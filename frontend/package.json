@@ -1,0 +1,47 @@
+{
+	"name": "frontend",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview"
+	},
+	"devDependencies": {
+		"@skeletonlabs/skeleton": "^2.10.2",
+		"@skeletonlabs/tw-plugin": "^0.4.0",
+		"@sveltejs/adapter-static": "^3.0.1",
+		"@sveltejs/kit": "^2.0.0",
+		"@sveltejs/vite-plugin-svelte": "^3.1.2",
+		"@tailwindcss/forms": "^0.5.7",
+		"@tailwindcss/typography": "^0.5.13",
+		"@types/node": "^20.12.12",
+		"autoprefixer": "^10.4.20",
+		"esm-env": "^1.2.2",
+		"postcss": "^8.4.49",
+		"prettier": "3.4.2",
+		"svelte": "^4.2.7",
+		"svelte-contextmenu": "^1.0.2",
+		"svelte-feather-icons": "^4.1.0",
+		"tailwindcss": "^3.4.17",
+		"vite": "^5.0.3"
+	},
+	"type": "module",
+	"dependencies": {
+		"@codemirror/lang-javascript": "^6.2.2",
+		"@codemirror/language": "^6.10.1",
+		"@codemirror/legacy-modes": "^6.4.0",
+		"@codemirror/theme-one-dark": "^6.1.2",
+		"@floating-ui/dom": "^1.6.13",
+		"@replit/codemirror-vim": "^6.2.1",
+		"@vincjo/datatables": "^1.14.5",
+		"hotkeys-js": "^3.13.9",
+		"lucide-svelte": "^0.468.0",
+		"svelte-codemirror-editor": "^1.4.0"
+
+	},
+	"optionalDependencies": {
+                "@rollup/rollup-linux-x64-gnu": "^4.0.0",
+                "@rollup/rollup-win32-x64-msvc": "^4.0.0"
+        }
+}

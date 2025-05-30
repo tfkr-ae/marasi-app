@@ -1,0 +1,50 @@
+name: Wails build
+
+on:
+  push:
+    tags:
+      - '*'  # Match any new tag
+permissions:
+  contents: write
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'marasi-app'
+            platform: 'linux/amd64'
+            os: 'ubuntu-latest'
+            sign: false
+          - name: 'marasi-app.exe'
+            platform: 'windows/amd64'
+            os: 'windows-latest'
+            sign: false
+          - name: 'marasi-app'
+            platform: 'darwin/universal'
+            os: 'macos-latest'
+            sign: true
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Build wails
+        uses: aalsuwaidi/wails-build-action@main
+        id: build
+        with:
+          build-name: ${{ matrix.name }}
+          build-platform: ${{ matrix.platform }}
+          sign: ${{ matrix.sign }}
+          sign-macos-apple-id: ${{ secrets.APPLE_ID }}
+          sign-macos-app-specific-password: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          sign-macos-app-id: ${{ secrets.MACOS_DEVELOPER_CERT_ID }}
+          sign-macos-app-cert: ${{ secrets.MACOS_DEVELOPER_CERT }}
+          sign-macos-app-cert-password: ${{ secrets.MACOS_DEVELOPER_CERT_PASSWORD }}
