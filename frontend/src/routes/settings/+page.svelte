@@ -1,7 +1,7 @@
 <script>
     import { Pencil, X } from "lucide-svelte";
-import {CreateWaypoint, DeleteWaypoint, SetFlag, ToggleFlag } from "../../lib/wailsjs/go/main/App";
-    import { marasiConfig, populateWaypoints, waypoints } from "../../stores";
+    import {CreateWaypoint, DeleteWaypoint, SetFlag, ToggleFlag } from "../../lib/wailsjs/go/main/App";
+    import { marasiConfig, populateWaypoints, waypoints, syntaxMode } from "../../stores";
     import { SlideToggle } from '@skeletonlabs/skeleton';
 
     let targetHost = "";
@@ -18,6 +18,23 @@ import {CreateWaypoint, DeleteWaypoint, SetFlag, ToggleFlag } from "../../lib/wa
         })
     }} bind:checked={$marasiConfig.VimEnabled}>Vim Enabled</SlideToggle>
     <label class="label">
+        <span>Syntax Mode:</span>
+        <div class="space-y-2">
+           	<label class="flex items-center space-x-2">
+          		<input class="radio" type="radio" name="radio-direct" value="disabled" bind:group={$syntaxMode}/>
+          		<p>Disabled</p>
+           	</label>
+           	<label class="flex items-center space-x-2">
+          		<input class="radio" type="radio" name="radio-direct" value="auto" bind:group={$syntaxMode}/>
+          		<p>Auto</p>
+           	</label>
+           	<label class="flex items-center space-x-2">
+          		<input class="radio" type="radio" name="radio-direct" value="enabled" bind:group={$syntaxMode}/>
+          		<p>Enabled</p>
+           	</label>
+        </div>
+    </label>
+    <label class="label">
         <span>Default Interface</span>
         <input on:change={(event) => {
             console.log(event.target.value);
@@ -28,7 +45,7 @@ import {CreateWaypoint, DeleteWaypoint, SetFlag, ToggleFlag } from "../../lib/wa
     </label>
     <label class="label">
         <span>Default Port</span>
-        <input 
+        <input
             on:change={(event) => {
                 SetFlag("default_port", event?.target?.value).then((config) => {
                     marasiConfig.set(config);
@@ -75,24 +92,24 @@ import {CreateWaypoint, DeleteWaypoint, SetFlag, ToggleFlag } from "../../lib/wa
                             <td>{$waypoints[host]}</td>
                             <td class="text-center">
                                 <div class="flex justify-center items-center space-x-2">
-                                  <button on:click={() => {
-                                    DeleteWaypoint(host)
-                                      .then(() => { populateWaypoints(); })
-                                      .catch((deleteError) => { console.log(deleteError); })
-                                  }} type="button" class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto">
-                                    <X size={15}/>
-                                  </button>
-                                  <button on:click={() => {
-                                    selected = host;
-                                    targetHost = host;
-                                    override = $waypoints[host];
-                                  }} type="button" class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto">
-                                    <Pencil size={15}/>
-                                  </button>
+                                    <button on:click={() => {
+                                        DeleteWaypoint(host)
+                                            .then(() => { populateWaypoints(); })
+                                            .catch((deleteError) => { console.log(deleteError); })
+                                    }} type="button" class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto">
+                                        <X size={15}/>
+                                    </button>
+                                    <button on:click={() => {
+                                        selected = host;
+                                        targetHost = host;
+                                        override = $waypoints[host];
+                                    }} type="button" class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto">
+                                        <Pencil size={15}/>
+                                    </button>
                                 </div>
-                              </td>
+                            </td>
                         </tr>
-                    {/each}
+                        {/each}
                 </tbody>
             </table>
         </div>

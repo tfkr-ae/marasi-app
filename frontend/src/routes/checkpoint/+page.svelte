@@ -35,7 +35,7 @@
         SquarePlay,
         ToggleLeft,
     } from "lucide-svelte";
-    import { checkpointCode, marasiConfig, interceptFlag, lineWrap} from "../../stores";
+    import { checkpointCode, marasiConfig, interceptFlag, lineWrap, syntaxMode} from "../../stores";
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
 
@@ -214,6 +214,22 @@
             interceptedCount = count;
         });
     }
+    function getLang(body) {
+      // Check value of store
+      switch($syntaxMode) {
+        case "disabled":
+          return undefined;
+        break;
+        case "auto":
+          // Check length
+          if (body.length < 75000) return StreamLanguage.define(http)
+          return undefined;
+        break;
+        case "enabled":
+          return StreamLanguage.define(http)
+        break;
+      }
+    }
     onMount(() => {
         EventsOn("intercepted", () => GetNext());
         GetNext();
@@ -326,7 +342,7 @@
 </div>
 <CodeMirror
     bind:value={intercepted}
-    lang={StreamLanguage.define(http)}
+    lang={getLang(intercepted)}
     class="text-xs"
     theme={oneDark}
     extensions={$marasiConfig.VimEnabled ? [vim()] : []}

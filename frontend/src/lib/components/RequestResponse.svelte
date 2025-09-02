@@ -5,7 +5,7 @@
     import { StreamLanguage } from "@codemirror/language";
     import { http } from "@codemirror/legacy-modes/mode/http";
     import { Braces, CodeIcon, CopyIcon, Maximize, Pen, WrapTextIcon } from "lucide-svelte";
-    import { drawerHeight, marasiConfig, prettify, lineWrap} from "../../stores";
+    import { drawerHeight, marasiConfig, prettify, lineWrap, syntaxMode} from "../../stores";
     import { GetNote } from "../wailsjs/go/main/App";
     import { getModalStore, getDrawerStore } from "@skeletonlabs/skeleton";
     import { onMount } from "svelte";
@@ -42,6 +42,22 @@
         setTimeout(adjustHeights, 50);
     }
 
+    function getLang(body) {
+      // Check value of store
+      switch($syntaxMode) {
+        case "disabled":
+          return undefined;
+        break;
+        case "auto":
+          // Check length
+          if (body.length < 75000) return StreamLanguage.define(http)
+          return undefined;
+        break;
+        case "enabled":
+          return StreamLanguage.define(http)
+        break;
+      }
+    }
     function adjustHeights() {
         const editors = document.querySelectorAll(".cm-editor");
 
@@ -157,7 +173,7 @@
     }
 </script>
 
-<div class="flex p-2 justify-between items-center w-full">
+<div class="flex p-2 justify-between items-center w-full sticky top-0 z-50 bg-inherit">
     <!-- Left: Request number -->
     <div class="flex items-center space-x-2 flex-shrink-0">
         {#if showToggle}
@@ -241,7 +257,7 @@
             bind:this={requestEditor}
             class="text-xs"
             bind:value={requestBody}
-            lang={StreamLanguage.define(http)}
+            lang={getLang(requestBody)}
             theme={oneDark}
             extensions={$marasiConfig.VimEnabled ? [vim()] : []}
             readonly={requestReadOnly}
@@ -253,7 +269,7 @@
             bind:this={responseEditor}
             class="text-xs"
             bind:value={responseBody}
-            lang={StreamLanguage.define(http)}
+            lang={getLang(responseBody)}
             theme={oneDark}
             extensions={$marasiConfig.VimEnabled ? [vim()] : []}
             readonly={responseReadOnly}

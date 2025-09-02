@@ -33,6 +33,7 @@ export const logItems = writable([]);
 export const extensionElements = writable({});
 export const prettify = writable(true);
 export const lineWrap = writable(true);
+export const syntaxMode = writable("auto");
 
 export let drawerHeight = writable("h-[60%]");
 export let marasiConfig = writable({});
