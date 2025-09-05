@@ -35,7 +35,7 @@
         SquarePlay,
         ToggleLeft,
     } from "lucide-svelte";
-    import { checkpointCode, marasiConfig, interceptFlag, lineWrap, syntaxMode} from "../../stores";
+    import { checkpointCode, marasiConfig, interceptFlag, lineWrap} from "../../stores";
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
 
@@ -216,7 +216,7 @@
     }
     function getLang(body) {
       // Check value of store
-      switch($syntaxMode) {
+      switch($marasiConfig.SyntaxMode) {
         case "disabled":
           return undefined;
         break;

@@ -1,5 +1,29 @@
 export namespace main {
 	
+	export class Config {
+	    ConfigDir: string;
+	    DesktopOS: string;
+	    FirstRun: boolean;
+	    VimEnabled: boolean;
+	    DefaultAddress: string;
+	    DefaultPort: string;
+	    SyntaxMode: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Config(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ConfigDir = source["ConfigDir"];
+	        this.DesktopOS = source["DesktopOS"];
+	        this.FirstRun = source["FirstRun"];
+	        this.VimEnabled = source["VimEnabled"];
+	        this.DefaultAddress = source["DefaultAddress"];
+	        this.DefaultPort = source["DefaultPort"];
+	        this.SyntaxMode = source["SyntaxMode"];
+	    }
+	}
 	export class Dashboard {
 	    Notes: number;
 	    Launchpads: number;
@@ -49,24 +73,18 @@ export namespace main {
 
 export namespace marasi {
 	
-	export class Config {
-	    DesktopOS: string;
-	    FirstRun: boolean;
-	    VimEnabled: boolean;
-	    DefaultAddress: string;
-	    DefaultPort: string;
+	export class ChromePathConfig {
+	    OS: string;
+	    Path: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Config(source);
+	        return new ChromePathConfig(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.DesktopOS = source["DesktopOS"];
-	        this.FirstRun = source["FirstRun"];
-	        this.VimEnabled = source["VimEnabled"];
-	        this.DefaultAddress = source["DefaultAddress"];
-	        this.DefaultPort = source["DefaultPort"];
+	        this.OS = source["OS"];
+	        this.Path = source["Path"];
 	    }
 	}
 	export class ExtensionLog {

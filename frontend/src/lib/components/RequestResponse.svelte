@@ -5,7 +5,7 @@
     import { StreamLanguage } from "@codemirror/language";
     import { http } from "@codemirror/legacy-modes/mode/http";
     import { Braces, CodeIcon, CopyIcon, Maximize, Pen, WrapTextIcon } from "lucide-svelte";
-    import { drawerHeight, marasiConfig, prettify, lineWrap, syntaxMode} from "../../stores";
+    import { drawerHeight, marasiConfig, prettify, lineWrap} from "../../stores";
     import { GetNote } from "../wailsjs/go/main/App";
     import { getModalStore, getDrawerStore } from "@skeletonlabs/skeleton";
     import { onMount } from "svelte";
@@ -44,7 +44,7 @@
 
     function getLang(body) {
       // Check value of store
-      switch($syntaxMode) {
+      switch($marasiConfig.SyntaxMode) {
         case "disabled":
           return undefined;
         break;

@@ -65,12 +65,12 @@
     let showExcali = false;
     let showInteract = false;
     let startupCompleted = false;
-    
+
     // Lazy-loaded components
     let SvelteChef;
     let Excalidraw;
     let Interact;
-    
+
     // Dynamic imports for heavy components
     const loadSvelteChef = async () => {
         if (!SvelteChef) {
@@ -78,14 +78,14 @@
             SvelteChef = module.default;
         }
     };
-    
+
     const loadExcalidraw = async () => {
         if (!Excalidraw) {
             const module = await import("../lib/components/Excalidraw.svelte");
             Excalidraw = module.default;
         }
     };
-    
+
     const loadInteract = async () => {
         if (!Interact) {
             const module = await import("../lib/components/Interact.svelte");
@@ -138,6 +138,7 @@
             WindowSetTitle("scratchpad");
             activeProject.set("scratchpad");
             openProject();
+            console.log($marasiConfig)
             if ($marasiConfig.FirstRun) {
                 const modal = {
                     type: "component",

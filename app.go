@@ -28,6 +28,7 @@ type App struct {
 	ctx      context.Context
 	Proxy    *marasi.Proxy
 	Listener net.Listener
+	Config   *Config
 }
 
 // NewApp creates a new App application struct
@@ -39,13 +40,17 @@ func NewApp() *App {
 	}
 	// Check and make application config directory
 	appConfigDir := filepath.Join(userConfigDir, "Marasi")
+	config, err := LoadConfig(appConfigDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 	Proxy, err := marasi.New(
 		marasi.WithConfigDir(appConfigDir),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &App{Proxy: Proxy}
+	return &App{Proxy: Proxy, Config: config}
 }
 
 // startup is called when the app starts. The context is saved
@@ -76,20 +81,20 @@ func (a *App) startup(ctx context.Context) {
 		}),
 	)
 }
-func (a *App) ToggleFlag(name string) (*marasi.Config, error) {
-	err := a.Proxy.Config.ToggleFlag(name)
+func (a *App) ToggleFlag(name string) (*Config, error) {
+	err := a.Config.ToggleFlag(name)
 	if err != nil {
-		return a.Proxy.Config, fmt.Errorf("toggling flag : %w", err)
+		return a.Config, fmt.Errorf("toggling flag : %w", err)
 	}
-	return a.Proxy.Config, nil
+	return a.Config, nil
 }
 
-func (a *App) SetFlag(name string, value string) (*marasi.Config, error) {
-	err := a.Proxy.Config.SetFlag(name, value)
+func (a *App) SetFlag(name string, value string) (*Config, error) {
+	err := a.Config.SetFlag(name, value)
 	if err != nil {
-		return a.Proxy.Config, fmt.Errorf("setting flag : %w", err)
+		return a.Config, fmt.Errorf("setting flag : %w", err)
 	}
-	return a.Proxy.Config, nil
+	return a.Config, nil
 }
 func (a *App) DeleteWaypoint(host string) error {
 	err := a.Proxy.Repo.DeleteWaypoint(host)
@@ -776,8 +781,8 @@ func (a *App) GetInterfaces() ([]string, error) {
 	// Return IPv4 addresses first, then IPv6
 	return append(ipv4Slice, ipv6Slice...), nil
 }
-func (a *App) GetMarasiConfig() *marasi.Config {
-	return a.Proxy.Config
+func (a *App) GetMarasiConfig() *Config {
+	return a.Config
 }
 func (a *App) GetRecentProjects() []struct {
 	ProjectName string
@@ -811,4 +816,26 @@ func (a *App) GetRecentProjects() []struct {
 		}
 	}
 	return recent
+}
+
+func (a *App) GetChromePaths() []marasi.ChromePathConfig {
+	return a.Proxy.Config.ChromeDirs
+}
+
+func (a *App) AddChromePath(path, os string) []marasi.ChromePathConfig {
+	err := a.Proxy.Config.AddChromePath(path, os)
+	if err != nil {
+		// Return something useful here
+		return []marasi.ChromePathConfig{}
+	}
+	return a.Proxy.Config.ChromeDirs
+}
+
+func (a *App) DeleteChromePath(path, os string) []marasi.ChromePathConfig {
+	err := a.Proxy.Config.DeleteChromePath(path, os)
+	if err != nil {
+		// Return something useful here
+		return []marasi.ChromePathConfig{}
+	}
+	return a.Proxy.Config.ChromeDirs
 }

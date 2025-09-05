@@ -4,7 +4,10 @@ go 1.24.0
 
 toolchain go1.24.2
 
-require github.com/wailsapp/wails/v2 v2.10.1
+require (
+	github.com/spf13/viper v1.19.0
+	github.com/wailsapp/wails/v2 v2.10.1
+)
 
 require (
 	github.com/Shopify/goluago v0.0.0-20240527182001-ec4ec6c26eab // indirect
@@ -29,7 +32,6 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/yosssi/gohtml v0.0.0-20201013000340-ee4748c638f4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -62,7 +64,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/samber/lo v1.49.1 // indirect
-	github.com/tfkr-ae/marasi v0.0.0-20250529150534-8642719ef6ad
+	github.com/tfkr-ae/marasi v0.0.0-20250905161100-622637f788e7
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
