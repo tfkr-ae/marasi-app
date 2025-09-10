@@ -56,9 +56,13 @@ export function GetLogs():Promise<Array<marasi.Log>>;
 
 export function GetMarasiConfig():Promise<main.Config>;
 
+export function GetMetadata(arg1:uuid.UUID):Promise<marasi.Metadata>;
+
 export function GetNote(arg1:uuid.UUID):Promise<string>;
 
 export function GetProxyItems():Promise<Record<uuid.UUID, marasi.Row>>;
+
+export function GetRawDetails(arg1:uuid.UUID):Promise<marasi.Row>;
 
 export function GetRecentProjects():Promise<Array<any>>;
 

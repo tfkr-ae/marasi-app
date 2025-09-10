@@ -5,12 +5,12 @@
     import { oneDark } from "@codemirror/theme-one-dark";
     import { vim } from "@replit/codemirror-vim";
     import { X } from "lucide-svelte";
-    
+
     export let parent;
     let content = '';
     const modalStore = getModalStore();
     const cBase = 'card p-4 w-modal shadow-xl space-y-4';
-    
+
     // Reactive statement to update content when modalStore changes
     $: if ($modalStore[0] && $modalStore[0].content) {
         // Check if content is already a string
@@ -33,7 +33,7 @@
 		if (event.key === 'Escape') {
             event.stopImmediatePropagation();
             modalStore.close();
-        } 
+        }
     }}>
 		<header class="flex justify-between items-center">
 			<h2 class="text-xl font-bold">
@@ -47,6 +47,7 @@
             class="text-xs"
             bind:value={content}
             lang={javascript()}
+            lineWrapping={true}
             theme={oneDark}
             extensions={vim()}
             readonly={true}

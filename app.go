@@ -334,6 +334,14 @@ func (a *App) GetProxyItems() map[uuid.UUID]marasi.Row {
 	return results
 }
 
+func (a *App) GetRawDetails(id uuid.UUID) marasi.Row {
+	row, err := a.Proxy.Repo.GetRaw(id)
+	if err != nil {
+		log.Print(err)
+	}
+	return row
+}
+
 // TODO  - Shift to proxy after
 func (a *App) DownloadExtension(url string, direct bool) {
 	err := a.Proxy.InstallExtension(url, direct)
@@ -724,6 +732,13 @@ func (a *App) DoExtender(code string) {
 	}
 	err = a.Proxy.Extensions["workshop"].ExecuteLua(code)
 	log.Print(err)
+}
+func (a *App) GetMetadata(id uuid.UUID) marasi.Metadata {
+	note, err := a.Proxy.Repo.GetMetadata(id)
+	if err != nil {
+		log.Print(err)
+	}
+	return note
 }
 func (a *App) GetNote(id uuid.UUID) string {
 	note, err := a.Proxy.Repo.GetNote(id)

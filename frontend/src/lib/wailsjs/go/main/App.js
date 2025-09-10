@@ -106,12 +106,20 @@ export function GetMarasiConfig() {
   return window['go']['main']['App']['GetMarasiConfig']();
 }
 
+export function GetMetadata(arg1) {
+  return window['go']['main']['App']['GetMetadata'](arg1);
+}
+
 export function GetNote(arg1) {
   return window['go']['main']['App']['GetNote'](arg1);
 }
 
 export function GetProxyItems() {
   return window['go']['main']['App']['GetProxyItems']();
+}
+
+export function GetRawDetails(arg1) {
+  return window['go']['main']['App']['GetRawDetails'](arg1);
 }
 
 export function GetRecentProjects() {

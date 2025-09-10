@@ -269,6 +269,40 @@ export namespace marasi {
 		    return a;
 		}
 	}
+	export class Row {
+	    Request: ProxyRequest;
+	    Response: ProxyResponse;
+	    Metadata: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new Row(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Request = this.convertValues(source["Request"], ProxyRequest);
+	        this.Response = this.convertValues(source["Response"], ProxyResponse);
+	        this.Metadata = source["Metadata"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

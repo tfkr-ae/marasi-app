@@ -60,6 +60,7 @@ export async function openProject() {
   interceptFlag.set(false);
   workshopCode.set("");
   waypoints.set({});
+  proxyItems.set({});
   currentLaunchpadIndex.set(0);
   currentLaunchpadRequestIndex.set(0);
 
