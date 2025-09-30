@@ -6,12 +6,9 @@
         GetResponse,
         Repeat,
         UpdateRepeaterEntry,
-        GetNote
+        GetNote,
     } from "../../lib/wailsjs/go/main/App";
-    import {
-        SlideToggle,
-        getModalStore,
-    } from "@skeletonlabs/skeleton";
+    import { SlideToggle, getModalStore } from "@skeletonlabs/skeleton";
     import { onMount } from "svelte";
     import { SettingsIcon } from "svelte-feather-icons";
     import ContextMenu, { Item, Divider } from "svelte-contextmenu";
@@ -22,7 +19,7 @@
         ArrowLeft,
         ArrowRight,
         ArrowUp,
-        ChevronLeft, 
+        ChevronLeft,
         ChevronRight,
         Lock,
         Pen,
@@ -30,16 +27,19 @@
         ToggleLeft,
         Trash,
         Send,
-
-        Braces
-
+        Braces,
     } from "lucide-svelte";
     import { Accordion, AccordionItem } from "@skeletonlabs/skeleton";
     import { page } from "$app/stores";
-    import {currentLaunchpadIndex, currentLaunchpadRequestIndex, activeProject, proxyItems } from "../../stores";
-    
+    import {
+        currentLaunchpadIndex,
+        currentLaunchpadRequestIndex,
+        activeProject,
+        proxyItems,
+    } from "../../stores";
+
     const modalStore = getModalStore();
-    
+
     // State variables
     let repeaterTabs = [];
     let tabSet = "";
@@ -54,37 +54,43 @@
     let shouldRefreshData = false;
     let shouldJumpToLatest = false; // Flag to track when we should jump to latest entry
     let shouldJumpToLastTab = false; // Flag to track when we should jump to the last tab
-    
+
     // Computed values
     $: currentItemsList = Object.values(items);
-    $: currentItem = currentItemsList.length > $currentLaunchpadRequestIndex ? currentItemsList[$currentLaunchpadRequestIndex] : null;
-    $: currentTab = repeaterTabs.length > $currentLaunchpadIndex ? repeaterTabs[$currentLaunchpadIndex] : null;
-    
+    $: currentItem =
+        currentItemsList.length > $currentLaunchpadRequestIndex
+            ? currentItemsList[$currentLaunchpadRequestIndex]
+            : null;
+    $: currentTab =
+        repeaterTabs.length > $currentLaunchpadIndex
+            ? repeaterTabs[$currentLaunchpadIndex]
+            : null;
+
     // Reset the request index when switching launchpads
     $: if (tabSet && tabSet !== previousTabSet) {
         previousTabSet = tabSet;
     }
-    
+
     // Watch for URL parameter changes
     $: {
         // Check for last request parameter
-        if ($page.url.searchParams.get('last') === '1') {
+        if ($page.url.searchParams.get("last") === "1") {
             shouldJumpToLatest = true;
         }
-        
+
         // Check for last tab parameter
-        if ($page.url.searchParams.get('lastTab') === '1') {
+        if ($page.url.searchParams.get("lastTab") === "1") {
             shouldJumpToLastTab = true;
         }
     }
-    
 
     $: if ($activeProject) {
         loadCheckpoint();
     }
-    
+
     function openMetadata() {
-        if (!currentItem || !currentItem.Request || !currentItem.Request.ID) return;
+        if (!currentItem || !currentItem.Request || !currentItem.Request.ID)
+            return;
         const modal = {
             type: "component",
             component: "Metadata",
@@ -99,26 +105,28 @@
         }
     }
     function openNotes() {
-        if (!currentItem || !currentItem.Request || !currentItem.Request.ID) return;
-        
+        if (!currentItem || !currentItem.Request || !currentItem.Request.ID)
+            return;
+
         GetNote(currentItem.Request.ID.toString()).then((note) => {
             const modal = {
                 type: "component",
                 component: "Notes",
-                title: "Request " + ($currentLaunchpadRequestIndex + 1) + " notes",
+                title:
+                    "Request " + ($currentLaunchpadRequestIndex + 1) + " notes",
                 requestID: currentItem.Request.ID,
                 content: note,
             };
-            
-        if (!$modalStore[0]) {
-            shouldRefreshData = true;
-            modalStore.trigger(modal);
-        } else if ($modalStore[0].component === "Notes") {
-            modalStore.close();
-        }
+
+            if (!$modalStore[0]) {
+                shouldRefreshData = true;
+                modalStore.trigger(modal);
+            } else if ($modalStore[0].component === "Notes") {
+                modalStore.close();
+            }
         });
     }
-    
+
     // Launchpad menu options (keyboard shortcuts)
     const launchpadMenu = [
         {
@@ -245,14 +253,14 @@
                 options: { scope: "launchpad", single: true },
                 keys: ["⌘+⇧+M", "ctrl+⇧+M"],
             },
-        }
+        },
     ];
-    
+
     // Load data when tabSet changes
     $: if (tabSet) {
         loadRequests(tabSet.toString());
     }
-    
+
     // Navigation functions
     function nextTab() {
         if ($currentLaunchpadIndex < repeaterTabs.length - 1) {
@@ -261,7 +269,7 @@
             tabSet = repeaterTabs[$currentLaunchpadIndex].ID;
         }
     }
-    
+
     function prevTab() {
         if ($currentLaunchpadIndex > 0) {
             $currentLaunchpadIndex -= 1;
@@ -269,23 +277,23 @@
             tabSet = repeaterTabs[$currentLaunchpadIndex].ID;
         }
     }
-    
+
     function nextRequest() {
         const requestsCount = currentItemsList.length;
         if ($currentLaunchpadRequestIndex < requestsCount - 1) {
             $currentLaunchpadRequestIndex += 1;
         }
     }
-    
+
     function prevRequest() {
         if ($currentLaunchpadRequestIndex > 0) {
             $currentLaunchpadRequestIndex -= 1;
         }
     }
-    
+
     function deleteCurrentTab() {
         if (!currentTab) return;
-        
+
         const modal = {
             type: "confirm",
             title: "Deleting " + currentTab.Name,
@@ -311,34 +319,30 @@
         };
         modalStore.trigger(modal);
     }
-    
+
     function focusRequestEditor() {
         const cmContent = document.querySelector('div[data-language="http"]');
         if (cmContent) cmContent.focus();
     }
-    
+
     function sendCurrentRequest() {
         if (!currentItem || !tabSet) return;
-        
-        repeat(
-            currentItem.RequestBody,
-            tabSet.toString(),
-            useHttps
-        );
+
+        repeat(currentItem.RequestBody, tabSet.toString(), useHttps);
     }
-    
+
     // API interaction functions
     function repeat(req, tab, useHttps) {
         if (!req || !tab) return;
-        
+
         isLoadingRequests = true;
         shouldJumpToLatest = true; // Set flag to jump to latest after sending
-        
+
         Repeat(req, tab.toString(), useHttps).then(() => {
             loadRequests(tabSet.toString());
         });
     }
-    
+
     function loadRequests(id) {
         if (!id) {
             isLoadingRequests = false;
@@ -348,84 +352,97 @@
         isLoadingRequests = true;
         items = {};
 
-        GetRepeaterRequests(id).then((reqs) => {
-            if (reqs && reqs.length > 0) {
-                reqs.forEach((req, index) => {
-                    items[req.ID] = {
-                        Request: {},
-                        Response: {},
-                        Metadata: {},
-                        RequestBody: "",
-                    };
-                    items[req.ID].Request = req;
-                    items[req.ID].Metadata = req.Metadata;
-                    GetResponse(req.ID).then((resp) => {
-                        items[req.ID].Response = resp;
+        GetRepeaterRequests(id)
+            .then((reqs) => {
+                if (reqs && reqs.length > 0) {
+                    reqs.forEach((req, index) => {
+                        items[req.ID] = {
+                            Request: {},
+                            Response: {},
+                            Metadata: {},
+                            RequestBody: "",
+                        };
+                        items[req.ID].Request = req;
+                        items[req.ID].Metadata = req.Metadata;
+                        GetResponse(req.ID).then((resp) => {
+                            items[req.ID].Response = resp;
+                        });
                     });
-                });
-
-                // Handle last=1 and lastTab=1
-                if (shouldJumpToLatest || $page.url.searchParams.get('last') === '1') {
-                    $currentLaunchpadRequestIndex = reqs.length - 1; // Jump to the last request
-                    shouldJumpToLatest = false; // Reset flag
-                } else if (previousTabSet !== id) {
-                    // For a different tab
-                    if ($currentLaunchpadRequestIndex < reqs.length && id === $page.url.searchParams.get('tabId')) {
-                        // If we have a stored index for this tab and it's valid, use it
-                        $currentLaunchpadRequestIndex = $currentLaunchpadRequestIndex;
+                    // Handle last=1 and lastTab=1
+                    if (
+                        shouldJumpToLatest ||
+                        $page.url.searchParams.get("last") === "1"
+                    ) {
+                        $currentLaunchpadRequestIndex = reqs.length - 1; // Jump to the last request
+                        shouldJumpToLatest = false; // Reset flag
+                    } else if (previousTabSet !== id) {
+                        // For a different tab
+                        if (
+                            $currentLaunchpadRequestIndex < reqs.length &&
+                            id === $page.url.searchParams.get("tabId")
+                        ) {
+                            // If we have a stored index for this tab and it's valid, use it
+                            $currentLaunchpadRequestIndex =
+                                $currentLaunchpadRequestIndex;
+                        } else {
+                            // Otherwise start at the first request
+                            $currentLaunchpadRequestIndex = 0;
+                        }
                     } else {
-                        // Otherwise start at the first request
-                        $currentLaunchpadRequestIndex = 0;
+                        // Ensure the index is valid for the current tab's request count
+                        $currentLaunchpadRequestIndex = Math.min(
+                            $currentLaunchpadRequestIndex,
+                            reqs.length - 1,
+                        );
                     }
                 } else {
-                    // Ensure the index is valid for the current tab's request count
-                    $currentLaunchpadRequestIndex = Math.min($currentLaunchpadRequestIndex, reqs.length - 1);
+                    // No requests in this tab
+                    $currentLaunchpadRequestIndex = 0;
                 }
-            } else {
-                // No requests in this tab
-                $currentLaunchpadRequestIndex = 0;
-            }
-            isLoadingRequests = false;
-        }).catch(err => {
-            console.error("Error loading requests:", err);
-            isLoadingRequests = false;
-        });
-    } 
+                isLoadingRequests = false;
+            })
+            .catch((err) => {
+                console.error("Error loading requests:", err);
+                isLoadingRequests = false;
+            });
+    }
     function loadCheckpoint() {
         isLoadingTabs = true;
 
-        GetRepeaterTabs().then((tabs) => {
-            repeaterTabs = tabs ? tabs : [];
+        GetRepeaterTabs()
+            .then((tabs) => {
+                repeaterTabs = tabs ? tabs : [];
 
-            if (repeaterTabs.length > 0) {
-                // Handle lastTab=1
-                if (shouldJumpToLastTab) {
-                    $currentLaunchpadIndex = repeaterTabs.length - 1; // Jump to the last tab
-                    shouldJumpToLastTab = false; // Reset flag
-                } else if ($currentLaunchpadIndex >= repeaterTabs.length) {
-                    $currentLaunchpadIndex = 0; // Fallback if current tab no longer exists
+                if (repeaterTabs.length > 0) {
+                    // Handle lastTab=1
+                    if (shouldJumpToLastTab) {
+                        $currentLaunchpadIndex = repeaterTabs.length - 1; // Jump to the last tab
+                        shouldJumpToLastTab = false; // Reset flag
+                    } else if ($currentLaunchpadIndex >= repeaterTabs.length) {
+                        $currentLaunchpadIndex = 0; // Fallback if current tab no longer exists
+                    }
+
+                    tabSet = repeaterTabs[$currentLaunchpadIndex].ID;
+                    selectedTab = repeaterTabs[$currentLaunchpadIndex];
+                    previousTabSet = tabSet;
+
+                    // Load requests for the selected tab
+                    loadRequests(tabSet.toString());
                 }
 
-                tabSet = repeaterTabs[$currentLaunchpadIndex].ID;
-                selectedTab = repeaterTabs[$currentLaunchpadIndex];
-                previousTabSet = tabSet;
-
-                // Load requests for the selected tab
-                loadRequests(tabSet.toString());
-            }
-
-            isLoadingTabs = false;
-        }).catch(err => {
-            console.error("Error loading tabs:", err);
-            isLoadingTabs = false;
-        });
-    } 
+                isLoadingTabs = false;
+            })
+            .catch((err) => {
+                console.error("Error loading tabs:", err);
+                isLoadingTabs = false;
+            });
+    }
     onMount(() => {
         isLoadingTabs = true;
 
         // Check for URL parameters on initial load
-        const lastParam = $page.url.searchParams.get('last') === '1';
-        const lastTabParam = $page.url.searchParams.get('lastTab') === '1';
+        const lastParam = $page.url.searchParams.get("last") === "1";
+        const lastTabParam = $page.url.searchParams.get("lastTab") === "1";
 
         if (lastParam) {
             shouldJumpToLatest = true;
@@ -463,34 +480,49 @@
         </div>
     {:else if repeaterTabs.length === 0}
         <!-- No Launchpads State -->
-        <div class="flex flex-col items-center justify-center my-12 text-center">
+        <div
+            class="flex flex-col items-center justify-center my-12 text-center"
+        >
             <h3 class="text-2xl mb-4">No Launchpads Available</h3>
-            <p class="mb-4">Create a launchpad for a request from the Ledger page</p>
+            <p class="mb-4">
+                Create a launchpad for a request from the Ledger page
+            </p>
         </div>
     {:else if currentTab}
         <!-- Launchpad Navigation -->
         <div class="launchpad-nav">
-            <button class="nav-button" on:click={prevTab} disabled={$currentLaunchpadIndex === 0}>
+            <button
+                class="nav-button"
+                on:click={prevTab}
+                disabled={$currentLaunchpadIndex === 0}
+            >
                 <ChevronLeft size={24} />
             </button>
-            
-            <div class="current-item" on:contextmenu={(e) => {
-                selectedTab = currentTab;
-                contextMenu.show(e);
-            }}>
-                <h2 class="text-xl font-bold">{currentTab.Name || 'No Launchpad Selected'}</h2>
-                <p class="text-sm opacity-70">{$currentLaunchpadIndex + 1} of {repeaterTabs.length}</p>
+
+            <div
+                class="current-item"
+                on:contextmenu={(e) => {
+                    selectedTab = currentTab;
+                    contextMenu.show(e);
+                }}
+            >
+                <h2 class="text-xl font-bold">
+                    {currentTab.Name || "No Launchpad Selected"}
+                </h2>
+                <p class="text-sm opacity-70">
+                    {$currentLaunchpadIndex + 1} of {repeaterTabs.length}
+                </p>
             </div>
-            
-            <button 
-                class="nav-button" 
-                on:click={nextTab} 
+
+            <button
+                class="nav-button"
+                on:click={nextTab}
                 disabled={$currentLaunchpadIndex >= repeaterTabs.length - 1}
             >
                 <ChevronRight size={24} />
             </button>
         </div>
-        
+
         <!-- Request Content Area -->
         <div class="request-content-area">
             {#if isLoadingRequests}
@@ -498,40 +530,49 @@
                     <div class="spinner"></div>
                 </div>
             {:else if currentItemsList.length === 0}
-                <div class="flex flex-col items-center justify-center my-8 text-center">
+                <div
+                    class="flex flex-col items-center justify-center my-8 text-center"
+                >
                     <p class="mb-4">No requests in this launchpad</p>
-                    <p class="text-sm opacity-70">Send requests to this launchpad from the History page.</p>
+                    <p class="text-sm opacity-70">
+                        Send requests to this launchpad from the History page.
+                    </p>
                 </div>
             {:else}
                 <!-- Request Navigation Bar -->
                 <div class="request-nav">
-                    <button 
-                        class="nav-button" 
-                        on:click={prevRequest} 
+                    <button
+                        class="nav-button"
+                        on:click={prevRequest}
                         disabled={$currentLaunchpadRequestIndex === 0}
                     >
                         <ArrowLeft size={20} />
                     </button>
-                    
+
                     <div class="current-item">
-                        <p class="text-lg">Request {$currentLaunchpadRequestIndex + 1} of {currentItemsList.length}</p>
+                        <p class="text-lg">
+                            Request {$currentLaunchpadRequestIndex + 1} of {currentItemsList.length}
+                        </p>
                     </div>
-                    
-                    <button 
-                        class="nav-button" 
-                        on:click={nextRequest} 
-                        disabled={$currentLaunchpadRequestIndex >= currentItemsList.length - 1}
+
+                    <button
+                        class="nav-button"
+                        on:click={nextRequest}
+                        disabled={$currentLaunchpadRequestIndex >=
+                            currentItemsList.length - 1}
                     >
                         <ArrowRight size={20} />
                     </button>
                 </div>
-                
+
                 <!-- Current Request/Response Display with Send Controls Inside -->
-                
+
                 <div class="card p-4 bg-surface-800/30 request-card">
                     {#if currentItem}
                         <!-- Send Controls - Centered inside the card -->
-                        <div class="flex justify-center items-center mb-4 send-controls w-full">
+                        <div
+                            class="flex justify-center items-center mb-4 send-controls w-full"
+                        >
                             <div class="flex items-center gap-6">
                                 <div class="flex items-center">
                                     <span class="mr-2">HTTPS</span>
@@ -540,9 +581,14 @@
                                         bind:checked={useHttps}
                                     />
                                 </div>
-                                
+
                                 <button
-                                    on:click={() => repeat(currentItem.RequestBody, tabSet.toString(), useHttps)}
+                                    on:click={() =>
+                                        repeat(
+                                            currentItem.RequestBody,
+                                            tabSet.toString(),
+                                            useHttps,
+                                        )}
                                     type="button"
                                     class="btn variant-filled-primary"
                                 >
@@ -550,14 +596,16 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- Key technique: Use #key to force component recreation when currentItem changes -->
                         {#key $currentLaunchpadRequestIndex}
                             <RequestResponse
-                                requestTitle={"Request " + ($currentLaunchpadRequestIndex + 1)}
+                                requestTitle={"Request " +
+                                    ($currentLaunchpadRequestIndex + 1)}
                                 request={currentItem.Request}
                                 response={currentItem.Response}
-                                metadata={$proxyItems[currentItem.Request.ID].Metadata}
+                                metadata={$proxyItems[currentItem.Request.ID]
+                                    .Metadata}
                                 requestReadOnly={false}
                                 bind:requestBody={currentItem.RequestBody}
                             />
@@ -631,7 +679,9 @@
                         GetRepeaterTabs().then((tabs) => {
                             repeaterTabs = tabs ? tabs : [];
                             // Find the index of the current tab in the new list
-                            const index = repeaterTabs.findIndex(tab => tab.ID === selectedTab.ID);
+                            const index = repeaterTabs.findIndex(
+                                (tab) => tab.ID === selectedTab.ID,
+                            );
                             if (index >= 0) {
                                 $currentLaunchpadIndex = index;
                                 tabSet = repeaterTabs[index].ID;
@@ -651,7 +701,8 @@
 
 <style>
     /* Navigation styling */
-    .launchpad-nav, .request-nav {
+    .launchpad-nav,
+    .request-nav {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -659,24 +710,24 @@
         background-color: rgba(47, 52, 60, 0.6);
         padding: 1rem;
     }
-    
+
     .launchpad-nav {
         margin-bottom: 1rem;
     }
-    
+
     .current-item {
         text-align: center;
         flex: 1;
     }
-    
+
     .launchpad-nav .current-item {
         cursor: pointer;
     }
-    
+
     .launchpad-nav .current-item:hover {
         opacity: 0.9;
     }
-    
+
     .nav-button {
         background: #cf595b;
         border: none;
@@ -689,23 +740,23 @@
         cursor: pointer;
         transition: background 0.2s;
     }
-    
+
     .nav-button:hover:not(:disabled) {
         background: #7c3537;
     }
-    
+
     .nav-button:disabled {
         background: #2f343c;
         opacity: 0.5;
         cursor: not-allowed;
     }
-    
+
     /* Send controls inside card */
     .send-controls {
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         padding-bottom: 0.75rem;
     }
-    
+
     /* Loading indicator */
     .spinner {
         width: 40px;
@@ -715,12 +766,16 @@
         border-radius: 50%;
         animation: spin 1s linear infinite;
     }
-    
+
     @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
     }
-    
+
     .request-card {
         display: flex;
         flex-direction: column; /* Keep column for overall structure */
@@ -729,11 +784,12 @@
         overflow: visible;
     }
 
-/* The RequestResponse component should handle row layout internally */
-:global(.request-card > div:not(.send-controls)) {
-    display: flex;
-    flex: 1;
-    overflow: visible;
-}
+    /* The RequestResponse component should handle row layout internally */
+    :global(.request-card > div:not(.send-controls)) {
+        display: flex;
+        flex: 1;
+        overflow: visible;
+    }
     /* Utility classes */
 </style>
+
