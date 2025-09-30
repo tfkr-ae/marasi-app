@@ -185,7 +185,7 @@ export namespace marasi {
 	    Method: string;
 	    Host: string;
 	    Path: string;
-	    Raw: number[];
+	    Raw: string;
 	    Metadata: Record<string, any>;
 	    // Go type: time
 	    RequestedAt: any;
@@ -230,7 +230,7 @@ export namespace marasi {
 	    StatusCode: number;
 	    ContentType: string;
 	    Length: string;
-	    Raw: number[];
+	    Raw: string;
 	    Metadata: Record<string, any>;
 	    // Go type: time
 	    RespondedAt: any;
