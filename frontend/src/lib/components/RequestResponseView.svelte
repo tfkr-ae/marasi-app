@@ -4,11 +4,12 @@
     import { GetNote, GetRawDetails } from "../wailsjs/go/main/App";
     import { Braces, CodeIcon, CopyIcon, Maximize, Pen, WrapTextIcon } from "lucide-svelte";
     import { drawerHeight, marasiConfig, prettify, lineWrap} from "../../stores";
-    import { getModalStore, getDrawerStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, getDrawerStore, getToastStore } from "@skeletonlabs/skeleton";
     import { vim } from "@replit/codemirror-vim";
     import { StreamLanguage } from "@codemirror/language";
     import { http } from "@codemirror/legacy-modes/mode/http";
     import { oneDark } from "@codemirror/theme-one-dark";
+    import { beforeNavigate, goto } from "$app/navigation";
 
     const modalStore = getModalStore();
     const drawerStore = getDrawerStore();
@@ -134,7 +135,41 @@
         return editorText === originalText.replaceAll("\r\n", "\n");
     }
 
-
+    $: {
+        GetRawDetails(request_id).then((row) => {
+            selectedRow = row;
+            if ($prettify) {
+                requestBody = row?.Metadata?.["prettified-request"] ?? (row?.Request?.Raw ?? '');
+                responseBody = row?.Metadata?.["prettified-response"] ?? (row?.Response?.Raw ?? '');
+            } else {
+                requestBody = row?.Request?.Raw ?? '';
+                responseBody = row?.Response?.Raw ?? '';
+            }
+            setTimeout(adjustHeights, 50);
+        });
+    }
+    beforeNavigate(({to, cancel}) => {
+        if (requestReadOnly && responseReadOnly) return;
+        if (userEdited) {
+            // Cancel and handle the goto manually in the modal response
+            cancel();
+            const modal = {
+                type: "confirm",
+                title: "Confirm Action",
+                body: "You have made changes to the text. Navigating away will clear your changes. Continue?",
+                response: (result) => {
+                    if (result) {
+                        // Force navigation
+                        userEdited = false;
+                        goto(to?.route?.id);
+                    } else {
+                        cancel();
+                    }
+                }
+            };
+            modalStore.trigger(modal);
+        } else return;
+    });
     onMount(() => {
         GetRawDetails(request_id).then((row) => {
             selectedRow = row;

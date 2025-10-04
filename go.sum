@@ -132,8 +132,6 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-github.com/tfkr-ae/marasi v0.0.0-20250930163737-fe3d657a49dd h1:YBcqulTw5IGuMwqlNDWRw7RJiPG2AH6Mp9w+wikhpEU=
-github.com/tfkr-ae/marasi v0.0.0-20250930163737-fe3d657a49dd/go.mod h1:bObpISKGeJO16Sr5d/3eOjgfB+FCyvmwvsqzTTC/1d4=
 github.com/tfkr-ae/marasi v0.0.0-20250930171445-633727cff735 h1:x/PHa0kkP9TZgg7h+9JtOjH4piLSClwVwyq4YeYyOiE=
 github.com/tfkr-ae/marasi v0.0.0-20250930171445-633727cff735/go.mod h1:bObpISKGeJO16Sr5d/3eOjgfB+FCyvmwvsqzTTC/1d4=
 github.com/tkrajina/go-reflector v0.5.8 h1:yPADHrwmUbMq4RGEyaOUpz2H90sRsETNVpjzo3DLVQQ=

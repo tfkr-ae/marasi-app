@@ -87,7 +87,7 @@
 
     function openMetadata() {
         if (!currentItem || !currentItem.Request || !currentItem.Request.ID) return;
-        GetNote(currentItem.Request.ID.toString()).then((metadata) => {
+        GetMetadata(currentItem.Request.ID.toString()).then((metadata) => {
             const modal = {
                 type: "component",
                 component: "Metadata",

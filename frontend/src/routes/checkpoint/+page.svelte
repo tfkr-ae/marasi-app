@@ -12,7 +12,6 @@
         ForwardIntercepted,
         DropIntercepted,
         RunExtension,
-        GetInterceptFlag,
         ToggleIntercept,
         InterceptResponse,
     } from "../../lib/wailsjs/go/main/App";
@@ -290,8 +289,7 @@
     </AccordionItem>
     <!-- ... -->
 </Accordion>
-
-<div class="p-1 text-center">
+<div class="p-1 flex flex-col items-center">
     <div class="btn-group variant-filled-primary">
         <button
             disabled={error !== ""}
@@ -325,26 +323,35 @@
         >
         <!--<button disabled="true">Intercept Response</button>-->
     </div>
+    <div class="text-center">
+        {#if interceptedCount > 0}
+            <p>Intercept Queue: {interceptedCount}</p>
+        {:else}
+            <p>No items in interception queue</p>
+        {/if}
+    </div>
+    <div class="text-center">
+        {#if error === ""}
+            <p>No Error</p>
+        {:else}
+            <p>{error}</p>
+        {/if}
+    </div>
+    <div class='w-full filler-color flex justify-center'>
+        <div class="w-[50%]">
+        <CodeMirror
+            bind:value={intercepted}
+            lang={getLang(intercepted)}
+            class="text-xs"
+            theme={oneDark}
+            extensions={$marasiConfig.VimEnabled ? [vim()] : []}
+            lineWrapping={$lineWrap}
+        />
+        </div>
+    </div>
 </div>
-<div class="text-center">
-    {#if interceptedCount > 0}
-        <p>Intercept Queue: {interceptedCount}</p>
-    {:else}
-        <p>No items in interception queue</p>
-    {/if}
-</div>
-<div class="text-center">
-    {#if error === ""}
-        <p>No Error</p>
-    {:else}
-        <p>{error}</p>
-    {/if}
-</div>
-<CodeMirror
-    bind:value={intercepted}
-    lang={getLang(intercepted)}
-    class="text-xs"
-    theme={oneDark}
-    extensions={$marasiConfig.VimEnabled ? [vim()] : []}
-    lineWrapping={$lineWrap}
-/>
+<style>
+    .filler-color {
+        background-color: #282c34
+    }
+</style>
