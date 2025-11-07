@@ -4,7 +4,7 @@
     const toastStore = getToastStore();
     import { goto } from "$app/navigation";
     import { DataHandler } from "@vincjo/datatables";
-    import { drawerHeight, filterInput, filterItems, populateHistory, proxyItems, searchInput } from "../../stores";
+    import { drawerHeight, filterInput, filterItems, lineWrap, populateHistory, proxyItems, searchInput } from "../../stores";
     import Sort from "../../lib/components/datatables/Sort.svelte";
     import RowCount from "../../lib/components/datatables/RowCount.svelte";
     import RowsPerPage from "../../lib/components/datatables/RowsPerPage.svelte";
@@ -43,6 +43,7 @@
         ArrowLeft,
         ArrowRight,
         Braces,
+        CodeIcon,
         CopyIcon,
         FilterIcon,
         Maximize,
@@ -51,6 +52,7 @@
         SearchIcon,
         SquareArrowOutUpRight,
         ToggleLeftIcon,
+        WrapText,
     } from "lucide-svelte";
 
     let isDrawerOpen = false;
@@ -322,6 +324,19 @@
                 },
                 options: { scope: "ledger", single: true },
                 keys: ["⌘+⇧+T", "ctrl+⇧+T"],
+            },
+        },
+        {
+            name: "Toggle Line Wrapping",
+            subtitle: "Line wrap request & response body",
+            keywords: "toggle, linewrap",
+            icon: WrapText,
+            action: {
+                handler: () => {
+                  $lineWrap = $lineWrap ? false : true;
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+W", "ctrl+⇧+W"],
             },
         }
     ];

@@ -11,7 +11,22 @@ export default defineConfig({
 	},
 	build: {
 		rollupOptions: {
-			external: []
+			external: [],
+			output: {
+				manualChunks: (id) => {
+					if (id.includes('node_modules')) {
+						if (id.includes('@skeletonlabs/skeleton') ||
+							id.includes('lucide-svelte') ||
+							id.includes('svelte-feather-icons')) {
+							return 'vendor';
+						}
+						if (id.includes('@codemirror') ||
+							id.includes('svelte-codemirror-editor')) {
+							return 'codemirror';
+						}
+					}
+				}
+			}
 		},
 		chunkSizeWarningLimit: 1600,
 	},

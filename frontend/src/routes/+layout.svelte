@@ -44,8 +44,6 @@
     } from "../stores.js";
     import { EventsOn, EventsOff, Quit, WindowSetTitle} from "../lib/wailsjs/runtime/runtime";
     import AppDrawer from "../lib/components/AppDrawer.svelte";
-    import SvelteChef from "../lib/components/SvelteChef.svelte";
-    import Interact from "../lib/components/Interact.svelte";
     import NotesModal from "../lib/components/NotesModal.svelte";
     import {
         GetExtensionFlag,
@@ -54,7 +52,6 @@
         SetupScratchpad,
         StartProxy,
     } from "../lib/wailsjs/go/main/App";
-    import Excalidraw from "../lib/components/Excalidraw.svelte";
     import WebComponentWrapper from "../lib/components/WebComponentWrapper.svelte";
     import { ChefHat, Brush} from "lucide-svelte";
     import MenuModal from "../lib/components/MenuModal.svelte";
@@ -68,6 +65,33 @@
     let showExcali = false;
     let showInteract = false;
     let startupCompleted = false;
+
+    // Lazy-loaded components
+    let SvelteChef;
+    let Excalidraw;
+    let Interact;
+
+    // Dynamic imports for heavy components
+    const loadSvelteChef = async () => {
+        if (!SvelteChef) {
+            const module = await import("../lib/components/SvelteChef.svelte");
+            SvelteChef = module.default;
+        }
+    };
+
+    const loadExcalidraw = async () => {
+        if (!Excalidraw) {
+            const module = await import("../lib/components/Excalidraw.svelte");
+            Excalidraw = module.default;
+        }
+    };
+
+    const loadInteract = async () => {
+        if (!Interact) {
+            const module = await import("../lib/components/Interact.svelte");
+            Interact = module.default;
+        }
+    };
     const toastStore = getToastStore();
     const modalStore = getModalStore();
     storePopup.set({ computePosition, autoUpdate, offset, shift, flip, arrow });
@@ -114,6 +138,7 @@
             WindowSetTitle("scratchpad");
             activeProject.set("scratchpad");
             openProject();
+            console.log($marasiConfig)
             if ($marasiConfig.FirstRun) {
                 const modal = {
                     type: "component",
@@ -367,7 +392,8 @@
             </AppRailAnchor> -->
                 <AppRailAnchor
                     selected={$page.url.pathname === "/sveltechef"}
-                    on:click={() => {
+                    on:click={async () => {
+                        await loadSvelteChef();
                         goto("/sveltechef");
                         showChef = true;
                     }}
@@ -385,7 +411,8 @@
                 </AppRailAnchor>
                 <AppRailAnchor
                     selected={$page.url.pathname === "/excalidraw"}
-                    on:click={() => {
+                    on:click={async () => {
+                        await loadExcalidraw();
                         goto("/excalidraw");
                         showExcali = true;
                     }}
@@ -403,7 +430,8 @@
                 </AppRailAnchor>
                 <AppRailAnchor
                     selected={$page.url.pathname === "/interact"}
-                    on:click={() => {
+                    on:click={async () => {
+                        await loadInteract();
                         goto("/interact");
                         showInteract = true;
                     }}
@@ -465,9 +493,15 @@
             <!-- Content area -->
             <div id="content" class="flex-1 overflow-auto">
                 <slot />
-                <SvelteChef isVisible={showChef} />
-                <Excalidraw isVisible={showExcali} />
-                <Interact isVisible={showInteract} />
+                {#if SvelteChef && showChef}
+                    <svelte:component this={SvelteChef} isVisible={showChef} />
+                {/if}
+                {#if Excalidraw && showExcali}
+                    <svelte:component this={Excalidraw} isVisible={showExcali} />
+                {/if}
+                {#if Interact && showInteract}
+                    <svelte:component this={Interact} isVisible={showInteract} />
+                {/if}
             </div>
         {/if}
     </div>

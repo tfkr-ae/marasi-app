@@ -1,92 +1,106 @@
 <script>
-	import { goto } from "$app/navigation";
-	import {
-		LoadExtensions,
-		OpenProject,
-		StartBrowser,
+    import { goto } from "$app/navigation";
+    import {
+        LoadExtensions,
+        OpenProject,
+        StartBrowser,
         StartProxy,
         ToggleFlag,
-	} from "../lib/wailsjs/go/main/App";
-	import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
-	import LogTable from "../lib/components/LogTable.svelte";
-	import Dashboard from "../lib/components/Dashboard.svelte";
-	import {
-		getDrawerStore,
-		getModalStore,
-		getToastStore,
-	} from "@skeletonlabs/skeleton";
-	import MarasiKeys from "../lib/components/MarasiMenu/MarasiKeys.svelte";
-	import {
-		AnchorIcon,
-		Binoculars,
-		BookIcon,
-		CompassIcon,
-		FlagIcon,
-		FolderOpen,
-		PartyPopper,
-		SendIcon,
+        ToggleIntercept,
+    } from "../lib/wailsjs/go/main/App";
+    import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
+    import LogTable from "../lib/components/LogTable.svelte";
+    import Dashboard from "../lib/components/Dashboard.svelte";
+    import {
+        getDrawerStore,
+        getModalStore,
+        getToastStore,
+    } from "@skeletonlabs/skeleton";
+    import MarasiKeys from "../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import {
+        AnchorIcon,
+        Binoculars,
+        BookIcon,
+        CompassIcon,
+        FlagIcon,
+        FolderOpen,
+        PartyPopper,
+        SendIcon,
         Settings,
         ToggleLeft,
-	} from "lucide-svelte";
-    import { activeProject, listener, marasiConfig, openProject} from "../stores";
+    } from "lucide-svelte";
+    import {
+        activeProject,
+        listener,
+        marasiConfig,
+        openProject,
+        interceptFlag,
+    } from "../stores";
     import { WindowSetTitle } from "../lib/wailsjs/runtime/runtime";
-	const drawerStore = getDrawerStore();
-	const modalStore = getModalStore();
-	const toastStore = getToastStore();
+    const drawerStore = getDrawerStore();
+    const modalStore = getModalStore();
+    const toastStore = getToastStore();
 
-	function closeAndGoto(url) {
-		drawerStore.close();
-		modalStore.close();
-		document.querySelector("dialog")?.close();
-		goto(url);
-	}
-    function setupListener(r) {
-        StartProxy(r.addr, r.port).then(() => {
-            listener.set({
-                status: true,
-                address: r.addr,
-                port: r.port,
-            });
-            const toastSettings = {
-                message: "Listening on " + r.addr + ":" + r.port, 
-                background: "variant-filled-success",
-            };
-            toastStore.trigger(toastSettings);
-        }).catch((listenerError) => {
-            listener.set({
-                status: false,
-                address: r.addr,
-                port: r.port,
-            });
-            const toastSettings = {
-                message: "Failed to setup listener on " + r.addr + ":" + r.port, 
-                background: "variant-filled-error",
-            };
-            toastStore.trigger(toastSettings);
-        });
+    function closeAndGoto(url) {
+        drawerStore.close();
+        modalStore.close();
+        document.querySelector("dialog")?.close();
+        goto(url);
     }
-
-    function open(r) {
-        OpenProject(r).then((name) => {
-            LoadExtensions().then(() => {
-                activeProject.set(name);
-                WindowSetTitle(name);
-                openProject();
+    function setupListener(r) {
+        StartProxy(r.addr, r.port)
+            .then(() => {
+                listener.set({
+                    status: true,
+                    address: r.addr,
+                    port: r.port,
+                });
                 const toastSettings = {
-                    message: "Opened " + name + " project",
+                    message: "Listening on " + r.addr + ":" + r.port,
                     background: "variant-filled-success",
                 };
                 toastStore.trigger(toastSettings);
-            }).catch((extensionError) => {
+            })
+            .catch((listenerError) => {
+                listener.set({
+                    status: false,
+                    address: r.addr,
+                    port: r.port,
+                });
                 const toastSettings = {
-                    message: "Failed to open project",
+                    message:
+                        "Failed to setup listener on " + r.addr + ":" + r.port,
                     background: "variant-filled-error",
                 };
                 toastStore.trigger(toastSettings);
             });
-        }).catch((repoError) => {
-            alert(repoError);
-        });
+    }
+
+    function open(r) {
+        OpenProject(r)
+            .then((name) => {
+                LoadExtensions()
+                    .then(() => {
+                        activeProject.set(name);
+                        WindowSetTitle(name);
+                        openProject();
+                        const toastSettings = {
+                            message: "Opened " + name + " project",
+                            background: "variant-filled-success",
+                        };
+                        toastStore.trigger(toastSettings);
+                    })
+                    .catch((extensionError) => {
+                        const toastSettings = {
+                            message: "Failed to open project",
+                            background: "variant-filled-error",
+                        };
+                        toastStore.trigger(toastSettings);
+                    });
+            })
+            .catch((repoError) => {
+                alert(repoError);
+            });
     }
 </script>
 
@@ -191,7 +205,7 @@
                     action: {
                         handler: () => {
                             StartBrowser().then(() => {
-                                console.log("Chrome started")
+                                console.log("Chrome started");
                             });
                         },
                         options: { scope: "all", single: true },
@@ -207,9 +221,7 @@
                         handler: () => {
                             drawerStore.close();
                             modalStore.close();
-                            document.querySelector(
-                                "dialog",
-                            )?.close();
+                            document.querySelector("dialog")?.close();
                             $toastStore[0]?.action?.response();
                         },
                         options: { scope: "all", single: true },
@@ -223,21 +235,21 @@
                     name: "Open Project",
                     action: {
                         handler: () => {
-                                const modal = {
-                                    type: "component",
-                                    component: "Project",
-                                    title: "Switch Projects",
-                                    response: (r) => {
-                                        if (r) {
-                                            open(r);
-                                        }
-                                    },
-                                };
-                                if (!$modalStore[0]) {
-                                    modalStore.trigger(modal);
-                                } else if ($modalStore[0].component === "Project") {
-                                    modalStore.close();
-                                }
+                            const modal = {
+                                type: "component",
+                                component: "Project",
+                                title: "Switch Projects",
+                                response: (r) => {
+                                    if (r) {
+                                        open(r);
+                                    }
+                                },
+                            };
+                            if (!$modalStore[0]) {
+                                modalStore.trigger(modal);
+                            } else if ($modalStore[0].component === "Project") {
+                                modalStore.close();
+                            }
                         },
                         options: { scope: "all", single: true },
                         keys: ["⌘+O", "ctrl+O"],
@@ -258,11 +270,13 @@
                                     if (r) {
                                         setupListener(r);
                                     }
-                                }
+                                },
                             };
                             if (!$modalStore[0]) {
                                 modalStore.trigger(modal);
-                            } else if ($modalStore[0].component === "Interface") {
+                            } else if (
+                                $modalStore[0].component === "Interface"
+                            ) {
                                 modalStore.close();
                             }
                         },
@@ -280,7 +294,7 @@
                             // $marasiConfig.VimEnabled = !$marasiConfig.VimEnabled;
                             ToggleFlag("vim_enabled").then((config) => {
                                 marasiConfig.set(config);
-                            })
+                            });
                         },
                         options: { scope: "all", single: true },
                         keys: ["⌘+T", "ctrl+T"],
@@ -288,7 +302,24 @@
                     subtitle: "Toggle Vim Mode in editor views",
                     icon: ToggleLeft,
                     keywords: "vim",
-                }
+                },
+                {
+                    name: $interceptFlag
+                        ? "Toggle Intercept Off"
+                        : "Toggle Intercept On",
+                    action: {
+                        handler: () => {
+                            ToggleIntercept().then((flag) => {
+                                interceptFlag.set(flag);
+                            });
+                        },
+                        options: { scope: "all", single: true },
+                        keys: ["⌘+I", "ctrl+I"],
+                    },
+                    subtitle: "Toggle the Global Intercept On or Off",
+                    icon: ToggleLeft,
+                    keywords: "intercept, toggle, global",
+                },
             ]}
         />
         <div class="container mx-auto p-8 space-y-8">
@@ -306,7 +337,7 @@
                                     if (r) {
                                         setupListener(r);
                                     }
-                                }
+                                },
                             };
                             if (!$modalStore[0]) {
                                 modalStore.trigger(modal);
@@ -314,12 +345,17 @@
                         }}
                     >
                         <span>{$listener.address + ":" + $listener.port}</span>
-                        <span class={"flex w-3 h-3 me-3 rounded-full " + ($listener.status ? "bg-success-500" : "bg-primary-500")}></span>
+                        <span
+                            class={"flex w-3 h-3 me-3 rounded-full " +
+                                ($listener.status
+                                    ? "bg-success-500"
+                                    : "bg-primary-500")}
+                        ></span>
                     </button>
                     <button
                         type="button"
                         class="btn variant-filled flex items-center"
-                        on:click={() => {                            
+                        on:click={() => {
                             const modal = {
                                 type: "component",
                                 component: "Project",
@@ -333,19 +369,20 @@
                             if (!$modalStore[0]) {
                                 modalStore.trigger(modal);
                             }
-                        }}>
+                        }}
+                    >
                         <span class="mr-2"><FolderOpen /></span>
                         <span>Open Project</span>
                     </button>
                 </div>
-                    <button
-                        type="button"
-                        class="btn variant-filled-primary"
-                        on:click={StartBrowser}
-                    >
-                        <span class=""><ChromeIcon /></span>
-                        <span>Start Chrome</span>
-                    </button>
+                <button
+                    type="button"
+                    class="btn variant-filled-primary"
+                    on:click={StartBrowser}
+                >
+                    <span class=""><ChromeIcon /></span>
+                    <span>Start Chrome</span>
+                </button>
             </div>
             <Dashboard />
         </div>
@@ -370,7 +407,9 @@
     .dashboard-content {
         flex: 1 0 auto;
         overflow-y: hidden; /* Prevent dashboard content from scrolling */
-        max-height: calc(100vh - 30vh); /* Ensure it doesn't overflow available space */
+        max-height: calc(
+            100vh - 30vh
+        ); /* Ensure it doesn't overflow available space */
         padding-bottom: 1rem;
     }
 
@@ -391,7 +430,7 @@
         .dashboard-content {
             max-height: calc(100vh - 25vh);
         }
-        
+
         .log-table-container {
             flex: 0 0 25vh;
             height: 25vh;
@@ -402,7 +441,7 @@
         .dashboard-content {
             max-height: calc(100vh - 20vh);
         }
-        
+
         .log-table-container {
             flex: 0 0 20vh;
             height: 20vh;

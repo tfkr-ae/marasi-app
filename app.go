@@ -28,6 +28,7 @@ type App struct {
 	ctx      context.Context
 	Proxy    *marasi.Proxy
 	Listener net.Listener
+	Config   *Config
 }
 
 // NewApp creates a new App application struct
@@ -39,13 +40,19 @@ func NewApp() *App {
 	}
 	// Check and make application config directory
 	appConfigDir := filepath.Join(userConfigDir, "Marasi")
+	config, err := LoadConfig(appConfigDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 	Proxy, err := marasi.New(
 		marasi.WithConfigDir(appConfigDir),
+		marasi.WithBasePipeline(),
+		marasi.WithDefaultModifierPipeline(),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &App{Proxy: Proxy}
+	return &App{Proxy: Proxy, Config: config}
 }
 
 // startup is called when the app starts. The context is saved
@@ -76,20 +83,20 @@ func (a *App) startup(ctx context.Context) {
 		}),
 	)
 }
-func (a *App) ToggleFlag(name string) (*marasi.Config, error) {
-	err := a.Proxy.Config.ToggleFlag(name)
+func (a *App) ToggleFlag(name string) (*Config, error) {
+	err := a.Config.ToggleFlag(name)
 	if err != nil {
-		return a.Proxy.Config, fmt.Errorf("toggling flag : %w", err)
+		return a.Config, fmt.Errorf("toggling flag : %w", err)
 	}
-	return a.Proxy.Config, nil
+	return a.Config, nil
 }
 
-func (a *App) SetFlag(name string, value string) (*marasi.Config, error) {
-	err := a.Proxy.Config.SetFlag(name, value)
+func (a *App) SetFlag(name string, value string) (*Config, error) {
+	err := a.Config.SetFlag(name, value)
 	if err != nil {
-		return a.Proxy.Config, fmt.Errorf("setting flag : %w", err)
+		return a.Config, fmt.Errorf("setting flag : %w", err)
 	}
-	return a.Proxy.Config, nil
+	return a.Config, nil
 }
 func (a *App) DeleteWaypoint(host string) error {
 	err := a.Proxy.Repo.DeleteWaypoint(host)
@@ -120,7 +127,7 @@ func (a *App) ToggleIntercept() bool {
 	return a.Proxy.InterceptFlag
 }
 func (a *App) GetExtensionLogs(name string) ([]marasi.ExtensionLog, error) {
-	if extension, ok := a.Proxy.Extensions[name]; ok {
+	if extension, ok := a.Proxy.GetExtension(name); ok {
 		return extension.Logs, nil
 	}
 	return []marasi.ExtensionLog{}, fmt.Errorf("extension %s not found", name)
@@ -143,12 +150,13 @@ func (a *App) GetWaypoints() (map[string]string, error) {
 	}
 	return waypoints, nil
 }
-func (a *App) UninstallExtension(name string) error {
-	return a.Proxy.RemoveExtension(name)
-}
-func (a *App) CheckExtensionUpdates() map[string]bool {
-	return a.Proxy.CheckExtensionUpdates()
-}
+
+// func (a *App) UninstallExtension(name string) error {
+// 	return a.Proxy.RemoveExtension(name)
+// }
+// func (a *App) CheckExtensionUpdates() map[string]bool {
+// 	return a.Proxy.CheckExtensionUpdates()
+// }
 
 // Utility function to detect if the listener was closed cleanly
 func isListenerClosed(err error) bool {
@@ -329,13 +337,21 @@ func (a *App) GetProxyItems() map[uuid.UUID]marasi.Row {
 	return results
 }
 
-// TODO  - Shift to proxy after
-func (a *App) DownloadExtension(url string, direct bool) {
-	err := a.Proxy.InstallExtension(url, direct)
+func (a *App) GetRawDetails(id uuid.UUID) marasi.Row {
+	row, err := a.Proxy.Repo.GetRaw(id)
 	if err != nil {
 		log.Print(err)
 	}
+	return row
 }
+
+// // TODO  - Shift to proxy after
+// func (a *App) DownloadExtension(url string, direct bool) {
+// 	err := a.Proxy.InstallExtension(url, direct)
+// 	if err != nil {
+// 		log.Print(err)
+// 	}
+// }
 
 func (a *App) GetFilters() []string {
 	results, err := a.Proxy.Repo.GetFilters()
@@ -393,7 +409,7 @@ func (a *App) StartBrowser() error {
 	return nil
 }
 func (a *App) GetExtensionUI(extensionName string) (extUI ExtensionUI) {
-	if extension, ok := a.Proxy.Extensions[extensionName]; ok {
+	if extension, ok := a.Proxy.GetExtension(extensionName); ok {
 		ui, err := extension.GetGlobalFlag("ui_code")
 		if err != nil {
 			log.Print(err)
@@ -411,7 +427,7 @@ func (a *App) GetExtensionUI(extensionName string) (extUI ExtensionUI) {
 	return extUI
 }
 func (a *App) GetExtensionFlag(extensionName string, flagName string) (bool, error) {
-	if extension, ok := a.Proxy.Extensions[extensionName]; ok {
+	if extension, ok := a.Proxy.GetExtension(extensionName); ok {
 		return extension.CheckGlobalFlag(flagName), nil
 	}
 	return false, fmt.Errorf("checking if %s exists", extensionName)
@@ -623,7 +639,6 @@ func (a *App) HighlightRow(id uuid.UUID, colorCode int) error {
 	if err != nil {
 		return fmt.Errorf("getting metadata for request %s : %w", id.String(), err)
 	}
-	log.Print(metadata)
 	switch colorCode {
 	case -1:
 		delete(metadata, "Highlight")
@@ -637,7 +652,7 @@ func (a *App) HighlightRow(id uuid.UUID, colorCode int) error {
 	return nil
 }
 
-func (a *App) GetExtensions() map[string]*marasi.Extension {
+func (a *App) GetExtensions() []*marasi.Extension {
 	return a.Proxy.Extensions
 }
 func (a *App) GetRepeaterTabs() []marasi.Launchpad {
@@ -701,7 +716,7 @@ func (a *App) RunExtension(extensionName string, code string) error {
 	if err != nil {
 		return fmt.Errorf("updating code for %s : %w", extensionName, err)
 	}
-	extension, ok := a.Proxy.Extensions[extensionName]
+	extension, ok := a.Proxy.GetExtension(extensionName)
 	if !ok {
 		return fmt.Errorf("extension %s not found", extensionName)
 	}
@@ -717,8 +732,17 @@ func (a *App) DoExtender(code string) {
 	if err != nil {
 		log.Print(err)
 	}
-	err = a.Proxy.Extensions["workshop"].ExecuteLua(code)
-	log.Print(err)
+	if ext, ok := a.Proxy.GetExtension("workshop"); ok {
+		err := ext.ExecuteLua(code)
+		log.Print(err)
+	}
+}
+func (a *App) GetMetadata(id uuid.UUID) marasi.Metadata {
+	note, err := a.Proxy.Repo.GetMetadata(id)
+	if err != nil {
+		log.Print(err)
+	}
+	return note
 }
 func (a *App) GetNote(id uuid.UUID) string {
 	note, err := a.Proxy.Repo.GetNote(id)
@@ -776,8 +800,8 @@ func (a *App) GetInterfaces() ([]string, error) {
 	// Return IPv4 addresses first, then IPv6
 	return append(ipv4Slice, ipv6Slice...), nil
 }
-func (a *App) GetMarasiConfig() *marasi.Config {
-	return a.Proxy.Config
+func (a *App) GetMarasiConfig() *Config {
+	return a.Config
 }
 func (a *App) GetRecentProjects() []struct {
 	ProjectName string
@@ -811,4 +835,26 @@ func (a *App) GetRecentProjects() []struct {
 		}
 	}
 	return recent
+}
+
+func (a *App) GetChromePaths() []marasi.ChromePathConfig {
+	return a.Proxy.Config.ChromeDirs
+}
+
+func (a *App) AddChromePath(path, os string) []marasi.ChromePathConfig {
+	err := a.Proxy.Config.AddChromePath(path, os)
+	if err != nil {
+		// Return something useful here
+		return []marasi.ChromePathConfig{}
+	}
+	return a.Proxy.Config.ChromeDirs
+}
+
+func (a *App) DeleteChromePath(path, os string) []marasi.ChromePathConfig {
+	err := a.Proxy.Config.DeleteChromePath(path, os)
+	if err != nil {
+		// Return something useful here
+		return []marasi.ChromePathConfig{}
+	}
+	return a.Proxy.Config.ChromeDirs
 }
