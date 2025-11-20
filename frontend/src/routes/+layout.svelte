@@ -28,6 +28,8 @@
         FlagIcon,
         CompassIcon,
         ZapIcon,
+        ListIcon,
+        FilterIcon,
     } from "svelte-feather-icons";
     import { goto } from "$app/navigation";
     import "../app.css";
@@ -313,6 +315,40 @@
                         </div>
                     </svelte:fragment>
                     <span>Ledger</span>
+                </AppRailAnchor>
+                <AppRailAnchor
+                    selected={$page.url.pathname === "/requests"}
+                    on:click={() => {
+                        goto("/requests");
+                    }}
+                    bind:group={currentTile}
+                    name="Requests"
+                    value={appRailIndex++}
+                    title="Requests"
+                >
+                    <svelte:fragment slot="lead">
+                        <div class="flex justify-center items-center w-full">
+                            <ListIcon />
+                        </div>
+                    </svelte:fragment>
+                    <span>Requests</span>
+                </AppRailAnchor>
+                <AppRailAnchor
+                    selected={$page.url.pathname === "/filters"}
+                    on:click={() => {
+                        goto("/filters");
+                    }}
+                    bind:group={currentTile}
+                    name="Filters"
+                    value={appRailIndex++}
+                    title="Filters"
+                >
+                    <svelte:fragment slot="lead">
+                        <div class="flex justify-center items-center w-full">
+                            <FilterIcon />
+                        </div>
+                    </svelte:fragment>
+                    <span>Filters</span>
                 </AppRailAnchor>
                 <AppRailAnchor
                     selected={$page.url.pathname === "/compass"}
