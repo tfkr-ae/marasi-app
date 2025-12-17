@@ -4,18 +4,26 @@
     const toastStore = getToastStore();
     import { goto } from "$app/navigation";
     import { DataHandler } from "@vincjo/datatables";
-    import { drawerHeight, filterInput, filterItems, lineWrap, populateHistory, proxyItems, searchInput } from "../../stores";
+    import {
+        drawerHeight,
+        filterInput,
+        filterItems,
+        lineWrap,
+        populateHistory,
+        proxyItems,
+        searchInput,
+    } from "../../stores";
     import Sort from "../../lib/components/datatables/Sort.svelte";
     import RowCount from "../../lib/components/datatables/RowCount.svelte";
     import RowsPerPage from "../../lib/components/datatables/RowsPerPage.svelte";
     import Pagination from "../../lib/components/datatables/Pagination.svelte";
     import Search from "../../lib/components/datatables/Search.svelte";
     import {
-        CreateRepeaterEntry,
+        CreateLaunchpadEntry,
         GetNote,
-        GetResponse,
+        GetRawDetails,
         HighlightRow,
-        LinkRequestToRepeater,
+        LinkRequestToLaunchpad,
         SetFilters,
     } from "../../lib/wailsjs/go/main/App";
     import { onMount } from "svelte";
@@ -43,7 +51,6 @@
         ArrowLeft,
         ArrowRight,
         Braces,
-        CodeIcon,
         CopyIcon,
         FilterIcon,
         Maximize,
@@ -70,28 +77,23 @@
             action: {
                 handler: () => {
                     if (isDrawerOpen) {
-                        GetNote(selectedId.Request.ID.toString()).then(
-                            (note) => {
-                                const modal = {
-                                    type: "component",
-                                    component: "Notes",
-                                    title:
-                                        "Request " +
-                                        (Object.values($proxyItems).indexOf(
-                                            selectedId,
-                                        ) +
-                                            1) +
-                                        " notes",
-                                    requestID: selectedId.Request.ID,
-                                    content: note,
-                                };
-                                if (!$modalStore[0]) {
-                                    modalStore.trigger(modal);
-                                } else if ($modalStore[0].component === "Notes") {
-                                    modalStore.close();
-                                }
-                            },
+                        const index = $proxyItems.findIndex(
+                            (item) => item.ID === selectedId.ID,
                         );
+                        GetNote(selectedId.ID).then((note) => {
+                            const modal = {
+                                type: "component",
+                                component: "Notes",
+                                title: "Request " + (index + 1) + " notes",
+                                requestID: selectedId.ID,
+                                content: note,
+                            };
+                            if (!$modalStore[0]) {
+                                modalStore.trigger(modal);
+                            } else if ($modalStore[0].component === "Notes") {
+                                modalStore.close();
+                            }
+                        });
                     }
                 },
                 options: { scope: "ledger", single: true },
@@ -146,30 +148,30 @@
                     if (isDrawerOpen) {
                         const requestIndex =
                             Object.values($proxyItems).indexOf(selectedId) + 1;
-                        CreateRepeaterEntry(
+                        CreateLaunchpadEntry(
                             "Request " + requestIndex,
                             "Launchpad for Request " + requestIndex,
                         ).then((id) => {
-                            LinkRequestToRepeater(
-                                selectedId.Request.ID,
-                                id,
-                            ).then(() => {
-                                const toastSettings = {
-                                    message:
-                                        "Request " +
-                                        requestIndex +
-                                        " sent to Launchpad",
-                                    action: {
-                                        label: "Jump to Launchpad",
-                                        response: () => {
-                                            drawerStore.close();
-                                            toastStore.close(toastId);
-                                            goto("/launchpad?lastTab=1");
+                            LinkRequestToLaunchpad(selectedId.ID, id).then(
+                                () => {
+                                    const toastSettings = {
+                                        message:
+                                            "Request " +
+                                            requestIndex +
+                                            " sent to Launchpad",
+                                        action: {
+                                            label: "Jump to Launchpad",
+                                            response: () => {
+                                                drawerStore.close();
+                                                toastStore.close(toastId);
+                                                goto("/launchpad?lastTab=1");
+                                            },
                                         },
-                                    },
-                                };
-                                const toastId = toastStore.trigger(toastSettings);
-                            });
+                                    };
+                                    const toastId =
+                                        toastStore.trigger(toastSettings);
+                                },
+                            );
                         });
                     }
                 },
@@ -186,10 +188,10 @@
                 handler: () => {
                     if (isDrawerOpen) {
                         const url =
-                            selectedId.Request.Scheme +
+                            selectedId.Scheme +
                             "://" +
-                            selectedId.Request.Host +
-                            selectedId.Request.Path;
+                            selectedId.Host +
+                            selectedId.Path;
                         navigator.clipboard
                             .writeText(url)
                             .then(() => {
@@ -221,7 +223,7 @@
                 handler: () => {
                     if (isDrawerOpen) {
                         navigator.clipboard
-                            .writeText(selectedId.Request.Raw)
+                            .writeText(selectedId.Raw)
                             .then(() => {
                                 const toastSettings = {
                                     message: "Request copied to clipboard",
@@ -294,7 +296,7 @@
                         };
                         if (!$modalStore[0]) {
                             modalStore.trigger(modal);
-                            console.log($modalStore[0])
+                            console.log($modalStore[0]);
                         } else if ($modalStore[0].component === "Metadata") {
                             modalStore.close();
                         }
@@ -315,8 +317,7 @@
                         if ($drawerHeight === "h-[60%]") {
                             $drawerHeight = "h-[100%]";
                             $drawerStore.height = $drawerHeight;
-                        }
-                        else {
+                        } else {
                             $drawerHeight = "h-[60%]";
                             $drawerStore.height = $drawerHeight;
                         }
@@ -333,12 +334,12 @@
             icon: WrapText,
             action: {
                 handler: () => {
-                  $lineWrap = $lineWrap ? false : true;
+                    $lineWrap = $lineWrap ? false : true;
                 },
                 options: { scope: "ledger", single: true },
                 keys: ["⌘+⇧+W", "ctrl+⇧+W"],
             },
-        }
+        },
     ];
     let ledgerMenu = [
         {
@@ -462,7 +463,9 @@
                             };
                             if (!$modalStore[0]) {
                                 modalStore.trigger(modal);
-                            } else if ($modalStore[0].component === "MenuInput") {
+                            } else if (
+                                $modalStore[0].component === "MenuInput"
+                            ) {
                                 modalStore.close();
                             }
                         }).then((r) => {
@@ -513,19 +516,19 @@
     $: handler.setRows(Object.values($proxyItems).reverse());
 
     function openDrawer(row) {
-        var requestIndex = Object.values($proxyItems).indexOf(row) + 1
-        GetResponse(row.Request.ID).then((response) => {
+        var requestIndex = Object.values($proxyItems).indexOf(row) + 1;
+        GetRawDetails(row.ID).then((requestResponse) => {
             const drawerSettings = {
                 id: "request-response",
                 meta: {
-                    metadata: row.Metadata,
-                    request: row.Request,
-                    response: response,
+                    metadata: requestResponse.Metadata,
+                    request: requestResponse.Request,
+                    response: requestResponse.Response,
                     requestIndex: requestIndex,
                 },
                 height: $drawerHeight,
                 width: "w-full",
-                position: "bottom"
+                position: "bottom",
             };
             selectedId = row;
             drawerStore.open(drawerSettings);
@@ -535,19 +538,14 @@
     function reselect() {
         // We have a request selected, let's update
         if (selectedId) {
-            selectedId = $proxyItems[selectedId?.Request?.ID];
-            console.log(selectedId)
+            selectedId = $proxyItems[selectedId?.ID];
         }
     }
     $: if ($proxyItems) {
         reselect();
     }
     onMount(() => {
-        handler.filter(
-            $filterItems,
-            (row) => row.Response.ContentType,
-            contentFilter2,
-        );
+        handler.filter($filterItems, (row) => row.ContentType, contentFilter2);
         handler.search($searchInput);
         const unsubscribe = drawerStore.subscribe((settings) => {
             isDrawerOpen = settings.open ? settings.open : false;
@@ -584,7 +582,7 @@
                     SetFilters($filterItems);
                     handler.filter(
                         $filterItems,
-                        (row) => row.Response.ContentType,
+                        (row) => row.ContentType,
                         contentFilter2,
                     );
                 }}
@@ -592,7 +590,7 @@
                     SetFilters($filterItems);
                     handler.filter(
                         $filterItems,
-                        (row) => row.Response.ContentType,
+                        (row) => row.ContentType,
                         contentFilter2,
                     );
                 }}
@@ -607,7 +605,7 @@
             <tr>
                 <!-- Use th for headers and ensure they are centered -->
                 <th>
-                    <Sort {handler} orderBy={(row) => row.Request.ID}>ID</Sort>
+                    <Sort {handler} orderBy={(row) => row.ID}>ID</Sort>
                 </th>
                 <th>Host</th>
                 <th>Method</th>
@@ -643,30 +641,28 @@
                                     {#if row.Metadata.intercepted}<FlagIcon
                                             size="10"
                                         />{/if}
-                                    {#if row.Metadata.intercepted && "original-request" in row.Metadata && row.Metadata["original-request"] !== row.Request.Raw}
+                                    {#if row.Metadata.intercepted && "original-request" in row.Metadata && row.Metadata["original-request"] !== row.Raw}
                                         <EditIcon size="10" />
                                     {/if}
-                                    {#if row.Metadata.intercepted && "original-response" in row.Metadata && row.Metadata["original-response"] !== row.Response.Raw}
+                                    {#if row.Metadata.intercepted && "original-response" in row.Metadata && row.Metadata["original-response"] !== row.Raw}
                                         <EditIcon size="10" />
                                     {/if}
                                     {#if row.Metadata.has_note && row.Metadata.has_note == 1}<Edit2Icon
                                             size="10"
                                         />{/if}
-                                    {#if row.Metadata.override_host}<Replace size="10"/>{/if}
+                                    {#if row.Metadata.override_host}<Replace
+                                            size="10"
+                                        />{/if}
                                 </div>
                             {/if}
                         </div>
                     </td>
-                    <td class="host-cell" title={row.Request.Host}
-                        >{row.Request.Host}</td
-                    >
-                    <td class="method-cell">{row.Request.Method}</td>
-                    <td class="path-cell" title={row.Request.Path}
-                        >{row.Request.Path}</td
-                    >
-                    <td class="ctype-cell">{row.Response.ContentType}</td>
-                    <td class="clength-cell">{row.Response.Length}</td>
-                    <td class="status-cell">{row.Response.Status}</td>
+                    <td class="host-cell" title={row.Host}>{row.Host}</td>
+                    <td class="method-cell">{row.Method}</td>
+                    <td class="path-cell" title={row.Path}>{row.Path}</td>
+                    <td class="ctype-cell">{row.ContentType}</td>
+                    <td class="clength-cell">{row.Length}</td>
+                    <td class="status-cell">{row.Status}</td>
                 </tr>
             {/each}
         </tbody>
@@ -676,7 +672,7 @@
 <ContextMenu bind:this={contextMenu}>
     <Item
         on:click={() => {
-            GetNote(selectedRow.Request.ID.toString()).then((note) => {
+            GetNote(selectedRow.ID.toString()).then((note) => {
                 const modal = {
                     type: "component",
                     component: "Notes",
@@ -684,7 +680,7 @@
                         "Request " +
                         (Object.values($proxyItems).indexOf(selectedRow) + 1) +
                         " notes",
-                    requestID: selectedRow.Request.ID,
+                    requestID: selectedRow.ID,
                     content: note,
                 };
                 if (!$modalStore[0]) {
@@ -699,54 +695,70 @@
         on:click={() => {
             const requestIndex =
                 Object.values($proxyItems).indexOf(selectedRow) + 1;
-                CreateRepeaterEntry(
-                    "Request " + requestIndex,
-                    "Launchpad for Request " + requestIndex,
-                ).then((id) => {
-                    LinkRequestToRepeater(selectedRow.Request.ID, id).then(() => {
-                        const toastSettings = {
-                            message:
-                                "Request " +
-                                requestIndex +
-                                " sent to Launchpad",
-                            action: {
-                                label: "Jump to Launchpad",
-                                response: () => {
-                                    drawerStore.close();
-                                    toastStore.close(toastId);
-                                    goto("/launchpad?lastTab=1");
-                                },
+            CreateLaunchpadEntry(
+                "Request " + requestIndex,
+                "Launchpad for Request " + requestIndex,
+            ).then((id) => {
+                LinkRequestToLaunchpad(selectedRow.ID, id).then(() => {
+                    const toastSettings = {
+                        message:
+                            "Request " + requestIndex + " sent to Launchpad",
+                        action: {
+                            label: "Jump to Launchpad",
+                            response: () => {
+                                drawerStore.close();
+                                toastStore.close(toastId);
+                                goto("/launchpad?lastTab=1");
                             },
-                        };
-                        const toastId = toastStore.trigger(toastSettings);
-                    });
+                        },
+                    };
+                    const toastId = toastStore.trigger(toastSettings);
                 });
+            });
         }}>Send to Launchpad</Item
     >
     <Divider />
     <ListBox active="hover:variant-soft">
         <ListBoxItem
-            on:click={() => highlightRow(selectedRow.Request.ID, 15680580)}
+            group
+            name
+            value
+            on:click={() => highlightRow(selectedRow.ID, 15680580)}
             class="bg-red-500">Red</ListBoxItem
         >
         <ListBoxItem
-            on:click={() => highlightRow(selectedRow.Request.ID, 2278750)}
+            group
+            name
+            value
+            on:click={() => highlightRow(selectedRow.ID, 2278750)}
             class="bg-green-500">Green</ListBoxItem
         >
         <ListBoxItem
-            on:click={() => highlightRow(selectedRow.Request.ID, 15381256)}
+            group
+            name
+            value
+            on:click={() => highlightRow(selectedRow.ID, 15381256)}
             class="bg-yellow-500">Yellow</ListBoxItem
         >
         <ListBoxItem
-            on:click={() => highlightRow(selectedRow.Request.ID, 3900150)}
+            group
+            name
+            value
+            on:click={() => highlightRow(selectedRow.ID, 3900150)}
             class="bg-blue-500">Blue</ListBoxItem
         >
         <ListBoxItem
-            on:click={() => highlightRow(selectedRow.Request.ID, 11032055)}
+            group
+            name
+            value
+            on:click={() => highlightRow(selectedRow.ID, 11032055)}
             class="bg-purple-500">Purple</ListBoxItem
         >
-        <ListBoxItem on:click={() => highlightRow(selectedRow.Request.ID, -1)}
-            >None</ListBoxItem
+        <ListBoxItem
+            group
+            name
+            value
+            on:click={() => highlightRow(selectedRow.ID, -1)}>None</ListBoxItem
         >
     </ListBox>
 </ContextMenu>

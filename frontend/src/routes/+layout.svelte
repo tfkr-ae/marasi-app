@@ -42,7 +42,12 @@
         readConfig,
         marasiConfig,
     } from "../stores.js";
-    import { EventsOn, EventsOff, Quit, WindowSetTitle} from "../lib/wailsjs/runtime/runtime";
+    import {
+        EventsOn,
+        EventsOff,
+        Quit,
+        WindowSetTitle,
+    } from "../lib/wailsjs/runtime/runtime";
     import AppDrawer from "../lib/components/AppDrawer.svelte";
     import NotesModal from "../lib/components/NotesModal.svelte";
     import {
@@ -53,7 +58,7 @@
         StartProxy,
     } from "../lib/wailsjs/go/main/App";
     import WebComponentWrapper from "../lib/components/WebComponentWrapper.svelte";
-    import { ChefHat, Brush} from "lucide-svelte";
+    import { ChefHat, Brush } from "lucide-svelte";
     import MenuModal from "../lib/components/MenuModal.svelte";
     import MetadataModal from "../lib/components/MetadataModal.svelte";
     import InterfaceModal from "../lib/components/InterfaceModal.svelte";
@@ -97,40 +102,49 @@
     storePopup.set({ computePosition, autoUpdate, offset, shift, flip, arrow });
     const modalRegistery = {
         Startup: { ref: StartupStepper },
-        Interface: {ref: InterfaceModal},
-        Project: {ref: ProjectModal},
+        Interface: { ref: InterfaceModal },
+        Project: { ref: ProjectModal },
         Notes: { ref: NotesModal },
         MenuInput: { ref: MenuModal },
         Metadata: { ref: MetadataModal },
     };
     const StartupRoutine2 = new Promise((resolve) => {
-        SetupScratchpad().then(() => {
-            LoadExtensions().then(() => {
-                StartProxy($marasiConfig.DefaultAddress, $marasiConfig.DefaultPort).then(() => {
-                        listener.set({
-                            status: true,
-                            address: $marasiConfig.DefaultAddress,
-                            port: $marasiConfig.DefaultPort
-                        });
-                        resolve();
-                    }).catch((listenerError) => {
-                        //Quit();
-                        listener.set({
-                            status: false,
-                            address: $marasiConfig.DefaultAddress,
-                            port: $marasiConfig.DefaultPort
-                        });
+        SetupScratchpad()
+            .then(() => {
+                LoadExtensions()
+                    .then(() => {
+                        StartProxy(
+                            $marasiConfig.DefaultAddress,
+                            $marasiConfig.DefaultPort,
+                        )
+                            .then(() => {
+                                listener.set({
+                                    status: true,
+                                    address: $marasiConfig.DefaultAddress,
+                                    port: $marasiConfig.DefaultPort,
+                                });
+                                resolve();
+                            })
+                            .catch((listenerError) => {
+                                //Quit();
+                                listener.set({
+                                    status: false,
+                                    address: $marasiConfig.DefaultAddress,
+                                    port: $marasiConfig.DefaultPort,
+                                });
+                                resolve();
+                            });
+                    })
+                    .catch((extensionError) => {
+                        console.log(extensionError);
                         resolve();
                     });
-            }).catch((extensionError) => {
-                    console.log(extensionError);
-                    resolve();
+            })
+            .catch((repoError) => {
+                console.log(repoError);
+                Quit();
             });
-        }).catch((repoError) => {
-            console.log(repoError);
-            Quit();
-        });
-    })
+    });
     onMount(() => {
         autoModeWatcher();
         readConfig();
@@ -138,7 +152,7 @@
             WindowSetTitle("scratchpad");
             activeProject.set("scratchpad");
             openProject();
-            console.log($marasiConfig)
+            console.log($marasiConfig);
             if ($marasiConfig.FirstRun) {
                 const modal = {
                     type: "component",
@@ -146,7 +160,7 @@
                     title: "Setup Listener",
                     response: (r) => {
                         console.log(r);
-                    }
+                    },
                 };
                 if (!$modalStore[0]) {
                     modalStore.trigger(modal);
@@ -177,33 +191,29 @@
                 $logItems = [...$logItems, newLog];
             }
             function handleNewRequest(newRequest) {
-                console.log(newRequest);
-                proxyItems.update((previous) => {
-                    const item = {
-                        Request: newRequest,
-                        Response: {},
-                        Metadata: newRequest.Metadata,
-                    };
-                    return { ...previous, [newRequest.ID]: item };
+                proxyItems.update((currentItems) => {
+                    return [...currentItems, newRequest];
                 });
             }
+
             function handleNewResponse(newResponse) {
-                const item = $proxyItems[newResponse.ID]
-                    ? $proxyItems[newResponse.ID]
-                    : { Request: {} };
-                item.Response = newResponse;
-                item.Metadata = newResponse.Metadata;
-                proxyItems.update((previous) => {
-                    return { ...previous, [newResponse.ID]: item };
+                proxyItems.update((currentItems) => {
+                    return currentItems.map((item) => {
+                        if (item.ID === newResponse.ID) {
+                            return { ...item, ...newResponse };
+                        }
+
+                        return item;
+                    });
                 });
             }
-            let toastId = '';
+            let toastId = "";
             const toastSettings = {
                 message: "Request Intercepted",
                 action: {
                     label: "Jump to Checkpoint",
                     response: () => {
-                        goto("/checkpoint")
+                        goto("/checkpoint");
                         toastStore.close(toastId);
                     },
                 },
@@ -224,7 +234,7 @@
                     background: background,
                 };
                 toastStore.trigger(toast);
-            })
+            });
             EventsOn("intercepted", (intercepted) => {
                 console.log(intercepted);
                 if ($page.url.pathname !== "/checkpoint") {
@@ -382,7 +392,7 @@
                     </svelte:fragment>
                     <span>Workshop</span>
                 </AppRailAnchor>
-            <!-- <AppRailAnchor selected={$page.url.pathname === '/extensions'} on:click={() => {goto("/extensions")}} bind:group={currentTile} name="Extensions" value={appRailIndex++} title="Extensions">
+                <!-- <AppRailAnchor selected={$page.url.pathname === '/extensions'} on:click={() => {goto("/extensions")}} bind:group={currentTile} name="Extensions" value={appRailIndex++} title="Extensions">
                 <svelte:fragment slot="lead">
                     <div class="flex justify-center items-center w-full">
                         <ListIcon />
@@ -497,10 +507,16 @@
                     <svelte:component this={SvelteChef} isVisible={showChef} />
                 {/if}
                 {#if Excalidraw && showExcali}
-                    <svelte:component this={Excalidraw} isVisible={showExcali} />
+                    <svelte:component
+                        this={Excalidraw}
+                        isVisible={showExcali}
+                    />
                 {/if}
                 {#if Interact && showInteract}
-                    <svelte:component this={Interact} isVisible={showInteract} />
+                    <svelte:component
+                        this={Interact}
+                        isVisible={showInteract}
+                    />
                 {/if}
             </div>
         {/if}

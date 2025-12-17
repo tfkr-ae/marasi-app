@@ -34,14 +34,14 @@
 		"@codemirror/theme-one-dark": "^6.1.2",
 		"@floating-ui/dom": "^1.6.13",
 		"@replit/codemirror-vim": "^6.2.1",
+		"@tanstack/svelte-table": "^8.21.3",
 		"@vincjo/datatables": "^1.14.5",
 		"hotkeys-js": "^3.13.9",
 		"lucide-svelte": "^0.468.0",
 		"svelte-codemirror-editor": "^1.4.0"
-
 	},
 	"optionalDependencies": {
-                "@rollup/rollup-linux-x64-gnu": "^4.0.0",
-                "@rollup/rollup-win32-x64-msvc": "^4.0.0"
-        }
+		"@rollup/rollup-linux-x64-gnu": "^4.0.0",
+		"@rollup/rollup-win32-x64-msvc": "^4.0.0"
+	}
 }

@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/tfkr-ae/marasi/db"
+	"github.com/tfkr-ae/marasi/domain"
+	"github.com/tfkr-ae/marasi/extensions"
 
 	marasi "github.com/tfkr-ae/marasi"
 
@@ -33,6 +35,8 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	waypoint := domain.Waypoint{}
+	log.Print(waypoint)
 	// get the default user config
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
@@ -60,15 +64,15 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.Proxy.WithOptions(
-		marasi.WithRequestHandler(func(req marasi.ProxyRequest) error {
+		marasi.WithRequestHandler(func(req domain.ProxyRequest) error {
 			runtime.EventsEmit(a.ctx, "request", req)
 			return nil
 		}),
-		marasi.WithResponseHandler(func(res marasi.ProxyResponse) error {
+		marasi.WithResponseHandler(func(res domain.ProxyResponse) error {
 			runtime.EventsEmit(a.ctx, "response", res)
 			return nil
 		}),
-		marasi.WithLogHandler(func(logItem marasi.Log) error {
+		marasi.WithLogHandler(func(logItem domain.Log) error {
 			runtime.EventsEmit(a.ctx, "log", logItem)
 			return nil
 		}),
@@ -99,7 +103,7 @@ func (a *App) SetFlag(name string, value string) (*Config, error) {
 	return a.Config, nil
 }
 func (a *App) DeleteWaypoint(host string) error {
-	err := a.Proxy.Repo.DeleteWaypoint(host)
+	err := a.Proxy.WaypointRepo.DeleteWaypoint(host)
 	if err != nil {
 		return err
 	}
@@ -126,14 +130,14 @@ func (a *App) ToggleIntercept() bool {
 	a.Proxy.InterceptFlag = !a.Proxy.InterceptFlag
 	return a.Proxy.InterceptFlag
 }
-func (a *App) GetExtensionLogs(name string) ([]marasi.ExtensionLog, error) {
+func (a *App) GetExtensionLogs(name string) ([]extensions.ExtensionLog, error) {
 	if extension, ok := a.Proxy.GetExtension(name); ok {
 		return extension.Logs, nil
 	}
-	return []marasi.ExtensionLog{}, fmt.Errorf("extension %s not found", name)
+	return []extensions.ExtensionLog{}, fmt.Errorf("extension %s not found", name)
 }
 func (a *App) CreateWaypoint(host string, override string) error {
-	err := a.Proxy.Repo.CreateOrUpdateWaypoint(host, override)
+	err := a.Proxy.WaypointRepo.CreateOrUpdateWaypoint(host, override)
 	if err != nil {
 		return err
 	}
@@ -144,19 +148,12 @@ func (a *App) CreateWaypoint(host string, override string) error {
 	return nil
 }
 func (a *App) GetWaypoints() (map[string]string, error) {
-	waypoints, err := a.Proxy.Repo.GetWaypoints()
+	err := a.Proxy.SyncWaypoints()
 	if err != nil {
 		return nil, err
 	}
-	return waypoints, nil
+	return a.Proxy.Waypoints, nil
 }
-
-// func (a *App) UninstallExtension(name string) error {
-// 	return a.Proxy.RemoveExtension(name)
-// }
-// func (a *App) CheckExtensionUpdates() map[string]bool {
-// 	return a.Proxy.CheckExtensionUpdates()
-// }
 
 // Utility function to detect if the listener was closed cleanly
 func isListenerClosed(err error) bool {
@@ -168,20 +165,20 @@ func isListenerClosed(err error) bool {
 }
 
 func (a *App) LoadExtensions() error {
-	extensions, err := a.Proxy.Repo.GetExtensions()
+	exts, err := a.Proxy.ExtensionRepo.GetExtensions()
 	if err != nil {
 		return fmt.Errorf("getting extensions : %w", err)
 	}
-	for _, extension := range extensions {
+	for _, extension := range exts {
 		// I hate this
-		err := a.Proxy.WithOptions(marasi.WithExtension(extension, marasi.ExtensionWithLogHandler(func(log marasi.ExtensionLog) error {
+		err := a.Proxy.WithOptions(marasi.WithExtension(extension, extensions.ExtensionWithLogHandler(func(log extensions.ExtensionLog) error {
 			runtime.EventsEmit(a.ctx, fmt.Sprintf("%s-log", extension.Name), log)
 			return nil
-		}), func(e *marasi.Extension) error {
+		}), func(e *extensions.Runtime) error {
 			e.LuaState.PushString("marasiapp")
 			e.LuaState.SetGlobal("app")
 			return nil
-		}, func(e *marasi.Extension) error {
+		}, func(e *extensions.Runtime) error {
 			// Create the toast function
 			toastFunc := func(l *lua.State) int {
 				// const toastSettings = {
@@ -197,7 +194,7 @@ func (a *App) LoadExtensions() error {
 			}
 			e.LuaState.Register("toast", toastFunc)
 			return nil
-		}, func(e *marasi.Extension) error {
+		}, func(e *extensions.Runtime) error {
 			// Test to register an extension icon in the menu
 			registerIcon := func(l *lua.State) int {
 				componentString := lua.CheckString(l, 1)
@@ -299,7 +296,11 @@ func (a *App) OpenProject(name string) (string, error) {
 		return "", fmt.Errorf("setting up repo %s : %w", filePath, err)
 	}
 	Repo := db.NewProxyRepo(dbConn)
-	a.Proxy.WithOptions(marasi.WithRepo(Repo))
+
+	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo))
+	if err != nil {
+		return "", err
+	}
 	base := filepath.Base(filePath)
 	projectName := strings.TrimSuffix(base, filepath.Ext(base))
 	return projectName, nil
@@ -311,10 +312,12 @@ func (a *App) SetupScratchpad() error {
 		return fmt.Errorf("setting up repo %s : %w", scratchPad, err)
 	}
 	Repo := db.NewProxyRepo(dbConn)
-	err = a.Proxy.WithOptions(marasi.WithRepo(Repo))
+
+	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo))
 	if err != nil {
 		return err
 	}
+
 	return nil
 
 }
@@ -322,39 +325,33 @@ func (a *App) close(ctx context.Context) {
 	a.Proxy.Close()
 }
 
-func (a *App) GetLogs() ([]marasi.Log, error) {
-	logs, err := a.Proxy.Repo.GetLogs()
+func (a *App) GetLogs() ([]*domain.Log, error) {
+	logs, err := a.Proxy.LogRepo.GetLogs()
 	if err != nil {
-		return []marasi.Log{}, fmt.Errorf("getting logs : %w", err)
+		return nil, fmt.Errorf("getting logs : %w", err)
 	}
 	return logs, nil
 }
-func (a *App) GetProxyItems() map[uuid.UUID]marasi.Row {
-	results, err := a.Proxy.Repo.GetItems()
+func (a *App) GetProxyItems() []*domain.RequestResponseSummary {
+	resultsSlice, err := a.Proxy.TrafficRepo.GetRequestResponseSummary()
 	if err != nil {
-		log.Print(fmt.Errorf("getting proxy items : %w", err))
+		log.Print(fmt.Errorf("getting proxy items: %w", err))
+		return nil
 	}
-	return results
+	return resultsSlice
 }
 
-func (a *App) GetRawDetails(id uuid.UUID) marasi.Row {
-	row, err := a.Proxy.Repo.GetRaw(id)
+func (a *App) GetRawDetails(id uuid.UUID) *domain.RequestResponseRow {
+	row, err := a.Proxy.TrafficRepo.GetRequestResponseRow(id)
+	log.Print(row)
 	if err != nil {
 		log.Print(err)
 	}
 	return row
 }
 
-// // TODO  - Shift to proxy after
-// func (a *App) DownloadExtension(url string, direct bool) {
-// 	err := a.Proxy.InstallExtension(url, direct)
-// 	if err != nil {
-// 		log.Print(err)
-// 	}
-// }
-
 func (a *App) GetFilters() []string {
-	results, err := a.Proxy.Repo.GetFilters()
+	results, err := a.Proxy.ConfigRepo.GetFilters()
 	if err != nil {
 		log.Print(err)
 		return []string{}
@@ -363,7 +360,7 @@ func (a *App) GetFilters() []string {
 }
 
 func (a *App) SetFilters(updated []string) error {
-	err := a.Proxy.Repo.SetFilters(updated)
+	err := a.Proxy.ConfigRepo.SetFilters(updated)
 	if err != nil {
 		return fmt.Errorf("setting filters : %w", err)
 	}
@@ -376,24 +373,24 @@ type ExtensionUI struct {
 }
 
 type Dashboard struct {
-	Notes         int32
-	Launchpads    int32
-	Interceptions int32
+	Notes         int
+	Launchpads    int
+	Interceptions int
 }
 
 func (a *App) CountNotes() (Dashboard, error) {
 	dashboard := Dashboard{}
-	count, err := a.Proxy.Repo.CountNotes()
+	count, err := a.Proxy.StatsRepo.CountNotes()
 	if err != nil {
 		return dashboard, fmt.Errorf("counting notes : %w", err)
 	}
 	dashboard.Notes = count
-	launchpads, err := a.Proxy.Repo.CountLaunchpads()
+	launchpads, err := a.Proxy.StatsRepo.CountLaunchpads()
 	if err != nil {
 		return dashboard, fmt.Errorf("counting launchpads : %w", err)
 	}
 	dashboard.Launchpads = launchpads
-	intercepted, err := a.Proxy.Repo.CountIntercepted()
+	intercepted, err := a.Proxy.StatsRepo.CountIntercepted()
 	if err != nil {
 		return dashboard, fmt.Errorf("counting launchpads : %w", err)
 	}
@@ -410,12 +407,12 @@ func (a *App) StartBrowser() error {
 }
 func (a *App) GetExtensionUI(extensionName string) (extUI ExtensionUI) {
 	if extension, ok := a.Proxy.GetExtension(extensionName); ok {
-		ui, err := extension.GetGlobalFlag("ui_code")
+		ui, err := extension.GetGlobalString("ui_code")
 		if err != nil {
 			log.Print(err)
 			return extUI
 		}
-		version, err := extension.GetGlobalFlag("version")
+		version, err := extension.GetGlobalString("version")
 		if err != nil {
 			log.Print(err)
 			return extUI
@@ -432,11 +429,10 @@ func (a *App) GetExtensionFlag(extensionName string, flagName string) (bool, err
 	}
 	return false, fmt.Errorf("checking if %s exists", extensionName)
 }
-func (a *App) GetResponse(id uuid.UUID) marasi.ProxyResponse {
-	response, err := a.Proxy.Repo.GetResponse(id)
+func (a *App) GetResponse(id uuid.UUID) *domain.ProxyResponse {
+	response, err := a.Proxy.TrafficRepo.GetResponse(id)
 	if err != nil {
-		log.Print(err)
-		return marasi.ProxyResponse{}
+		return nil
 	}
 	return response
 }
@@ -635,7 +631,7 @@ func (a *App) GetScopeRules() map[string]interface{} {
 }
 
 func (a *App) HighlightRow(id uuid.UUID, colorCode int) error {
-	metadata, err := a.Proxy.Repo.GetMetadata(id)
+	metadata, err := a.Proxy.TrafficRepo.GetMetadata(id)
 	if err != nil {
 		return fmt.Errorf("getting metadata for request %s : %w", id.String(), err)
 	}
@@ -645,58 +641,57 @@ func (a *App) HighlightRow(id uuid.UUID, colorCode int) error {
 	default:
 		metadata["Highlight"] = fmt.Sprintf("#%06X", colorCode)
 	}
-	err = a.Proxy.Repo.UpdateMetadata(metadata, id)
+	err = a.Proxy.TrafficRepo.UpdateMetadata(metadata, id)
 	if err != nil {
 		return fmt.Errorf("updating metadata for id %s : %w", id.String(), err)
 	}
 	return nil
 }
 
-func (a *App) GetExtensions() []*marasi.Extension {
+func (a *App) GetExtensions() []*extensions.Runtime {
 	return a.Proxy.Extensions
 }
-func (a *App) GetRepeaterTabs() []marasi.Launchpad {
-	repeater, err := a.Proxy.Repo.GetLaunchpads()
+func (a *App) GetLaunchpads() []*domain.Launchpad {
+	launchpad, err := a.Proxy.LaunchpadRepo.GetLaunchpads()
 	if err != nil {
-		return []marasi.Launchpad{}
+		return nil
 	}
-	return repeater
+	return launchpad
 }
 
-func (a *App) GetRepeaterRequests(id uuid.UUID) []marasi.ProxyRequest {
-	repeaterRequests, err := a.Proxy.Repo.GetLaunchpadRequests(id)
+func (a *App) GetLaunchpadRequests(id uuid.UUID) []*domain.ProxyRequest {
+	launchpadRequest, err := a.Proxy.LaunchpadRepo.GetLaunchpadRequests(id)
 	if err != nil {
-		log.Println(err)
-		return []marasi.ProxyRequest{}
+		return nil
 	}
-	return repeaterRequests
+	return launchpadRequest
 }
 
-func (a *App) LinkRequestToRepeater(requestID uuid.UUID, repeaterID uuid.UUID) {
-	err := a.Proxy.Repo.LinkRequestToLaunchpad(requestID, repeaterID)
+func (a *App) LinkRequestToLaunchpad(requestID uuid.UUID, repeaterID uuid.UUID) {
+	err := a.Proxy.LaunchpadRepo.LinkRequestToLaunchpad(requestID, repeaterID)
 	if err != nil {
 		log.Println(err)
 	}
 	return
 }
-func (a *App) CreateRepeaterEntry(name string, description string) uuid.UUID {
-	repeaterUUID, err := a.Proxy.Repo.CreateLaunchpad(name, description)
+func (a *App) CreateLaunchpadEntry(name string, description string) uuid.UUID {
+	launchpadUUID, err := a.Proxy.LaunchpadRepo.CreateLaunchpad(name, description)
 	if err != nil {
 		log.Println(err)
 		return uuid.Nil
 	}
-	return repeaterUUID
+	return launchpadUUID
 }
 
-func (a *App) DeleteRepeaterEntry(id uuid.UUID) error {
-	err := a.Proxy.Repo.DeleteLaunchpad(id)
+func (a *App) DeleteLaunchpadEntry(id uuid.UUID) error {
+	err := a.Proxy.LaunchpadRepo.DeleteLaunchpad(id)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func (a *App) UpdateRepeaterEntry(id uuid.UUID, name string, description string) error {
-	err := a.Proxy.Repo.UpdateLaunchpad(id, name, description)
+func (a *App) UpdateLaunchpadEntry(id uuid.UUID, name string, description string) error {
+	err := a.Proxy.LaunchpadRepo.UpdateLaunchpad(id, name, description)
 	if err != nil {
 		return err
 	}
@@ -704,7 +699,7 @@ func (a *App) UpdateRepeaterEntry(id uuid.UUID, name string, description string)
 
 }
 func (a *App) GetExtensionCode(extensionName string) (string, error) {
-	code, err := a.Proxy.Repo.GetExtensionLuaCode(extensionName)
+	code, err := a.Proxy.ExtensionRepo.GetExtensionLuaCodeByName(extensionName)
 	if err != nil {
 		return "", fmt.Errorf("getting code for %s : %w", extensionName, err)
 	}
@@ -712,7 +707,7 @@ func (a *App) GetExtensionCode(extensionName string) (string, error) {
 }
 
 func (a *App) RunExtension(extensionName string, code string) error {
-	err := a.Proxy.Repo.UpdateLuaCode(extensionName, code)
+	err := a.Proxy.ExtensionRepo.UpdateExtensionLuaCodeByName(extensionName, code)
 	if err != nil {
 		return fmt.Errorf("updating code for %s : %w", extensionName, err)
 	}
@@ -728,7 +723,7 @@ func (a *App) RunExtension(extensionName string, code string) error {
 	return nil
 }
 func (a *App) DoExtender(code string) {
-	err := a.Proxy.Repo.UpdateLuaCode("workshop", code)
+	err := a.Proxy.ExtensionRepo.UpdateExtensionLuaCodeByName("workshop", code)
 	if err != nil {
 		log.Print(err)
 	}
@@ -737,22 +732,22 @@ func (a *App) DoExtender(code string) {
 		log.Print(err)
 	}
 }
-func (a *App) GetMetadata(id uuid.UUID) marasi.Metadata {
-	note, err := a.Proxy.Repo.GetMetadata(id)
+func (a *App) GetMetadata(id uuid.UUID) map[string]any {
+	note, err := a.Proxy.TrafficRepo.GetMetadata(id)
 	if err != nil {
 		log.Print(err)
 	}
 	return note
 }
 func (a *App) GetNote(id uuid.UUID) string {
-	note, err := a.Proxy.Repo.GetNote(id)
+	note, err := a.Proxy.TrafficRepo.GetNote(id)
 	if err != nil {
 		log.Print(err)
 	}
 	return note
 }
 func (a *App) UpdateNote(id uuid.UUID, note string) error {
-	err := a.Proxy.Repo.UpdateNote(id, note)
+	err := a.Proxy.TrafficRepo.UpdateNote(id, note)
 	if err != nil {
 		return fmt.Errorf("updating note : %w", err)
 	}
