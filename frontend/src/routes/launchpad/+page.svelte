@@ -250,7 +250,7 @@
             action: {
                 handler: () => (useHttps = !useHttps),
                 options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+T+T+T+T+T+T+T+T+T+T+T+T", "ctrl+⇧+T"],
+                keys: ["⌘+⇧+T", "ctrl+⇧+T"],
             },
         },
         {
