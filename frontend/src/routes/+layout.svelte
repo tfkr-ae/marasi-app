@@ -8,7 +8,11 @@
         flip,
         arrow,
     } from "@floating-ui/dom";
-    import { storePopup } from "@skeletonlabs/skeleton";
+    import {
+        getDrawerStore,
+        LightSwitch,
+        storePopup,
+    } from "@skeletonlabs/skeleton";
     import {
         initializeStores,
         Toast,
@@ -41,25 +45,31 @@
         openProject,
         readConfig,
         marasiConfig,
+        extensions,
+        extensions_ui,
     } from "../stores.js";
-    import { EventsOn, EventsOff, Quit, WindowSetTitle} from "../lib/wailsjs/runtime/runtime";
+    import {
+        EventsOn,
+        EventsOff,
+        Quit,
+        WindowSetTitle,
+        EventsEmit,
+    } from "../lib/wailsjs/runtime/runtime";
     import AppDrawer from "../lib/components/AppDrawer.svelte";
     import NotesModal from "../lib/components/NotesModal.svelte";
     import {
-        GetExtensionFlag,
-        GetExtensions,
         LoadExtensions,
         SetupScratchpad,
         StartProxy,
     } from "../lib/wailsjs/go/main/App";
-    import WebComponentWrapper from "../lib/components/WebComponentWrapper.svelte";
-    import { ChefHat, Brush} from "lucide-svelte";
+    import { ChefHat, Brush } from "lucide-svelte";
     import MenuModal from "../lib/components/MenuModal.svelte";
     import MetadataModal from "../lib/components/MetadataModal.svelte";
     import InterfaceModal from "../lib/components/InterfaceModal.svelte";
     import ProjectModal from "../lib/components/ProjectModal.svelte";
     import StartupStepper from "../lib/components/StartupStepper.svelte";
-    let extensions = {};
+    import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
+    import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
     let appRailIndex = 0;
     let showChef = false;
     let showExcali = false;
@@ -94,43 +104,47 @@
     };
     const toastStore = getToastStore();
     const modalStore = getModalStore();
+    const drawerStore = getDrawerStore();
     storePopup.set({ computePosition, autoUpdate, offset, shift, flip, arrow });
     const modalRegistery = {
         Startup: { ref: StartupStepper },
-        Interface: {ref: InterfaceModal},
-        Project: {ref: ProjectModal},
+        Interface: { ref: InterfaceModal },
+        Project: { ref: ProjectModal },
         Notes: { ref: NotesModal },
         MenuInput: { ref: MenuModal },
         Metadata: { ref: MetadataModal },
+        "extension-modal": { ref: ModalWrapper },
     };
     const StartupRoutine2 = new Promise((resolve) => {
-        SetupScratchpad().then(() => {
-            LoadExtensions().then(() => {
-                StartProxy($marasiConfig.DefaultAddress, $marasiConfig.DefaultPort).then(() => {
+        SetupScratchpad()
+            .then(() => {
+                StartProxy(
+                    $marasiConfig.DefaultAddress,
+                    $marasiConfig.DefaultPort,
+                )
+                    .then(() => {
                         listener.set({
                             status: true,
                             address: $marasiConfig.DefaultAddress,
-                            port: $marasiConfig.DefaultPort
+                            port: $marasiConfig.DefaultPort,
                         });
                         resolve();
-                    }).catch((listenerError) => {
+                    })
+                    .catch((listenerError) => {
                         //Quit();
                         listener.set({
                             status: false,
                             address: $marasiConfig.DefaultAddress,
-                            port: $marasiConfig.DefaultPort
+                            port: $marasiConfig.DefaultPort,
                         });
                         resolve();
                     });
-            }).catch((extensionError) => {
-                    console.log(extensionError);
-                    resolve();
+            })
+            .catch((repoError) => {
+                console.log(repoError);
+                Quit();
             });
-        }).catch((repoError) => {
-            console.log(repoError);
-            Quit();
-        });
-    })
+    });
     onMount(() => {
         autoModeWatcher();
         readConfig();
@@ -138,7 +152,6 @@
             WindowSetTitle("scratchpad");
             activeProject.set("scratchpad");
             openProject();
-            console.log($marasiConfig)
             if ($marasiConfig.FirstRun) {
                 const modal = {
                     type: "component",
@@ -146,7 +159,7 @@
                     title: "Setup Listener",
                     response: (r) => {
                         console.log(r);
-                    }
+                    },
                 };
                 if (!$modalStore[0]) {
                     modalStore.trigger(modal);
@@ -177,38 +190,33 @@
                 $logItems = [...$logItems, newLog];
             }
             function handleNewRequest(newRequest) {
-                console.log(newRequest);
-                proxyItems.update((previous) => {
-                    const item = {
-                        Request: newRequest,
-                        Response: {},
-                        Metadata: newRequest.Metadata,
-                    };
-                    return { ...previous, [newRequest.ID]: item };
+                proxyItems.update((currentItems) => {
+                    return [...currentItems, newRequest];
                 });
+                console.log($proxyItems);
             }
+
             function handleNewResponse(newResponse) {
-                const item = $proxyItems[newResponse.ID]
-                    ? $proxyItems[newResponse.ID]
-                    : { Request: {} };
-                item.Response = newResponse;
-                item.Metadata = newResponse.Metadata;
-                proxyItems.update((previous) => {
-                    return { ...previous, [newResponse.ID]: item };
+                proxyItems.update((currentItems) => {
+                    return currentItems.map((item) => {
+                        if (item.ID === newResponse.ID) {
+                            return { ...item, ...newResponse };
+                        }
+
+                        return item;
+                    });
                 });
+
+                if (
+                    $drawerStore.id === "request-response" &&
+                    $drawerStore.meta?.request?.ID === newResponse.ID
+                ) {
+                    drawerStore.update((s) => {
+                        s.meta.incomingResponse = newResponse;
+                        return s;
+                    });
+                }
             }
-            let toastId = '';
-            const toastSettings = {
-                message: "Request Intercepted",
-                action: {
-                    label: "Jump to Checkpoint",
-                    response: () => {
-                        goto("/checkpoint")
-                        toastStore.close(toastId);
-                    },
-                },
-            };
-            // Example of setting up an event listener
             EventsOn("request", (newRequest) => handleNewRequest(newRequest));
             EventsOn("response", (newResponse) =>
                 handleNewResponse(newResponse),
@@ -216,52 +224,87 @@
             EventsOn("log", (newLog) => {
                 handleNewLog(newLog);
             });
-            EventsOn("extension-toast", (message, background) => {
-                console.log(message);
-                console.log(background);
-                const toast = {
-                    message: message,
-                    background: background,
-                };
-                toastStore.trigger(toast);
-            })
             EventsOn("intercepted", (intercepted) => {
-                console.log(intercepted);
                 if ($page.url.pathname !== "/checkpoint") {
                     switch (intercepted) {
                         case "request":
-                            toastId = toastStore.trigger(toastSettings);
+                            const reqToastID = toastStore.trigger({
+                                message: "Request Intercepted",
+                                action: {
+                                    label: "Jump to Checkpoint",
+                                    response: () => {
+                                        goto("/checkpoint");
+                                        toastStore.close(reqToastID);
+                                    },
+                                },
+                            });
                             break;
                         case "response":
-                            toastSettings.message = "Response intercepted";
-                            toastId = toastStore.trigger(toastSettings);
+                            const resToastID = toastStore.trigger({
+                                message: "Response Intercepted",
+                                action: {
+                                    label: "Jump to Checkpoint",
+                                    response: () => {
+                                        goto("/checkpoint");
+                                        toastStore.close(resToastID);
+                                    },
+                                },
+                            });
                             break;
                     }
-                } else {
-                    console.log("Already on intercept, not sending a toast");
                 }
             });
-            // Load extensons
-            /* Probably will have to loop here to create all extensions */
-            GetExtensions().then((exts) => {
-                console.log(exts);
-                Object.values(exts).forEach((extension) => {
-                    GetExtensionFlag(extension["Name"], "ui").then(
-                        (flag, error) => {
-                            if (flag) {
-                                extensions[extension["Name"]] = extension;
-                            }
-                        },
-                    );
-                });
-            });
-            // Cleanup function when the component is destroyed
+            EventsOn(
+                "extension_gui_render",
+                ({ extensionName, target, schema }) => {
+                    if (target === "toast") {
+                        const allowedVariants = [
+                            "primary",
+                            "secondary",
+                            "tertiary",
+                            "success",
+                            "warning",
+                            "error",
+                            "surface",
+                        ];
+                        const variant = allowedVariants.includes(schema.variant)
+                            ? "variant-filled-" + schema.variant
+                            : "variant-filled-primary";
+                        const t = {
+                            message: schema.message,
+                            background: variant,
+                        };
+
+                        toastStore.trigger(t);
+                    } else {
+                        extensions_ui.update((store) => {
+                            const ext = store[extensionName] || { state: {} };
+                            ext[target] = schema;
+                            return { ...store, [extensionName]: ext };
+                        });
+                    }
+                },
+            );
+
+            EventsOn(
+                "extension_state_update",
+                ({ extensionName, key, value }) => {
+                    extensions_ui.update((store) => {
+                        const ext = store[extensionName] || { state: {} };
+                        ext.state[key] = value;
+                        return { ...store, [extensionName]: ext };
+                    });
+                    console.log($extensions_ui);
+                },
+            );
         });
         return () => {
             EventsOff("request");
             EventsOff("response");
             EventsOff("intercepted");
-            //ninjaMenu.clear();
+            EventsOff("log");
+            EventsOff("extension_gui_render");
+            EventsOff("extension_state_update");
         };
     });
 </script>
@@ -285,9 +328,7 @@
                     title="Home"
                 >
                     <svelte:fragment slot="lead">
-                        <div
-                            class="flex justify-center items-center w-full h-full"
-                        >
+                        <div class="flex justify-center items-center w-full">
                             {#if $page.url.pathname === "/"}
                                 <Logo size="75" mode="light" />
                             {:else}
@@ -382,14 +423,6 @@
                     </svelte:fragment>
                     <span>Workshop</span>
                 </AppRailAnchor>
-            <!-- <AppRailAnchor selected={$page.url.pathname === '/extensions'} on:click={() => {goto("/extensions")}} bind:group={currentTile} name="Extensions" value={appRailIndex++} title="Extensions">
-                <svelte:fragment slot="lead">
-                    <div class="flex justify-center items-center w-full">
-                        <ListIcon />
-                    </div>
-                </svelte:fragment>
-                <span>Extensions</span>
-            </AppRailAnchor> -->
                 <AppRailAnchor
                     selected={$page.url.pathname === "/sveltechef"}
                     on:click={async () => {
@@ -448,31 +481,38 @@
                     <span>Interactsh</span>
                 </AppRailAnchor>
                 <hr class="!border-t-2" />
-                {#each Object.entries(extensions) as [name, extension]}
-                    <AppRailAnchor
-                        selected={$page.url.pathname === "/extensions/" + name}
-                        on:click={() => {
-                            goto("/extensions/" + name);
-                        }}
-                        bind:group={currentTile}
-                        {name}
-                        value={appRailIndex++}
-                        title={name}
-                    >
-                        <svelte:fragment slot="lead">
-                            <div
-                                class="flex justify-center items-center w-full"
-                            >
-                                <WebComponentWrapper
-                                    extensionName={name}
-                                    type="icon"
-                                ></WebComponentWrapper>
-                            </div>
-                        </svelte:fragment>
-                        <span>{name}</span>
-                    </AppRailAnchor>
+                {#each $extensions as extension}
+                    {@const iconSchema = $extensions_ui[extension.Name]?.icon}
+                    {#if iconSchema}
+                        <AppRailAnchor
+                            selected={$page.url.pathname ===
+                                "/extension/" + extension.Name}
+                            on:click={() => {
+                                goto("/extension/" + extension.Name);
+                            }}
+                            bind:group={currentTile}
+                            name={extension.Name}
+                            value={appRailIndex++}
+                            title={extension.Name}
+                        >
+                            <svelte:fragment slot="lead">
+                                <div>
+                                    <ExtensionUI
+                                        extensionData={extension}
+                                        schema={iconSchema}
+                                    />
+                                </div>
+                            </svelte:fragment>
+                            <span>{extension.Name}</span>
+                        </AppRailAnchor>
+                    {/if}
                 {/each}
                 <svelte:fragment slot="trail">
+                    <!-- <AppRailAnchor> -->
+                    <!--     <div class="flex justify-center items-center w-full"> -->
+                    <!--         <LightSwitch /> -->
+                    <!--     </div> -->
+                    <!-- </AppRailAnchor> -->
                     <AppRailAnchor
                         selected={$page.url.pathname === "/settings"}
                         on:click={() => {
@@ -497,10 +537,16 @@
                     <svelte:component this={SvelteChef} isVisible={showChef} />
                 {/if}
                 {#if Excalidraw && showExcali}
-                    <svelte:component this={Excalidraw} isVisible={showExcali} />
+                    <svelte:component
+                        this={Excalidraw}
+                        isVisible={showExcali}
+                    />
                 {/if}
                 {#if Interact && showInteract}
-                    <svelte:component this={Interact} isVisible={showInteract} />
+                    <svelte:component
+                        this={Interact}
+                        isVisible={showInteract}
+                    />
                 {/if}
             </div>
         {/if}

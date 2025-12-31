@@ -11,13 +11,18 @@
     } from "@skeletonlabs/skeleton";
     import { SettingsIcon } from "svelte-feather-icons";
     import CodeMirror from "svelte-codemirror-editor";
-    import {
-        RunExtension,
-    } from "../../lib/wailsjs/go/main/App";
+    import { RunExtension } from "../../lib/wailsjs/go/main/App";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
-    import { EditIcon, FileCode, SquarePlay, ToggleLeftIcon } from "lucide-svelte";
-    import { compassCode, marasiConfig} from "../../stores";
+    import {
+        EditIcon,
+        FileCode,
+        SquarePlay,
+        ToggleLeftIcon,
+    } from "lucide-svelte";
+    import { compassCode, marasiConfig } from "../../stores";
     import ScopeTester from "../../lib/components/ScopeTester.svelte";
+    import { autocompletion } from "@codemirror/autocomplete";
+    import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
 
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
@@ -79,9 +84,9 @@
             },
         },
         {
-            name: "Show Logs", 
-            subtitle: "Show Extension Logs", 
-            keywords: 'logs, lua',
+            name: "Show Logs",
+            subtitle: "Show Extension Logs",
+            keywords: "logs, lua",
             icon: FileCode,
             action: {
                 handler: () => {
@@ -95,14 +100,14 @@
                             },
                             height: "h-full",
                             width: "w-3/5",
-                            position: "right"
+                            position: "right",
                         };
                         drawerStore.open(drawerSettings);
                     }
                 },
-                options: {scope: "compass", single: true},
-                keys: ["⌘+⇧+L", "ctrl+⇧+L"]
-            }, 
+                options: { scope: "compass", single: true },
+                keys: ["⌘+⇧+L", "ctrl+⇧+L"],
+            },
         },
     ];
     let accOpened = false;
@@ -115,31 +120,27 @@
         <svelte:fragment slot="summary">Compass Settings</svelte:fragment>
         <svelte:fragment slot="content">
             <ScopeTester />
-            <!-- <div class="flex justify-center mt-2 p-2">
-                <button
-                    type="button"
-                    class="btn variant-filled-primary"
-                    on:click={() => {
-                        RunExtension("compass", $compassCode)
-                            .then(() => {
-                                console.log("Success");
-                            })
-                            .catch((error) => {
-                                console.log(error);
-                            });
-                    }}>Execute</button
-                >
-            </div> -->
         </svelte:fragment>
     </AccordionItem>
-    <!-- ... -->
 </Accordion>
 <div>
     <CodeMirror
         bind:value={$compassCode}
         class="text-xs"
         theme={oneDark}
-        extensions={$marasiConfig.VimEnabled ? [vim(), StreamLanguage.define(lua)] : [StreamLanguage.define(lua)]}
+        extensions={$marasiConfig.VimEnabled
+            ? [
+                  vim(),
+                  StreamLanguage.define(lua),
+                  autocompletion({
+                      override: [marasiCompletionSource],
+                  }),
+              ]
+            : [
+                  StreamLanguage.define(lua),
+                  autocompletion({
+                      override: [marasiCompletionSource],
+                  }),
+              ]}
     />
 </div>
-

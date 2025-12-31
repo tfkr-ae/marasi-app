@@ -1,11 +1,16 @@
 <script>
     import { onMount } from "svelte";
     import CodeMirror from "svelte-codemirror-editor";
-    import { GetNote, GetRawDetails } from "../wailsjs/go/main/App";
+    import {
+        GetMetadata,
+        GetNote,
+        GetRawDetails,
+    } from "../wailsjs/go/main/App";
     import {
         Braces,
         CodeIcon,
         CopyIcon,
+        EyeOffIcon,
         Maximize,
         Pen,
         WrapTextIcon,
@@ -16,15 +21,13 @@
         prettify,
         lineWrap,
     } from "../../stores";
-    import {
-        getModalStore,
-        getDrawerStore,
-        getToastStore,
-    } from "@skeletonlabs/skeleton";
+    import { getModalStore, getDrawerStore } from "@skeletonlabs/skeleton";
     import { vim } from "@replit/codemirror-vim";
     import { StreamLanguage } from "@codemirror/language";
     import { http } from "@codemirror/legacy-modes/mode/http";
     import { oneDark } from "@codemirror/theme-one-dark";
+    import { modeCurrent } from "@skeletonlabs/skeleton";
+    import { ayuLight } from "thememirror";
     import { beforeNavigate, goto } from "$app/navigation";
 
     const modalStore = getModalStore();
@@ -36,50 +39,46 @@
     export let showPrettifyToggle = true;
     export let requestReadOnly = true;
     export let responseReadOnly = true;
-    // Request body is exported for launchpad
+    export let isFiltered = false;
+    export let incomingResponse = undefined;
     export let requestBody;
 
-    let responseBody, selectedRow;
+    let responseBody = "";
+    let selectedRow;
 
     let userEdited = false;
     function adjustHeights() {
         const editors = document.querySelectorAll(".cm-editor");
 
-        // First, reset heights to auto to get true content height
         editors.forEach((editor) => {
             editor.style.height = "auto";
         });
 
-        // Force layout recalculation
         void editors[0]?.offsetHeight;
 
         let maxHeight = 0;
 
-        // Now find the maximum content height
         editors.forEach((editor) => {
-            // Use scrollHeight to get full content height
             const height = editor.scrollHeight;
             if (height > maxHeight) {
                 maxHeight = height;
             }
         });
 
-        // Set minimum height (can adjust as needed)
         maxHeight = Math.max(maxHeight, 200);
 
-        // Now set all editors to the maximum height
         editors.forEach((editor) => {
             editor.style.height = `${maxHeight}px`;
         });
     }
 
-    // Get lang based on body length and config
     function getLang(body) {
+        if (!body) return undefined;
+
         switch ($marasiConfig.SyntaxMode) {
             case "disabled":
                 return undefined;
             case "auto":
-                // Check length
                 if (body.length < 75000) return StreamLanguage.define(http);
                 return undefined;
             case "enabled":
@@ -103,21 +102,21 @@
     }
 
     function viewMetadata() {
-        const modal = {
-            type: "component",
-            component: "Metadata",
-            content: selectedRow?.Metadata,
-            title: titleText + " Metadata",
-        };
-        if (!$modalStore[0]) {
-            modalStore.trigger(modal);
-        }
+        GetMetadata(request_id).then((metadata) => {
+            const modal = {
+                type: "component",
+                component: "Metadata",
+                content: metadata,
+                title: titleText + " Metadata",
+            };
+            if (!$modalStore[0]) {
+                modalStore.trigger(modal);
+            }
+        });
     }
 
     function togglePrettify() {
-        // If the editors are readonly and it's safe to toggle
         if (requestReadOnly && responseReadOnly) {
-            // No edits, toggle directly
             prettify.update((value) => !value);
             setTimeout(adjustHeights, 50);
         } else {
@@ -149,7 +148,9 @@
     }
 
     $: {
+        const currentRequestId = request_id;
         GetRawDetails(request_id).then((row) => {
+            if (currentRequestId !== request_id) return;
             selectedRow = row;
             if ($prettify) {
                 requestBody =
@@ -170,7 +171,6 @@
     beforeNavigate(({ to, cancel }) => {
         if (requestReadOnly && responseReadOnly) return;
         if (userEdited) {
-            // Cancel and handle the goto manually in the modal response
             cancel();
             const modal = {
                 type: "confirm",
@@ -178,7 +178,6 @@
                 body: "You have made changes to the text. Navigating away will clear your changes. Continue?",
                 response: (result) => {
                     if (result) {
-                        // Force navigation
                         userEdited = false;
                         goto(to?.route?.id);
                     } else {
@@ -210,23 +209,8 @@
     });
 
     $: {
-        // If the editors are readonly and it's safe to toggle
-        if (requestReadOnly && responseReadOnly) {
-            if ($prettify) {
-                requestBody =
-                    selectedRow?.Metadata?.["prettified-request"] ??
-                    selectedRow?.Request?.Raw ??
-                    "";
-                responseBody =
-                    selectedRow?.Metadata?.["prettified-response"] ??
-                    selectedRow?.Response?.Raw ??
-                    "";
-            } else {
-                requestBody = selectedRow?.Request?.Raw ?? "";
-                responseBody = selectedRow?.Response?.Raw ?? "";
-            }
-        } else {
-            if (!userEdited) {
+        if (selectedRow) {
+            if (requestReadOnly && responseReadOnly) {
                 if ($prettify) {
                     requestBody =
                         selectedRow?.Metadata?.["prettified-request"] ??
@@ -240,9 +224,30 @@
                     requestBody = selectedRow?.Request?.Raw ?? "";
                     responseBody = selectedRow?.Response?.Raw ?? "";
                 }
+            } else {
+                if (!userEdited) {
+                    if ($prettify) {
+                        requestBody =
+                            selectedRow?.Metadata?.["prettified-request"] ??
+                            requestBody;
+
+                        responseBody =
+                            selectedRow?.Metadata?.["prettified-response"] ??
+                            selectedRow?.Response?.Raw ??
+                            "";
+                    } else {
+                        responseBody = selectedRow?.Response?.Raw ?? "";
+                    }
+                }
             }
+            setTimeout(adjustHeights, 50);
         }
-        setTimeout(adjustHeights, 50);
+    }
+    $: if (incomingResponse !== undefined && selectedRow) {
+        if (!selectedRow.Response) selectedRow.Response = {};
+        selectedRow.Response = incomingResponse;
+
+        selectedRow = selectedRow;
     }
 </script>
 
@@ -271,9 +276,19 @@
                     <Maximize size={16} />
                 </button>
             {/if}
-            <h5 class="h5 flex-shrink-0">{titleText}</h5>
+            <h5 class="h5 flex-shrink-0">
+                {titleText}
+                {#if isFiltered}
+                    <span
+                        class="justify-center inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200"
+                    >
+                        <EyeOffIcon size={14} strokeWidth={2.5} />
+                        Filtered
+                    </span>
+                {/if}
+            </h5>
         </div>
-        <div class="flex space-x-2 flex-grow justify-center">
+        <div class="flex space-x-2 flex-grow px-2">
             <button
                 class="btn btn-sm variant-soft-primary flex items-center"
                 on:click={() => {
@@ -362,7 +377,7 @@
                 class="text-xs"
                 bind:value={requestBody}
                 lang={getLang(requestBody)}
-                theme={oneDark}
+                theme={$modeCurrent ? ayuLight : oneDark}
                 extensions={$marasiConfig.VimEnabled ? [vim()] : []}
                 readonly={requestReadOnly}
                 lineWrapping={$lineWrap}
@@ -373,7 +388,7 @@
                 class="text-xs"
                 bind:value={responseBody}
                 lang={getLang(responseBody)}
-                theme={oneDark}
+                theme={$modeCurrent ? ayuLight : oneDark}
                 extensions={$marasiConfig.VimEnabled ? [vim()] : []}
                 readonly={responseReadOnly}
                 lineWrapping={$lineWrap}

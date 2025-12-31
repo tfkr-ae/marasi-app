@@ -5,16 +5,19 @@
     import { onMount } from "svelte";
     import { GetExtensions } from "../wailsjs/go/main/App";
     export const extensionsMap = {};
-    const handler = new DataHandler(Object.values($logItems), { rowsPerPage: 200 });
+    const handler = new DataHandler(Object.values($logItems), {
+        rowsPerPage: 200,
+    });
     $: handler.setRows(Object.values($logItems).toReversed());
     $: rows = handler.getRows();
     onMount(() => {
         GetExtensions().then((exts) => {
-            Object.values(exts).forEach((ext) => {
+            console.log(exts);
+            exts.forEach((ext) => {
                 extensionsMap[ext.ID] = ext.Name;
             });
         });
-    })
+    });
 </script>
 
 <div class="table-container">
@@ -22,7 +25,12 @@
         <thead>
             <tr>
                 <th>
-                    <Sort {handler} orderBy={(row) => {return $logItems.indexOf(row)}}>ID</Sort>
+                    <Sort
+                        {handler}
+                        orderBy={(row) => {
+                            return $logItems.indexOf(row);
+                        }}>ID</Sort
+                    >
                 </th>
                 <th>Level</th>
                 <th>Message</th>
@@ -37,17 +45,25 @@
                     <td class="id-cell">{$logItems.indexOf(row) + 1}</td>
                     <td class="level-cell">{row.Level}</td>
                     <td class="message-cell">{row.Message}</td>
-                    <td class="req-resp-cell">{row.RequestID.Valid ? row.RequestID.String : ''}</td>
-                    <td class="extension-cell">{row.ExtensionID.Valid ? extensionsMap[row.ExtensionID.String]: ''}</td>
-                    <td class="timestamp-cell">{new Date(row.Timestamp).toLocaleString('en-GB', {
-                        year: 'numeric',
-                        month: 'numeric',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                      })}</td>
+                    <td class="req-resp-cell"
+                        >{row.RequestID ? row.RequestID : ""}</td
+                    >
+                    <td class="extension-cell"
+                        >{row.ExtensionID
+                            ? extensionsMap[row.ExtensionID]
+                            : ""}</td
+                    >
+                    <td class="timestamp-cell"
+                        >{new Date(row.Timestamp).toLocaleString("en-GB", {
+                            year: "numeric",
+                            month: "numeric",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                            hour12: false,
+                        })}</td
+                    >
                 </tr>
             {/each}
         </tbody>
@@ -91,7 +107,7 @@
         text-align: center; /* Center their content */
         padding: 0.5em;
     }
-    
+
     /* Message cell takes remaining space and allows wrapping */
     .message-cell {
         width: auto; /* Expands to fill remaining space */
