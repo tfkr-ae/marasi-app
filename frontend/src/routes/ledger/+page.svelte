@@ -108,7 +108,7 @@
                     }, 10);
                 },
                 options: { scope: "ledger", single: true },
-                keys: ["⌘+⇧+S", "ctrl+��+S"],
+                keys: ["⌘+⇧+S", "ctrl+⇧+S"],
             },
         },
         {
