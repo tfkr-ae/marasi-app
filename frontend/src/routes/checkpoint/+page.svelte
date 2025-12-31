@@ -16,7 +16,6 @@
         InterceptResponse,
     } from "../../lib/wailsjs/go/main/App";
     import { onMount } from "svelte";
-    import { EventsOn } from "../../lib/wailsjs/runtime/runtime";
     import {
         Accordion,
         AccordionItem,
@@ -34,7 +33,14 @@
         SquarePlay,
         ToggleLeft,
     } from "lucide-svelte";
-    import { checkpointCode, marasiConfig, interceptFlag, lineWrap} from "../../stores";
+    import {
+        checkpointCode,
+        marasiConfig,
+        interceptFlag,
+        lineWrap,
+    } from "../../stores";
+    import { autocompletion } from "@codemirror/autocomplete";
+    import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
 
@@ -214,36 +220,21 @@
         });
     }
     function getLang(body) {
-      // Check value of store
-      switch($marasiConfig.SyntaxMode) {
-        case "disabled":
-          return undefined;
-        break;
-        case "auto":
-          // Check length
-          if (body.length < 75000) return StreamLanguage.define(http)
-          return undefined;
-        break;
-        case "enabled":
-          return StreamLanguage.define(http)
-        break;
-      }
+        switch ($marasiConfig.SyntaxMode) {
+            case "disabled":
+                return undefined;
+            case "auto":
+                if (body.length < 75000) return StreamLanguage.define(http);
+                return undefined;
+            case "enabled":
+                return StreamLanguage.define(http);
+        }
     }
     onMount(() => {
-        EventsOn("intercepted", () => GetNext());
         GetNext();
         GetInterceptedQueue().then((count) => {
             interceptedCount = count;
         });
-        /*
-        GetInterceptFlag().then((flag) => {
-            $interceptFlag.set(flag);
-        });
-        */
-        return () => {
-            //intercepted = "";
-            //EventsOff("intercepted");
-        };
     });
 </script>
 
@@ -258,8 +249,19 @@
                 class="text-xs"
                 theme={oneDark}
                 extensions={$marasiConfig.VimEnabled
-                    ? [vim(), StreamLanguage.define(lua)]
-                    : [StreamLanguage.define(lua)]}
+                    ? [
+                          vim(),
+                          StreamLanguage.define(lua),
+                          autocompletion({
+                              override: [marasiCompletionSource],
+                          }),
+                      ]
+                    : [
+                          StreamLanguage.define(lua),
+                          autocompletion({
+                              override: [marasiCompletionSource],
+                          }),
+                      ]}
             />
             <div class="flex justify-end mt-2">
                 <button
@@ -321,7 +323,6 @@
                 drop();
             }}>Drop</button
         >
-        <!--<button disabled="true">Intercept Response</button>-->
     </div>
     <div class="text-center">
         {#if interceptedCount > 0}
@@ -337,21 +338,23 @@
             <p>{error}</p>
         {/if}
     </div>
-    <div class='w-full filler-color flex justify-center'>
+    <div class="w-full filler-color flex justify-center">
         <div class="w-[50%]">
-        <CodeMirror
-            bind:value={intercepted}
-            lang={getLang(intercepted)}
-            class="text-xs"
-            theme={oneDark}
-            extensions={$marasiConfig.VimEnabled ? [vim()] : []}
-            lineWrapping={$lineWrap}
-        />
+            <CodeMirror
+                bind:value={intercepted}
+                lang={getLang(intercepted)}
+                class="text-xs"
+                theme={oneDark}
+                extensions={$marasiConfig.VimEnabled ? [vim()] : []}
+                lineWrapping={$lineWrap}
+            />
         </div>
     </div>
 </div>
+
 <style>
     .filler-color {
-        background-color: #282c34
+        background-color: #282c34;
     }
 </style>
+

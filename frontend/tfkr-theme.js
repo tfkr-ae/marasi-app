@@ -1,6 +1,6 @@
-export const tfkrTheme= {
-    name: 'tfkrTheme',
-    properties: {
+export const tfkrTheme = {
+	name: 'tfkrTheme',
+	properties: {
 		// =~= Theme Properties =~=
 		"--theme-font-family-base": `system-ui`,
 		"--theme-font-family-heading": `system-ui`,
@@ -95,6 +95,6 @@ export const tfkrTheme= {
 		"--color-surface-700": "35 39 45", // #23272d
 		"--color-surface-800": "28 31 36", // #1c1f24
 		"--color-surface-900": "23 25 29", // #17191d
-		
+
 	}
 }

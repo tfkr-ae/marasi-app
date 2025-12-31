@@ -14,7 +14,7 @@
         GetExtensions().then((exts) => {
             console.log(exts);
             exts.forEach((ext) => {
-                extensionsMap[ext.Data.ID] = ext.Data.Name;
+                extensionsMap[ext.ID] = ext.Name;
             });
         });
     });

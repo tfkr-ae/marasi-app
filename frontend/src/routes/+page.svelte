@@ -35,8 +35,11 @@
         marasiConfig,
         openProject,
         interceptFlag,
+        extensions_ui,
+        extensions,
     } from "../stores";
     import { WindowSetTitle } from "../lib/wailsjs/runtime/runtime";
+    import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
     const drawerStore = getDrawerStore();
     const modalStore = getModalStore();
     const toastStore = getToastStore();
@@ -79,27 +82,22 @@
     function open(r) {
         OpenProject(r)
             .then((name) => {
-                LoadExtensions()
-                    .then(() => {
-                        activeProject.set(name);
-                        WindowSetTitle(name);
-                        openProject();
-                        const toastSettings = {
-                            message: "Opened " + name + " project",
-                            background: "variant-filled-success",
-                        };
-                        toastStore.trigger(toastSettings);
-                    })
-                    .catch((extensionError) => {
-                        const toastSettings = {
-                            message: "Failed to open project",
-                            background: "variant-filled-error",
-                        };
-                        toastStore.trigger(toastSettings);
-                    });
+                activeProject.set(name);
+                WindowSetTitle(name);
+                goto("/");
+                openProject();
+                const toastSettings = {
+                    message: "Opened " + name + " project",
+                    background: "variant-filled-success",
+                };
+                toastStore.trigger(toastSettings);
             })
             .catch((repoError) => {
-                alert(repoError);
+                const toastSettings = {
+                    message: "Failed to open project",
+                    background: "variant-filled-error",
+                };
+                toastStore.trigger(toastSettings);
             });
     }
 </script>
@@ -320,6 +318,43 @@
                     icon: ToggleLeft,
                     keywords: "intercept, toggle, global",
                 },
+                ...$extensions
+                    .filter(
+                        (ext) =>
+                            ext.Name !== "compass" && ext.Name !== "checkpoint",
+                    )
+                    .map((extension, index) => {
+                        const iconSchema = $extensions_ui[extension.Name]?.icon;
+                        const menuIconSchema = iconSchema
+                            ? { ...iconSchema, size: 14 }
+                            : null;
+
+                        return {
+                            name: extension.Name,
+                            subtitle: `Open ${extension.Name}`,
+                            keywords: `${extension.Name}`,
+                            icon: {
+                                component: ExtensionUI,
+                                props: {
+                                    extensionData: extension,
+                                    schema: menuIconSchema,
+                                },
+                            },
+                            action: {
+                                handler: () =>
+                                    closeAndGoto(
+                                        "/extension/" + extension.Name,
+                                    ),
+                                keys:
+                                    index < 9
+                                        ? [
+                                              `⌘+alt+${index + 1}`,
+                                              `ctrl+alt+${index + 1}`,
+                                          ]
+                                        : [],
+                            },
+                        };
+                    }),
             ]}
         />
         <div class="container mx-auto p-8 space-y-8">

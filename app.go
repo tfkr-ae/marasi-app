@@ -20,7 +20,6 @@ import (
 
 	marasi "github.com/tfkr-ae/marasi"
 
-	"github.com/Shopify/go-lua"
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -35,8 +34,6 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	waypoint := domain.Waypoint{}
-	log.Print(waypoint)
 	// get the default user config
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
@@ -164,55 +161,6 @@ func isListenerClosed(err error) bool {
 	return strings.Contains(err.Error(), "use of closed network connection")
 }
 
-func (a *App) LoadExtensions() error {
-	exts, err := a.Proxy.ExtensionRepo.GetExtensions()
-	if err != nil {
-		return fmt.Errorf("getting extensions : %w", err)
-	}
-	for _, extension := range exts {
-		// I hate this
-		err := a.Proxy.WithOptions(marasi.WithExtension(extension, extensions.ExtensionWithLogHandler(func(log extensions.ExtensionLog) error {
-			runtime.EventsEmit(a.ctx, fmt.Sprintf("%s-log", extension.Name), log)
-			return nil
-		}), func(e *extensions.Runtime) error {
-			e.LuaState.PushString("marasiapp")
-			e.LuaState.SetGlobal("app")
-			return nil
-		}, func(e *extensions.Runtime) error {
-			// Create the toast function
-			toastFunc := func(l *lua.State) int {
-				// const toastSettings = {
-				//     message:"Updated Workshop",
-				//     background: "variant-filled-success"
-				// };
-				// toastStore.trigger(toastSettings);
-				// }).catch((error) => {
-				message := lua.CheckString(l, 1)
-				background := lua.CheckString(l, 2)
-				runtime.EventsEmit(a.ctx, "extension-toast", message, background)
-				return 0
-			}
-			e.LuaState.Register("toast", toastFunc)
-			return nil
-		}, func(e *extensions.Runtime) error {
-			// Test to register an extension icon in the menu
-			registerIcon := func(l *lua.State) int {
-				componentString := lua.CheckString(l, 1)
-				log.Print(componentString)
-				// Maybe we can use the name so that it is extension specific?
-				runtime.EventsEmit(a.ctx, "extension-icon", extension.Name, componentString)
-				runtime.WindowExecJS(a.ctx, "console.log('hello')")
-				return 0
-			}
-			e.LuaState.Register("RegisterIcon", registerIcon)
-			return nil
-		}))
-		if err != nil {
-			return fmt.Errorf("applying options to %s : %w", extension.Name, err)
-		}
-	}
-	return nil
-}
 func (a *App) StartProxy(addr string, port string) error {
 	if a.Listener != nil {
 		if err := a.StopProxy(); err != nil {
@@ -343,7 +291,6 @@ func (a *App) GetProxyItems() []*domain.RequestResponseSummary {
 
 func (a *App) GetRawDetails(id uuid.UUID) *domain.RequestResponseRow {
 	row, err := a.Proxy.TrafficRepo.GetRequestResponseRow(id)
-	log.Print(row)
 	if err != nil {
 		log.Print(err)
 	}
@@ -395,7 +342,6 @@ func (a *App) CountNotes() (Dashboard, error) {
 		return dashboard, fmt.Errorf("counting launchpads : %w", err)
 	}
 	dashboard.Interceptions = intercepted
-	log.Print(dashboard)
 	return dashboard, nil
 }
 func (a *App) StartBrowser() error {
@@ -637,9 +583,9 @@ func (a *App) HighlightRow(id uuid.UUID, colorCode int) error {
 	}
 	switch colorCode {
 	case -1:
-		delete(metadata, "Highlight")
+		delete(metadata, "highlight")
 	default:
-		metadata["Highlight"] = fmt.Sprintf("#%06X", colorCode)
+		metadata["highlight"] = fmt.Sprintf("#%06X", colorCode)
 	}
 	err = a.Proxy.TrafficRepo.UpdateMetadata(metadata, id)
 	if err != nil {
@@ -648,9 +594,6 @@ func (a *App) HighlightRow(id uuid.UUID, colorCode int) error {
 	return nil
 }
 
-func (a *App) GetExtensions() []*extensions.Runtime {
-	return a.Proxy.Extensions
-}
 func (a *App) GetLaunchpads() []*domain.Launchpad {
 	launchpad, err := a.Proxy.LaunchpadRepo.GetLaunchpads()
 	if err != nil {
@@ -683,7 +626,7 @@ func (a *App) CreateLaunchpadEntry(name string, description string) uuid.UUID {
 	return launchpadUUID
 }
 
-func (a *App) DeleteLaunchpadEntry(id uuid.UUID) error {
+func (a *App) DeleteLaunchpad(id uuid.UUID) error {
 	err := a.Proxy.LaunchpadRepo.DeleteLaunchpad(id)
 	if err != nil {
 		return err

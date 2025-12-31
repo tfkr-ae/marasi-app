@@ -2,10 +2,7 @@
 	import { slide } from "svelte/transition";
 
 	// TODO LATER
-	import {
-		prefersReducedMotionStore,
-		dynamicTransition,
-	} from "./utilities";
+	import { prefersReducedMotionStore, dynamicTransition } from "./utilities";
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	// type SlideTransition = typeof slide;
@@ -16,7 +13,7 @@
 <script>
 	import { createEventDispatcher } from "svelte";
 	import { flip } from "svelte/animate";
-	import {marasiConfig } from "../../../stores.js";
+	import { marasiConfig } from "../../../stores.js";
 
 	// Types
 	const dispatch = createEventDispatcher();
@@ -78,9 +75,7 @@
 		// Filter options
 		_options = _options.filter((option) => {
 			// Format the input search value
-			const inputFormatted = String(input)
-				.toLowerCase()
-				.trim();
+			const inputFormatted = String(input).toLowerCase().trim();
 			// Format the option
 			let optionFormatted = JSON.stringify([
 				option.label,
@@ -88,8 +83,7 @@
 				option.keywords,
 			]).toLowerCase();
 			// Check Match
-			if (optionFormatted.includes(inputFormatted))
-				return option;
+			if (optionFormatted.includes(inputFormatted)) return option;
 		});
 		return _options;
 	}
@@ -136,61 +130,45 @@
 							class="flex items-center justify-between w-full
 				border-l-4 border-primary-500 px-3 py-2"
 							on:click={() => {
-								onSelection(
-									option,
-								);
+								onSelection(option);
 							}}
 						>
 							<!-- Left side: optional icon + name/subtitle -->
-							<div
-								class="flex items-center gap-2"
-							>
+							<div class="flex items-center gap-2">
 								{#if option.icon}
 									<svelte:component
-										this={option.icon}
+										this={option.icon.component ||
+											option.icon}
+										{...option.icon.props || {}}
 										class="h-4 w-4"
 									/>
 								{/if}
 
-								<div
-									class="flex flex-col text-left"
-								>
-									<span
-										>{option.name}</span
-									>
-									<span
-										class="text-sm text-surface-400"
+								<div class="flex flex-col text-left">
+									<span>{option.name}</span>
+									<span class="text-sm text-surface-400"
 										>{option.subtitle}</span
 									>
 								</div>
 							</div>
 
 							<!-- Right side: shortcut keys -->
-							<div
-								class="flex items-center gap-2"
-							>
+							<div class="flex items-center gap-2">
 								{#if Array.isArray(option.action.keys)}
 									{#if $marasiConfig.DesktopOS === "darwin"}
 										<kbd
 											class="kbd text-surface-400 text-sm"
-											>{option
-												.action
-												.keys[0]}</kbd
+											>{option.action.keys[0]}</kbd
 										>
 									{:else}
 										<kbd
 											class="kbd text-surface-400 text-sm"
-											>{option
-												.action
-												.keys[1]}</kbd
+											>{option.action.keys[1]}</kbd
 										>
 									{/if}
 								{:else}
-									<kbd
-										class="kbd text-surface-400 text-sm"
-										>{option
-											.action
-											.keys}</kbd
+									<kbd class="kbd text-surface-400 text-sm"
+										>{option.action.keys}</kbd
 									>
 								{/if}
 							</div>
@@ -205,4 +183,3 @@
 		</div>
 	{/if}
 </div>
-

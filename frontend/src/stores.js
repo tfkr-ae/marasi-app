@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import {
 	GetProxyItems,
 	GetLogs,
@@ -7,14 +7,25 @@ import {
 	GetExtensionCode,
 	GetWaypoints,
 	GetInterceptFlag,
+	GetExtensions,
+	LoadExtensions,
+	GetLaunchpads,
+	GetLaunchpadRequests,
 } from "./lib/wailsjs/go/main/App";
 
+
+// Extensions
+export const extensions = writable([]);
+export const extensions_ui = writable({});
+
+
 // Ledger Stores
+export const sorting = writable([{ id: "ID", desc: true }]);
+export const pagination = writable({ pageIndex: 0, pageSize: 100 });
 export const searchInput = writable("");
 export const proxyItems = writable([]);
-export const filterItems = writable([]);
-export const filterInput = writable("");
-
+export const contentTypeFilter = writable([]);
+export const contentTypeFilterInput = writable("");
 // Compass
 export const compassCode = writable("");
 export const testerInput = writable("");
@@ -42,8 +53,10 @@ export async function readConfig() {
 }
 
 // Launchpad navigation state persistence
-export const currentLaunchpadIndex = writable(0);
-export const currentLaunchpadRequestIndex = writable(0);
+export const currentEntryIndex = writable(0);
+export const activeLaunchpadID = writable("");
+export const launchpads = writable([]);
+
 export let listener = writable({
 	status: false,
 	address: "127.0.0.1",
@@ -51,9 +64,11 @@ export let listener = writable({
 });
 export let activeProject = writable("Marasi");
 export async function openProject() {
-	// Reset inputs
+	pagination.set({ pageIndex: 0, pageSize: 100 });
+	sorting.set([{ id: "ID", desc: true }])
 	searchInput.set("");
-	filterInput.set("");
+	contentTypeFilter.set([]);
+	contentTypeFilterInput.set("");
 	compassCode.set("");
 	testerInput.set("");
 	checkpointCode.set("");
@@ -61,8 +76,15 @@ export async function openProject() {
 	workshopCode.set("");
 	waypoints.set({});
 	proxyItems.set({});
-	currentLaunchpadIndex.set(0);
-	currentLaunchpadRequestIndex.set(0);
+	currentEntryIndex.set(0);
+	activeLaunchpadID.set("");
+	extensions.set([]);
+	extensions_ui.set({});
+	try {
+		await LoadExtensions();
+	} catch (err) {
+		console.error("Failed to load project extensions:", err);
+	}
 
 	// Reset items
 	await populateHistory();
@@ -72,6 +94,8 @@ export async function openProject() {
 	await populateCheckpoint();
 	await populateWorkshop();
 	await populateWaypoints();
+	await populateExtensions();
+	await populateLaunchpads();
 }
 
 export async function populateWaypoints() {
@@ -119,7 +143,7 @@ export async function populateFilters() {
 		console.log("----- Filter ------");
 		console.log(filters);
 		console.log("----- Filter ------");
-		filterItems.set(filters ? filters : []);
+		contentTypeFilter.set(filters ? filters : []);
 	});
 }
 export async function populateLogs() {
@@ -135,5 +159,36 @@ export async function populateHistory() {
 		proxyItems.set(items ? items : []);
 		const end = performance.now();
 		console.log(`Time taken to set store: ${end - start} ms`);
+	});
+}
+
+export async function populateExtensions() {
+	GetExtensions().then((exts) => {
+		console.log(exts)
+		extensions.set(exts ? exts : []);
+	});
+}
+export async function populateLaunchpads() {
+	const items = await GetLaunchpads();
+
+	const initalisedItems = (items || []).map(item => ({
+		...item,
+		Entries: []
+	}));
+
+	launchpads.set(initalisedItems);
+}
+
+export async function populateLaunchpadEntries(id) {
+	if (!id) return;
+
+	const reqs = await GetLaunchpadRequests(id);
+	launchpads.update(tabs => {
+		return tabs.map(t => {
+			if (t.ID == id) {
+				return { ...t, Entries: reqs || [] };
+			}
+			return t;
+		});
 	});
 }
