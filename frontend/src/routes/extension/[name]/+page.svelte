@@ -38,6 +38,7 @@
                         EventsEmit("extension_call_function", {
                             extensionID: extensionData.ID,
                             function: item.action,
+                            state: $extensions_ui[extensionData.Name],
                         });
                     }
                 },
