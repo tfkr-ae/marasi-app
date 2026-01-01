@@ -116,34 +116,36 @@
         "extension-modal": { ref: ModalWrapper },
     };
     const StartupRoutine2 = new Promise((resolve) => {
-        SetupScratchpad()
-            .then(() => {
-                StartProxy(
-                    $marasiConfig.DefaultAddress,
-                    $marasiConfig.DefaultPort,
-                )
-                    .then(() => {
-                        listener.set({
-                            status: true,
-                            address: $marasiConfig.DefaultAddress,
-                            port: $marasiConfig.DefaultPort,
+        readConfig().then(() => {
+            SetupScratchpad()
+                .then(() => {
+                    StartProxy(
+                        $marasiConfig.DefaultAddress,
+                        $marasiConfig.DefaultPort,
+                    )
+                        .then(() => {
+                            listener.set({
+                                status: true,
+                                address: $marasiConfig.DefaultAddress,
+                                port: $marasiConfig.DefaultPort,
+                            });
+                            resolve();
+                        })
+                        .catch((listenerError) => {
+                            //Quit();
+                            listener.set({
+                                status: false,
+                                address: $marasiConfig.DefaultAddress,
+                                port: $marasiConfig.DefaultPort,
+                            });
+                            resolve();
                         });
-                        resolve();
-                    })
-                    .catch((listenerError) => {
-                        //Quit();
-                        listener.set({
-                            status: false,
-                            address: $marasiConfig.DefaultAddress,
-                            port: $marasiConfig.DefaultPort,
-                        });
-                        resolve();
-                    });
-            })
-            .catch((repoError) => {
-                console.log(repoError);
-                Quit();
-            });
+                })
+                .catch((repoError) => {
+                    console.log(repoError);
+                    Quit();
+                });
+        });
     });
     onMount(() => {
         autoModeWatcher();
