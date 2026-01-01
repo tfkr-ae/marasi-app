@@ -149,7 +149,6 @@
     });
     onMount(() => {
         autoModeWatcher();
-        readConfig();
         StartupRoutine2.then(() => {
             WindowSetTitle("scratchpad");
             activeProject.set("scratchpad");
