@@ -47,13 +47,14 @@
         marasiConfig,
         extensions,
         extensions_ui,
+        addRequest,
+        addResponse,
     } from "../stores.js";
     import {
         EventsOn,
         EventsOff,
         Quit,
         WindowSetTitle,
-        EventsEmit,
     } from "../lib/wailsjs/runtime/runtime";
     import AppDrawer from "../lib/components/AppDrawer.svelte";
     import NotesModal from "../lib/components/NotesModal.svelte";
@@ -186,28 +187,13 @@
                 }
             };
             startupCompleted = true;
-            //Function to handle events
+
             function handleNewLog(newLog) {
                 $logItems = [...$logItems, newLog];
             }
-            function handleNewRequest(newRequest) {
-                proxyItems.update((currentItems) => {
-                    return [...currentItems, newRequest];
-                });
-                console.log($proxyItems);
-            }
-
-            function handleNewResponse(newResponse) {
-                proxyItems.update((currentItems) => {
-                    return currentItems.map((item) => {
-                        if (item.ID === newResponse.ID) {
-                            return { ...item, ...newResponse };
-                        }
-
-                        return item;
-                    });
-                });
-
+            EventsOn("request", (newRequest) => addRequest(newRequest));
+            EventsOn("response", (newResponse) => {
+                addResponse(newResponse);
                 if (
                     $drawerStore.id === "request-response" &&
                     $drawerStore.meta?.request?.ID === newResponse.ID
@@ -217,11 +203,7 @@
                         return s;
                     });
                 }
-            }
-            EventsOn("request", (newRequest) => handleNewRequest(newRequest));
-            EventsOn("response", (newResponse) =>
-                handleNewResponse(newResponse),
-            );
+            });
             EventsOn("log", (newLog) => {
                 handleNewLog(newLog);
             });
