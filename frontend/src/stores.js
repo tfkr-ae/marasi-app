@@ -14,6 +14,13 @@ import {
 } from "./lib/wailsjs/go/main/App";
 
 
+// Startup
+export const appState = writable({
+	isReady: false,
+	message: 'Starting...',
+	details: ''
+});
+
 // Extensions
 export const extensions = writable([]);
 export const extensions_ui = writable({});
@@ -118,6 +125,11 @@ export let listener = writable({
 });
 export let activeProject = writable("Marasi");
 export async function openProject() {
+	appState.set({
+		isReady: false,
+		message: 'Starting...',
+		details: ''
+	});
 	requestBuffer = [];
 	responseBuffer = new Map();
 	pagination.set({ pageIndex: 0, pageSize: 100 });
