@@ -38,7 +38,6 @@
     let currentTile = 0;
     import { page } from "$app/stores";
     import {
-        proxyItems,
         logItems,
         activeProject,
         listener,
@@ -47,21 +46,20 @@
         marasiConfig,
         extensions,
         extensions_ui,
+        addRequest,
+        addResponse,
+        appState,
     } from "../stores.js";
     import {
         EventsOn,
         EventsOff,
         Quit,
         WindowSetTitle,
-        EventsEmit,
+        EventsOnce,
     } from "../lib/wailsjs/runtime/runtime";
     import AppDrawer from "../lib/components/AppDrawer.svelte";
     import NotesModal from "../lib/components/NotesModal.svelte";
-    import {
-        LoadExtensions,
-        SetupScratchpad,
-        StartProxy,
-    } from "../lib/wailsjs/go/main/App";
+    import { SetupScratchpad, StartProxy } from "../lib/wailsjs/go/main/App";
     import { ChefHat, Brush } from "lucide-svelte";
     import MenuModal from "../lib/components/MenuModal.svelte";
     import MetadataModal from "../lib/components/MetadataModal.svelte";
@@ -70,11 +68,11 @@
     import StartupStepper from "../lib/components/StartupStepper.svelte";
     import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
     import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
+    import ProgressRadial from "../lib/extensions/components/ProgressRadial.svelte";
     let appRailIndex = 0;
     let showChef = false;
     let showExcali = false;
     let showInteract = false;
-    let startupCompleted = false;
 
     // Lazy-loaded components
     let SvelteChef;
@@ -143,11 +141,15 @@
                 })
                 .catch((repoError) => {
                     console.log(repoError);
-                    Quit();
                 });
         });
     });
     onMount(() => {
+        EventsOn("log", (log) => {
+            if (log?.data?.component === "db") {
+                appState.update((s) => ({ ...s, message: log.message }));
+            }
+        });
         autoModeWatcher();
         StartupRoutine2.then(() => {
             WindowSetTitle("scratchpad");
@@ -185,29 +187,14 @@
                         );
                 }
             };
-            startupCompleted = true;
-            //Function to handle events
+            $appState.isReady = true;
+
             function handleNewLog(newLog) {
                 $logItems = [...$logItems, newLog];
             }
-            function handleNewRequest(newRequest) {
-                proxyItems.update((currentItems) => {
-                    return [...currentItems, newRequest];
-                });
-                console.log($proxyItems);
-            }
-
-            function handleNewResponse(newResponse) {
-                proxyItems.update((currentItems) => {
-                    return currentItems.map((item) => {
-                        if (item.ID === newResponse.ID) {
-                            return { ...item, ...newResponse };
-                        }
-
-                        return item;
-                    });
-                });
-
+            EventsOn("request", (newRequest) => addRequest(newRequest));
+            EventsOn("response", (newResponse) => {
+                addResponse(newResponse);
                 if (
                     $drawerStore.id === "request-response" &&
                     $drawerStore.meta?.request?.ID === newResponse.ID
@@ -217,11 +204,7 @@
                         return s;
                     });
                 }
-            }
-            EventsOn("request", (newRequest) => handleNewRequest(newRequest));
-            EventsOn("response", (newResponse) =>
-                handleNewResponse(newResponse),
-            );
+            });
             EventsOn("log", (newLog) => {
                 handleNewLog(newLog);
             });
@@ -314,7 +297,7 @@
     <div class="flex flex-1 h-screen">
         <Modal components={modalRegistery} />
         <Toast position="br" />
-        {#if startupCompleted}
+        {#if $appState.isReady}
             <AppDrawer />
             <AppRail class="no-select h-full no-scroll">
                 <!-- AppRailTiles -->
@@ -549,6 +532,13 @@
                         isVisible={showInteract}
                     />
                 {/if}
+            </div>
+        {:else}
+            <div class="flex items-center w-full h-full justify-center">
+                <div class="items-center justify-center">
+                    <Logo size="128" />
+                    <p class="text-xs">{$appState.message}</p>
+                </div>
             </div>
         {/if}
     </div>

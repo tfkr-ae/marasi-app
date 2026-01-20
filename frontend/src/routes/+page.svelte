@@ -37,6 +37,7 @@
         interceptFlag,
         extensions_ui,
         extensions,
+        appState,
     } from "../stores";
     import { WindowSetTitle } from "../lib/wailsjs/runtime/runtime";
     import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
@@ -80,12 +81,14 @@
     }
 
     function open(r) {
+        $appState.isReady = false;
         OpenProject(r)
             .then((name) => {
                 activeProject.set(name);
                 WindowSetTitle(name);
                 goto("/");
                 openProject();
+                $appState.isReady = true;
                 const toastSettings = {
                     message: "Opened " + name + " project",
                     background: "variant-filled-success",

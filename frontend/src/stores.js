@@ -14,6 +14,13 @@ import {
 } from "./lib/wailsjs/go/main/App";
 
 
+// Startup
+export const appState = writable({
+	isReady: false,
+	message: 'Starting...',
+	details: ''
+});
+
 // Extensions
 export const extensions = writable([]);
 export const extensions_ui = writable({});
@@ -26,6 +33,60 @@ export const searchInput = writable("");
 export const proxyItems = writable([]);
 export const contentTypeFilter = writable([]);
 export const contentTypeFilterInput = writable("");
+
+let requestBuffer = [];
+let responseBuffer = new Map();
+function flushBuffer() {
+	if (requestBuffer.length === 0 && responseBuffer.size === 0) return;
+
+	const reqBatch = requestBuffer;
+	const resBatch = responseBuffer;
+
+	requestBuffer = [];
+	responseBuffer = new Map();
+
+	proxyItems.update((items) => {
+		let current = Array.isArray(items) ? items : [];
+
+		if (resBatch.size > 0 && current.length > 0) {
+			current = current.map(item => {
+				if (resBatch.has(item.ID)) {
+					return { ...item, ...resBatch.get(item.ID) };
+				}
+				return item;
+			});
+		}
+
+		if (reqBatch.length > 0) {
+			if (resBatch.size > 0) {
+				for (let i = 0; i < reqBatch.length; i++) {
+					const req = reqBatch[i];
+					if (resBatch.has(req.ID)) {
+						reqBatch[i] = { ...req, ...resBatch.get(req.ID) };
+					}
+				}
+			}
+			current = [...current, ...reqBatch];
+		}
+
+		return current;
+	});
+}
+if (typeof window !== "undefined") {
+	setInterval(flushBuffer, 200);
+}
+
+export function addRequest(req) {
+	requestBuffer.push(req);
+	if (requestBuffer.length > 500) flushBuffer();
+}
+export function addResponse(res) {
+	responseBuffer.set(res.ID, res);
+
+	if (responseBuffer.size > 500) flushBuffer();
+}
+
+// ---------------------------
 // Compass
 export const compassCode = writable("");
 export const testerInput = writable("");
@@ -64,6 +125,13 @@ export let listener = writable({
 });
 export let activeProject = writable("Marasi");
 export async function openProject() {
+	appState.set({
+		isReady: false,
+		message: 'Starting...',
+		details: ''
+	});
+	requestBuffer = [];
+	responseBuffer = new Map();
 	pagination.set({ pageIndex: 0, pageSize: 100 });
 	sorting.set([{ id: "ID", desc: true }])
 	searchInput.set("");
@@ -75,7 +143,7 @@ export async function openProject() {
 	interceptFlag.set(false);
 	workshopCode.set("");
 	waypoints.set({});
-	proxyItems.set({});
+	proxyItems.set([]);
 	currentEntryIndex.set(0);
 	activeLaunchpadID.set("");
 	extensions.set([]);

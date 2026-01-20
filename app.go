@@ -45,6 +45,7 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	Proxy, err := marasi.New(
 		marasi.WithConfigDir(appConfigDir),
 		marasi.WithBasePipeline(),
@@ -60,6 +61,7 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	logHandler := NewLogHandler(ctx)
 	a.Proxy.WithOptions(
 		marasi.WithRequestHandler(func(req domain.ProxyRequest) error {
 			runtime.EventsEmit(a.ctx, "request", req)
@@ -82,6 +84,7 @@ func (a *App) startup(ctx context.Context) {
 			}
 			return nil
 		}),
+		marasi.WithLogger(logHandler),
 	)
 }
 func (a *App) ToggleFlag(name string) (*Config, error) {
@@ -239,7 +242,7 @@ func (a *App) OpenProject(name string) (string, error) {
 		filePath = filePath + ".marasi"
 	}
 
-	dbConn, err := db.New(filePath)
+	dbConn, err := db.New(filePath, a.Proxy.Logger)
 	if err != nil {
 		return "", fmt.Errorf("setting up repo %s : %w", filePath, err)
 	}
@@ -255,7 +258,7 @@ func (a *App) OpenProject(name string) (string, error) {
 }
 func (a *App) SetupScratchpad() error {
 	scratchPad := path.Join(a.Proxy.ConfigDir, "scratchpad.marasi")
-	dbConn, err := db.New(scratchPad)
+	dbConn, err := db.New(scratchPad, a.Proxy.Logger)
 	if err != nil {
 		return fmt.Errorf("setting up repo %s : %w", scratchPad, err)
 	}

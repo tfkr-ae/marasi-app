@@ -573,6 +573,7 @@ export const TYPE_DEFINITIONS = {
             set_status_code: { args: "(${1:code})", argLabel: "(int)", returnType: "void", details: "Sets the HTTP status code for the response." },
             length: { args: "()", argLabel: "()", returnType: "number", details: "Returns the content length of the response body." },
             body: { args: "()", argLabel: "()", returnType: "string", details: "Returns the response body as a string." },
+            request: { args: "()", argLabel: "()", returnType: "http.Request", details: "Returns the original request object associated with this response." },
             set_body: { args: '("${1:body}")', argLabel: "(str)", returnType: "void", details: "Replaces the response body with the given string." },
             headers: { args: "()", argLabel: "()", returnType: "http.Header", details: "Returns the response headers object." },
             content_type: { args: "()", argLabel: "()", returnType: "string", details: "Returns the value of the Content-Type header." },
