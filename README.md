@@ -9,6 +9,7 @@
 A desktop GUI application for web application security testing built on top of the [Marasi library](https://github.com/tfkr-ae/marasi).
 
 [marasi.app](https://marasi.app)
+[telegram](https://t.me/marasiproxy)
 </div>
 
 Marasi (مراسي) is Arabic for dockyards — places where ships are received, maintained, and dispatched. Like a dockyard for HTTP traffic, Marasi lets you intercept, inspect, modify, and extend requests as they flow through your applications.
