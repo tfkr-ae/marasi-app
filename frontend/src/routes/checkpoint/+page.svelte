@@ -41,6 +41,7 @@
     } from "../../stores";
     import { autocompletion } from "@codemirror/autocomplete";
     import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
+    import { EventsOn } from "../../lib/wailsjs/runtime/runtime";
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
 
@@ -231,10 +232,16 @@
         }
     }
     onMount(() => {
+        const unsubscribe = EventsOn("intercepted", () => {
+            GetNext();
+        });
         GetNext();
         GetInterceptedQueue().then((count) => {
             interceptedCount = count;
         });
+        return () => {
+            unsubscribe();
+        };
     });
 </script>
 
@@ -357,4 +364,3 @@
         background-color: #282c34;
     }
 </style>
-
