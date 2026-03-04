@@ -433,17 +433,17 @@ export const MARASI_API = {
                                     },
                                     encrypt: {
                                         type: "method",
-                                        args: '("${1:key}", "${2:plain}", "${3:iv}")',
-                                        argLabel: "(str, str, str)",
+                                        args: '("${1:hex_key}", "${2:plain}", "${3:hex_iv}")',
+                                        argLabel: "(hex, str, hex)",
                                         returnType: "string",
-                                        details: "Encrypts plaintext using AES-GCM."
+                                        details: "Encrypts plaintext using AES-GCM. Key and IV must be hex encoded."
                                     },
                                     decrypt: {
                                         type: "method",
-                                        args: '("${1:key}", "${2:cipher}", "${3:iv}")',
-                                        argLabel: "(str, str, str)",
+                                        args: '("${1:hex_key}", "${2:hex_cipher}", "${3:hex_iv}")',
+                                        argLabel: "(hex, hex, hex)",
                                         returnType: "string",
-                                        details: "Decrypts ciphertext using AES-GCM."
+                                        details: "Decrypts hex-encoded ciphertext using AES-GCM. Key, ciphertext, and IV must be hex encoded."
                                     },
                                 },
                             },
@@ -460,17 +460,17 @@ export const MARASI_API = {
                                     },
                                     encrypt: {
                                         type: "method",
-                                        args: '("${1:key}", "${2:plain}", "${3:iv}")',
-                                        argLabel: "(str, str, str)",
+                                        args: '("${1:hex_key}", "${2:plain}", "${3:hex_iv}")',
+                                        argLabel: "(hex, str, hex)",
                                         returnType: "string",
-                                        details: "Encrypts plaintext using AES-CBC with PKCS7 padding."
+                                        details: "Encrypts plaintext using AES-CBC with PKCS7 padding. Key and IV must be hex encoded."
                                     },
                                     decrypt: {
                                         type: "method",
-                                        args: '("${1:key}", "${2:cipher}", "${3:iv}")',
-                                        argLabel: "(str, str, str)",
+                                        args: '("${1:hex_key}", "${2:hex_cipher}", "${3:hex_iv}")',
+                                        argLabel: "(hex, hex, hex)",
                                         returnType: "string",
-                                        details: "Decrypts ciphertext using AES-CBC and removes PKCS7 padding."
+                                        details: "Decrypts hex-encoded ciphertext using AES-CBC. Key, ciphertext, and IV must be hex encoded."
                                     },
                                 },
                             },
@@ -489,17 +489,17 @@ export const MARASI_API = {
                             },
                             encrypt: {
                                 type: "method",
-                                args: '("${1:pub_key}", "${2:plain}")',
-                                argLabel: "(str, str)",
+                                args: '("${1:hex_pub_key}", "${2:plain}")',
+                                argLabel: "(hex, str)",
                                 returnType: "string",
-                                details: "Encrypts plaintext using RSA with OAEP padding and SHA-256."
+                                details: "Encrypts plaintext using RSA with OAEP padding. The public key must be hex encoded."
                             },
                             decrypt: {
                                 type: "method",
-                                args: '("${1:priv_key}", "${2:cipher}")',
-                                argLabel: "(str, str)",
+                                args: '("${1:hex_priv_key}", "${2:hex_cipher}")',
+                                argLabel: "(hex, hex)",
                                 returnType: "string",
-                                details: "Decrypts ciphertext using RSA with OAEP padding and SHA-256."
+                                details: "Decrypts hex-encoded ciphertext using RSA with OAEP padding. The private key and ciphertext must be hex encoded."
                             },
                         },
                     },
@@ -516,17 +516,17 @@ export const MARASI_API = {
                             },
                             sign: {
                                 type: "method",
-                                args: '("${1:priv_key}", "${2:msg}")',
-                                argLabel: "(str, str)",
+                                args: '("${1:hex_priv_key}", "${2:msg}")',
+                                argLabel: "(hex, str)",
                                 returnType: "string",
-                                details: "Calculates the signature of a message using a private key."
+                                details: "Calculates the signature of a message. The private key must be hex encoded; returns a hex signature."
                             },
                             verify: {
                                 type: "method",
-                                args: '("${1:pub_key}", "${2:msg}", "${3:sig}")',
-                                argLabel: "(str, str, str)",
+                                args: '("${1:hex_pub_key}", "${2:msg}", "${3:hex_sig}")',
+                                argLabel: "(hex, str, hex)",
                                 returnType: "boolean",
-                                details: "Checks if a signature is valid for a given message and public key."
+                                details: "Checks if a signature is valid. The public key and signature must be hex encoded."
                             },
                         },
                     },
@@ -652,7 +652,7 @@ export const TYPE_DEFINITIONS = {
             metadata: { args: "()", argLabel: "()", returnType: "table", details: "Returns the metadata currently set on the builder." },
             set_metadata: { args: "(${1:table})", argLabel: "(table)", returnType: "RequestBuilder", details: "Sets the metadata for the request." },
             send: { args: "()", argLabel: "()", returnType: "http.Response", details: "Sends the request synchronously and returns the response." },
-            send_async: { args: "(function(cb_res)\n\t${}\nend)", argLabel: "(func)", returnType: "void", details: "Sends the request asynchronously; the callback receives (response, error)." },
+            send_async: { args: "(function(cb_res, err)\n\t${}\nend)", argLabel: "(func)", returnType: "void", details: "Sends the request asynchronously; the callback receives (response, error)." },
         }
     },
 
