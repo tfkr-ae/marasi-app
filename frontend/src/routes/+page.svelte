@@ -7,6 +7,8 @@
         StartProxy,
         ToggleFlag,
         ToggleIntercept,
+        DownloadCert,
+        CopyCertToClipboard,
     } from "../lib/wailsjs/go/main/App";
     import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
     import LogTable from "../lib/components/LogTable.svelte";
@@ -21,7 +23,10 @@
         AnchorIcon,
         Binoculars,
         BookIcon,
+        BookOpenCheckIcon,
         CompassIcon,
+        Copy,
+        Download,
         FlagIcon,
         FolderOpen,
         PartyPopper,
@@ -176,13 +181,26 @@
                     keywords: "Launchpad",
                 },
                 {
+                    name: "Logbook",
+                    action: {
+                        handler: () => {
+                            closeAndGoto("/logbook");
+                        },
+                        options: { scope: "all", single: true },
+                        keys: ["⌘+6", "ctrl+6"],
+                    },
+                    subtitle: "Review test cases and findings",
+                    icon: BookOpenCheckIcon,
+                    keywords: "logbook,findings,tests",
+                },
+                {
                     name: "Workshop",
                     action: {
                         handler: () => {
                             closeAndGoto("/workshop");
                         },
                         options: { scope: "all", single: true },
-                        keys: ["⌘+6", "ctrl+6"],
+                        keys: ["⌘+7", "ctrl+7"],
                     },
                     subtitle: "Extend Marasi",
                     icon: ToolIcon,
@@ -215,6 +233,62 @@
                     subtitle: "Start Browser",
                     icon: ChromeIcon,
                     keywords: "Chrome",
+                },
+                {
+                    name: "Download Certificate",
+                    action: {
+                        handler: async () => {
+                            try {
+                                const saved = await DownloadCert();
+                                if (saved) {
+                                    toastStore.trigger({
+                                        message:
+                                            "Certificate saved successfully",
+                                        background: "variant-filled-success",
+                                    });
+                                }
+                            } catch (err) {
+                                toastStore.trigger({
+                                    message:
+                                        "Failed to save certificate: " + err,
+                                    background: "variant-filled-error",
+                                });
+                            }
+                        },
+                        options: { scope: "all", single: true },
+                        keys: ["⌘+D", "ctrl+D"],
+                    },
+                    subtitle: "Download Certificate",
+                    icon: Download,
+                    keywords: "certificate,download",
+                },
+                {
+                    name: "Copy Certificate",
+                    action: {
+                        handler: async () => {
+                            try {
+                                const copied = await CopyCertToClipboard();
+                                if (copied) {
+                                    toastStore.trigger({
+                                        message:
+                                            "Certificate copied to clipboard",
+                                        background: "variant-filled-success",
+                                    });
+                                }
+                            } catch (err) {
+                                toastStore.trigger({
+                                    message:
+                                        "Failed to copy certificate: " + err,
+                                    background: "variant-filled-error",
+                                });
+                            }
+                        },
+                        options: { scope: "all", single: true },
+                        keys: ["⌘+,", "ctrl+,"],
+                    },
+                    subtitle: "Download Certificate",
+                    icon: Copy,
+                    keywords: "certificate,download",
                 },
                 {
                     name: "Jump to Toast",
@@ -413,14 +487,42 @@
                         <span>Open Project</span>
                     </button>
                 </div>
-                <button
-                    type="button"
-                    class="btn variant-filled-primary"
-                    on:click={StartBrowser}
-                >
-                    <span class=""><ChromeIcon /></span>
-                    <span>Start Chrome</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="btn variant-filled-primary"
+                        on:click={async () => {
+                            try {
+                                const saved = await DownloadCert();
+                                if (saved) {
+                                    toastStore.trigger({
+                                        message:
+                                            "Certificate saved successfully",
+                                        background: "variant-filled-success",
+                                    });
+                                }
+                            } catch (err) {
+                                toastStore.trigger({
+                                    message:
+                                        "Failed to save certificate: " + err,
+                                    background: "variant-filled-error",
+                                });
+                            }
+                        }}
+                    >
+                        <span><Download size={20} /></span>
+                        <span>Download Certificate</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn variant-filled-primary"
+                        on:click={StartBrowser}
+                    >
+                        <span class=""><ChromeIcon /></span>
+                        <span>Start Chrome</span>
+                    </button>
+                </div>
             </div>
             <Dashboard />
         </div>

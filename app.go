@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/pem"
 	"fmt"
 	"log"
 	"net"
@@ -798,4 +799,61 @@ func (a *App) DeleteChromePath(path, os string) []marasi.ChromePathConfig {
 		return []marasi.ChromePathConfig{}
 	}
 	return a.Proxy.Config.ChromeDirs
+}
+
+func (a *App) DownloadCert() (bool, error) {
+	if a.Proxy.Cert == nil {
+		return false, nil
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: a.Proxy.Cert.Raw,
+	})
+
+	home, _ := os.UserHomeDir()
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultDirectory: filepath.Join(home, "Downloads"),
+		DefaultFilename:  "marasi-proxy.crt",
+		Title:            "Save Proxy Certificate",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Certificate Files (*.crt)", Pattern: "*.crt"},
+			{DisplayName: "PEM Files (*.pem)", Pattern: "*.pem"},
+			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+		},
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	if path == "" {
+		return false, nil
+	}
+
+	err = os.WriteFile(path, certPEM, 0600)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (a *App) CopyCertToClipboard() (bool, error) {
+	if a.Proxy.Cert == nil {
+		return false, fmt.Errorf("certificate is not available")
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: a.Proxy.Cert.Raw,
+	})
+
+	err := runtime.ClipboardSetText(a.ctx, string(certPEM))
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

@@ -296,7 +296,6 @@
             </div>
         </svelte:fragment>
     </AccordionItem>
-    <!-- ... -->
 </Accordion>
 <div class="p-1 flex flex-col items-center">
     <div class="btn-group variant-filled-primary">

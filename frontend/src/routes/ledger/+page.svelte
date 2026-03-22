@@ -51,6 +51,10 @@
         BracesIcon,
         MaximizeIcon,
         WrapTextIcon,
+        BookCheckIcon,
+        LinkIcon,
+        Unlink,
+        ShieldAlertIcon,
     } from "lucide-svelte";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import IDCell from "../../lib/components/IDCell.svelte";
@@ -64,6 +68,8 @@
         SetFilters,
     } from "../../lib/wailsjs/go/main/App";
     import { onMount } from "svelte";
+    import { testCaseStore } from "../../stores/testCaseStore";
+    import { findingStore } from "../../stores/findingStore";
 
     const drawerStore = getDrawerStore();
     const modalStore = getModalStore();
@@ -207,43 +213,8 @@
     ];
     let drawerMenu = [
         {
-            name: "Note",
-            subtitle: "Open Request Note",
-            icon: PenIcon,
-            keywords: "note",
-            action: {
-                handler: () => {
-                    if (drawerOpened) {
-                        GetNote($drawerStore?.meta?.request?.ID).then(
-                            (note) => {
-                                const modal = {
-                                    type: "component",
-                                    component: "Notes",
-                                    title:
-                                        "Request " +
-                                        $drawerStore?.meta?.requestIndex +
-                                        " notes",
-                                    requestID: $drawerStore?.meta?.request?.ID,
-                                    content: note,
-                                };
-                                if (!$modalStore[0]) {
-                                    modalStore.trigger(modal);
-                                } else if (
-                                    $modalStore[0].component === "Notes"
-                                ) {
-                                    modalStore.close();
-                                }
-                            },
-                        );
-                    }
-                },
-                options: { scope: "ledger", single: true },
-                keys: ["⌘+⇧+N", "ctrl+⇧+N"],
-            },
-        },
-        {
-            name: "Next",
-            subtitle: "Go to next request",
+            name: "Next Request",
+            subtitle: "Jump to the next item in the table",
             icon: ArrowRightIcon,
             keywords: "next",
             action: {
@@ -275,8 +246,8 @@
             },
         },
         {
-            name: "Previous",
-            subtitle: "Go to previous request",
+            name: "Previous Request",
+            subtitle: "Jump to the previous item in the table",
             icon: ArrowLeftIcon,
             keywords: "previous",
             action: {
@@ -308,8 +279,8 @@
             },
         },
         {
-            name: "Launchpad",
-            subtitle: "Send request to Launchpad",
+            name: "Send to Launchpad",
+            subtitle: "Open this request in the launchpad editor",
             icon: SendIcon,
             keywords: "launchpad",
             action: {
@@ -349,8 +320,300 @@
             },
         },
         {
+            name: "Create Test Case",
+            subtitle: "Create a new test case from this request",
+            icon: BookCheckIcon,
+            keywords: "create,test,case",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        if (!$modalStore[0]) {
+                            testCaseStore
+                                .create([$drawerStore?.meta?.request?.ID])
+                                .then((testCase) => {
+                                    const modal = {
+                                        type: "component",
+                                        component: "TestCase",
+                                        meta: {
+                                            testCase: testCase,
+                                            isNew: true,
+                                        },
+                                    };
+                                    modalStore.trigger(modal);
+                                });
+                        } else if ($modalStore[0].component === "TestCase") {
+                            modalStore.close();
+                        }
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+T", "ctrl+⇧+T"],
+            },
+        },
+        {
+            name: "Link to Test Case",
+            subtitle: "Attach request to an existing test case",
+            icon: LinkIcon,
+            keywords: "link,attach,existing",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        if (!$modalStore[0]) {
+                            if ($testCaseStore.length > 0) {
+                                const modal = {
+                                    type: "component",
+                                    component: "SelectTestCase",
+                                    meta: {
+                                        requestID:
+                                            $drawerStore?.meta?.request?.ID,
+                                        mode: "link",
+                                    },
+                                };
+                                modalStore.trigger(modal);
+                            } else {
+                                toastStore.trigger({
+                                    message: "No existing test cases found...",
+                                    background: "variant-filled-warning",
+                                });
+                            }
+                        } else if (
+                            $modalStore[0].component === "SelectTestCase"
+                        ) {
+                            modalStore.close();
+                        }
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+A", "ctrl+⇧+A"],
+            },
+        },
+        {
+            name: "Unlink Test Case",
+            subtitle: "Remove request from linked test case",
+            icon: Unlink,
+            keywords: "unlink test case",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        if (!$modalStore[0]) {
+                            const requestID = $drawerStore?.meta?.request?.ID;
+                            // Check if this specific request is actually linked anywhere
+                            const hasLinks = $testCaseStore.some((tc) =>
+                                tc.Requests?.includes(requestID),
+                            );
+
+                            if (hasLinks) {
+                                const modal = {
+                                    type: "component",
+                                    component: "SelectTestCase",
+                                    meta: {
+                                        requestID: requestID,
+                                        mode: "unlink",
+                                    },
+                                };
+                                modalStore.trigger(modal);
+                            } else {
+                                toastStore.trigger({
+                                    message:
+                                        "No test cases linked to this request.",
+                                    background: "variant-filled-warning",
+                                });
+                            }
+                        } else if (
+                            $modalStore[0].component === "SelectTestCase"
+                        ) {
+                            modalStore.close();
+                        }
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+D", "ctrl+⇧+D"],
+            },
+        },
+        {
+            name: "Create Finding",
+            subtitle: "Create a new finding from this request",
+            icon: ShieldAlertIcon,
+            keywords: "create,finding",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        if (!$modalStore[0]) {
+                            findingStore
+                                .create([$drawerStore?.meta?.request?.ID])
+                                .then((finding) => {
+                                    const modal = {
+                                        type: "component",
+                                        component: "Finding",
+                                        meta: {
+                                            finding: finding,
+                                            isNew: true,
+                                        },
+                                    };
+                                    modalStore.trigger(modal);
+                                })
+                                .catch((err) => console.log(err));
+                        } else if ($modalStore[0].component === "Finding") {
+                            modalStore.close();
+                        }
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+F", "ctrl+⇧+F"],
+            },
+        },
+        {
+            name: "Link Finding",
+            subtitle: "Attach request to an existing finding",
+            icon: LinkIcon,
+            keywords: "link,attach,existing",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        if (!$modalStore[0]) {
+                            if ($findingStore.length > 0) {
+                                const modal = {
+                                    type: "component",
+                                    component: "SelectFinding",
+                                    meta: {
+                                        requestID:
+                                            $drawerStore?.meta?.request?.ID,
+                                        mode: "link",
+                                    },
+                                };
+                                modalStore.trigger(modal);
+                            } else {
+                                toastStore.trigger({
+                                    message: "No existing findings found...",
+                                    background: "variant-filled-warning",
+                                });
+                            }
+                        } else if (
+                            $modalStore[0].component === "SelectFinding"
+                        ) {
+                            modalStore.close();
+                        }
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+K", "ctrl+⇧+K"],
+            },
+        },
+        {
+            name: "Unlink Finding",
+            subtitle: "Remove request from linked finding",
+            icon: Unlink,
+            keywords: "unlink test case",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        if (!$modalStore[0]) {
+                            const requestID = $drawerStore?.meta?.request?.ID;
+                            // Check if this specific request is actually linked anywhere
+                            const hasLinks = $findingStore.some((fnd) =>
+                                fnd.Requests?.includes(requestID),
+                            );
+
+                            if (hasLinks) {
+                                const modal = {
+                                    type: "component",
+                                    component: "SelectFinding",
+                                    meta: {
+                                        requestID: requestID,
+                                        mode: "unlink",
+                                    },
+                                };
+                                modalStore.trigger(modal);
+                            } else {
+                                toastStore.trigger({
+                                    message:
+                                        "No findings linked to this request.",
+                                    background: "variant-filled-warning",
+                                });
+                            }
+                        } else if (
+                            $modalStore[0].component === "SelectFinding"
+                        ) {
+                            modalStore.close();
+                        }
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+X", "ctrl+⇧+X"],
+            },
+        },
+        {
+            name: "View Note",
+            subtitle: "View or modify request note",
+            icon: PenIcon,
+            keywords: "note",
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        GetNote($drawerStore?.meta?.request?.ID).then(
+                            (note) => {
+                                const modal = {
+                                    type: "component",
+                                    component: "Notes",
+                                    title:
+                                        "Request " +
+                                        $drawerStore?.meta?.requestIndex +
+                                        " notes",
+                                    requestID: $drawerStore?.meta?.request?.ID,
+                                    content: note,
+                                };
+                                if (!$modalStore[0]) {
+                                    modalStore.trigger(modal);
+                                } else if (
+                                    $modalStore[0].component === "Notes"
+                                ) {
+                                    modalStore.close();
+                                }
+                            },
+                        );
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+N", "ctrl+⇧+N"],
+            },
+        },
+        {
+            name: "View Metadata",
+            subtitle: "View metadata for this request",
+            keywords: "metadata",
+            icon: BracesIcon,
+            action: {
+                handler: () => {
+                    if (drawerOpened) {
+                        GetMetadata($drawerStore?.meta?.request?.ID).then(
+                            (metadata) => {
+                                const modal = {
+                                    type: "component",
+                                    component: "Metadata",
+                                    content: metadata,
+                                    title:
+                                        "Request " +
+                                        $drawerStore?.meta?.requestIndex +
+                                        " Metadata",
+                                };
+                                if (!$modalStore[0]) {
+                                    modalStore.trigger(modal);
+                                } else if (
+                                    $modalStore[0].component === "Metadata"
+                                ) {
+                                    modalStore.close();
+                                }
+                            },
+                        );
+                    }
+                },
+                options: { scope: "ledger", single: true },
+                keys: ["⌘+⇧+M", "ctrl+⇧+M"],
+            },
+        },
+        {
             name: "Copy URL",
-            subtitle: "Copy request URL",
+            subtitle: "Copy the request URL",
             keywords: "request, url",
             icon: CopyIcon,
             action: {
@@ -384,8 +647,8 @@
             },
         },
         {
-            name: "Copy Request",
-            subtitle: "Copy Raw Request",
+            name: "Copy Raw Request",
+            subtitle: "Copy the complete HTTP request",
             keywords: "request, raw",
             icon: CopyIcon,
             action: {
@@ -410,12 +673,12 @@
                     }
                 },
                 options: { scope: "ledger", single: true },
-                keys: ["⌘+⇧+E", "ctrl+⇧+E"],
+                keys: ["⌘+⇧+R", "ctrl+⇧+R"],
             },
         },
         {
-            name: "Copy Response",
-            subtitle: "Copy Raw Response",
+            name: "Copy Raw Response",
+            subtitle: "Copy the complete HTTP response",
             keywords: "response, raw",
             icon: CopyIcon,
             action: {
@@ -440,47 +703,13 @@
                     }
                 },
                 options: { scope: "ledger", single: true },
-                keys: ["⌘+⇧+B", "ctrl+⇧+B"],
+                keys: ["⌘+⇧+S", "ctrl+⇧+S"],
             },
         },
         {
-            name: "Metadata",
-            subtitle: "View Metadata for Request / Response",
-            keywords: "metadata",
-            icon: BracesIcon,
-            action: {
-                handler: () => {
-                    if (drawerOpened) {
-                        GetMetadata($drawerStore?.meta?.request?.ID).then(
-                            (metadata) => {
-                                const modal = {
-                                    type: "component",
-                                    component: "Metadata",
-                                    content: metadata,
-                                    title:
-                                        "Request " +
-                                        $drawerStore?.meta?.requestIndex +
-                                        " Metadata",
-                                };
-                                if (!$modalStore[0]) {
-                                    modalStore.trigger(modal);
-                                } else if (
-                                    $modalStore[0].component === "Metadata"
-                                ) {
-                                    modalStore.close();
-                                }
-                            },
-                        );
-                    }
-                },
-                options: { scope: "ledger", single: true },
-                keys: ["⌘+⇧+M", "ctrl+⇧+M"],
-            },
-        },
-        {
-            name: "Toggle Drawer Height",
-            subtitle: "Expand the request response drawer",
-            keywords: "toggle, expands",
+            name: "Toggle Fullscreen",
+            subtitle: "Expand or collapse the request drawer",
+            keywords: "toggle, expand",
             icon: MaximizeIcon,
             action: {
                 handler: () => {
@@ -495,12 +724,12 @@
                     }
                 },
                 options: { scope: "ledger", single: true },
-                keys: ["⌘+⇧+T", "ctrl+⇧+T"],
+                keys: ["⌘+⇧+E", "ctrl+⇧+E"],
             },
         },
         {
-            name: "Toggle Line Wrapping",
-            subtitle: "Line wrap request & response body",
+            name: "Toggle Word Wrap",
+            subtitle: "Wrap request / response lines",
             keywords: "toggle, linewrap",
             icon: WrapTextIcon,
             action: {
@@ -675,7 +904,7 @@
                 <div
                     class="input-group input-group-divider grid-cols-[auto_1fr_auto]"
                 >
-                    <div class="input-group-shim"><Search size={16} /></div>
+                    <div class="input-group-shim"><Search size={24} /></div>
                     <input
                         id="searchBox"
                         type="search"
@@ -880,6 +1109,36 @@
                 });
             });
         }}>Send to Launchpad</Item
+    >
+    <Item
+        on:click={() => {
+            testCaseStore.create([selectedRow.original.ID]).then((testCase) => {
+                const modal = {
+                    type: "component",
+                    component: "TestCase",
+                    meta: {
+                        testCase: testCase,
+                        isNew: true,
+                    },
+                };
+                modalStore.trigger(modal);
+            });
+        }}>Create Test Case</Item
+    >
+    <Item
+        on:click={() => {
+            findingStore.create([selectedRow.original.ID]).then((finding) => {
+                const modal = {
+                    type: "component",
+                    component: "Finding",
+                    meta: {
+                        finding: finding,
+                        isNew: true,
+                    },
+                };
+                modalStore.trigger(modal);
+            });
+        }}>Create Finding</Item
     >
     <Divider />
     <ListBox active="hover:variant-soft">

@@ -1,13 +1,33 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/spf13/viper"
 )
+
+//go:embed resources/default_test_cases.yml
+var defaultTestCasesYAML []byte
+
+// TestCase represents a single security testing objective.
+type TestCase struct {
+	Title       string `mapstructure:"title"`
+	Description string `mapstructure:"description"`
+	Category    string `mapstructure:"category"`
+}
+
+// TestCaseProfile represents the entire test_cases.yml structure.
+type TestCaseProfile struct {
+	Title       string     `mapstructure:"title"`
+	Description string     `mapstructure:"description"`
+	Version     string     `mapstructure:"version"`
+	TestCases   []TestCase `mapstructure:"test_cases"`
+}
 
 // Config represents the application configuration stored in YAML format.
 // It contains settings for the proxy server and user preferences.
@@ -19,6 +39,10 @@ type Config struct {
 	DefaultAddress string `mapstructure:"default_address"` // Default proxy server address
 	DefaultPort    string `mapstructure:"default_port"`    // Default proxy server port
 	SyntaxMode     string `mapstructure:"syntax_mode"`
+
+	// TestCaseProfile holds the parsed test cases profile.
+	// Ignored by the main application viper instance.
+	TestCaseProfile TestCaseProfile `mapstructure:"-"`
 }
 
 // ToggleFlag toggles a boolean configuration flag and saves the configuration to disk.
@@ -113,5 +137,43 @@ func LoadConfig(appConfigDir string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("writing config after unmarshalling : %w", err)
 	}
+
+	if err := loadTestCases(appConfigDir, &config); err != nil {
+		return nil, fmt.Errorf("loading test cases: %w", err)
+	}
+
 	return &config, nil
+}
+
+// loadTestCases handles the extraction and parsing of test_cases.yml
+func loadTestCases(dir string, cfg *Config) error {
+	tcViper := viper.New()
+	tcViper.SetConfigName("test_cases")
+	tcViper.SetConfigType("yaml")
+	tcViper.AddConfigPath(dir)
+
+	testCasesPath := filepath.Join(dir, "test_cases.yml")
+
+	// Create with default data if missing, using the embedded file.
+	if _, err := os.Stat(testCasesPath); os.IsNotExist(err) {
+		log.Println("[*] creating default test_cases.yml")
+		if err := os.WriteFile(testCasesPath, defaultTestCasesYAML, 0600); err != nil {
+			return fmt.Errorf("writing default test_cases.yml: %w", err)
+		}
+	}
+
+	if err := tcViper.ReadInConfig(); err != nil {
+		return fmt.Errorf("reading test_cases.yml: %w", err)
+	}
+
+	var profile TestCaseProfile
+	if err := tcViper.Unmarshal(&profile); err != nil {
+		return fmt.Errorf("unmarshalling test cases profile: %w", err)
+	}
+
+	// Assign the parsed profile to the main config struct
+	cfg.TestCaseProfile = profile
+
+	// tcViper is naturally garbage collected here since we don't need to save with it
+	return nil
 }

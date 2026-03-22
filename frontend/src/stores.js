@@ -1,4 +1,4 @@
-import { writable, get } from "svelte/store";
+import { writable } from "svelte/store";
 import {
 	GetProxyItems,
 	GetLogs,
@@ -12,6 +12,8 @@ import {
 	GetLaunchpads,
 	GetLaunchpadRequests,
 } from "./lib/wailsjs/go/main/App";
+import { testCaseStore } from "./stores/testCaseStore";
+import { findingStore } from "./stores/findingStore";
 
 
 // Startup
@@ -33,6 +35,9 @@ export const searchInput = writable("");
 export const proxyItems = writable([]);
 export const contentTypeFilter = writable([]);
 export const contentTypeFilterInput = writable("");
+
+// Logbook Stores
+export const logbookSearchInput = writable("");
 
 let requestBuffer = [];
 let responseBuffer = new Map();
@@ -66,7 +71,8 @@ function flushBuffer() {
 					}
 				}
 			}
-			current = [...current, ...reqBatch];
+			// current = [...current, ...reqBatch];
+			current.push(...reqBatch);
 		}
 
 		return current;
@@ -118,6 +124,7 @@ export const currentEntryIndex = writable(0);
 export const activeLaunchpadID = writable("");
 export const launchpads = writable([]);
 
+
 export let listener = writable({
 	status: false,
 	address: "127.0.0.1",
@@ -135,6 +142,7 @@ export async function openProject() {
 	pagination.set({ pageIndex: 0, pageSize: 100 });
 	sorting.set([{ id: "ID", desc: true }])
 	searchInput.set("");
+	logbookSearchInput.set("");
 	contentTypeFilter.set([]);
 	contentTypeFilterInput.set("");
 	compassCode.set("");
@@ -148,6 +156,8 @@ export async function openProject() {
 	activeLaunchpadID.set("");
 	extensions.set([]);
 	extensions_ui.set({});
+	testCaseStore.clear();
+	findingStore.clear();
 	try {
 		await LoadExtensions();
 	} catch (err) {
@@ -164,6 +174,8 @@ export async function openProject() {
 	await populateWaypoints();
 	await populateExtensions();
 	await populateLaunchpads();
+	await testCaseStore.populate();
+	await findingStore.populate();
 }
 
 export async function populateWaypoints() {
@@ -260,3 +272,4 @@ export async function populateLaunchpadEntries(id) {
 		});
 	});
 }
+

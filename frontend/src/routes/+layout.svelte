@@ -8,11 +8,7 @@
         flip,
         arrow,
     } from "@floating-ui/dom";
-    import {
-        getDrawerStore,
-        LightSwitch,
-        storePopup,
-    } from "@skeletonlabs/skeleton";
+    import { getDrawerStore, storePopup } from "@skeletonlabs/skeleton";
     import {
         initializeStores,
         Toast,
@@ -53,14 +49,14 @@
     import {
         EventsOn,
         EventsOff,
-        Quit,
         WindowSetTitle,
-        EventsOnce,
     } from "../lib/wailsjs/runtime/runtime";
     import AppDrawer from "../lib/components/AppDrawer.svelte";
     import NotesModal from "../lib/components/NotesModal.svelte";
+    import TestCaseModal from "../lib/components/TestCaseModal.svelte";
+    import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
     import { SetupScratchpad, StartProxy } from "../lib/wailsjs/go/main/App";
-    import { ChefHat, Brush } from "lucide-svelte";
+    import { ChefHat, Brush, BookOpenCheckIcon } from "lucide-svelte";
     import MenuModal from "../lib/components/MenuModal.svelte";
     import MetadataModal from "../lib/components/MetadataModal.svelte";
     import InterfaceModal from "../lib/components/InterfaceModal.svelte";
@@ -68,7 +64,8 @@
     import StartupStepper from "../lib/components/StartupStepper.svelte";
     import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
     import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
-    import ProgressRadial from "../lib/extensions/components/ProgressRadial.svelte";
+    import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
+    import FindingModal from "../lib/components/FindingModal.svelte";
     let appRailIndex = 0;
     let showChef = false;
     let showExcali = false;
@@ -111,6 +108,10 @@
         Notes: { ref: NotesModal },
         MenuInput: { ref: MenuModal },
         Metadata: { ref: MetadataModal },
+        TestCase: { ref: TestCaseModal },
+        SelectTestCase: { ref: SelectTestCaseModal },
+        Finding: { ref: FindingModal },
+        SelectFinding: { ref: SelectFindingModal },
         "extension-modal": { ref: ModalWrapper },
     };
     const StartupRoutine2 = new Promise((resolve) => {
@@ -174,6 +175,8 @@
                 // if ($modalStore[0]?.component === "Interface" || $modalStore[0]?.component === "Project") return true;
                 switch ($page.url.pathname) {
                     case "/ledger":
+                        return true;
+                    case "/logbook":
                         return true;
                     default:
                         var target = event.target || event.srcElement;
@@ -295,8 +298,6 @@
 
 <div class="flex flex-col h-screen">
     <div class="flex flex-1 h-screen">
-        <Modal components={modalRegistery} />
-        <Toast position="br" />
         {#if $appState.isReady}
             <AppDrawer />
             <AppRail class="no-select h-full no-scroll">
@@ -389,6 +390,23 @@
                         </div>
                     </svelte:fragment>
                     <span>Launchpad</span>
+                </AppRailAnchor>
+                <AppRailAnchor
+                    selected={$page.url.pathname === "/logbook"}
+                    on:click={() => {
+                        goto("/logbook");
+                    }}
+                    bind:group={currentTile}
+                    name="Logbook"
+                    value={appRailIndex++}
+                    title="Logbook"
+                >
+                    <svelte:fragment slot="lead">
+                        <div class="flex justify-center items-center w-full">
+                            <BookOpenCheckIcon />
+                        </div>
+                    </svelte:fragment>
+                    <span>Logbook</span>
                 </AppRailAnchor>
                 <AppRailAnchor
                     selected={$page.url.pathname === "/workshop"}
@@ -543,8 +561,13 @@
         {/if}
     </div>
 </div>
+<Toast position="br" />
+<Modal components={modalRegistery} />
 
 <style>
+    :global(.snackbar-wrapper) {
+        z-index: 1000 !important;
+    }
     :root {
         --ctx-menu-background: #2f343c;
         --ctx-menu-border: 1px solid #cf595b;

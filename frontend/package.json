@@ -9,6 +9,7 @@
 	},
 	"devDependencies": {
 		"@lezer/generator": "^1.8.0",
+		"@pandatix/js-cvss": "^0.4.4",
 		"@skeletonlabs/skeleton": "^2.10.2",
 		"@skeletonlabs/tw-plugin": "^0.4.0",
 		"@sveltejs/adapter-static": "^3.0.1",

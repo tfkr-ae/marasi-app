@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    Request;
     import CodeMirror from "svelte-codemirror-editor";
     import {
         GetMetadata,
@@ -7,12 +8,14 @@
         GetRawDetails,
     } from "../wailsjs/go/main/App";
     import {
+        BookCheck,
         Braces,
         CodeIcon,
         CopyIcon,
         EyeOffIcon,
         Maximize,
         Pen,
+        ShieldAlert,
         WrapTextIcon,
     } from "lucide-svelte";
     import {
@@ -21,7 +24,11 @@
         prettify,
         lineWrap,
     } from "../../stores";
-    import { getModalStore, getDrawerStore } from "@skeletonlabs/skeleton";
+    import {
+        getModalStore,
+        getDrawerStore,
+        ProgressRadial,
+    } from "@skeletonlabs/skeleton";
     import { vim } from "@replit/codemirror-vim";
     import { StreamLanguage } from "@codemirror/language";
     import { http } from "@codemirror/legacy-modes/mode/http";
@@ -29,6 +36,8 @@
     import { modeCurrent } from "@skeletonlabs/skeleton";
     import { ayuLight } from "thememirror";
     import { beforeNavigate, goto } from "$app/navigation";
+    import { testCaseStore } from "../../stores/testCaseStore";
+    import { findingStore } from "../../stores/findingStore";
 
     const modalStore = getModalStore();
     const drawerStore = getDrawerStore();
@@ -45,6 +54,7 @@
 
     let responseBody = "";
     let selectedRow;
+    let loading = true;
 
     let userEdited = false;
     function adjustHeights() {
@@ -70,6 +80,7 @@
         editors.forEach((editor) => {
             editor.style.height = `${maxHeight}px`;
         });
+        loading = false;
     }
 
     function getLang(body) {
@@ -108,6 +119,38 @@
                 component: "Metadata",
                 content: metadata,
                 title: titleText + " Metadata",
+            };
+            if (!$modalStore[0]) {
+                modalStore.trigger(modal);
+            }
+        });
+    }
+
+    function createTestCase() {
+        testCaseStore.create([request_id]).then((testCase) => {
+            const modal = {
+                type: "component",
+                component: "TestCase",
+                meta: {
+                    testCase: testCase,
+                    isNew: true,
+                },
+            };
+            if (!$modalStore[0]) {
+                modalStore.trigger(modal);
+            }
+        });
+    }
+
+    function createFinding() {
+        findingStore.create([request_id]).then((finding) => {
+            const modal = {
+                type: "component",
+                component: "Finding",
+                meta: {
+                    finding: finding,
+                    isNew: true,
+                },
             };
             if (!$modalStore[0]) {
                 modalStore.trigger(modal);
@@ -251,148 +294,192 @@
     }
 </script>
 
-{#if showTitleBar}
-    <div
-        class="flex p-2 justify-between items-center w-full sticky top-0 z-50 bg-inherit"
-    >
-        <div class="flex items-center space-x-2 flex-shrink-0">
-            {#if showSizeToggle}
-                <button
-                    class="p-1 rounded {$drawerHeight === 'h-[100%]'
-                        ? 'bg-warning-500 text-slate-500'
-                        : 'bg-warning-50 text-slate-500'}"
-                    on:click={() => {
-                        if ($drawerStore.open) {
-                            if ($drawerHeight === "h-[60%]") {
-                                $drawerHeight = "h-[100%]";
-                                $drawerStore.height = $drawerHeight;
-                            } else {
-                                $drawerHeight = "h-[60%]";
-                                $drawerStore.height = $drawerHeight;
-                            }
-                        }
-                    }}
-                >
-                    <Maximize size={16} />
-                </button>
-            {/if}
-            <h5 class="h5 flex-shrink-0">
-                {titleText}
-                {#if isFiltered}
-                    <span
-                        class="justify-center inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200"
-                    >
-                        <EyeOffIcon size={14} strokeWidth={2.5} />
-                        Filtered
-                    </span>
-                {/if}
-            </h5>
+{#if loading}
+    <div class="flex flex-col sm:flex-row w-full h-full min-h-[300px]">
+        <div
+            class="flex-1 flex justify-center items-center p-4 border-r border-surface-500/20"
+        >
+            <div class="text-center">
+                <ProgressRadial
+                    meter="stroke-primary-500"
+                    track="stroke-primary-500/30"
+                    value={undefined}
+                    width="w-12"
+                />
+            </div>
         </div>
-        <div class="flex space-x-2 flex-grow px-2">
-            <button
-                class="btn btn-sm variant-soft-primary flex items-center"
-                on:click={() => {
-                    navigator.clipboard.writeText(requestBody);
-                }}
-            >
-                <CopyIcon size={14} class="mr-1" /> Copy Request
-            </button>
-            <button
-                class="btn btn-sm variant-soft-primary flex items-center"
-                on:click={() => {
-                    navigator.clipboard.writeText(responseBody);
-                }}
-            >
-                <CopyIcon size={14} class="mr-1" /> Copy Response
-            </button>
-            <button
-                class="btn btn-sm variant-soft-secondary flex items-center"
-                on:click={() => {
-                    viewNote();
-                }}
-            >
-                <Pen size={14} class="mr-1" /> View Note
-            </button>
-            <button
-                class="btn btn-sm variant-soft-secondary flex items-center"
-                on:click={() => {
-                    viewMetadata();
-                }}
-            >
-                <Braces size={14} class="mr-1" /> View Metadata
-            </button>
-        </div>
-        <div class="flex justify-right space-x-2">
-            {#if showPrettifyToggle}
-                <div class="flex items-center space-x-2 flex-shrink-0">
-                    <span class="text-sm">Prettify</span>
-                    <button
-                        class="p-1 rounded {$prettify
-                            ? 'bg-warning-500 text-slate-500'
-                            : 'bg-warning-50 text-slate-500'}"
-                        on:click={() => {
-                            togglePrettify();
-                        }}
-                    >
-                        <CodeIcon size={16} />
-                    </button>
-                </div>
-            {/if}
-            <div class="flex items-center space-x-2 flex-shrink-0">
-                <span class="text-sm">Linewrap</span>
-                <button
-                    class="p-1 rounded {$lineWrap
-                        ? 'bg-warning-500 text-slate-500'
-                        : 'bg-warning-50 text-slate-500'}"
-                    on:click={() => {
-                        $lineWrap = $lineWrap ? false : true;
-                        setTimeout(adjustHeights, 50);
-                    }}
-                >
-                    <WrapTextIcon size={16} />
-                </button>
+
+        <div class="flex-1 flex justify-center items-center p-4">
+            <div class="text-center">
+                <ProgressRadial
+                    meter="stroke-primary-500"
+                    track="stroke-primary-500/30"
+                    value={undefined}
+                    width="w-12"
+                />
             </div>
         </div>
     </div>
-{/if}
+{:else}
+    {#if showTitleBar}
+        <div
+            class="flex p-2 justify-between items-center w-full sticky top-0 z-50 bg-inherit"
+        >
+            <div class="flex items-center space-x-2 flex-shrink-0">
+                {#if showSizeToggle}
+                    <button
+                        class="p-1 rounded {$drawerHeight === 'h-[100%]'
+                            ? 'bg-warning-500 text-slate-500'
+                            : 'bg-warning-50 text-slate-500'}"
+                        on:click={() => {
+                            if ($drawerStore.open) {
+                                if ($drawerHeight === "h-[60%]") {
+                                    $drawerHeight = "h-[100%]";
+                                    $drawerStore.height = $drawerHeight;
+                                } else {
+                                    $drawerHeight = "h-[60%]";
+                                    $drawerStore.height = $drawerHeight;
+                                }
+                            }
+                        }}
+                    >
+                        <Maximize size={16} />
+                    </button>
+                {/if}
+                <h5 class="h5 flex-shrink-0">
+                    {titleText}
+                    {#if isFiltered}
+                        <span
+                            class="justify-center inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200"
+                        >
+                            <EyeOffIcon size={14} strokeWidth={2.5} />
+                            Filtered
+                        </span>
+                    {/if}
+                </h5>
+            </div>
+            <div class="flex space-x-2 flex-grow px-2">
+                <button
+                    class="btn btn-sm variant-soft-primary flex items-center"
+                    on:click={() => {
+                        navigator.clipboard.writeText(requestBody);
+                    }}
+                >
+                    <CopyIcon size={14} class="mr-1" /> Copy Request
+                </button>
+                <button
+                    class="btn btn-sm variant-soft-primary flex items-center"
+                    on:click={() => {
+                        navigator.clipboard.writeText(responseBody);
+                    }}
+                >
+                    <CopyIcon size={14} class="mr-1" /> Copy Response
+                </button>
+                <button
+                    class="btn btn-sm variant-soft-primary flex items-center"
+                    on:click={() => {
+                        viewNote();
+                    }}
+                >
+                    <Pen size={14} class="mr-1" /> View Note
+                </button>
+                <button
+                    class="btn btn-sm variant-soft-primary flex items-center"
+                    on:click={() => {
+                        viewMetadata();
+                    }}
+                >
+                    <Braces size={14} class="mr-1" /> View Metadata
+                </button>
+                <button
+                    class="btn btn-sm variant-soft-primary flex items-center"
+                    on:click={() => {
+                        createTestCase();
+                    }}
+                >
+                    <BookCheck size={14} class="mr-1" /> Create Test Case
+                </button>
+                <button
+                    class="btn btn-sm variant-soft-primary flex items-center"
+                    on:click={() => {
+                        createFinding();
+                    }}
+                >
+                    <ShieldAlert size={14} class="mr-1" /> Create Finding
+                </button>
+            </div>
+            <div class="flex justify-right space-x-2">
+                {#if showPrettifyToggle}
+                    <div class="flex items-center space-x-2 flex-shrink-0">
+                        <span class="text-sm">Prettify</span>
+                        <button
+                            class="p-1 rounded {$prettify
+                                ? 'bg-warning-500 text-slate-500'
+                                : 'bg-warning-50 text-slate-500'}"
+                            on:click={() => {
+                                togglePrettify();
+                            }}
+                        >
+                            <CodeIcon size={16} />
+                        </button>
+                    </div>
+                {/if}
+                <div class="flex items-center space-x-2 flex-shrink-0">
+                    <span class="text-sm">Linewrap</span>
+                    <button
+                        class="p-1 rounded {$lineWrap
+                            ? 'bg-warning-500 text-slate-500'
+                            : 'bg-warning-50 text-slate-500'}"
+                        on:click={() => {
+                            $lineWrap = $lineWrap ? false : true;
+                            setTimeout(adjustHeights, 50);
+                        }}
+                    >
+                        <WrapTextIcon size={16} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
 
-{#if requestBody || responseBody}
-    <div class="flex flex-col sm:flex-row w-full">
-        <div class="flex-1 p-1 overflow-auto">
-            <CodeMirror
-                on:change={(event) => {
-                    const text = event.detail;
-                    if (
-                        !safeCompare(
-                            text,
-                            selectedRow?.Metadata["prettified-request"],
-                        ) &&
-                        !safeCompare(text, selectedRow?.Request?.Raw ?? "")
-                    ) {
-                        userEdited = true;
-                    } else {
-                        userEdited = false;
-                    }
-                }}
-                class="text-xs"
-                bind:value={requestBody}
-                lang={getLang(requestBody)}
-                theme={$modeCurrent ? ayuLight : oneDark}
-                extensions={$marasiConfig.VimEnabled ? [vim()] : []}
-                readonly={requestReadOnly}
-                lineWrapping={$lineWrap}
-            ></CodeMirror>
+    {#if requestBody || responseBody}
+        <div class="flex flex-col sm:flex-row w-full">
+            <div class="flex-1 p-1 overflow-auto">
+                <CodeMirror
+                    on:change={(event) => {
+                        const text = event.detail;
+                        if (
+                            !safeCompare(
+                                text,
+                                selectedRow?.Metadata["prettified-request"],
+                            ) &&
+                            !safeCompare(text, selectedRow?.Request?.Raw ?? "")
+                        ) {
+                            userEdited = true;
+                        } else {
+                            userEdited = false;
+                        }
+                    }}
+                    class="text-xs"
+                    bind:value={requestBody}
+                    lang={getLang(requestBody)}
+                    theme={$modeCurrent ? ayuLight : oneDark}
+                    extensions={$marasiConfig.VimEnabled ? [vim()] : []}
+                    readonly={requestReadOnly}
+                    lineWrapping={$lineWrap}
+                ></CodeMirror>
+            </div>
+            <div class="flex-1 p-1 overflow-auto">
+                <CodeMirror
+                    class="text-xs"
+                    bind:value={responseBody}
+                    lang={getLang(responseBody)}
+                    theme={$modeCurrent ? ayuLight : oneDark}
+                    extensions={$marasiConfig.VimEnabled ? [vim()] : []}
+                    readonly={responseReadOnly}
+                    lineWrapping={$lineWrap}
+                ></CodeMirror>
+            </div>
         </div>
-        <div class="flex-1 p-1 overflow-auto">
-            <CodeMirror
-                class="text-xs"
-                bind:value={responseBody}
-                lang={getLang(responseBody)}
-                theme={$modeCurrent ? ayuLight : oneDark}
-                extensions={$marasiConfig.VimEnabled ? [vim()] : []}
-                readonly={responseReadOnly}
-                lineWrapping={$lineWrap}
-            ></CodeMirror>
-        </div>
-    </div>
+    {/if}
 {/if}

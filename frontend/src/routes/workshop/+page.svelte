@@ -130,7 +130,6 @@
             </div>
         </svelte:fragment>
     </AccordionItem>
-    <!-- ... -->
 </Accordion>
 <div>
     <CodeMirror
