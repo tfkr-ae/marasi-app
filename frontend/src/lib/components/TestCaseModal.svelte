@@ -33,6 +33,8 @@
     let templateSearchInput = "";
     let showTemplateSearch = isNew;
     let imageUrls = {};
+    let displayedRequests = [];
+    let requestSearchTimeout;
 
     if (!testCase.Tags || testCase.Tags.length === 0) {
         testCase.Tags = ["example_tag"];
@@ -41,11 +43,36 @@
         $testCaseStore.find((tc) => tc.ID === testCase.ID)?.Artifacts || [];
     $: requests =
         $testCaseStore.find((tc) => tc.ID === testCase.ID)?.Requests || [];
-    $: autocompleteProxyOptions = $proxyItems.map((item, i) => ({
-        label: `${i + 1} - ${item.Scheme}://${item.Host}${item.Path}`,
-        value: item.ID,
-        ...item,
-    }));
+    $: allRequests = $proxyItems.map((item, i) => {
+        const label = `${i + 1} - ${item.Scheme}://${item.Host}${item.Path}`;
+        return {
+            label,
+            searchLabel: label.toLowerCase(),
+            value: item.ID,
+            ...item,
+        };
+    });
+    $: {
+        clearTimeout(requestSearchTimeout);
+
+        requestSearchTimeout = setTimeout(() => {
+            const inputFormatted = requestInput.toLowerCase().trim();
+
+            if (!inputFormatted) {
+                displayedRequests = allRequests.slice(0, 100);
+            } else {
+                const matches = [];
+                for (let i = 0; i < allRequests.length; i++) {
+                    if (allRequests[i].searchLabel.includes(inputFormatted)) {
+                        matches.push(allRequests[i]);
+                    }
+                    if (matches.length === 100) break;
+                }
+                displayedRequests = matches;
+            }
+        }, 200);
+    }
+    const passThroughFilter = () => displayedRequests;
 
     $: if (testCase.Tags?.length > 1 && testCase.Tags.includes("example_tag")) {
         testCase.Tags = testCase.Tags.filter((tag) => tag !== "example_tag");
@@ -100,15 +127,6 @@
                 target.scrollIntoView({ behavior: "smooth", block: "start" });
             }
         }, 250);
-    }
-
-    function requestFilter() {
-        const inputFormatted = requestInput.toLowerCase().trim();
-        if (!inputFormatted) return autocompleteProxyOptions;
-
-        return autocompleteProxyOptions.filter((opt) =>
-            opt.label.toLowerCase().includes(inputFormatted),
-        );
     }
 
     function templateFilter() {
@@ -369,8 +387,8 @@
                     >
                         <Autocomplete
                             bind:input={requestInput}
-                            options={autocompleteProxyOptions}
-                            filter={requestFilter}
+                            options={displayedRequests}
+                            filter={passThroughFilter}
                             on:selection={async (e) => {
                                 const selectedID = e.detail.ID;
                                 requestInput = "";
