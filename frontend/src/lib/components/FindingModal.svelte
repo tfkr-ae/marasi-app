@@ -240,8 +240,15 @@
 </script>
 
 {#if $modalStore[0]}
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
         class="card p-6 w-[75%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-primary-500"
+        on:keydown={(event) => {
+            if (event.key === "Escape") {
+                event.stopImmediatePropagation();
+                modalStore.close();
+            }
+        }}
     >
         <header class="flex justify-between items-center p-2">
             <div class="flex items-center gap-2">

@@ -39,8 +39,15 @@
 </script>
 
 {#if $modalStore[0]}
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
         class="card p-4 w-[65%] max-w-[95vw] shadow-xl rounded-0 flex flex-col max-h-[90vh]"
+        on:keydown={(event) => {
+            if (event.key === "Escape") {
+                event.stopImmediatePropagation();
+                modalStore.close();
+            }
+        }}
     >
         <header class="flex justify-between items-center p-2">
             <h2 class="text-xl font-bold">
