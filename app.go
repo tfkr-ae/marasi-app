@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tfkr-ae/marasi/chrome"
 	"github.com/tfkr-ae/marasi/db"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/extensions"
@@ -348,8 +349,8 @@ func (a *App) CountNotes() (Dashboard, error) {
 	dashboard.Interceptions = intercepted
 	return dashboard, nil
 }
-func (a *App) StartBrowser() error {
-	err := a.Proxy.StartChrome()
+func (a *App) StartBrowser(profile string) error {
+	err := a.Proxy.StartChrome(profile)
 	if err != nil {
 		return fmt.Errorf("starting chrome : %w", err)
 	}
@@ -779,24 +780,44 @@ func (a *App) GetRecentProjects() []struct {
 	return recent
 }
 
-func (a *App) GetChromePaths() []marasi.ChromePathConfig {
+func (a *App) GetChromeProfiles() []string {
+	return a.Proxy.Config.ChromeProfiles
+}
+
+func (a *App) AddChromeProfile(name string) ([]string, error) {
+	err := a.Proxy.Config.AddChromeProfile(name)
+	if err != nil {
+		return []string{}, err
+	}
+	return a.Proxy.Config.ChromeProfiles, nil
+}
+
+func (a *App) DeleteChromeProfile(name string) ([]string, error) {
+	err := a.Proxy.Config.DeleteChromeProfile(name)
+	if err != nil {
+		return []string{}, err
+	}
+	return a.Proxy.Config.ChromeProfiles, nil
+}
+
+func (a *App) GetChromePaths() []chrome.PathConfig {
 	return a.Proxy.Config.ChromeDirs
 }
 
-func (a *App) AddChromePath(path, os string) []marasi.ChromePathConfig {
+func (a *App) AddChromePath(path, os string) []chrome.PathConfig {
 	err := a.Proxy.Config.AddChromePath(path, os)
 	if err != nil {
 		// Return something useful here
-		return []marasi.ChromePathConfig{}
+		return []chrome.PathConfig{}
 	}
 	return a.Proxy.Config.ChromeDirs
 }
 
-func (a *App) DeleteChromePath(path, os string) []marasi.ChromePathConfig {
+func (a *App) DeleteChromePath(path, os string) []chrome.PathConfig {
 	err := a.Proxy.Config.DeleteChromePath(path, os)
 	if err != nil {
 		// Return something useful here
-		return []marasi.ChromePathConfig{}
+		return []chrome.PathConfig{}
 	}
 	return a.Proxy.Config.ChromeDirs
 }

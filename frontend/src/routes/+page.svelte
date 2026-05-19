@@ -1,590 +1,808 @@
 <script>
-    import { goto } from "$app/navigation";
-    import {
-        LoadExtensions,
-        OpenProject,
-        StartBrowser,
-        StartProxy,
-        ToggleFlag,
-        ToggleIntercept,
-        DownloadCert,
-        CopyCertToClipboard,
-    } from "../lib/wailsjs/go/main/App";
-    import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
-    import LogTable from "../lib/components/LogTable.svelte";
-    import Dashboard from "../lib/components/Dashboard.svelte";
-    import {
-        getDrawerStore,
-        getModalStore,
-        getToastStore,
-    } from "@skeletonlabs/skeleton";
-    import MarasiKeys from "../lib/components/MarasiMenu/MarasiKeys.svelte";
-    import {
-        AnchorIcon,
-        Binoculars,
-        BookIcon,
-        BookOpenCheckIcon,
-        CompassIcon,
-        Copy,
-        Download,
-        FlagIcon,
-        FolderOpen,
-        PartyPopper,
-        SendIcon,
-        Settings,
-        ToggleLeft,
-    } from "lucide-svelte";
-    import {
-        activeProject,
-        listener,
-        marasiConfig,
-        openProject,
-        interceptFlag,
-        extensions_ui,
-        extensions,
-        appState,
-    } from "../stores";
-    import { WindowSetTitle } from "../lib/wailsjs/runtime/runtime";
-    import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
-    const drawerStore = getDrawerStore();
-    const modalStore = getModalStore();
-    const toastStore = getToastStore();
+	import { goto } from "$app/navigation";
+	import {
+		OpenProject,
+		StartBrowser,
+		StartProxy,
+		ToggleFlag,
+		ToggleIntercept,
+		DownloadCert,
+		CopyCertToClipboard,
+		GetChromeProfiles,
+	} from "../lib/wailsjs/go/main/App";
+	import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
+	import LogTable from "../lib/components/LogTable.svelte";
+	import Dashboard from "../lib/components/Dashboard.svelte";
+	import {
+		getDrawerStore,
+		getModalStore,
+		getToastStore,
+		popup,
+	} from "@skeletonlabs/skeleton";
+	import MarasiKeys from "../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import {
+		AnchorIcon,
+		Binoculars,
+		BookIcon,
+		BookOpenCheckIcon,
+		ChevronDown,
+		CompassIcon,
+		Copy,
+		Download,
+		FlagIcon,
+		FolderOpen,
+		PartyPopper,
+		SendIcon,
+		Settings,
+		ToggleLeft,
+	} from "lucide-svelte";
+	import {
+		activeProject,
+		listener,
+		marasiConfig,
+		openProject,
+		interceptFlag,
+		extensions_ui,
+		extensions,
+		appState,
+	} from "../stores";
+	import { WindowSetTitle } from "../lib/wailsjs/runtime/runtime";
+	import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
+	import { onMount } from "svelte";
+	const drawerStore = getDrawerStore();
+	const modalStore = getModalStore();
+	const toastStore = getToastStore();
+	let chromeProfiles = [];
+	const chromeProfilesPopup = {
+		event: "click",
+		target: "chromeProfilesPopup",
+		placement: "bottom-end",
+	};
 
-    function closeAndGoto(url) {
-        drawerStore.close();
-        modalStore.close();
-        document.querySelector("dialog")?.close();
-        goto(url);
-    }
-    function setupListener(r) {
-        StartProxy(r.addr, r.port)
-            .then(() => {
-                listener.set({
-                    status: true,
-                    address: r.addr,
-                    port: r.port,
-                });
-                const toastSettings = {
-                    message: "Listening on " + r.addr + ":" + r.port,
-                    background: "variant-filled-success",
-                };
-                toastStore.trigger(toastSettings);
-            })
-            .catch((listenerError) => {
-                listener.set({
-                    status: false,
-                    address: r.addr,
-                    port: r.port,
-                });
-                const toastSettings = {
-                    message:
-                        "Failed to setup listener on " + r.addr + ":" + r.port,
-                    background: "variant-filled-error",
-                };
-                toastStore.trigger(toastSettings);
-            });
-    }
+	function closeAndGoto(url) {
+		drawerStore.close();
+		modalStore.close();
+		document.querySelector("dialog")?.close();
+		goto(url);
+	}
+	function setupListener(r) {
+		StartProxy(r.addr, r.port)
+			.then(() => {
+				listener.set({
+					status: true,
+					address: r.addr,
+					port: r.port,
+				});
+				const toastSettings = {
+					message:
+						"Listening on " +
+						r.addr +
+						":" +
+						r.port,
+					background: "variant-filled-success",
+				};
+				toastStore.trigger(toastSettings);
+			})
+			.catch((listenerError) => {
+				listener.set({
+					status: false,
+					address: r.addr,
+					port: r.port,
+				});
+				const toastSettings = {
+					message:
+						"Failed to setup listener on " +
+						r.addr +
+						":" +
+						r.port,
+					background: "variant-filled-error",
+				};
+				toastStore.trigger(toastSettings);
+			});
+	}
 
-    function open(r) {
-        $appState.isReady = false;
-        OpenProject(r)
-            .then((name) => {
-                activeProject.set(name);
-                WindowSetTitle(name);
-                goto("/");
-                openProject();
-                $appState.isReady = true;
-                const toastSettings = {
-                    message: "Opened " + name + " project",
-                    background: "variant-filled-success",
-                };
-                toastStore.trigger(toastSettings);
-            })
-            .catch((repoError) => {
-                const toastSettings = {
-                    message: "Failed to open project",
-                    background: "variant-filled-error",
-                };
-                toastStore.trigger(toastSettings);
-            });
-    }
+	function open(r) {
+		$appState.isReady = false;
+		OpenProject(r)
+			.then((name) => {
+				activeProject.set(name);
+				WindowSetTitle(name);
+				goto("/");
+				openProject();
+				$appState.isReady = true;
+				const toastSettings = {
+					message: "Opened " + name + " project",
+					background: "variant-filled-success",
+				};
+				toastStore.trigger(toastSettings);
+			})
+			.catch((repoError) => {
+				const toastSettings = {
+					message: "Failed to open project",
+					background: "variant-filled-error",
+				};
+				toastStore.trigger(toastSettings);
+			});
+	}
+	onMount(() => {
+		GetChromeProfiles().then((profiles) => {
+			chromeProfiles = profiles;
+		});
+	});
 </script>
 
 <div class="content">
-    <div class="no-select dashboard-content">
-        <MarasiKeys
-            scope="all"
-            menuOptions={[
-                {
-                    name: "Marasi",
-                    subtitle: "Dashboard",
-                    icon: AnchorIcon,
-                    keywords: "home, dashboard",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+1", "ctrl+1"],
-                    },
-                },
-                {
-                    name: "Ledger",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/ledger");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+2", "ctrl+2"],
-                    },
-                    subtitle: "View requests",
-                    icon: BookIcon,
-                    keywords: "ledger",
-                },
-                {
-                    name: "Compass",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/compass");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+3", "ctrl+3"],
-                    },
-                    subtitle: "Configure scope",
-                    icon: CompassIcon,
-                    keywords: "compass",
-                },
-                {
-                    name: "Checkpoint",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/checkpoint");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+4", "ctrl+4"],
-                    },
-                    subtitle: "Intercept Requests",
-                    icon: FlagIcon,
-                    keywords: "checkpoint",
-                },
-                {
-                    name: "Launchpad",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/launchpad");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+5", "ctrl+5"],
-                    },
-                    subtitle: "Edit and Repeat Requests",
-                    icon: SendIcon,
-                    keywords: "Launchpad",
-                },
-                {
-                    name: "Logbook",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/logbook");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+6", "ctrl+6"],
-                    },
-                    subtitle: "Review test cases and findings",
-                    icon: BookOpenCheckIcon,
-                    keywords: "logbook,findings,tests",
-                },
-                {
-                    name: "Workshop",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/workshop");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+7", "ctrl+7"],
-                    },
-                    subtitle: "Extend Marasi",
-                    icon: ToolIcon,
-                    keywords: "Workshop",
-                },
-                {
-                    name: "Settings",
-                    action: {
-                        handler: () => {
-                            closeAndGoto("/settings");
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+S", "ctrl+S"],
-                    },
-                    subtitle: "Configure your settings",
-                    icon: Settings,
-                    keywords: "settings",
-                },
-                {
-                    name: "Start Chrome",
-                    action: {
-                        handler: () => {
-                            StartBrowser().then(() => {
-                                console.log("Chrome started");
-                            });
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+`", "ctrl+`"],
-                    },
-                    subtitle: "Start Browser",
-                    icon: ChromeIcon,
-                    keywords: "Chrome",
-                },
-                {
-                    name: "Download Certificate",
-                    action: {
-                        handler: async () => {
-                            try {
-                                const saved = await DownloadCert();
-                                if (saved) {
-                                    toastStore.trigger({
-                                        message:
-                                            "Certificate saved successfully",
-                                        background: "variant-filled-success",
-                                    });
-                                }
-                            } catch (err) {
-                                toastStore.trigger({
-                                    message:
-                                        "Failed to save certificate: " + err,
-                                    background: "variant-filled-error",
-                                });
-                            }
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+D", "ctrl+D"],
-                    },
-                    subtitle: "Download Certificate",
-                    icon: Download,
-                    keywords: "certificate,download",
-                },
-                {
-                    name: "Copy Certificate",
-                    action: {
-                        handler: async () => {
-                            try {
-                                const copied = await CopyCertToClipboard();
-                                if (copied) {
-                                    toastStore.trigger({
-                                        message:
-                                            "Certificate copied to clipboard",
-                                        background: "variant-filled-success",
-                                    });
-                                }
-                            } catch (err) {
-                                toastStore.trigger({
-                                    message:
-                                        "Failed to copy certificate: " + err,
-                                    background: "variant-filled-error",
-                                });
-                            }
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+,", "ctrl+,"],
-                    },
-                    subtitle: "Download Certificate",
-                    icon: Copy,
-                    keywords: "certificate,download",
-                },
-                {
-                    name: "Jump to Toast",
-                    action: {
-                        handler: () => {
-                            drawerStore.close();
-                            modalStore.close();
-                            document.querySelector("dialog")?.close();
-                            $toastStore[0]?.action?.response();
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+.", "ctrl+."],
-                    },
-                    subtitle: "Jump to the active toast",
-                    icon: PartyPopper,
-                    keywords: "toast",
-                },
-                {
-                    name: "Open Project",
-                    action: {
-                        handler: () => {
-                            const modal = {
-                                type: "component",
-                                component: "Project",
-                                title: "Switch Projects",
-                                response: (r) => {
-                                    if (r) {
-                                        open(r);
-                                    }
-                                },
-                            };
-                            if (!$modalStore[0]) {
-                                modalStore.trigger(modal);
-                            } else if ($modalStore[0].component === "Project") {
-                                modalStore.close();
-                            }
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+O", "ctrl+O"],
-                    },
-                    subtitle: "Open a project",
-                    icon: FolderOpen,
-                    keywords: "open project",
-                },
-                {
-                    name: "Setup Listener",
-                    action: {
-                        handler: () => {
-                            const modal = {
-                                type: "component",
-                                component: "Interface",
-                                title: "Setup Listener",
-                                response: (r) => {
-                                    if (r) {
-                                        setupListener(r);
-                                    }
-                                },
-                            };
-                            if (!$modalStore[0]) {
-                                modalStore.trigger(modal);
-                            } else if (
-                                $modalStore[0].component === "Interface"
-                            ) {
-                                modalStore.close();
-                            }
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+L", "ctrl+L"],
-                    },
-                    subtitle: "Start a new listener",
-                    icon: Binoculars,
-                    keywords: "listener",
-                },
-                {
-                    name: "Toggle Vim Mode",
-                    action: {
-                        handler: () => {
-                            // $marasiConfig.VimEnabled = !$marasiConfig.VimEnabled;
-                            ToggleFlag("vim_enabled").then((config) => {
-                                marasiConfig.set(config);
-                            });
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+T", "ctrl+T"],
-                    },
-                    subtitle: "Toggle Vim Mode in editor views",
-                    icon: ToggleLeft,
-                    keywords: "vim",
-                },
-                {
-                    name: $interceptFlag
-                        ? "Toggle Intercept Off"
-                        : "Toggle Intercept On",
-                    action: {
-                        handler: () => {
-                            ToggleIntercept().then((flag) => {
-                                interceptFlag.set(flag);
-                            });
-                        },
-                        options: { scope: "all", single: true },
-                        keys: ["⌘+I", "ctrl+I"],
-                    },
-                    subtitle: "Toggle the Global Intercept On or Off",
-                    icon: ToggleLeft,
-                    keywords: "intercept, toggle, global",
-                },
-                ...$extensions
-                    .filter(
-                        (ext) =>
-                            ext.Name !== "compass" && ext.Name !== "checkpoint",
-                    )
-                    .map((extension, index) => {
-                        const iconSchema = $extensions_ui[extension.Name]?.icon;
-                        const menuIconSchema = iconSchema
-                            ? { ...iconSchema, size: 14 }
-                            : null;
+	<div class="no-select dashboard-content">
+		<MarasiKeys
+			scope="all"
+			menuOptions={[
+				{
+					name: "Marasi",
+					subtitle: "Dashboard",
+					icon: AnchorIcon,
+					keywords: "home, dashboard",
+					action: {
+						handler: () => {
+							closeAndGoto("/");
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+1", "ctrl+1"],
+					},
+				},
+				{
+					name: "Ledger",
+					action: {
+						handler: () => {
+							closeAndGoto("/ledger");
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+2", "ctrl+2"],
+					},
+					subtitle: "View requests",
+					icon: BookIcon,
+					keywords: "ledger",
+				},
+				{
+					name: "Compass",
+					action: {
+						handler: () => {
+							closeAndGoto(
+								"/compass",
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+3", "ctrl+3"],
+					},
+					subtitle: "Configure scope",
+					icon: CompassIcon,
+					keywords: "compass",
+				},
+				{
+					name: "Checkpoint",
+					action: {
+						handler: () => {
+							closeAndGoto(
+								"/checkpoint",
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+4", "ctrl+4"],
+					},
+					subtitle: "Intercept Requests",
+					icon: FlagIcon,
+					keywords: "checkpoint",
+				},
+				{
+					name: "Launchpad",
+					action: {
+						handler: () => {
+							closeAndGoto(
+								"/launchpad",
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+5", "ctrl+5"],
+					},
+					subtitle: "Edit and Repeat Requests",
+					icon: SendIcon,
+					keywords: "Launchpad",
+				},
+				{
+					name: "Logbook",
+					action: {
+						handler: () => {
+							closeAndGoto(
+								"/logbook",
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+6", "ctrl+6"],
+					},
+					subtitle: "Review test cases and findings",
+					icon: BookOpenCheckIcon,
+					keywords: "logbook,findings,tests",
+				},
+				{
+					name: "Workshop",
+					action: {
+						handler: () => {
+							closeAndGoto(
+								"/workshop",
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+7", "ctrl+7"],
+					},
+					subtitle: "Extend Marasi",
+					icon: ToolIcon,
+					keywords: "Workshop",
+				},
+				{
+					name: "Settings",
+					action: {
+						handler: () => {
+							closeAndGoto(
+								"/settings",
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+S", "ctrl+S"],
+					},
+					subtitle: "Configure your settings",
+					icon: Settings,
+					keywords: "settings",
+				},
+				{
+					name: "Start Chrome",
+					action: {
+						handler: () => {
+							StartBrowser("").then(
+								() => {
+									console.log(
+										"Chrome started",
+									);
+								},
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+`", "ctrl+`"],
+					},
+					subtitle: "Start Browser",
+					icon: ChromeIcon,
+					keywords: "Chrome",
+				},
+				{
+					name: "Download Certificate",
+					action: {
+						handler: async () => {
+							try {
+								const saved =
+									await DownloadCert();
+								if (saved) {
+									toastStore.trigger(
+										{
+											message: "Certificate saved successfully",
+											background: "variant-filled-success",
+										},
+									);
+								}
+							} catch (err) {
+								toastStore.trigger(
+									{
+										message:
+											"Failed to save certificate: " +
+											err,
+										background: "variant-filled-error",
+									},
+								);
+							}
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+D", "ctrl+D"],
+					},
+					subtitle: "Download Certificate",
+					icon: Download,
+					keywords: "certificate,download",
+				},
+				{
+					name: "Copy Certificate",
+					action: {
+						handler: async () => {
+							try {
+								const copied =
+									await CopyCertToClipboard();
+								if (copied) {
+									toastStore.trigger(
+										{
+											message: "Certificate copied to clipboard",
+											background: "variant-filled-success",
+										},
+									);
+								}
+							} catch (err) {
+								toastStore.trigger(
+									{
+										message:
+											"Failed to copy certificate: " +
+											err,
+										background: "variant-filled-error",
+									},
+								);
+							}
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+,", "ctrl+,"],
+					},
+					subtitle: "Download Certificate",
+					icon: Copy,
+					keywords: "certificate,download",
+				},
+				{
+					name: "Jump to Toast",
+					action: {
+						handler: () => {
+							drawerStore.close();
+							modalStore.close();
+							document.querySelector(
+								"dialog",
+							)?.close();
+							$toastStore[0]?.action?.response();
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+.", "ctrl+."],
+					},
+					subtitle: "Jump to the active toast",
+					icon: PartyPopper,
+					keywords: "toast",
+				},
+				{
+					name: "Open Project",
+					action: {
+						handler: () => {
+							const modal = {
+								type: "component",
+								component: "Project",
+								title: "Switch Projects",
+								response: (
+									r,
+								) => {
+									if (r) {
+										open(
+											r,
+										);
+									}
+								},
+							};
+							if (!$modalStore[0]) {
+								modalStore.trigger(
+									modal,
+								);
+							} else if (
+								$modalStore[0]
+									.component ===
+								"Project"
+							) {
+								modalStore.close();
+							}
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+O", "ctrl+O"],
+					},
+					subtitle: "Open a project",
+					icon: FolderOpen,
+					keywords: "open project",
+				},
+				{
+					name: "Setup Listener",
+					action: {
+						handler: () => {
+							const modal = {
+								type: "component",
+								component: "Interface",
+								title: "Setup Listener",
+								response: (
+									r,
+								) => {
+									if (r) {
+										setupListener(
+											r,
+										);
+									}
+								},
+							};
+							if (!$modalStore[0]) {
+								modalStore.trigger(
+									modal,
+								);
+							} else if (
+								$modalStore[0]
+									.component ===
+								"Interface"
+							) {
+								modalStore.close();
+							}
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+L", "ctrl+L"],
+					},
+					subtitle: "Start a new listener",
+					icon: Binoculars,
+					keywords: "listener",
+				},
+				{
+					name: "Toggle Vim Mode",
+					action: {
+						handler: () => {
+							// $marasiConfig.VimEnabled = !$marasiConfig.VimEnabled;
+							ToggleFlag(
+								"vim_enabled",
+							).then((config) => {
+								marasiConfig.set(
+									config,
+								);
+							});
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+T", "ctrl+T"],
+					},
+					subtitle: "Toggle Vim Mode in editor views",
+					icon: ToggleLeft,
+					keywords: "vim",
+				},
+				{
+					name: $interceptFlag
+						? "Toggle Intercept Off"
+						: "Toggle Intercept On",
+					action: {
+						handler: () => {
+							ToggleIntercept().then(
+								(flag) => {
+									interceptFlag.set(
+										flag,
+									);
+								},
+							);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+I", "ctrl+I"],
+					},
+					subtitle: "Toggle the Global Intercept On or Off",
+					icon: ToggleLeft,
+					keywords: "intercept, toggle, global",
+				},
+				...$extensions
+					.filter(
+						(ext) =>
+							ext.Name !==
+								"compass" &&
+							ext.Name !==
+								"checkpoint",
+					)
+					.map((extension, index) => {
+						const iconSchema =
+							$extensions_ui[
+								extension.Name
+							]?.icon;
+						const menuIconSchema =
+							iconSchema
+								? {
+										...iconSchema,
+										size: 14,
+									}
+								: null;
 
-                        return {
-                            name: extension.Name,
-                            subtitle: `Open ${extension.Name}`,
-                            keywords: `${extension.Name}`,
-                            icon: {
-                                component: ExtensionUI,
-                                props: {
-                                    extensionData: extension,
-                                    schema: menuIconSchema,
-                                },
-                            },
-                            action: {
-                                handler: () =>
-                                    closeAndGoto(
-                                        "/extension/" + extension.Name,
-                                    ),
-                                keys:
-                                    index < 9
-                                        ? [
-                                              `⌘+alt+${index + 1}`,
-                                              `ctrl+alt+${index + 1}`,
-                                          ]
-                                        : [],
-                            },
-                        };
-                    }),
-            ]}
-        />
-        <div class="container mx-auto p-8 space-y-8">
-            <div class="header flex justify-between items-center mb-8">
-                <div class="btn-group variant-filled">
-                    <button
-                        type="button"
-                        class="btn items-center flex variant-filled"
-                        on:click={() => {
-                            const modal = {
-                                type: "component",
-                                component: "Interface",
-                                title: "Setup Listener",
-                                response: (r) => {
-                                    if (r) {
-                                        setupListener(r);
-                                    }
-                                },
-                            };
-                            if (!$modalStore[0]) {
-                                modalStore.trigger(modal);
-                            }
-                        }}
-                    >
-                        <span>{$listener.address + ":" + $listener.port}</span>
-                        <span
-                            class={"flex w-3 h-3 me-3 rounded-full " +
-                                ($listener.status
-                                    ? "bg-success-500"
-                                    : "bg-primary-500")}
-                        ></span>
-                    </button>
-                    <button
-                        type="button"
-                        class="btn variant-filled flex items-center"
-                        on:click={() => {
-                            const modal = {
-                                type: "component",
-                                component: "Project",
-                                title: "Switch Projects",
-                                response: (r) => {
-                                    if (r) {
-                                        open(r);
-                                    }
-                                },
-                            };
-                            if (!$modalStore[0]) {
-                                modalStore.trigger(modal);
-                            }
-                        }}
-                    >
-                        <span class="mr-2"><FolderOpen /></span>
-                        <span>Open Project</span>
-                    </button>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button
-                        type="button"
-                        class="btn variant-filled-primary"
-                        on:click={async () => {
-                            try {
-                                const saved = await DownloadCert();
-                                if (saved) {
-                                    toastStore.trigger({
-                                        message:
-                                            "Certificate saved successfully",
-                                        background: "variant-filled-success",
-                                    });
-                                }
-                            } catch (err) {
-                                toastStore.trigger({
-                                    message:
-                                        "Failed to save certificate: " + err,
-                                    background: "variant-filled-error",
-                                });
-                            }
-                        }}
-                    >
-                        <span><Download size={20} /></span>
-                        <span>Download Certificate</span>
-                    </button>
+						return {
+							name: extension.Name,
+							subtitle: `Open ${extension.Name}`,
+							keywords: `${extension.Name}`,
+							icon: {
+								component: ExtensionUI,
+								props: {
+									extensionData:
+										extension,
+									schema: menuIconSchema,
+								},
+							},
+							action: {
+								handler: () =>
+									closeAndGoto(
+										"/extension/" +
+											extension.Name,
+									),
+								keys:
+									index <
+									9
+										? [
+												`⌘+alt+${index + 1}`,
+												`ctrl+alt+${index + 1}`,
+											]
+										: [],
+							},
+						};
+					}),
+			]}
+		/>
+		<div class="container mx-auto p-8 space-y-8">
+			<div
+				class="header flex justify-between items-center mb-8"
+			>
+				<div class="btn-group variant-filled">
+					<button
+						type="button"
+						class="btn items-center flex variant-filled"
+						on:click={() => {
+							const modal = {
+								type: "component",
+								component: "Interface",
+								title: "Setup Listener",
+								response: (
+									r,
+								) => {
+									if (r) {
+										setupListener(
+											r,
+										);
+									}
+								},
+							};
+							if (!$modalStore[0]) {
+								modalStore.trigger(
+									modal,
+								);
+							}
+						}}
+					>
+						<span
+							>{$listener.address +
+								":" +
+								$listener.port}</span
+						>
+						<span
+							class={"flex w-3 h-3 me-3 rounded-full " +
+								($listener.status
+									? "bg-success-500"
+									: "bg-primary-500")}
+						></span>
+					</button>
+					<button
+						type="button"
+						class="btn variant-filled flex items-center"
+						on:click={() => {
+							const modal = {
+								type: "component",
+								component: "Project",
+								title: "Switch Projects",
+								response: (
+									r,
+								) => {
+									if (r) {
+										open(
+											r,
+										);
+									}
+								},
+							};
+							if (!$modalStore[0]) {
+								modalStore.trigger(
+									modal,
+								);
+							}
+						}}
+					>
+						<span class="mr-2"
+							><FolderOpen /></span
+						>
+						<span>Open Project</span>
+					</button>
+				</div>
+				<div class="flex items-center gap-2">
+					<button
+						type="button"
+						class="btn variant-filled-primary"
+						on:click={async () => {
+							try {
+								const saved =
+									await DownloadCert();
+								if (saved) {
+									toastStore.trigger(
+										{
+											message: "Certificate saved successfully",
+											background: "variant-filled-success",
+										},
+									);
+								}
+							} catch (err) {
+								toastStore.trigger(
+									{
+										message:
+											"Failed to save certificate: " +
+											err,
+										background: "variant-filled-error",
+									},
+								);
+							}
+						}}
+					>
+						<span
+							><Download
+								size={20}
+							/></span
+						>
+						<span>Download Certificate</span
+						>
+					</button>
 
-                    <button
-                        type="button"
-                        class="btn variant-filled-primary"
-                        on:click={StartBrowser}
-                    >
-                        <span class=""><ChromeIcon /></span>
-                        <span>Start Chrome</span>
-                    </button>
-                </div>
-            </div>
-            <Dashboard />
-        </div>
-    </div>
+					<div class="relative w-fit">
+						<div
+							class="flex w-full overflow-hidden rounded-container-token"
+						>
+							<button
+								type="button"
+								class="btn variant-filled-primary flex-1"
+								class:rounded-none={chromeProfiles.length >
+									0}
+								on:click={() =>
+									StartBrowser(
+										"",
+									)}
+							>
+								<span
+									><ChromeIcon
+									/></span
+								>
+								<span
+									>Start
+									Chrome</span
+								>
+							</button>
 
-    <div class="log-table-container">
-        <LogTable />
-    </div>
+							{#if chromeProfiles.length > 0}
+								<button
+									type="button"
+									class="btn variant-filled-primary rounded-none border-l border-surface-500/30 px-3"
+									use:popup={chromeProfilesPopup}
+									aria-label="Start Chrome with custom profile"
+									title="Start with custom profile"
+								>
+									<span
+										><ChevronDown
+										/></span
+									>
+								</button>
+							{/if}
+						</div>
+
+						{#if chromeProfiles.length >= 0}
+							<div
+								class="card z-10 w-full bg-surface-100-800-token shadow-xl"
+								data-popup="chromeProfilesPopup"
+							>
+								{#each chromeProfiles as profile}
+									<button
+										type="button"
+										class="w-full p-3 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
+										on:click={() =>
+											StartBrowser(
+												profile,
+											)}
+									>
+										{profile}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+			<Dashboard />
+		</div>
+	</div>
+
+	<div class="log-table-container">
+		<LogTable />
+	</div>
 </div>
 
 <style>
-    /* Container for the page content */
-    .content {
-        display: flex;
-        flex-direction: column;
-        height: 100vh; /* Use fixed height instead of min-height */
-        overflow: hidden; /* Prevent overall page scrolling */
-        position: relative; /* Create positioning context */
-    }
+	/* Container for the page content */
+	.content {
+		display: flex;
+		flex-direction: column;
+		height: 100vh; /* Use fixed height instead of min-height */
+		overflow: hidden; /* Prevent overall page scrolling */
+		position: relative; /* Create positioning context */
+	}
 
-    /* Main content area - fixed, non-scrollable */
-    .dashboard-content {
-        flex: 1 0 auto;
-        overflow-y: hidden; /* Prevent dashboard content from scrolling */
-        max-height: calc(
-            100vh - 30vh
-        ); /* Ensure it doesn't overflow available space */
-        padding-bottom: 1rem;
-    }
+	/* Main content area - fixed, non-scrollable */
+	.dashboard-content {
+		flex: 1 0 auto;
+		overflow-y: hidden; /* Prevent dashboard content from scrolling */
+		max-height: calc(
+			100vh - 30vh
+		); /* Ensure it doesn't overflow available space */
+		padding-bottom: 1rem;
+	}
 
-    /* Log table container - the only scrollable part */
-    .log-table-container {
-        flex: 0 0 50vh; /* Fixed height */
-        height: 50vh;
-        border-top: 2px solid #2f343c;
-        background-color: #1c1c1c;
-        overflow-y: auto; /* Enable scrolling only for log table */
-        position: relative; /* Create stacking context */
-        bottom: 0; /* Position at bottom */
-        width: 100%;
-    }
+	/* Log table container - the only scrollable part */
+	.log-table-container {
+		flex: 0 0 50vh; /* Fixed height */
+		height: 50vh;
+		border-top: 2px solid #2f343c;
+		background-color: #1c1c1c;
+		overflow-y: auto; /* Enable scrolling only for log table */
+		position: relative; /* Create stacking context */
+		bottom: 0; /* Position at bottom */
+		width: 100%;
+	}
 
-    /* Responsive adjustments for small screens */
-    @media (max-height: 700px) {
-        .dashboard-content {
-            max-height: calc(100vh - 25vh);
-        }
+	/* Responsive adjustments for small screens */
+	@media (max-height: 700px) {
+		.dashboard-content {
+			max-height: calc(100vh - 25vh);
+		}
 
-        .log-table-container {
-            flex: 0 0 25vh;
-            height: 25vh;
-        }
-    }
+		.log-table-container {
+			flex: 0 0 25vh;
+			height: 25vh;
+		}
+	}
 
-    @media (max-height: 500px) {
-        .dashboard-content {
-            max-height: calc(100vh - 20vh);
-        }
+	@media (max-height: 500px) {
+		.dashboard-content {
+			max-height: calc(100vh - 20vh);
+		}
 
-        .log-table-container {
-            flex: 0 0 20vh;
-            height: 20vh;
-        }
-    }
+		.log-table-container {
+			flex: 0 0 20vh;
+			height: 20vh;
+		}
+	}
 </style>
