@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tfkr-ae/marasi/domain"
@@ -13,7 +14,7 @@ import (
 func (a *App) CreateDraftFinding(requests []uuid.UUID, tcUUID *uuid.UUID) (*domain.Finding, error) {
 	findingUUID, err := uuid.NewV7()
 	if err != nil {
-		return nil, fmt.Errorf("generating uuid for finindg : %w", err)
+		return nil, fmt.Errorf("generating uuid for finding : %w", err)
 	}
 
 	draftFinding := &domain.Finding{
@@ -180,6 +181,78 @@ func (a *App) DownloadArtifact(artifactUUID uuid.UUID) (bool, error) {
 
 	err = os.WriteFile(path, art.Data, 0600)
 	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (a *App) ListTemplates() ([]string, error) {
+	return a.Proxy.ReportGenerator.ListTemplates()
+}
+
+func (a *App) ExportReport(name string, metadata domain.ReportMetadata) (bool, error) {
+	payload, err := a.buildReportPayload(metadata)
+	if err != nil {
+		return false, err
+	}
+
+	templateBytes, err := a.Proxy.ReportGenerator.LoadTemplate(name)
+
+	if err != nil {
+		return false, err
+	}
+
+	reportBytes, err := a.Proxy.ReportGenerator.Execute(templateBytes, payload)
+
+	if err != nil {
+		return false, err
+	}
+
+	ext := filepath.Ext(name)
+
+	defaultFilename := payload.Metadata.Title
+	if ext != "" && !strings.HasSuffix(defaultFilename, ext) {
+		defaultFilename = defaultFilename + ext
+	}
+
+	return a.saveReportBytes(defaultFilename, reportBytes)
+
+}
+
+func (a *App) buildReportPayload(metadata domain.ReportMetadata) (*domain.ReportPayload, error) {
+	payload := &domain.ReportPayload{
+		Metadata:  metadata,
+		TestCases: []*domain.TestCase{},
+		Findings:  []*domain.Finding{},
+	}
+
+	findings, err := a.Proxy.ReportingRepo.ListFindings()
+	if err != nil {
+		return nil, err
+	}
+
+	payload.Findings = findings
+
+	return payload, nil
+}
+
+func (a *App) saveReportBytes(defaultFilename string, reportBytes []byte) (bool, error) {
+	home, _ := os.UserHomeDir()
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultDirectory: filepath.Join(home, "Downloads"),
+		DefaultFilename:  defaultFilename,
+		Title:            "Save Report",
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if path == "" {
+		return false, nil
+	}
+
+	if err := os.WriteFile(path, reportBytes, 0600); err != nil {
 		return false, err
 	}
 

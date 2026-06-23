@@ -2,6 +2,7 @@
 	import {
 		Accordion,
 		AccordionItem,
+		getDrawerStore,
 		getModalStore,
 		Tab,
 		TabGroup,
@@ -23,6 +24,7 @@
 	import { logbookSearchInput } from "../../stores";
 
 	const modalStore = getModalStore();
+	const drawerStore = getDrawerStore();
 	let accOpened = false;
 	let tabSet = 0;
 	let menu = [];
@@ -36,9 +38,9 @@
 			case "Medium":
 				return "bg-yellow-500 text-black";
 			case "Low":
-				return "bg-green-500 text-white";
-			case "Informational":
 				return "bg-blue-500 text-white";
+			case "Informational":
+				return "bg-green-500 text-white";
 			default:
 				return "variant-soft";
 		}
@@ -62,6 +64,28 @@
 				meta: { testCase: testCase, isNew: isNew },
 			});
 		}
+	}
+
+	function openExportDrawer() {
+		if ($modalStore[0]) return;
+		if (findings.length === 0 && testCases.length === 0) return;
+		if (
+			!$drawerStore ||
+			Object.keys($drawerStore).length === 0 ||
+			!$drawerStore.open
+		)
+			drawerStore.open({
+				id: "report-export",
+				position: "right",
+				width: "w-full md:w-[50%]",
+				height: "h-full",
+				rounded: "rounded-none",
+			});
+		else if (
+			$drawerStore.id === "report-export" &&
+			$drawerStore.open
+		)
+			drawerStore.close();
 	}
 
 	$: testCases = $testCaseStore
@@ -230,6 +254,17 @@
 				keys: ["⌘+⇧+T", "ctrl+⇧+T"],
 			},
 		},
+		{
+			name: "Export Report",
+			subtitle: "Create a report from logbook",
+			keywords: "report, template, findings",
+			icon: SquareArrowRightIcon,
+			action: {
+				handler: openExportDrawer,
+				options: { scope: "logbook", single: true },
+				keys: ["⌘+⇧+E", "ctrl+⇧+E"],
+			},
+		},
 	];
 </script>
 
@@ -382,7 +417,11 @@
 						</button>
 						<button
 							class="btn btn-sm variant-filled-primary"
-							disabled
+							disabled={findings.length ===
+								0 &&
+								testCases.length ===
+									0}
+							on:click={openExportDrawer}
 						>
 							<SquareArrowRightIcon
 								size={14}

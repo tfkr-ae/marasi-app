@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/tfkr-ae/marasi/db"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/extensions"
+	"github.com/tfkr-ae/marasi/report"
 
 	marasi "github.com/tfkr-ae/marasi"
 
@@ -250,7 +252,12 @@ func (a *App) OpenProject(name string) (string, error) {
 	}
 	Repo := db.NewProxyRepo(dbConn)
 
-	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo))
+	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
+	if err != nil {
+		return "", fmt.Errorf("creating report generator : %w", err)
+	}
+
+	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo), marasi.WithReportGenerator(generator))
 	if err != nil {
 		return "", err
 	}
@@ -266,7 +273,13 @@ func (a *App) SetupScratchpad() error {
 	}
 	Repo := db.NewProxyRepo(dbConn)
 
-	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo))
+	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
+	if err != nil {
+		return fmt.Errorf("creating report generator : %w", err)
+	}
+
+	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo), marasi.WithReportGenerator(generator))
+
 	if err != nil {
 		return err
 	}
@@ -877,4 +890,17 @@ func (a *App) CopyCertToClipboard() (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (a *App) GetUserName() string {
+	currentUser, err := user.Current()
+	if err != nil {
+		return "User"
+	}
+
+	if currentUser.Name != "" {
+		return currentUser.Name
+	}
+
+	return currentUser.Username
 }

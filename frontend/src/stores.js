@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import {
 	GetProxyItems,
 	GetLogs,
@@ -11,6 +11,7 @@ import {
 	LoadExtensions,
 	GetLaunchpads,
 	GetLaunchpadRequests,
+	GetUserName,
 } from "./lib/wailsjs/go/main/App";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
@@ -38,6 +39,19 @@ export const contentTypeFilterInput = writable("");
 
 // Logbook Stores
 export const logbookSearchInput = writable("");
+export const reportMetadata = writable({
+	title: "Report Title",
+	client: "Client Name",
+	type: "Assessment Type",
+	is_draft: true,
+	scope: "Assessment Scope",
+	assessor: "Assessor",
+	start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString('en-CA'),
+	end: new Date().toLocaleDateString('en-CA'),
+	created_at: new Date().toISOString(),
+	truncate_length: 0,
+	custom_properties: {},
+});
 
 let requestBuffer = [];
 let responseBuffer = new Map();
@@ -143,6 +157,19 @@ export async function openProject() {
 	sorting.set([{ id: "ID", desc: true }])
 	searchInput.set("");
 	logbookSearchInput.set("");
+	reportMetadata.set({
+		title: get(activeProject) + " Report",
+		client: "Client Name",
+		type: "Assessment Type",
+		is_draft: true,
+		scope: "Assessment Scope",
+		assessor: await GetUserName(),
+		start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString('en-CA'),
+		end: new Date().toLocaleDateString('en-CA'),
+		created_at: new Date().toISOString(),
+		truncate_length: 0,
+		custom_properties: {},
+	})
 	contentTypeFilter.set([]);
 	contentTypeFilterInput.set("");
 	compassCode.set("");
