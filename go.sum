@@ -120,6 +120,8 @@ github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
 github.com/tfkr-ae/marasi v0.0.0-20260623164937-a72909d4f196 h1:495vbN2VQpPPSAv0KqyQNTlwKNvRceouYQByhjKaUD0=
 github.com/tfkr-ae/marasi v0.0.0-20260623164937-a72909d4f196/go.mod h1:peTUEH4S1PAuohBg9+xfVHUoCSBILst/soT/B2lZGRg=
+github.com/tfkr-ae/marasi v0.0.0-20260625033920-0bfa29e115fb h1:qser1i3DTiDxH8o1VVrF0xW7JbJZ0C2yfwnfZLRV7MQ=
+github.com/tfkr-ae/marasi v0.0.0-20260625033920-0bfa29e115fb/go.mod h1:peTUEH4S1PAuohBg9+xfVHUoCSBILst/soT/B2lZGRg=
 github.com/tkrajina/go-reflector v0.5.8 h1:yPADHrwmUbMq4RGEyaOUpz2H90sRsETNVpjzo3DLVQQ=
 github.com/tkrajina/go-reflector v0.5.8/go.mod h1:ECbqLgccecY5kPmPmXg1MrHW585yMcDkVl6IvJe64T4=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
