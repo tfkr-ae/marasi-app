@@ -183,6 +183,7 @@
                             const modal = {
                                 type: "component",
                                 component: "MenuInput",
+                                toggleShortcut: { key: "o", shiftKey: true },
                                 title: "Open request",
                                 response: (r) => {
                                     resolve(r);
@@ -334,6 +335,10 @@
                                     const modal = {
                                         type: "component",
                                         component: "TestCase",
+                                        toggleShortcut: {
+                                            key: "t",
+                                            shiftKey: true,
+                                        },
                                         meta: {
                                             testCase: testCase,
                                             isNew: true,
@@ -363,6 +368,10 @@
                                 const modal = {
                                     type: "component",
                                     component: "SelectTestCase",
+                                    toggleShortcut: {
+                                        key: "a",
+                                        shiftKey: true,
+                                    },
                                     meta: {
                                         requestID:
                                             $drawerStore?.meta?.request?.ID,
@@ -406,6 +415,10 @@
                                 const modal = {
                                     type: "component",
                                     component: "SelectTestCase",
+                                    toggleShortcut: {
+                                        key: "d",
+                                        shiftKey: true,
+                                    },
                                     meta: {
                                         requestID: requestID,
                                         mode: "unlink",
@@ -445,6 +458,10 @@
                                     const modal = {
                                         type: "component",
                                         component: "Finding",
+                                        toggleShortcut: {
+                                            key: "f",
+                                            shiftKey: true,
+                                        },
                                         meta: {
                                             finding: finding,
                                             isNew: true,
@@ -475,6 +492,10 @@
                                 const modal = {
                                     type: "component",
                                     component: "SelectFinding",
+                                    toggleShortcut: {
+                                        key: "k",
+                                        shiftKey: true,
+                                    },
                                     meta: {
                                         requestID:
                                             $drawerStore?.meta?.request?.ID,
@@ -518,6 +539,10 @@
                                 const modal = {
                                     type: "component",
                                     component: "SelectFinding",
+                                    toggleShortcut: {
+                                        key: "x",
+                                        shiftKey: true,
+                                    },
                                     meta: {
                                         requestID: requestID,
                                         mode: "unlink",
@@ -555,6 +580,10 @@
                                 const modal = {
                                     type: "component",
                                     component: "Notes",
+                                    toggleShortcut: {
+                                        key: "n",
+                                        shiftKey: true,
+                                    },
                                     title:
                                         "Request " +
                                         $drawerStore?.meta?.requestIndex +
@@ -590,6 +619,10 @@
                                 const modal = {
                                     type: "component",
                                     component: "Metadata",
+                                    toggleShortcut: {
+                                        key: "m",
+                                        shiftKey: true,
+                                    },
                                     content: metadata,
                                     title:
                                         "Request " +
@@ -1074,6 +1107,7 @@
                 const modal = {
                     type: "component",
                     component: "Notes",
+                    toggleShortcut: { key: "n", shiftKey: true },
                     title: "Request " + (selectedRow.index + 1) + " notes",
                     requestID: selectedRow.original.ID,
                     content: note,
@@ -1116,6 +1150,7 @@
                 const modal = {
                     type: "component",
                     component: "TestCase",
+                    toggleShortcut: { key: "t", shiftKey: true },
                     meta: {
                         testCase: testCase,
                         isNew: true,
@@ -1131,6 +1166,7 @@
                 const modal = {
                     type: "component",
                     component: "Finding",
+                    toggleShortcut: { key: "f", shiftKey: true },
                     meta: {
                         finding: finding,
                         isNew: true,

@@ -398,6 +398,7 @@
 							const modal = {
 								type: "component",
 								component: "Project",
+								toggleShortcut: { key: "o" },
 								title: "Switch Projects",
 								response: (
 									r,
@@ -438,6 +439,7 @@
 							const modal = {
 								type: "component",
 								component: "Interface",
+								toggleShortcut: { key: "l" },
 								title: "Setup Listener",
 								response: (
 									r,
@@ -582,6 +584,7 @@
 							const modal = {
 								type: "component",
 								component: "Interface",
+								toggleShortcut: { key: "l" },
 								title: "Setup Listener",
 								response: (
 									r,
@@ -619,6 +622,7 @@
 							const modal = {
 								type: "component",
 								component: "Project",
+								toggleShortcut: { key: "o" },
 								title: "Switch Projects",
 								response: (
 									r,

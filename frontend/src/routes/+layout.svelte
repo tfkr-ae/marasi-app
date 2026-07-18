@@ -66,6 +66,10 @@
     import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
     import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
     import FindingModal from "../lib/components/FindingModal.svelte";
+    import {
+        hasBlockingOverlay,
+        isolateOverlays,
+    } from "../lib/overlayIsolation.js";
     let appRailIndex = 0;
     let showChef = false;
     let showExcali = false;
@@ -170,9 +174,7 @@
                 }
             }
             hotkeys.filter = (event) => {
-                if ($modalStore[0]?.component === "Startup") return false;
-                if ($modalStore[0]?.component) return true;
-                // if ($modalStore[0]?.component === "Interface" || $modalStore[0]?.component === "Project") return true;
+                if (hasBlockingOverlay(modalStore)) return false;
                 switch ($page.url.pathname) {
                     case "/ledger":
                         return true;
@@ -296,10 +298,12 @@
     });
 </script>
 
-<div class="flex flex-col h-screen">
+<div
+    class="flex flex-col h-screen"
+    use:isolateOverlays={{ modalStore, drawerStore, toastStore }}
+>
     <div class="flex flex-1 h-screen">
         {#if $appState.isReady}
-            <AppDrawer />
             <AppRail class="no-select h-full no-scroll">
                 <!-- AppRailTiles -->
                 <AppRailAnchor
@@ -561,6 +565,9 @@
         {/if}
     </div>
 </div>
+{#if $appState.isReady}
+    <AppDrawer />
+{/if}
 <Toast position="br" />
 <Modal components={modalRegistery} />
 

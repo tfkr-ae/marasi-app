@@ -3,9 +3,19 @@
 @tailwind utilities;
 
 .no-select {
-    @apply select-none cursor-default;
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
+  @apply select-none cursor-default;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+[data-overlay-initial-focus]:focus {
+  outline: none !important;
+}
+
+input[data-overlay-initial-focus]:focus,
+textarea[data-overlay-initial-focus]:focus,
+select[data-overlay-initial-focus]:focus {
+  box-shadow: none !important;
 }

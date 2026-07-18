@@ -276,6 +276,7 @@
                         const modal = {
                             type: "component",
                             component: "Notes",
+                            toggleShortcut: { key: "n", shiftKey: true },
                             title: `Request ${$currentEntryIndex + 1} Notes`,
                             content: note,
                             requestID: currentEntry.ID,
@@ -303,6 +304,7 @@
                         const modal = {
                             type: "component",
                             component: "Metadata",
+                            toggleShortcut: { key: "m", shiftKey: true },
                             title: `Request ${$currentEntryIndex + 1} Metadata`,
                             content: metadata,
                             requestID: currentEntry.ID,

@@ -18,12 +18,17 @@
 	export let scope = "all";
 	export function toggleDialog() {
 		if (!dialog) return;
-		isOpen = !isOpen;
-		if (isOpen) {
+		if (!dialog.open) {
+			isOpen = true;
 			dialog.showModal();
 		} else {
-			dialog.close();
+			closeDialog();
 		}
+	}
+
+	function closeDialog() {
+		if (!dialog?.open) return;
+		dialog.close();
 	}
 
 	function handleClickOutside(event) {
@@ -34,13 +39,17 @@
 			event.clientY < rect.top ||
 			event.clientY > rect.bottom
 		) {
-			dialog.close();
+			closeDialog();
 		}
 	}
 
 	function onSelection(event) {
-		if (isOpen) toggleDialog();
+		if (isOpen) closeDialog();
 		event.detail.action.handler();
+	}
+	function handleCancel(event) {
+		event.preventDefault();
+		closeDialog();
 	}
 	function handleClose() {
 		isOpen = false;
@@ -83,13 +92,17 @@
 	class="w-modal text-white bg-neutral-800"
 	bind:this={dialog}
 	on:close={handleClose}
+	on:cancel={handleCancel}
 	on:click={handleClickOutside}
 	on:keydown={(event) => {
-		if (event.key === 'Escape') {
-            event.stopImmediatePropagation();
-			if (isOpen) toggleDialog();
-        } 
+		if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			closeDialog();
+		}
 	}}
+	aria-label="Marasi commands"
+	aria-modal="true"
 >
 	<input
 		id="commandmenu"
@@ -97,6 +110,7 @@
 		type="search"
 		bind:value={commandInput}
 		placeholder="Search..."
+		aria-label="Search commands"
 	/>
 	<div class="card w-full" tabindex="-1">
 		<MenuItemList
@@ -112,4 +126,3 @@
 		background: rgba(0, 0, 0, 0.5);
 	}
 </style>
-

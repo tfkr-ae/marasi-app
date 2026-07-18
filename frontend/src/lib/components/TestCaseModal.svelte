@@ -284,8 +284,8 @@
 			</div>
 
 			<button
-				class="text-2xl leading-none focus:outline-none"
-				tabindex="-1"
+				class="text-2xl leading-none"
+				aria-label="Close"
 				on:click={modalStore.close}
 			>
 				<X />
