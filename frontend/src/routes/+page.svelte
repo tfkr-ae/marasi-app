@@ -366,9 +366,9 @@
 						},
 						keys: ["⌘+,", "ctrl+,"],
 					},
-					subtitle: "Download Certificate",
+					subtitle: "Copy Certificate",
 					icon: Copy,
-					keywords: "certificate,download",
+					keywords: "certificate,copy",
 				},
 				{
 					name: "Jump to Toast",
