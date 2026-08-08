@@ -1,9 +1,5 @@
 <svelte:options accessors />
 
-<script context="module">
-	console.log("Loaded");
-</script>
-
 <script>
 	import hotkeys from "hotkeys-js";
 	import MenuItemList from "./MenuItemList.svelte";
@@ -13,9 +9,15 @@
 
 	let isOpen = false;
 	let commandInput = "";
+	let mounted = false;
+	let boundOptions = [];
+	let boundMenuOptions;
+	let previousScope = "all";
+	const commandKeys = "cmd+k, ctrl+k";
 
 	export let menuOptions = [];
 	export let scope = "all";
+	export let persistOptions = false;
 	export function toggleDialog() {
 		if (!dialog) return;
 		if (!dialog.open) {
@@ -55,29 +57,53 @@
 		isOpen = false;
 	}
 
-	hotkeys("cmd+k, ctrl+k", { single: true }, (event, _) => {
+	function handleCommandKey(event) {
 		event.preventDefault();
 		toggleDialog();
-	});
+		return false;
+	}
 
-	$: menuOptions.forEach((option) => {
-		hotkeys(option.action.keys.join(), option.action.options, () => {
-			if (isOpen) toggleDialog();
-			option.action.handler();
-			return false;
-		});
-	});
-	onMount(() => {
-		hotkeys.setScope(scope);
-		menuOptions.forEach((option) => {
-			hotkeys(option.action.keys.join(), option.action.options, () => {
+	function bindOptions(options) {
+		options.forEach((option) => {
+			const keys = Array.isArray(option.action.keys)
+				? option.action.keys.join()
+				: option.action.keys;
+			const handler = () => {
 				if (isOpen) toggleDialog();
 				option.action.handler();
 				return false;
-			});
+			};
+			hotkeys(keys, { ...option.action.options, scope }, handler);
+			boundOptions.push({ keys, handler });
 		});
+	}
+
+	function unbindOptions() {
+		boundOptions.forEach(({ keys, handler }) => {
+			hotkeys.unbind(keys, scope, handler);
+		});
+		boundOptions = [];
+	}
+
+	$: if (mounted && menuOptions !== boundMenuOptions) {
+		unbindOptions();
+		bindOptions(menuOptions);
+		boundMenuOptions = menuOptions;
+	}
+
+	onMount(() => {
+		previousScope = hotkeys.getScope();
+		hotkeys.setScope(scope);
+		hotkeys(commandKeys, { scope, single: true }, handleCommandKey);
+		bindOptions(menuOptions);
+		boundMenuOptions = menuOptions;
+		mounted = true;
 		return () => {
-			// hotkeys.unbind();
+			mounted = false;
+			if (persistOptions) boundOptions = [];
+			else unbindOptions();
+			hotkeys.unbind(commandKeys, scope, handleCommandKey);
+			if (hotkeys.getScope() === scope) hotkeys.setScope(previousScope);
 		};
 	});
 </script>

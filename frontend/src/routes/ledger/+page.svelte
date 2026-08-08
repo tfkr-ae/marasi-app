@@ -55,6 +55,7 @@
         LinkIcon,
         Unlink,
         ShieldAlertIcon,
+        RadioIcon,
     } from "lucide-svelte";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import IDCell from "../../lib/components/IDCell.svelte";
@@ -79,6 +80,32 @@
     let menu = [];
     let contextMenu;
     let selectedRow;
+
+    function isWebSocketUpgrade(meta = $drawerStore?.meta) {
+        const response = meta?.incomingResponse || meta?.response;
+        return (
+            meta?.metadata?.protocol === "websocket" ||
+            response?.StatusCode === 101 ||
+            response?.ContentType === "websocket" ||
+            Boolean(meta?.metadata?.["websocket.state"])
+        );
+    }
+
+    function openWebSocketStream() {
+        const meta = $drawerStore?.meta;
+        if (!drawerOpened || !isWebSocketUpgrade(meta) || $modalStore[0]) return;
+        modalStore.trigger({
+            type: "component",
+            component: "WebsocketStream",
+            meta: {
+                upgradeRequest: structuredClone({
+                    Metadata: meta.metadata,
+                    Request: meta.request,
+                    Response: meta.incomingResponse || meta.response,
+                }),
+            },
+        });
+    }
 
     let ledgerMenu = [
         {
@@ -774,6 +801,17 @@
             },
         },
     ];
+    const websocketDrawerMenuItem = {
+        name: "Open WebSocket Stream",
+        subtitle: "Open the upgraded connection stream",
+        keywords: "open websocket upgrade stream frames",
+        icon: RadioIcon,
+        action: {
+            handler: openWebSocketStream,
+            options: { scope: "ledger", single: true },
+            keys: ["⌘+⇧+O", "ctrl+⇧+O"],
+        },
+    };
 
     const columnHelper = createColumnHelper();
     const columns = [
@@ -917,7 +955,10 @@
     onMount(() => {
         const unsubscribe = drawerStore.subscribe((settings) => {
             drawerOpened = settings.open ? settings.open : false;
-            if (drawerOpened) menu.menuOptions = drawerMenu;
+            if (drawerOpened)
+                menu.menuOptions = isWebSocketUpgrade(settings.meta)
+                    ? [websocketDrawerMenuItem, ...drawerMenu]
+                    : drawerMenu;
             else menu.menuOptions = ledgerMenu;
         });
         return () => {

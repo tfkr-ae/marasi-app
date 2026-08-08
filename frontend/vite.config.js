@@ -9,6 +9,17 @@ export default defineConfig({
 	resolve: {
 		preserveSymlinks: true, // Ensure symlinks are resolved
 	},
+	server: {
+		host: 'localhost',
+		port: 5173,
+		strictPort: true,
+		hmr: {
+			protocol: 'ws',
+			host: 'localhost',
+			port: 5173,
+			clientPort: 5173,
+		},
+	},
 	build: {
 		rollupOptions: {
 			external: [],

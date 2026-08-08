@@ -135,6 +135,7 @@
 	<div class="no-select dashboard-content">
 		<MarasiKeys
 			scope="all"
+			persistOptions={true}
 			menuOptions={[
 				{
 					name: "Marasi",

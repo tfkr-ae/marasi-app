@@ -101,6 +101,7 @@ function resolveType(expression) {
 
     if (lower === "req" || lower.endsWith("request") || lower.endsWith("req")) return "http.Request";
     if (lower === "res" || lower.endsWith("response") || lower.endsWith("res")) return "http.Response";
+    if (lower === "message" || lower.endsWith("message") || lower === "msg" || lower.endsWith("wsmsg")) return "websocket.Message";
     if (lower === "url" || lower.endsWith("url")) return "url.URL";
     if (lower === "headers" || lower.endsWith("header") || lower.endsWith("headers")) return "http.Header";
     if (lower === "cookie" || lower.endsWith("cookie")) return "http.Cookie";

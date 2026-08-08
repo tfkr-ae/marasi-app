@@ -136,12 +136,13 @@ export function isolateOverlays(appRoot, stores) {
     });
 
     for (const overlay of document.querySelectorAll(overlaySelector)) {
-      overlay.inert = overlay !== activeOverlay;
+      overlay.inert =
+        overlay !== activeOverlay && !overlay.contains(activeOverlay);
     }
 
     appRoot.inert = Boolean(activeOverlay && !appRoot.contains(activeOverlay));
     for (const toast of document.querySelectorAll(".snackbar-wrapper")) {
-      toast.inert = Boolean(activeOverlay);
+      toast.inert = false;
     }
 
     if (activeOverlay === previousOverlay) return;

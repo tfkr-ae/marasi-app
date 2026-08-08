@@ -537,6 +537,26 @@ export const MARASI_API = {
 };
 
 export const TYPE_DEFINITIONS = {
+    "websocket.Message": {
+        methods: {
+            id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the unique identifier for the WebSocket message." },
+            connection_id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the live WebSocket connection ID." },
+            request_id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the HTTP upgrade request ID for this connection." },
+            direction: { args: "()", argLabel: "()", returnType: "string", details: "Returns client or server depending on message direction." },
+            opcode: { args: "()", argLabel: "()", returnType: "number", details: "Returns the WebSocket frame opcode." },
+            set_opcode: { args: "(${1:opcode})", argLabel: "(int)", returnType: "void", details: "Sets the WebSocket frame opcode." },
+            payload: { args: "()", argLabel: "()", returnType: "string", details: "Returns the frame payload as a string." },
+            set_payload: { args: '("${1:payload}")', argLabel: "(str)", returnType: "void", details: "Replaces the frame payload." },
+            length: { args: "()", argLabel: "()", returnType: "number", details: "Returns the payload length in bytes." },
+            fin: { args: "()", argLabel: "()", returnType: "boolean", details: "Returns whether this is the final fragment." },
+            is_binary: { args: "()", argLabel: "()", returnType: "boolean", details: "Returns true when the opcode is binary." },
+            metadata: { args: "()", argLabel: "()", returnType: "table", details: "Returns message metadata." },
+            set_metadata: { args: "(${1:meta_table})", argLabel: "(table)", returnType: "void", details: "Sets extension-specific metadata on the message." },
+            drop: { args: "()", argLabel: "()", returnType: "void", details: "Marks the message to be dropped; it will not be forwarded." },
+            skip: { args: "()", argLabel: "()", returnType: "void", details: "Stops later extension processing while still forwarding the message." },
+        },
+    },
+
     "http.Request": {
         methods: {
             id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the unique identifier for the request." },

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -90,6 +91,7 @@ func (a *App) startup(ctx context.Context) {
 		}),
 		marasi.WithLogger(logHandler),
 	)
+	a.configureWebSocketHandlers()
 }
 func (a *App) ToggleFlag(name string) (*Config, error) {
 	err := a.Config.ToggleFlag(name)
@@ -192,18 +194,23 @@ func (a *App) StartProxy(addr string, port string) error {
 }
 
 func (a *App) StopProxy() error {
-	if a.Listener == nil {
-		return nil // Listener already stopped
+	var stopErr error
+	if a.Listener != nil {
+		// Close the listener to stop accepting new connections.
+		if err := a.Listener.Close(); err != nil {
+			stopErr = fmt.Errorf("error stopping listener: %w", err)
+		}
+		a.Listener = nil
 	}
 
-	// Close the listener to stop accepting new connections
-	err := a.Listener.Close()
-	if err != nil {
-		return fmt.Errorf("error stopping listener: %w", err)
+	if err := a.Proxy.CloseWebSocketsAndFlush(); err != nil {
+		stopErr = errors.Join(
+			stopErr,
+			fmt.Errorf("closing websocket connections: %w", err),
+		)
 	}
-	// Cleanup
-	a.Listener = nil
-	return nil
+
+	return stopErr
 }
 
 // OpenFileDialog shows a file selection dialog and returns the selected file path
@@ -254,12 +261,24 @@ func (a *App) OpenProject(name string) (string, error) {
 
 	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
 	if err != nil {
+		_ = Repo.Close()
 		return "", fmt.Errorf("creating report generator : %w", err)
 	}
+	if err := a.Proxy.CloseWebSocketsAndFlush(); err != nil {
+		_ = Repo.Close()
+		return "", fmt.Errorf("closing websocket connections: %w", err)
+	}
 
+	oldDBCloser := a.Proxy.DBCloser
 	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo), marasi.WithReportGenerator(generator))
 	if err != nil {
+		_ = Repo.Close()
 		return "", err
+	}
+	if oldDBCloser != nil {
+		if err := oldDBCloser.Close(); err != nil {
+			log.Printf("closing previous project database: %v", err)
+		}
 	}
 	base := filepath.Base(filePath)
 	projectName := strings.TrimSuffix(base, filepath.Ext(base))
@@ -289,6 +308,7 @@ func (a *App) SetupScratchpad() error {
 }
 func (a *App) close(ctx context.Context) {
 	a.Proxy.Close()
+	a.Listener = nil
 }
 
 func (a *App) GetLogs() ([]*domain.Log, error) {

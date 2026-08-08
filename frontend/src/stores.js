@@ -15,19 +15,18 @@ import {
 } from "./lib/wailsjs/go/main/App";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
-
+import { connectionStore } from "./stores/connectionStore";
 
 // Startup
 export const appState = writable({
 	isReady: false,
-	message: 'Starting...',
-	details: ''
+	message: "Starting...",
+	details: "",
 });
 
 // Extensions
 export const extensions = writable([]);
 export const extensions_ui = writable({});
-
 
 // Ledger Stores
 export const sorting = writable([{ id: "ID", desc: true }]);
@@ -46,8 +45,8 @@ export const reportMetadata = writable({
 	is_draft: true,
 	scope: "Assessment Scope",
 	assessor: "Assessor",
-	start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString('en-CA'),
-	end: new Date().toLocaleDateString('en-CA'),
+	start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString("en-CA"),
+	end: new Date().toLocaleDateString("en-CA"),
 	created_at: new Date().toISOString(),
 	truncate_length: 0,
 	custom_properties: {},
@@ -68,7 +67,7 @@ function flushBuffer() {
 		let current = Array.isArray(items) ? items : [];
 
 		if (resBatch.size > 0 && current.length > 0) {
-			current = current.map(item => {
+			current = current.map((item) => {
 				if (resBatch.has(item.ID)) {
 					return { ...item, ...resBatch.get(item.ID) };
 				}
@@ -106,6 +105,26 @@ export function addResponse(res) {
 	if (responseBuffer.size > 500) flushBuffer();
 }
 
+export function patchWebSocketMetadata(conn) {
+	if (!conn?.RequestID) return;
+	proxyItems.update((items) =>
+		(items || []).map((item) => {
+			if (item.ID !== conn.RequestID) return item;
+			return {
+				...item,
+				Metadata: {
+					...(item.Metadata || {}),
+					protocol: "websocket",
+					"websocket.state": conn.State || "closed",
+					"websocket.transport": conn.Transport,
+					"websocket.close_code": conn.CloseCode,
+					"websocket.close_reason": conn.CloseReason,
+				},
+			};
+		}),
+	);
+}
+
 // ---------------------------
 // Compass
 export const compassCode = writable("");
@@ -138,7 +157,6 @@ export const currentEntryIndex = writable(0);
 export const activeLaunchpadID = writable("");
 export const launchpads = writable([]);
 
-
 export let listener = writable({
 	status: false,
 	address: "127.0.0.1",
@@ -148,13 +166,13 @@ export let activeProject = writable("Marasi");
 export async function openProject() {
 	appState.set({
 		isReady: false,
-		message: 'Starting...',
-		details: ''
+		message: "Starting...",
+		details: "",
 	});
 	requestBuffer = [];
 	responseBuffer = new Map();
 	pagination.set({ pageIndex: 0, pageSize: 100 });
-	sorting.set([{ id: "ID", desc: true }])
+	sorting.set([{ id: "ID", desc: true }]);
 	searchInput.set("");
 	logbookSearchInput.set("");
 	reportMetadata.set({
@@ -164,12 +182,12 @@ export async function openProject() {
 		is_draft: true,
 		scope: "Assessment Scope",
 		assessor: await GetUserName(),
-		start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString('en-CA'),
-		end: new Date().toLocaleDateString('en-CA'),
+		start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString("en-CA"),
+		end: new Date().toLocaleDateString("en-CA"),
 		created_at: new Date().toISOString(),
 		truncate_length: 0,
 		custom_properties: {},
-	})
+	});
 	contentTypeFilter.set([]);
 	contentTypeFilterInput.set("");
 	compassCode.set("");
@@ -185,6 +203,7 @@ export async function openProject() {
 	extensions_ui.set({});
 	testCaseStore.clear();
 	findingStore.clear();
+	connectionStore.clear();
 	try {
 		await LoadExtensions();
 	} catch (err) {
@@ -203,6 +222,7 @@ export async function openProject() {
 	await populateLaunchpads();
 	await testCaseStore.populate();
 	await findingStore.populate();
+	await connectionStore.populateInterceptFlag();
 }
 
 export async function populateWaypoints() {
@@ -271,16 +291,16 @@ export async function populateHistory() {
 
 export async function populateExtensions() {
 	GetExtensions().then((exts) => {
-		console.log(exts)
+		console.log(exts);
 		extensions.set(exts ? exts : []);
 	});
 }
 export async function populateLaunchpads() {
 	const items = await GetLaunchpads();
 
-	const initalisedItems = (items || []).map(item => ({
+	const initalisedItems = (items || []).map((item) => ({
 		...item,
-		Entries: []
+		Entries: [],
 	}));
 
 	launchpads.set(initalisedItems);
@@ -290,8 +310,8 @@ export async function populateLaunchpadEntries(id) {
 	if (!id) return;
 
 	const reqs = await GetLaunchpadRequests(id);
-	launchpads.update(tabs => {
-		return tabs.map(t => {
+	launchpads.update((tabs) => {
+		return tabs.map((t) => {
 			if (t.ID == id) {
 				return { ...t, Entries: reqs || [] };
 			}
@@ -299,4 +319,3 @@ export async function populateLaunchpadEntries(id) {
 		});
 	});
 }
-

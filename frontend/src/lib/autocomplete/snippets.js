@@ -13,6 +13,12 @@ export const GLOBAL_SNIPPETS = [
     snippetCompletion("function interceptResponse(res)\n\t${}\nend", {
         label: "interceptResponse", type: "function", info: "Determine if response should be intercepted"
     }),
+    snippetCompletion("function processWebSocketMessage(message)\n\t${}\nend", {
+        label: "processWebSocketMessage", type: "function", info: "Process WebSocket frames before forward/intercept"
+    }),
+    snippetCompletion("function interceptWebSocketMessage(message)\n\treturn ${1:false}\nend", {
+        label: "interceptWebSocketMessage", type: "function", info: "Return true to pause a WebSocket frame for manual intercept"
+    }),
     snippetCompletion("function startup()\n\t${}\nend", {
         label: "startup", type: "function", info: "Function that runs once on startup"
     }),
