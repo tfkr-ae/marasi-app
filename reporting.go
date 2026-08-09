@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tfkr-ae/marasi/domain"
+	"github.com/tfkr-ae/marasi/report"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -189,6 +190,10 @@ func (a *App) DownloadArtifact(artifactUUID uuid.UUID) (bool, error) {
 
 func (a *App) ListTemplates() ([]string, error) {
 	return a.Proxy.ReportGenerator.ListTemplates()
+}
+
+func (a *App) RestoreDefaultReportTemplate() error {
+	return report.RestoreDefaultTemplate(a.Proxy.ReportGenerator)
 }
 
 func (a *App) ExportReport(name string, metadata domain.ReportMetadata) (bool, error) {

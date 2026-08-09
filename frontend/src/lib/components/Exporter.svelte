@@ -1,20 +1,57 @@
 <script>
-	import { FileText } from "lucide-svelte";
+	import { FileText, RotateCcw } from "lucide-svelte";
 	import {
 		ListTemplates,
 		ExportReport,
+		RestoreDefaultReportTemplate,
 	} from "../../lib/wailsjs/go/main/App";
-	import { getDrawerStore, getToastStore } from "@skeletonlabs/skeleton";
+	import {
+		getDrawerStore,
+		getModalStore,
+		getToastStore,
+	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { reportMetadata } from "../../stores";
 	import ProgressRadial from "../extensions/components/ProgressRadial.svelte";
 
 	const toastStore = getToastStore();
 	const drawerStore = getDrawerStore();
+	const modalStore = getModalStore();
 	let templates = [];
 	let loadingTemplates = true;
 	let exporting = false;
+	let restoringDefaultTemplate = false;
 	let selectedTemplate;
+
+	function confirmDefaultTemplateRestore() {
+		if (restoringDefaultTemplate) return;
+
+		modalStore.trigger({
+			type: "confirm",
+			title: "Restore Default Report Template",
+			body: "This will overwrite all changes to default_template.md with the version bundled with Marasi. Other report templates will not be changed.",
+			response: async (confirmed) => {
+				if (!confirmed) return;
+
+				restoringDefaultTemplate = true;
+				try {
+					await RestoreDefaultReportTemplate();
+					toastStore.trigger({
+						message: "Default report template restored",
+						background: "variant-filled-success",
+					});
+				} catch (error) {
+					toastStore.trigger({
+						message: `Failed to restore default report template: ${String(error)}`,
+						background: "variant-filled-error",
+					});
+				} finally {
+					restoringDefaultTemplate = false;
+				}
+			},
+		});
+	}
+
 	async function loadTemplates() {
 		loadingTemplates = true;
 		try {
@@ -79,6 +116,17 @@
 				Export Report
 			</h2>
 		</div>
+		<button
+			type="button"
+			class="btn btn-sm variant-filled-primary shrink-0"
+			disabled={restoringDefaultTemplate}
+			on:click={confirmDefaultTemplateRestore}
+		>
+			<RotateCcw size={16} />
+			{restoringDefaultTemplate
+				? "Restoring..."
+				: "Restore Default Template"}
+		</button>
 	</header>
 
 	<div class="flex-1 space-y-5 overflow-y-auto px-5 py-5">
