@@ -167,6 +167,7 @@
 		const modal = {
 			type: "component",
 			component: "WebsocketStream",
+			toggleShortcut: { key: "o", shiftKey: true },
 			meta: {
 				upgradeRequest: structuredClone(selectedRow),
 			},
