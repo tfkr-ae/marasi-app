@@ -237,7 +237,13 @@ func (a *App) buildReportPayload(metadata domain.ReportMetadata) (*domain.Report
 		return nil, err
 	}
 
+	testCases, err := a.Proxy.ReportingRepo.ListTestCases()
+	if err != nil {
+		return nil, err
+	}
+
 	payload.Findings = findings
+	payload.TestCases = testCases
 
 	return payload, nil
 }
