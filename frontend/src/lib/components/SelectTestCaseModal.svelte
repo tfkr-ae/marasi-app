@@ -41,7 +41,7 @@
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="card p-4 w-[65%] max-w-[95vw] shadow-xl rounded-0 flex flex-col max-h-[90vh]"
+		class="card p-4 w-[65%] max-w-[95vw] shadow-xl rounded-0 flex flex-col max-h-[90vh] bg-surface-50-800-token text-surface-900-50-token"
 		on:keydown={(event) => {
 			if (event.key === "Escape") {
 				event.stopImmediatePropagation();
@@ -63,7 +63,7 @@
 			</button>
 		</header>
 		<input
-			class="input"
+			class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 			type="search"
 			name="search"
 			bind:value={input}
@@ -73,7 +73,7 @@
 
 		{#if autocompleteOptions.length > 0}
 			<div
-				class="card p-2 w-full max-h-[200px] overflow-y-auto mt-1 shadow-xl border border-surface-500 z-10"
+				class="card p-2 w-full max-h-[200px] overflow-y-auto mt-1 shadow-xl border border-surface-500 z-10 bg-white dark:bg-surface-700"
 			>
 				<Autocomplete
 					bind:input

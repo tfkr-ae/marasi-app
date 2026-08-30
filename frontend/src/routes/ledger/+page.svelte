@@ -31,6 +31,7 @@
 		InputChip,
 		ListBoxItem,
 		ListBox,
+		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import {
 		Search,
@@ -55,6 +56,7 @@
 		LinkIcon,
 		Unlink,
 		ShieldAlertIcon,
+		Swords,
 		RadioIcon,
 	} from "lucide-svelte";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
@@ -71,6 +73,7 @@
 	import { onMount } from "svelte";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
+	import { armoryStore } from "../../stores/armoryStore";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -113,6 +116,34 @@
 				}),
 			},
 		});
+	}
+
+	async function sendDrawerRequestToArmory() {
+		if (!drawerOpened) return;
+		try {
+			const template = await armoryStore.createTemplateFromRequest(
+				$drawerStore.meta.request.ID,
+			);
+			const toastId = toastStore.trigger({
+				message: `Request ${$drawerStore.meta.requestIndex} sent to Armory`,
+				background: $modeCurrent
+					? "bg-surface-50 text-surface-900 border border-surface-300"
+					: "bg-surface-100 text-surface-900",
+				action: {
+					label: "Jump to Armory",
+					response: () => {
+						drawerStore.close();
+						toastStore.close(toastId);
+						goto(`/armory?id=${template.ID}`);
+					},
+				},
+			});
+		} catch (error) {
+			toastStore.trigger({
+				message: `Failed to send request to Armory: ${String(error)}`,
+				background: "variant-filled-error",
+			});
+		}
 	}
 
 	let ledgerMenu = [
@@ -339,6 +370,17 @@
 			},
 		},
 		{
+			name: "Send to Armory",
+			subtitle: "Create an Armory template from this request",
+			icon: Swords,
+			keywords: "armory template request",
+			action: {
+				handler: sendDrawerRequestToArmory,
+				options: { scope: "ledger", single: true },
+				keys: ["⌘+⇧+A", "ctrl+⇧+A"],
+			},
+		},
+		{
 			name: "Previous Request",
 			subtitle: "Jump to the previous item in the table",
 			icon: ArrowLeftIcon,
@@ -415,6 +457,10 @@
 											"Request " +
 											index +
 											" sent to Launchpad",
+										background:
+											$modeCurrent
+												? "bg-surface-50 text-surface-900 border border-surface-300"
+												: "bg-surface-100 text-surface-900",
 										action: {
 											label: "Jump to Launchpad",
 											response: () => {
@@ -511,7 +557,7 @@
 									component: "SelectTestCase",
 									toggleShortcut:
 										{
-											key: "a",
+										key: "b",
 											shiftKey: true,
 										},
 									meta: {
@@ -543,7 +589,7 @@
 					}
 				},
 				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+A", "ctrl+⇧+A"],
+				keys: ["⌘+⇧+B", "ctrl+⇧+B"],
 			},
 		},
 		{
@@ -1335,7 +1381,7 @@
 						</span>
 
 						<div
-							class="btn-group variant-filled-surface btn-group-sm"
+							class="btn-group btn-group-sm {$modeCurrent ? 'bg-surface-200 text-surface-900' : 'variant-filled-surface'}"
 						>
 							<button
 								disabled={!$table.getCanPreviousPage()}
@@ -1391,7 +1437,7 @@
 </Accordion>
 
 <div class="no-select font-mono text-xs">
-	<table class="table table-hover">
+	<table class="table">
 		<thead>
 			{#each $table.getHeaderGroups() as hg}
 				<tr>
@@ -1508,6 +1554,9 @@
 							"Request " +
 							index +
 							" sent to Launchpad",
+						background: $modeCurrent
+							? "bg-surface-50 text-surface-900 border border-surface-300"
+							: "bg-surface-100 text-surface-900",
 						action: {
 							label: "Jump to Launchpad",
 							response: () => {
@@ -1701,11 +1750,33 @@
 		line-height: normal;
 		white-space: nowrap;
 		border-bottom: 1px solid rgb(var(--color-primary-500));
+		background-color: rgb(var(--color-surface-50));
 	}
 	.table {
 		border-collapse: collapse;
 		width: 100%;
 		font-size: 1rem;
+	}
+	tbody tr,
+	tbody tr:nth-child(even),
+	tbody tr:nth-child(odd) {
+		background-color: rgb(var(--color-surface-50));
+	}
+	tbody tr:hover,
+	tbody tr:nth-child(even):hover,
+	tbody tr:nth-child(odd):hover {
+		background-color: rgb(var(--color-surface-200)) !important;
+	}
+	:global(.dark) thead th,
+	:global(.dark) tbody tr,
+	:global(.dark) tbody tr:nth-child(even),
+	:global(.dark) tbody tr:nth-child(odd) {
+		background-color: rgb(var(--color-surface-900));
+	}
+	:global(.dark) tbody tr:hover,
+	:global(.dark) tbody tr:nth-child(even):hover,
+	:global(.dark) tbody tr:nth-child(odd):hover {
+		background-color: rgb(var(--color-surface-700)) !important;
 	}
 	tbody td {
 		vertical-align: middle;

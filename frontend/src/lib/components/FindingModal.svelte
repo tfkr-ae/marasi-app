@@ -274,7 +274,7 @@
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="card p-6 w-[75%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-primary-500"
+		class="card p-6 w-[75%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-primary-500 bg-surface-50-800-token text-surface-900-50-token"
 		on:keydown={(event) => {
 			if (event.key === "Escape") {
 				event.stopImmediatePropagation();
@@ -305,7 +305,7 @@
 			<label class="label col-span-3">
 				<span>Title</span>
 				<input
-					class="input"
+					class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					type="text"
 					bind:value={finding.Title}
 				/>
@@ -313,7 +313,7 @@
 			<label class="label col-span-1">
 				<span>Severity</span>
 				<select
-					class="select"
+					class="select bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					bind:value={finding.Severity}
 				>
 					<option value="Critical"
@@ -430,7 +430,7 @@
 						class="flex items-center gap-2 h-[42px]"
 					>
 						<input
-							class="input h-full"
+							class="input h-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 							type="search"
 							bind:value={
 								testCaseInput
@@ -453,7 +453,7 @@
 
 					{#if testCaseInput.length > 0}
 						<div
-							class="card p-2 w-full max-h-[200px] overflow-y-auto mt-1 shadow-xl border border-surface-500 z-10"
+							class="card p-2 w-full max-h-[200px] overflow-y-auto mt-1 shadow-xl border border-surface-500 z-10 bg-white dark:bg-surface-700"
 						>
 							<Autocomplete
 								bind:input={
@@ -489,7 +489,7 @@
 				<span>Linked Requests</span>
 
 				<input
-					class="input"
+					class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					type="search"
 					name="requestSearch"
 					bind:value={requestInput}
@@ -499,7 +499,7 @@
 
 				{#if requestInput.length > 0}
 					<div
-						class="card p-2 w-full max-h-[200px] overflow-y-auto mt-2 shadow-sm border border-surface-500/30"
+						class="card p-2 w-full max-h-[200px] overflow-y-auto mt-2 shadow-sm border border-surface-500/30 bg-white dark:bg-surface-700"
 					>
 						<Autocomplete
 							bind:input={
@@ -635,7 +635,7 @@
 			<label class="label col-span-4 md:col-span-2">
 				<span>Writeup</span>
 				<textarea
-					class="textarea rounded-none"
+					class="textarea rounded-none bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					rows="10"
 					bind:value={finding.WriteUp}
 					placeholder="Finding Writeup"
@@ -644,7 +644,7 @@
 			<label class="label col-span-4 md:col-span-2">
 				<span>Treatment Plan</span>
 				<textarea
-					class="textarea rounded-none"
+					class="textarea rounded-none bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					rows="10"
 					bind:value={finding.TreatmentPlan}
 					placeholder="Treatment Plan"
@@ -656,6 +656,7 @@
 				<FileDropzone
 					name="files"
 					multiple
+					class="bg-white dark:bg-surface-700"
 					on:change={async (e) => {
 						const fileList = e.target.files;
 						if (!fileList.length) return;
@@ -854,7 +855,7 @@
 										slot="content"
 									>
 										<div
-											class="flex justify-center p-2 bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
+											class="flex justify-center p-2 bg-surface-50 dark:bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
 										>
 											{#if imageUrls[art.ID]}
 												<img
@@ -1021,7 +1022,7 @@
 										slot="content"
 									>
 										<div
-											class="flex justify-center p-2 bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
+											class="flex justify-center p-2 bg-surface-50 dark:bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
 										>
 											{#if imageUrls[art.ID]}
 												<video

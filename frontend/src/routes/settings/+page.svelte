@@ -17,7 +17,7 @@
 		populateWaypoints,
 		waypoints,
 	} from "../../stores";
-	import { getToastStore, SlideToggle } from "@skeletonlabs/skeleton";
+	import { getToastStore, SlideToggle, modeCurrent } from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	const toastStore = getToastStore();
 
@@ -66,7 +66,7 @@
 	});
 </script>
 
-<div class="no-select p-4 space-y-2">
+<div class="no-select p-4 space-y-2 text-surface-900-50-token">
 	<h2 class="text-2xl font-bold mb-6">Marasi Settings</h2>
 	<SlideToggle
 		name="slider-label"
@@ -156,7 +156,7 @@
 	<label class="label">
 		<span>Waypoints</span>
 		<div class="table-container">
-			<table class="table table-hover">
+			<table class="table">
 				<thead>
 					<tr>
 						<th class="text-center w-[40%]"
@@ -174,7 +174,7 @@
 							<input
 								type="text"
 								placeholder="Enter host (host:port)"
-								class="input w-full variant-filled-secondary"
+								class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 								bind:value={
 									targetHost
 								}
@@ -184,7 +184,7 @@
 							<input
 								type="text"
 								placeholder="Enter override (host:port)"
-								class="input w-full variant-filled-secondary"
+								class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 								bind:value={
 									override
 								}
@@ -201,7 +201,7 @@
 										selected !==
 											targetHost)}
 								type="button"
-								class="btn variant-filled-primary block mx-auto w-full"
+								class="btn block mx-auto w-full {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 								on:click={() => {
 									CreateWaypoint(
 										targetHost,
@@ -272,7 +272,7 @@
 												);
 										}}
 										type="button"
-										class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto"
+										class="btn-icon inline-flex items-center justify-center p-1 w-auto h-auto {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 									>
 										<X
 											size={15}
@@ -290,7 +290,7 @@
 												];
 										}}
 										type="button"
-										class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto"
+										class="btn-icon inline-flex items-center justify-center p-1 w-auto h-auto {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 									>
 										<Pencil
 											size={15}
@@ -307,7 +307,7 @@
 	<label class="label">
 		<span>Chrome Paths</span>
 		<div class="table-container">
-			<table class="table table-hover">
+			<table class="table">
 				<thead>
 					<tr>
 						<th class="text-center w-[40%]"
@@ -324,7 +324,7 @@
 							<input
 								type="text"
 								placeholder="Enter Chrome Path (e.g. /usr/bin/google-chrome)"
-								class="input w-full variant-filled-secondary"
+								class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 								bind:value={
 									selectedPath
 								}
@@ -332,7 +332,7 @@
 						</td>
 						<td>
 							<select
-								class="input w-full variant-filled-secondary"
+								class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 								bind:value={
 									selectedOS
 								}
@@ -364,7 +364,7 @@
 									selectedPath ===
 										""}
 								type="button"
-								class="btn variant-filled-primary block mx-auto w-full"
+								class="btn block mx-auto w-full {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 								on:click={() => {
 									AddChromePath(
 										selectedPath,
@@ -407,7 +407,7 @@
 											);
 										}}
 										type="button"
-										class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto"
+										class="btn-icon inline-flex items-center justify-center p-1 w-auto h-auto {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 									>
 										<X
 											size={15}
@@ -424,7 +424,7 @@
 	<label class="label">
 		<span>Chrome Profiles</span>
 		<div class="table-container">
-			<table class="table table-hover">
+			<table class="table">
 				<thead>
 					<tr>
 						<th class="text-center w-[80%]"
@@ -438,7 +438,7 @@
 							<input
 								type="text"
 								placeholder="Enter profile name"
-								class="input w-full variant-filled-secondary"
+								class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 								bind:value={
 									selectedProfile
 								}
@@ -449,7 +449,7 @@
 								disabled={selectedProfile ===
 									""}
 								type="button"
-								class="btn variant-filled-primary block mx-auto w-full"
+								class="btn block mx-auto w-full {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 								on:click={() => {
 									AddChromeProfile(
 										selectedProfile,
@@ -529,7 +529,7 @@
 												);
 										}}
 										type="button"
-										class="btn-icon variant-filled-primary inline-flex items-center justify-center p-1 w-auto h-auto"
+										class="btn-icon inline-flex items-center justify-center p-1 w-auto h-auto {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 									>
 										<X
 											size={15}

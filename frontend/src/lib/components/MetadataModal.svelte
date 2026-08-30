@@ -1,15 +1,16 @@
 <script>
-    import { getModalStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import CodeMirror from "svelte-codemirror-editor";
     import { javascript } from "@codemirror/lang-javascript";
     import { oneDark } from "@codemirror/theme-one-dark";
+    import { githubLight } from "@uiw/codemirror-theme-github";
     import { vim } from "@replit/codemirror-vim";
     import { X } from "lucide-svelte";
 
     export let parent;
     let content = '';
     const modalStore = getModalStore();
-    const cBase = 'card p-4 w-modal shadow-xl space-y-4';
+    const cBase = 'card p-4 w-modal shadow-xl space-y-4 bg-surface-50-800-token text-surface-900-50-token';
 
     // Reactive statement to update content when modalStore changes
     $: if ($modalStore[0] && $modalStore[0].content) {
@@ -48,7 +49,7 @@
             bind:value={content}
             lang={javascript()}
             lineWrapping={true}
-            theme={oneDark}
+            theme={$modeCurrent ? githubLight : oneDark}
             extensions={vim()}
             readonly={true}
         />

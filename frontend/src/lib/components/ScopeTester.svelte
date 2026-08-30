@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    import { modeCurrent } from "@skeletonlabs/skeleton";
     import { testerInput } from "../../stores";
     import { TestScopeMatch } from "../wailsjs/go/main/App";
 
@@ -43,7 +44,14 @@
     
     function getResultClass() {
       if (!lastResult || lastResult.error) return '';
-      return lastResult.inScope ? 'bg-success-500' : 'bg-error-500';
+      if (lastResult.inScope) {
+        return $modeCurrent
+          ? 'bg-success-100 text-success-800 border border-success-300'
+          : 'bg-success-700 text-success-100 border border-success-600';
+      }
+      return $modeCurrent
+        ? 'bg-error-100 text-error-800 border border-error-300'
+        : 'bg-error-700 text-error-100 border border-error-600';
     }
     
     // Function to clean up regex patterns for display
@@ -89,7 +97,7 @@
       <div class="text-center mb-4">
         <button 
           on:click={testMatch} 
-          class="btn variant-filled-primary" 
+          class="btn {$modeCurrent ? 'variant-ghost-primary' : 'variant-filled-primary'} border-0 ring-0"
           disabled={loading}
         >
           {loading ? 'Testing...' : 'Test Rules'}
@@ -97,14 +105,14 @@
       </div>
       
       {#if error}
-        <div class="mt-4 p-2 bg-error-200 text-error-800 rounded">
+        <div class="mt-4 p-2 bg-error-100 text-error-800 border border-error-300 dark:bg-error-700 dark:text-error-100 dark:border-error-600 rounded">
           {error}
         </div>
       {/if}
       
       {#if lastResult && !error}
         <!-- Add key attribute to force re-rendering -->
-        <div key={resultKey} class="mt-4 p-3 {getResultClass()} text-black">
+        <div key={resultKey} class="mt-4 p-3 {getResultClass()}">
           <div class="mt-2">
             <p><b>Tested URL:</b> {lastResult.testedUrl}</p>
             
@@ -128,27 +136,3 @@
       {/if}
     </div>
   </div>
-  
-  <style>
-    .input {
-      background-color: rgb(var(--color-surface-500));
-      padding: 0.5rem;
-    }
-    
-    .btn {
-      padding: 0.5rem 1rem;
-      background-color: rgb(var(--color-primary-500));
-      color: rgb(var(--on-primary));
-      cursor: pointer;
-      border: none;
-    }
-    
-    .btn:hover {
-      background-color: rgb(var(--color-primary-600));
-    }
-    
-    .btn:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-  </style>

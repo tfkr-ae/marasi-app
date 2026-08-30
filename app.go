@@ -16,12 +16,15 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/tfkr-ae/marasi/armory"
 	"github.com/tfkr-ae/marasi/chrome"
 	"github.com/tfkr-ae/marasi/db"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/extensions"
 	"github.com/tfkr-ae/marasi/report"
+	"github.com/tfkr-ae/marasi/wordlist"
 
 	marasi "github.com/tfkr-ae/marasi"
 
@@ -51,8 +54,14 @@ func NewApp() *App {
 		log.Fatal(err)
 	}
 
+	wordlists, err := wordlist.NewManager(appConfigDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	Proxy, err := marasi.New(
 		marasi.WithConfigDir(appConfigDir),
+		marasi.WithWordlistManager(wordlists),
 		marasi.WithBasePipeline(),
 		marasi.WithDefaultModifierPipeline(),
 	)
@@ -236,6 +245,7 @@ func (a *App) OpenFileDialog() (string, error) {
 	// Show the dialog and return the selected path
 	return runtime.OpenFileDialog(a.ctx, dialogOptions)
 }
+
 func (a *App) OpenProject(name string) (string, error) {
 	var filePath string
 
@@ -264,13 +274,36 @@ func (a *App) OpenProject(name string) (string, error) {
 		_ = Repo.Close()
 		return "", fmt.Errorf("creating report generator : %w", err)
 	}
-	if err := a.Proxy.CloseWebSocketsAndFlush(); err != nil {
+
+	armory, err := armory.NewManager(Repo, a.Proxy.WordlistManager, a.Proxy.SendArmoryRequest)
+	if err != nil {
 		_ = Repo.Close()
-		return "", fmt.Errorf("closing websocket connections: %w", err)
+		return "", fmt.Errorf("creating armory manager : %w", err)
+	}
+	if err := recoverInterruptedArmoryRuns(Repo); err != nil {
+		_ = Repo.Close()
+		return "", err
+	}
+	confirmed, err := a.confirmCancelArmoryRuns("Switch Project")
+	if err != nil {
+		_ = Repo.Close()
+		return "", err
+	}
+	if !confirmed {
+		_ = Repo.Close()
+		return "", errors.New("project switch cancelled")
+	}
+	if socketErr := a.Proxy.CloseWebSocketsAndFlush(); socketErr != nil {
+		_ = Repo.Close()
+		return "", fmt.Errorf("closing websocket connections: %w", socketErr)
 	}
 
 	oldDBCloser := a.Proxy.DBCloser
-	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo), marasi.WithReportGenerator(generator))
+	err = a.Proxy.WithOptions(
+		marasi.WithDefaultRepositories(Repo),
+		marasi.WithReportGenerator(generator),
+		marasi.WithArmory(armory),
+	)
 	if err != nil {
 		_ = Repo.Close()
 		return "", err
@@ -297,9 +330,24 @@ func (a *App) SetupScratchpad() error {
 		return fmt.Errorf("creating report generator : %w", err)
 	}
 
-	err = a.Proxy.WithOptions(marasi.WithDefaultRepositories(Repo), marasi.WithReportGenerator(generator))
+	armory, err := armory.NewManager(Repo, a.Proxy.WordlistManager, a.Proxy.SendArmoryRequest)
+	if err != nil {
+		_ = Repo.Close()
+		return fmt.Errorf("creating armory manager : %w", err)
+	}
+	if err := recoverInterruptedArmoryRuns(Repo); err != nil {
+		_ = Repo.Close()
+		return err
+	}
+
+	err = a.Proxy.WithOptions(
+		marasi.WithDefaultRepositories(Repo),
+		marasi.WithReportGenerator(generator),
+		marasi.WithArmory(armory),
+	)
 
 	if err != nil {
+		_ = Repo.Close()
 		return err
 	}
 
@@ -309,6 +357,81 @@ func (a *App) SetupScratchpad() error {
 func (a *App) close(ctx context.Context) {
 	a.Proxy.Close()
 	a.Listener = nil
+}
+
+func (a *App) beforeClose(ctx context.Context) bool {
+	confirmed, err := a.confirmCancelArmoryRuns("Close Marasi")
+	if err != nil {
+		log.Printf("cancelling active Armory runs: %v", err)
+	}
+	return err != nil || !confirmed
+}
+
+func (a *App) confirmCancelArmoryRuns(action string) (bool, error) {
+	if a.Proxy.Armory == nil || len(a.Proxy.Armory.ActiveRunIDs()) == 0 {
+		return true, nil
+	}
+
+	result, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Type:          runtime.WarningDialog,
+		Title:         action,
+		Message:       action + " will cancel all active Armory runs. Continue?",
+		Buttons:       []string{"Cancel", action},
+		DefaultButton: "Cancel",
+		CancelButton:  "Cancel",
+	})
+	if err != nil || result != action {
+		return false, err
+	}
+
+	activeRunIDs := a.Proxy.Armory.ActiveRunIDs()
+	for _, id := range activeRunIDs {
+		if err := a.Proxy.Armory.CancelRun(id); err != nil {
+			for _, activeID := range a.Proxy.Armory.ActiveRunIDs() {
+				if activeID == id {
+					return false, fmt.Errorf("cancelling armory run %s: %w", id, err)
+				}
+			}
+		}
+	}
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for len(a.Proxy.Armory.ActiveRunIDs()) > 0 {
+		select {
+		case <-ticker.C:
+		case <-timer.C:
+			return false, errors.New("timed out cancelling active Armory runs")
+		}
+	}
+	return true, nil
+}
+
+func recoverInterruptedArmoryRuns(repo domain.ArmoryRepository) error {
+	templates, err := repo.GetArmoryTemplates()
+	if err != nil {
+		return fmt.Errorf("getting armory templates: %w", err)
+	}
+	for _, template := range templates {
+		runs, err := repo.GetArmoryRuns(template.ID)
+		if err != nil {
+			return fmt.Errorf("getting armory runs: %w", err)
+		}
+		for _, run := range runs {
+			if run.Status != domain.ArmoryRunInProgress {
+				continue
+			}
+			finishedAt := time.Now()
+			run.Status = domain.ArmoryRunCancelled
+			run.FinishedAt = &finishedAt
+			if err := repo.UpdateArmoryRun(run); err != nil {
+				return fmt.Errorf("recovering interrupted armory run %s: %w", run.ID, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (a *App) GetLogs() ([]*domain.Log, error) {

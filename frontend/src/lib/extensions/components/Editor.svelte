@@ -2,6 +2,8 @@
     import { tick } from "svelte";
     import CodeMirror from "svelte-codemirror-editor";
     import { oneDark } from "@codemirror/theme-one-dark";
+    import { githubLight } from "@uiw/codemirror-theme-github";
+    import { modeCurrent } from "@skeletonlabs/skeleton";
     import { vim } from "@replit/codemirror-vim";
     import { extensions_ui, marasiConfig } from "../../../stores";
     import { resolveBind, updateBind } from "./utils";
@@ -55,7 +57,7 @@
 <CodeMirror
     value={localValue}
     class={"text-xs " + classes}
-    theme={oneDark}
+    theme={$modeCurrent ? githubLight : oneDark}
     extensions={$marasiConfig?.VimEnabled ? [vim()] : []}
     lang={language}
     {readonly}

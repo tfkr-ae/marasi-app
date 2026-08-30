@@ -115,7 +115,7 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <dialog
-	class="w-modal text-white bg-neutral-800"
+	class="w-modal bg-surface-100-800-token text-surface-900-50-token"
 	bind:this={dialog}
 	on:close={handleClose}
 	on:cancel={handleCancel}

@@ -59,7 +59,7 @@
     <input
         {placeholder}
         {disabled}
-        class="input w-full {errorMessage ? 'input-error' : ''}"
+        class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0 {errorMessage ? 'input-error' : ''}"
         value={localValue}
         on:input={handleInput}
         {...validation}

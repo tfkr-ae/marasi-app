@@ -1,6 +1,7 @@
 <script>
     import { createEventDispatcher } from "svelte";
     import { CVSS31 } from "@pandatix/js-cvss";
+    import { modeCurrent } from "@skeletonlabs/skeleton";
 
     const dispatch = createEventDispatcher();
 
@@ -130,37 +131,41 @@
     }
 </script>
 
-<div class="card overflow-hidden border border-surface-500/30">
+<div class="card overflow-hidden border border-surface-500/30 bg-white dark:bg-surface-800 text-surface-900-50-token">
     <header
-        class="bg-surface-700 p-2 px-4 flex justify-between items-center text-white"
+        class="bg-surface-100 dark:bg-surface-700 p-2 px-4 flex justify-between items-center text-surface-900 dark:text-white"
     >
         <span
-            class="text-sm font-bold uppercase tracking-widest text-primary-400"
+            class="text-sm font-bold uppercase tracking-widest text-primary-600 dark:text-primary-400"
             >Base Score Metrics</span
         >
-        <code class="text-xs variant-soft-primary p-1 rounded font-mono">
+        <code class="text-xs p-1 rounded font-mono {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-soft-primary'}">
             {vector || "No vector set"}
         </code>
     </header>
 
     <div
-        class="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 bg-surface-50/5 w-full"
+        class="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 bg-white dark:bg-surface-50/5 w-full"
     >
         <div class="space-y-6 w-full">
             {#each leftMetrics as m}
                 <div class="space-y-2">
-                    <p class="font-bold text-sm opacity-80 text-secondary-500">
+                    <p class="font-bold text-sm text-surface-800 dark:text-secondary-500">
                         {m.name}
                     </p>
                     <div class="flex flex-wrap gap-2 w-full">
                         {#each m.options as opt}
                             <button
                                 type="button"
-                                class="btn btn-sm grow transition-colors {selections[
+                                class="btn btn-sm grow {selections[
                                     m.key
-                                ] === opt.v
-                                    ? 'variant-filled-primary'
-                                    : 'variant-soft-surface'}"
+                                 ] === opt.v
+                                     ? $modeCurrent
+                                       ? 'variant-ghost-primary ring-0 shadow-none'
+                                       : 'variant-filled-primary'
+                                    : $modeCurrent
+                                      ? 'bg-surface-100 text-surface-900 hover:bg-surface-400/25 hover:!filter-none border-0 ring-0'
+                                      : 'variant-soft-surface'}"
                                 on:click={() => handleSelection(m.key, opt.v)}
                             >
                                 {opt.L} ({opt.v})
@@ -174,18 +179,22 @@
         <div class="space-y-6 w-full">
             {#each rightMetrics as m}
                 <div class="space-y-2">
-                    <p class="font-bold text-sm opacity-80 text-secondary-500">
+                    <p class="font-bold text-sm text-surface-800 dark:text-secondary-500">
                         {m.name}
                     </p>
                     <div class="flex flex-wrap gap-2 w-full">
                         {#each m.options as opt}
                             <button
                                 type="button"
-                                class="btn btn-sm grow transition-colors {selections[
+                                class="btn btn-sm grow {selections[
                                     m.key
-                                ] === opt.v
-                                    ? 'variant-filled-primary'
-                                    : 'variant-soft-surface'}"
+                                 ] === opt.v
+                                     ? $modeCurrent
+                                       ? 'variant-ghost-primary ring-0 shadow-none'
+                                       : 'variant-filled-primary'
+                                    : $modeCurrent
+                                      ? 'bg-surface-100 text-surface-900 hover:bg-surface-400/25 hover:!filter-none border-0 ring-0'
+                                      : 'variant-soft-surface'}"
                                 on:click={() => handleSelection(m.key, opt.v)}
                             >
                                 {opt.L} ({opt.v})
@@ -197,13 +206,13 @@
         </div>
     </div>
 
-    <footer class="p-4 border-t border-surface-500/20 bg-surface-800/30">
+    <footer class="p-4 border-t border-surface-500/20 bg-surface-100 dark:bg-surface-800/30">
         <label class="label">
             <span class="text-xs opacity-60 mb-1 block uppercase font-bold"
                 >Manual Vector Override / Paste</span
             >
             <input
-                class="input font-mono text-sm variant-form-material"
+                class="input font-mono text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
                 type="text"
                 bind:value={vector}
                 placeholder="e.g. CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"

@@ -1,5 +1,5 @@
 <script>
-    import { getModalStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
     import { GetRecentProjects } from "../wailsjs/go/main/App";
     import { OpenFileDialog } from "../wailsjs/go/main/App";
@@ -11,7 +11,7 @@
     let filteredList = [];
     let selectedIndex = -1;
     const modalStore = getModalStore();
-    const cBase = 'card p-4 w-modal shadow-xl space-y-4';
+    const cBase = 'card p-4 w-modal shadow-xl space-y-4 bg-surface-50-800-token text-surface-900-50-token';
     const cHeader = 'text-2xl font-bold';
     const cForm = 'space-y-4';
     
@@ -167,16 +167,20 @@
         <form class="modal-form {cForm}" on:submit|preventDefault>
             <!-- SEARCH BAR AT TOP -->
             <div class="relative w-full mb-2">
-                <input class="input w-full" 
-                       type="search" 
-                       name="search" 
-                       bind:value={input} 
-                       placeholder="Search or enter new project name..." 
+                <input class="input w-full bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
+                       type="search"
+                       name="project-name"
+                       autocomplete="off"
+                       autocorrect="off"
+                       autocapitalize="off"
+                       spellcheck="false"
+                       bind:value={input}
+                       placeholder="Search or enter new project name..."
                        on:keydown={handleKeydown} />
             </div>
             
             <!-- RECENT PROJECTS LIST -->
-            <div class="card w-full h-64 overflow-y-auto p-0">
+            <div class="card w-full h-64 overflow-y-auto p-0 bg-white dark:bg-surface-700">
                 {#if filteredList.length > 0}
                     <ul class="project-list">
                         {#each filteredList as project, i}
@@ -194,7 +198,7 @@
                         {/each}
                     </ul>
                 {:else}
-                    <div class="p-4 text-center text-surface-500">
+                    <div class="p-4 text-center opacity-70">
                         {input.trim() ? 'No matching projects found' : 'No recent projects'}
                     </div>
                 {/if}
@@ -204,7 +208,7 @@
             <div class="w-full mt-4">
                 <button 
                     type="button"
-                    class="btn variant-filled-secondary w-full"
+                    class="btn w-full {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
                     on:click={openSelected}
                 >
                     {filteredList.length > 0 ? 'Open Selected' : 'Create New Project'}
@@ -216,7 +220,7 @@
             <div class="w-full mt-2">
                 <button 
                     type="button"
-                    class="btn variant-filled-primary w-full"
+                    class="btn w-full {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
                     on:click={openFileSelector}
                 >
                     Browse Files...
@@ -224,7 +228,7 @@
             </div>
             
             <!-- Simple information about project creation behavior -->
-            <div class="text-sm text-surface-300 mt-2">
+            <div class="text-sm opacity-70 mt-2">
                 {#if !input.includes('/') && !input.includes('\\')}
                     New projects with just a name will be created in the default directory.
                 {/if}
@@ -245,18 +249,14 @@
         cursor: pointer;
     }
     
-    .project-item:hover {
-        background-color: #cf595b;
-        opacity: 80%;
-    }
-    
+    .project-item:hover,
     .project-item.selected {
-        background-color: #cf595b;
-        opacity: 80%;
+        background-color: rgb(var(--color-primary-100));
     }
-    
-    .project-item.selected .project-path {
-        color: #fffff0;
+
+    :global(.dark) .project-item:hover,
+    :global(.dark) .project-item.selected {
+        background-color: rgb(var(--color-primary-500) / 0.2);
     }
     
     .project-name {
@@ -266,7 +266,7 @@
     
     .project-path {
         font-size: 0.8rem;
-        color: #fffff0;
+        opacity: 0.7;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;

@@ -76,7 +76,8 @@
         text-align: center;
         padding: 4px;
         line-height: normal;
-        border-bottom: 1px solid #cf595b;
+        border-bottom: 1px solid rgb(var(--color-primary-500));
+        background-color: rgb(var(--color-surface-50));
         white-space: nowrap;
     }
 
@@ -87,11 +88,17 @@
         font-size: 0.9rem;
     }
 
+    tbody tr,
+    tbody tr:nth-child(even),
+    tbody tr:nth-child(odd) {
+        background-color: rgb(var(--color-surface-50));
+    }
+
     tbody td {
         vertical-align: middle;
         padding: 0.5em;
         line-height: 1.2;
-        border: 1px solid #2f343c;
+        border: 1px solid rgb(var(--color-surface-300));
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -124,7 +131,22 @@
 
     /* Make rows hoverable */
     tbody tr:hover {
-        background-color: #2f343c;
+        background-color: rgb(var(--color-surface-200));
         cursor: pointer;
+    }
+
+    :global(.dark) thead th,
+    :global(.dark) tbody tr,
+    :global(.dark) tbody tr:nth-child(even),
+    :global(.dark) tbody tr:nth-child(odd) {
+        background-color: rgb(var(--color-surface-900));
+    }
+
+    :global(.dark) tbody td {
+        border-color: rgb(var(--color-surface-600));
+    }
+
+    :global(.dark) tbody tr:hover {
+        background-color: rgb(var(--color-surface-700));
     }
 </style>

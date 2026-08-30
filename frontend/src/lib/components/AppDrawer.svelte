@@ -18,10 +18,15 @@
 	rounded={drawerRounded}
 	height={drawerHeight}
 	width={drawerWidth}
+	bgDrawer={$drawerStore.id === "request-response" ||
+	$drawerStore.id === "report-export"
+		? "bg-surface-50 dark:bg-surface-800"
+		: "bg-surface-100-800-token"}
 >
 	{#if $drawerStore.id === "request-response"}
 		<RequestResponseView
 			showSizeToggle={true}
+			showArmoryAction={true}
 			request_id={$drawerStore.meta.request.ID}
 			titleText={"Request " + $drawerStore.meta.requestIndex}
 			isFiltered={$drawerStore.meta.isFiltered}

@@ -3,7 +3,7 @@
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
-	import { ayuLight } from "thememirror";
+	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { Send } from "lucide-svelte";
 	import { InjectWebSocketMessage } from "../wailsjs/go/main/App";
 	import { marasiConfig, lineWrap } from "../../stores";
@@ -82,7 +82,7 @@
 			<label class="flex items-center gap-1.5 text-xs">
 				<span class="opacity-60">Direction</span>
 				<select
-					class="select select-sm"
+					class="select select-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					bind:value={direction}
 				>
 					<option value="client"
@@ -97,7 +97,7 @@
 			<label class="flex items-center gap-1.5 text-xs">
 				<span class="opacity-60">Opcode</span>
 				<select
-					class="select select-sm"
+					class="select select-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					bind:value={opcode}
 				>
 					<option value={0}>Continuation</option>
@@ -143,7 +143,7 @@
 		<CodeMirror
 			class="h-full w-full text-xs"
 			bind:value={payloadText}
-			theme={$modeCurrent ? ayuLight : oneDark}
+			theme={$modeCurrent ? githubLight : oneDark}
 			extensions={$marasiConfig.VimEnabled ? [vim()] : []}
 			lineWrapping={$lineWrap}
 		/>

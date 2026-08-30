@@ -4,6 +4,7 @@
 	import { http } from "@codemirror/legacy-modes/mode/http";
 	import { lua } from "@codemirror/legacy-modes/mode/lua";
 	import { oneDark } from "@codemirror/theme-one-dark";
+	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";
 	import {
 		GetIntercepted,
@@ -21,6 +22,7 @@
 		AccordionItem,
 		getDrawerStore,
 		getToastStore,
+		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import { SettingsIcon } from "svelte-feather-icons";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
@@ -271,7 +273,7 @@
 			<CodeMirror
 				bind:value={$checkpointCode}
 				class="text-xs"
-				theme={oneDark}
+				theme={$modeCurrent ? githubLight : oneDark}
 				extensions={$marasiConfig.VimEnabled
 					? [
 							vim(),
@@ -298,7 +300,7 @@
 			<div class="flex justify-end mt-2">
 				<button
 					type="button"
-					class="btn variant-filled-primary"
+					class="btn {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 					on:click={() => {
 						RunExtension(
 							"checkpoint",
@@ -334,23 +336,29 @@
 	</AccordionItem>
 </Accordion>
 <div class="p-1 flex flex-col items-center">
-	<div class="btn-group variant-filled-primary">
+	<div class={$modeCurrent ? "btn-group checkpoint-ghost-group" : "btn-group variant-filled-primary"}>
 		<button
+			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
 			disabled={error !== "" || interceptedCount == 0}
 			on:click={() => {
 				forward(intercepted);
 			}}>Forward</button
 		>
 		<button
+			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
 			disabled={type !== "request"}
 			on:click={() => {
 				forwardAndInterceptResponse();
 			}}>Intercept Response</button
 		>
 		<button
-			class={$interceptFlag
-				? "btn variant-filled-success hover:variant-filled-success"
-				: "btn variant-filled-primary"}
+			class={$modeCurrent
+				? $interceptFlag
+					? "btn variant-ghost-success ring-0 shadow-none"
+					: "btn variant-ghost-primary ring-0 shadow-none"
+				: $interceptFlag
+					? "btn variant-filled-success hover:variant-filled-success"
+					: "btn variant-filled-primary"}
 			on:click={() => {
 				ToggleIntercept().then((flag) => {
 					interceptFlag.set(flag);
@@ -361,6 +369,7 @@
 				: "Global Intercept (Off)"}</button
 		>
 		<button
+			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
 			disabled={interceptedCount == 0}
 			on:click={() => {
 				drop();
@@ -381,13 +390,13 @@
 			<p>{error}</p>
 		{/if}
 	</div>
-	<div class="w-full filler-color flex justify-center">
+	<div class="w-full flex justify-center dark:bg-[#282c34]">
 		<div class="w-[50%]">
 			<CodeMirror
 				bind:value={intercepted}
 				lang={getLang(intercepted)}
 				class="text-xs"
-				theme={oneDark}
+				theme={$modeCurrent ? githubLight : oneDark}
 				extensions={$marasiConfig.VimEnabled
 					? [vim()]
 					: []}
@@ -398,7 +407,31 @@
 </div>
 
 <style>
-	.filler-color {
-		background-color: #282c34;
+	:global(.checkpoint-ghost-group) {
+		--tw-ring-shadow: 0 0 #0000;
+		box-shadow: none;
+	}
+	:global(.checkpoint-ghost-group > *) {
+		--tw-ring-inset: ;
+		--tw-ring-offset-shadow: 0 0 #0000;
+		--tw-ring-shadow: 0 0 #0000;
+		box-shadow: none !important;
+		border: 0 !important;
+	}
+	:global(.checkpoint-ghost-group > * + *) {
+		border-left-width: 0 !important;
+	}
+	:global(.checkpoint-ghost-group > *:disabled:hover) {
+		background-color: rgb(var(--color-primary-500) / 0.2) !important;
+		filter: none !important;
+		--tw-brightness: brightness(1);
+	}
+	:global(.checkpoint-ghost-group > .variant-ghost-primary:not(:disabled):hover) {
+		background-color: rgb(var(--color-primary-200)) !important;
+		filter: none !important;
+	}
+	:global(.checkpoint-ghost-group > .variant-ghost-success:not(:disabled):hover) {
+		background-color: rgb(var(--color-success-200)) !important;
+		filter: none !important;
 	}
 </style>

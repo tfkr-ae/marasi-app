@@ -1,27 +1,28 @@
 import { get, writable } from "svelte/store";
 import {
-	GetProxyItems,
-	GetLogs,
-	GetMarasiConfig,
-	GetFilters,
-	GetExtensionCode,
-	GetWaypoints,
-	GetInterceptFlag,
-	GetExtensions,
-	LoadExtensions,
-	GetLaunchpads,
-	GetLaunchpadRequests,
-	GetUserName,
+  GetProxyItems,
+  GetLogs,
+  GetMarasiConfig,
+  GetFilters,
+  GetExtensionCode,
+  GetWaypoints,
+  GetInterceptFlag,
+  GetExtensions,
+  LoadExtensions,
+  GetLaunchpads,
+  GetLaunchpadRequests,
+  GetUserName,
 } from "./lib/wailsjs/go/main/App";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { connectionStore } from "./stores/connectionStore";
+import { armoryStore } from "./stores/armoryStore";
 
 // Startup
 export const appState = writable({
-	isReady: false,
-	message: "Starting...",
-	details: "",
+  isReady: false,
+  message: "Starting...",
+  details: "",
 });
 
 // Extensions
@@ -39,90 +40,92 @@ export const contentTypeFilterInput = writable("");
 // Logbook Stores
 export const logbookSearchInput = writable("");
 export const reportMetadata = writable({
-	title: "Report Title",
-	client: "Client Name",
-	type: "Assessment Type",
-	is_draft: true,
-	scope: "Assessment Scope",
-	assessor: "Assessor",
-	start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString("en-CA"),
-	end: new Date().toLocaleDateString("en-CA"),
-	created_at: new Date().toISOString(),
-	truncate_length: 0,
-	custom_properties: {},
+  title: "Report Title",
+  client: "Client Name",
+  type: "Assessment Type",
+  is_draft: true,
+  scope: "Assessment Scope",
+  assessor: "Assessor",
+  start: new Date(
+    new Date().setDate(new Date().getDate() - 14),
+  ).toLocaleDateString("en-CA"),
+  end: new Date().toLocaleDateString("en-CA"),
+  created_at: new Date().toISOString(),
+  truncate_length: 0,
+  custom_properties: {},
 });
 
 let requestBuffer = [];
 let responseBuffer = new Map();
 function flushBuffer() {
-	if (requestBuffer.length === 0 && responseBuffer.size === 0) return;
+  if (requestBuffer.length === 0 && responseBuffer.size === 0) return;
 
-	const reqBatch = requestBuffer;
-	const resBatch = responseBuffer;
+  const reqBatch = requestBuffer;
+  const resBatch = responseBuffer;
 
-	requestBuffer = [];
-	responseBuffer = new Map();
+  requestBuffer = [];
+  responseBuffer = new Map();
 
-	proxyItems.update((items) => {
-		let current = Array.isArray(items) ? items : [];
+  proxyItems.update((items) => {
+    let current = Array.isArray(items) ? items : [];
 
-		if (resBatch.size > 0 && current.length > 0) {
-			current = current.map((item) => {
-				if (resBatch.has(item.ID)) {
-					return { ...item, ...resBatch.get(item.ID) };
-				}
-				return item;
-			});
-		}
+    if (resBatch.size > 0 && current.length > 0) {
+      current = current.map((item) => {
+        if (resBatch.has(item.ID)) {
+          return { ...item, ...resBatch.get(item.ID) };
+        }
+        return item;
+      });
+    }
 
-		if (reqBatch.length > 0) {
-			if (resBatch.size > 0) {
-				for (let i = 0; i < reqBatch.length; i++) {
-					const req = reqBatch[i];
-					if (resBatch.has(req.ID)) {
-						reqBatch[i] = { ...req, ...resBatch.get(req.ID) };
-					}
-				}
-			}
-			// current = [...current, ...reqBatch];
-			current.push(...reqBatch);
-		}
+    if (reqBatch.length > 0) {
+      if (resBatch.size > 0) {
+        for (let i = 0; i < reqBatch.length; i++) {
+          const req = reqBatch[i];
+          if (resBatch.has(req.ID)) {
+            reqBatch[i] = { ...req, ...resBatch.get(req.ID) };
+          }
+        }
+      }
+      // current = [...current, ...reqBatch];
+      current.push(...reqBatch);
+    }
 
-		return current;
-	});
+    return current;
+  });
 }
 if (typeof window !== "undefined") {
-	setInterval(flushBuffer, 200);
+  setInterval(flushBuffer, 200);
 }
 
 export function addRequest(req) {
-	requestBuffer.push(req);
-	if (requestBuffer.length > 500) flushBuffer();
+  requestBuffer.push(req);
+  if (requestBuffer.length > 500) flushBuffer();
 }
 export function addResponse(res) {
-	responseBuffer.set(res.ID, res);
+  responseBuffer.set(res.ID, res);
 
-	if (responseBuffer.size > 500) flushBuffer();
+  if (responseBuffer.size > 500) flushBuffer();
 }
 
 export function patchWebSocketMetadata(conn) {
-	if (!conn?.RequestID) return;
-	proxyItems.update((items) =>
-		(items || []).map((item) => {
-			if (item.ID !== conn.RequestID) return item;
-			return {
-				...item,
-				Metadata: {
-					...(item.Metadata || {}),
-					protocol: "websocket",
-					"websocket.state": conn.State || "closed",
-					"websocket.transport": conn.Transport,
-					"websocket.close_code": conn.CloseCode,
-					"websocket.close_reason": conn.CloseReason,
-				},
-			};
-		}),
-	);
+  if (!conn?.RequestID) return;
+  proxyItems.update((items) =>
+    (items || []).map((item) => {
+      if (item.ID !== conn.RequestID) return item;
+      return {
+        ...item,
+        Metadata: {
+          ...(item.Metadata || {}),
+          protocol: "websocket",
+          "websocket.state": conn.State || "closed",
+          "websocket.transport": conn.Transport,
+          "websocket.close_code": conn.CloseCode,
+          "websocket.close_reason": conn.CloseReason,
+        },
+      };
+    }),
+  );
 }
 
 // ---------------------------
@@ -148,8 +151,8 @@ export const lineWrap = writable(true);
 export let drawerHeight = writable("h-[60%]");
 export let marasiConfig = writable({});
 export async function readConfig() {
-	const config = await GetMarasiConfig();
-	marasiConfig.set(config);
+  const config = await GetMarasiConfig();
+  marasiConfig.set(config);
 }
 
 // Launchpad navigation state persistence
@@ -158,164 +161,172 @@ export const activeLaunchpadID = writable("");
 export const launchpads = writable([]);
 
 export let listener = writable({
-	status: false,
-	address: "127.0.0.1",
-	port: "8080",
+  status: false,
+  address: "127.0.0.1",
+  port: "8080",
 });
 export let activeProject = writable("Marasi");
 export async function openProject() {
-	appState.set({
-		isReady: false,
-		message: "Starting...",
-		details: "",
-	});
-	requestBuffer = [];
-	responseBuffer = new Map();
-	pagination.set({ pageIndex: 0, pageSize: 100 });
-	sorting.set([{ id: "ID", desc: true }]);
-	searchInput.set("");
-	logbookSearchInput.set("");
-	reportMetadata.set({
-		title: get(activeProject) + " Report",
-		client: "Client Name",
-		type: "Assessment Type",
-		is_draft: true,
-		scope: "Assessment Scope",
-		assessor: await GetUserName(),
-		start: new Date(new Date().setDate(new Date().getDate() - 14)).toLocaleDateString("en-CA"),
-		end: new Date().toLocaleDateString("en-CA"),
-		created_at: new Date().toISOString(),
-		truncate_length: 0,
-		custom_properties: {},
-	});
-	contentTypeFilter.set([]);
-	contentTypeFilterInput.set("");
-	compassCode.set("");
-	testerInput.set("");
-	checkpointCode.set("");
-	interceptFlag.set(false);
-	workshopCode.set("");
-	waypoints.set({});
-	proxyItems.set([]);
-	currentEntryIndex.set(0);
-	activeLaunchpadID.set("");
-	extensions.set([]);
-	extensions_ui.set({});
-	testCaseStore.clear();
-	findingStore.clear();
-	connectionStore.clear();
-	try {
-		await LoadExtensions();
-	} catch (err) {
-		console.error("Failed to load project extensions:", err);
-	}
+  appState.set({
+    isReady: false,
+    message: "Starting...",
+    details: "",
+  });
+  requestBuffer = [];
+  responseBuffer = new Map();
+  pagination.set({ pageIndex: 0, pageSize: 100 });
+  sorting.set([{ id: "ID", desc: true }]);
+  searchInput.set("");
+  logbookSearchInput.set("");
+  reportMetadata.set({
+    title: get(activeProject) + " Report",
+    client: "Client Name",
+    type: "Assessment Type",
+    is_draft: true,
+    scope: "Assessment Scope",
+    assessor: await GetUserName(),
+    start: new Date(
+      new Date().setDate(new Date().getDate() - 14),
+    ).toLocaleDateString("en-CA"),
+    end: new Date().toLocaleDateString("en-CA"),
+    created_at: new Date().toISOString(),
+    truncate_length: 0,
+    custom_properties: {},
+  });
+  contentTypeFilter.set([]);
+  contentTypeFilterInput.set("");
+  compassCode.set("");
+  testerInput.set("");
+  checkpointCode.set("");
+  interceptFlag.set(false);
+  workshopCode.set("");
+  waypoints.set({});
+  proxyItems.set([]);
+  currentEntryIndex.set(0);
+  activeLaunchpadID.set("");
+  extensions.set([]);
+  extensions_ui.set({});
+  testCaseStore.clear();
+  findingStore.clear();
+  connectionStore.clear();
+  armoryStore.clear();
+  try {
+    await LoadExtensions();
+  } catch (err) {
+    console.error("Failed to load project extensions:", err);
+  }
 
-	// Reset items
-	await populateHistory();
-	await populateLogs();
-	await populateFilters();
-	await populateScope();
-	await populateCheckpoint();
-	await populateWorkshop();
-	await populateWaypoints();
-	await populateExtensions();
-	await populateLaunchpads();
-	await testCaseStore.populate();
-	await findingStore.populate();
-	await connectionStore.populateInterceptFlag();
+  // Reset items
+  await populateHistory();
+  await populateLogs();
+  await populateFilters();
+  await populateScope();
+  await populateCheckpoint();
+  await populateWorkshop();
+  await populateWaypoints();
+  await populateExtensions();
+  await populateLaunchpads();
+  await testCaseStore.populate();
+  await findingStore.populate();
+  await connectionStore.populateInterceptFlag();
+  await armoryStore.populate();
 }
 
 export async function populateWaypoints() {
-	GetWaypoints()
-		.then((points) => {
-			console.log(points);
-			waypoints.set(points);
-		})
-		.catch((waypointErr) => {
-			console.log(waypointErr);
-		});
+  GetWaypoints()
+    .then((points) => {
+      console.log(points);
+      waypoints.set(points);
+    })
+    .catch((waypointErr) => {
+      console.log(waypointErr);
+    });
 }
 export async function populateWorkshop() {
-	GetExtensionCode("workshop")
-		.then((code) => {
-			workshopCode.set(code);
-		})
-		.catch((error) => {
-			console.log(error);
-		});
+  GetExtensionCode("workshop")
+    .then((code) => {
+      workshopCode.set(code);
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 }
 export async function populateCheckpoint() {
-	GetExtensionCode("checkpoint")
-		.then((code) => {
-			checkpointCode.set(code);
-		})
-		.catch((error) => {
-			console.log(error);
-		});
-	GetInterceptFlag().then((flag) => {
-		interceptFlag.set(flag);
-	});
+  GetExtensionCode("checkpoint")
+    .then((code) => {
+      checkpointCode.set(code);
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+  GetInterceptFlag().then((flag) => {
+    interceptFlag.set(flag);
+  });
 }
 export async function populateScope() {
-	GetExtensionCode("compass")
-		.then((code) => {
-			compassCode.set(code);
-		})
-		.catch((error) => {
-			console.log(error);
-		});
+  GetExtensionCode("compass")
+    .then((code) => {
+      compassCode.set(code);
+    })
+    .catch((error) => {
+      console.log(error);
+    });
 }
 export async function populateFilters() {
-	GetFilters().then((filters) => {
-		console.log("----- Filter ------");
-		console.log(filters);
-		console.log("----- Filter ------");
-		contentTypeFilter.set(filters ? filters : []);
-	});
+  GetFilters().then((filters) => {
+    console.log("----- Filter ------");
+    console.log(filters);
+    console.log("----- Filter ------");
+    contentTypeFilter.set(filters ? filters : []);
+  });
 }
 export async function populateLogs() {
-	GetLogs().then((items) => {
-		console.log(items);
-		logItems.set(items ? items : []);
-	});
+  GetLogs().then((items) => {
+    console.log(items);
+    logItems.set(items ? items : []);
+  });
 }
 export async function populateHistory() {
-	const start = performance.now();
-	GetProxyItems().then((items) => {
-		console.log("Received items from Go:", items);
-		proxyItems.set(items ? items : []);
-		const end = performance.now();
-		console.log(`Time taken to set store: ${end - start} ms`);
-	});
+  const start = performance.now();
+  GetProxyItems()
+    .then((items) => {
+      console.log("Received items from Go:", items);
+      proxyItems.set(items ? items : []);
+      const end = performance.now();
+      console.log(`Time taken to set store: ${end - start} ms`);
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 }
 
 export async function populateExtensions() {
-	GetExtensions().then((exts) => {
-		console.log(exts);
-		extensions.set(exts ? exts : []);
-	});
+  GetExtensions().then((exts) => {
+    console.log(exts);
+    extensions.set(exts ? exts : []);
+  });
 }
 export async function populateLaunchpads() {
-	const items = await GetLaunchpads();
+  const items = await GetLaunchpads();
 
-	const initalisedItems = (items || []).map((item) => ({
-		...item,
-		Entries: [],
-	}));
+  const initalisedItems = (items || []).map((item) => ({
+    ...item,
+    Entries: [],
+  }));
 
-	launchpads.set(initalisedItems);
+  launchpads.set(initalisedItems);
 }
 
 export async function populateLaunchpadEntries(id) {
-	if (!id) return;
+  if (!id) return;
 
-	const reqs = await GetLaunchpadRequests(id);
-	launchpads.update((tabs) => {
-		return tabs.map((t) => {
-			if (t.ID == id) {
-				return { ...t, Entries: reqs || [] };
-			}
-			return t;
-		});
-	});
+  const reqs = await GetLaunchpadRequests(id);
+  launchpads.update((tabs) => {
+    return tabs.map((t) => {
+      if (t.ID == id) {
+        return { ...t, Entries: reqs || [] };
+      }
+      return t;
+    });
+  });
 }

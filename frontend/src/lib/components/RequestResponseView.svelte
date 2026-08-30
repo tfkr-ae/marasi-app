@@ -16,6 +16,7 @@
 		Pen,
 		RadioIcon,
 		ShieldAlert,
+		Swords,
 		WrapTextIcon,
 	} from "lucide-svelte";
 	import {
@@ -27,25 +28,29 @@
 	import {
 		getModalStore,
 		getDrawerStore,
+		getToastStore,
 		ProgressRadial,
 	} from "@skeletonlabs/skeleton";
 	import { vim } from "@replit/codemirror-vim";
 	import { StreamLanguage } from "@codemirror/language";
 	import { http } from "@codemirror/legacy-modes/mode/http";
 	import { oneDark } from "@codemirror/theme-one-dark";
+	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { ayuLight } from "thememirror";
 	import { beforeNavigate, goto } from "$app/navigation";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
+	import { armoryStore } from "../../stores/armoryStore";
 
 	const modalStore = getModalStore();
 	const drawerStore = getDrawerStore();
+	const toastStore = getToastStore();
 	export let request_id;
 	export let titleText = "";
 	export let showTitleBar = true;
 	export let showSizeToggle = false;
 	export let showPrettifyToggle = true;
+	export let showArmoryAction = false;
 	export let requestReadOnly = true;
 	export let responseReadOnly = true;
 	export let isFiltered = false;
@@ -161,6 +166,36 @@
 				modalStore.trigger(modal);
 			}
 		});
+	}
+
+	async function sendToArmory() {
+		try {
+			const template =
+				await armoryStore.createTemplateFromRequest(
+					request_id,
+				);
+			const toastId = toastStore.trigger({
+				message: `${titleText || "Request"} sent to Armory`,
+				background: $modeCurrent
+					? "bg-surface-50 text-surface-900 border border-surface-300"
+					: "bg-surface-100 text-surface-900",
+				action: {
+					label: "Jump to Armory",
+					response: () => {
+						drawerStore.close();
+						toastStore.close(toastId);
+						goto(
+							`/armory?id=${template.ID}`,
+						);
+					},
+				},
+			});
+		} catch (error) {
+			toastStore.trigger({
+				message: `Failed to send request to Armory: ${String(error)}`,
+				background: "variant-filled-error",
+			});
+		}
 	}
 
 	function openWebsocketStream() {
@@ -371,9 +406,9 @@
 {:else}
 	{#if showTitleBar}
 		<div
-			class="flex p-2 justify-between items-center w-full sticky top-0 z-50 bg-inherit"
+			class="flex min-w-0 w-full flex-wrap items-center gap-2 p-2 sticky top-0 z-50 bg-inherit"
 		>
-			<div class="flex items-center space-x-2 flex-shrink-0">
+			<div class="flex items-start space-x-2 flex-shrink-0">
 				{#if showSizeToggle}
 					<button
 						class="p-1 rounded {$drawerHeight ===
@@ -402,22 +437,34 @@
 						<Maximize size={16} />
 					</button>
 				{/if}
-				<h5 class="h5 flex-shrink-0">
-					{titleText}
-					{#if isFiltered}
-						<span
-							class="justify-center inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200"
+				<div class="flex flex-col">
+					<h5 class="h5 flex-shrink-0">
+						{titleText}
+						{#if isFiltered}
+							<span
+								class="justify-center inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200"
+							>
+								<EyeOffIcon
+									size={14}
+									strokeWidth={2.5}
+								/>
+								Filtered
+							</span>
+						{/if}
+					</h5>
+					{#if isWebSocket}
+						<button
+							type="button"
+							class="mt-0.5 w-fit justify-center inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium variant-soft-primary"
+							on:click={openWebsocketStream}
 						>
-							<EyeOffIcon
-								size={14}
-								strokeWidth={2.5}
-							/>
-							Filtered
-						</span>
+							<RadioIcon size={12} />
+							WebSocket
+						</button>
 					{/if}
-				</h5>
+				</div>
 			</div>
-			<div class="flex space-x-2 flex-grow px-2">
+			<div class="flex min-w-0 flex-1 flex-wrap gap-2">
 				<button
 					class="btn btn-sm variant-soft-primary flex items-center"
 					on:click={() => {
@@ -474,21 +521,19 @@
 					<ShieldAlert size={14} class="mr-1" /> Create
 					Finding
 				</button>
-				{#if isWebSocket}
+				{#if showArmoryAction}
 					<button
 						class="btn btn-sm variant-soft-primary flex items-center"
-						on:click={() => {
-							openWebsocketStream();
-						}}
+						on:click={sendToArmory}
 					>
-						<RadioIcon
+						<Swords
 							size={14}
 							class="mr-1"
-						/> Open Websocket Stream
+						/> Send to Armory
 					</button>
 				{/if}
 			</div>
-			<div class="flex justify-right space-x-2">
+			<div class="ml-auto flex shrink-0 items-center gap-2">
 				{#if showPrettifyToggle}
 					<div
 						class="flex items-center space-x-2 flex-shrink-0"
@@ -564,7 +609,7 @@
 					bind:value={requestBody}
 					lang={getLang(requestBody)}
 					theme={$modeCurrent
-						? ayuLight
+						? githubLight
 						: oneDark}
 					extensions={$marasiConfig.VimEnabled
 						? [vim()]
@@ -579,7 +624,7 @@
 					bind:value={responseBody}
 					lang={getLang(responseBody)}
 					theme={$modeCurrent
-						? ayuLight
+						? githubLight
 						: oneDark}
 					extensions={$marasiConfig.VimEnabled
 						? [vim()]

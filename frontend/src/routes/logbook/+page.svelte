@@ -6,6 +6,7 @@
 		getModalStore,
 		Tab,
 		TabGroup,
+		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import {
 		BookCheck,
@@ -271,7 +272,7 @@
 </script>
 
 <MarasiKeys bind:this={menu} scope="logbook" menuOptions={logbookMenu} />
-<Accordion rounded="none">
+<Accordion rounded="none" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
 	<AccordionItem bind:open={accOpened}>
 		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
 		<svelte:fragment slot="summary"
@@ -378,7 +379,7 @@
 								)
 									modalStore.close();
 							}}
-							class="btn btn-sm variant-filled-primary"
+							class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 						>
 							<Plus
 								size={14}
@@ -410,7 +411,7 @@
 								)
 									modalStore.close();
 							}}
-							class="btn btn-sm variant-filled-tertiary"
+							class="btn btn-sm {$modeCurrent ? 'variant-ghost-tertiary ring-0 shadow-none' : 'variant-filled-tertiary'}"
 						>
 							<Plus
 								size={14}
@@ -418,7 +419,7 @@
 							/> Test Case
 						</button>
 						<button
-							class="btn btn-sm variant-filled-primary"
+							class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 							disabled={findings.length ===
 								0 &&
 								testCases.length ===
@@ -456,7 +457,7 @@
 				<!--svelte-ignore a11y-click-events-have-key-events-->
 				<!--svelte-ignore a11y-no-static-element-interactions-->
 				<div
-					class="card group relative p-4 cursor-pointer flex flex-col justify-between gap-4 border-l-4 border-surface-500/30 transition-all hover:border-primary-500 bg-surface-100-800-token"
+					class="card group relative p-4 cursor-pointer flex flex-col justify-between gap-4 border-l-4 border-surface-500/30 transition-all bg-surface-50 dark:bg-surface-800 {$modeCurrent ? 'hover:border-primary-500/20' : 'hover:border-primary-500'}"
 					on:click={() =>
 						openFindingModal(
 							finding,
@@ -464,9 +465,9 @@
 						)}
 				>
 					<span
-						class="badge-icon variant-filled-primary absolute -top-2 -right-2 z-20 w-8 h-8 cursor-pointer
-                 opacity-0 group-hover:opacity-100 transition-all duration-200
-                 hover:variant-filled-error shadow-lg"
+						class="badge-icon absolute -top-2 -right-2 z-20 w-8 h-8 cursor-pointer
+                 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg
+                 {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none hover:variant-ghost-error' : 'variant-filled-primary hover:variant-filled-error'}"
 						on:click|stopPropagation={() => {
 							modalStore.trigger({
 								type: "confirm",
@@ -502,7 +503,7 @@
 								</span>
 							</div>
 							<span
-								class="text-xs font-mono opacity-60 bg-surface-900 px-2 py-1"
+								class="text-xs font-mono opacity-60 bg-surface-200 px-2 py-1 text-surface-900 dark:bg-surface-900 dark:text-surface-50"
 							>
 								CVSS: {finding?.CVSSScore ||
 									"N/A"}
@@ -607,7 +608,7 @@
 				<!--svelte-ignore a11y-click-events-have-key-events-->
 				<!--svelte-ignore a11y-no-static-element-interactions-->
 				<div
-					class="card group relative p-4 cursor-pointer flex flex-col justify-between gap-4 border-l-4 border-surface-500/30 transition-all hover:border-tertiary-500 bg-surface-100-800-token"
+					class="card group relative p-4 cursor-pointer flex flex-col justify-between gap-4 border-l-4 border-surface-500/30 transition-all bg-surface-50 dark:bg-surface-800 {$modeCurrent ? 'hover:border-tertiary-500/20' : 'hover:border-tertiary-500'}"
 					on:click={() =>
 						openTestCaseModal(
 							testCase,
@@ -615,9 +616,9 @@
 						)}
 				>
 					<span
-						class="badge-icon variant-filled-tertiary absolute -top-2 -right-2 z-20 w-8 h-8 cursor-pointer
-                 opacity-0 group-hover:opacity-100 transition-all duration-200
-                 hover:variant-filled-warning shadow-lg"
+						class="badge-icon absolute -top-2 -right-2 z-20 w-8 h-8 cursor-pointer
+                 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg
+                 {$modeCurrent ? 'variant-ghost-tertiary ring-0 shadow-none hover:variant-ghost-warning' : 'variant-filled-tertiary hover:variant-filled-warning'}"
 						on:click|stopPropagation={() => {
 							modalStore.trigger({
 								type: "confirm",
@@ -661,20 +662,20 @@
 								{#if testCase?.Tags?.length > 0}
 									{#each testCase.Tags.slice(0, 2) as tag}
 										<span
-											class="text-xs font-mono opacity-60 bg-surface-900 px-2 py-1 rounded-token whitespace-nowrap"
+											class="text-xs font-mono opacity-60 bg-surface-200 text-surface-900 dark:bg-surface-900 dark:text-surface-50 px-2 py-1 rounded-token whitespace-nowrap"
 										>
 											{tag}
 										</span>
 									{/each}
 									{#if testCase.Tags.length > 2}
 										<span
-											class="text-xs font-mono opacity-60 bg-surface-900 px-2 py-1 rounded-token"
+											class="text-xs font-mono opacity-60 bg-surface-200 text-surface-900 dark:bg-surface-900 dark:text-surface-50 px-2 py-1 rounded-token"
 											>...</span
 										>
 									{/if}
 								{:else}
 									<span
-										class="text-xs font-mono opacity-60 bg-surface-900 px-2 py-1 rounded-token whitespace-nowrap"
+										class="text-xs font-mono opacity-60 bg-surface-200 text-surface-900 dark:bg-surface-900 dark:text-surface-50 px-2 py-1 rounded-token whitespace-nowrap"
 										>Untagged</span
 									>
 								{/if}

@@ -18,6 +18,9 @@
 		getModalStore,
 		getToastStore,
 		popup,
+		modeCurrent,
+		setModeCurrent,
+		setModeUserPrefers,
 	} from "@skeletonlabs/skeleton";
 	import MarasiKeys from "../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import {
@@ -34,6 +37,8 @@
 		PartyPopper,
 		SendIcon,
 		Settings,
+		Swords,
+		Sun,
 		ToggleLeft,
 	} from "lucide-svelte";
 	import {
@@ -101,28 +106,27 @@
 			});
 	}
 
-	function open(r) {
-		$appState.isReady = false;
-		OpenProject(r)
-			.then((name) => {
-				activeProject.set(name);
-				WindowSetTitle(name);
-				goto("/");
-				openProject();
-				$appState.isReady = true;
-				const toastSettings = {
-					message: "Opened " + name + " project",
-					background: "variant-filled-success",
-				};
-				toastStore.trigger(toastSettings);
-			})
-			.catch((repoError) => {
-				const toastSettings = {
-					message: "Failed to open project",
-					background: "variant-filled-error",
-				};
-				toastStore.trigger(toastSettings);
+	async function open(r) {
+		try {
+			const name = await OpenProject(r);
+			$appState.isReady = false;
+			activeProject.set(name);
+			WindowSetTitle(name);
+			goto("/");
+			await openProject();
+			$appState.isReady = true;
+			toastStore.trigger({
+				message: "Opened " + name + " project",
+				background: "variant-filled-success",
 			});
+		} catch (repoError) {
+			$appState.isReady = true;
+			if (String(repoError).includes("project switch cancelled")) return;
+			toastStore.trigger({
+				message: "Failed to open project",
+				background: "variant-filled-error",
+			});
+		}
 	}
 	onMount(() => {
 		GetChromeProfiles().then((profiles) => {
@@ -224,6 +228,22 @@
 					keywords: "Launchpad",
 				},
 				{
+					name: "Armory",
+					action: {
+						handler: () => {
+							closeAndGoto("/armory");
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+6", "ctrl+6"],
+					},
+					subtitle: "Create request templates",
+					icon: Swords,
+					keywords: "armory,template,attack",
+				},
+				{
 					name: "Logbook",
 					action: {
 						handler: () => {
@@ -235,7 +255,7 @@
 							scope: "all",
 							single: true,
 						},
-						keys: ["⌘+6", "ctrl+6"],
+						keys: ["⌘+7", "ctrl+7"],
 					},
 					subtitle: "Review test cases and findings",
 					icon: BookOpenCheckIcon,
@@ -253,7 +273,7 @@
 							scope: "all",
 							single: true,
 						},
-						keys: ["⌘+7", "ctrl+7"],
+						keys: ["⌘+8", "ctrl+8"],
 					},
 					subtitle: "Extend Marasi",
 					icon: ToolIcon,
@@ -375,12 +395,13 @@
 					name: "Jump to Toast",
 					action: {
 						handler: () => {
+							const action = $toastStore.at(-1)?.action;
 							drawerStore.close();
 							modalStore.close();
 							document.querySelector(
 								"dialog",
 							)?.close();
-							$toastStore[0]?.action?.response();
+							action?.response();
 						},
 						options: {
 							scope: "all",
@@ -399,7 +420,10 @@
 							const modal = {
 								type: "component",
 								component: "Project",
-								toggleShortcut: { key: "o" },
+								toggleShortcut:
+									{
+										key: "o",
+									},
 								title: "Switch Projects",
 								response: (
 									r,
@@ -440,7 +464,10 @@
 							const modal = {
 								type: "component",
 								component: "Interface",
-								toggleShortcut: { key: "l" },
+								toggleShortcut:
+									{
+										key: "l",
+									},
 								title: "Setup Listener",
 								response: (
 									r,
@@ -496,6 +523,24 @@
 					subtitle: "Toggle Vim Mode in editor views",
 					icon: ToggleLeft,
 					keywords: "vim",
+				},
+				{
+					name: "Toggle Light Mode",
+					action: {
+						handler: () => {
+							const next = !$modeCurrent;
+							setModeUserPrefers(next);
+							setModeCurrent(next);
+						},
+						options: {
+							scope: "all",
+							single: true,
+						},
+						keys: ["⌘+U", "ctrl+U"],
+					},
+					subtitle: "Switch between light and dark mode",
+					icon: Sun,
+					keywords: "theme, light, dark, mode, ui",
 				},
 				{
 					name: $interceptFlag
@@ -577,15 +622,18 @@
 			<div
 				class="header flex justify-between items-center mb-8"
 			>
-				<div class="btn-group variant-filled">
+				<div class="btn-group {$modeCurrent ? 'light-ghost-group' : 'variant-filled'}">
 					<button
 						type="button"
-						class="btn items-center flex variant-filled"
+						class="btn items-center flex {$modeCurrent ? 'variant-ghost border-0 ring-0' : 'variant-filled'}"
 						on:click={() => {
 							const modal = {
 								type: "component",
 								component: "Interface",
-								toggleShortcut: { key: "l" },
+								toggleShortcut:
+									{
+										key: "l",
+									},
 								title: "Setup Listener",
 								response: (
 									r,
@@ -618,12 +666,15 @@
 					</button>
 					<button
 						type="button"
-						class="btn variant-filled flex items-center"
+						class="btn flex items-center {$modeCurrent ? 'variant-ghost border-0 ring-0' : 'variant-filled'}"
 						on:click={() => {
 							const modal = {
 								type: "component",
 								component: "Project",
-								toggleShortcut: { key: "o" },
+								toggleShortcut:
+									{
+										key: "o",
+									},
 								title: "Switch Projects",
 								response: (
 									r,
@@ -651,7 +702,7 @@
 				<div class="flex items-center gap-2">
 					<button
 						type="button"
-						class="btn variant-filled-primary"
+						class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
 						on:click={async () => {
 							try {
 								const saved =
@@ -691,7 +742,7 @@
 						>
 							<button
 								type="button"
-								class="btn variant-filled-primary flex-1"
+								class="btn flex-1 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
 								class:rounded-none={chromeProfiles.length >
 									0}
 								on:click={() =>
@@ -712,7 +763,7 @@
 							{#if chromeProfiles.length > 0}
 								<button
 									type="button"
-									class="btn variant-filled-primary rounded-none border-l border-surface-500/30 px-3"
+									class="btn rounded-none px-3 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
 									use:popup={chromeProfilesPopup}
 									aria-label="Start Chrome with custom profile"
 									title="Start with custom profile"
@@ -757,6 +808,10 @@
 </div>
 
 <style>
+	:global(.light-ghost-group .btn:hover) {
+		background-color: rgb(var(--color-surface-400) / 0.25) !important;
+	}
+
 	/* Container for the page content */
 	.content {
 		display: flex;
@@ -780,12 +835,21 @@
 	.log-table-container {
 		flex: 0 0 50vh; /* Fixed height */
 		height: 50vh;
-		border-top: 2px solid #2f343c;
-		background-color: #1c1c1c;
+		border-top: 2px solid rgb(var(--color-surface-300));
+		background-color: rgb(var(--color-surface-50));
 		overflow-y: auto; /* Enable scrolling only for log table */
 		position: relative; /* Create stacking context */
 		bottom: 0; /* Position at bottom */
 		width: 100%;
+		scrollbar-color: rgb(var(--color-surface-400))
+			rgb(var(--color-surface-100));
+	}
+
+	:global(.dark) .log-table-container {
+		border-top-color: rgb(var(--color-surface-500));
+		background-color: rgb(var(--color-surface-900));
+		scrollbar-color: rgb(var(--color-surface-600))
+			rgb(var(--color-surface-800));
 	}
 
 	/* Responsive adjustments for small screens */

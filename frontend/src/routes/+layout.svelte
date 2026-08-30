@@ -15,10 +15,13 @@
 		Modal,
 		getToastStore,
 		getModalStore,
+		LightSwitch,
+		modeCurrent,
+		autoModeWatcher,
 	} from "@skeletonlabs/skeleton";
 	initializeStores();
 	import { onMount } from "svelte";
-	import { autoModeWatcher } from "@skeletonlabs/skeleton";
+
 	import { AppRail, AppRailAnchor } from "@skeletonlabs/skeleton";
 	import {
 		BookIcon,
@@ -57,11 +60,17 @@
 	import NotesModal from "../lib/components/NotesModal.svelte";
 	import TestCaseModal from "../lib/components/TestCaseModal.svelte";
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
+	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import {
 		SetupScratchpad,
 		StartProxy,
 	} from "../lib/wailsjs/go/main/App";
-	import { ChefHat, Brush, BookOpenCheckIcon } from "lucide-svelte";
+	import {
+		ChefHat,
+		Brush,
+		BookOpenCheckIcon,
+		Swords,
+	} from "lucide-svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
 	import MetadataModal from "../lib/components/MetadataModal.svelte";
 	import InterfaceModal from "../lib/components/InterfaceModal.svelte";
@@ -136,6 +145,7 @@
 		Finding: { ref: FindingModal },
 		WebsocketStream: { ref: WebSocketModal },
 		SelectFinding: { ref: SelectFindingModal },
+		SelectWordlist: { ref: SelectWordlistModal },
 		"extension-modal": { ref: ModalWrapper },
 	};
 	const StartupRoutine2 = new Promise((resolve) => {
@@ -407,7 +417,11 @@
 >
 	<div class="flex flex-1 h-screen">
 		{#if $appState.isReady}
-			<AppRail class="no-select h-full no-scroll">
+			<AppRail
+				class="no-select h-full nav-rail"
+				background="bg-surface-50-800-token"
+				aspectRatio="py-3"
+			>
 				<!-- AppRailTiles -->
 				<AppRailAnchor
 					selected={$page.url.pathname === "/"}
@@ -423,17 +437,16 @@
 						<div
 							class="flex justify-center items-center w-full"
 						>
-							{#if $page.url.pathname === "/"}
-								<Logo
-									size="75"
-									mode="light"
-								/>
-							{:else}
-								<Logo
-									size="75"
-									mode="dark"
-								/>
-							{/if}
+							<Logo
+								size="75"
+								mode={$page.url.pathname ===
+									"/" ||
+								$modeCurrent
+									? "light"
+									: "dark"}
+								selected={$page.url.pathname ===
+									"/"}
+							/>
 						</div>
 					</svelte:fragment>
 					<span></span>
@@ -518,6 +531,27 @@
 					</svelte:fragment>
 					<span>Launchpad</span>
 				</AppRailAnchor>
+				<AppRailAnchor
+					selected={$page.url.pathname ===
+						"/armory"}
+					on:click={() => {
+						goto("/armory");
+					}}
+					bind:group={currentTile}
+					name="Armory"
+					value={appRailIndex++}
+					title="Armory"
+				>
+					<svelte:fragment slot="lead">
+						<div
+							class="flex justify-center items-center w-full"
+						>
+							<Swords />
+						</div>
+					</svelte:fragment>
+					<span>Armory</span>
+				</AppRailAnchor>
+
 				<AppRailAnchor
 					selected={$page.url.pathname ===
 						"/logbook"}
@@ -624,7 +658,6 @@
 					</svelte:fragment>
 					<span>Interactsh</span>
 				</AppRailAnchor>
-				<hr class="!border-t-2" />
 				{#each $extensions as extension}
 					{@const iconSchema =
 						$extensions_ui[extension.Name]
@@ -663,11 +696,20 @@
 					{/if}
 				{/each}
 				<svelte:fragment slot="trail">
-					<!-- <AppRailAnchor> -->
-					<!--     <div class="flex justify-center items-center w-full"> -->
-					<!--         <LightSwitch /> -->
-					<!--     </div> -->
-					<!-- </AppRailAnchor> -->
+					<div
+						class="flex justify-center items-center w-full py-2"
+					>
+						<LightSwitch
+							width="w-10"
+							height="h-5"
+							bgLight="bg-surface-200"
+							bgDark="bg-surface-500"
+							fillLight="fill-surface-50"
+							fillDark="fill-surface-50"
+							ring="ring-[1px] ring-surface-400"
+							class="outline-none focus:outline-none focus-visible:outline-none"
+						/>
+					</div>
 					<AppRailAnchor
 						selected={$page.url.pathname ===
 							"/settings"}
@@ -727,12 +769,48 @@
 {#if $appState.isReady}
 	<AppDrawer />
 {/if}
-<Toast position="br" />
-<Modal components={modalRegistery} />
+<Toast
+	position="br"
+	buttonAction={$modeCurrent
+		? "btn variant-ghost-primary border-0 ring-0"
+		: "btn variant-filled-primary"}
+/>
+<Modal
+	components={modalRegistery}
+	background="bg-surface-50-800-token text-surface-900-50-token"
+	buttonPositive={$modeCurrent
+		? "variant-ghost-primary border-0 ring-0"
+		: "variant-filled-primary"}
+	buttonNeutral={$modeCurrent
+		? "variant-ghost-surface border-0 ring-0"
+		: "variant-ghost-surface"}
+/>
 
 <style>
 	:global(.snackbar-wrapper) {
 		z-index: 1000 !important;
+	}
+	:global(html:not(.dark) .modal-backdrop) {
+		background-color: rgb(15 23 42 / 0.12) !important;
+	}
+	:global(html:not(.dark) .modal-backdrop .modal) {
+		background-color: rgb(var(--color-surface-50)) !important;
+		opacity: 1 !important;
+	}
+	:global(html:not(.dark) .modal-footer .variant-ghost-surface),
+	:global(html:not(.dark) .modal-footer .variant-ghost-primary) {
+		border: 0 !important;
+		box-shadow: none !important;
+		--tw-ring-shadow: 0 0 #0000;
+	}
+	:global(html:not(.dark) .modal-prompt-input) {
+		background-color: #ffffff !important;
+		color: rgb(var(--color-surface-900)) !important;
+		border: 0 !important;
+		box-shadow: none !important;
+	}
+	:global(.dark .modal-prompt-input) {
+		background-color: rgb(var(--color-surface-700)) !important;
 	}
 	:root {
 		--ctx-menu-background: #2f343c;
@@ -742,13 +820,8 @@
 		--ctx-menu-padding: 0.375rem 0.5rem;
 	}
 
-	.no-scroll {
-		overflow: hidden; /* Hides the scrollbars */
-		scrollbar-width: none; /* For Firefox */
-		-ms-overflow-style: none; /* For Internet Explorer and Edge */
-	}
-
-	.no-scroll::-webkit-scrollbar {
-		display: none; /* Hides the scrollbar for Webkit browsers */
+	:global(.nav-rail) {
+		overflow-x: hidden;
+		overflow-y: auto;
 	}
 </style>

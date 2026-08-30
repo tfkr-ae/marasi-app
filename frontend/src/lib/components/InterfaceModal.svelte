@@ -1,5 +1,5 @@
 <script>
-    import { getModalStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { GetInterfaces } from "../wailsjs/go/main/App";
     import { onMount } from "svelte";
     import { listener } from "../../stores";
@@ -10,7 +10,7 @@
 	let selectedInterface = 0;
 	let port = $listener.port;
 	const modalStore = getModalStore();
-	const cBase = 'card p-4 w-modal shadow-xl space-y-4';
+	const cBase = 'card p-4 w-modal shadow-xl space-y-4 bg-surface-50-800-token text-surface-900-50-token';
 	const cHeader = 'text-2xl font-bold';
 	const cForm = 'space-y-4';
     function onInput() {
@@ -48,7 +48,7 @@
 			</button>
 		</header>
 		<form class="modal-form {cForm}">
-			<select bind:value={selectedInterface} class="select">
+			<select bind:value={selectedInterface} class="select bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0">
 				{#each interfaceList as proxyInterface, index}
 					<option value={index}
 						>{proxyInterface}</option
@@ -56,14 +56,14 @@
 				{/each}
 			</select>
 			<input
-				class="input variant-form-material"
+				class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 				type="number"
 				bind:value={port}
 				placeholder="8080"
 			/>
             <!-- prettier-ignore -->
             <footer class="modal-footer {parent.regionFooter}">
-                <button class="btn {parent.buttonPositive}" on:click={onInput}>Continue</button>
+                <button class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}" on:click={onInput}>Continue</button>
             </footer>
         </form>
     </div>

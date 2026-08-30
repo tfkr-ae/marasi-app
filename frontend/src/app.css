@@ -19,3 +19,17 @@ textarea[data-overlay-initial-focus]:focus,
 select[data-overlay-initial-focus]:focus {
   box-shadow: none !important;
 }
+
+html:not(.dark) button.variant-ghost-primary:not(:disabled):hover,
+html:not(.dark) a.variant-ghost-primary:hover,
+html:not(.dark) .btn-group.variant-ghost-primary > button:not(:disabled):hover,
+html:not(.dark) .btn-group.variant-ghost-primary > a:hover {
+  background-color: rgb(var(--color-primary-200)) !important;
+  filter: none !important;
+}
+
+html:not(.dark) button.variant-ghost-success:not(:disabled):hover,
+html:not(.dark) a.variant-ghost-success:hover {
+  background-color: rgb(var(--color-success-200)) !important;
+  filter: none !important;
+}

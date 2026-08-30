@@ -4,7 +4,7 @@
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
-	import { ayuLight } from "thememirror";
+	import { githubLight } from "@uiw/codemirror-theme-github";
 	import {
 		ArrowDownLeft,
 		ArrowUpRight,
@@ -171,7 +171,7 @@
 			<CodeMirror
 				class="h-full w-full text-xs"
 				bind:value={payloadText}
-				theme={$modeCurrent ? ayuLight : oneDark}
+				theme={$modeCurrent ? githubLight : oneDark}
 				extensions={$marasiConfig.VimEnabled ? [vim()] : []}
 				lineWrapping={$lineWrap}
 			/>

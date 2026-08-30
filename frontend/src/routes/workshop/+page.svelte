@@ -2,12 +2,14 @@
     import { StreamLanguage } from "@codemirror/language";
     import { lua } from "@codemirror/legacy-modes/mode/lua";
     import { oneDark } from "@codemirror/theme-one-dark";
+    import { githubLight } from "@uiw/codemirror-theme-github";
     import { vim } from "@replit/codemirror-vim";
     import {
         Accordion,
         AccordionItem,
         getDrawerStore,
         getToastStore,
+        modeCurrent,
     } from "@skeletonlabs/skeleton";
     import { SettingsIcon } from "svelte-feather-icons";
     import CodeMirror from "svelte-codemirror-editor";
@@ -114,7 +116,7 @@
 </script>
 
 <MarasiKeys scope="workshop" menuOptions={workshopMenu} />
-<Accordion rounded="false">
+<Accordion rounded="false" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
         <svelte:fragment slot="summary">Workshop Settings</svelte:fragment>
@@ -122,7 +124,7 @@
             <div class="flex justify-center mt-2 p-2">
                 <button
                     type="button"
-                    class="btn variant-filled-primary"
+                    class="btn {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
                     on:click={() => {
                         DoExtender($workshopCode);
                     }}>Execute</button
@@ -135,7 +137,7 @@
     <CodeMirror
         bind:value={$workshopCode}
         class="text-xs"
-        theme={oneDark}
+        theme={$modeCurrent ? githubLight : oneDark}
         extensions={$marasiConfig.VimEnabled
             ? [
                   vim(),

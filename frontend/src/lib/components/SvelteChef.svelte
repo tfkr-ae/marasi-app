@@ -1,8 +1,13 @@
 <script>
     import { onMount } from "svelte";
+    import { modeCurrent } from "@skeletonlabs/skeleton";
     export let input = "";
-    export let isVisible = false; // Prop to control visibility
-    let url = "https://gchq.github.io/CyberChef?theme=dark&input=" + input;
+    export let isVisible = false;
+    $: url =
+        "https://gchq.github.io/CyberChef?theme=" +
+        ($modeCurrent ? "classic" : "dark") +
+        "&input=" +
+        input;
     onMount(() => {
         return () => {
             isVisible = false;

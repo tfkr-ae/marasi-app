@@ -7,7 +7,7 @@
 
 
 {#if $modalStore[0]}
-    <div class="card p-4 w-modal shadow-xl space-y-4 rounded-0">
+    <div class="card p-4 w-modal shadow-xl space-y-4 rounded-0 bg-surface-50-800-token text-surface-900-50-token">
         <Stepper active="variant-filled-primary" on:complete={(event) => {
             ToggleFlag("first_run").then((config) => {
                 marasiConfig.set(config);

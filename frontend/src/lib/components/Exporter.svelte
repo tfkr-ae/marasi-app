@@ -9,6 +9,7 @@
 		getDrawerStore,
 		getModalStore,
 		getToastStore,
+		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { reportMetadata } from "../../stores";
@@ -105,7 +106,7 @@
 </script>
 
 <div
-	class="flex h-full flex-col bg-surface-100-800-token text-surface-900-50-token"
+	class="flex h-full flex-col bg-surface-50 dark:bg-surface-800 text-surface-900-50-token"
 >
 	<header
 		class="flex items-center justify-between gap-4 border-b border-surface-500/20 px-5 py-4"
@@ -118,19 +119,18 @@
 		</div>
 		<button
 			type="button"
-			class="btn btn-sm variant-filled-primary shrink-0"
+			class="btn btn-sm shrink-0 {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 			disabled={restoringDefaultTemplate}
 			on:click={confirmDefaultTemplateRestore}
 		>
-			<RotateCcw size={16} />
+			<RotateCcw size={16} class="mr-1" />
 			{restoringDefaultTemplate
 				? "Restoring..."
 				: "Restore Default Template"}
 		</button>
 	</header>
 
-	<div class="flex-1 space-y-5 overflow-y-auto px-5 py-5">
-		<div class="space-y-1.5 h-full flex flex-col">
+	<div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
 			<label class="label">
 				<span>Templates</span>
 				<select
@@ -186,26 +186,26 @@
 					bind:value={$reportMetadata.assessor}
 				/>
 			</label>
-			<label class="label">
-				<span>Start</span>
-				<input
-					class="input"
-					type="date"
-					bind:value={$reportMetadata.start}
-				/>
-			</label>
-
-			<label class="label">
-				<span>End</span>
-				<input
-					class="input"
-					type="date"
-					bind:value={$reportMetadata.end}
-				/>
-			</label>
+			<div class="grid grid-cols-2 gap-3">
+				<label class="label">
+					<span>Start</span>
+					<input
+						class="input"
+						type="date"
+						bind:value={$reportMetadata.start}
+					/>
+				</label>
+				<label class="label">
+					<span>End</span>
+					<input
+						class="input"
+						type="date"
+						bind:value={$reportMetadata.end}
+					/>
+				</label>
+			</div>
 			<label class="label">
 				<span>Report Options</span>
-
 				<label class="flex items-center gap-2 mt-1">
 					<input
 						class="checkbox"
@@ -241,11 +241,9 @@
 				</label>
 				<div class="ml-6 mt-1 min-h-[42px]">
 					{#if $reportMetadata.truncate_length > 0}
-						<div
-							class="flex items-center gap-2"
-						>
+						<div class="flex items-center gap-2">
 							<input
-								class="input w-32 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+								class="input w-32"
 								type="number"
 								min="100"
 								bind:value={
@@ -259,26 +257,25 @@
 					{/if}
 				</div>
 			</label>
-			<div class="flex justify-end mt-3 py-1">
-				<button
-					type="button"
-					class="btn variant-filled-primary w-fit"
-					disabled={exporting}
-					on:click={() => exportReport()}
-				>
-					{#if exporting}
-						<ProgressRadial
-							width="w-5"
-							stroke={100}
-							meter="stroke-surface-50"
-							track="stroke-primary-400"
-						/>
-						<span>Exporting...</span>
-					{:else}
-						<span>Export</span>
-					{/if}
-				</button>
-			</div>
-		</div>
 	</div>
+	<footer class="flex shrink-0 justify-end border-t border-surface-500/20 px-5 py-4">
+		<button
+			type="button"
+			class="btn w-fit {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
+			disabled={exporting}
+			on:click={() => exportReport()}
+		>
+			{#if exporting}
+				<ProgressRadial
+					width="w-5"
+					stroke={100}
+					meter="stroke-surface-50"
+					track="stroke-primary-400"
+				/>
+				<span>Exporting...</span>
+			{:else}
+				<span>Export</span>
+			{/if}
+		</button>
+	</footer>
 </div>

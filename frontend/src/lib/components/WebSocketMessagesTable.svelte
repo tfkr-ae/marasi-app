@@ -12,7 +12,7 @@
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
-	import { ayuLight } from "thememirror";
+	import { githubLight } from "@uiw/codemirror-theme-github";
 	import {
 		ArrowDown,
 		ArrowDownLeft,
@@ -532,7 +532,7 @@
 							class="text-xs h-full w-full"
 							bind:value={payloadText}
 							theme={$modeCurrent
-								? ayuLight
+								? githubLight
 								: oneDark}
 							extensions={$marasiConfig.VimEnabled
 								? [vim()]

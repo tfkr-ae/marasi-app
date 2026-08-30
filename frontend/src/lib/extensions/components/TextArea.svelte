@@ -7,7 +7,7 @@
     export let value = { bind: "" };
     export let placeholder = "";
     export let classes =
-        "textarea textarea-bordered w-full p-2 focus:outline-none focus:ring-2 focus:ring-primary-500";
+        "textarea w-full p-2 bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0";
     export let disabled = false;
     export let readonly = false;
     export let rows = 5;

@@ -266,7 +266,7 @@
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="card p-6 w-[75%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-tertiary-500"
+		class="card p-6 w-[75%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-tertiary-500 bg-surface-50-800-token text-surface-900-50-token"
 		on:keydown={(event) => {
 			if (event.key === "Escape") {
 				event.stopImmediatePropagation();
@@ -306,7 +306,7 @@
 					>
 						<input
 							id="templateSearch"
-							class="input"
+							class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 							type="search"
 							bind:value={
 								templateSearchInput
@@ -338,7 +338,7 @@
 
 					{#if templateSearchInput.length > 0}
 						<div
-							class="card p-2 w-full max-h-[200px] overflow-y-auto mt-2 shadow-sm border border-tertiary-500/30"
+							class="card p-2 w-full max-h-[200px] overflow-y-auto mt-2 shadow-sm border border-tertiary-500/30 bg-white dark:bg-surface-700"
 						>
 							<Autocomplete
 								bind:input={
@@ -409,7 +409,7 @@
 				<span>Title</span>
 				<input
 					id="titleInput"
-					class="input"
+					class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					type="text"
 					bind:value={testCase.Title}
 				/>
@@ -417,7 +417,7 @@
 			<label class="label col-span-4 md:col-span-1">
 				<span>Category</span>
 				<input
-					class="input"
+					class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					type="text"
 					bind:value={testCase.Category}
 				/>
@@ -425,7 +425,7 @@
 			<label class="label col-span-4">
 				<span>Description</span>
 				<input
-					class="input"
+					class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					type="text"
 					bind:value={testCase.Description}
 				/>
@@ -436,12 +436,13 @@
 					bind:value={testCase.Tags}
 					name="chips"
 					placeholder="Tags"
+					class="bg-white dark:bg-surface-700 border-0 ring-0 focus-within:border-0 focus-within:ring-0"
 				/>
 			</label>
 			<label class="label col-span-4">
 				<span>Note</span>
 				<textarea
-					class="textarea rounded-none"
+					class="textarea rounded-none bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					rows="10"
 					bind:value={testCase.Note}
 					placeholder="Request notes here"
@@ -452,7 +453,7 @@
 				<span>Linked Requests</span>
 
 				<input
-					class="input"
+					class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
 					type="search"
 					name="requestSearch"
 					bind:value={requestInput}
@@ -462,7 +463,7 @@
 
 				{#if requestInput.length > 0}
 					<div
-						class="card p-2 w-full max-h-[200px] overflow-y-auto mt-2 shadow-sm border border-surface-500/30"
+						class="card p-2 w-full max-h-[200px] overflow-y-auto mt-2 shadow-sm border border-surface-500/30 bg-white dark:bg-surface-700"
 					>
 						<Autocomplete
 							bind:input={
@@ -598,6 +599,7 @@
 				<FileDropzone
 					name="files"
 					multiple
+					class="bg-white dark:bg-surface-700"
 					on:change={async (e) => {
 						const fileList = e.target.files;
 						if (!fileList.length) return;
@@ -797,7 +799,7 @@
 										slot="content"
 									>
 										<div
-											class="flex justify-center p-2 bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
+											class="flex justify-center p-2 bg-surface-50 dark:bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
 										>
 											{#if imageUrls[art.ID]}
 												<img
@@ -965,7 +967,7 @@
 										slot="content"
 									>
 										<div
-											class="flex justify-center p-2 bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
+											class="flex justify-center p-2 bg-surface-50 dark:bg-surface-900/50 rounded min-h-[100px] items-center border-t border-surface-500/20"
 										>
 											{#if imageUrls[art.ID]}
 												<video

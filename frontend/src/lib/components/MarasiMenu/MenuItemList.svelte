@@ -146,7 +146,7 @@
 
 								<div class="flex flex-col text-left">
 									<span>{option.name}</span>
-									<span class="text-sm text-surface-400"
+									<span class="text-sm opacity-70"
 										>{option.subtitle}</span
 									>
 								</div>

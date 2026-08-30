@@ -29,7 +29,7 @@
 </div>
 {#if logs?.length > 0}
     {#each logs as log}
-        <pre class="pre text-xs p-0">[{new Date(log.Time).toLocaleString("en-US", {
+        <pre class="pre text-xs p-0 bg-surface-50 text-surface-900 dark:bg-surface-900 dark:text-surface-50">[{new Date(log.Time).toLocaleString("en-US", {
                                     year: 'numeric',
                                     month: 'long',
                                     day: 'numeric',

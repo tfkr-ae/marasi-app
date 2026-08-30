@@ -6,6 +6,7 @@
         getToastStore,
         ProgressRadial,
         SlideToggle,
+        modeCurrent,
     } from "@skeletonlabs/skeleton";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import {
@@ -325,7 +326,7 @@
 
 <MarasiKeys scope="launchpad" menuOptions={launchpadMenu} />
 
-<Accordion rounded="none">
+<Accordion rounded="none" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
         <svelte:fragment slot="summary">Launchpad Settings</svelte:fragment>
@@ -344,10 +345,10 @@
         </div>
     {:else if activeLaunchpad}
         <div
-            class="flex justify-between items-center bg-surface-800/50 p-4 mb-4"
+            class="flex justify-between items-center bg-surface-200 dark:bg-surface-800/50 p-4 mb-4"
         >
             <button
-                class="btn variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500"
+                class="btn {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500'}"
                 on:click={() => navLaunchpad(-1)}
                 disabled={currentLaunchpadIndex === 0}
             >
@@ -362,7 +363,7 @@
             </div>
 
             <button
-                class="btn variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500"
+                class="btn {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500'}"
                 on:click={() => navLaunchpad(1)}
                 disabled={currentLaunchpadIndex >= $launchpads.length - 1}
             >
@@ -375,10 +376,10 @@
             </div>
         {:else}
             <div
-                class="flex justify-between items-center bg-surface-800/50 p-4 mb-4"
+                class="flex justify-between items-center bg-surface-200 dark:bg-surface-800/50 p-4 mb-4"
             >
                 <button
-                    class="btn variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500"
+                    class="btn {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500'}"
                     on:click={() => navEntry(-1)}
                     disabled={$currentEntryIndex === 0}
                 >
@@ -388,7 +389,7 @@
                     >Request {$currentEntryIndex + 1} of {activeEntries.length}</span
                 >
                 <button
-                    class="btn variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500"
+                    class="btn {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary hover:bg-primary-800 disabled:bg-surface-500'}"
                     on:click={() => navEntry(1)}
                     disabled={$currentEntryIndex >= activeEntries.length - 1}
                 >
@@ -396,7 +397,7 @@
                 </button>
             </div>
 
-            <div class="card p-4 mx-4">
+            <div class="card p-4 mx-4 bg-surface-50 dark:bg-surface-800">
                 <div
                     class="flex justify-center items-center gap-6 mb-4 border-b border-surface-500/20 pb-4"
                 >
@@ -409,7 +410,7 @@
                         />
                     </div>
                     <button
-                        class="btn variant-filled-primary btn-sm"
+                        class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
                         on:click={sendRequest}
                         disabled={isSending || !$listener.status}
                     >

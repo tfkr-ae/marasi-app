@@ -1,11 +1,11 @@
 <script>
-    import { getModalStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { X } from "lucide-svelte";
 
     export let parent;
     let input = "";
 	const modalStore = getModalStore();
-	const cBase = 'card p-4 w-modal shadow-xl space-y-4';
+	const cBase = 'card p-4 w-modal shadow-xl space-y-4 bg-surface-50-800-token text-surface-900-50-token';
 	const cForm = 'space-y-4';
     function onInput() {
         $modalStore[0].response(input);
@@ -31,11 +31,11 @@
 		</header>
         <form class="modal-form {cForm}">
             <label class="label">
-                <input class="input" type="text" placeholder="Request No." bind:value={input}/>
+                <input class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0" type="text" placeholder="Request No." bind:value={input}/>
             </label>
         <!-- prettier-ignore -->
         <footer class="modal-footer {parent.regionFooter}">
-            <button class="btn {parent.buttonPositive}" on:click={onInput}>Continue</button>
+            <button class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}" on:click={onInput}>Continue</button>
         </footer>
         </form>
     </div>
