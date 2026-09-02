@@ -43,6 +43,7 @@
 		drawerHeight,
 		lineWrap,
 		marasiConfig,
+		proxyItems,
 	} from "../../stores";
 
 	const drawerStore = getDrawerStore();
@@ -94,8 +95,12 @@
 		? $armoryStore.runsByTemplate[selectedTemplateId] || []
 		: [];
 	$: selectedRun = runs.find((run) => run.ID === selectedRunId);
-	$: requests = selectedRunId
-		? $armoryStore.requestsByRun[selectedRunId] || []
+	$: requests = selectedRun
+		? ($proxyItems || []).filter(
+				(item) =>
+					String(item?.Metadata?.armory_run_id) ===
+					String(selectedRunId),
+			)
 		: [];
 	$: if (!selectedTemplateId && $armoryStore.templates.length > 0) {
 		selectTemplate($armoryStore.templates[0]);
@@ -272,7 +277,6 @@
 			});
 			selectedRunId = run.ID;
 			if (start) await armoryStore.startRun(run.ID);
-			await armoryStore.loadRunRequests(run.ID);
 			notify(start ? "Run started" : "Draft run created");
 		} catch (error) {
 			reportError(error);
@@ -281,13 +285,8 @@
 		}
 	}
 
-	async function selectRun(run) {
+	function selectRun(run) {
 		selectedRunId = run.ID;
-		try {
-			await armoryStore.loadRunRequests(run.ID);
-		} catch (error) {
-			reportError(error);
-		}
 	}
 
 	async function startRun(run) {
@@ -318,8 +317,14 @@
 				if (!confirmed) return;
 				try {
 					await armoryStore.deleteRun(run.ID);
-					if (selectedRunId === run.ID)
-						selectedRunId = null;
+					if (selectedRunId === run.ID) {
+						const remaining =
+							$armoryStore.runsByTemplate[
+								selectedTemplateId
+							] || [];
+						selectedRunId =
+							remaining[0]?.ID ?? null;
+					}
 				} catch (error) {
 					reportError(error);
 				}
@@ -332,11 +337,9 @@
 			id: "request-response",
 			meta: {
 				metadata: row.Metadata,
-				request: row.Request,
-				response: row.Response,
+				request: { ID: row.ID },
 				requestIndex: index + 1,
 				isFiltered: false,
-				incomingResponse: row.Response,
 			},
 			height: $drawerHeight,
 			width: "w-full",
@@ -375,7 +378,7 @@
 
 	function cycleRequest(direction) {
 		const currentIndex = requests.findIndex(
-			(row) => row.Request.ID === $drawerStore.meta?.request?.ID,
+			(row) => row.ID === $drawerStore.meta?.request?.ID,
 		);
 		const index = currentIndex + direction;
 		if (currentIndex !== -1 && requests[index]) {
@@ -402,10 +405,6 @@
 		if (!selectedTemplateId) return;
 		try {
 			await armoryStore.loadRuns(selectedTemplateId);
-			if (selectedRunId)
-				await armoryStore.loadRunRequests(
-					selectedRunId,
-				);
 			notify("Runs refreshed");
 		} catch (error) {
 			reportError(error);
@@ -431,9 +430,6 @@
 		await Promise.all(
 			idsToRefresh.map((id) => armoryStore.refreshRun(id)),
 		);
-		if (idsToRefresh.includes(selectedRunId)) {
-			await armoryStore.loadRunRequests(selectedRunId);
-		}
 	}
 
 	const armoryMenu = [
@@ -582,7 +578,7 @@
 		},
 		{
 			name: "Refresh Armory Runs",
-			subtitle: "Refresh runs and captured traffic",
+			subtitle: "Refresh run status",
 			keywords: "refresh, runs, traffic",
 			icon: RefreshCw,
 			action: {
@@ -1076,7 +1072,7 @@
 							No requests captured yet
 						</p>
 					{:else}
-						{#each requests as row, index (row.Request.ID)}
+						{#each requests as row, index (row.ID)}
 							<button
 								type="button"
 								class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-surface-500/20 p-3 text-left hover:bg-surface-100-800-token"
@@ -1088,27 +1084,17 @@
 							>
 								<span
 									class="badge variant-soft-primary font-mono"
-									>{row
-										.Request
-										.Method}</span
+									>{row.Method}</span
 								>
 								<span
 									class="truncate text-sm"
-									>{row
-										.Request
-										.Host}{row
-										.Request
-										.Path}</span
+									>{row.Host}{row.Path}</span
 								>
 								<span
 									class="font-mono text-sm"
-									>{row
-										.Response
-										.StatusCode >
+									>{row.StatusCode >
 									0
-										? row
-												.Response
-												.StatusCode
+										? row.StatusCode
 										: "-"}</span
 								>
 							</button>

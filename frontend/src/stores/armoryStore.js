@@ -8,7 +8,6 @@ import {
   DeleteArmoryTemplate,
   GetActiveArmoryRunIDs,
   GetArmoryRun,
-  GetArmoryRunRequests,
   GetArmoryRuns,
   GetArmoryTemplates,
   GetArmoryWordlists,
@@ -21,7 +20,6 @@ import {
 const initialState = {
   templates: [],
   runsByTemplate: {},
-  requestsByRun: {},
   wordlists: [],
   activeRunIds: [],
 };
@@ -209,9 +207,7 @@ function createArmoryStore() {
             runs.filter((run) => run.ID !== id),
           ]),
         );
-        const requestsByRun = { ...state.requestsByRun };
-        delete requestsByRun[id];
-        return { ...state, runsByTemplate, requestsByRun };
+        return { ...state, runsByTemplate };
       });
     },
 
@@ -224,18 +220,6 @@ function createArmoryStore() {
     },
 
     previewWordlist: (name, limit = 20) => PreviewArmoryWordlist(name, limit),
-
-    loadRunRequests: async (runId) => {
-      const requests = (await GetArmoryRunRequests(runId)) || [];
-      update((state) => ({
-        ...state,
-        requestsByRun: {
-          ...state.requestsByRun,
-          [runId]: requests,
-        },
-      }));
-      return requests;
-    },
   };
 }
 
