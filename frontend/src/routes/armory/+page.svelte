@@ -1,6 +1,6 @@
 <script>
 	import { onMount, tick } from "svelte";
-	import { derived, writable } from "svelte/store";
+	import { derived, get, writable } from "svelte/store";
 	import {
 		createColumnHelper,
 		createSvelteTable,
@@ -65,17 +65,33 @@
 		maelstrom: "Generates every combination of the selected payload sets.",
 	};
 
-	let search = "";
-	let selectedTemplateId = null;
-	let selectedRunId = null;
-	let name = "";
-	let description = "";
-	let rawTemplate = "";
-	let attackType = "harpoon";
-	let useHTTPS = true;
-	let selectedWordlists = [];
+	const savedArmoryState = get(armoryStore);
+	const savedTemplateId = savedArmoryState.selectedTemplateId;
+	const savedTemplateDraft = savedArmoryState.templateDraft?.templateId ===
+		savedTemplateId
+		? savedArmoryState.templateDraft
+		: null;
+	const savedRunSettings = savedArmoryState.runSettingsByTemplate[
+		savedTemplateId
+	] || {
+		attackType: "harpoon",
+		useHTTPS: true,
+		selectedWordlists: [],
+		maxConcurrent: 10,
+	};
 
-	let maxConcurrent = 10;
+	let search = savedArmoryState.search;
+	let selectedTemplateId = savedTemplateId;
+	let selectedRunId = savedArmoryState.selectedRunByTemplate[
+		savedTemplateId
+	] ?? null;
+	let name = savedTemplateDraft?.name || "";
+	let description = savedTemplateDraft?.description || "";
+	let rawTemplate = savedTemplateDraft?.rawTemplate || "";
+	let attackType = savedRunSettings.attackType;
+	let useHTTPS = savedRunSettings.useHTTPS;
+	let selectedWordlists = [...savedRunSettings.selectedWordlists];
+	let maxConcurrent = savedRunSettings.maxConcurrent;
 	let saving = false;
 	let launching = false;
 	let validating = true;
@@ -89,9 +105,16 @@
 	let templateList;
 	let runList;
 	let paginatedRunId = null;
+	let handledRouteTemplateId = null;
+	let projectStateVersion = savedArmoryState.projectStateVersion;
 
 	const armoryTraffic = writable([]);
-	const trafficPagination = writable({ pageIndex: 0, pageSize: 100 });
+	const trafficPagination = writable({
+		pageIndex: selectedRunId
+			? savedArmoryState.trafficPageByRun[selectedRunId] || 0
+			: 0,
+		pageSize: savedArmoryState.trafficPageSize,
+	});
 	const columnHelper = createColumnHelper();
 	const trafficColumns = [
 		columnHelper.accessor("Method", { id: "method" }),
@@ -102,9 +125,11 @@
 	];
 
 	function setTrafficPagination(updater) {
-		trafficPagination.update((old) =>
-			updater instanceof Function ? updater(old) : updater,
-		);
+		trafficPagination.update((old) => {
+			const next = updater instanceof Function ? updater(old) : updater;
+			armoryStore.setTrafficPagination(selectedRunId, next);
+			return next;
+		});
 	}
 
 	const trafficTableOptions = derived(
@@ -149,9 +174,31 @@
 			)
 		: [];
 	$: armoryTraffic.set(requests);
+	$: if ($armoryStore.projectStateVersion !== projectStateVersion) {
+		projectStateVersion = $armoryStore.projectStateVersion;
+		search = $armoryStore.search;
+		selectedTemplateId = null;
+		selectedRunId = null;
+		name = "";
+		description = "";
+		rawTemplate = "";
+		attackType = "harpoon";
+		useHTTPS = true;
+		selectedWordlists = [];
+		maxConcurrent = 10;
+		paginatedRunId = null;
+		handledRouteTemplateId = null;
+		accOpened = false;
+		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
+	}
 	$: if (selectedRunId !== paginatedRunId) {
 		paginatedRunId = selectedRunId;
-		setTrafficPagination((old) => ({ ...old, pageIndex: 0 }));
+		trafficPagination.set({
+			pageIndex: selectedRunId
+				? $armoryStore.trafficPageByRun[selectedRunId] || 0
+				: 0,
+			pageSize: $armoryStore.trafficPageSize,
+		});
 		if (drawerOpened) drawerStore.close();
 	}
 	$: if (
@@ -169,15 +216,33 @@
 			),
 		}));
 	}
-	$: if (!selectedTemplateId && $armoryStore.templates.length > 0) {
+	$: if (!selectedTemplate && $armoryStore.templates.length > 0) {
 		selectTemplate($armoryStore.templates[0]);
 	}
 	$: routeTemplateId = $page.url.searchParams.get("id");
-	$: if (routeTemplateId && routeTemplateId !== selectedTemplateId) {
+	$: if (!routeTemplateId) handledRouteTemplateId = null;
+	$: if (routeTemplateId && routeTemplateId !== handledRouteTemplateId) {
 		const routeTemplate = $armoryStore.templates.find(
 			(template) => template.ID === routeTemplateId,
 		);
-		if (routeTemplate) selectTemplate(routeTemplate);
+		if (routeTemplate) {
+			handledRouteTemplateId = routeTemplateId;
+			selectTemplate(routeTemplate);
+		}
+	}
+	$: armoryStore.setSearch(search);
+	$: if (selectedTemplateId) {
+		armoryStore.updateTemplateDraft(selectedTemplateId, {
+			name,
+			description,
+			rawTemplate,
+		});
+		armoryStore.updateRunSettings(selectedTemplateId, {
+			attackType,
+			useHTTPS,
+			selectedWordlists,
+			maxConcurrent,
+		});
 	}
 	$: if (validationReady) {
 		queueValidation(
@@ -228,11 +293,16 @@
 	}
 
 	async function selectTemplate(template) {
+		const selection = armoryStore.selectTemplate(template);
 		selectedTemplateId = template.ID;
-		selectedRunId = null;
-		name = template.Name;
-		description = template.Description || "";
-		rawTemplate = template.RawTemplate;
+		selectedRunId = selection.selectedRunId;
+		name = selection.templateDraft.name;
+		description = selection.templateDraft.description;
+		rawTemplate = selection.templateDraft.rawTemplate;
+		attackType = selection.settings.attackType;
+		useHTTPS = selection.settings.useHTTPS;
+		selectedWordlists = [...selection.settings.selectedWordlists];
+		maxConcurrent = selection.settings.maxConcurrent;
 		try {
 			await armoryStore.loadRuns(template.ID);
 		} catch (error) {
@@ -344,6 +414,7 @@
 				maxConcurrent: Number(maxConcurrent),
 			});
 			selectedRunId = run.ID;
+			armoryStore.selectRun(selectedTemplate.ID, run.ID);
 			if (start) await armoryStore.startRun(run.ID);
 			notify(start ? "Run started" : "Draft run created");
 		} catch (error) {
@@ -355,12 +426,14 @@
 
 	function selectRun(run) {
 		selectedRunId = run.ID;
+		armoryStore.selectRun(selectedTemplateId, run.ID);
 	}
 
 	async function startRun(run) {
 		try {
 			await armoryStore.startRun(run.ID);
 			selectedRunId = run.ID;
+			armoryStore.selectRun(selectedTemplateId, run.ID);
 			notify("Run started");
 		} catch (error) {
 			reportError(error);
@@ -390,8 +463,11 @@
 							$armoryStore.runsByTemplate[
 								selectedTemplateId
 							] || [];
-						selectedRunId =
-							remaining[0]?.ID ?? null;
+						selectedRunId = remaining[0]?.ID ?? null;
+						armoryStore.selectRun(
+							selectedTemplateId,
+							selectedRunId,
+						);
 					}
 				} catch (error) {
 					reportError(error);

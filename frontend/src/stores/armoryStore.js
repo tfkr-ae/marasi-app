@@ -17,12 +17,31 @@ import {
   ValidateArmoryRun,
 } from "../lib/wailsjs/go/main/App";
 
-const initialState = {
-  templates: [],
-  runsByTemplate: {},
-  wordlists: [],
-  activeRunIds: [],
-};
+function defaultRunSettings() {
+  return {
+    attackType: "harpoon",
+    useHTTPS: true,
+    selectedWordlists: [],
+    maxConcurrent: 10,
+  };
+}
+
+function initialState(projectStateVersion = 0) {
+  return {
+    projectStateVersion,
+    templates: [],
+    runsByTemplate: {},
+    wordlists: [],
+    activeRunIds: [],
+    search: "",
+    selectedTemplateId: null,
+    templateDraft: null,
+    runSettingsByTemplate: {},
+    selectedRunByTemplate: {},
+    trafficPageByRun: {},
+    trafficPageSize: 100,
+  };
+}
 
 function sortTemplates(templates) {
   return [...templates].sort((left, right) => {
@@ -32,7 +51,8 @@ function sortTemplates(templates) {
 }
 
 function createArmoryStore() {
-  const { subscribe, set, update } = writable(initialState);
+  let projectStateVersion = 0;
+  const { subscribe, set, update } = writable(initialState());
 
   function upsertRun(run) {
     update((state) => {
@@ -69,7 +89,10 @@ function createArmoryStore() {
 
   async function populate() {
     const templates = (await GetArmoryTemplates()) || [];
-    set({ ...initialState, templates: sortTemplates(templates) });
+    set({
+      ...initialState(projectStateVersion),
+      templates: sortTemplates(templates),
+    });
 
     const [wordlists, activeRunIds] = await Promise.all([
       GetArmoryWordlists(),
@@ -110,8 +133,81 @@ function createArmoryStore() {
   return {
     subscribe,
 
-    clear: () => set(initialState),
+    clear: () => set(initialState(++projectStateVersion)),
     populate,
+
+    setSearch: (search) => update((state) => ({ ...state, search })),
+
+    selectTemplate: (template) => {
+      let selection;
+      update((state) => {
+        const templateId = template.ID;
+        const sameTemplate = state.selectedTemplateId === templateId;
+        const settings =
+          state.runSettingsByTemplate[templateId] || defaultRunSettings();
+        const templateDraft =
+          sameTemplate && state.templateDraft?.templateId === templateId
+            ? state.templateDraft
+            : {
+                templateId,
+                name: template.Name,
+                description: template.Description || "",
+                rawTemplate: template.RawTemplate,
+              };
+        selection = {
+          templateDraft,
+          settings,
+          selectedRunId: state.selectedRunByTemplate[templateId] ?? null,
+        };
+
+        return {
+          ...state,
+          selectedTemplateId: templateId,
+          templateDraft,
+          runSettingsByTemplate: {
+            ...state.runSettingsByTemplate,
+            [templateId]: settings,
+          },
+        };
+      });
+      return selection;
+    },
+
+    updateTemplateDraft: (templateId, templateDraft) =>
+      update((state) => {
+        if (state.selectedTemplateId !== templateId) return state;
+        return {
+          ...state,
+          templateDraft: { templateId, ...templateDraft },
+        };
+      }),
+
+    updateRunSettings: (templateId, settings) =>
+      update((state) => ({
+        ...state,
+        runSettingsByTemplate: {
+          ...state.runSettingsByTemplate,
+          [templateId]: { ...settings },
+        },
+      })),
+
+    selectRun: (templateId, runId) =>
+      update((state) => ({
+        ...state,
+        selectedRunByTemplate: {
+          ...state.selectedRunByTemplate,
+          [templateId]: runId,
+        },
+      })),
+
+    setTrafficPagination: (runId, { pageIndex, pageSize }) =>
+      update((state) => ({
+        ...state,
+        trafficPageSize: pageSize,
+        trafficPageByRun: runId
+          ? { ...state.trafficPageByRun, [runId]: pageIndex }
+          : state.trafficPageByRun,
+      })),
 
     createTemplate: async ({ name, description = "", rawTemplate }) => {
       const template = await CreateArmoryTemplate(
@@ -150,11 +246,26 @@ function createArmoryStore() {
       await DeleteArmoryTemplate(id);
       update((state) => {
         const runsByTemplate = { ...state.runsByTemplate };
+        const runSettingsByTemplate = { ...state.runSettingsByTemplate };
+        const selectedRunByTemplate = { ...state.selectedRunByTemplate };
+        const trafficPageByRun = { ...state.trafficPageByRun };
+        for (const run of runsByTemplate[id] || []) {
+          delete trafficPageByRun[run.ID];
+        }
         delete runsByTemplate[id];
+        delete runSettingsByTemplate[id];
+        delete selectedRunByTemplate[id];
         return {
           ...state,
           templates: state.templates.filter((template) => template.ID !== id),
           runsByTemplate,
+          runSettingsByTemplate,
+          selectedRunByTemplate,
+          trafficPageByRun,
+          selectedTemplateId:
+            state.selectedTemplateId === id ? null : state.selectedTemplateId,
+          templateDraft:
+            state.templateDraft?.templateId === id ? null : state.templateDraft,
         };
       });
     },
@@ -201,13 +312,25 @@ function createArmoryStore() {
     deleteRun: async (id) => {
       await DeleteArmoryRun(id);
       update((state) => {
+        const selectedRunByTemplate = Object.fromEntries(
+          Object.entries(state.selectedRunByTemplate).map(
+            ([templateId, runId]) => [templateId, runId === id ? null : runId],
+          ),
+        );
+        const trafficPageByRun = { ...state.trafficPageByRun };
+        delete trafficPageByRun[id];
         const runsByTemplate = Object.fromEntries(
           Object.entries(state.runsByTemplate).map(([templateId, runs]) => [
             templateId,
             runs.filter((run) => run.ID !== id),
           ]),
         );
-        return { ...state, runsByTemplate };
+        return {
+          ...state,
+          runsByTemplate,
+          selectedRunByTemplate,
+          trafficPageByRun,
+        };
       });
     },
 
