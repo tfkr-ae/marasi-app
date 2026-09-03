@@ -1,5 +1,4 @@
 <script>
-	import { onMount } from "svelte";
 	import CodeMirror from "svelte-codemirror-editor";
 	import {
 		GetMetadata,
@@ -252,24 +251,9 @@
 
 	$: {
 		const currentRequestId = request_id;
-		GetRawDetails(request_id).then((row) => {
+		GetRawDetails(currentRequestId).then((row) => {
 			if (currentRequestId !== request_id) return;
 			selectedRow = row;
-			if ($prettify) {
-				requestBody =
-					row?.Metadata?.["prettified-request"] ??
-					row?.Request?.Raw ??
-					"";
-				responseBody =
-					row?.Metadata?.[
-						"prettified-response"
-					] ??
-					row?.Response?.Raw ??
-					"";
-			} else {
-				requestBody = row?.Request?.Raw ?? "";
-				responseBody = row?.Response?.Raw ?? "";
-			}
 			setTimeout(adjustHeights, 50);
 		});
 	}
@@ -293,28 +277,6 @@
 			modalStore.trigger(modal);
 		} else return;
 	});
-	onMount(() => {
-		GetRawDetails(request_id).then((row) => {
-			selectedRow = row;
-			if ($prettify) {
-				requestBody =
-					row?.Metadata?.["prettified-request"] ??
-					row?.Request?.Raw ??
-					"";
-				responseBody =
-					row?.Metadata?.[
-						"prettified-response"
-					] ??
-					row?.Response?.Raw ??
-					"";
-			} else {
-				requestBody = row?.Request?.Raw ?? "";
-				responseBody = row?.Response?.Raw ?? "";
-			}
-			setTimeout(adjustHeights, 50);
-		});
-	});
-
 	$: {
 		if (selectedRow) {
 			if (requestReadOnly && responseReadOnly) {

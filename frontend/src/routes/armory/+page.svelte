@@ -1,5 +1,11 @@
 <script>
 	import { onMount, tick } from "svelte";
+	import { derived, writable } from "svelte/store";
+	import {
+		createColumnHelper,
+		createSvelteTable,
+		getCoreRowModel,
+	} from "@tanstack/svelte-table";
 	import CodeMirror from "svelte-codemirror-editor";
 	import { StreamLanguage } from "@codemirror/language";
 	import { http } from "@codemirror/legacy-modes/mode/http";
@@ -19,6 +25,8 @@
 	import {
 		ArrowLeft,
 		ArrowRight,
+		ChevronLeft,
+		ChevronRight,
 		CircleStop,
 		Edit,
 		FilePlus2,
@@ -80,6 +88,42 @@
 	let menu;
 	let templateList;
 	let runList;
+	let paginatedRunId = null;
+
+	const armoryTraffic = writable([]);
+	const trafficPagination = writable({ pageIndex: 0, pageSize: 100 });
+	const columnHelper = createColumnHelper();
+	const trafficColumns = [
+		columnHelper.accessor("Method", { id: "method" }),
+		columnHelper.accessor((row) => `${row.Host}${row.Path}`, {
+			id: "url",
+		}),
+		columnHelper.accessor("StatusCode", { id: "status" }),
+	];
+
+	function setTrafficPagination(updater) {
+		trafficPagination.update((old) =>
+			updater instanceof Function ? updater(old) : updater,
+		);
+	}
+
+	const trafficTableOptions = derived(
+		[armoryTraffic, trafficPagination],
+		([$data, $pagination]) => {
+			const start = $pagination.pageIndex * $pagination.pageSize;
+			return {
+				data: $data.slice(start, start + $pagination.pageSize),
+				columns: trafficColumns,
+				autoResetPageIndex: false,
+				manualPagination: true,
+				pageCount: Math.ceil($data.length / $pagination.pageSize),
+				state: { pagination: $pagination },
+				onPaginationChange: setTrafficPagination,
+				getCoreRowModel: getCoreRowModel(),
+			};
+		},
+	);
+	const trafficTable = createSvelteTable(trafficTableOptions);
 
 	$: query = search.trim().toLowerCase();
 	$: filteredTemplates = $armoryStore.templates.filter(
@@ -104,6 +148,27 @@
 					String(selectedRunId),
 			)
 		: [];
+	$: armoryTraffic.set(requests);
+	$: if (selectedRunId !== paginatedRunId) {
+		paginatedRunId = selectedRunId;
+		setTrafficPagination((old) => ({ ...old, pageIndex: 0 }));
+		if (drawerOpened) drawerStore.close();
+	}
+	$: if (
+		$trafficPagination.pageIndex >
+		Math.max(
+			0,
+			Math.ceil(requests.length / $trafficPagination.pageSize) - 1,
+		)
+	) {
+		setTrafficPagination((old) => ({
+			...old,
+			pageIndex: Math.max(
+				0,
+				Math.ceil(requests.length / old.pageSize) - 1,
+			),
+		}));
+	}
 	$: if (!selectedTemplateId && $armoryStore.templates.length > 0) {
 		selectTemplate($armoryStore.templates[0]);
 	}
@@ -397,8 +462,24 @@
 		);
 		const index = currentIndex + direction;
 		if (currentIndex !== -1 && requests[index]) {
+			$trafficTable.setPageIndex(
+				Math.floor(index / $trafficPagination.pageSize),
+			);
 			openRequest(requests[index], index);
 		}
+	}
+
+	function changeTrafficPage(changePage) {
+		if (drawerOpened) drawerStore.close();
+		changePage();
+	}
+
+	function changeTrafficPageSize(event) {
+		if (drawerOpened) drawerStore.close();
+		setTrafficPagination({
+			pageIndex: 0,
+			pageSize: Number(event.currentTarget.value),
+		});
 	}
 
 	function statusClass(status) {
@@ -1068,13 +1149,65 @@
 				</div>
 				<section class="col-start-3 row-start-3 flex h-0 min-h-full flex-col overflow-hidden border-l border-t border-surface-500/30">
 				<header
-					class="border-b border-surface-500/30 p-4"
+					class="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500/30 p-4"
 				>
 					<h2 class="font-bold">
 						Traffic {selectedRun
 							? `(${requests.length})`
 							: ""}
 					</h2>
+					{#if selectedRun && requests.length > 0}
+						<div class="flex items-center gap-2 text-xs">
+							<label class="flex items-center gap-1">
+								<span class="sr-only">Rows per page</span>
+								<select
+									class="select select-sm w-16"
+									value={$trafficPagination.pageSize}
+									on:change={changeTrafficPageSize}
+								>
+									{#each [10, 20, 30, 40, 50, 100] as pageSize}
+										<option value={pageSize}>{pageSize}</option>
+									{/each}
+								</select>
+							</label>
+							<span class="whitespace-nowrap opacity-70">
+								{$trafficPagination.pageIndex *
+									$trafficPagination.pageSize +
+									1}-
+								{Math.min(
+									($trafficPagination.pageIndex + 1) *
+										$trafficPagination.pageSize,
+									requests.length,
+								)} of {requests.length.toLocaleString()}
+							</span>
+							<div class="btn-group btn-group-sm">
+								<button
+									type="button"
+									disabled={!$trafficTable.getCanPreviousPage()}
+									on:click={() =>
+										changeTrafficPage(() =>
+											$trafficTable.previousPage(),
+										)}
+									title="Previous page"
+									aria-label="Previous page"
+								>
+									<ChevronLeft size={16} />
+								</button>
+								<button
+									type="button"
+									disabled={!$trafficTable.getCanNextPage()}
+									on:click={() =>
+										changeTrafficPage(() =>
+											$trafficTable.nextPage(),
+										)}
+									title="Next page"
+									aria-label="Next page"
+								>
+									<ChevronRight size={16} />
+								</button>
+							</div>
+						</div>
+					{/if}
 				</header>
 				<div class="min-h-0 flex-1 overflow-y-auto">
 					{#if !selectedRun}
@@ -1091,29 +1224,30 @@
 							No requests captured yet
 						</p>
 					{:else}
-						{#each requests as row, index (row.ID)}
+						{#each $trafficTable.getRowModel().rows as tableRow (tableRow.original.ID)}
+							{@const absoluteIndex =
+								$trafficPagination.pageIndex *
+									$trafficPagination.pageSize +
+								tableRow.index}
 							<button
 								type="button"
 								class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-surface-500/20 p-3 text-left hover:bg-surface-100-800-token"
 								on:click={() =>
-									openRequest(
-										row,
-										index,
-									)}
+									openRequest(tableRow.original, absoluteIndex)}
 							>
 								<span
 									class="badge variant-soft-primary font-mono"
-									>{row.Method}</span
+									>{tableRow.original.Method}</span
 								>
 								<span
 									class="truncate text-sm"
-									>{row.Host}{row.Path}</span
+									>{tableRow.original.Host}{tableRow.original.Path}</span
 								>
 								<span
 									class="font-mono text-sm"
-									>{row.StatusCode >
+									>{tableRow.original.StatusCode >
 									0
-										? row.StatusCode
+										? tableRow.original.StatusCode
 										: "-"}</span
 								>
 							</button>
