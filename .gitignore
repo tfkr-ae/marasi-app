@@ -3,3 +3,4 @@ node_modules
 frontend/build
 frontend/src/lib/wailsjs/
 .DS_Store
+.opencode
