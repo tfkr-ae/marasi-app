@@ -1125,6 +1125,7 @@
 </div>
 
 <style>
+	.editor :global(.codemirror-wrapper),
 	.editor :global(.cm-editor) {
 		height: 100%;
 	}
