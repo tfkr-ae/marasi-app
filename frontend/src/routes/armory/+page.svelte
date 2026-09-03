@@ -242,10 +242,11 @@
 
 	function createTemplate() {
 		modalStore.trigger({
-			type: "prompt",
+			type: "component",
+			component: "MenuInput",
 			title: "New Armory Template",
 			body: "Enter a name for the request template.",
-			valueAttr: { placeholder: "Template name" },
+			meta: { placeholder: "Template name" },
 			buttonTextSubmit: "Create",
 			response: async (value) => {
 				if (typeof value !== "string" || !value.trim()) return;

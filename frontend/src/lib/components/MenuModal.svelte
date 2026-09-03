@@ -29,13 +29,16 @@
 				<X />
 			</button>
 		</header>
-        <form class="modal-form {cForm}">
-            <label class="label">
-                <input class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0" type="text" placeholder="Request No." bind:value={input}/>
-            </label>
-        <!-- prettier-ignore -->
-        <footer class="modal-footer {parent.regionFooter}">
-            <button class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}" on:click={onInput}>Continue</button>
+		{#if $modalStore[0].body}
+			<p>{$modalStore[0].body}</p>
+		{/if}
+		<form class="modal-form {cForm}" on:submit|preventDefault={onInput}>
+			<label class="label">
+				<input class="input bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0" type="text" placeholder={$modalStore[0].meta?.placeholder ?? "Request No."} bind:value={input}/>
+			</label>
+		<!-- prettier-ignore -->
+		<footer class="modal-footer {parent.regionFooter}">
+			<button class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}">{$modalStore[0].buttonTextSubmit ?? "Continue"}</button>
         </footer>
         </form>
     </div>
