@@ -10,10 +10,8 @@
 	let previewLoading = false;
 	let refreshing = false;
 
-	$: selected = $modalStore[0]?.meta?.selected || [];
 	$: query = input.trim().toLowerCase();
 	$: options = ($armoryStore.wordlists || []).filter((wordlist) => {
-		if (selected.includes(wordlist.Name)) return false;
 		return !query || wordlist.Name.toLowerCase().includes(query);
 	});
 

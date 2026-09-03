@@ -381,10 +381,8 @@
 		});
 	}
 
-	function toggleWordlist(wordlist) {
-		selectedWordlists = selectedWordlists.includes(wordlist)
-			? selectedWordlists.filter((name) => name !== wordlist)
-			: [...selectedWordlists, wordlist];
+	function removeWordlist(index) {
+		selectedWordlists = selectedWordlists.filter((_, i) => i !== index);
 	}
 
 	function openWordlistModal() {
@@ -392,9 +390,8 @@
 		modalStore.trigger({
 			type: "component",
 			component: "SelectWordlist",
-			meta: { selected: selectedWordlists },
 			response: (name) => {
-				if (name && !selectedWordlists.includes(name)) {
+				if (name) {
 					selectedWordlists = [...selectedWordlists, name];
 				}
 			},
@@ -1022,14 +1019,14 @@
 							{#if selectedWordlists.length === 0}
 								<span class="text-sm opacity-60">No wordlists selected</span>
 							{:else}
-								{#each selectedWordlists as wordlist (wordlist)}
+								{#each selectedWordlists as wordlist, index}
 									<span class="chip variant-soft-primary inline-flex items-center gap-1 px-2 py-0.5 text-xs">
 										{wordlist}
 										<button
 											type="button"
 											class="inline-flex"
 											aria-label={`Remove ${wordlist}`}
-											on:click={() => toggleWordlist(wordlist)}
+											on:click={() => removeWordlist(index)}
 										>
 											<X size={12} />
 										</button>
