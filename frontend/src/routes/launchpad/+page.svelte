@@ -25,6 +25,7 @@
         TrashIcon,
     } from "lucide-svelte";
     import { page } from "$app/stores";
+    import { beforeNavigate, goto } from "$app/navigation";
     import {
         activeLaunchpadID,
         currentEntryIndex,
@@ -46,6 +47,7 @@
     let accOpened = false;
     let useHttps = true;
     let isSending = false;
+    let userEdited = false;
 
     $: if ($launchpads.length > 0) {
         const isValid = $launchpads.some((l) => l.ID == $activeLaunchpadID);
@@ -85,20 +87,50 @@
         populateLaunchpadEntries($activeLaunchpadID);
     }
 
+    function confirmLeave(onConfirm) {
+        if (!userEdited) {
+            onConfirm();
+            return;
+        }
+        modalStore.trigger({
+            type: "confirm",
+            title: "Confirm Action",
+            body: "You have made changes to the text. Navigating away will clear your changes. Continue?",
+            response: (result) => {
+                if (result) {
+                    userEdited = false;
+                    onConfirm();
+                }
+            },
+        });
+    }
+
     function navLaunchpad(dir) {
         const nextIdx = currentLaunchpadIndex + dir;
         if (nextIdx >= 0 && nextIdx < $launchpads.length) {
-            $activeLaunchpadID = $launchpads[nextIdx].ID;
-            $currentEntryIndex = 0;
+            confirmLeave(() => {
+                $activeLaunchpadID = $launchpads[nextIdx].ID;
+                $currentEntryIndex = 0;
+            });
         }
     }
 
     function navEntry(dir) {
         const nextIdx = $currentEntryIndex + dir;
         if (nextIdx >= 0 && nextIdx < activeEntries.length) {
-            $currentEntryIndex = nextIdx;
+            confirmLeave(() => {
+                $currentEntryIndex = nextIdx;
+            });
         }
     }
+
+    beforeNavigate(({ to, cancel }) => {
+        if (!userEdited) return;
+        cancel();
+        confirmLeave(() => {
+            if (to) goto(to.url.pathname + to.url.search);
+        });
+    });
 
     async function sendRequest() {
         if (!currentEntry?.ID || !$activeLaunchpadID) return;
@@ -118,6 +150,7 @@
 
             await Repeat(currentEntry.Body, $activeLaunchpadID, useHttps);
 
+            userEdited = false;
             await populateLaunchpadEntries($activeLaunchpadID);
 
             toastStore.trigger({
@@ -434,6 +467,7 @@
                             request_id={currentEntry.ID}
                             titleText={"Request " + ($currentEntryIndex + 1)}
                             bind:requestBody={currentEntry.Body}
+                            bind:userEdited
                             requestReadOnly={false}
                         />
                     {/key}

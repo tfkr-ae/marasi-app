@@ -36,7 +36,7 @@
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { beforeNavigate, goto } from "$app/navigation";
+	import { goto } from "$app/navigation";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { armoryStore } from "../../stores/armoryStore";
@@ -55,12 +55,11 @@
 	export let isFiltered = false;
 	export let incomingResponse = undefined;
 	export let requestBody;
+	export let userEdited = false;
 
 	let responseBody = "";
 	let selectedRow;
 	let loading = true;
-
-	let userEdited = false;
 	function adjustHeights() {
 		const editors = document.querySelectorAll(".cm-editor");
 
@@ -257,26 +256,6 @@
 			setTimeout(adjustHeights, 50);
 		});
 	}
-	beforeNavigate(({ to, cancel }) => {
-		if (requestReadOnly && responseReadOnly) return;
-		if (userEdited) {
-			cancel();
-			const modal = {
-				type: "confirm",
-				title: "Confirm Action",
-				body: "You have made changes to the text. Navigating away will clear your changes. Continue?",
-				response: (result) => {
-					if (result) {
-						userEdited = false;
-						goto(to?.route?.id);
-					} else {
-						cancel();
-					}
-				},
-			};
-			modalStore.trigger(modal);
-		} else return;
-	});
 	$: {
 		if (selectedRow) {
 			if (requestReadOnly && responseReadOnly) {
