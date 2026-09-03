@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
 	import CodeMirror from "svelte-codemirror-editor";
 	import { StreamLanguage } from "@codemirror/language";
 	import { http } from "@codemirror/legacy-modes/mode/http";
@@ -78,6 +78,8 @@
 	let accOpened = false;
 	let drawerOpened = false;
 	let menu;
+	let templateList;
+	let runList;
 
 	$: query = search.trim().toLowerCase();
 	$: filteredTemplates = $armoryStore.templates.filter(
@@ -362,18 +364,31 @@
 		return { item: items[index], index };
 	}
 
+	async function revealSelection(list) {
+		await tick();
+		list
+			?.querySelector('[aria-current="true"]')
+			?.scrollIntoView({ block: "nearest" });
+	}
+
 	function cycleTemplate(direction) {
 		const target = adjacent(
 			$armoryStore.templates,
 			selectedTemplateId,
 			direction,
 		);
-		if (target) selectTemplate(target.item);
+		if (target) {
+			selectTemplate(target.item);
+			revealSelection(templateList);
+		}
 	}
 
 	function cycleRun(direction) {
 		const target = adjacent(runs, selectedRunId, direction);
-		if (target) selectRun(target.item);
+		if (target) {
+			selectRun(target.item);
+			revealSelection(runList);
+		}
 	}
 
 	function cycleRequest(direction) {
@@ -678,6 +693,7 @@
 			</header>
 
 			<div
+				bind:this={templateList}
 				class="col-start-1 row-start-2 row-span-2 min-h-0 space-y-2 overflow-y-auto border-r border-surface-500/30 p-2"
 			>
 				{#if filteredTemplates.length === 0}
@@ -692,6 +708,7 @@
 					{#each filteredTemplates as template (template.ID)}
 						<button
 							type="button"
+							aria-current={template.ID === selectedTemplateId}
 							class="w-full border-l-4 p-3 text-left transition-colors {template.ID ===
 							selectedTemplateId
 								? 'border-primary-500 bg-surface-200-700-token'
@@ -933,6 +950,7 @@
 					</button>
 				</header>
 				<div
+					bind:this={runList}
 					class="col-start-3 row-start-2 min-h-0 space-y-2 overflow-y-auto border-l border-surface-500/30 p-2"
 				>
 					{#if runs.length === 0}
@@ -950,6 +968,7 @@
 									? 'border-primary-500 bg-surface-200-700-token'
 									: 'border-transparent bg-surface-100-800-token'}"
 								role="button"
+								aria-current={run.ID === selectedRunId}
 								tabindex="0"
 								on:click={() =>
 									selectRun(
