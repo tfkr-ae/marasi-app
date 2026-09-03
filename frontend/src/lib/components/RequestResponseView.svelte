@@ -306,7 +306,10 @@
 						requestBody =
 							selectedRow?.Metadata?.[
 								"prettified-request"
-							] ?? requestBody;
+							] ??
+							selectedRow?.Request
+								?.Raw ??
+							requestBody;
 
 						responseBody =
 							selectedRow?.Metadata?.[
@@ -316,6 +319,10 @@
 								?.Raw ??
 							"";
 					} else {
+						requestBody =
+							selectedRow?.Request
+								?.Raw ??
+							requestBody;
 						responseBody =
 							selectedRow?.Response
 								?.Raw ?? "";
