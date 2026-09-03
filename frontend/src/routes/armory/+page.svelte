@@ -588,6 +588,7 @@
 		if (!$appState.isReady) return;
 		const previousActiveRunIds = $armoryStore.activeRunIds || [];
 		const activeRunIds = await armoryStore.refreshActiveRuns();
+		if (activeRunIds === null) return;
 		const inProgressIds = Object.values(
 			$armoryStore.runsByTemplate,
 		)
@@ -805,6 +806,8 @@
 
 		return () => {
 			drawerOpened = false;
+			drawerStore.close();
+			modalStore.close();
 			unsubscribe();
 			clearInterval(interval);
 			clearTimeout(validationTimer);

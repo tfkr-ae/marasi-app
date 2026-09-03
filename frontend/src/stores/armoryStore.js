@@ -88,9 +88,11 @@ function createArmoryStore() {
   }
 
   async function populate() {
+    const version = projectStateVersion;
     const templates = (await GetArmoryTemplates()) || [];
+    if (version !== projectStateVersion) return;
     set({
-      ...initialState(projectStateVersion),
+      ...initialState(version),
       templates: sortTemplates(templates),
     });
 
@@ -98,6 +100,7 @@ function createArmoryStore() {
       GetArmoryWordlists(),
       GetActiveArmoryRunIDs(),
     ]);
+    if (version !== projectStateVersion) return;
 
     update((state) => ({
       ...state,
@@ -107,7 +110,9 @@ function createArmoryStore() {
   }
 
   async function loadRuns(templateId) {
+    const version = projectStateVersion;
     const runs = (await GetArmoryRuns(templateId)) || [];
+    if (version !== projectStateVersion) return [];
     update((state) => ({
       ...state,
       runsByTemplate: {
@@ -119,13 +124,17 @@ function createArmoryStore() {
   }
 
   async function refreshRun(id) {
+    const version = projectStateVersion;
     const run = await GetArmoryRun(id);
+    if (version !== projectStateVersion) return run;
     upsertRun(run);
     return run;
   }
 
   async function refreshActiveRuns() {
+    const version = projectStateVersion;
     const activeRunIds = (await GetActiveArmoryRunIDs()) || [];
+    if (version !== projectStateVersion) return null;
     update((state) => ({ ...state, activeRunIds }));
     return activeRunIds;
   }
