@@ -162,7 +162,9 @@
 	$: selectedTemplate = $armoryStore.templates.find(
 		(template) => template.ID === selectedTemplateId,
 	);
-	$: runs = selectedTemplateId
+	$: runs = filteredTemplates.some(
+		(template) => template.ID === selectedTemplateId,
+	)
 		? $armoryStore.runsByTemplate[selectedTemplateId] || []
 		: [];
 	$: selectedRun = runs.find((run) => run.ID === selectedRunId);
@@ -1226,19 +1228,22 @@
 				</div>
 				<section class="col-start-3 row-start-3 flex h-0 min-h-full flex-col overflow-hidden border-l border-t border-surface-500/30">
 				<header
-					class="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500/30 p-4"
+					class="flex items-center justify-between gap-2 border-b border-surface-500/30 p-3"
 				>
-					<h2 class="font-bold">
-						Traffic {selectedRun
-							? `(${requests.length})`
-							: ""}
-					</h2>
+					<div class="shrink-0">
+						<h2 class="font-bold">Traffic</h2>
+						{#if selectedRun}
+							<p class="whitespace-nowrap text-xs opacity-60">
+								{requests.length.toLocaleString()} items
+							</p>
+						{/if}
+					</div>
 					{#if selectedRun && requests.length > 0}
-						<div class="flex items-center gap-2 text-xs">
+						<div class="flex shrink-0 items-center gap-1.5 text-xs">
 							<label class="flex items-center gap-1">
 								<span class="sr-only">Rows per page</span>
 								<select
-									class="select select-sm w-16"
+									class="select select-sm w-20"
 									value={$trafficPagination.pageSize}
 									on:change={changeTrafficPageSize}
 								>
@@ -1248,14 +1253,8 @@
 								</select>
 							</label>
 							<span class="whitespace-nowrap opacity-70">
-								{$trafficPagination.pageIndex *
-									$trafficPagination.pageSize +
-									1}-
-								{Math.min(
-									($trafficPagination.pageIndex + 1) *
-										$trafficPagination.pageSize,
-									requests.length,
-								)} of {requests.length.toLocaleString()}
+								{($trafficPagination.pageIndex + 1).toLocaleString()} /
+								{$trafficTable.getPageCount().toLocaleString()}
 							</span>
 							<div class="btn-group btn-group-sm">
 								<button
