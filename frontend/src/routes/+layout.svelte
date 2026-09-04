@@ -812,14 +812,6 @@
 	:global(.dark .modal-prompt-input) {
 		background-color: rgb(var(--color-surface-700)) !important;
 	}
-	:root {
-		--ctx-menu-background: #2f343c;
-		--ctx-menu-border: 1px solid #cf595b;
-		--ctx-menu-hover-bg: #cf595b;
-		--ctx-menu-font-size: 0.9rem;
-		--ctx-menu-padding: 0.375rem 0.5rem;
-	}
-
 	:global(.nav-rail) {
 		overflow-x: hidden;
 		overflow-y: auto;

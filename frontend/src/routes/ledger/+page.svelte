@@ -1621,7 +1621,7 @@
 		}}>Create Finding</Item
 	>
 	<Divider />
-	<ListBox active="hover:variant-soft">
+	<ListBox active="">
 		<ListBoxItem
 			group
 			name
@@ -1641,7 +1641,7 @@
 							.padStart(6, "0");
 				});
 			}}
-			class="bg-red-500">Red</ListBoxItem
+			class="!bg-red-500 text-black hover:brightness-110">Red</ListBoxItem
 		>
 		<ListBoxItem
 			group
@@ -1662,7 +1662,7 @@
 							.padStart(6, "0");
 				});
 			}}
-			class="bg-green-500">Green</ListBoxItem
+			class="!bg-green-500 text-black hover:brightness-110">Green</ListBoxItem
 		>
 		<ListBoxItem
 			group
@@ -1683,7 +1683,7 @@
 							.padStart(6, "0");
 				});
 			}}
-			class="bg-yellow-500">Yellow</ListBoxItem
+			class="!bg-yellow-500 text-black hover:brightness-110">Yellow</ListBoxItem
 		>
 		<ListBoxItem
 			group
@@ -1704,7 +1704,7 @@
 							.padStart(6, "0");
 				});
 			}}
-			class="bg-blue-500">Blue</ListBoxItem
+			class="!bg-blue-500 text-black hover:brightness-110">Blue</ListBoxItem
 		>
 		<ListBoxItem
 			group
@@ -1725,7 +1725,7 @@
 							.padStart(6, "0");
 				});
 			}}
-			class="bg-purple-500">Purple</ListBoxItem
+			class="!bg-purple-500 text-black hover:brightness-110">Purple</ListBoxItem
 		>
 		<ListBoxItem
 			group
@@ -1739,7 +1739,8 @@
 						].Metadata["highlight"] = "";
 					},
 				);
-			}}>None</ListBoxItem
+			}}
+			class="context-menu-none">None</ListBoxItem
 		>
 	</ListBox>
 </ContextMenu>

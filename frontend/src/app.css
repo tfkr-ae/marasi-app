@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  --ctx-menu-background: rgb(var(--color-surface-50));
+  --ctx-menu-border: 1px solid rgb(var(--color-primary-500));
+  --ctx-menu-hover-bg: rgb(var(--color-primary-200));
+  --ctx-menu-font-size: 0.9rem;
+  --ctx-menu-padding: 0.375rem 0.5rem;
+}
+
+html.dark body {
+  --ctx-menu-background: #2f343c;
+  --ctx-menu-hover-bg: #cf595b;
+}
+
+.context-menu .context-menu-none:hover {
+  background: var(--ctx-menu-hover-bg) !important;
+}
+
 .no-select {
   @apply select-none cursor-default;
   user-select: none;
