@@ -4,16 +4,30 @@ set -eu
 . "$(dirname -- "$0")/common.sh"
 
 FEATURE=${1:-}
+ACTION=${2:-}
+LABEL=${3:-}
+SHORTCUT=${4:-}
+
+usage() {
+	printf 'Usage: %s {dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|settings} [compare <label> <shortcut>]\n' "$0" >&2
+	exit 2
+}
+
 case "$FEATURE" in
 	dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|settings) ;;
-	*)
-		printf 'Usage: %s {dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|settings}\n' "$0" >&2
-		exit 2
-		;;
+	*) usage ;;
 esac
+
+if [ -n "$ACTION" ]; then
+	[ "$ACTION" = "compare" ] && [ -n "$LABEL" ] && [ -n "$SHORTCUT" ] || usage
+fi
 
 "$SCRIPT_DIR/doctor.sh" >/dev/null
 EVIDENCE_DIR=$(evidence_dir)
 CDP_PORT=$(cat "$CDP_PORT_FILE")
 DEV_PORT=$(recorded_dev_port)
-node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE"
+if [ "$ACTION" = "compare" ]; then
+	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE" compare "$LABEL" "$SHORTCUT"
+else
+	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE"
+fi

@@ -14,4 +14,4 @@ Marasi's primary user interface is the Wails desktop app. Verification drives th
 | Lua workshop | [workshop.md](workshop.md) | Workshop route opens and saved code executes with visible log output |
 | Application settings | [settings.md](settings.md) | Settings route opens and a reversible setting persists to isolated config |
 
-Use `.opencode/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. The feature files describe the additional actions needed for complete behavioral proof.
+Use `.opencode/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. Use `drive.sh <feature> compare "<visible label>" "<shortcut>"` when an in-page control also has a MarasiKeys binding. The feature files describe the additional actions needed for complete behavioral proof.

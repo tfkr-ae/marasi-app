@@ -51,7 +51,15 @@ Use the executable driver with one mapped route:
 .opencode/skills/verify-marasi/scripts/drive.sh settings
 ```
 
-The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse press to the app rail's stable `[title]` selector, and fails unless both the route and route-specific text match. For controls within a route, use the selectors recorded in `features/` through CDP or an available browser automation tool connected to the Wails dev-server URL.
+The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse press to a painted control, and fails unless the expected route or overlay appears. A painted control has a bounding box wider and taller than 10px and is not inside `dialog`. Hidden MarasiKeys menu nodes reuse the same labels at `0,0`; matching innerText alone is not a click.
+
+Most in-app actions have that painted control plus a MarasiKeys binding. Root bindings live in `frontend/src/routes/+page.svelte` as `⌘+key`. Page bindings live in that route's MarasiKeys menu as `⌘+⇧+key` on macOS. Prove both paths with:
+
+```bash
+.opencode/skills/verify-marasi/scripts/drive.sh dashboard compare "Open Project" "cmd+o"
+```
+
+The compare action clicks the painted label, captures the overlay or route change, restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (`MetaLeft` down, key, key up, `MetaLeft` up). It fails unless both paths paint the same overlay text or land on the same route.
 
 The shipped CDP helper uses Node's built-in `WebSocket`, so it adds no npm package. Chrome defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; override `MARASI_VERIFY_CHROME_BIN` when needed.
 
@@ -65,6 +73,7 @@ Each launch creates `.artifacts/verify-marasi/<UTC timestamp>/`. Keep these file
 - `<feature>-before.json` and `<feature>-before.png` capture the state before navigation.
 - `<feature>-action.txt` records the exact user input.
 - `<feature>-after.json` and `<feature>-after.png` capture the resulting DOM and screen.
+- `<label>-click-*` and `<label>-shortcut-*` capture a painted-control compare; `<label>-compare.json` is the pass/fail record.
 - `<feature>-console.json` and `<feature>-network.json` record browser events during the action.
 - `doctor.txt` proves the process, listener, config, and SQLite project existed.
 
@@ -88,6 +97,6 @@ Run one verification instance at a time. This repo fixes Vite to port `5173`, so
 
 ## Helpers
 
-All scripts under `scripts/` are executable and derive the repository root from their own path. Their supported invocations are shown above. `launch.sh`, `doctor.sh`, and `drive.sh` call `cdp.mjs`; call the shell helpers rather than reverse-engineering the CDP protocol.
+All scripts under `scripts/` are executable and derive the repository root from their own path. Their supported invocations are shown above. `launch.sh`, `doctor.sh`, and `drive.sh` call `cdp.mjs`; call the shell helpers rather than reverse-engineering the CDP protocol. Shortcut compares go through `drive.sh <feature> compare`, not a one-off CDP script.
 
 Read `features/README.md` before choosing proof coverage. A check of one easy route does not cover the other mapped entry points.
