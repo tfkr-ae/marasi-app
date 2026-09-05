@@ -323,9 +323,11 @@ async function driveTheme(route) {
 	fs.writeFileSync(`${evidenceDir}/theme-action.txt`, "input=Command+U twice after leaving dashboard\nexpected=theme changes and returns to its initial value\n");
 	await pressShortcut("cmd+u");
 	await waitFor(`document.documentElement.classList.contains("dark") !== ${initialDark}`, "theme change", 20, 250);
+	await sleep(400);
 	await capture("theme-toggled");
 	await pressShortcut("cmd+u");
 	await waitFor(`document.documentElement.classList.contains("dark") === ${initialDark}`, "theme restoration", 20, 250);
+	await sleep(400);
 	await capture("theme-restored");
 	fs.writeFileSync(`${evidenceDir}/theme-result.json`, `${JSON.stringify({ initialDark, toggledDark: !initialDark, restoredDark: initialDark }, null, 2)}\n`);
 	console.log(`feature=${feature}\naction=theme\nresult=Command+U changed and restored theme after leaving dashboard\nevidence=${evidenceDir}`);
