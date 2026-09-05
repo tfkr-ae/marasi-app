@@ -54,6 +54,7 @@
 	import { WindowSetTitle } from "../lib/wailsjs/runtime/runtime";
 	import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
@@ -528,7 +529,7 @@
 					name: "Toggle Light Mode",
 					action: {
 						handler: () => {
-							const next = !$modeCurrent;
+							const next = !get(modeCurrent);
 							setModeUserPrefers(next);
 							setModeCurrent(next);
 						},
