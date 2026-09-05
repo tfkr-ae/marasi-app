@@ -49,6 +49,7 @@ Use the executable driver with one mapped route:
 .opencode/skills/verify-marasi/scripts/drive.sh logbook
 .opencode/skills/verify-marasi/scripts/drive.sh workshop
 .opencode/skills/verify-marasi/scripts/drive.sh settings
+.opencode/skills/verify-marasi/scripts/drive.sh dashboard theme
 ```
 
 The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse press to a painted control, and fails unless the expected route or overlay appears. A painted control has a bounding box wider and taller than 10px and is not inside `dialog`. Hidden MarasiKeys menu nodes reuse the same labels at `0,0`; matching innerText alone is not a click.
@@ -60,6 +61,8 @@ Most in-app actions have that painted control plus a MarasiKeys binding. Root bi
 ```
 
 The compare action clicks the painted label, captures the overlay or route change, restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (`MetaLeft` down, key, key up, `MetaLeft` up). It fails unless both paths paint the same overlay text or land on the same route.
+
+The dashboard `theme` action leaves Home for Settings, sends `Command+U` twice, and fails unless the global appearance changes and returns to its original mode. This proves the dashboard-owned shortcut still reads live state after Home is destroyed.
 
 The shipped CDP helper uses Node's built-in `WebSocket`, so it adds no npm package. Chrome defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; override `MARASI_VERIFY_CHROME_BIN` when needed.
 
@@ -74,6 +77,7 @@ Each launch creates `.artifacts/verify-marasi/<UTC timestamp>/`. Keep these file
 - `<feature>-action.txt` records the exact user input.
 - `<feature>-after.json` and `<feature>-after.png` capture the resulting DOM and screen.
 - `<label>-click-*` and `<label>-shortcut-*` capture a painted-control compare; `<label>-compare.json` is the pass/fail record.
+- `theme-before.*`, `theme-toggled.*`, `theme-restored.*`, and `theme-result.json` prove the global appearance shortcut works after leaving Home.
 - `<feature>-console.json` and `<feature>-network.json` record browser events during the action.
 - `doctor.txt` proves the process, listener, config, and SQLite project existed.
 

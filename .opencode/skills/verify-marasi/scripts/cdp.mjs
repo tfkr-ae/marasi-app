@@ -6,7 +6,7 @@ const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, acti
 const port = Number(portText);
 const viewport = { width: Number(widthText), height: Number(heightText) };
 if (!mode || !Number.isInteger(port) || !appURL || !evidenceDir || !Number.isInteger(viewport.width) || !Number.isInteger(viewport.height)) {
-	throw new Error("usage: cdp.mjs <launch|doctor|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [feature] [compare <label> <shortcut>]");
+	throw new Error("usage: cdp.mjs <launch|doctor|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [feature] [compare <label> <shortcut>|theme]");
 }
 
 const routes = {
@@ -306,6 +306,31 @@ async function driveCompare(route) {
 	console.log(`feature=${feature}\naction=compare\nlabel=${label}\nshortcut=${shortcut}\nresult=${clickResult.kind} matched\nevidence=${evidenceDir}`);
 }
 
+async function driveTheme(route) {
+	await waitFor(`location.pathname === ${JSON.stringify(route.path)}`, "dashboard route", 20);
+	const settings = await evaluate(`(() => {
+		const element = document.querySelector('[title="Settings"]');
+		if (!element) return {error: "settings rail not found"};
+		const box = element.getBoundingClientRect();
+		return {x: box.left + box.width / 2, y: box.top + box.height / 2, width: box.width, height: box.height};
+	})()`);
+	assertPaintedPoint(settings, '[title="Settings"]');
+	await clickPoint(settings);
+	await waitFor(`location.pathname === "/settings"`, "settings route", 20);
+
+	const initialDark = await evaluate(`document.documentElement.classList.contains("dark")`);
+	await capture("theme-before");
+	fs.writeFileSync(`${evidenceDir}/theme-action.txt`, "input=Command+U twice after leaving dashboard\nexpected=theme changes and returns to its initial value\n");
+	await pressShortcut("cmd+u");
+	await waitFor(`document.documentElement.classList.contains("dark") !== ${initialDark}`, "theme change", 20, 250);
+	await capture("theme-toggled");
+	await pressShortcut("cmd+u");
+	await waitFor(`document.documentElement.classList.contains("dark") === ${initialDark}`, "theme restoration", 20, 250);
+	await capture("theme-restored");
+	fs.writeFileSync(`${evidenceDir}/theme-result.json`, `${JSON.stringify({ initialDark, toggledDark: !initialDark, restoredDark: initialDark }, null, 2)}\n`);
+	console.log(`feature=${feature}\naction=theme\nresult=Command+U changed and restored theme after leaving dashboard\nevidence=${evidenceDir}`);
+}
+
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
@@ -322,6 +347,7 @@ if (mode === "launch") {
 	const route = routes[feature];
 	if (!route) throw new Error(`unknown feature: ${feature}`);
 	if (action === "compare") await driveCompare(route);
+	else if (action === "theme") await driveTheme(route);
 	else if (action) throw new Error(`unknown action: ${action}`);
 	else await driveRoute(route);
 } else {
