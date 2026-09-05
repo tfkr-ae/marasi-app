@@ -1,5 +1,5 @@
 <script>
-	import { SendIcon, FlagIcon, EditIcon, Replace, Radio, Edit2Icon } from "lucide-svelte";
+	import { SendIcon, FlagIcon, EditIcon, Replace, Radio, Edit2Icon, Swords } from "lucide-svelte";
 
 	export let index;
 	export let row;
@@ -11,6 +11,7 @@
 	$: activeIcons = [
 		{ show: isWebSocket, component: Radio, className: wsColor },
 		{ show: row.Metadata?.launchpad, component: SendIcon },
+		{ show: row.Metadata?.armory_run_id, component: Swords },
 		{ show: row.Metadata?.intercepted, component: FlagIcon },
 		{
 			show: row.Metadata?.intercepted && row.Metadata["original-request"] !== row.Raw,
