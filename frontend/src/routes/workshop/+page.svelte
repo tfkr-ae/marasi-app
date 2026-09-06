@@ -11,13 +11,13 @@
         getToastStore,
         modeCurrent,
     } from "@skeletonlabs/skeleton";
-    import { SettingsIcon } from "svelte-feather-icons";
     import CodeMirror from "svelte-codemirror-editor";
     import { DoExtender, RunExtension } from "../../lib/wailsjs/go/main/App";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import {
         EditIcon,
         FileCode,
+        SettingsIcon,
         SquarePlay,
         ToggleLeftIcon,
     } from "lucide-svelte";

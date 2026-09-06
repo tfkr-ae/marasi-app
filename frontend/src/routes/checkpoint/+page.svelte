@@ -24,7 +24,6 @@
 		getToastStore,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { SettingsIcon } from "svelte-feather-icons";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import {
 		CornerLeftDown,
@@ -32,6 +31,7 @@
 		FileCode,
 		FilePenLine,
 		Forward,
+		SettingsIcon,
 		SquarePlay,
 		ToggleLeft,
 	} from "lucide-svelte";

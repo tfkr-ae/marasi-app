@@ -35,12 +35,12 @@
 		Rocket,
 		Save,
 		Search,
+		SettingsIcon,
 		SquareArrowUpRight,
 		ToggleLeft,
 		Trash2,
 		X,
 	} from "lucide-svelte";
-	import { SettingsIcon } from "svelte-feather-icons";
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryCompletionSource } from "../../lib/autocomplete/armory";
