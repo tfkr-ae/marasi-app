@@ -19,12 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tfkr-ae/marasi/armory"
 	"github.com/tfkr-ae/marasi/chrome"
-	"github.com/tfkr-ae/marasi/db"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/extensions"
-	"github.com/tfkr-ae/marasi/report"
 	"github.com/tfkr-ae/marasi/wordlist"
 
 	marasi "github.com/tfkr-ae/marasi"
@@ -39,6 +36,7 @@ type App struct {
 	ctx      context.Context
 	Proxy    *marasi.Proxy
 	listener service.ListenerLifecycle
+	projects *service.ProjectLifecycle
 	Config   *Config
 }
 
@@ -70,7 +68,12 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &App{Proxy: Proxy, Config: config, listener: service.NewListenerLifecycle(Proxy, log.Writer())}
+	return &App{
+		Proxy:    Proxy,
+		Config:   config,
+		listener: service.NewListenerLifecycle(Proxy, log.Writer()),
+		projects: service.NewProjectLifecycle(Proxy, appConfigDir, wordlists, Proxy.Logger),
+	}
 }
 
 // startup is called when the app starts. The context is saved
@@ -251,55 +254,18 @@ func (a *App) OpenProject(name string) (string, error) {
 		filePath = filePath + ".marasi"
 	}
 
-	dbConn, err := db.New(filePath, a.Proxy.Logger)
-	if err != nil {
-		return "", fmt.Errorf("setting up repo %s : %w", filePath, err)
-	}
-	Repo := db.NewProxyRepo(dbConn)
-
-	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
-	if err != nil {
-		_ = Repo.Close()
-		return "", fmt.Errorf("creating report generator : %w", err)
-	}
-
-	armory, err := armory.NewManager(Repo, a.Proxy.WordlistManager, a.Proxy.SendArmoryRequest)
-	if err != nil {
-		_ = Repo.Close()
-		return "", fmt.Errorf("creating armory manager : %w", err)
-	}
-	if err := recoverInterruptedArmoryRuns(Repo); err != nil {
-		_ = Repo.Close()
-		return "", err
-	}
 	confirmed, err := a.confirmCancelArmoryRuns("Switch Project")
 	if err != nil {
-		_ = Repo.Close()
 		return "", err
 	}
 	if !confirmed {
-		_ = Repo.Close()
 		return "", errors.New("project switch cancelled")
 	}
-	if socketErr := a.Proxy.CloseWebSocketsAndFlush(); socketErr != nil {
-		_ = Repo.Close()
-		return "", fmt.Errorf("closing websocket connections: %w", socketErr)
-	}
-
-	oldDBCloser := a.Proxy.DBCloser
-	err = a.Proxy.WithOptions(
-		marasi.WithDefaultRepositories(Repo),
-		marasi.WithReportGenerator(generator),
-		marasi.WithArmory(armory),
-	)
-	if err != nil {
-		_ = Repo.Close()
+	if err := a.projects.Open(context.Background(), filePath); err != nil {
 		return "", err
 	}
-	if oldDBCloser != nil {
-		if err := oldDBCloser.Close(); err != nil {
-			log.Printf("closing previous project database: %v", err)
-		}
+	if err := recoverInterruptedArmoryRuns(a.Proxy.Armory.Repo()); err != nil {
+		log.Printf("recovering interrupted armory runs: %v", err)
 	}
 	base := filepath.Base(filePath)
 	projectName := strings.TrimSuffix(base, filepath.Ext(base))
@@ -307,46 +273,19 @@ func (a *App) OpenProject(name string) (string, error) {
 }
 func (a *App) SetupScratchpad() error {
 	scratchPad := path.Join(a.Proxy.ConfigDir, "scratchpad.marasi")
-	dbConn, err := db.New(scratchPad, a.Proxy.Logger)
-	if err != nil {
-		return fmt.Errorf("setting up repo %s : %w", scratchPad, err)
-	}
-	Repo := db.NewProxyRepo(dbConn)
-
-	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
-	if err != nil {
-		return fmt.Errorf("creating report generator : %w", err)
-	}
-
-	armory, err := armory.NewManager(Repo, a.Proxy.WordlistManager, a.Proxy.SendArmoryRequest)
-	if err != nil {
-		_ = Repo.Close()
-		return fmt.Errorf("creating armory manager : %w", err)
-	}
-	if err := recoverInterruptedArmoryRuns(Repo); err != nil {
-		_ = Repo.Close()
+	if err := a.projects.Open(context.Background(), scratchPad); err != nil {
 		return err
 	}
-
-	err = a.Proxy.WithOptions(
-		marasi.WithDefaultRepositories(Repo),
-		marasi.WithReportGenerator(generator),
-		marasi.WithArmory(armory),
-	)
-
-	if err != nil {
-		_ = Repo.Close()
-		return err
+	if err := recoverInterruptedArmoryRuns(a.Proxy.Armory.Repo()); err != nil {
+		log.Printf("recovering interrupted armory runs: %v", err)
 	}
-
 	return nil
-
 }
 func (a *App) close(ctx context.Context) {
 	_ = a.listener.Shutdown()
-	if a.Proxy.DBCloser != nil {
-		if err := a.Proxy.DBCloser.Close(); err != nil {
-			log.Printf("closing project database: %v", err)
+	if a.projects != nil {
+		if err := a.projects.Shutdown(); err != nil {
+			log.Printf("releasing open project: %v", err)
 		}
 	}
 }
