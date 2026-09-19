@@ -20,4 +20,4 @@ Run `scripts/drive.sh checkpoint` for route proof. For interception behavior, co
 - Broad rules can hold unrelated traffic. Use a unique verification host or path.
 - Enabling `Global Intercept` intercepts every HTTP request and response regardless of a narrow Lua rule.
 - A request left intercepted can keep clients waiting during cleanup.
-- WebSocket interception uses a separate toggle and queue inside each Ledger WebSocket modal.
+- WebSocket interception uses a separate toggle and queue inside each Ledger WebSocket modal. The toggle is process-global; the queued frames are per connection.

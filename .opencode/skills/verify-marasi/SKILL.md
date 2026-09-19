@@ -15,7 +15,7 @@ Run from the repository root on macOS:
 .opencode/skills/verify-marasi/scripts/launch.sh
 ```
 
-The helper runs `wails dev -m -nosyncgomod -nocolour -devserver localhost:34115`, creates an isolated home directory, and writes verification-only config with `first_run: false`. It starts an isolated headless Chrome against the Wails dev server with the app's `1600x900` window size. It defaults to proxy port `18080`; set `MARASI_VERIFY_PROXY_PORT` before launch to choose another free port. It returns after browser JavaScript sees the scratchpad dashboard through the real Go bindings.
+The helper runs `wails dev -m -nosyncgomod -nocolour -devserver localhost:34115` with `GOWORK=off`, creates an isolated home directory, and writes verification-only config with `first_run: false`. It starts an isolated headless Chrome against the Wails dev server with the app's `1600x900` window size. It defaults to proxy port `18080`; set `MARASI_VERIFY_PROXY_PORT` before launch to choose another free port. It returns after browser JavaScript sees the scratchpad dashboard through the real Go bindings.
 
 The state directory defaults to `${TMPDIR}/verify-marasi`. Launch refuses to reuse existing state or occupied ports `5173`, `34115`, and `18080`. Chrome chooses a free DevTools port. It does not use the normal `~/Library/Application Support/Marasi` directory. Configure alternate dev and fixed CDP ports with `MARASI_VERIFY_DEV_PORT` and `MARASI_VERIFY_CDP_PORT`. Vite is fixed to `5173` in this repo, so only one verification run can use the default checkout at a time.
 

@@ -3,13 +3,14 @@
 ## Sub-features
 
 - Scratchpad project startup, traffic metrics, reporting, and scope summaries
+- Application log table
 - Listener status and listener reconfiguration
 - Open Project, Download Certificate, and Start Chrome actions
 - Global light/dark appearance toggle
 
 ## How to get to it (user POV)
 
-Launch Marasi or select the rail item titled `Home`. The command shortcut is `Command+1`. A ready scratchpad shows `scratchpad Project Dashboard`, listener address and port, `Open Project`, `Download Certificate`, and `Start Chrome`.
+Launch Marasi or select the rail item titled `Home`. The command shortcut is `Command+1`. A ready scratchpad shows `scratchpad Project Dashboard`, listener address and port, `Open Project`, `Download Certificate`, `Start Chrome`, and an application log table with Level, Message, and Timestamp columns.
 
 ## Driving it with Chrome CDP
 

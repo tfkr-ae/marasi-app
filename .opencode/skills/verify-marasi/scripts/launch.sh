@@ -67,7 +67,7 @@ cd "$REPO_ROOT"
 
 GOCACHE_VALUE=$(go env GOCACHE)
 GOMODCACHE_VALUE=$(go env GOMODCACHE)
-HOME="$HOME_DIR" GOCACHE="$GOCACHE_VALUE" GOMODCACHE="$GOMODCACHE_VALUE" wails dev -m -nosyncgomod -nocolour -devserver "localhost:$DEV_PORT" > "$EVIDENCE_DIR/app.log" 2>&1 &
+HOME="$HOME_DIR" GOCACHE="$GOCACHE_VALUE" GOMODCACHE="$GOMODCACHE_VALUE" GOWORK=off wails dev -m -nosyncgomod -nocolour -devserver "localhost:$DEV_PORT" > "$EVIDENCE_DIR/app.log" 2>&1 &
 PID=$!
 printf '%s\n' "$PID" > "$PID_FILE"
 printf 'pid=%s\n' "$PID" >> "$EVIDENCE_DIR/launch.txt"

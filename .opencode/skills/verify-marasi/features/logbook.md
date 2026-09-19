@@ -9,7 +9,7 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Logbook` or press `Command+7`. Expand `Logbook Settings` to expose search, tabs, creation controls, and report export.
+Select the rail item titled `Logbook` or press `Command+7`. `Logbook Settings` starts closed. Expand it to expose search, tabs, creation controls, and report export.
 
 ## Driving it with Chrome CDP
 

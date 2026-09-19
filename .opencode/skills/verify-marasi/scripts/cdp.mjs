@@ -14,7 +14,7 @@ const routes = {
 	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Ledger Settings" },
 	compass: { selector: '[title="Compass"]', path: "/compass", expected: "Compass Settings" },
 	checkpoint: { selector: '[title="Checkpoint"]', path: "/checkpoint", expected: "Checkpoint" },
-	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "No Launchpads" },
+	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Launchpad Settings" },
 	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Armory Settings" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "Logbook Settings" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
@@ -22,7 +22,8 @@ const routes = {
 };
 
 const overlayPainted = `Boolean((() => {
-	const card = document.querySelector("dialog[open], [data-testid='modal-component'] .modal-example-form, [data-testid='modal-component']");
+	const overlay = document.querySelector("dialog[open], [data-testid='modal-component']");
+	const card = overlay?.querySelector(".modal-example-form") || overlay;
 	const box = card?.getBoundingClientRect();
 	return box && box.width > 100 && box.height > 100;
 })())`;
