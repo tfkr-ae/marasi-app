@@ -5,6 +5,7 @@ go 1.26.0
 replace github.com/tfkr-ae/marasi => ../service-implementation
 
 require (
+	github.com/google/martian v2.1.0+incompatible
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v2 v2.10.1
 )
@@ -17,7 +18,6 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.11 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/google/martian v2.1.0+incompatible // indirect
 	github.com/jmoiron/sqlx v1.4.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
