@@ -15,6 +15,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/tfkr-ae/marasi/wordlist"
 
 	marasi "github.com/tfkr-ae/marasi"
+	"github.com/tfkr-ae/marasi/service"
 
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -36,7 +38,7 @@ import (
 type App struct {
 	ctx      context.Context
 	Proxy    *marasi.Proxy
-	Listener net.Listener
+	listener service.ListenerLifecycle
 	Config   *Config
 }
 
@@ -68,7 +70,7 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &App{Proxy: Proxy, Config: config}
+	return &App{Proxy: Proxy, Config: config, listener: service.NewListenerLifecycle(Proxy, log.Writer())}
 }
 
 // startup is called when the app starts. The context is saved
@@ -170,56 +172,42 @@ func (a *App) GetWaypoints() (map[string]string, error) {
 	return a.Proxy.Waypoints, nil
 }
 
-// Utility function to detect if the listener was closed cleanly
-func isListenerClosed(err error) bool {
-	if err == nil {
-		return true
+func listenerSettings(addr string, port string) (service.ListenerSettings, error) {
+	if addr == "" || port == "" {
+		return service.ListenerSettings{}, service.ErrListenerUnavailable
 	}
-	// Customize this check to identify errors that are expected on listener close
-	return strings.Contains(err.Error(), "use of closed network connection")
+	parsed, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return service.ListenerSettings{}, service.ErrListenerUnavailable
+	}
+	portNumber := uint16(parsed)
+	return service.ListenerSettings{Address: &addr, Port: &portNumber}, nil
 }
 
 func (a *App) StartProxy(addr string, port string) error {
-	if a.Listener != nil {
-		if err := a.StopProxy(); err != nil {
-			return fmt.Errorf("error stopping existing listener: %w", err)
-		}
-	}
-	a.Proxy.WithOptions(marasi.WithTLS())
-	listener, err := a.Proxy.GetListener(addr, port)
+	settings, err := listenerSettings(addr, port)
 	if err != nil {
-		log.Print(err)
-		return fmt.Errorf("getting listener on %s:%s", addr, port)
+		return err
 	}
-	a.Listener = listener
-	go func() {
-		err := a.Proxy.Serve(listener)
-		if err != nil && !isListenerClosed(err) {
-			log.Printf("proxy error : %v", err)
-		}
-	}()
-	return nil
-
+	if err := a.Proxy.WithOptions(marasi.WithTLS()); err != nil {
+		return err
+	}
+	_, err = a.listener.Start(context.Background(), settings)
+	return err
 }
 
 func (a *App) StopProxy() error {
-	var stopErr error
-	if a.Listener != nil {
-		// Close the listener to stop accepting new connections.
-		if err := a.Listener.Close(); err != nil {
-			stopErr = fmt.Errorf("error stopping listener: %w", err)
-		}
-		a.Listener = nil
-	}
+	_, err := a.listener.Stop(context.Background())
+	return err
+}
 
-	if err := a.Proxy.CloseWebSocketsAndFlush(); err != nil {
-		stopErr = errors.Join(
-			stopErr,
-			fmt.Errorf("closing websocket connections: %w", err),
-		)
+func (a *App) UpdateProxy(addr string, port string) error {
+	settings, err := listenerSettings(addr, port)
+	if err != nil {
+		return err
 	}
-
-	return stopErr
+	_, err = a.listener.Update(context.Background(), settings)
+	return err
 }
 
 // OpenFileDialog shows a file selection dialog and returns the selected file path
@@ -355,8 +343,12 @@ func (a *App) SetupScratchpad() error {
 
 }
 func (a *App) close(ctx context.Context) {
-	a.Proxy.Close()
-	a.Listener = nil
+	_ = a.listener.Shutdown()
+	if a.Proxy.DBCloser != nil {
+		if err := a.Proxy.DBCloser.Close(); err != nil {
+			log.Printf("closing project database: %v", err)
+		}
+	}
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
@@ -763,7 +755,7 @@ func (a *App) GetLaunchpads() []*domain.Launchpad {
 	return launchpad
 }
 
-func (a *App) GetLaunchpadRequests(id uuid.UUID) []*domain.ProxyRequest {
+func (a *App) GetLaunchpadRequests(id uuid.UUID) []*domain.RequestResponseSummary {
 	launchpadRequest, err := a.Proxy.LaunchpadRepo.GetLaunchpadRequests(id)
 	if err != nil {
 		return nil
@@ -795,7 +787,7 @@ func (a *App) DeleteLaunchpad(id uuid.UUID) error {
 	return nil
 }
 func (a *App) UpdateLaunchpadEntry(id uuid.UUID, name string, description string) error {
-	err := a.Proxy.LaunchpadRepo.UpdateLaunchpad(id, name, description)
+	err := a.Proxy.LaunchpadRepo.UpdateLaunchpad(id, &name, &description)
 	if err != nil {
 		return err
 	}
