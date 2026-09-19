@@ -94,13 +94,8 @@ func (a *App) startup(ctx context.Context) {
 			runtime.EventsEmit(a.ctx, "log", logItem)
 			return nil
 		}),
-		marasi.WithInterceptHandler(func(intercepted *marasi.Intercepted) error {
-			switch intercepted.Type {
-			case "request":
-				runtime.EventsEmit(a.ctx, "intercepted", "request")
-			case "response":
-				runtime.EventsEmit(a.ctx, "intercepted", "response")
-			}
+		marasi.WithInterceptHandler(func(item domain.CheckpointItem) error {
+			runtime.EventsEmit(a.ctx, "intercepted", item.Type)
 			return nil
 		}),
 		marasi.WithLogger(logHandler),
@@ -135,20 +130,16 @@ func (a *App) DeleteWaypoint(host string) error {
 }
 
 func (a *App) GetInterceptFlag() bool {
-	return a.Proxy.InterceptFlag
+	return a.Proxy.GetIntercept()
 }
 
-func (a *App) InterceptResponse() {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		// No need to check really because the value is ignored if it is a response
-		a.Proxy.InterceptedQueue = a.Proxy.InterceptedQueue[1:]
-		item.Channel <- marasi.InterceptionTuple{Resume: true, ShouldInterceptResponse: true}
-	}
+func (a *App) SetIntercept(enabled bool) bool {
+	a.Proxy.SetIntercept(enabled)
+	return a.Proxy.GetIntercept()
 }
+
 func (a *App) ToggleIntercept() bool {
-	a.Proxy.InterceptFlag = !a.Proxy.InterceptFlag
-	return a.Proxy.InterceptFlag
+	return a.SetIntercept(!a.Proxy.GetIntercept())
 }
 func (a *App) GetExtensionLogs(name string) ([]extensions.ExtensionLog, error) {
 	if extension, ok := a.Proxy.GetExtension(name); ok {
@@ -475,28 +466,37 @@ func (a *App) GetResponse(id uuid.UUID) *domain.ProxyResponse {
 	return response
 }
 
-type InterceptedResult struct {
-	Raw  string `json:"raw"`
-	Type string `json:"type"`
+func (a *App) GetCheckpointItems() []domain.CheckpointItem {
+	return a.Proxy.CheckpointItems()
 }
 
-func (a *App) GetIntercepted() InterceptedResult {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		intercepted := a.Proxy.InterceptedQueue[0]
-		return InterceptedResult{
-			Raw:  intercepted.Raw,
-			Type: intercepted.Type,
+func (a *App) GetCheckpoint(id uuid.UUID) *domain.CheckpointItem {
+	item, ok := a.Proxy.GetCheckpoint(id)
+	if !ok {
+		return nil
+	}
+	return &item
+}
+
+func (a *App) ForwardCheckpoint(id uuid.UUID, body string, interceptResponse bool) error {
+	fwd := marasi.CheckpointForward{InterceptResponse: interceptResponse}
+	if body != "" {
+		item, ok := a.Proxy.GetCheckpoint(id)
+		if !ok {
+			return fmt.Errorf("%w: %s", marasi.ErrCheckpointNotFound, id)
+		}
+		raw := []byte(body)
+		if item.Type == domain.CheckpointTypeWebSocket {
+			fwd.Payload = &raw
+		} else {
+			fwd.Raw = &raw
 		}
 	}
-	return InterceptedResult{}
+	return a.Proxy.ForwardCheckpoint(id, fwd)
 }
 
-func (a *App) DropIntercepted() {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		a.Proxy.InterceptedQueue = a.Proxy.InterceptedQueue[1:]
-		item.Channel <- marasi.InterceptionTuple{Resume: false, ShouldInterceptResponse: false}
-	}
+func (a *App) DropCheckpoint(id uuid.UUID) error {
+	return a.Proxy.DropCheckpoint(id)
 }
 func (a *App) Repeat(raw string, repeaterId string, useHttps bool) {
 	err := a.Proxy.Launch(raw, repeaterId, useHttps)
@@ -504,49 +504,17 @@ func (a *App) Repeat(raw string, repeaterId string, useHttps bool) {
 		log.Println(err)
 	}
 }
-func (a *App) ForwardIntercepted(body string) {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		switch item.Type {
-		case "request":
-			_, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(body))))
-			if err != nil {
-				log.Print(err)
-				return
-			}
-		case "response":
-			_, err := http.ReadResponse(bufio.NewReader(bytes.NewReader([]byte(body))), nil)
-			if err != nil {
-				log.Print(err)
-				return
-			}
+func (a *App) CheckHTTPParse(body string, itemType string) string {
+	switch itemType {
+	case domain.CheckpointTypeRequest:
+		_, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(body))))
+		if err != nil {
+			return err.Error()
 		}
-		item.Raw = body
-		a.Proxy.InterceptedQueue = a.Proxy.InterceptedQueue[1:]
-		item.Channel <- marasi.InterceptionTuple{Resume: true, ShouldInterceptResponse: false}
-	}
-}
-
-func (a *App) GetInterceptedQueue() int {
-	return len(a.Proxy.InterceptedQueue)
-}
-
-func (a *App) CheckHTTPParse(body string) string {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		switch item.Type {
-		case "request":
-			_, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(body))))
-			if err != nil {
-				log.Print(err)
-				return err.Error()
-			}
-		case "response":
-			_, err := http.ReadResponse(bufio.NewReader(bytes.NewReader([]byte(body))), nil)
-			if err != nil {
-				log.Print(err)
-				return err.Error()
-			}
+	case domain.CheckpointTypeResponse:
+		_, err := http.ReadResponse(bufio.NewReader(bytes.NewReader([]byte(body))), nil)
+		if err != nil {
+			return err.Error()
 		}
 	}
 	return ""

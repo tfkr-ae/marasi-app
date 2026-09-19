@@ -7,14 +7,12 @@
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";
 	import {
-		GetIntercepted,
-		GetInterceptedQueue,
+		GetCheckpointItems,
 		CheckHTTPParse,
-		ForwardIntercepted,
-		DropIntercepted,
+		ForwardCheckpoint,
+		DropCheckpoint,
 		RunExtension,
 		ToggleIntercept,
-		InterceptResponse,
 	} from "../../lib/wailsjs/go/main/App";
 	import { onMount } from "svelte";
 	import {
@@ -49,6 +47,7 @@
 
 	let intercepted = "";
 	let type = "";
+	let currentId = null;
 	let error = "";
 	let accOpened;
 	const checkpointMenu = [
@@ -205,35 +204,68 @@
 		CheckSyntax(intercepted);
 	}
 	let interceptedCount = 0;
+	function dumpText(item) {
+		const raw = item?.Raw;
+		if (typeof raw === "string") {
+			return raw;
+		}
+		if (raw instanceof Uint8Array) {
+			return new TextDecoder().decode(raw);
+		}
+		if (Array.isArray(raw)) {
+			return new TextDecoder().decode(Uint8Array.from(raw));
+		}
+		return "";
+	}
 	function CheckSyntax(text) {
-		CheckHTTPParse(text).then((response) => {
+		if (!type) {
+			error = "";
+			return;
+		}
+		CheckHTTPParse(text, type).then((response) => {
 			error = response;
 		});
 	}
 	function forwardAndInterceptResponse() {
-		InterceptResponse().then(() => {
+		if (!currentId) {
+			return;
+		}
+		ForwardCheckpoint(currentId, intercepted, true).then(() => {
 			GetNext();
 		});
 	}
 	function drop() {
-		DropIntercepted().then(() => {
+		if (!currentId) {
+			return;
+		}
+		DropCheckpoint(currentId).then(() => {
 			GetNext();
 		});
 	}
 	function forward(body) {
-		ForwardIntercepted(body).then(() => {
+		if (!currentId) {
+			return;
+		}
+		ForwardCheckpoint(currentId, body, false).then(() => {
 			GetNext();
 		});
 	}
 	function GetNext() {
-		GetIntercepted().then((result) => {
-			intercepted = result.raw
-				? result.raw
-				: "No item in queue";
-			type = result.type ? result.type : "";
-		});
-		GetInterceptedQueue().then((count) => {
-			interceptedCount = count;
+		GetCheckpointItems().then((items) => {
+			const httpItems = (items || []).filter((item) => {
+				return item.Type === "request" || item.Type === "response";
+			});
+			interceptedCount = httpItems.length;
+			const item = httpItems[0];
+			if (item) {
+				currentId = item.ID;
+				intercepted = dumpText(item);
+				type = item.Type;
+				return;
+			}
+			currentId = null;
+			intercepted = "No item in queue";
+			type = "";
 		});
 	}
 	function getLang(body) {
@@ -253,9 +285,6 @@
 			GetNext();
 		});
 		GetNext();
-		GetInterceptedQueue().then((count) => {
-			interceptedCount = count;
-		});
 		return () => {
 			unsubscribe();
 		};
@@ -346,7 +375,7 @@
 		>
 		<button
 			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
-			disabled={type !== "request"}
+			disabled={error !== "" || type !== "request"}
 			on:click={() => {
 				forwardAndInterceptResponse();
 			}}>Intercept Response</button

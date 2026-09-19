@@ -4,7 +4,6 @@ import (
 	"github.com/google/uuid"
 	marasi "github.com/tfkr-ae/marasi"
 	"github.com/tfkr-ae/marasi/domain"
-	marasiws "github.com/tfkr-ae/marasi/websocket"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -53,10 +52,13 @@ func (a *App) GetWSInterceptFlag() bool {
 	return a.Proxy.GetWebSocketIntercept()
 }
 
-func (a *App) ToggleWSIntercept() bool {
-	enabled := !a.Proxy.GetWebSocketIntercept()
+func (a *App) SetWSIntercept(enabled bool) bool {
 	a.Proxy.SetWebSocketIntercept(enabled)
-	return enabled
+	return a.Proxy.GetWebSocketIntercept()
+}
+
+func (a *App) ToggleWSIntercept() bool {
+	return a.SetWSIntercept(!a.Proxy.GetWebSocketIntercept())
 }
 
 func (a *App) GetWSIntercepted(requestID uuid.UUID) *domain.WebSocketMessage {
@@ -70,15 +72,13 @@ func (a *App) GetWSIntercepted(requestID uuid.UUID) *domain.WebSocketMessage {
 }
 
 func (a *App) ForwardWSIntercepted(messageID uuid.UUID, opcode int, payload string) error {
-	return a.Proxy.ResolveWebSocketInterception(messageID, marasiws.InterceptionDecision{
-		Resume:  true,
-		Opcode:  opcode,
-		Payload: []byte(payload),
+	body := []byte(payload)
+	return a.Proxy.ForwardCheckpoint(messageID, marasi.CheckpointForward{
+		Payload: &body,
+		Opcode:  &opcode,
 	})
 }
 
 func (a *App) DropWSIntercepted(messageID uuid.UUID) error {
-	return a.Proxy.ResolveWebSocketInterception(messageID, marasiws.InterceptionDecision{
-		Resume: false,
-	})
+	return a.Proxy.DropCheckpoint(messageID)
 }

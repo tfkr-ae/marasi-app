@@ -44,14 +44,11 @@ func TestOpenProjectSwitchesThroughLifecycle(t *testing.T) {
 }
 
 func TestOpenProjectSurfacesProjectBusy(t *testing.T) {
-	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
-		t.Fatalf("opening scratchpad: %v", err)
-	}
+	app := newCheckpointApp(t)
 	oldPath := scratchpadPath(t, app)
 	oldRepo := app.Proxy.TrafficRepo
-	intercepted := &marasi.Intercepted{Type: "request", Channel: make(chan marasi.InterceptionTuple)}
-	app.Proxy.InterceptedQueue = []*marasi.Intercepted{intercepted}
+	_, reqID, done := startAppRequestHold(t, app)
+	waitForAppCheckpoint(t, app, 1)
 
 	name, err := app.OpenProject("other")
 	if !errors.Is(err, service.ErrProjectBusy) {
@@ -61,13 +58,19 @@ func TestOpenProjectSurfacesProjectBusy(t *testing.T) {
 	if app.Proxy.TrafficRepo != oldRepo {
 		t.Fatal("wanted old project repositories left in place")
 	}
-	if len(app.Proxy.InterceptedQueue) != 1 || app.Proxy.InterceptedQueue[0] != intercepted {
-		t.Fatal("wanted queued intercept left untouched")
+	if !app.Proxy.HasPendingCheckpoint() {
+		t.Fatal("wanted pending checkpoint left untouched")
 	}
 	select {
-	case <-intercepted.Channel:
-		t.Fatal("wanted intercept still waiting")
+	case <-done:
+		t.Fatal("wanted checkpoint still waiting")
 	default:
+	}
+	if err := app.DropCheckpoint(reqID); err != nil {
+		t.Fatalf("dropping checkpoint: %v", err)
+	}
+	if err := receiveAppHoldResult(t, done); !errors.Is(err, marasi.ErrDropped) {
+		t.Fatalf("wanted: %v\ngot: %v", marasi.ErrDropped, err)
 	}
 }
 
