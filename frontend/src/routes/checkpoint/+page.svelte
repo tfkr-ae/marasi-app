@@ -206,8 +206,20 @@
 	let interceptedCount = 0;
 	function dumpText(item) {
 		const raw = item?.Raw;
+		if (!raw) {
+			return "";
+		}
 		if (typeof raw === "string") {
-			return raw;
+			try {
+				const binary = atob(raw);
+				return new TextDecoder().decode(
+					Uint8Array.from(binary, (char) =>
+						char.charCodeAt(0),
+					),
+				);
+			} catch {
+				return raw;
+			}
 		}
 		if (raw instanceof Uint8Array) {
 			return new TextDecoder().decode(raw);
