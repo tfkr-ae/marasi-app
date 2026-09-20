@@ -10,7 +10,7 @@
 
 ## How to get to it (user POV)
 
-Launch Marasi or select the rail item titled `Home`. The command shortcut is `Command+1`. A ready scratchpad shows `scratchpad Project Dashboard`, listener address and port, `Open Project`, `Download Certificate`, `Start Chrome`, and an application log table with Level, Message, and Timestamp columns.
+Launch Marasi or select the rail item titled `Home`. The command shortcut is `Command+1`. A ready scratchpad shows `scratchpad Project Dashboard`, listener address and port, `Open Project`, `Download Certificate`, `Start Chrome`, and an application log table with ID, Level, Message, Request Response ID, Extension, and Timestamp columns.
 
 ## Driving it with Chrome CDP
 

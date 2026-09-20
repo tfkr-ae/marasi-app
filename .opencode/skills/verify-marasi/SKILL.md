@@ -33,7 +33,7 @@ Run this first whenever startup, automation, or a result looks wrong:
 .opencode/skills/verify-marasi/scripts/doctor.sh
 ```
 
-It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. A green doctor writes `doctor.txt` and prints the exact paths.
+It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. Doctor and drive attach to the Chrome page whose URL matches the Wails origin, not the first `type=page` target. Headless Chrome can also keep `chrome://settings/help` and omnibox pages around. A green doctor writes `doctor.txt` and prints the exact paths.
 
 ## Drive
 
@@ -60,7 +60,7 @@ Most in-app actions have that painted control plus a MarasiKeys binding. Root bi
 .opencode/skills/verify-marasi/scripts/drive.sh dashboard compare "Open Project" "cmd+o"
 ```
 
-The compare action clicks the painted label, captures the overlay or route change, restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (`MetaLeft` down, key, key up, `MetaLeft` up). It fails unless both paths paint the same overlay text or land on the same route.
+The compare action requires the feature route to already be visible. It clicks the painted label, captures the overlay or route change, restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (`MetaLeft` down, key, key up, `MetaLeft` up). It fails unless both paths paint the same overlay text or land on the same route. After a pass it dismisses a leftover overlay with Escape so the next drive is not blocked.
 
 The dashboard `theme` action leaves Home for Settings, sends `Command+U` twice, and fails unless the global appearance changes and returns to its original mode. This proves the dashboard-owned shortcut still reads live state after Home is destroyed.
 

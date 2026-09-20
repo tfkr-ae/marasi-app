@@ -13,7 +13,7 @@ Select the rail item titled `Logbook` or press `Command+7`. `Logbook Settings` s
 
 ## Driving it with Chrome CDP
 
-Run `scripts/drive.sh logbook` for route proof. Create a finding, replace its title with a unique marker, close the modal, search for the marker, and reopen the card. Capture the filtered card and a read-only query of the persisted finding. The report drawer is browser-verifiable, but saving a report uses a native dialog.
+Run `scripts/drive.sh logbook` for route proof. Expand `Logbook Settings`, click the painted `Finding` button, replace title `Draft Finding` with a unique marker, close the modal, search for the marker, and reopen the card. Capture the filtered card and a read-only query of the `findings` table. The report drawer is browser-verifiable, but saving a report uses a native dialog.
 
 ## Gotchas
 

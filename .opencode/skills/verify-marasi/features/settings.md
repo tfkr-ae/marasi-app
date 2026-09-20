@@ -12,11 +12,11 @@ Select the rail item titled `Settings`. The page exposes `Marasi Settings`, Wayp
 
 ## Driving it with Chrome CDP
 
-Run `scripts/drive.sh settings` for route proof. For persistence, toggle Vim mode and confirm `vim_enabled` changed in the isolated `marasi_appconfig.yaml`, then toggle it back and prove the original value was restored.
+Run `scripts/drive.sh settings` for route proof. For persistence, click the painted `Vim Enabled` control and confirm `vim_enabled` changed in the isolated `marasi_appconfig.yaml`, then click it again and prove the original value was restored.
 
 ## Gotchas
 
 - General settings persist to `marasi_appconfig.yaml`, Chrome settings to `marasi_config.yaml`, and waypoints to the project database.
 - Address and port edits do not visibly restart the current listener.
 - Chrome Profiles is below the fold at the `1600x900` verification viewport.
-- Profile creation and deletion also modify directories in the isolated home.
+- Adding a Chrome profile only appends YAML. Deleting a profile also removes `$configDir/chrome_profiles/<name>`. Directories appear later when Chrome starts.

@@ -17,7 +17,7 @@ Run `scripts/drive.sh armory` for route proof. For a run, use a disposable local
 
 ## Gotchas
 
-- A fresh scratchpad may have no templates or wordlists.
+- A fresh scratchpad may have no templates. Wordlists live in `$APP_CONFIG_DIR/wordlists`, not the `.marasi` file. Seed that directory for an isolated run.
 - Validation is debounced and temporarily disables run controls.
 - The payload-position count must match the selected wordlists and attack mode.
 - Polling makes status evidence timing-sensitive; wait for a terminal state.

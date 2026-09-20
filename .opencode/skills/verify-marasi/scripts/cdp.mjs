@@ -28,12 +28,18 @@ const overlayPainted = `Boolean((() => {
 	return box && box.width > 100 && box.height > 100;
 })())`;
 
+const appOrigin = new URL(appURL).origin;
 const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then((response) => {
 	if (!response.ok) throw new Error(`CDP target list returned ${response.status}`);
 	return response.json();
 });
-const target = targets.find((entry) => entry.type === "page");
-if (!target?.webSocketDebuggerUrl) throw new Error("Chrome has no debuggable page target");
+const pages = targets.filter((entry) => entry.type === "page");
+const target = mode === "launch"
+	? pages.find((entry) => entry.url === "about:blank") || pages.find((entry) => entry.url?.startsWith(appOrigin)) || pages[0]
+	: pages.find((entry) => entry.url?.startsWith(appOrigin));
+if (!target?.webSocketDebuggerUrl) {
+	throw new Error(`Chrome has no Marasi page at ${appOrigin}; pages=${JSON.stringify(pages.map((entry) => entry.url))}`);
+}
 
 const socket = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => {
@@ -303,6 +309,11 @@ async function driveCompare(route) {
 	fs.writeFileSync(`${evidenceDir}/${name}-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
 	if (!compare.sameKind || !compare.samePath || !compare.sameOverlay) {
 		throw new Error(`${shortcut} did not match clicking "${label}": ${JSON.stringify(compare)}`);
+	}
+	if (shortcutResult.kind === "overlay") {
+		await pressEscape();
+		await waitFor(`!${overlayPainted}`, "overlay closed after compare", 20, 250);
+		await sleep(200);
 	}
 	console.log(`feature=${feature}\naction=compare\nlabel=${label}\nshortcut=${shortcut}\nresult=${clickResult.kind} matched\nevidence=${evidenceDir}`);
 }
