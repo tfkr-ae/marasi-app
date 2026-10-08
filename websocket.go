@@ -41,7 +41,8 @@ func (a *App) GetWebSocketConnection(id uuid.UUID) *domain.WebSocketConnection {
 }
 
 func (a *App) InjectWebSocketMessage(id uuid.UUID, direction string, opcode int, payload string) error {
-	return a.Proxy.InjectWebSocketMessage(id, direction, opcode, []byte(payload))
+	_, err := a.Proxy.InjectWebSocketMessage(id, direction, opcode, []byte(payload))
+	return err
 }
 
 func (a *App) CloseWebSocket(id uuid.UUID, code int, reason string) error {

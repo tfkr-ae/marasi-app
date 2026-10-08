@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -192,6 +193,26 @@ func TestAppCheckpoint(t *testing.T) {
 		}
 		if string(message.Frame.Payload) != "edited" {
 			t.Fatalf("wanted payload %q\ngot: %q", "edited", message.Frame.Payload)
+		}
+	})
+
+	t.Run("should drop pending HTTP and WebSocket items on app exit", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		_, _, requestDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 1)
+		_, webSocketDone := startAppWebSocketHold(t, app)
+		waitForAppCheckpoint(t, app, 2)
+
+		app.close(context.Background())
+
+		if err := receiveAppHoldResult(t, requestDone); !errors.Is(err, marasi.ErrDropped) {
+			t.Fatalf("wanted: %v\ngot: %v", marasi.ErrDropped, err)
+		}
+		if err := receiveAppHoldResult(t, webSocketDone); err != nil {
+			t.Fatalf("wanted: nil\ngot: %v", err)
+		}
+		if remaining := app.GetCheckpointItems(); len(remaining) != 0 {
+			t.Fatalf("wanted empty list, got %d items", len(remaining))
 		}
 	})
 }
