@@ -106,8 +106,7 @@ func newProjectApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("creating proxy: %v", err)
 	}
-	listener := service.NewListenerLifecycle(proxy, io.Discard)
-	projects := service.NewProjectLifecycle(proxy, configDir, manager, logger)
+	listener, projects := newLifecycles(proxy, configDir, manager, io.Discard, logger)
 	t.Cleanup(func() {
 		if err := listener.Shutdown(); err != nil {
 			t.Fatalf("shutting down listener: %v", err)
@@ -117,6 +116,15 @@ func newProjectApp(t *testing.T) *App {
 		}
 	})
 	return &App{Proxy: proxy, listener: listener, projects: projects}
+}
+
+func newScratchpadApp(t *testing.T) *App {
+	t.Helper()
+	app := newProjectApp(t)
+	if err := app.SetupScratchpad(); err != nil {
+		t.Fatalf("opening scratchpad: %v", err)
+	}
+	return app
 }
 
 func scratchpadPath(t *testing.T, app *App) string {

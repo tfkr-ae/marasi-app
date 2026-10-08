@@ -219,10 +219,7 @@ func TestAppCheckpoint(t *testing.T) {
 
 func newCheckpointApp(t *testing.T) *App {
 	t.Helper()
-	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
-		t.Fatalf("opening scratchpad: %v", err)
-	}
+	app := newScratchpadApp(t)
 	app.SetIntercept(true)
 	return app
 }

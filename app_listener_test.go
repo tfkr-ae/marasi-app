@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -211,6 +213,50 @@ func TestCloseUsesTerminalShutdown(t *testing.T) {
 	}
 }
 
+func TestCloseInterruptsExtensionHoldingRequest(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		_, _ = response.Write([]byte(request.URL.Path))
+	}))
+	defer origin.Close()
+
+	app := newScratchpadApp(t)
+	events := &recordedEvents{}
+	if err := app.attachExtensionHooks(events.emit); err != nil {
+		t.Fatalf("attaching extension hooks: %v", err)
+	}
+	hang := `function processRequest(request) print("entered"); while true do end end`
+	if err := app.RunExtension("workshop", hang); err != nil {
+		t.Fatalf("installing hanging hook: %v", err)
+	}
+	if err := app.StartProxy("127.0.0.1", "0"); err != nil {
+		t.Fatalf("starting listener: %v", err)
+	}
+	proxyURL := &url.URL{Scheme: "http", Host: listenerAddress(t, app)}
+	transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	go func() {
+		if response, err := client.Get(origin.URL + "/held-by-extension"); err == nil {
+			response.Body.Close()
+		}
+	}()
+	waitForExtensionLog(t, app, "workshop", "entered")
+	if !events.has("workshop-log") {
+		t.Fatal("wanted workshop-log event for the hook's print")
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		app.close(context.Background())
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("wanted close to interrupt the extension holding the request")
+	}
+}
+
 func TestStartProxyRecoversAfterUnexpectedServingFailure(t *testing.T) {
 	app := newListenerApp(t)
 	if err := app.StartProxy("127.0.0.1", "0"); err != nil {
@@ -294,4 +340,39 @@ func closeActiveProxyListener(t *testing.T, proxy *marasi.Proxy) {
 	if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		t.Fatalf("closing active proxy listener: %v", err)
 	}
+}
+
+func waitForExtensionLog(t *testing.T, app *App, name, text string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		logs, err := app.GetExtensionLogs(name)
+		if err != nil {
+			t.Fatalf("reading %s logs: %v", name, err)
+		}
+		for _, entry := range logs {
+			if entry.Text == text {
+				return
+			}
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s log %q", name, text)
+}
+
+type recordedEvents struct {
+	mu    sync.Mutex
+	names []string
+}
+
+func (events *recordedEvents) emit(name string, _ ...any) {
+	events.mu.Lock()
+	defer events.mu.Unlock()
+	events.names = append(events.names, name)
+}
+
+func (events *recordedEvents) has(name string) bool {
+	events.mu.Lock()
+	defer events.mu.Unlock()
+	return slices.Contains(events.names, name)
 }

@@ -7,7 +7,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -68,12 +70,22 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
+	listener, projects := newLifecycles(Proxy, appConfigDir, wordlists, log.Writer(), Proxy.Logger)
 	return &App{
 		Proxy:    Proxy,
 		Config:   config,
-		listener: service.NewListenerLifecycle(Proxy, log.Writer()),
-		projects: service.NewProjectLifecycle(Proxy, appConfigDir, wordlists, Proxy.Logger),
+		listener: listener,
+		projects: projects,
 	}
+}
+
+// newLifecycles binds the project to the listener so listener shutdown
+// interrupts project Lua before draining the requests it may be holding.
+func newLifecycles(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, logWriter io.Writer, logger *slog.Logger) (service.ListenerLifecycle, *service.ProjectLifecycle) {
+	listener := service.NewListenerLifecycle(proxy, logWriter)
+	projects := service.NewProjectLifecycle(proxy, configDir, wordlists, logger)
+	listener.BindProject(projects)
+	return listener, projects
 }
 
 // startup is called when the app starts. The context is saved
@@ -118,15 +130,10 @@ func (a *App) SetFlag(name string, value string) (*Config, error) {
 	return a.Config, nil
 }
 func (a *App) DeleteWaypoint(host string) error {
-	err := a.Proxy.WaypointRepo.DeleteWaypoint(host)
-	if err != nil {
-		return err
-	}
-	err = a.Proxy.SyncWaypoints()
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := a.Proxy.ApplyWaypointChange(func(repo domain.WaypointRepository) (bool, error) {
+		return true, repo.DeleteWaypoint(host)
+	})
+	return err
 }
 
 func (a *App) GetInterceptFlag() bool {
@@ -143,20 +150,15 @@ func (a *App) ToggleIntercept() bool {
 }
 func (a *App) GetExtensionLogs(name string) ([]extensions.ExtensionLog, error) {
 	if extension, ok := a.Proxy.GetExtension(name); ok {
-		return extension.Logs, nil
+		return extension.LogSnapshot(), nil
 	}
 	return []extensions.ExtensionLog{}, fmt.Errorf("extension %s not found", name)
 }
 func (a *App) CreateWaypoint(host string, override string) error {
-	err := a.Proxy.WaypointRepo.CreateOrUpdateWaypoint(host, override)
-	if err != nil {
-		return err
-	}
-	err = a.Proxy.SyncWaypoints()
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := a.Proxy.ApplyWaypointChange(func(repo domain.WaypointRepository) (bool, error) {
+		return true, repo.CreateOrUpdateWaypoint(host, override)
+	})
+	return err
 }
 func (a *App) GetWaypoints() (map[string]string, error) {
 	err := a.Proxy.SyncWaypoints()
@@ -710,13 +712,13 @@ func (a *App) GetExtensionCode(extensionName string) (string, error) {
 }
 
 func (a *App) RunExtension(extensionName string, code string) error {
-	err := a.Proxy.ExtensionRepo.UpdateExtensionLuaCodeByName(extensionName, code)
-	if err != nil {
-		return fmt.Errorf("updating code for %s : %w", extensionName, err)
-	}
 	extension, ok := a.Proxy.GetExtension(extensionName)
 	if !ok {
 		return fmt.Errorf("extension %s not found", extensionName)
+	}
+	err := extension.UpdateLuaContent(a.Proxy.ExtensionRepo, code)
+	if err != nil {
+		return fmt.Errorf("updating code for %s : %w", extensionName, err)
 	}
 
 	err = extension.ExecuteLua(code)
@@ -726,12 +728,7 @@ func (a *App) RunExtension(extensionName string, code string) error {
 	return nil
 }
 func (a *App) DoExtender(code string) {
-	err := a.Proxy.ExtensionRepo.UpdateExtensionLuaCodeByName("workshop", code)
-	if err != nil {
-		log.Print(err)
-	}
-	if ext, ok := a.Proxy.GetExtension("workshop"); ok {
-		err := ext.ExecuteLua(code)
+	if err := a.RunExtension("workshop", code); err != nil {
 		log.Print(err)
 	}
 }
