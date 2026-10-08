@@ -39,6 +39,7 @@ type App struct {
 	Proxy    *marasi.Proxy
 	listener service.ListenerLifecycle
 	projects *service.ProjectLifecycle
+	chrome   *service.Chrome
 	Config   *Config
 }
 
@@ -70,22 +71,24 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
-	listener, projects := newLifecycles(Proxy, appConfigDir, wordlists, log.Writer(), Proxy.Logger)
-	return &App{
-		Proxy:    Proxy,
-		Config:   config,
-		listener: listener,
-		projects: projects,
-	}
+	app := newApp(Proxy, appConfigDir, wordlists, log.Writer(), Proxy.Logger)
+	app.Config = config
+	return app
 }
 
-// newLifecycles binds the project to the listener so listener shutdown
-// interrupts project Lua before draining the requests it may be holding.
-func newLifecycles(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, logWriter io.Writer, logger *slog.Logger) (service.ListenerLifecycle, *service.ProjectLifecycle) {
+// newApp wires the shared service lifecycles around proxy. The project is
+// bound to the listener so listener shutdown interrupts project Lua before
+// draining the requests it may be holding.
+func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, logWriter io.Writer, logger *slog.Logger) *App {
 	listener := service.NewListenerLifecycle(proxy, logWriter)
 	projects := service.NewProjectLifecycle(proxy, configDir, wordlists, logger)
 	listener.BindProject(projects)
-	return listener, projects
+	return &App{
+		Proxy:    proxy,
+		listener: listener,
+		projects: projects,
+		chrome:   service.NewChrome(proxy, listener, logWriter),
+	}
 }
 
 // startup is called when the app starts. The context is saved
@@ -430,7 +433,7 @@ func (a *App) CountNotes() (Dashboard, error) {
 	return dashboard, nil
 }
 func (a *App) StartBrowser(profile string) error {
-	err := a.Proxy.StartChrome(profile)
+	_, err := a.chrome.Start(context.Background(), profile)
 	if err != nil {
 		return fmt.Errorf("starting chrome : %w", err)
 	}
@@ -832,46 +835,59 @@ func (a *App) GetRecentProjects() []struct {
 	return recent
 }
 
+// Chrome settings live in the machine config shared with service instances,
+// so each call rereads it under the shared config lock.
+
 func (a *App) GetChromeProfiles() []string {
-	return a.Proxy.Config.ChromeProfiles
+	profiles, err := a.chrome.Profiles(context.Background())
+	if err != nil {
+		log.Printf("reading chrome profiles: %v", err)
+		return a.Proxy.Config.ChromeProfiles
+	}
+	return profiles
 }
 
 func (a *App) AddChromeProfile(name string) ([]string, error) {
-	err := a.Proxy.Config.AddChromeProfile(name)
+	profiles, err := a.chrome.AddProfile(context.Background(), name)
 	if err != nil {
 		return []string{}, err
 	}
-	return a.Proxy.Config.ChromeProfiles, nil
+	return profiles, nil
 }
 
 func (a *App) DeleteChromeProfile(name string) ([]string, error) {
-	err := a.Proxy.Config.DeleteChromeProfile(name)
+	profiles, err := a.chrome.RemoveProfile(context.Background(), name)
 	if err != nil {
 		return []string{}, err
 	}
-	return a.Proxy.Config.ChromeProfiles, nil
+	return profiles, nil
 }
 
 func (a *App) GetChromePaths() []chrome.PathConfig {
-	return a.Proxy.Config.ChromeDirs
+	paths, err := a.chrome.Paths(context.Background())
+	if err != nil {
+		log.Printf("reading chrome paths: %v", err)
+		return a.Proxy.Config.ChromeDirs
+	}
+	return paths
 }
 
 func (a *App) AddChromePath(path, os string) []chrome.PathConfig {
-	err := a.Proxy.Config.AddChromePath(path, os)
+	paths, err := a.chrome.AddPath(context.Background(), chrome.PathConfig{OS: os, Path: path})
 	if err != nil {
 		// Return something useful here
 		return []chrome.PathConfig{}
 	}
-	return a.Proxy.Config.ChromeDirs
+	return paths
 }
 
 func (a *App) DeleteChromePath(path, os string) []chrome.PathConfig {
-	err := a.Proxy.Config.DeleteChromePath(path, os)
+	paths, err := a.chrome.RemovePath(context.Background(), chrome.PathConfig{OS: os, Path: path})
 	if err != nil {
 		// Return something useful here
 		return []chrome.PathConfig{}
 	}
-	return a.Proxy.Config.ChromeDirs
+	return paths
 }
 
 func (a *App) DownloadCert() (bool, error) {

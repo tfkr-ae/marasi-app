@@ -106,16 +106,16 @@ func newProjectApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("creating proxy: %v", err)
 	}
-	listener, projects := newLifecycles(proxy, configDir, manager, io.Discard, logger)
+	app := newApp(proxy, configDir, manager, io.Discard, logger)
 	t.Cleanup(func() {
-		if err := listener.Shutdown(); err != nil {
+		if err := app.listener.Shutdown(); err != nil {
 			t.Fatalf("shutting down listener: %v", err)
 		}
-		if err := projects.Shutdown(); err != nil {
+		if err := app.projects.Shutdown(); err != nil {
 			t.Fatalf("releasing open project: %v", err)
 		}
 	})
-	return &App{Proxy: proxy, listener: listener, projects: projects}
+	return app
 }
 
 func newScratchpadApp(t *testing.T) *App {
