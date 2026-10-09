@@ -184,10 +184,30 @@ export let listener = writable({
   port: "8080",
 });
 export let activeProject = writable("Marasi");
+/**
+ * Turns a backend log event from opening a project into splash-screen text,
+ * or returns null for events the splash ignores. Migrations log one record
+ * per statement through goose, with the migration file as `source`.
+ */
+export function projectOpenMessage(log) {
+  const data = log?.data;
+  if (data?.logger === "goose" && data.source) {
+    return `Upgrading project database (${data.source})…`;
+  }
+  if (data?.component !== "db") return null;
+  if (log.message === "Connecting to SQLite...") {
+    return "Opening project database…";
+  }
+  if (log.message === "Migrations completed") {
+    return "Project database upgraded";
+  }
+  return log.message;
+}
+
 export async function openProject() {
   appState.set({
     isReady: false,
-    message: "Starting...",
+    message: "Loading " + get(activeProject) + "…",
     details: "",
   });
   requestBuffer = [];

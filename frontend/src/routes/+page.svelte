@@ -113,8 +113,26 @@
 	}
 
 	async function open(r) {
+		// Show the splash only if OpenProject is slow, as when it migrates an
+		// older project, so quick switches stay instant. Database log events
+		// replace this message while it runs (see projectOpenMessage).
+		const projectName = String(r)
+			.split(/[\\/]/)
+			.pop()
+			.replace(/\.marasi$/, "");
+		appState.update((s) => ({
+			...s,
+			message: "Opening " + projectName + "…",
+			details: "",
+		}));
+		const splashTimer = setTimeout(
+			() => appState.update((s) => ({ ...s, isReady: false })),
+			300,
+		);
 		try {
-			const name = await OpenProject(r);
+			const name = await OpenProject(r).finally(() =>
+				clearTimeout(splashTimer),
+			);
 			$appState.isReady = false;
 			activeProject.set(name);
 			WindowSetTitle(name);

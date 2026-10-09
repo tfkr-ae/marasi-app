@@ -49,6 +49,7 @@
 		addResponse,
 		appState,
 		patchWebSocketMetadata,
+		projectOpenMessage,
 	} from "../stores.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import {
@@ -181,11 +182,9 @@
 	});
 	onMount(() => {
 		EventsOn("log", (log) => {
-			if (log?.data?.component === "db") {
-				appState.update((s) => ({
-					...s,
-					message: log.message,
-				}));
+			const message = projectOpenMessage(log);
+			if (message) {
+				appState.update((s) => ({ ...s, message }));
 			}
 		});
 		autoModeWatcher();
@@ -760,7 +759,10 @@
 				class="flex items-center w-full h-full justify-center"
 			>
 				<div class="items-center justify-center">
-					<Logo size="128" />
+					<Logo
+						size="128"
+						mode={$modeCurrent ? "light" : "dark"}
+					/>
 					<p class="text-xs">
 						{$appState.message}
 					</p>

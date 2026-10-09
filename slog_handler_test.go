@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -39,6 +41,77 @@ func TestLogEventJSONForLogTable(t *testing.T) {
 			t.Fatalf("wanted empty table columns for slog log, got level=%q message=%q timestamp=%q from %s", level, message, timestamp, payload)
 		}
 	})
+}
+
+func TestRelayLoggerReachesFrontendOnceAttached(t *testing.T) {
+	var base, frontend recordingHandler
+	logger, attachFrontend := newRelayLogger(&base)
+	dbLogger := logger.With("component", "db")
+
+	dbLogger.Info("before attach")
+	attachFrontend(&frontend)
+	dbLogger.Info("Connecting to SQLite...", "path", "/tmp/p.marasi")
+
+	if got := base.messages(); len(got) != 2 {
+		t.Fatalf("wanted both records on the base handler, got %v", got)
+	}
+	got := frontend.records
+	if len(got) != 1 || got[0].message != "Connecting to SQLite..." {
+		t.Fatalf("wanted only the post-attach record on the frontend, got %+v", got)
+	}
+	if got[0].attrs["component"] != "db" || got[0].attrs["path"] != "/tmp/p.marasi" {
+		t.Fatalf("wanted component and path attributes on the frontend record, got %v", got[0].attrs)
+	}
+}
+
+type recordedLog struct {
+	message string
+	attrs   map[string]any
+}
+
+// recordingHandler keeps every record it handles, with attributes from both
+// WithAttrs and the record itself. Handlers made by WithAttrs share its log.
+type recordingHandler struct {
+	records []recordedLog
+	attrs   []slog.Attr
+	parent  *recordingHandler
+}
+
+func (h *recordingHandler) root() *recordingHandler {
+	if h.parent != nil {
+		return h.parent.root()
+	}
+	return h
+}
+
+func (h *recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *recordingHandler) Handle(_ context.Context, r slog.Record) error {
+	attrs := map[string]any{}
+	for _, a := range h.attrs {
+		attrs[a.Key] = a.Value.Any()
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		attrs[a.Key] = a.Value.Any()
+		return true
+	})
+	root := h.root()
+	root.records = append(root.records, recordedLog{message: r.Message, attrs: attrs})
+	return nil
+}
+
+func (h *recordingHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &recordingHandler{attrs: append(append([]slog.Attr{}, h.attrs...), attrs...), parent: h.root()}
+}
+
+func (h *recordingHandler) WithGroup(string) slog.Handler { return h }
+
+func (h *recordingHandler) messages() []string {
+	var out []string
+	for _, r := range h.root().records {
+		out = append(out, r.message)
+	}
+	return out
 }
 
 func logTableColumns(t *testing.T, payload []byte) (level, message, timestamp string) {
