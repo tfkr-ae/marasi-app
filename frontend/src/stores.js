@@ -17,6 +17,7 @@ import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { connectionStore } from "./stores/connectionStore";
 import { armoryStore } from "./stores/armoryStore";
+import { clearQuery } from "./stores/ledgerQuery";
 
 // Startup
 export const appState = writable({
@@ -32,7 +33,6 @@ export const extensions_ui = writable({});
 // Ledger Stores
 export const sorting = writable([{ id: "ID", desc: true }]);
 export const pagination = writable({ pageIndex: 0, pageSize: 100 });
-export const searchInput = writable("");
 export const proxyItems = writable([]);
 export const contentTypeFilter = writable([]);
 export const contentTypeFilterInput = writable("");
@@ -176,7 +176,7 @@ export async function openProject() {
   responseBuffer = new Map();
   pagination.set({ pageIndex: 0, pageSize: 100 });
   sorting.set([{ id: "ID", desc: true }]);
-  searchInput.set("");
+  clearQuery();
   logbookSearchInput.set("");
   reportMetadata.set({
     title: get(activeProject) + " Report",

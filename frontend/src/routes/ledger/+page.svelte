@@ -12,7 +12,6 @@
 	} from "@tanstack/svelte-table";
 	import {
 		drawerHeight,
-		searchInput,
 		sorting,
 		pagination,
 		contentTypeFilter,
@@ -57,6 +56,7 @@
 		ShieldAlertIcon,
 		Swords,
 		RadioIcon,
+		X,
 	} from "lucide-svelte";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import IDCell from "../../lib/components/IDCell.svelte";
@@ -80,6 +80,16 @@
 		shownPairAtNumber,
 		patchShownPairMetadata,
 	} from "../../stores/ledgerRows";
+	import {
+		queryText,
+		ledgerQuery,
+		queryActive,
+		scheduleQuery,
+		runQuery,
+		rerunQuery,
+		clearQuery,
+		markQueryError,
+	} from "../../stores/ledgerQuery";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -1102,30 +1112,52 @@
 		);
 	};
 
-	const setGlobalFilter = (updater) => {
-		searchInput.update((old) =>
-			updater instanceof Function ? updater(old) : updater,
-		);
-	};
+	// A new query run starts at page 1.
+	let lastRunID = $ledgerQuery.runID;
+	$: if ($ledgerQuery.runID !== lastRunID) {
+		lastRunID = $ledgerQuery.runID;
+		setPagination((old) => ({ ...old, pageIndex: 0 }));
+	}
+
+	$: queryErrorMark = markQueryError($ledgerQuery.error);
+
+	function onQueryKeydown(e) {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			runQuery($queryText);
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			e.stopPropagation();
+			clearQuery();
+		}
+	}
+
+	// Stores the content-type exclusion, then runs the active query again so
+	// its results reflect it. The QueryTraffic binding reads the stored
+	// exclusion itself.
+	async function saveContentTypeExclusion() {
+		setPagination((old) => ({
+			...old,
+			pageIndex: 0,
+		}));
+		await SetFilters($contentTypeFilter);
+		await rerunQuery();
+	}
 
 	const options = derived(
-		[
-			shownRows,
-			sorting,
-			pagination,
-			searchInput,
-			contentTypeFilter,
-		],
+		[shownRows, sorting, pagination, contentTypeFilter, queryActive],
 		([
 			$data,
 			$sorting,
 			$pagination,
-			$globalFilter,
 			$contentTypeFilter,
+			$queryActive,
 		]) => {
 			const currentFilters = [];
 
-			if ($contentTypeFilter?.length) {
+			// Query results come back with the exclusion already
+			// applied, so it filters the live view only.
+			if (!$queryActive && $contentTypeFilter?.length) {
 				currentFilters.push({
 					id: "ContentType",
 					value: $contentTypeFilter,
@@ -1138,17 +1170,14 @@
 				state: {
 					sorting: $sorting,
 					pagination: $pagination,
-					globalFilter: $globalFilter ?? "",
 					columnFilters: currentFilters,
 				},
 				onSortingChange: setSorting,
 				onPaginationChange: setPagination,
-				onGlobalFilterChange: setGlobalFilter,
 				getCoreRowModel: getCoreRowModel(),
 				getSortedRowModel: getSortedRowModel(),
 				getPaginationRowModel: getPaginationRowModel(),
 				getFilteredRowModel: getFilteredRowModel(),
-				enableGlobalFilter: true,
 			};
 		},
 	);
@@ -1232,29 +1261,65 @@
 		>
 		<svelte:fragment slot="content">
 			<div class="flex flex-col gap-4 p-2">
-				<div
-					class="input-group input-group-divider grid-cols-[auto_1fr_auto]"
-				>
-					<div class="input-group-shim">
-						<Search size={24} />
+				<div class="flex flex-col gap-1">
+					<div
+						class="input-group input-group-divider grid-cols-[auto_minmax(0,1fr)_auto]"
+					>
+						<div class="input-group-shim">
+							<Search size={24} />
+						</div>
+						<input
+							id="searchBox"
+							class="font-mono"
+							type="text"
+							autocomplete="off"
+							spellcheck="false"
+							placeholder="Search traffic…"
+							bind:value={$queryText}
+							on:input={() =>
+								scheduleQuery($queryText)}
+							on:keydown={onQueryKeydown}
+						/>
+						{#if $queryText}
+							<button
+								type="button"
+								class="input-group-shim"
+								title="Clear query"
+								aria-label="Clear query"
+								on:click={() => clearQuery()}
+							>
+								<X size={16} />
+							</button>
+						{:else}
+							<div></div>
+						{/if}
 					</div>
-					<input
-						id="searchBox"
-						type="search"
-						placeholder="Search..."
-						bind:value={$searchInput}
-						on:input={() => {
-							setPagination(
-								(old) => ({
-									...old,
-									pageIndex: 0,
-								}),
-							);
-							setGlobalFilter(
-								$searchInput,
-							);
-						}}
-					/>
+					{#if $ledgerQuery.error}
+						<div
+							class="text-error-500 text-xs"
+							role="alert"
+						>
+							{#if queryErrorMark}
+								<pre
+									class="font-mono whitespace-pre-wrap break-all">{queryErrorMark.before}<mark
+										class="bg-error-500 text-white"
+										>{queryErrorMark.at}</mark
+									>{queryErrorMark.after}</pre>
+								<span
+									>Position {$ledgerQuery
+										.error
+										.position}: {$ledgerQuery
+										.error
+										.message}</span
+								>
+							{:else}
+								<span
+									>{$ledgerQuery.error
+										.message}</span
+								>
+							{/if}
+						</div>
+					{/if}
 				</div>
 				<InputChip
 					bind:input={$contentTypeFilterInput}
@@ -1262,20 +1327,8 @@
 					name="chips"
 					placeholder="Filter by Content Type"
 					rounded="none"
-					on:add={() => {
-						setPagination((old) => ({
-							...old,
-							pageIndex: 0,
-						}));
-						SetFilters($contentTypeFilter);
-					}}
-					on:remove={() => {
-						setPagination((old) => ({
-							...old,
-							pageIndex: 0,
-						}));
-						SetFilters($contentTypeFilter);
-					}}
+					on:add={saveContentTypeExclusion}
+					on:remove={saveContentTypeExclusion}
 				></InputChip>
 
 				<div

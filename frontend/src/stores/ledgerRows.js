@@ -5,21 +5,21 @@
 // highlights) must find its pair here by ID, never by a row position, because
 // the order and contents of the shown rows depend on the active source.
 //
-// Today the only source is the live view (`proxyItems`). Query results will be
-// added as a second source.
+// The active source is the query results while a query is active, and the
+// live view (`proxyItems`) otherwise.
 //
 // Plain module: no Svelte component dependencies.
 import { derived, get } from "svelte/store";
 import { proxyItems } from "../stores";
-
-/** The store holding the rows of the active source. */
-function activeSource() {
-  return proxyItems;
-}
+import { ledgerQuery, patchQueryResultMetadata } from "./ledgerQuery";
 
 /** Rows currently shown in the ledger, in source order. */
-export const shownRows = derived(activeSource(), ($items) =>
-  Array.isArray($items) ? $items : [],
+export const shownRows = derived(
+  [proxyItems, ledgerQuery],
+  ([$items, $query]) => {
+    if ($query.ranQuery !== "") return $query.items;
+    return Array.isArray($items) ? $items : [];
+  },
 );
 
 function sameID(a, b) {
@@ -51,11 +51,12 @@ export function shownPairAtNumber(number) {
 }
 
 /**
- * Merges `patch` into the Metadata of the shown pair with this ID and notifies
- * subscribers. Does nothing when the pair isn't shown.
+ * Merges `patch` into the Metadata of the pair with this ID, in the live view
+ * and in the loaded query results, and notifies subscribers. A source that
+ * doesn't hold the pair is left alone.
  */
 export function patchShownPairMetadata(id, patch) {
-  activeSource().update((items) => {
+  proxyItems.update((items) => {
     const item = (items || []).find((it) => sameID(it.ID, id));
     if (item) {
       if (!item.Metadata) item.Metadata = {};
@@ -63,4 +64,5 @@ export function patchShownPairMetadata(id, patch) {
     }
     return items;
   });
+  patchQueryResultMetadata(id, patch);
 }
