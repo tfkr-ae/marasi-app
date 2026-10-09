@@ -20,3 +20,5 @@ Run `scripts/drive.sh launchpad` for route proof. It requires `Launchpad Setting
 - The empty state proves only that the route loaded.
 - Navigating away with changed request text opens a confirmation prompt and discards changes when accepted.
 - The target may receive a real network request. Use a local disposable endpoint unless external delivery is the behavior under test.
+- Send requires the UI's listener state to be online. HTTPS starts enabled; disable it for a plain local HTTP endpoint.
+- A launch toast is not response proof: require endpoint receipt, a new response, and persisted request/group linkage.

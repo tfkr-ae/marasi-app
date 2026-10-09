@@ -5,10 +5,11 @@
 - Vim, syntax mode, default interface, and default port
 - Waypoint management
 - Chrome executable paths and profiles
+- Build version displayed below the page heading (`dev` in a local development build)
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`. The page exposes `Marasi Settings`, Waypoints, Chrome Paths, and Chrome Profiles.
+Select the rail item titled `Settings`. The page exposes `Marasi Settings`, the build version, Waypoints, Chrome Paths, and Chrome Profiles.
 
 ## Driving it with Chrome CDP
 

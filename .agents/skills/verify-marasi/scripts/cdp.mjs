@@ -195,7 +195,10 @@ async function pressShortcut(text) {
 	if (parsed.shift) await pressKey("keyDown", "Shift", "ShiftLeft", 16, modifiers);
 	if (parsed.ctrl) await pressKey("keyDown", "Control", "ControlLeft", 17, modifiers);
 	if (parsed.alt) await pressKey("keyDown", "Alt", "AltLeft", 18, modifiers);
-	await pressKey("rawKeyDown", event.key, event.code, event.keyCode, modifiers, { text: "", unmodifiedText: "" });
+	await pressKey("rawKeyDown", event.key, event.code, event.keyCode, modifiers, {
+		text: "", unmodifiedText: "",
+		...(parsed.meta && parsed.key === "a" ? {commands: ["selectAll"]} : {}),
+	});
 	await pressKey("keyUp", event.key, event.code, event.keyCode, modifiers);
 	if (parsed.alt) await pressKey("keyUp", "Alt", "AltLeft", 18, modifiers & ~1);
 	if (parsed.ctrl) await pressKey("keyUp", "Control", "ControlLeft", 17, modifiers & ~2);
@@ -345,6 +348,59 @@ async function driveTheme(route) {
 	console.log(`feature=${feature}\naction=theme\nresult=Command+U changed and restored theme after leaving dashboard\nevidence=${evidenceDir}`);
 }
 
+async function driveSteps(route) {
+	const recipe = JSON.parse(label);
+	if (!recipe.name || !Array.isArray(recipe.steps) || !recipe.steps.length) throw new Error("steps requires {name, steps: [...]}");
+	await waitFor(`location.pathname === ${JSON.stringify(route.path)}`, `${feature} route`, 20);
+	const prefix = `${feature}-${slug(recipe.name)}`;
+	fs.writeFileSync(`${evidenceDir}/${prefix}-action.json`, `${JSON.stringify(recipe, null, 2)}\n`);
+	await capture(`${prefix}-before`);
+	try {
+		for (const [index, step] of recipe.steps.entries()) {
+			if (step.click || step.text) {
+				const point = await evaluate(`(() => {
+					const nodes = ${step.click ? `Array.from(document.querySelectorAll(${JSON.stringify(step.click)}))` : 'Array.from(document.querySelectorAll("button, a, [role=button], label"))'};
+					const el = nodes.find(el => {
+						const box = el.getBoundingClientRect();
+						return box.width > 10 && box.height > 10 && ${step.text ? `el.innerText.replace(/\\s+/g, " ").trim() === ${JSON.stringify(step.text)}` : "true"};
+					});
+					if (!el) return {error: "painted control not found"};
+					el.scrollIntoView({block: "center"});
+					const box = el.getBoundingClientRect();
+					return {x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width, height: box.height};
+				})()`);
+				assertPaintedPoint(point, step.click || step.text);
+				await clickPoint(point);
+			} else if (step.key) {
+				await pressShortcut(step.key);
+			} else if (typeof step.insert === "string") {
+				await send("Input.insertText", {text: step.insert});
+			} else if (typeof step.waitText === "string") {
+				await waitFor(`document.body.innerText.includes(${JSON.stringify(step.waitText)})`, step.waitText, 40, 250);
+			} else if (typeof step.waitNoText === "string") {
+				await waitFor(`!document.body.innerText.includes(${JSON.stringify(step.waitNoText)})`, `absence of ${step.waitNoText}`, 40, 250);
+			} else if (typeof step.waitEnabledText === "string") {
+				await waitFor(`Array.from(document.querySelectorAll("button")).some(el => {
+					const box = el.getBoundingClientRect();
+					return box.width > 10 && box.height > 10 && !el.disabled && el.innerText.trim() === ${JSON.stringify(step.waitEnabledText)};
+				})`, `enabled ${step.waitEnabledText} button`, 40, 250);
+			} else if (Number.isInteger(step.waitMs) && step.waitMs > 0 && step.waitMs <= 10000) {
+				await sleep(step.waitMs);
+			} else {
+				throw new Error(`unsupported UI step: ${JSON.stringify(step)}`);
+			}
+			await sleep(250);
+			await capture(`${prefix}-step-${index + 1}`);
+		}
+		console.log(`feature=${feature}\naction=steps\nrecipe=${recipe.name}\nresult=passed\nevidence=${evidenceDir}`);
+	} finally {
+		await capture(`${prefix}-after`);
+		fs.writeFileSync(`${evidenceDir}/${prefix}-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
+		fs.writeFileSync(`${evidenceDir}/${prefix}-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
+		socket.close();
+	}
+}
+
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
@@ -361,6 +417,7 @@ if (mode === "launch") {
 	const route = routes[feature];
 	if (!route) throw new Error(`unknown feature: ${feature}`);
 	if (action === "compare") await driveCompare(route);
+	else if (action === "steps") await driveSteps(route);
 	else if (action === "theme") await driveTheme(route);
 	else if (action) throw new Error(`unknown action: ${action}`);
 	else await driveRoute(route);

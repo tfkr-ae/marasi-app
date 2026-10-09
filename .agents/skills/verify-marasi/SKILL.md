@@ -64,6 +64,16 @@ The compare action requires the feature route to already be visible. It clicks t
 
 The dashboard `theme` action leaves Home for Settings, sends `Command+U` twice, and fails unless the global appearance changes and returns to its original mode. This proves the dashboard-owned shortcut still reads live state after Home is destroyed.
 
+For behavioral actions beyond navigation, use a named sequence of real UI inputs:
+
+```bash
+.agents/skills/verify-marasi/scripts/drive.sh settings steps '{"name":"vim-toggle","steps":[{"text":"Vim Enabled"}]}'
+```
+
+`steps` requires the feature route to already be visible. Use one action per step: `click` (CSS selector), `text` (exact painted button/link/label text), `key` (the same shortcut syntax as compare, including `escape` and `enter`), `insert` (text into the focused input/editor), `waitText`, `waitNoText`, `waitEnabledText` (painted, enabled button with exact text), or `waitMs` (1–10000 milliseconds). Clicks scroll the target into view; input goes through CDP mouse/keyboard events, not store or backend calls. To replace text, click the editor/input, send `cmd+a`, then `insert`. Disable Vim through Settings before replacing CodeMirror text this way, and restore the setting afterward. Click a non-editor control before a shortcut when the route's input-focus filter blocks it.
+
+Wait for specific resulting content, not an existing label or text still in the editor; for debounced queries, allow the debounce to settle before checking results. Inspect screenshots and persisted side effects even when the sequence passes. A sequence is an input driver, not an automatic proof of the feature's full behavior. After a failure, run doctor and dismiss any leftover overlay or reset/relaunch a wedged page before another drive.
+
 The shipped CDP helper uses Node's built-in `WebSocket`, so it adds no npm package. Chrome defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; override `MARASI_VERIFY_CHROME_BIN` when needed.
 
 ## Evidence
@@ -78,6 +88,7 @@ Each launch creates `.artifacts/verify-marasi/<UTC timestamp>/`. Keep these file
 - `<feature>-after.json` and `<feature>-after.png` capture the resulting DOM and screen.
 - `<label>-click-*` and `<label>-shortcut-*` capture a painted-control compare; `<label>-compare.json` is the pass/fail record.
 - `theme-before.*`, `theme-toggled.*`, `theme-restored.*`, and `theme-result.json` prove the global appearance shortcut works after leaving Home.
+- `<feature>-<recipe>-action.json`, `-before.*`, `-step-<n>.*`, `-after.*`, `-console.json`, and `-network.json` record a UI-step sequence, including the resulting state on an action failure. Use a distinct recipe name for each attempt so earlier evidence is not overwritten.
 - `<feature>-console.json` and `<feature>-network.json` record browser events during the action.
 - `doctor.txt` proves the process, listener, config, and SQLite project existed.
 
