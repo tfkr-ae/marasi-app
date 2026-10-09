@@ -10,8 +10,13 @@
 //
 // Plain module: no Svelte component dependencies.
 import { derived, get } from "svelte/store";
-import { proxyItems } from "../stores";
-import { ledgerQuery, patchQueryResultMetadata } from "./ledgerQuery";
+import { pagination, proxyItems } from "../stores";
+import {
+  ledgerQuery,
+  patchQueryResultMetadata,
+  queryActive,
+  queryPageIndex,
+} from "./ledgerQuery";
 
 /** Rows currently shown in the ledger, in source order. */
 export const shownRows = derived(
@@ -21,6 +26,30 @@ export const shownRows = derived(
     return Array.isArray($items) ? $items : [];
   },
 );
+
+/**
+ * The ledger table's pagination: the rows per page are shared, and the page
+ * index belongs to the active mode, so each mode keeps its own page.
+ */
+export const ledgerPagination = derived(
+  [pagination, queryActive, queryPageIndex],
+  ([$pagination, $queryActive, $queryPageIndex]) => ({
+    pageSize: $pagination.pageSize,
+    pageIndex: $queryActive ? $queryPageIndex : $pagination.pageIndex,
+  }),
+);
+
+/** Changes the ledger table's pagination (a value or TanStack updater). */
+export function setLedgerPagination(updater) {
+  const current = get(ledgerPagination);
+  const next = updater instanceof Function ? updater(current) : updater;
+  if (get(queryActive)) {
+    queryPageIndex.set(next.pageIndex);
+    pagination.update((old) => ({ ...old, pageSize: next.pageSize }));
+  } else {
+    pagination.set({ pageIndex: next.pageIndex, pageSize: next.pageSize });
+  }
+}
 
 function sameID(a, b) {
   return a != null && b != null && String(a) === String(b);

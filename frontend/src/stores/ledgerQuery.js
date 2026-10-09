@@ -32,6 +32,11 @@ function emptyQueryState() {
     // Cursor for the next older page, or null when none exists.
     nextCursor: null,
     indexComplete: true,
+    // True while the next older page is being fetched.
+    loadingOlder: false,
+    // True when fetching an older page failed. Older pages stop loading until
+    // the query runs again.
+    olderFailed: false,
     // The last failed query: { query, message, position }, where position is
     // marasi's 1-based character offset into `query`, or null when the failure
     // wasn't in the query text. null when the last query that ran was valid.
@@ -44,6 +49,34 @@ export const ledgerQuery = writable(emptyQueryState());
 
 /** True when the ledger shows query results instead of the live view. */
 export const queryActive = derived(ledgerQuery, ($q) => $q.ranQuery !== "");
+
+/**
+ * The page the ledger shows in query mode. The live view keeps its own page in
+ * `pagination`, so clearing the query returns to it. Each run starts at 0.
+ */
+export const queryPageIndex = writable(0);
+
+/**
+ * "N matches", or "N+ matches" while older pages remain. "" in the live view.
+ */
+export const matchCountLabel = derived(ledgerQuery, ($q) => {
+  if ($q.ranQuery === "") return "";
+  const count = $q.items.length;
+  const more = $q.nextCursor ? "+" : "";
+  return `${count.toLocaleString()}${more} ${count === 1 && !more ? "match" : "matches"}`;
+});
+
+/** The status line under the query box in query mode; "" in the live view. */
+export const queryStatusLabel = derived(matchCountLabel, ($label) =>
+  $label ? `${$label} · newest first · column sorting off` : "",
+);
+
+/** Shown while a query is active and older traffic is still being indexed. */
+export const indexWarning = derived(ledgerQuery, ($q) =>
+  $q.ranQuery !== "" && !$q.indexComplete
+    ? "Indexing older traffic — text matches may be incomplete"
+    : "",
+);
 
 let delayTimer = null;
 // Identifies the newest request, so a slower, older response can't overwrite
@@ -99,8 +132,62 @@ export async function runQuery(text = get(queryText)) {
     items: result.Items ?? [],
     nextCursor: result.NextCursor ?? null,
     indexComplete: result.IndexComplete,
+    loadingOlder: false,
+    olderFailed: false,
     error: null,
   }));
+  queryPageIndex.set(0);
+}
+
+/**
+ * True when the ledger, showing `pageIndex` at `pageSize` rows per page, is on
+ * the last loaded page of query results while older pages remain.
+ */
+export function needsOlderPage(q, pageIndex, pageSize) {
+  if (q.ranQuery === "" || !q.nextCursor || q.loadingOlder || q.olderFailed)
+    return false;
+  const lastLoaded = Math.max(Math.ceil(q.items.length / pageSize) - 1, 0);
+  return pageIndex >= lastLoaded;
+}
+
+/**
+ * Fetches the next older page of query results from the cursor and appends
+ * it. The page can come back short or empty while a cursor remains, because
+ * some content-type exclusions are applied after marasi returns the page; the
+ * caller asks again while `needsOlderPage` holds. A result that arrives after
+ * the query ran again or was cleared is dropped.
+ */
+export async function loadOlderPage() {
+  const start = get(ledgerQuery);
+  if (start.ranQuery === "" || !start.nextCursor || start.loadingOlder) return;
+  const isCurrent = (q) =>
+    q.runID === start.runID &&
+    q.ranQuery === start.ranQuery &&
+    q.nextCursor === start.nextCursor;
+  ledgerQuery.update((q) => ({ ...q, loadingOlder: true }));
+  let result;
+  try {
+    result = await QueryTraffic(start.ranQuery, start.nextCursor);
+    if (result.QueryError) throw new Error(result.QueryError.Message);
+  } catch (err) {
+    console.error("Loading older query results failed:", err);
+    ledgerQuery.update((q) =>
+      isCurrent(q) ? { ...q, loadingOlder: false, olderFailed: true } : q,
+    );
+    return;
+  }
+  ledgerQuery.update((q) => {
+    if (!isCurrent(q)) return q;
+    const loaded = new Set(q.items.map((it) => String(it.ID)));
+    const older = (result.Items ?? []).filter((it) => !loaded.has(String(it.ID)));
+    return {
+      ...q,
+      items: [...q.items, ...older],
+      nextCursor: result.NextCursor ?? null,
+      indexComplete: result.IndexComplete,
+      loadingOlder: false,
+    };
+  });
 }
 
 /** Runs the query box's text once it has been left alone for the delay. */
@@ -132,6 +219,7 @@ export function clearQuery({ keepText = false } = {}) {
   latestRequest++;
   if (!keepText) queryText.set("");
   ledgerQuery.update((q) => ({ ...emptyQueryState(), runID: q.runID }));
+  queryPageIndex.set(0);
 }
 
 /**

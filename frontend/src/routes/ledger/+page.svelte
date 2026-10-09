@@ -79,6 +79,8 @@
 		shownPairNumber,
 		shownPairAtNumber,
 		patchShownPairMetadata,
+		ledgerPagination,
+		setLedgerPagination,
 	} from "../../stores/ledgerRows";
 	import {
 		queryText,
@@ -89,6 +91,11 @@
 		rerunQuery,
 		clearQuery,
 		markQueryError,
+		queryPageIndex,
+		queryStatusLabel,
+		indexWarning,
+		needsOlderPage,
+		loadOlderPage,
 	} from "../../stores/ledgerQuery";
 
 	const drawerStore = getDrawerStore();
@@ -1106,17 +1113,20 @@
 		);
 	};
 
-	const setPagination = (updater) => {
-		pagination.update((old) =>
-			updater instanceof Function ? updater(old) : updater,
-		);
-	};
+	// Each mode keeps its own page; a new query run starts at page 1.
+	const setPagination = setLedgerPagination;
 
-	// A new query run starts at page 1.
-	let lastRunID = $ledgerQuery.runID;
-	$: if ($ledgerQuery.runID !== lastRunID) {
-		lastRunID = $ledgerQuery.runID;
-		setPagination((old) => ({ ...old, pageIndex: 0 }));
+	// Reaching the last loaded page of query results loads the next older
+	// page. This runs again after each load, so pages that come back short
+	// or empty while a cursor remains keep loading.
+	$: if (
+		needsOlderPage(
+			$ledgerQuery,
+			$queryPageIndex,
+			$pagination.pageSize,
+		)
+	) {
+		loadOlderPage();
 	}
 
 	$: queryErrorMark = markQueryError($ledgerQuery.error);
@@ -1145,7 +1155,13 @@
 	}
 
 	const options = derived(
-		[shownRows, sorting, pagination, contentTypeFilter, queryActive],
+		[
+			shownRows,
+			sorting,
+			ledgerPagination,
+			contentTypeFilter,
+			queryActive,
+		],
 		([
 			$data,
 			$sorting,
@@ -1163,12 +1179,15 @@
 					value: $contentTypeFilter,
 				});
 			}
+			// Query results stay newest first: sorting only the loaded
+			// part of the results would mislead.
 			return {
 				data: $data,
 				columns,
 				autoResetPageIndex: false,
+				enableSorting: !$queryActive,
 				state: {
-					sorting: $sorting,
+					sorting: $queryActive ? [] : $sorting,
 					pagination: $pagination,
 					columnFilters: currentFilters,
 				},
@@ -1318,6 +1337,19 @@
 										.message}</span
 								>
 							{/if}
+						</div>
+					{/if}
+					{#if $queryStatusLabel}
+						<div class="text-xs opacity-70">
+							{$queryStatusLabel}
+						</div>
+					{/if}
+					{#if $indexWarning}
+						<div
+							class="text-warning-500 text-xs"
+							role="status"
+						>
+							{$indexWarning}
 						</div>
 					{/if}
 				</div>
