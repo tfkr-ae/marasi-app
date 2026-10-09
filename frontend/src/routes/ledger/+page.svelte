@@ -75,7 +75,7 @@
 		LinkRequestToLaunchpad,
 		SetFilters,
 	} from "../../lib/wailsjs/go/main/App";
-	import { onMount, tick } from "svelte";
+	import { onMount } from "svelte";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { armoryStore } from "../../stores/armoryStore";
@@ -200,21 +200,21 @@
 			keywords: "search",
 			icon: SearchIcon,
 			action: {
-				// Toggles the accordion: opening it focuses the query
-				// box, closing it takes focus out of the box.
-				handler: async () => {
+				handler: () => {
 					drawerStore.close();
 					accOpened = !accOpened;
-					await tick();
 					setTimeout(() => {
 						const searchBox =
 							document.getElementById(
 								"searchBox",
 							);
-						if (accOpened) {
-							searchBox?.focus();
+						if (
+							document.activeElement ===
+							searchBox
+						) {
+							searchBox.blur();
 						} else {
-							searchBox?.blur();
+							searchBox.focus();
 						}
 					}, 10);
 				},
@@ -1364,7 +1364,7 @@
 						>
 					{/if}
 				{/if}
-				{#if $ledgerQuery.error && !accOpened}
+				{#if $ledgerQuery.error?.query === $queryText && !accOpened}
 					<span
 						id="ledgerQueryErrorMarker"
 						class="text-error-500"
