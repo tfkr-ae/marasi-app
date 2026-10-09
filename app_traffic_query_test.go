@@ -181,6 +181,28 @@ func TestQueryTrafficPagesWithCursorWithoutDuplicatesOrGaps(t *testing.T) {
 	}
 }
 
+// Values with a * are excluded after marasi returns the page, so a page can
+// come back empty while older pages remain. The cursor must still lead on.
+func TestQueryTrafficKeepsCursorWhenStarExclusionEmptiesAPage(t *testing.T) {
+	app := newScratchpadApp(t)
+	older := capturePair(t, app, capturedPair{host: "api.acme.test", path: "/a", statusCode: 200, contentType: "application/json"})
+	for range 501 {
+		capturePair(t, app, capturedPair{host: "api.acme.test", path: "/b", statusCode: 200, contentType: "*/*"})
+	}
+	excludeContentTypes(t, app, "*/*")
+
+	first := queryTraffic(t, app, `host = "api.acme.test"`, nil)
+	if len(first.Items) != 0 || first.NextCursor == nil {
+		t.Fatalf("wanted an empty first page with a cursor, got %d items and cursor %v", len(first.Items), first.NextCursor)
+	}
+	second := queryTraffic(t, app, `host = "api.acme.test"`, first.NextCursor)
+
+	assertIDs(t, []uuid.UUID{older}, itemIDs(second.Items))
+	if second.NextCursor != nil {
+		t.Fatalf("wanted no cursor after the last page, got %v", *second.NextCursor)
+	}
+}
+
 func TestQueryTrafficReportsCompleteIndex(t *testing.T) {
 	app := newScratchpadApp(t)
 	capturePair(t, app, capturedPair{host: "api.acme.test", path: "/a", statusCode: 200, contentType: "text/html"})
