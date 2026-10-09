@@ -50,8 +50,28 @@ function emptyQueryState() {
 /** The query's state. Read it; change it through the functions below. */
 export const ledgerQuery = writable(emptyQueryState());
 
+/** True when the query state `q` shows query results instead of the live view. */
+export function isQueryActive(q) {
+  return q.ranQuery !== "";
+}
+
 /** True when the ledger shows query results instead of the live view. */
-export const queryActive = derived(ledgerQuery, ($q) => $q.ranQuery !== "");
+export const queryActive = derived(ledgerQuery, isQueryActive);
+
+/** True when both are pair IDs and they name the same pair. */
+export function sameID(a, b) {
+  return a != null && b != null && String(a) === String(b);
+}
+
+/** The IDs of `items`, as strings. */
+export function pairIDSet(items) {
+  return new Set(items.map((item) => String(item.ID)));
+}
+
+/** "match" or "matches" for `count`; `more` means there could be more. */
+export function matchNoun(count, more = false) {
+  return count === 1 && !more ? "match" : "matches";
+}
 
 /**
  * The page the ledger shows in query mode. The live view keeps its own page in
@@ -63,10 +83,10 @@ export const queryPageIndex = writable(0);
  * "N matches", or "N+ matches" while older pages remain. "" in the live view.
  */
 export const matchCountLabel = derived(ledgerQuery, ($q) => {
-  if ($q.ranQuery === "") return "";
+  if (!isQueryActive($q)) return "";
   const count = $q.items.length;
   const more = $q.nextCursor ? "+" : "";
-  return `${count.toLocaleString()}${more} ${count === 1 && !more ? "match" : "matches"}`;
+  return `${count.toLocaleString()}${more} ${matchNoun(count, !!more)}`;
 });
 
 /** The status line under the query box in query mode; "" in the live view. */
@@ -76,7 +96,7 @@ export const queryStatusLabel = derived(matchCountLabel, ($label) =>
 
 /** Shown while a query is active and older traffic is still being indexed. */
 export const indexWarning = derived(ledgerQuery, ($q) =>
-  $q.ranQuery !== "" && !$q.indexComplete
+  isQueryActive($q) && !$q.indexComplete
     ? "Indexing older traffic — text matches may be incomplete"
     : "",
 );
@@ -112,27 +132,22 @@ export async function runQuery(text = get(queryText)) {
   }
   const request = ++latestRequest;
   let result;
+  let failure = null;
   try {
     result = await QueryTraffic(text, null);
-  } catch (err) {
-    if (request !== latestRequest) return;
-    console.error("Querying traffic failed:", err);
-    ledgerQuery.update((q) => ({
-      ...q,
-      error: { query: text, message: String(err), position: null },
-    }));
-    return;
-  }
-  if (request !== latestRequest) return;
-  if (result.QueryError) {
-    ledgerQuery.update((q) => ({
-      ...q,
-      error: {
-        query: text,
+    if (result.QueryError) {
+      failure = {
         message: result.QueryError.Message,
         position: result.QueryError.Position,
-      },
-    }));
+      };
+    }
+  } catch (err) {
+    console.error("Querying traffic failed:", err);
+    failure = { message: String(err), position: null };
+  }
+  if (request !== latestRequest) return;
+  if (failure) {
+    ledgerQuery.update((q) => ({ ...q, error: { query: text, ...failure } }));
     return;
   }
   trafficChanged = false;
@@ -156,7 +171,7 @@ export async function runQuery(text = get(queryText)) {
  * the last loaded page of query results while older pages remain.
  */
 export function needsOlderPage(q, pageIndex, pageSize) {
-  if (q.ranQuery === "" || !q.nextCursor || q.loadingOlder || q.olderFailed)
+  if (!isQueryActive(q) || !q.nextCursor || q.loadingOlder || q.olderFailed)
     return false;
   const lastLoaded = Math.max(Math.ceil(q.items.length / pageSize) - 1, 0);
   return pageIndex >= lastLoaded;
@@ -171,7 +186,7 @@ export function needsOlderPage(q, pageIndex, pageSize) {
  */
 export async function loadOlderPage() {
   const start = get(ledgerQuery);
-  if (start.ranQuery === "" || !start.nextCursor || start.loadingOlder) return;
+  if (!isQueryActive(start) || !start.nextCursor || start.loadingOlder) return;
   const isCurrent = (q) =>
     q.runID === start.runID &&
     q.ranQuery === start.ranQuery &&
@@ -190,7 +205,7 @@ export async function loadOlderPage() {
   }
   ledgerQuery.update((q) => {
     if (!isCurrent(q)) return q;
-    const loaded = new Set(q.items.map((it) => String(it.ID)));
+    const loaded = pairIDSet(q.items);
     const older = (result.Items ?? []).filter((it) => !loaded.has(String(it.ID)));
     return {
       ...q,
@@ -218,8 +233,8 @@ export function scheduleQuery(text = get(queryText)) {
  * changed. Does nothing in the live view.
  */
 export function rerunQuery() {
-  const { ranQuery } = get(ledgerQuery);
-  if (ranQuery !== "") return runQuery(ranQuery);
+  const q = get(ledgerQuery);
+  if (isQueryActive(q)) return runQuery(q.ranQuery);
 }
 
 /**
@@ -232,10 +247,6 @@ export function clearQuery({ keepText = false } = {}) {
   if (!keepText) queryText.set("");
   ledgerQuery.update((q) => ({ ...emptyQueryState(), runID: q.runID }));
   queryPageIndex.set(0);
-}
-
-function sameID(a, b) {
-  return a != null && b != null && String(a) === String(b);
 }
 
 // Pair IDs are UUIDv7 strings, so comparing them as strings orders pairs by
@@ -255,17 +266,18 @@ export function markTrafficChanged() {
 }
 
 /**
- * Applies `update(item)` to the query result with this ID, in the loaded
- * results and in the new matches. Does nothing when neither holds the pair.
+ * Applies `update(item)` to every loaded query result and new match.
+ * `update` returns the item itself to leave it alone, or a replacement.
+ * Subscribers are notified only when something was replaced.
  */
-function patchQueryResult(id, update) {
+function patchQueryResults(update) {
   ledgerQuery.update((q) => {
     let changed = false;
     const patchList = (list) =>
       list.map((item) => {
-        if (!sameID(item.ID, id)) return item;
-        changed = true;
-        return update(item);
+        const patched = update(item);
+        if (patched !== item) changed = true;
+        return patched;
       });
     const items = patchList(q.items);
     const newMatches = patchList(q.newMatches);
@@ -278,10 +290,11 @@ function patchQueryResult(id, update) {
  * Does nothing when the pair isn't loaded.
  */
 export function patchQueryResultMetadata(id, patch) {
-  patchQueryResult(id, (item) => ({
-    ...item,
-    Metadata: { ...(item.Metadata || {}), ...patch },
-  }));
+  patchQueryResults((item) =>
+    sameID(item.ID, id)
+      ? { ...item, Metadata: { ...(item.Metadata || {}), ...patch } }
+      : item,
+  );
 }
 
 /**
@@ -290,20 +303,10 @@ export function patchQueryResultMetadata(id, patch) {
  * removed, even when they no longer match.
  */
 export function patchQueryResultResponses(responses) {
-  if (responses.size === 0) return;
-  ledgerQuery.update((q) => {
-    if (q.ranQuery === "") return q;
-    let changed = false;
-    const patchList = (list) =>
-      list.map((item) => {
-        const res = responses.get(item.ID);
-        if (!res) return item;
-        changed = true;
-        return { ...item, ...res };
-      });
-    const items = patchList(q.items);
-    const newMatches = patchList(q.newMatches);
-    return changed ? { ...q, items, newMatches } : q;
+  if (responses.size === 0 || !isQueryActive(get(ledgerQuery))) return;
+  patchQueryResults((item) => {
+    const res = responses.get(item.ID);
+    return res ? { ...item, ...res } : item;
   });
 }
 
@@ -315,8 +318,9 @@ export function patchQueryResultResponses(responses) {
  * or when traffic hasn't changed.
  */
 export async function checkForNewMatches() {
-  const { ranQuery, runID } = get(ledgerQuery);
-  if (ranQuery === "" || !trafficChanged) return;
+  const start = get(ledgerQuery);
+  if (!isQueryActive(start) || !trafficChanged) return;
+  const { ranQuery, runID } = start;
   trafficChanged = false;
   let result;
   try {
@@ -330,12 +334,12 @@ export async function checkForNewMatches() {
   ledgerQuery.update((q) => {
     // A different query ran, or the ledger went back to the live view.
     if (q.ranQuery !== ranQuery || q.runID !== runID) return q;
-    const loaded = new Set(q.items.map((item) => String(item.ID)));
+    const loaded = pairIDSet(q.items);
     const isNew = (item) =>
       !loaded.has(String(item.ID)) &&
       (q.nextCursor == null || String(item.ID) > String(q.nextCursor));
     const fresh = (result.Items ?? []).filter(isNew);
-    const freshIDs = new Set(fresh.map((item) => String(item.ID)));
+    const freshIDs = pairIDSet(fresh);
     // Earlier new matches can fall off the newest page when a lot of
     // traffic arrives; keep them.
     const kept = q.newMatches.filter(

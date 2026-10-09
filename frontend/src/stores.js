@@ -22,6 +22,7 @@ import {
   markTrafficChanged,
   patchQueryResultMetadata,
   patchQueryResultResponses,
+  sameID,
 } from "./stores/ledgerQuery";
 
 // Startup
@@ -127,14 +128,22 @@ export function patchWebSocketMetadata(conn) {
     "websocket.close_code": conn.CloseCode,
     "websocket.close_reason": conn.CloseReason,
   };
+  patchLiveViewMetadata(conn.RequestID, patch);
+  patchQueryResultMetadata(conn.RequestID, patch);
+  markTrafficChanged();
+}
+
+/**
+ * Merges `patch` into the Metadata of the live-view pair with this ID. Does
+ * nothing when the live view doesn't hold the pair.
+ */
+export function patchLiveViewMetadata(id, patch) {
   proxyItems.update((items) =>
     (items || []).map((item) => {
-      if (item.ID !== conn.RequestID) return item;
+      if (!sameID(item.ID, id)) return item;
       return { ...item, Metadata: { ...(item.Metadata || {}), ...patch } };
     }),
   );
-  patchQueryResultMetadata(conn.RequestID, patch);
-  markTrafficChanged();
 }
 
 // ---------------------------
