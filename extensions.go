@@ -14,7 +14,12 @@ import (
 // emitFunc sends a Wails event to the frontend.
 type emitFunc func(name string, data ...any)
 
+// emit sends a Wails event once startup has given the app its context. Events
+// fired before then have no frontend to reach and are dropped.
 func (a *App) emit(name string, data ...any) {
+	if a.ctx == nil {
+		return
+	}
 	runtime.EventsEmit(a.ctx, name, data...)
 }
 
@@ -74,26 +79,20 @@ func registerGUI(ext *extensions.Runtime, emit emitFunc) error {
 	return nil
 }
 
-// attachExtensionHooks gives the open project's extensions the app's GUI
-// library and live log events. It keeps the runtimes the project lifecycle
-// loaded, so app exit can still interrupt their Lua.
-func (a *App) attachExtensionHooks(emit emitFunc) error {
-	for _, ext := range a.Proxy.Extensions {
-		ext.Mu.Lock()
-		ext.OnLog = extensionLogHandler(ext.Data.Name, emit)
-		err := registerGUI(ext, emit)
-		ext.Mu.Unlock()
-		if err != nil {
-			return fmt.Errorf("attaching hooks to %s : %w", ext.Data.Name, err)
-		}
+// attachExtensionHooks gives an extension the app's GUI library and live log
+// events. The project lifecycle applies it to every extension it loads, before
+// the extension's code runs. The hooks read a.emitEvent when they fire, so they
+// reach the frontend once startup has set a.ctx.
+func (a *App) attachExtensionHooks(ext *extensions.Runtime) error {
+	emit := func(name string, data ...any) { a.emitEvent(name, data...) }
+	ext.OnLog = extensionLogHandler(ext.Data.Name, emit)
+	if err := registerGUI(ext, emit); err != nil {
+		return fmt.Errorf("attaching hooks to %s : %w", ext.Data.Name, err)
 	}
 	return nil
 }
 
 func (a *App) LoadExtensions() error {
-	if err := a.attachExtensionHooks(a.emit); err != nil {
-		return err
-	}
 	runtime.EventsOff(a.ctx, "extension_sync_state")
 	runtime.EventsOff(a.ctx, "extension_call_function")
 

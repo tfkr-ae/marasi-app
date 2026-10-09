@@ -35,12 +35,13 @@ import (
 
 // App struct
 type App struct {
-	ctx      context.Context
-	Proxy    *marasi.Proxy
-	listener service.ListenerLifecycle
-	projects *service.ProjectLifecycle
-	chrome   *service.Chrome
-	Config   *Config
+	ctx       context.Context
+	emitEvent emitFunc
+	Proxy     *marasi.Proxy
+	listener  service.ListenerLifecycle
+	projects  *service.ProjectLifecycle
+	chrome    *service.Chrome
+	Config    *Config
 }
 
 // NewApp creates a new App application struct
@@ -80,15 +81,14 @@ func NewApp() *App {
 // bound to the listener so listener shutdown interrupts project Lua before
 // draining the requests it may be holding.
 func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, logWriter io.Writer, logger *slog.Logger) *App {
+	app := &App{Proxy: proxy}
+	app.emitEvent = app.emit
 	listener := service.NewListenerLifecycle(proxy, logWriter)
-	projects := service.NewProjectLifecycle(proxy, configDir, wordlists, logger)
-	listener.BindProject(projects)
-	return &App{
-		Proxy:    proxy,
-		listener: listener,
-		projects: projects,
-		chrome:   service.NewChrome(proxy, listener, logWriter),
-	}
+	app.projects = service.NewProjectLifecycle(proxy, configDir, wordlists, logger, app.attachExtensionHooks)
+	listener.BindProject(app.projects)
+	app.listener = listener
+	app.chrome = service.NewChrome(proxy, listener, logWriter)
+	return app
 }
 
 // startup is called when the app starts. The context is saved

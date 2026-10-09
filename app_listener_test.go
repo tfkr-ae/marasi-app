@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -214,15 +215,18 @@ func TestCloseUsesTerminalShutdown(t *testing.T) {
 }
 
 func TestCloseInterruptsExtensionHoldingRequest(t *testing.T) {
+	var originHits atomic.Int32
 	origin := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		originHits.Add(1)
 		_, _ = response.Write([]byte(request.URL.Path))
 	}))
 	defer origin.Close()
 
-	app := newScratchpadApp(t)
+	app := newProjectApp(t)
 	events := &recordedEvents{}
-	if err := app.attachExtensionHooks(events.emit); err != nil {
-		t.Fatalf("attaching extension hooks: %v", err)
+	app.emitEvent = events.emit
+	if err := app.SetupScratchpad(); err != nil {
+		t.Fatalf("opening scratchpad: %v", err)
 	}
 	hang := `function processRequest(request) print("entered"); while true do end end`
 	if err := app.RunExtension("workshop", hang); err != nil {
@@ -235,7 +239,9 @@ func TestCloseInterruptsExtensionHoldingRequest(t *testing.T) {
 	transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport}
+	requestDone := make(chan struct{})
 	go func() {
+		defer close(requestDone)
 		if response, err := client.Get(origin.URL + "/held-by-extension"); err == nil {
 			response.Body.Close()
 		}
@@ -254,6 +260,14 @@ func TestCloseInterruptsExtensionHoldingRequest(t *testing.T) {
 	case <-closed:
 	case <-time.After(5 * time.Second):
 		t.Fatal("wanted close to interrupt the extension holding the request")
+	}
+	select {
+	case <-requestDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("wanted the held request to finish after close")
+	}
+	if hits := originHits.Load(); hits != 0 {
+		t.Fatalf("wanted the interrupted request dropped, origin got %d requests", hits)
 	}
 }
 
