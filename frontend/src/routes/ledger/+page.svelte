@@ -99,6 +99,7 @@
 		clearQuery,
 		markQueryError,
 		queryPageIndex,
+		matchCountLabel,
 		queryStatusLabel,
 		indexWarning,
 		needsOlderPage,
@@ -1144,8 +1145,6 @@
 		? "variant-ghost-primary ring-0 shadow-none"
 		: "variant-filled-primary";
 
-	// "N matches" for the loaded query results, "N+" while older pages remain.
-	$: queryMatchLabel = `${$ledgerQuery.items.length}${$ledgerQuery.nextCursor ? "+" : ""} matches`;
 
 	let queryFieldsOpen = false;
 
@@ -1318,7 +1317,7 @@
 					<span
 						id="ledgerQueryMatchCount"
 						class="whitespace-nowrap text-xs opacity-70"
-						>{queryMatchLabel}</span
+						>{$matchCountLabel}</span
 					>
 					{#if !$ledgerQuery.indexComplete}
 						<span
