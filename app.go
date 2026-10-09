@@ -42,6 +42,9 @@ type App struct {
 	projects  *service.ProjectLifecycle
 	chrome    *service.Chrome
 	Config    *Config
+	// attachFrontendLog sends the project lifecycle's log to the frontend
+	// once startup has the Wails context. Nil in tests.
+	attachFrontendLog func(slog.Handler)
 }
 
 // NewApp creates a new App application struct
@@ -72,7 +75,9 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
-	app := newApp(Proxy, appConfigDir, wordlists, log.Writer(), Proxy.Logger)
+	logger, attachFrontendLog := newRelayLogger(Proxy.Logger.Handler())
+	app := newApp(Proxy, appConfigDir, wordlists, log.Writer(), logger)
+	app.attachFrontendLog = attachFrontendLog
 	app.Config = config
 	return app
 }
@@ -96,6 +101,9 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	logHandler := NewLogHandler(ctx)
+	if a.attachFrontendLog != nil {
+		a.attachFrontendLog(logHandler.Handler())
+	}
 	a.Proxy.WithOptions(
 		marasi.WithRequestHandler(func(req domain.ProxyRequest) error {
 			runtime.EventsEmit(a.ctx, "request", req)

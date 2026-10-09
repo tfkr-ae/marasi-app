@@ -12,8 +12,6 @@
 	} from "@tanstack/svelte-table";
 	import {
 		drawerHeight,
-		proxyItems,
-		searchInput,
 		sorting,
 		pagination,
 		contentTypeFilter,
@@ -58,7 +56,14 @@
 		ShieldAlertIcon,
 		Swords,
 		RadioIcon,
+		X,
+		LoaderCircle,
+		CircleHelp,
+		CircleAlert,
+		TriangleAlert,
 	} from "lucide-svelte";
+	import QueryFieldList from "../../lib/components/QueryFieldList.svelte";
+	import { appendToQuery } from "../../lib/ledgerQueryFields";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import IDCell from "../../lib/components/IDCell.svelte";
 	import {
@@ -74,6 +79,36 @@
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { armoryStore } from "../../stores/armoryStore";
+	import {
+		shownRows,
+		findShownPair,
+		pairNumber,
+		shownPairAtNumber,
+		patchShownPairMetadata,
+		ledgerPagination,
+		setLedgerPagination,
+	} from "../../stores/ledgerRows";
+	import {
+		queryText,
+		queryPending,
+		ledgerQuery,
+		queryActive,
+		isQueryActive,
+		matchNoun,
+		scheduleQuery,
+		runQuery,
+		rerunQuery,
+		clearQuery,
+		markQueryError,
+		queryPageIndex,
+		matchCountLabel,
+		queryStatusLabel,
+		indexWarning,
+		needsOlderPage,
+		loadOlderPage,
+		markTrafficChanged,
+		mergeNewMatches,
+	} from "../../stores/ledgerQuery";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -82,7 +117,7 @@
 	let drawerOpened = false;
 	let menu = [];
 	let contextMenu;
-	let selectedRow;
+	let selectedPairID;
 
 	function isWebSocketUpgrade(meta = $drawerStore?.meta) {
 		const response = meta?.incomingResponse || meta?.response;
@@ -293,24 +328,13 @@
 						}).then((requestIndex) => {
 							if (!requestIndex)
 								return;
-							const targetIndex =
-								parseInt(
-									requestIndex,
-								) - 1;
-							const rows =
-								$table.getCoreRowModel()
-									.rows;
-							if (rows[targetIndex]) {
-								const row =
-									rows[
-										targetIndex
-									];
-								openDrawer(
-									row.original,
-									targetIndex +
-										1,
+							const pair =
+								shownPairAtNumber(
+									parseInt(
+										requestIndex,
+									),
 								);
-							}
+							if (pair) openDrawer(pair.ID);
 						});
 					}
 				},
@@ -329,40 +353,7 @@
 				handler: () => {
 					if (drawerOpened) {
 						modalStore.close();
-						const rows =
-							$table.getRowModel()
-								.rows;
-						const isFiltered =
-							$drawerStore?.meta
-								?.isFiltered;
-						const filteredIndex =
-							$drawerStore?.meta
-								?.filteredIndex;
-
-						let nextIndex = -1;
-
-						if (isFiltered) {
-							if (rows.length > 0)
-								nextIndex = 0;
-						} else {
-							if (
-								filteredIndex <
-								rows.length - 1
-							) {
-								nextIndex =
-									filteredIndex +
-									1;
-							}
-						}
-
-						if (nextIndex !== -1) {
-							const row =
-								rows[nextIndex];
-							openDrawer(
-								row.original,
-								row.index + 1,
-							);
-						}
+						stepDrawer(1);
 					}
 				},
 				options: { scope: "ledger", single: true },
@@ -389,39 +380,7 @@
 				handler: () => {
 					if (drawerOpened) {
 						modalStore.close();
-						const rows =
-							$table.getRowModel()
-								.rows;
-						const isFiltered =
-							$drawerStore?.meta
-								?.isFiltered;
-						const filteredIndex =
-							$drawerStore?.meta
-								?.filteredIndex;
-
-						let prevIndex = -1;
-
-						if (isFiltered) {
-							if (rows.length > 0)
-								prevIndex =
-									rows.length -
-									1;
-						} else {
-							if (filteredIndex > 0) {
-								prevIndex =
-									filteredIndex -
-									1;
-							}
-						}
-
-						if (prevIndex !== -1) {
-							const row =
-								rows[prevIndex];
-							openDrawer(
-								row.original,
-								row.index + 1,
-							);
-						}
+						stepDrawer(-1);
 					}
 				},
 				options: { scope: "ledger", single: true },
@@ -451,6 +410,8 @@
 									?.ID,
 								id,
 							).then(() => {
+								// Linking edits the pair's metadata.
+								markTrafficChanged();
 								const toastSettings =
 									{
 										message:
@@ -1108,7 +1069,7 @@
 			header: "ID",
 			cell: (info) =>
 				renderComponent(IDCell, {
-					index: info.row.index + 1,
+					index: pairNumber(info.row.original.ID),
 					row: info.row.original,
 				}),
 			sortingFn: "text",
@@ -1166,88 +1127,183 @@
 		);
 	};
 
-	const setPagination = (updater) => {
-		pagination.update((old) =>
-			updater instanceof Function ? updater(old) : updater,
-		);
-	};
+	// Reaching the last loaded page of query results loads the next older
+	// page. This runs again after each load, so pages that come back short
+	// or empty while a cursor remains keep loading.
+	$: if (
+		needsOlderPage(
+			$ledgerQuery,
+			$queryPageIndex,
+			$pagination.pageSize,
+		)
+	) {
+		loadOlderPage();
+	}
 
-	const setGlobalFilter = (updater) => {
-		searchInput.update((old) =>
-			updater instanceof Function ? updater(old) : updater,
-		);
-	};
+	$: queryErrorMark = markQueryError($ledgerQuery.error);
+
+	// After a query change or a change in the loaded results (a merge of new
+	// matches or an older page), the selected row and the open drawer stay
+	// when their pair is still in the rows, and close otherwise.
+	let lastShownRowsSignature = shownRowsSignature($ledgerQuery);
+	$: if (shownRowsSignature($ledgerQuery) !== lastShownRowsSignature) {
+		lastShownRowsSignature = shownRowsSignature($ledgerQuery);
+		keepFocusOnShownPair();
+	}
+
+	// Changes whenever the shown rows can lose pairs: on a switch between
+	// modes, a new query run, or a change in the loaded query results.
+	function shownRowsSignature(q) {
+		return `${isQueryActive(q)}:${q.runID}:${q.items.length}`;
+	}
+
+	function keepFocusOnShownPair() {
+		if (selectedPairID != null && !findShownPair(selectedPairID)) {
+			selectedPairID = undefined;
+		}
+		if (!drawerOpened || $drawerStore.id !== "request-response") return;
+		const pair = findShownPair($drawerStore.meta?.request?.ID);
+		if (!pair) {
+			drawerStore.close();
+			return;
+		}
+		// A pair new to the live view gets its number, and a switch between
+		// modes changes whether the exclusion can hide it.
+		const requestIndex = pairNumber(pair.ID);
+		const isFiltered = hiddenByExclusion(pair);
+		if (
+			$drawerStore.meta.requestIndex !== requestIndex ||
+			$drawerStore.meta.isFiltered !== isFiltered
+		) {
+			drawerStore.update((s) => {
+				s.meta.requestIndex = requestIndex;
+				s.meta.isFiltered = isFiltered;
+				return s;
+			});
+		}
+	}
+
+	// The app's primary button convention, for the Query badge and the active
+	// field-list toggle. $modeCurrent is true in light mode.
+	$: primaryClass = $modeCurrent
+		? "variant-ghost-primary ring-0 shadow-none"
+		: "variant-filled-primary";
+
+	let queryFieldsOpen = false;
+
+	// Appends a field-list example to the query box and runs it like typing.
+	function insertQueryExample(example) {
+		const text = appendToQuery($queryText, example);
+		queryText.set(text);
+		scheduleQuery(text);
+		document.getElementById("searchBox")?.focus();
+	}
+
+	function onQueryKeydown(e) {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			runQuery($queryText);
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			e.stopPropagation();
+			clearQuery();
+		}
+	}
+
+	// Stores the content-type exclusion, then runs the active query again so
+	// its results reflect it. The QueryTraffic binding reads the stored
+	// exclusion itself.
+	async function saveContentTypeExclusion() {
+		setLedgerPagination((old) => ({
+			...old,
+			pageIndex: 0,
+		}));
+		await SetFilters($contentTypeFilter);
+		await rerunQuery();
+	}
 
 	const options = derived(
 		[
-			proxyItems,
+			shownRows,
 			sorting,
-			pagination,
-			searchInput,
+			ledgerPagination,
 			contentTypeFilter,
+			queryActive,
 		],
 		([
 			$data,
 			$sorting,
 			$pagination,
-			$globalFilter,
 			$contentTypeFilter,
+			$queryActive,
 		]) => {
 			const currentFilters = [];
 
-			if ($contentTypeFilter?.length) {
+			// Query results come back with the content-type exclusion
+			// already applied, so the table applies it in the live view
+			// only.
+			if (!$queryActive && $contentTypeFilter?.length) {
 				currentFilters.push({
 					id: "ContentType",
 					value: $contentTypeFilter,
 				});
 			}
+			// Query results stay newest first: sorting only the loaded
+			// part of the results would mislead.
 			return {
 				data: $data,
 				columns,
 				autoResetPageIndex: false,
+				enableSorting: !$queryActive,
 				state: {
-					sorting: $sorting,
+					sorting: $queryActive ? [] : $sorting,
 					pagination: $pagination,
-					globalFilter: $globalFilter ?? "",
 					columnFilters: currentFilters,
 				},
 				onSortingChange: setSorting,
-				onPaginationChange: setPagination,
-				onGlobalFilterChange: setGlobalFilter,
+				onPaginationChange: setLedgerPagination,
 				getCoreRowModel: getCoreRowModel(),
 				getSortedRowModel: getSortedRowModel(),
 				getPaginationRowModel: getPaginationRowModel(),
 				getFilteredRowModel: getFilteredRowModel(),
-				enableGlobalFilter: true,
 			};
 		},
 	);
 
 	const table = createSvelteTable(options);
 
-	function isFiltered(id) {
-		return !$table
-			.getRowModel()
-			.rows.find((row) => row.original.ID === id);
-	}
-
-	function filteredIndex(id) {
+	// Position of the pair among the rows on the current table page, or -1.
+	function pagePosition(id) {
 		return $table
 			.getRowModel()
 			.rows.findIndex((row) => row.original.ID === id);
 	}
 
-	function openDrawer(row, index) {
-		GetRawDetails(row.ID).then((requestResponse) => {
+	// True when the content-type exclusion hides the pair in the live view,
+	// as the ContentType column's filter does. Query results never contain
+	// hidden pairs, so this is false in query mode.
+	function hiddenByExclusion(pair) {
+		return (
+			!$queryActive &&
+			($contentTypeFilter ?? []).includes(pair.ContentType)
+		);
+	}
+
+	// Opens the drawer on the shown pair with this ID.
+	function openDrawer(id) {
+		const pair = findShownPair(id);
+		if (!pair) return;
+		const requestIndex = pairNumber(id);
+		GetRawDetails(pair.ID).then((requestResponse) => {
 			const drawerSettings = {
 				id: "request-response",
 				meta: {
 					metadata: requestResponse.Metadata,
 					request: requestResponse.Request,
 					response: requestResponse.Response,
-					requestIndex: index,
-					filteredIndex: filteredIndex(row.ID),
-					isFiltered: isFiltered(row.ID),
+					requestIndex,
+					// Shows the drawer's "Filtered" label.
+					isFiltered: hiddenByExclusion(pair),
 				},
 				height: $drawerHeight,
 				width: "w-full",
@@ -1255,6 +1311,23 @@
 			};
 			drawerStore.open(drawerSettings);
 		});
+	}
+
+	// Opens the drawer on the row `step` places from the drawer's pair on the
+	// current table page. When that pair isn't on the page, a forward step
+	// opens the first row and a backward step opens the last.
+	function stepDrawer(step) {
+		const rows = $table.getRowModel().rows;
+		if (rows.length === 0) return;
+		const position = pagePosition($drawerStore?.meta?.request?.ID);
+		let target;
+		if (position === -1) {
+			target = step > 0 ? 0 : rows.length - 1;
+		} else {
+			target = position + step;
+		}
+		if (target < 0 || target >= rows.length) return;
+		openDrawer(rows[target].original.ID);
 	}
 	onMount(() => {
 		const unsubscribe = drawerStore.subscribe((settings) => {
@@ -1281,54 +1354,159 @@
 <Accordion rounded="none">
 	<AccordionItem bind:open={accOpened}>
 		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
-		<svelte:fragment slot="summary">Ledger Settings</svelte:fragment
-		>
+		<svelte:fragment slot="summary">
+			<div class="flex min-w-0 items-center gap-2">
+				<span class="whitespace-nowrap">Ledger Settings</span>
+				{#if $queryActive}
+					<span
+						id="ledgerQueryBadge"
+						class="badge {primaryClass}">Query</span
+					>
+					<span
+						class="min-w-0 truncate font-mono text-xs opacity-80"
+						title={$ledgerQuery.ranQuery}
+						>{$ledgerQuery.ranQuery}</span
+					>
+					<span
+						id="ledgerQueryMatchCount"
+						class="whitespace-nowrap text-xs opacity-70"
+						>{$matchCountLabel}</span
+					>
+					{#if !$ledgerQuery.indexComplete}
+						<span
+							class="text-warning-500"
+							title="Indexing older traffic — text matches may be incomplete"
+							><TriangleAlert size={14} /></span
+						>
+					{/if}
+				{/if}
+				{#if $ledgerQuery.error?.query === $queryText && !accOpened}
+					<span
+						id="ledgerQueryErrorMarker"
+						class="text-error-500"
+						title="Invalid query: {$ledgerQuery.error.message}"
+						><CircleAlert size={14} /></span
+					>
+				{/if}
+			</div>
+		</svelte:fragment>
 		<svelte:fragment slot="content">
 			<div class="flex flex-col gap-4 p-2">
-				<div
-					class="input-group input-group-divider grid-cols-[auto_1fr_auto]"
-				>
-					<div class="input-group-shim">
-						<Search size={24} />
+				<div class="flex flex-col gap-1">
+					<div
+						class="input-group input-group-divider {$queryText
+							? 'grid-cols-[auto_minmax(0,1fr)_auto_auto]'
+							: 'grid-cols-[auto_minmax(0,1fr)_auto]'}"
+					>
+						<div class="input-group-shim">
+							{#if $queryPending}
+								<LoaderCircle
+									size={24}
+									class="animate-spin"
+								/>
+							{:else}
+								<Search size={24} />
+							{/if}
+						</div>
+						<input
+							id="searchBox"
+							class="min-w-0 font-mono"
+							type="text"
+							autocomplete="off"
+							spellcheck="false"
+							placeholder="Search traffic…"
+							bind:value={$queryText}
+							on:input={() =>
+								scheduleQuery($queryText)}
+							on:keydown={onQueryKeydown}
+						/>
+						{#if $queryText}
+							<button
+								id="ledgerQueryClear"
+								type="button"
+								class="input-group-shim"
+								title="Clear query (Esc)"
+								aria-label="Clear query"
+								on:click={() => clearQuery()}
+							>
+								<X size={16} />
+							</button>
+						{/if}
+						<button
+							id="ledgerQueryFieldsToggle"
+							type="button"
+							class="input-group-shim {queryFieldsOpen
+								? primaryClass
+								: ''}"
+							title="Query fields"
+							aria-label="Query fields"
+							aria-expanded={queryFieldsOpen}
+							aria-controls="ledgerQueryFields"
+							on:click={() =>
+								(queryFieldsOpen = !queryFieldsOpen)}
+						>
+							<CircleHelp size={16} />
+						</button>
 					</div>
-					<input
-						id="searchBox"
-						type="search"
-						placeholder="Search..."
-						bind:value={$searchInput}
-						on:input={() => {
-							setPagination(
-								(old) => ({
-									...old,
-									pageIndex: 0,
-								}),
-							);
-							setGlobalFilter(
-								$searchInput,
-							);
-						}}
-					/>
+					{#if $ledgerQuery.error}
+						<div
+							class="text-error-500 text-xs"
+							role="alert"
+						>
+							{#if queryErrorMark}
+								<pre
+									class="font-mono whitespace-pre-wrap break-all">{queryErrorMark.before}<mark
+										class="bg-error-500 text-white"
+										>{queryErrorMark.at}</mark
+									>{queryErrorMark.after}</pre>
+								<span
+									>Position {$ledgerQuery
+										.error
+										.position}: {$ledgerQuery
+										.error
+										.message}</span
+								>
+							{:else}
+								<span
+									>{$ledgerQuery.error
+										.message}</span
+								>
+							{/if}
+						</div>
+					{/if}
+					{#if $queryStatusLabel}
+						<div class="text-xs opacity-70">
+							{$queryStatusLabel}
+						</div>
+					{/if}
+					{#if $indexWarning}
+						<div
+							class="text-warning-500 text-xs"
+							role="status"
+						>
+							{$indexWarning}
+						</div>
+					{/if}
 				</div>
+				{#if queryFieldsOpen}
+					<div
+						id="ledgerQueryFields"
+						class="card max-h-[50vh] overflow-auto p-3"
+					>
+						<QueryFieldList
+							on:insert={(e) =>
+								insertQueryExample(e.detail)}
+						/>
+					</div>
+				{/if}
 				<InputChip
 					bind:input={$contentTypeFilterInput}
 					bind:value={$contentTypeFilter}
 					name="chips"
 					placeholder="Filter by Content Type"
 					rounded="none"
-					on:add={() => {
-						setPagination((old) => ({
-							...old,
-							pageIndex: 0,
-						}));
-						SetFilters($contentTypeFilter);
-					}}
-					on:remove={() => {
-						setPagination((old) => ({
-							...old,
-							pageIndex: 0,
-						}));
-						SetFilters($contentTypeFilter);
-					}}
+					on:add={saveContentTypeExclusion}
+					on:remove={saveContentTypeExclusion}
 				></InputChip>
 
 				<div
@@ -1351,7 +1529,7 @@
 												.value,
 										)
 									: 10;
-								setPagination(
+								setLedgerPagination(
 									(
 										old,
 									) => ({
@@ -1437,6 +1615,25 @@
 </Accordion>
 
 <div class="no-select font-mono text-xs">
+	{#if $queryActive && $ledgerQuery.newMatches.length > 0}
+		<!-- Fixed strip across the content area (right of the 80px app rail),
+		     so the button floats centred at the bottom of the window without
+		     moving the rows. The strip ignores clicks; only the button takes them. -->
+		<div
+			class="pointer-events-none fixed bottom-6 left-20 right-0 z-10 flex justify-center"
+		>
+			<div class="bg-surface-50-900-token pointer-events-auto">
+				<button
+					type="button"
+					class="btn btn-sm {primaryClass}"
+					on:click={mergeNewMatches}
+				>
+					{$ledgerQuery.newMatches.length.toLocaleString()}
+					new {matchNoun($ledgerQuery.newMatches.length)}
+				</button>
+			</div>
+		</div>
+	{/if}
 	<table class="table">
 		<thead>
 			{#each $table.getHeaderGroups() as hg}
@@ -1479,13 +1676,10 @@
 					style="background-color: {row.original
 						.Metadata?.highlight ?? ''}"
 					on:click={() => {
-						openDrawer(
-							row.original,
-							row.index + 1,
-						);
+						openDrawer(row.original.ID);
 					}}
 					on:contextmenu={(e) => {
-						selectedRow = row;
+						selectedPairID = row.original.ID;
 						contextMenu.show(e);
 					}}
 				>
@@ -1515,7 +1709,7 @@
 <ContextMenu bind:this={contextMenu}>
 	<Item
 		on:click={() => {
-			GetNote(selectedRow.original.ID).then((note) => {
+			GetNote(selectedPairID).then((note) => {
 				const modal = {
 					type: "component",
 					component: "Notes",
@@ -1525,9 +1719,9 @@
 					},
 					title:
 						"Request " +
-						(selectedRow.index + 1) +
+						pairNumber(selectedPairID) +
 						" notes",
-					requestID: selectedRow.original.ID,
+					requestID: selectedPairID,
 					content: note,
 				};
 				if (!$modalStore[0]) {
@@ -1540,15 +1734,17 @@
 	</Item>
 	<Item
 		on:click={() => {
-			const index = selectedRow.index + 1;
+			const index = pairNumber(selectedPairID);
 			CreateLaunchpadEntry(
 				"Request " + index,
 				"Launchpad for Request " + index,
 			).then((id) => {
 				LinkRequestToLaunchpad(
-					selectedRow.original.ID,
+					selectedPairID,
 					id,
 				).then(() => {
+					// Linking edits the pair's metadata.
+					markTrafficChanged();
 					const toastSettings = {
 						message:
 							"Request " +
@@ -1581,7 +1777,7 @@
 	<Item
 		on:click={() => {
 			testCaseStore
-				.create([selectedRow.original.ID])
+				.create([selectedPairID])
 				.then((testCase) => {
 					const modal = {
 						type: "component",
@@ -1602,7 +1798,7 @@
 	<Item
 		on:click={() => {
 			findingStore
-				.create([selectedRow.original.ID])
+				.create([selectedPairID])
 				.then((finding) => {
 					const modal = {
 						type: "component",
@@ -1629,16 +1825,16 @@
 			on:click={() => {
 				const color = 15680580;
 				HighlightRow(
-					selectedRow.original.ID,
+					selectedPairID,
 					color,
 				).then(() => {
-					$proxyItems[selectedRow.index].Metadata[
-						"highlight"
-					] =
-						"#" +
-						color
-							.toString(16)
-							.padStart(6, "0");
+					patchShownPairMetadata(selectedPairID, {
+						highlight:
+							"#" +
+							color
+								.toString(16)
+								.padStart(6, "0"),
+					});
 				});
 			}}
 			class="!bg-red-500 text-black hover:brightness-110">Red</ListBoxItem
@@ -1650,16 +1846,16 @@
 			on:click={() => {
 				const color = 2278750;
 				HighlightRow(
-					selectedRow.original.ID,
+					selectedPairID,
 					color,
 				).then(() => {
-					$proxyItems[selectedRow.index].Metadata[
-						"highlight"
-					] =
-						"#" +
-						color
-							.toString(16)
-							.padStart(6, "0");
+					patchShownPairMetadata(selectedPairID, {
+						highlight:
+							"#" +
+							color
+								.toString(16)
+								.padStart(6, "0"),
+					});
 				});
 			}}
 			class="!bg-green-500 text-black hover:brightness-110">Green</ListBoxItem
@@ -1671,16 +1867,16 @@
 			on:click={() => {
 				const color = 15381256;
 				HighlightRow(
-					selectedRow.original.ID,
+					selectedPairID,
 					color,
 				).then(() => {
-					$proxyItems[selectedRow.index].Metadata[
-						"highlight"
-					] =
-						"#" +
-						color
-							.toString(16)
-							.padStart(6, "0");
+					patchShownPairMetadata(selectedPairID, {
+						highlight:
+							"#" +
+							color
+								.toString(16)
+								.padStart(6, "0"),
+					});
 				});
 			}}
 			class="!bg-yellow-500 text-black hover:brightness-110">Yellow</ListBoxItem
@@ -1692,16 +1888,16 @@
 			on:click={() => {
 				const color = 3900150;
 				HighlightRow(
-					selectedRow.original.ID,
+					selectedPairID,
 					color,
 				).then(() => {
-					$proxyItems[selectedRow.index].Metadata[
-						"highlight"
-					] =
-						"#" +
-						color
-							.toString(16)
-							.padStart(6, "0");
+					patchShownPairMetadata(selectedPairID, {
+						highlight:
+							"#" +
+							color
+								.toString(16)
+								.padStart(6, "0"),
+					});
 				});
 			}}
 			class="!bg-blue-500 text-black hover:brightness-110">Blue</ListBoxItem
@@ -1713,16 +1909,16 @@
 			on:click={() => {
 				const color = 11032055;
 				HighlightRow(
-					selectedRow.original.ID,
+					selectedPairID,
 					color,
 				).then(() => {
-					$proxyItems[selectedRow.index].Metadata[
-						"highlight"
-					] =
-						"#" +
-						color
-							.toString(16)
-							.padStart(6, "0");
+					patchShownPairMetadata(selectedPairID, {
+						highlight:
+							"#" +
+							color
+								.toString(16)
+								.padStart(6, "0"),
+					});
 				});
 			}}
 			class="!bg-purple-500 text-black hover:brightness-110">Purple</ListBoxItem
@@ -1732,11 +1928,11 @@
 			name
 			value
 			on:click={() => {
-				HighlightRow(selectedRow.original.ID, -1).then(
+				HighlightRow(selectedPairID, -1).then(
 					() => {
-						$proxyItems[
-							selectedRow.index
-						].Metadata["highlight"] = "";
+						patchShownPairMetadata(selectedPairID, {
+							highlight: "",
+						});
 					},
 				);
 			}}

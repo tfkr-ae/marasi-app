@@ -17,6 +17,13 @@ import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { connectionStore } from "./stores/connectionStore";
 import { armoryStore } from "./stores/armoryStore";
+import {
+  clearQuery,
+  markTrafficChanged,
+  patchQueryResultMetadata,
+  patchQueryResultResponses,
+  sameID,
+} from "./stores/ledgerQuery";
 
 // Startup
 export const appState = writable({
@@ -32,7 +39,6 @@ export const extensions_ui = writable({});
 // Ledger Stores
 export const sorting = writable([{ id: "ID", desc: true }]);
 export const pagination = writable({ pageIndex: 0, pageSize: 100 });
-export const searchInput = writable("");
 export const proxyItems = writable([]);
 export const contentTypeFilter = writable([]);
 export const contentTypeFilterInput = writable("");
@@ -93,6 +99,11 @@ function flushBuffer() {
 
     return current;
   });
+
+  // Responses also fill in loaded query results, and any traffic may bring
+  // new matches.
+  patchQueryResultResponses(resBatch);
+  markTrafficChanged();
 }
 if (typeof window !== "undefined") {
   setInterval(flushBuffer, 200);
@@ -110,20 +121,27 @@ export function addResponse(res) {
 
 export function patchWebSocketMetadata(conn) {
   if (!conn?.RequestID) return;
+  const patch = {
+    protocol: "websocket",
+    "websocket.state": conn.State || "closed",
+    "websocket.transport": conn.Transport,
+    "websocket.close_code": conn.CloseCode,
+    "websocket.close_reason": conn.CloseReason,
+  };
+  patchLiveViewMetadata(conn.RequestID, patch);
+  patchQueryResultMetadata(conn.RequestID, patch);
+  markTrafficChanged();
+}
+
+/**
+ * Merges `patch` into the Metadata of the live-view pair with this ID. Does
+ * nothing when the live view doesn't hold the pair.
+ */
+export function patchLiveViewMetadata(id, patch) {
   proxyItems.update((items) =>
     (items || []).map((item) => {
-      if (item.ID !== conn.RequestID) return item;
-      return {
-        ...item,
-        Metadata: {
-          ...(item.Metadata || {}),
-          protocol: "websocket",
-          "websocket.state": conn.State || "closed",
-          "websocket.transport": conn.Transport,
-          "websocket.close_code": conn.CloseCode,
-          "websocket.close_reason": conn.CloseReason,
-        },
-      };
+      if (!sameID(item.ID, id)) return item;
+      return { ...item, Metadata: { ...(item.Metadata || {}), ...patch } };
     }),
   );
 }
@@ -166,17 +184,37 @@ export let listener = writable({
   port: "8080",
 });
 export let activeProject = writable("Marasi");
+/**
+ * Turns a backend log event from opening a project into splash-screen text,
+ * or returns null for events the splash ignores. Migrations log one record
+ * per statement through goose, with the migration file as `source`.
+ */
+export function projectOpenMessage(log) {
+  const data = log?.data;
+  if (data?.logger === "goose" && data.source) {
+    return `Upgrading project database (${data.source})…`;
+  }
+  if (data?.component !== "db") return null;
+  if (log.message === "Connecting to SQLite...") {
+    return "Opening project database…";
+  }
+  if (log.message === "Migrations completed") {
+    return "Project database upgraded";
+  }
+  return log.message;
+}
+
 export async function openProject() {
   appState.set({
     isReady: false,
-    message: "Starting...",
+    message: "Loading " + get(activeProject) + "…",
     details: "",
   });
   requestBuffer = [];
   responseBuffer = new Map();
   pagination.set({ pageIndex: 0, pageSize: 100 });
   sorting.set([{ id: "ID", desc: true }]);
-  searchInput.set("");
+  clearQuery();
   logbookSearchInput.set("");
   reportMetadata.set({
     title: get(activeProject) + " Report",

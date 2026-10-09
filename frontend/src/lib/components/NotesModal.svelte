@@ -2,7 +2,7 @@
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { UpdateNote } from "../wailsjs/go/main/App";
     import { onDestroy, onMount } from "svelte";
-    import { proxyItems } from "../../stores";
+    import { patchShownPairMetadata } from "../../stores/ledgerRows";
     import { X } from "lucide-svelte";
 
     export let parent;
@@ -20,14 +20,9 @@
         UpdateNote($modalStore[0].requestID.toString(), content)
             .then(() => {
                 isSaved = true;
-                const index = $proxyItems.findIndex(
-                    (item) => item.ID == requestId,
-                );
-                if (index !== -1) {
-                    content.length > 0
-                        ? ($proxyItems[index].Metadata["has_note"] = 1)
-                        : ($proxyItems[index].Metadata["has_note"] = 0);
-                }
+                patchShownPairMetadata(requestId, {
+                    has_note: content.length > 0 ? 1 : 0,
+                });
                 modalStore.close();
             })
             .catch((noteError) => {
@@ -48,14 +43,9 @@
         if (!isSaved) {
             UpdateNote(requestId, content)
                 .then(() => {
-                    const index = $proxyItems.findIndex(
-                        (item) => item.ID == requestId,
-                    );
-                    if (index !== -1) {
-                        content.length > 0
-                            ? ($proxyItems[index].Metadata["has_note"] = 1)
-                            : ($proxyItems[index].Metadata["has_note"] = 0);
-                    }
+                    patchShownPairMetadata(requestId, {
+                        has_note: content.length > 0 ? 1 : 0,
+                    });
                     modalStore.close();
                 })
                 .catch((noteError) => {
