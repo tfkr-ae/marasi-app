@@ -11,6 +11,7 @@
 		GetChromeProfiles,
 		AddChromeProfile,
 		DeleteChromeProfile,
+		GetBuildInfo,
 	} from "../../lib/wailsjs/go/main/App";
 	import {
 		marasiConfig,
@@ -29,6 +30,7 @@
 	let selectedProfile = "";
 	let chromePaths = [];
 	let chromeProfiles = [];
+	let buildInfo = null;
 	function handleSyntaxModeChange(event) {
 		const value = event?.target?.value;
 		switch (value) {
@@ -56,6 +58,9 @@
 		}
 	}
 	onMount(() => {
+		GetBuildInfo().then((info) => {
+			buildInfo = info;
+		});
 		GetChromePaths().then((paths) => {
 			chromePaths = paths;
 		});
@@ -67,7 +72,19 @@
 </script>
 
 <div class="no-select p-4 space-y-2 text-surface-900-50-token">
-	<h2 class="text-2xl font-bold mb-6">Marasi Settings</h2>
+	<div class="mb-6">
+		<h2 class="text-2xl font-bold">Marasi Settings</h2>
+		{#if buildInfo}
+			<p
+				class="text-sm font-mono"
+				class:text-primary-500={buildInfo.Channel === "nightly"}
+				class:text-success-500={buildInfo.Channel === "release"}
+				class:opacity-60={buildInfo.Channel === "dev"}
+			>
+				{buildInfo.Version}
+			</p>
+		{/if}
+	</div>
 	<SlideToggle
 		name="slider-label"
 		active="bg-primary-500"

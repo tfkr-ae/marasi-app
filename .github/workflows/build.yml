@@ -1,0 +1,128 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build
+        required: true
+        type: string
+      channel:
+        description: Build channel embedded in the app (nightly or release)
+        required: true
+        type: string
+      version:
+        description: Version string embedded in the app, in the marasi CLI format
+        required: true
+        type: string
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-3-dev libwebkit2gtk-4.1-dev
+      # main.go embeds frontend/build, which only exists after a frontend build.
+      - run: mkdir -p frontend/build && touch frontend/build/.keep
+      - run: go test -v -race -tags webkit2_41 ./...
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux/amd64
+            output: marasi-app
+            asset: marasi-app
+            tags: webkit2_41
+          - os: windows-latest
+            platform: windows/amd64
+            output: marasi-app.exe
+            asset: marasi-app.exe
+          - os: macos-latest
+            platform: darwin/universal
+            output: marasi-app
+            asset: marasi-app.app.zip
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - if: runner.os == 'Linux'
+        run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install Wails
+        run: go install "github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)"
+      - name: Build
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          OUTPUT: ${{ matrix.output }}
+          TAGS: ${{ matrix.tags }}
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          args=(-platform "$PLATFORM" -webview2 download -o "$OUTPUT"
+            -ldflags "-X main.buildChannel=$CHANNEL -X 'main.version=$VERSION'")
+          if [ -n "$TAGS" ]; then
+            args+=(-tags "$TAGS")
+          fi
+          wails build "${args[@]}"
+      - if: runner.os == 'macOS'
+        uses: Apple-Actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.MACOS_DEVELOPER_CERT }}
+          p12-password: ${{ secrets.MACOS_DEVELOPER_CERT_PASSWORD }}
+          keychain-password: ${{ secrets.MACOS_DEVELOPER_CERT_PASSWORD }}
+      - name: Sign and notarize
+        if: runner.os == 'macOS'
+        env:
+          MACOS_DEVELOPER_CERT_ID: ${{ secrets.MACOS_DEVELOPER_CERT_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          app=build/bin/marasi-app.app
+          zip_path=build/bin/marasi-app.app.zip
+          codesign --force --options runtime --timestamp --deep --sign "$MACOS_DEVELOPER_CERT_ID" "$app"
+          codesign --verify --deep --strict --verbose "$app"
+          team_id="${MACOS_DEVELOPER_CERT_ID##*(}"
+          team_id="${team_id%)}"
+          ditto -c -k --keepParent "$app" "$zip_path"
+          keychain="$HOME/Library/Keychains/signing_temp.keychain-db"
+          xcrun notarytool store-credentials marasi-notary \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$team_id" \
+            --keychain "$keychain"
+          xcrun notarytool submit "$zip_path" \
+            --keychain-profile marasi-notary \
+            --keychain "$keychain" \
+            --wait
+          xcrun stapler staple "$app"
+          rm -f "$zip_path"
+          ditto -c -k --keepParent "$app" "$zip_path"
+      - if: runner.os == 'Linux'
+        run: chmod +x build/bin/marasi-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: build/bin/${{ matrix.asset }}

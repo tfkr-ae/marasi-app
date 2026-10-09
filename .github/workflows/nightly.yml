@@ -1,0 +1,99 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag, or branch to build (defaults to the branch selected above)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.check.outputs.publish }}
+      sha: ${{ steps.check.outputs.sha }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+      - id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          last=$(git rev-parse --verify --quiet 'refs/tags/nightly^{commit}' || true)
+          if [ "$EVENT_NAME" = schedule ] && [ "$sha" = "$last" ]; then
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo "No commits since the last nightly (${sha:0:7}), skipping."
+            exit 0
+          fi
+          {
+            echo 'publish=true'
+            echo "sha=$sha"
+            echo "version=$(date -u '+%d.%m.%Y') (nightly ${sha:0:7})"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      channel: nightly
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  publish:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum marasi-app marasi-app.exe marasi-app.app.zip > checksums.txt
+      - name: Move nightly tag
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          git tag -f nightly "$SHA"
+          git push origin refs/tags/nightly --force
+      - name: Publish nightly
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref || github.ref_name }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          notes=$(printf 'Ref: %s\nCommit: %s\n' "$REF" "$SHA")
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release delete nightly --yes
+          fi
+          gh release create nightly \
+            --verify-tag \
+            --title Nightly \
+            --prerelease \
+            --latest=false \
+            --notes "$notes" \
+            dist/marasi-app \
+            dist/marasi-app.exe \
+            dist/marasi-app.app.zip \
+            dist/checksums.txt
