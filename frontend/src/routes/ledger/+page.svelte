@@ -104,6 +104,8 @@
 		indexWarning,
 		needsOlderPage,
 		loadOlderPage,
+		markTrafficChanged,
+		mergeNewMatches,
 	} from "../../stores/ledgerQuery";
 
 	const drawerStore = getDrawerStore();
@@ -406,6 +408,8 @@
 									?.ID,
 								id,
 							).then(() => {
+					// Linking edits the pair's metadata.
+					markTrafficChanged();
 								const toastSettings =
 									{
 										message:
@@ -1139,6 +1143,39 @@
 
 	$: queryErrorMark = markQueryError($ledgerQuery.error);
 
+	// After a query change or a change in the loaded results (a merge of new
+	// matches or an older page), the selected row and the open drawer stay
+	// when their pair is still in the rows, and close otherwise.
+	let lastRowsKey = rowsKey($ledgerQuery);
+	$: if (rowsKey($ledgerQuery) !== lastRowsKey) {
+		lastRowsKey = rowsKey($ledgerQuery);
+		keepFocusOnShownPair();
+	}
+
+	function rowsKey(q) {
+		return `${q.ranQuery !== ""}:${q.runID}:${q.items.length}`;
+	}
+
+	function keepFocusOnShownPair() {
+		if (selectedPairID != null && !findShownPair(selectedPairID)) {
+			selectedPairID = undefined;
+		}
+		if (!drawerOpened || $drawerStore.id !== "request-response") return;
+		const id = $drawerStore.meta?.request?.ID;
+		if (!findShownPair(id)) {
+			drawerStore.close();
+			return;
+		}
+		// The pair's request number can change with the rows.
+		const requestIndex = shownPairNumber(id);
+		if ($drawerStore.meta.requestIndex !== requestIndex) {
+			drawerStore.update((s) => {
+				s.meta.requestIndex = requestIndex;
+				return s;
+			});
+		}
+	}
+
 	// The app's primary button convention, for the Query badge and the active
 	// field-list toggle. $modeCurrent is true in light mode.
 	$: primaryClass = $modeCurrent
@@ -1562,6 +1599,28 @@
 </Accordion>
 
 <div class="no-select font-mono text-xs">
+	{#if $queryActive && $ledgerQuery.newMatches.length > 0}
+		<!-- Zero-height sticky strip, so the button floats over the top of
+		     the table without moving the rows. -->
+		<div
+			class="sticky top-0 z-10 flex h-0 justify-center overflow-visible"
+		>
+			<div class="bg-surface-50-900-token mt-1">
+				<button
+					type="button"
+					class="btn btn-sm {$modeCurrent
+						? 'variant-ghost-primary ring-0 shadow-none'
+						: 'variant-filled-primary'} rounded-none"
+					on:click={mergeNewMatches}
+				>
+					{$ledgerQuery.newMatches.length}
+					new {$ledgerQuery.newMatches.length === 1
+						? "match"
+						: "matches"}
+				</button>
+			</div>
+		</div>
+	{/if}
 	<table class="table">
 		<thead>
 			{#each $table.getHeaderGroups() as hg}
@@ -1671,6 +1730,8 @@
 					selectedPairID,
 					id,
 				).then(() => {
+					// Linking edits the pair's metadata.
+					markTrafficChanged();
 					const toastSettings = {
 						message:
 							"Request " +

@@ -41,6 +41,9 @@ function emptyQueryState() {
     // marasi's 1-based character offset into `query`, or null when the failure
     // wasn't in the query text. null when the last query that ran was valid.
     error: null,
+    // Pairs that match the query but aren't loaded yet, newest first. They
+    // join `items` only when merged, so the shown rows don't move.
+    newMatches: [],
   };
 }
 
@@ -77,6 +80,13 @@ export const indexWarning = derived(ledgerQuery, ($q) =>
     ? "Indexing older traffic — text matches may be incomplete"
     : "",
 );
+
+/** How often query mode checks for new matches after traffic changed. */
+export const NEW_MATCHES_POLL_MS = 5000;
+
+// Set by request and response events and by edits made in the app; cleared
+// when the newest page of the query is fetched.
+let trafficChanged = false;
 
 let delayTimer = null;
 // Identifies the newest request, so a slower, older response can't overwrite
@@ -125,6 +135,7 @@ export async function runQuery(text = get(queryText)) {
     }));
     return;
   }
+  trafficChanged = false;
   ledgerQuery.update((q) => ({
     ...q,
     ranQuery: text,
@@ -135,6 +146,7 @@ export async function runQuery(text = get(queryText)) {
     loadingOlder: false,
     olderFailed: false,
     error: null,
+    newMatches: [],
   }));
   queryPageIndex.set(0);
 }
@@ -222,15 +234,145 @@ export function clearQuery({ keepText = false } = {}) {
   queryPageIndex.set(0);
 }
 
+function sameID(a, b) {
+  return a != null && b != null && String(a) === String(b);
+}
+
+// Pair IDs are UUIDv7 strings, so comparing them as strings orders pairs by
+// capture time, the same order marasi returns query results in.
+function newestFirst(a, b) {
+  const x = String(a.ID);
+  const y = String(b.ID);
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+
 /**
- * Merges `patch` into the Metadata of the loaded query result with this ID.
+ * Records that traffic changed: a request or response arrived, or a pair was
+ * edited in the app. The next poll in query mode then checks for new matches.
+ */
+export function markTrafficChanged() {
+  trafficChanged = true;
+}
+
+/**
+ * Applies `update(item)` to the query result with this ID, in the loaded
+ * results and in the new matches. Does nothing when neither holds the pair.
+ */
+function patchQueryResult(id, update) {
+  ledgerQuery.update((q) => {
+    let changed = false;
+    const patchList = (list) =>
+      list.map((item) => {
+        if (!sameID(item.ID, id)) return item;
+        changed = true;
+        return update(item);
+      });
+    const items = patchList(q.items);
+    const newMatches = patchList(q.newMatches);
+    return changed ? { ...q, items, newMatches } : q;
+  });
+}
+
+/**
+ * Merges `patch` into the Metadata of the query result with this ID.
  * Does nothing when the pair isn't loaded.
  */
 export function patchQueryResultMetadata(id, patch) {
+  patchQueryResult(id, (item) => ({
+    ...item,
+    Metadata: { ...(item.Metadata || {}), ...patch },
+  }));
+}
+
+/**
+ * Fills in the responses that arrived for loaded query results, in place by
+ * pair ID. `responses` maps pair IDs to response summaries. Rows are never
+ * removed, even when they no longer match.
+ */
+export function patchQueryResultResponses(responses) {
+  if (responses.size === 0) return;
   ledgerQuery.update((q) => {
-    const item = q.items.find((it) => String(it.ID) === String(id));
-    if (item) item.Metadata = { ...(item.Metadata || {}), ...patch };
-    return q;
+    if (q.ranQuery === "") return q;
+    let changed = false;
+    const patchList = (list) =>
+      list.map((item) => {
+        const res = responses.get(item.ID);
+        if (!res) return item;
+        changed = true;
+        return { ...item, ...res };
+      });
+    const items = patchList(q.items);
+    const newMatches = patchList(q.newMatches);
+    return changed ? { ...q, items, newMatches } : q;
+  });
+}
+
+/**
+ * Checks for new matches when traffic changed since the last check: fetches
+ * the newest page of the active query and keeps the pairs that aren't loaded
+ * as new matches. Pairs older than the next page's cursor are left out,
+ * because loading older pages brings them in. Does nothing in the live view
+ * or when traffic hasn't changed.
+ */
+export async function checkForNewMatches() {
+  const { ranQuery, runID } = get(ledgerQuery);
+  if (ranQuery === "" || !trafficChanged) return;
+  trafficChanged = false;
+  let result;
+  try {
+    result = await QueryTraffic(ranQuery, null);
+  } catch (err) {
+    console.error("Checking for new matches failed:", err);
+    trafficChanged = true;
+    return;
+  }
+  if (result.QueryError) return;
+  ledgerQuery.update((q) => {
+    // A different query ran, or the ledger went back to the live view.
+    if (q.ranQuery !== ranQuery || q.runID !== runID) return q;
+    const loaded = new Set(q.items.map((item) => String(item.ID)));
+    const isNew = (item) =>
+      !loaded.has(String(item.ID)) &&
+      (q.nextCursor == null || String(item.ID) > String(q.nextCursor));
+    const fresh = (result.Items ?? []).filter(isNew);
+    const freshIDs = new Set(fresh.map((item) => String(item.ID)));
+    // Earlier new matches can fall off the newest page when a lot of
+    // traffic arrives; keep them.
+    const kept = q.newMatches.filter(
+      (item) => isNew(item) && !freshIDs.has(String(item.ID)),
+    );
+    return {
+      ...q,
+      newMatches: [...fresh, ...kept].sort(newestFirst),
+      indexComplete: result.IndexComplete,
+    };
+  });
+}
+
+/**
+ * Merges the new matches into the query results in newest-first order and
+ * goes back to page 1 of the query results.
+ */
+export function mergeNewMatches() {
+  if (get(ledgerQuery).newMatches.length === 0) return;
+  ledgerQuery.update((q) => ({
+    ...q,
+    items: [...q.items, ...q.newMatches].sort(newestFirst),
+    newMatches: [],
+  }));
+  queryPageIndex.set(0);
+}
+
+// Polls for new matches only while query mode is active.
+if (typeof window !== "undefined") {
+  let pollTimer = null;
+  queryActive.subscribe((active) => {
+    if (active && pollTimer === null) {
+      pollTimer = setInterval(checkForNewMatches, NEW_MATCHES_POLL_MS);
+    } else if (!active && pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
   });
 }
 

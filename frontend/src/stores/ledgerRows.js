@@ -13,6 +13,7 @@ import { derived, get } from "svelte/store";
 import { pagination, proxyItems } from "../stores";
 import {
   ledgerQuery,
+  markTrafficChanged,
   patchQueryResultMetadata,
   queryActive,
   queryPageIndex,
@@ -81,8 +82,9 @@ export function shownPairAtNumber(number) {
 
 /**
  * Merges `patch` into the Metadata of the pair with this ID, in the live view
- * and in the loaded query results, and notifies subscribers. A source that
- * doesn't hold the pair is left alone.
+ * and in the loaded query results and new matches, and notifies subscribers.
+ * A source that doesn't hold the pair is left alone. The edit can change what
+ * the query matches, so it also marks traffic as changed.
  */
 export function patchShownPairMetadata(id, patch) {
   proxyItems.update((items) => {
@@ -94,4 +96,5 @@ export function patchShownPairMetadata(id, patch) {
     return items;
   });
   patchQueryResultMetadata(id, patch);
+  markTrafficChanged();
 }

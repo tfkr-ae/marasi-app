@@ -17,7 +17,12 @@ import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { connectionStore } from "./stores/connectionStore";
 import { armoryStore } from "./stores/armoryStore";
-import { clearQuery } from "./stores/ledgerQuery";
+import {
+  clearQuery,
+  markTrafficChanged,
+  patchQueryResultMetadata,
+  patchQueryResultResponses,
+} from "./stores/ledgerQuery";
 
 // Startup
 export const appState = writable({
@@ -93,6 +98,11 @@ function flushBuffer() {
 
     return current;
   });
+
+  // Responses also fill in loaded query results, and any traffic may bring
+  // new matches.
+  patchQueryResultResponses(resBatch);
+  markTrafficChanged();
 }
 if (typeof window !== "undefined") {
   setInterval(flushBuffer, 200);
@@ -110,22 +120,21 @@ export function addResponse(res) {
 
 export function patchWebSocketMetadata(conn) {
   if (!conn?.RequestID) return;
+  const patch = {
+    protocol: "websocket",
+    "websocket.state": conn.State || "closed",
+    "websocket.transport": conn.Transport,
+    "websocket.close_code": conn.CloseCode,
+    "websocket.close_reason": conn.CloseReason,
+  };
   proxyItems.update((items) =>
     (items || []).map((item) => {
       if (item.ID !== conn.RequestID) return item;
-      return {
-        ...item,
-        Metadata: {
-          ...(item.Metadata || {}),
-          protocol: "websocket",
-          "websocket.state": conn.State || "closed",
-          "websocket.transport": conn.Transport,
-          "websocket.close_code": conn.CloseCode,
-          "websocket.close_reason": conn.CloseReason,
-        },
-      };
+      return { ...item, Metadata: { ...(item.Metadata || {}), ...patch } };
     }),
   );
+  patchQueryResultMetadata(conn.RequestID, patch);
+  markTrafficChanged();
 }
 
 // ---------------------------
