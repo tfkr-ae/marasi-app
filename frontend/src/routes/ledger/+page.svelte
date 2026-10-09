@@ -57,7 +57,13 @@
 		Swords,
 		RadioIcon,
 		X,
+		LoaderCircle,
+		CircleHelp,
+		CircleAlert,
+		TriangleAlert,
 	} from "lucide-svelte";
+	import QueryFieldList from "../../lib/components/QueryFieldList.svelte";
+	import { appendToQuery } from "../../lib/ledgerQueryFields";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import IDCell from "../../lib/components/IDCell.svelte";
 	import {
@@ -69,7 +75,7 @@
 		LinkRequestToLaunchpad,
 		SetFilters,
 	} from "../../lib/wailsjs/go/main/App";
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { armoryStore } from "../../stores/armoryStore";
@@ -82,6 +88,7 @@
 	} from "../../stores/ledgerRows";
 	import {
 		queryText,
+		queryPending,
 		ledgerQuery,
 		queryActive,
 		scheduleQuery,
@@ -185,21 +192,21 @@
 			keywords: "search",
 			icon: SearchIcon,
 			action: {
-				handler: () => {
+				// Toggles the accordion: opening it focuses the query
+				// box, closing it takes focus out of the box.
+				handler: async () => {
 					drawerStore.close();
 					accOpened = !accOpened;
+					await tick();
 					setTimeout(() => {
 						const searchBox =
 							document.getElementById(
 								"searchBox",
 							);
-						if (
-							document.activeElement ===
-							searchBox
-						) {
-							searchBox.blur();
+						if (accOpened) {
+							searchBox?.focus();
 						} else {
-							searchBox.focus();
+							searchBox?.blur();
 						}
 					}, 10);
 				},
@@ -1164,6 +1171,25 @@
 		}
 	}
 
+	// The app's primary button convention, for the Query badge and the active
+	// field-list toggle. $modeCurrent is true in light mode.
+	$: primaryClass = $modeCurrent
+		? "variant-ghost-primary ring-0 shadow-none"
+		: "variant-filled-primary";
+
+	// "N matches" for the loaded query results, "N+" while older pages remain.
+	$: queryMatchLabel = `${$ledgerQuery.items.length}${$ledgerQuery.nextCursor ? "+" : ""} matches`;
+
+	let queryFieldsOpen = false;
+
+	// Appends a field-list example to the query box and runs it like typing.
+	function insertQueryExample(example) {
+		const text = appendToQuery($queryText, example);
+		queryText.set(text);
+		scheduleQuery(text);
+		document.getElementById("searchBox")?.focus();
+	}
+
 	function onQueryKeydown(e) {
 		if (e.key === "Enter") {
 			e.preventDefault();
@@ -1300,20 +1326,61 @@
 <Accordion rounded="none">
 	<AccordionItem bind:open={accOpened}>
 		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
-		<svelte:fragment slot="summary">Ledger Settings</svelte:fragment
-		>
+		<svelte:fragment slot="summary">
+			<div class="flex min-w-0 items-center gap-2">
+				<span class="whitespace-nowrap">Ledger Settings</span>
+				{#if $queryActive}
+					<span
+						id="ledgerQueryBadge"
+						class="badge {primaryClass}">Query</span
+					>
+					<span
+						class="min-w-0 truncate font-mono text-xs opacity-80"
+						title={$ledgerQuery.ranQuery}
+						>{$ledgerQuery.ranQuery}</span
+					>
+					<span
+						id="ledgerQueryMatchCount"
+						class="whitespace-nowrap text-xs opacity-70"
+						>{queryMatchLabel}</span
+					>
+					{#if !$ledgerQuery.indexComplete}
+						<span
+							class="text-warning-500"
+							title="Indexing older traffic — text matches may be incomplete"
+							><TriangleAlert size={14} /></span
+						>
+					{/if}
+				{/if}
+				{#if $ledgerQuery.error && !accOpened}
+					<span
+						id="ledgerQueryErrorMarker"
+						class="text-error-500"
+						title="Invalid query: {$ledgerQuery.error.message}"
+						><CircleAlert size={14} /></span
+					>
+				{/if}
+			</div>
+		</svelte:fragment>
 		<svelte:fragment slot="content">
 			<div class="flex flex-col gap-4 p-2">
 				<div class="flex flex-col gap-1">
 					<div
-						class="input-group input-group-divider grid-cols-[auto_minmax(0,1fr)_auto]"
+						class="input-group input-group-divider grid-cols-[auto_minmax(0,1fr)_auto_auto]"
 					>
 						<div class="input-group-shim">
-							<Search size={24} />
+							{#if $queryPending}
+								<LoaderCircle
+									size={24}
+									class="animate-spin"
+								/>
+							{:else}
+								<Search size={24} />
+							{/if}
 						</div>
 						<input
 							id="searchBox"
-							class="font-mono"
+							class="min-w-0 font-mono"
 							type="text"
 							autocomplete="off"
 							spellcheck="false"
@@ -1325,9 +1392,10 @@
 						/>
 						{#if $queryText}
 							<button
+								id="ledgerQueryClear"
 								type="button"
 								class="input-group-shim"
-								title="Clear query"
+								title="Clear query (Esc)"
 								aria-label="Clear query"
 								on:click={() => clearQuery()}
 							>
@@ -1336,6 +1404,21 @@
 						{:else}
 							<div></div>
 						{/if}
+						<button
+							id="ledgerQueryFieldsToggle"
+							type="button"
+							class="input-group-shim {queryFieldsOpen
+								? primaryClass
+								: ''}"
+							title="Query fields"
+							aria-label="Query fields"
+							aria-expanded={queryFieldsOpen}
+							aria-controls="ledgerQueryFields"
+							on:click={() =>
+								(queryFieldsOpen = !queryFieldsOpen)}
+						>
+							<CircleHelp size={16} />
+						</button>
 					</div>
 					{#if $ledgerQuery.error}
 						<div
@@ -1364,6 +1447,17 @@
 						</div>
 					{/if}
 				</div>
+				{#if queryFieldsOpen}
+					<div
+						id="ledgerQueryFields"
+						class="card max-h-[50vh] overflow-auto p-3"
+					>
+						<QueryFieldList
+							on:insert={(e) =>
+								insertQueryExample(e.detail)}
+						/>
+					</div>
+				{/if}
 				<InputChip
 					bind:input={$contentTypeFilterInput}
 					bind:value={$contentTypeFilter}
