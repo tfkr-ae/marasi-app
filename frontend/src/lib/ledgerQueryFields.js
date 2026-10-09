@@ -6,7 +6,7 @@
 
 /** How bare text and the boolean operators work, shown above the fields. */
 export const QUERY_PREAMBLE =
-  "Bare text, for example eyJhbGci, searches every text part of a pair: request, response, note and metadata. " +
+  "Bare text, for example eyJhbGci, matches pairs that contain it in any text part: request, response, note or metadata. " +
   "Text terms need 3 or more characters. " +
   "Combine conditions with AND, OR, NOT, - and parentheses; a space between them means AND.";
 
@@ -25,9 +25,9 @@ export const QUERY_FIELDS = [
   { name: "responded_at", ops: ["=", "!=", "<", "<=", ">", ">="], example: 'responded_at < "2026-10-09T10:00:00Z"', help: "RFC 3339 timestamp." },
   { name: "metadata.<key>", ops: ["=", "!="], example: 'metadata.extension = "workshop"', help: "The value at that key: a string, number, true, false or null." },
   { name: "request_head", ops: [":"], example: 'request_head:"authorization"', help: "Contains, ignoring case. Request line plus headers." },
-  { name: "request_body", ops: [":"], example: 'request_body:"password"', help: "Contains, ignoring case. Binary bodies are not searched." },
+  { name: "request_body", ops: [":"], example: 'request_body:"password"', help: "Contains, ignoring case. Binary bodies never match." },
   { name: "response_head", ops: [":"], example: 'response_head:"set-cookie"', help: "Contains, ignoring case. Status line plus headers." },
-  { name: "response_body", ops: [":"], example: 'response_body:"eyJhbGci"', help: "Contains, ignoring case. Binary bodies are not searched." },
+  { name: "response_body", ops: [":"], example: 'response_body:"eyJhbGci"', help: "Contains, ignoring case. Binary bodies never match." },
   { name: "note", ops: [":"], example: 'note:"idor"', help: "Contains, ignoring case." },
   { name: "metadata", ops: [":"], example: 'metadata:"workshop"', help: "Contains, ignoring case, anywhere in the metadata." },
 ];
