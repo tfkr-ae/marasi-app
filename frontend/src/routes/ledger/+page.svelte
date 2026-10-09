@@ -82,7 +82,7 @@
 	import {
 		shownRows,
 		findShownPair,
-		shownPairNumber,
+		pairNumber,
 		shownPairAtNumber,
 		patchShownPairMetadata,
 		ledgerPagination,
@@ -93,6 +93,8 @@
 		queryPending,
 		ledgerQuery,
 		queryActive,
+		isQueryActive,
+		matchNoun,
 		scheduleQuery,
 		runQuery,
 		rerunQuery,
@@ -408,8 +410,8 @@
 									?.ID,
 								id,
 							).then(() => {
-					// Linking edits the pair's metadata.
-					markTrafficChanged();
+								// Linking edits the pair's metadata.
+								markTrafficChanged();
 								const toastSettings =
 									{
 										message:
@@ -1067,7 +1069,7 @@
 			header: "ID",
 			cell: (info) =>
 				renderComponent(IDCell, {
-					index: info.row.index + 1,
+					index: pairNumber(info.row.original.ID),
 					row: info.row.original,
 				}),
 			sortingFn: "text",
@@ -1125,9 +1127,6 @@
 		);
 	};
 
-	// Each mode keeps its own page; a new query run starts at page 1.
-	const setPagination = setLedgerPagination;
-
 	// Reaching the last loaded page of query results loads the next older
 	// page. This runs again after each load, so pages that come back short
 	// or empty while a cursor remains keep loading.
@@ -1146,14 +1145,16 @@
 	// After a query change or a change in the loaded results (a merge of new
 	// matches or an older page), the selected row and the open drawer stay
 	// when their pair is still in the rows, and close otherwise.
-	let lastRowsKey = rowsKey($ledgerQuery);
-	$: if (rowsKey($ledgerQuery) !== lastRowsKey) {
-		lastRowsKey = rowsKey($ledgerQuery);
+	let lastShownRowsSignature = shownRowsSignature($ledgerQuery);
+	$: if (shownRowsSignature($ledgerQuery) !== lastShownRowsSignature) {
+		lastShownRowsSignature = shownRowsSignature($ledgerQuery);
 		keepFocusOnShownPair();
 	}
 
-	function rowsKey(q) {
-		return `${q.ranQuery !== ""}:${q.runID}:${q.items.length}`;
+	// Changes whenever the shown rows can lose pairs: on a switch between
+	// modes, a new query run, or a change in the loaded query results.
+	function shownRowsSignature(q) {
+		return `${isQueryActive(q)}:${q.runID}:${q.items.length}`;
 	}
 
 	function keepFocusOnShownPair() {
@@ -1161,16 +1162,22 @@
 			selectedPairID = undefined;
 		}
 		if (!drawerOpened || $drawerStore.id !== "request-response") return;
-		const id = $drawerStore.meta?.request?.ID;
-		if (!findShownPair(id)) {
+		const pair = findShownPair($drawerStore.meta?.request?.ID);
+		if (!pair) {
 			drawerStore.close();
 			return;
 		}
-		// The pair's request number can change with the rows.
-		const requestIndex = shownPairNumber(id);
-		if ($drawerStore.meta.requestIndex !== requestIndex) {
+		// A pair new to the live view gets its number, and a switch between
+		// modes changes whether the exclusion can hide it.
+		const requestIndex = pairNumber(pair.ID);
+		const isFiltered = hiddenByExclusion(pair);
+		if (
+			$drawerStore.meta.requestIndex !== requestIndex ||
+			$drawerStore.meta.isFiltered !== isFiltered
+		) {
 			drawerStore.update((s) => {
 				s.meta.requestIndex = requestIndex;
+				s.meta.isFiltered = isFiltered;
 				return s;
 			});
 		}
@@ -1181,7 +1188,6 @@
 	$: primaryClass = $modeCurrent
 		? "variant-ghost-primary ring-0 shadow-none"
 		: "variant-filled-primary";
-
 
 	let queryFieldsOpen = false;
 
@@ -1208,7 +1214,7 @@
 	// its results reflect it. The QueryTraffic binding reads the stored
 	// exclusion itself.
 	async function saveContentTypeExclusion() {
-		setPagination((old) => ({
+		setLedgerPagination((old) => ({
 			...old,
 			pageIndex: 0,
 		}));
@@ -1233,8 +1239,9 @@
 		]) => {
 			const currentFilters = [];
 
-			// Query results come back with the exclusion already
-			// applied, so it filters the live view only.
+			// Query results come back with the content-type exclusion
+			// already applied, so the table applies it in the live view
+			// only.
 			if (!$queryActive && $contentTypeFilter?.length) {
 				currentFilters.push({
 					id: "ContentType",
@@ -1254,7 +1261,7 @@
 					columnFilters: currentFilters,
 				},
 				onSortingChange: setSorting,
-				onPaginationChange: setPagination,
+				onPaginationChange: setLedgerPagination,
 				getCoreRowModel: getCoreRowModel(),
 				getSortedRowModel: getSortedRowModel(),
 				getPaginationRowModel: getPaginationRowModel(),
@@ -1272,11 +1279,21 @@
 			.rows.findIndex((row) => row.original.ID === id);
 	}
 
+	// True when the content-type exclusion hides the pair in the live view,
+	// as the ContentType column's filter does. Query results never contain
+	// hidden pairs, so this is false in query mode.
+	function hiddenByExclusion(pair) {
+		return (
+			!$queryActive &&
+			($contentTypeFilter ?? []).includes(pair.ContentType)
+		);
+	}
+
 	// Opens the drawer on the shown pair with this ID.
 	function openDrawer(id) {
 		const pair = findShownPair(id);
 		if (!pair) return;
-		const requestIndex = shownPairNumber(id);
+		const requestIndex = pairNumber(id);
 		GetRawDetails(pair.ID).then((requestResponse) => {
 			const drawerSettings = {
 				id: "request-response",
@@ -1285,9 +1302,8 @@
 					request: requestResponse.Request,
 					response: requestResponse.Response,
 					requestIndex,
-					// The pair isn't on the current table page, for
-					// example because a content-type exclusion hides it.
-					isFiltered: pagePosition(pair.ID) === -1,
+					// Shows the drawer's "Filtered" label.
+					isFiltered: hiddenByExclusion(pair),
 				},
 				height: $drawerHeight,
 				width: "w-full",
@@ -1513,7 +1529,7 @@
 												.value,
 										)
 									: 10;
-								setPagination(
+								setLedgerPagination(
 									(
 										old,
 									) => ({
@@ -1608,15 +1624,11 @@
 			<div class="bg-surface-50-900-token mt-1">
 				<button
 					type="button"
-					class="btn btn-sm {$modeCurrent
-						? 'variant-ghost-primary ring-0 shadow-none'
-						: 'variant-filled-primary'} rounded-none"
+					class="btn btn-sm {primaryClass}"
 					on:click={mergeNewMatches}
 				>
-					{$ledgerQuery.newMatches.length}
-					new {$ledgerQuery.newMatches.length === 1
-						? "match"
-						: "matches"}
+					{$ledgerQuery.newMatches.length.toLocaleString()}
+					new {matchNoun($ledgerQuery.newMatches.length)}
 				</button>
 			</div>
 		</div>
@@ -1706,7 +1718,7 @@
 					},
 					title:
 						"Request " +
-						shownPairNumber(selectedPairID) +
+						pairNumber(selectedPairID) +
 						" notes",
 					requestID: selectedPairID,
 					content: note,
@@ -1721,7 +1733,7 @@
 	</Item>
 	<Item
 		on:click={() => {
-			const index = shownPairNumber(selectedPairID);
+			const index = pairNumber(selectedPairID);
 			CreateLaunchpadEntry(
 				"Request " + index,
 				"Launchpad for Request " + index,
