@@ -1394,7 +1394,9 @@
 			<div class="flex flex-col gap-4 p-2">
 				<div class="flex flex-col gap-1">
 					<div
-						class="input-group input-group-divider grid-cols-[auto_minmax(0,1fr)_auto_auto]"
+						class="input-group input-group-divider {$queryText
+							? 'grid-cols-[auto_minmax(0,1fr)_auto_auto]'
+							: 'grid-cols-[auto_minmax(0,1fr)_auto]'}"
 					>
 						<div class="input-group-shim">
 							{#if $queryPending}
@@ -1429,8 +1431,6 @@
 							>
 								<X size={16} />
 							</button>
-						{:else}
-							<div></div>
 						{/if}
 						<button
 							id="ledgerQueryFieldsToggle"
@@ -1616,12 +1616,13 @@
 
 <div class="no-select font-mono text-xs">
 	{#if $queryActive && $ledgerQuery.newMatches.length > 0}
-		<!-- Zero-height sticky strip, so the button floats over the top of
-		     the table without moving the rows. -->
+		<!-- Fixed strip across the content area (right of the 80px app rail),
+		     so the button floats centred at the bottom of the window without
+		     moving the rows. The strip ignores clicks; only the button takes them. -->
 		<div
-			class="sticky top-0 z-10 flex h-0 justify-center overflow-visible"
+			class="pointer-events-none fixed bottom-6 left-20 right-0 z-10 flex justify-center"
 		>
-			<div class="bg-surface-50-900-token mt-1">
+			<div class="bg-surface-50-900-token pointer-events-auto">
 				<button
 					type="button"
 					class="btn btn-sm {primaryClass}"
