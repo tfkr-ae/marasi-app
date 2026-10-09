@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/tfkr-ae/marasi/domain"
@@ -52,12 +53,15 @@ func (a *App) QueryTraffic(query string, cursor *uuid.UUID) (TrafficQueryResult,
 	exclusion := newContentTypeExclusion(excluded)
 	items, next, indexComplete, err := traffic.ListTraffic(cursor, trafficQueryPageSize, exclusion.apply(query))
 	if queryErr, ok := asQueryError(err); ok {
+		// The combined query can fail where the researcher's text alone did
+		// not, for example by nesting too deeply or growing too long.
+		queryErr.Position = exclusion.researcherPosition(query, queryErr.Position)
 		return TrafficQueryResult{QueryError: queryErr}, nil
 	}
 	if err != nil {
 		return TrafficQueryResult{}, fmt.Errorf("querying traffic: %w", err)
 	}
-	return TrafficQueryResult{Items: exclusion.filter(items), NextCursor: next, IndexComplete: indexComplete}, nil
+	return TrafficQueryResult{Items: exclusion.hide(items), NextCursor: next, IndexComplete: indexComplete}, nil
 }
 
 // contentTypeExclusion hides the same pairs as the live view's exclusion,
@@ -101,7 +105,19 @@ func (e contentTypeExclusion) apply(query string) string {
 	return combined.String()
 }
 
-func (e contentTypeExclusion) filter(items []*domain.RequestResponseSummary) []*domain.RequestResponseSummary {
+// researcherPosition maps a 1-based position in the combined query that
+// apply built from query back to the matching position in query, clamped to
+// the researcher's text when it falls in the parts apply added.
+func (e contentTypeExclusion) researcherPosition(query string, combined int) int {
+	position := combined
+	if len(e.queryTerms) > 0 {
+		position-- // the opening parenthesis apply added
+	}
+	return min(max(position, 1), max(utf8.RuneCountInString(query), 1))
+}
+
+// hide drops the pairs whose content type is excluded exactly.
+func (e contentTypeExclusion) hide(items []*domain.RequestResponseSummary) []*domain.RequestResponseSummary {
 	if len(e.exact) == 0 {
 		return items
 	}

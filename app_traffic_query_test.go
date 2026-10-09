@@ -1,10 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"io"
 	"log/slog"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,9 +216,15 @@ func TestQueryTrafficReportsCompleteIndex(t *testing.T) {
 	}
 }
 
-// newLegacyTrafficApp opens a project holding a pair written the way an older
-// Marasi binary wrote it, without an index row, and never builds the index.
-func newLegacyTrafficApp(t *testing.T) *App {
+// projectDatabase is the part of an open project database the tests touch.
+type projectDatabase interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Close() error
+}
+
+// newTrafficApp opens a fresh project database as the project, without
+// building its index, and returns the database too.
+func newTrafficApp(t *testing.T) (*App, projectDatabase) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	database, err := db.New(filepath.Join(t.TempDir(), "project.marasi"), logger)
@@ -224,6 +232,22 @@ func newLegacyTrafficApp(t *testing.T) *App {
 		t.Fatalf("opening project: %v", err)
 	}
 	t.Cleanup(func() { database.Close() })
+	proxy, err := marasi.New(
+		marasi.WithLogger(logger),
+		marasi.WithConfigDir(t.TempDir()),
+		marasi.WithDefaultRepositories(db.NewProxyRepo(database)),
+	)
+	if err != nil {
+		t.Fatalf("creating proxy: %v", err)
+	}
+	return &App{Proxy: proxy}, database
+}
+
+// newLegacyTrafficApp opens a project holding a pair written the way an older
+// Marasi binary wrote it, without an index row, and never builds the index.
+func newLegacyTrafficApp(t *testing.T) *App {
+	t.Helper()
+	app, database := newTrafficApp(t)
 	id, err := uuid.NewV7()
 	if err != nil {
 		t.Fatalf("creating pair id: %v", err)
@@ -235,15 +259,7 @@ func newLegacyTrafficApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("inserting legacy pair: %v", err)
 	}
-	proxy, err := marasi.New(
-		marasi.WithLogger(logger),
-		marasi.WithConfigDir(t.TempDir()),
-		marasi.WithDefaultRepositories(db.NewProxyRepo(database)),
-	)
-	if err != nil {
-		t.Fatalf("creating proxy: %v", err)
-	}
-	return &App{Proxy: proxy}
+	return app
 }
 
 func TestQueryTrafficReportsIncompleteIndex(t *testing.T) {
@@ -313,5 +329,51 @@ func TestQueryTrafficRejectsUnbalancedParenthesesUnderExclusion(t *testing.T) {
 	want := TrafficQueryError{Message: `unexpected ")"`, Position: 6}
 	if got != want {
 		t.Fatalf("\nwanted:\n%+v\ngot:\n%+v", want, got)
+	}
+}
+
+// The researcher's query can be valid on its own and still fail once it is
+// combined with the content-type exclusion, for example by nesting too deeply.
+// The error must point into the researcher's text, not the combined query.
+func TestQueryTrafficReportsCombinedQueryErrorAtResearchersPosition(t *testing.T) {
+	app := newScratchpadApp(t)
+	capturePair(t, app, capturedPair{host: "api.acme.test", path: "/a", statusCode: 200, contentType: "text/html", body: "abc"})
+	excludeContentTypes(t, app, "image/png")
+
+	got := queryTrafficError(t, app, strings.Repeat(`NOT (`, 199)+`"abc"`+strings.Repeat(`)`, 199))
+
+	want := TrafficQueryError{Message: `query nests more than 200 conditions; use fewer conditions or less nesting`, Position: 996}
+	if got != want {
+		t.Fatalf("\nwanted:\n%+v\ngot:\n%+v", want, got)
+	}
+}
+
+func TestQueryTrafficKeepsCombinedQueryErrorInsideResearchersText(t *testing.T) {
+	app := newScratchpadApp(t)
+	capturePair(t, app, capturedPair{host: "api.acme.test", path: "/a", statusCode: 200, contentType: "text/html", body: "abc"})
+	excludeContentTypes(t, app, "image/png", "image/gif")
+	for _, query := range []string{
+		strings.Repeat(`"abc" AND `, 199) + `"abc"`,
+		`host = "` + strings.Repeat("a", 8170) + `"`,
+	} {
+		got := queryTrafficError(t, app, query)
+
+		if got.Position < 1 || got.Position > len(query) {
+			t.Fatalf("wanted a position inside the %d-character query, got %+v", len(query), got)
+		}
+	}
+}
+
+func TestQueryTrafficReturnsGoErrorWhenTheDatabaseFails(t *testing.T) {
+	app, database := newTrafficApp(t)
+	database.Close()
+
+	result, err := app.QueryTraffic(`host = "api.acme.test"`, nil)
+
+	if err == nil {
+		t.Fatalf("wanted a Go error from a closed database, got %+v", result)
+	}
+	if result.QueryError != nil {
+		t.Fatalf("wanted no query error from a closed database, got %+v", *result.QueryError)
 	}
 }
