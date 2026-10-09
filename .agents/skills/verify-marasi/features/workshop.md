@@ -9,11 +9,11 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Workshop`. A ready page exposes `Workshop Settings` and a Lua editor with `data-language="lua"`.
+Select the rail item titled `Workshop` or press `Command+8`. A ready page exposes `Workshop Settings` and a Lua editor with `data-language="lua"`.
 
 ## Driving it with Chrome CDP
 
-Run `scripts/drive.sh workshop` for route proof. Replace the isolated project's code with a unique `extension:log` call, invoke `Update Workshop`, and open `Show Logs`. Capture the success result and unique log line.
+Run `scripts/drive.sh workshop` for route proof. Replace the isolated project's code with a unique `print("...")` call, invoke `Update Workshop`, and open `Show Logs`. Capture the success result and unique log line. `Show Logs` is fed by Lua `print`; `extension:log` is not a runtime API.
 
 ## Gotchas
 

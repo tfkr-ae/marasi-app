@@ -16,6 +16,8 @@ Run `scripts/drive.sh ledger` for route proof. For behavior, send a real request
 
 ## Gotchas
 
+- `#searchBox`, content-type chips, and pagination live inside `Ledger Settings`, which starts closed.
+- Content-type chips exclude matching types. Defaults already hide images, fonts, media, JavaScript, CSS, PDF, archives, and office types. Use `text/html` or similar for capture proof.
 - An empty Ledger only proves navigation. Complete capture proof needs traffic through the proxy.
 - HTTPS traffic needs the verification instance's generated certificate.
 - WebSocket flows have separate connection and message views.

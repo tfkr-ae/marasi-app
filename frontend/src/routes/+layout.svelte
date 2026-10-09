@@ -285,6 +285,9 @@
 				patchWebSocketMetadata(conn);
 			});
 			EventsOn("log", (newLog) => {
+				if (typeof newLog?.Level !== "string") {
+					return;
+				}
 				handleNewLog(newLog);
 			});
 			EventsOn("intercepted", (intercepted) => {

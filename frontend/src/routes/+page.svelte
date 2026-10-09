@@ -4,6 +4,7 @@
 		OpenProject,
 		StartBrowser,
 		StartProxy,
+		UpdateProxy,
 		ToggleFlag,
 		ToggleIntercept,
 		DownloadCert,
@@ -72,7 +73,9 @@
 		goto(url);
 	}
 	function setupListener(r) {
-		StartProxy(r.addr, r.port)
+		const active = get(listener).status;
+		const apply = active ? UpdateProxy : StartProxy;
+		apply(r.addr, r.port)
 			.then(() => {
 				listener.set({
 					status: true,
@@ -90,11 +93,13 @@
 				toastStore.trigger(toastSettings);
 			})
 			.catch((listenerError) => {
-				listener.set({
-					status: false,
-					address: r.addr,
-					port: r.port,
-				});
+				if (!active) {
+					listener.set({
+						status: false,
+						address: r.addr,
+						port: r.port,
+					});
+				}
 				const toastSettings = {
 					message:
 						"Failed to setup listener on " +

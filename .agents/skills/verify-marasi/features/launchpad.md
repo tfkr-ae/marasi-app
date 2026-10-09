@@ -13,7 +13,7 @@ Select the rail item titled `Launchpad` or press `Command+5`. A fresh project sh
 
 ## Driving it with Chrome CDP
 
-Run `scripts/drive.sh launchpad` for the fresh-project route proof. For replay behavior, first capture a request in Ledger and use its Launchpad action. In Launchpad, select the group and entry, edit the real request text, and activate `Send`. Capture the source Ledger action, edited request, sending action, resulting status/body, and persisted Launchpad/request rows in the isolated SQLite project.
+Run `scripts/drive.sh launchpad` for route proof. It requires `Launchpad Settings`. A fresh project also shows `No Launchpads` and `Create one from ledger.` For replay behavior, first capture a request in Ledger and use its Launchpad action. In Launchpad, select the group and entry, edit the real request text, and activate `Send`. Capture the source Ledger action, edited request, sending action, resulting status/body, and persisted Launchpad/request rows in the isolated SQLite project.
 
 ## Gotchas
 

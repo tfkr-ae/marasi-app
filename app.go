@@ -7,7 +7,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,18 +17,17 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/tfkr-ae/marasi/armory"
 	"github.com/tfkr-ae/marasi/chrome"
-	"github.com/tfkr-ae/marasi/db"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/extensions"
-	"github.com/tfkr-ae/marasi/report"
 	"github.com/tfkr-ae/marasi/wordlist"
 
 	marasi "github.com/tfkr-ae/marasi"
+	"github.com/tfkr-ae/marasi/service"
 
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -34,10 +35,13 @@ import (
 
 // App struct
 type App struct {
-	ctx      context.Context
-	Proxy    *marasi.Proxy
-	Listener net.Listener
-	Config   *Config
+	ctx       context.Context
+	emitEvent emitFunc
+	Proxy     *marasi.Proxy
+	listener  service.ListenerLifecycle
+	projects  *service.ProjectLifecycle
+	chrome    *service.Chrome
+	Config    *Config
 }
 
 // NewApp creates a new App application struct
@@ -68,7 +72,23 @@ func NewApp() *App {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &App{Proxy: Proxy, Config: config}
+	app := newApp(Proxy, appConfigDir, wordlists, log.Writer(), Proxy.Logger)
+	app.Config = config
+	return app
+}
+
+// newApp wires the shared service lifecycles around proxy. The project is
+// bound to the listener so listener shutdown interrupts project Lua before
+// draining the requests it may be holding.
+func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, logWriter io.Writer, logger *slog.Logger) *App {
+	app := &App{Proxy: proxy}
+	app.emitEvent = app.emit
+	listener := service.NewListenerLifecycle(proxy, logWriter)
+	app.projects = service.NewProjectLifecycle(proxy, configDir, wordlists, logger, app.attachExtensionHooks)
+	listener.BindProject(app.projects)
+	app.listener = listener
+	app.chrome = service.NewChrome(proxy, listener, logWriter)
+	return app
 }
 
 // startup is called when the app starts. The context is saved
@@ -89,13 +109,8 @@ func (a *App) startup(ctx context.Context) {
 			runtime.EventsEmit(a.ctx, "log", logItem)
 			return nil
 		}),
-		marasi.WithInterceptHandler(func(intercepted *marasi.Intercepted) error {
-			switch intercepted.Type {
-			case "request":
-				runtime.EventsEmit(a.ctx, "intercepted", "request")
-			case "response":
-				runtime.EventsEmit(a.ctx, "intercepted", "response")
-			}
+		marasi.WithInterceptHandler(func(item domain.CheckpointItem) error {
+			runtime.EventsEmit(a.ctx, "intercepted", item.Type)
 			return nil
 		}),
 		marasi.WithLogger(logHandler),
@@ -118,49 +133,35 @@ func (a *App) SetFlag(name string, value string) (*Config, error) {
 	return a.Config, nil
 }
 func (a *App) DeleteWaypoint(host string) error {
-	err := a.Proxy.WaypointRepo.DeleteWaypoint(host)
-	if err != nil {
-		return err
-	}
-	err = a.Proxy.SyncWaypoints()
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := a.Proxy.ApplyWaypointChange(func(repo domain.WaypointRepository) (bool, error) {
+		return true, repo.DeleteWaypoint(host)
+	})
+	return err
 }
 
 func (a *App) GetInterceptFlag() bool {
-	return a.Proxy.InterceptFlag
+	return a.Proxy.GetIntercept()
 }
 
-func (a *App) InterceptResponse() {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		// No need to check really because the value is ignored if it is a response
-		a.Proxy.InterceptedQueue = a.Proxy.InterceptedQueue[1:]
-		item.Channel <- marasi.InterceptionTuple{Resume: true, ShouldInterceptResponse: true}
-	}
+func (a *App) SetIntercept(enabled bool) bool {
+	a.Proxy.SetIntercept(enabled)
+	return a.Proxy.GetIntercept()
 }
+
 func (a *App) ToggleIntercept() bool {
-	a.Proxy.InterceptFlag = !a.Proxy.InterceptFlag
-	return a.Proxy.InterceptFlag
+	return a.SetIntercept(!a.Proxy.GetIntercept())
 }
 func (a *App) GetExtensionLogs(name string) ([]extensions.ExtensionLog, error) {
 	if extension, ok := a.Proxy.GetExtension(name); ok {
-		return extension.Logs, nil
+		return extension.LogSnapshot(), nil
 	}
 	return []extensions.ExtensionLog{}, fmt.Errorf("extension %s not found", name)
 }
 func (a *App) CreateWaypoint(host string, override string) error {
-	err := a.Proxy.WaypointRepo.CreateOrUpdateWaypoint(host, override)
-	if err != nil {
-		return err
-	}
-	err = a.Proxy.SyncWaypoints()
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := a.Proxy.ApplyWaypointChange(func(repo domain.WaypointRepository) (bool, error) {
+		return true, repo.CreateOrUpdateWaypoint(host, override)
+	})
+	return err
 }
 func (a *App) GetWaypoints() (map[string]string, error) {
 	err := a.Proxy.SyncWaypoints()
@@ -170,56 +171,42 @@ func (a *App) GetWaypoints() (map[string]string, error) {
 	return a.Proxy.Waypoints, nil
 }
 
-// Utility function to detect if the listener was closed cleanly
-func isListenerClosed(err error) bool {
-	if err == nil {
-		return true
+func listenerSettings(addr string, port string) (service.ListenerSettings, error) {
+	if addr == "" || port == "" {
+		return service.ListenerSettings{}, service.ErrListenerUnavailable
 	}
-	// Customize this check to identify errors that are expected on listener close
-	return strings.Contains(err.Error(), "use of closed network connection")
+	parsed, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return service.ListenerSettings{}, service.ErrListenerUnavailable
+	}
+	portNumber := uint16(parsed)
+	return service.ListenerSettings{Address: &addr, Port: &portNumber}, nil
 }
 
 func (a *App) StartProxy(addr string, port string) error {
-	if a.Listener != nil {
-		if err := a.StopProxy(); err != nil {
-			return fmt.Errorf("error stopping existing listener: %w", err)
-		}
-	}
-	a.Proxy.WithOptions(marasi.WithTLS())
-	listener, err := a.Proxy.GetListener(addr, port)
+	settings, err := listenerSettings(addr, port)
 	if err != nil {
-		log.Print(err)
-		return fmt.Errorf("getting listener on %s:%s", addr, port)
+		return err
 	}
-	a.Listener = listener
-	go func() {
-		err := a.Proxy.Serve(listener)
-		if err != nil && !isListenerClosed(err) {
-			log.Printf("proxy error : %v", err)
-		}
-	}()
-	return nil
-
+	if err := a.Proxy.WithOptions(marasi.WithTLS()); err != nil {
+		return err
+	}
+	_, err = a.listener.Start(context.Background(), settings)
+	return err
 }
 
 func (a *App) StopProxy() error {
-	var stopErr error
-	if a.Listener != nil {
-		// Close the listener to stop accepting new connections.
-		if err := a.Listener.Close(); err != nil {
-			stopErr = fmt.Errorf("error stopping listener: %w", err)
-		}
-		a.Listener = nil
-	}
+	_, err := a.listener.Stop(context.Background())
+	return err
+}
 
-	if err := a.Proxy.CloseWebSocketsAndFlush(); err != nil {
-		stopErr = errors.Join(
-			stopErr,
-			fmt.Errorf("closing websocket connections: %w", err),
-		)
+func (a *App) UpdateProxy(addr string, port string) error {
+	settings, err := listenerSettings(addr, port)
+	if err != nil {
+		return err
 	}
-
-	return stopErr
+	_, err = a.listener.Update(context.Background(), settings)
+	return err
 }
 
 // OpenFileDialog shows a file selection dialog and returns the selected file path
@@ -263,55 +250,18 @@ func (a *App) OpenProject(name string) (string, error) {
 		filePath = filePath + ".marasi"
 	}
 
-	dbConn, err := db.New(filePath, a.Proxy.Logger)
-	if err != nil {
-		return "", fmt.Errorf("setting up repo %s : %w", filePath, err)
-	}
-	Repo := db.NewProxyRepo(dbConn)
-
-	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
-	if err != nil {
-		_ = Repo.Close()
-		return "", fmt.Errorf("creating report generator : %w", err)
-	}
-
-	armory, err := armory.NewManager(Repo, a.Proxy.WordlistManager, a.Proxy.SendArmoryRequest)
-	if err != nil {
-		_ = Repo.Close()
-		return "", fmt.Errorf("creating armory manager : %w", err)
-	}
-	if err := recoverInterruptedArmoryRuns(Repo); err != nil {
-		_ = Repo.Close()
-		return "", err
-	}
 	confirmed, err := a.confirmCancelArmoryRuns("Switch Project")
 	if err != nil {
-		_ = Repo.Close()
 		return "", err
 	}
 	if !confirmed {
-		_ = Repo.Close()
 		return "", errors.New("project switch cancelled")
 	}
-	if socketErr := a.Proxy.CloseWebSocketsAndFlush(); socketErr != nil {
-		_ = Repo.Close()
-		return "", fmt.Errorf("closing websocket connections: %w", socketErr)
-	}
-
-	oldDBCloser := a.Proxy.DBCloser
-	err = a.Proxy.WithOptions(
-		marasi.WithDefaultRepositories(Repo),
-		marasi.WithReportGenerator(generator),
-		marasi.WithArmory(armory),
-	)
-	if err != nil {
-		_ = Repo.Close()
+	if err := a.projects.Open(context.Background(), filePath); err != nil {
 		return "", err
 	}
-	if oldDBCloser != nil {
-		if err := oldDBCloser.Close(); err != nil {
-			log.Printf("closing previous project database: %v", err)
-		}
+	if err := recoverInterruptedArmoryRuns(a.Proxy.Armory.Repo()); err != nil {
+		log.Printf("recovering interrupted armory runs: %v", err)
 	}
 	base := filepath.Base(filePath)
 	projectName := strings.TrimSuffix(base, filepath.Ext(base))
@@ -319,44 +269,21 @@ func (a *App) OpenProject(name string) (string, error) {
 }
 func (a *App) SetupScratchpad() error {
 	scratchPad := path.Join(a.Proxy.ConfigDir, "scratchpad.marasi")
-	dbConn, err := db.New(scratchPad, a.Proxy.Logger)
-	if err != nil {
-		return fmt.Errorf("setting up repo %s : %w", scratchPad, err)
-	}
-	Repo := db.NewProxyRepo(dbConn)
-
-	generator, err := report.NewGenerator(Repo, report.WithConfigDir(a.Proxy.ConfigDir))
-	if err != nil {
-		return fmt.Errorf("creating report generator : %w", err)
-	}
-
-	armory, err := armory.NewManager(Repo, a.Proxy.WordlistManager, a.Proxy.SendArmoryRequest)
-	if err != nil {
-		_ = Repo.Close()
-		return fmt.Errorf("creating armory manager : %w", err)
-	}
-	if err := recoverInterruptedArmoryRuns(Repo); err != nil {
-		_ = Repo.Close()
+	if err := a.projects.Open(context.Background(), scratchPad); err != nil {
 		return err
 	}
-
-	err = a.Proxy.WithOptions(
-		marasi.WithDefaultRepositories(Repo),
-		marasi.WithReportGenerator(generator),
-		marasi.WithArmory(armory),
-	)
-
-	if err != nil {
-		_ = Repo.Close()
-		return err
+	if err := recoverInterruptedArmoryRuns(a.Proxy.Armory.Repo()); err != nil {
+		log.Printf("recovering interrupted armory runs: %v", err)
 	}
-
 	return nil
-
 }
 func (a *App) close(ctx context.Context) {
-	a.Proxy.Close()
-	a.Listener = nil
+	_ = a.listener.Shutdown()
+	if a.projects != nil {
+		if err := a.projects.Shutdown(); err != nil {
+			log.Printf("releasing open project: %v", err)
+		}
+	}
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
@@ -506,7 +433,7 @@ func (a *App) CountNotes() (Dashboard, error) {
 	return dashboard, nil
 }
 func (a *App) StartBrowser(profile string) error {
-	err := a.Proxy.StartChrome(profile)
+	_, err := a.chrome.Start(context.Background(), profile)
 	if err != nil {
 		return fmt.Errorf("starting chrome : %w", err)
 	}
@@ -544,28 +471,37 @@ func (a *App) GetResponse(id uuid.UUID) *domain.ProxyResponse {
 	return response
 }
 
-type InterceptedResult struct {
-	Raw  string `json:"raw"`
-	Type string `json:"type"`
+func (a *App) GetCheckpointItems() []domain.CheckpointItem {
+	return a.Proxy.CheckpointItems()
 }
 
-func (a *App) GetIntercepted() InterceptedResult {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		intercepted := a.Proxy.InterceptedQueue[0]
-		return InterceptedResult{
-			Raw:  intercepted.Raw,
-			Type: intercepted.Type,
+func (a *App) GetCheckpoint(id uuid.UUID) *domain.CheckpointItem {
+	item, ok := a.Proxy.GetCheckpoint(id)
+	if !ok {
+		return nil
+	}
+	return &item
+}
+
+func (a *App) ForwardCheckpoint(id uuid.UUID, body string, interceptResponse bool) error {
+	fwd := marasi.CheckpointForward{InterceptResponse: interceptResponse}
+	if body != "" {
+		item, ok := a.Proxy.GetCheckpoint(id)
+		if !ok {
+			return fmt.Errorf("%w: %s", marasi.ErrCheckpointNotFound, id)
+		}
+		raw := []byte(body)
+		if item.Type == domain.CheckpointTypeWebSocket {
+			fwd.Payload = &raw
+		} else {
+			fwd.Raw = &raw
 		}
 	}
-	return InterceptedResult{}
+	return a.Proxy.ForwardCheckpoint(id, fwd)
 }
 
-func (a *App) DropIntercepted() {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		a.Proxy.InterceptedQueue = a.Proxy.InterceptedQueue[1:]
-		item.Channel <- marasi.InterceptionTuple{Resume: false, ShouldInterceptResponse: false}
-	}
+func (a *App) DropCheckpoint(id uuid.UUID) error {
+	return a.Proxy.DropCheckpoint(id)
 }
 func (a *App) Repeat(raw string, repeaterId string, useHttps bool) {
 	err := a.Proxy.Launch(raw, repeaterId, useHttps)
@@ -573,49 +509,17 @@ func (a *App) Repeat(raw string, repeaterId string, useHttps bool) {
 		log.Println(err)
 	}
 }
-func (a *App) ForwardIntercepted(body string) {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		switch item.Type {
-		case "request":
-			_, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(body))))
-			if err != nil {
-				log.Print(err)
-				return
-			}
-		case "response":
-			_, err := http.ReadResponse(bufio.NewReader(bytes.NewReader([]byte(body))), nil)
-			if err != nil {
-				log.Print(err)
-				return
-			}
+func (a *App) CheckHTTPParse(body string, itemType string) string {
+	switch itemType {
+	case domain.CheckpointTypeRequest:
+		_, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(body))))
+		if err != nil {
+			return err.Error()
 		}
-		item.Raw = body
-		a.Proxy.InterceptedQueue = a.Proxy.InterceptedQueue[1:]
-		item.Channel <- marasi.InterceptionTuple{Resume: true, ShouldInterceptResponse: false}
-	}
-}
-
-func (a *App) GetInterceptedQueue() int {
-	return len(a.Proxy.InterceptedQueue)
-}
-
-func (a *App) CheckHTTPParse(body string) string {
-	if len(a.Proxy.InterceptedQueue) > 0 {
-		item := a.Proxy.InterceptedQueue[0]
-		switch item.Type {
-		case "request":
-			_, err := http.ReadRequest(bufio.NewReader(bytes.NewReader([]byte(body))))
-			if err != nil {
-				log.Print(err)
-				return err.Error()
-			}
-		case "response":
-			_, err := http.ReadResponse(bufio.NewReader(bytes.NewReader([]byte(body))), nil)
-			if err != nil {
-				log.Print(err)
-				return err.Error()
-			}
+	case domain.CheckpointTypeResponse:
+		_, err := http.ReadResponse(bufio.NewReader(bytes.NewReader([]byte(body))), nil)
+		if err != nil {
+			return err.Error()
 		}
 	}
 	return ""
@@ -763,7 +667,7 @@ func (a *App) GetLaunchpads() []*domain.Launchpad {
 	return launchpad
 }
 
-func (a *App) GetLaunchpadRequests(id uuid.UUID) []*domain.ProxyRequest {
+func (a *App) GetLaunchpadRequests(id uuid.UUID) []*domain.RequestResponseSummary {
 	launchpadRequest, err := a.Proxy.LaunchpadRepo.GetLaunchpadRequests(id)
 	if err != nil {
 		return nil
@@ -795,7 +699,7 @@ func (a *App) DeleteLaunchpad(id uuid.UUID) error {
 	return nil
 }
 func (a *App) UpdateLaunchpadEntry(id uuid.UUID, name string, description string) error {
-	err := a.Proxy.LaunchpadRepo.UpdateLaunchpad(id, name, description)
+	err := a.Proxy.LaunchpadRepo.UpdateLaunchpad(id, &name, &description)
 	if err != nil {
 		return err
 	}
@@ -811,13 +715,13 @@ func (a *App) GetExtensionCode(extensionName string) (string, error) {
 }
 
 func (a *App) RunExtension(extensionName string, code string) error {
-	err := a.Proxy.ExtensionRepo.UpdateExtensionLuaCodeByName(extensionName, code)
-	if err != nil {
-		return fmt.Errorf("updating code for %s : %w", extensionName, err)
-	}
 	extension, ok := a.Proxy.GetExtension(extensionName)
 	if !ok {
 		return fmt.Errorf("extension %s not found", extensionName)
+	}
+	err := extension.UpdateLuaContent(a.Proxy.ExtensionRepo, code)
+	if err != nil {
+		return fmt.Errorf("updating code for %s : %w", extensionName, err)
 	}
 
 	err = extension.ExecuteLua(code)
@@ -827,12 +731,7 @@ func (a *App) RunExtension(extensionName string, code string) error {
 	return nil
 }
 func (a *App) DoExtender(code string) {
-	err := a.Proxy.ExtensionRepo.UpdateExtensionLuaCodeByName("workshop", code)
-	if err != nil {
-		log.Print(err)
-	}
-	if ext, ok := a.Proxy.GetExtension("workshop"); ok {
-		err := ext.ExecuteLua(code)
+	if err := a.RunExtension("workshop", code); err != nil {
 		log.Print(err)
 	}
 }
@@ -936,46 +835,59 @@ func (a *App) GetRecentProjects() []struct {
 	return recent
 }
 
+// Chrome settings live in the machine config shared with service instances,
+// so each call rereads it under the shared config lock.
+
 func (a *App) GetChromeProfiles() []string {
-	return a.Proxy.Config.ChromeProfiles
+	profiles, err := a.chrome.Profiles(context.Background())
+	if err != nil {
+		log.Printf("reading chrome profiles: %v", err)
+		return a.Proxy.Config.ChromeProfiles
+	}
+	return profiles
 }
 
 func (a *App) AddChromeProfile(name string) ([]string, error) {
-	err := a.Proxy.Config.AddChromeProfile(name)
+	profiles, err := a.chrome.AddProfile(context.Background(), name)
 	if err != nil {
 		return []string{}, err
 	}
-	return a.Proxy.Config.ChromeProfiles, nil
+	return profiles, nil
 }
 
 func (a *App) DeleteChromeProfile(name string) ([]string, error) {
-	err := a.Proxy.Config.DeleteChromeProfile(name)
+	profiles, err := a.chrome.RemoveProfile(context.Background(), name)
 	if err != nil {
 		return []string{}, err
 	}
-	return a.Proxy.Config.ChromeProfiles, nil
+	return profiles, nil
 }
 
 func (a *App) GetChromePaths() []chrome.PathConfig {
-	return a.Proxy.Config.ChromeDirs
+	paths, err := a.chrome.Paths(context.Background())
+	if err != nil {
+		log.Printf("reading chrome paths: %v", err)
+		return a.Proxy.Config.ChromeDirs
+	}
+	return paths
 }
 
 func (a *App) AddChromePath(path, os string) []chrome.PathConfig {
-	err := a.Proxy.Config.AddChromePath(path, os)
+	paths, err := a.chrome.AddPath(context.Background(), chrome.PathConfig{OS: os, Path: path})
 	if err != nil {
 		// Return something useful here
 		return []chrome.PathConfig{}
 	}
-	return a.Proxy.Config.ChromeDirs
+	return paths
 }
 
 func (a *App) DeleteChromePath(path, os string) []chrome.PathConfig {
-	err := a.Proxy.Config.DeleteChromePath(path, os)
+	paths, err := a.chrome.RemovePath(context.Background(), chrome.PathConfig{OS: os, Path: path})
 	if err != nil {
 		// Return something useful here
 		return []chrome.PathConfig{}
 	}
-	return a.Proxy.Config.ChromeDirs
+	return paths
 }
 
 func (a *App) DownloadCert() (bool, error) {

@@ -12,17 +12,17 @@ Marasi is a Wails desktop app backed by a local proxy and SQLite project. The Vi
 Run from the repository root on macOS:
 
 ```bash
-.opencode/skills/verify-marasi/scripts/launch.sh
+.agents/skills/verify-marasi/scripts/launch.sh
 ```
 
-The helper runs `wails dev -m -nosyncgomod -nocolour -devserver localhost:34115`, creates an isolated home directory, and writes verification-only config with `first_run: false`. It starts an isolated headless Chrome against the Wails dev server with the app's `1600x900` window size. It defaults to proxy port `18080`; set `MARASI_VERIFY_PROXY_PORT` before launch to choose another free port. It returns after browser JavaScript sees the scratchpad dashboard through the real Go bindings.
+The helper runs `wails dev -m -nosyncgomod -nocolour -devserver localhost:34115` with `GOWORK=off`, creates an isolated home directory, and writes verification-only config with `first_run: false`. It starts an isolated headless Chrome against the Wails dev server with the app's `1600x900` window size. It defaults to proxy port `18080`; set `MARASI_VERIFY_PROXY_PORT` before launch to choose another free port. It returns after browser JavaScript sees the scratchpad dashboard through the real Go bindings.
 
 The state directory defaults to `${TMPDIR}/verify-marasi`. Launch refuses to reuse existing state or occupied ports `5173`, `34115`, and `18080`. Chrome chooses a free DevTools port. It does not use the normal `~/Library/Application Support/Marasi` directory. Configure alternate dev and fixed CDP ports with `MARASI_VERIFY_DEV_PORT` and `MARASI_VERIFY_CDP_PORT`. Vite is fixed to `5173` in this repo, so only one verification run can use the default checkout at a time.
 
 Teardown only the instance recorded by the helper:
 
 ```bash
-.opencode/skills/verify-marasi/scripts/cleanup.sh
+.agents/skills/verify-marasi/scripts/cleanup.sh
 ```
 
 ## Doctor
@@ -30,26 +30,26 @@ Teardown only the instance recorded by the helper:
 Run this first whenever startup, automation, or a result looks wrong:
 
 ```bash
-.opencode/skills/verify-marasi/scripts/doctor.sh
+.agents/skills/verify-marasi/scripts/doctor.sh
 ```
 
-It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. A green doctor writes `doctor.txt` and prints the exact paths.
+It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. Doctor and drive attach to the Chrome page whose URL matches the Wails origin, not the first `type=page` target. Headless Chrome can also keep `chrome://settings/help` and omnibox pages around. A green doctor writes `doctor.txt` and prints the exact paths.
 
 ## Drive
 
 Use the executable driver with one mapped route:
 
 ```bash
-.opencode/skills/verify-marasi/scripts/drive.sh dashboard
-.opencode/skills/verify-marasi/scripts/drive.sh ledger
-.opencode/skills/verify-marasi/scripts/drive.sh compass
-.opencode/skills/verify-marasi/scripts/drive.sh checkpoint
-.opencode/skills/verify-marasi/scripts/drive.sh launchpad
-.opencode/skills/verify-marasi/scripts/drive.sh armory
-.opencode/skills/verify-marasi/scripts/drive.sh logbook
-.opencode/skills/verify-marasi/scripts/drive.sh workshop
-.opencode/skills/verify-marasi/scripts/drive.sh settings
-.opencode/skills/verify-marasi/scripts/drive.sh dashboard theme
+.agents/skills/verify-marasi/scripts/drive.sh dashboard
+.agents/skills/verify-marasi/scripts/drive.sh ledger
+.agents/skills/verify-marasi/scripts/drive.sh compass
+.agents/skills/verify-marasi/scripts/drive.sh checkpoint
+.agents/skills/verify-marasi/scripts/drive.sh launchpad
+.agents/skills/verify-marasi/scripts/drive.sh armory
+.agents/skills/verify-marasi/scripts/drive.sh logbook
+.agents/skills/verify-marasi/scripts/drive.sh workshop
+.agents/skills/verify-marasi/scripts/drive.sh settings
+.agents/skills/verify-marasi/scripts/drive.sh dashboard theme
 ```
 
 The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse press to a painted control, and fails unless the expected route or overlay appears. A painted control has a bounding box wider and taller than 10px and is not inside `dialog`. Hidden MarasiKeys menu nodes reuse the same labels at `0,0`; matching innerText alone is not a click.
@@ -57,10 +57,10 @@ The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse
 Most in-app actions have that painted control plus a MarasiKeys binding. Root bindings live in `frontend/src/routes/+page.svelte` as `⌘+key`. Page bindings live in that route's MarasiKeys menu as `⌘+⇧+key` on macOS. Prove both paths with:
 
 ```bash
-.opencode/skills/verify-marasi/scripts/drive.sh dashboard compare "Open Project" "cmd+o"
+.agents/skills/verify-marasi/scripts/drive.sh dashboard compare "Open Project" "cmd+o"
 ```
 
-The compare action clicks the painted label, captures the overlay or route change, restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (`MetaLeft` down, key, key up, `MetaLeft` up). It fails unless both paths paint the same overlay text or land on the same route.
+The compare action requires the feature route to already be visible. It clicks the painted label, captures the overlay or route change, restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (`MetaLeft` down, key, key up, `MetaLeft` up). It fails unless both paths paint the same overlay text or land on the same route. After a pass it dismisses a leftover overlay with Escape so the next drive is not blocked.
 
 The dashboard `theme` action leaves Home for Settings, sends `Command+U` twice, and fails unless the global appearance changes and returns to its original mode. This proves the dashboard-owned shortcut still reads live state after Home is destroyed.
 
@@ -92,7 +92,7 @@ With Wails v2.10.1, browser-connected startup currently writes `runtime:ready ->
 Run:
 
 ```bash
-.opencode/skills/verify-marasi/scripts/cleanup.sh
+.agents/skills/verify-marasi/scripts/cleanup.sh
 ```
 
 Cleanup sends `TERM` only to the recorded Chrome and Wails PIDs, waits for Wails, and uses `KILL` only if that same Wails PID does not exit. It removes the scratch home and state files. It leaves `.artifacts/verify-marasi/` untouched. Run cleanup after failed attempts too.
