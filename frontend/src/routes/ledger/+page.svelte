@@ -65,6 +65,8 @@
 	import QueryFieldList from "../../lib/components/QueryFieldList.svelte";
 	import { appendToQuery } from "../../lib/ledgerQueryFields";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import { useMenuActions } from "../../lib/keybindings/app.js";
+	import { isWebSocketUpgrade } from "../../lib/keybindings/contexts.js";
 	import IDCell from "../../lib/components/IDCell.svelte";
 	import {
 		CreateLaunchpadEntry,
@@ -115,19 +117,8 @@
 	const toastStore = getToastStore();
 	let accOpened = false;
 	let drawerOpened = false;
-	let menu = [];
 	let contextMenu;
 	let selectedPairID;
-
-	function isWebSocketUpgrade(meta = $drawerStore?.meta) {
-		const response = meta?.incomingResponse || meta?.response;
-		return (
-			meta?.metadata?.protocol === "websocket" ||
-			response?.StatusCode === 101 ||
-			response?.ContentType === "websocket" ||
-			Boolean(meta?.metadata?.["websocket.state"])
-		);
-	}
 
 	function openWebSocketStream() {
 		const meta = $drawerStore?.meta;
@@ -183,884 +174,740 @@
 
 	let ledgerMenu = [
 		{
-			name: "Toggle Ledger Settings",
-			subtitle: "Toggle Settings Accordian",
-			keywords: "settings, toggle",
+			actionId: "ledger.drawer-closed.toggle-settings",
 			icon: ToggleLeftIcon,
-			action: {
-				handler: () => {
-					drawerStore.close();
-					accOpened = !accOpened;
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+P", "ctrl+P"],
+			handler: () => {
+				drawerStore.close();
+				accOpened = !accOpened;
 			},
 		},
 		{
-			name: "Search",
-			subtitle: "Jump to search input",
-			keywords: "search",
+			actionId: "ledger.drawer-closed.focus-query",
 			icon: SearchIcon,
-			action: {
-				handler: () => {
-					drawerStore.close();
-					accOpened = !accOpened;
-					setTimeout(() => {
-						const searchBox =
-							document.getElementById(
-								"searchBox",
-							);
-						if (
-							document.activeElement ===
-							searchBox
-						) {
-							searchBox.blur();
-						} else {
-							searchBox.focus();
-						}
-					}, 10);
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+S", "ctrl+⇧+S"],
+			handler: () => {
+				drawerStore.close();
+				accOpened = !accOpened;
+				setTimeout(() => {
+					const searchBox =
+						document.getElementById(
+							"searchBox",
+						);
+					if (
+						document.activeElement ===
+						searchBox
+					) {
+						searchBox.blur();
+					} else {
+						searchBox.focus();
+					}
+				}, 10);
 			},
 		},
 		{
-			name: "Filter",
-			subtitle: "Jump to filter input",
-			keywords: "filter",
+			actionId: "ledger.drawer-closed.focus-exclusion",
 			icon: FilterIcon,
-			action: {
-				handler: () => {
-					drawerStore.close();
-					accOpened = !accOpened;
-					setTimeout(() => {
-						const filterBox =
-							document.querySelector(
-								'input[placeholder="Filter by Content Type"]',
-							);
-						if (
-							document.activeElement ===
-							filterBox
-						) {
-							filterBox.blur();
-						} else {
-							filterBox.focus();
-						}
-					}, 10);
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+F", "ctrl+⇧+F"],
+			handler: () => {
+				drawerStore.close();
+				accOpened = !accOpened;
+				setTimeout(() => {
+					const filterBox =
+						document.querySelector(
+							'input[placeholder="Filter by Content Type"]',
+						);
+					if (
+						document.activeElement ===
+						filterBox
+					) {
+						filterBox.blur();
+					} else {
+						filterBox.focus();
+					}
+				}, 10);
 			},
 		},
 		{
-			name: "Next",
-			subtitle: "Go to next page",
+			actionId: "ledger.drawer-closed.next-page",
 			icon: ArrowRightIcon,
-			keywords: "next",
-			action: {
-				handler: () => {
-					if (
-						!drawerOpened &&
-						$table.getCanNextPage()
-					) {
-						$table.nextPage();
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+]", "ctrl+]"],
+			handler: () => {
+				if (
+					!drawerOpened &&
+					$table.getCanNextPage()
+				) {
+					$table.nextPage();
+				}
 			},
 		},
 		{
-			name: "Previous",
-			subtitle: "Go to the previous page",
-			keywords: "previous",
+			actionId: "ledger.drawer-closed.previous-page",
 			icon: ArrowLeftIcon,
-			action: {
-				handler: () => {
-					if (
-						!drawerOpened &&
-						$table.getCanPreviousPage()
-					) {
-						$table.previousPage();
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+[", "ctrl+["],
+			handler: () => {
+				if (
+					!drawerOpened &&
+					$table.getCanPreviousPage()
+				) {
+					$table.previousPage();
+				}
 			},
 		},
 		{
-			name: "Open",
-			subtitle: "Open Request Drawer",
-			keywords: "open",
+			actionId: "ledger.drawer-closed.open-request",
 			icon: SquareArrowUpRightIcon,
-			action: {
-				handler: () => {
-					if (!drawerOpened) {
-						new Promise((resolve) => {
-							const modal = {
-								type: "component",
-								component: "MenuInput",
-								toggleShortcut:
-									{
-										key: "o",
-										shiftKey: true,
-									},
-								title: "Open request",
-								response: (
-									r,
-								) => {
-									resolve(
-										r,
-									);
+			handler: () => {
+				if (!drawerOpened) {
+					new Promise((resolve) => {
+						const modal = {
+							type: "component",
+							component: "MenuInput",
+							toggleShortcut:
+								{
+									key: "o",
+									shiftKey: true,
 								},
-							};
-							if (!$modalStore[0]) {
-								modalStore.trigger(
-									modal,
+							title: "Open request",
+							response: (
+								r,
+							) => {
+								resolve(
+									r,
 								);
-							} else if (
-								$modalStore[0]
-									.component ===
-								"MenuInput"
-							) {
-								modalStore.close();
-							}
-						}).then((requestIndex) => {
-							if (!requestIndex)
-								return;
-							const pair =
-								shownPairAtNumber(
-									parseInt(
-										requestIndex,
-									),
-								);
-							if (pair) openDrawer(pair.ID);
-						});
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+O", "ctrl+⇧+O"],
+							},
+						};
+						if (!$modalStore[0]) {
+							modalStore.trigger(
+								modal,
+							);
+						} else if (
+							$modalStore[0]
+								.component ===
+							"MenuInput"
+						) {
+							modalStore.close();
+						}
+					}).then((requestIndex) => {
+						if (!requestIndex)
+							return;
+						const pair =
+							shownPairAtNumber(
+								parseInt(
+									requestIndex,
+								),
+							);
+						if (pair) openDrawer(pair.ID);
+					});
+				}
 			},
 		},
 	];
 	let drawerMenu = [
 		{
-			name: "Next Request",
-			subtitle: "Jump to the next item in the table",
+			actionId: "ledger.drawer-open.next-request",
 			icon: ArrowRightIcon,
-			keywords: "next",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						modalStore.close();
-						stepDrawer(1);
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+]", "ctrl+⇧+]"],
+			handler: () => {
+				if (drawerOpened) {
+					modalStore.close();
+					stepDrawer(1);
+				}
 			},
 		},
 		{
-			name: "Send to Armory",
-			subtitle: "Create an Armory template from this request",
+			actionId: "ledger.drawer-open.send-to-armory",
 			icon: Swords,
-			keywords: "armory template request",
-			action: {
-				handler: sendDrawerRequestToArmory,
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+A", "ctrl+⇧+A"],
-			},
+			handler: sendDrawerRequestToArmory,
 		},
 		{
-			name: "Previous Request",
-			subtitle: "Jump to the previous item in the table",
+			actionId: "ledger.drawer-open.previous-request",
 			icon: ArrowLeftIcon,
-			keywords: "previous",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						modalStore.close();
-						stepDrawer(-1);
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+[", "ctrl+⇧+["],
+			handler: () => {
+				if (drawerOpened) {
+					modalStore.close();
+					stepDrawer(-1);
+				}
 			},
 		},
 		{
-			name: "Send to Launchpad",
-			subtitle: "Open this request in the launchpad editor",
+			actionId: "ledger.drawer-open.send-to-launchpad",
 			icon: SendIcon,
-			keywords: "launchpad",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						const index =
-							$drawerStore?.meta
-								?.requestIndex;
-						CreateLaunchpadEntry(
-							"Request " + index,
-							"Launchpad for Request " +
-								index,
-						).then((id) => {
-							LinkRequestToLaunchpad(
-								$drawerStore
-									?.meta
-									?.request
-									?.ID,
-								id,
-							).then(() => {
-								// Linking edits the pair's metadata.
-								markTrafficChanged();
-								const toastSettings =
-									{
-										message:
-											"Request " +
-											index +
-											" sent to Launchpad",
-										background:
-											$modeCurrent
-												? "bg-surface-50 text-surface-900 border border-surface-300"
-												: "bg-surface-100 text-surface-900",
-										action: {
-											label: "Jump to Launchpad",
-											response: () => {
-												drawerStore.close();
-												toastStore.close(
-													toastId,
-												);
-												goto(
-													"/launchpad?id=" +
-														id,
-												);
-											},
+			handler: () => {
+				if (drawerOpened) {
+					const index =
+						$drawerStore?.meta
+							?.requestIndex;
+					CreateLaunchpadEntry(
+						"Request " + index,
+						"Launchpad for Request " +
+							index,
+					).then((id) => {
+						LinkRequestToLaunchpad(
+							$drawerStore
+								?.meta
+								?.request
+								?.ID,
+							id,
+						).then(() => {
+							// Linking edits the pair's metadata.
+							markTrafficChanged();
+							const toastSettings =
+								{
+									message:
+										"Request " +
+										index +
+										" sent to Launchpad",
+									background:
+										$modeCurrent
+											? "bg-surface-50 text-surface-900 border border-surface-300"
+											: "bg-surface-100 text-surface-900",
+									action: {
+										label: "Jump to Launchpad",
+										response: () => {
+											drawerStore.close();
+											toastStore.close(
+												toastId,
+											);
+											goto(
+												"/launchpad?id=" +
+													id,
+											);
 										},
-									};
-								const toastId =
-									toastStore.trigger(
-										toastSettings,
-									);
-							});
+									},
+								};
+							const toastId =
+								toastStore.trigger(
+									toastSettings,
+								);
 						});
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+L", "ctrl+⇧+L"],
+					});
+				}
 			},
 		},
 		{
-			name: "Create Test Case",
-			subtitle: "Create a new test case from this request",
+			actionId: "ledger.drawer-open.create-test-case",
 			icon: BookCheckIcon,
-			keywords: "create,test,case",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (!$modalStore[0]) {
-							testCaseStore
-								.create([
-									$drawerStore
-										?.meta
-										?.request
-										?.ID,
-								])
-								.then(
-									(
-										testCase,
-									) => {
-										const modal =
-											{
-												type: "component",
-												component: "TestCase",
-												toggleShortcut:
-													{
-														key: "t",
-														shiftKey: true,
-													},
-												meta: {
-													testCase: testCase,
-													isNew: true,
-												},
-											};
-										modalStore.trigger(
-											modal,
-										);
-									},
-								);
-						} else if (
-							$modalStore[0]
-								.component ===
-							"TestCase"
-						) {
-							modalStore.close();
-						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+T", "ctrl+⇧+T"],
-			},
-		},
-		{
-			name: "Link to Test Case",
-			subtitle: "Attach request to an existing test case",
-			icon: LinkIcon,
-			keywords: "link,attach,existing",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (!$modalStore[0]) {
-							if (
-								$testCaseStore.length >
-								0
-							) {
-								const modal = {
-									type: "component",
-									component: "SelectTestCase",
-									toggleShortcut:
-										{
-										key: "b",
-											shiftKey: true,
-										},
-									meta: {
-										requestID: $drawerStore
-											?.meta
-											?.request
-											?.ID,
-										mode: "link",
-									},
-								};
-								modalStore.trigger(
-									modal,
-								);
-							} else {
-								toastStore.trigger(
-									{
-										message: "No existing test cases found...",
-										background: "variant-filled-warning",
-									},
-								);
-							}
-						} else if (
-							$modalStore[0]
-								.component ===
-							"SelectTestCase"
-						) {
-							modalStore.close();
-						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+B", "ctrl+⇧+B"],
-			},
-		},
-		{
-			name: "Unlink Test Case",
-			subtitle: "Remove request from linked test case",
-			icon: Unlink,
-			keywords: "unlink test case",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (!$modalStore[0]) {
-							const requestID =
+			handler: () => {
+				if (drawerOpened) {
+					if (!$modalStore[0]) {
+						testCaseStore
+							.create([
 								$drawerStore
-									?.meta
-									?.request
-									?.ID;
-							// Check if this specific request is actually linked anywhere
-							const hasLinks =
-								$testCaseStore.some(
-									(tc) =>
-										tc.Requests?.includes(
-											requestID,
-										),
-								);
-
-							if (hasLinks) {
-								const modal = {
-									type: "component",
-									component: "SelectTestCase",
-									toggleShortcut:
-										{
-											key: "d",
-											shiftKey: true,
-										},
-									meta: {
-										requestID: requestID,
-										mode: "unlink",
-									},
-								};
-								modalStore.trigger(
-									modal,
-								);
-							} else {
-								toastStore.trigger(
-									{
-										message: "No test cases linked to this request.",
-										background: "variant-filled-warning",
-									},
-								);
-							}
-						} else if (
-							$modalStore[0]
-								.component ===
-							"SelectTestCase"
-						) {
-							modalStore.close();
-						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+D", "ctrl+⇧+D"],
-			},
-		},
-		{
-			name: "Create Finding",
-			subtitle: "Create a new finding from this request",
-			icon: ShieldAlertIcon,
-			keywords: "create,finding",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (!$modalStore[0]) {
-							findingStore
-								.create([
-									$drawerStore
-										?.meta
-										?.request
-										?.ID,
-								])
-								.then(
-									(
-										finding,
-									) => {
-										const modal =
-											{
-												type: "component",
-												component: "Finding",
-												toggleShortcut:
-													{
-														key: "f",
-														shiftKey: true,
-													},
-												meta: {
-													finding: finding,
-													isNew: true,
-												},
-											};
-										modalStore.trigger(
-											modal,
-										);
-									},
-								)
-								.catch((err) =>
-									console.log(
-										err,
-									),
-								);
-						} else if (
-							$modalStore[0]
-								.component ===
-							"Finding"
-						) {
-							modalStore.close();
-						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+F", "ctrl+⇧+F"],
-			},
-		},
-		{
-			name: "Link Finding",
-			subtitle: "Attach request to an existing finding",
-			icon: LinkIcon,
-			keywords: "link,attach,existing",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (!$modalStore[0]) {
-							if (
-								$findingStore.length >
-								0
-							) {
-								const modal = {
-									type: "component",
-									component: "SelectFinding",
-									toggleShortcut:
-										{
-											key: "k",
-											shiftKey: true,
-										},
-									meta: {
-										requestID: $drawerStore
-											?.meta
-											?.request
-											?.ID,
-										mode: "link",
-									},
-								};
-								modalStore.trigger(
-									modal,
-								);
-							} else {
-								toastStore.trigger(
-									{
-										message: "No existing findings found...",
-										background: "variant-filled-warning",
-									},
-								);
-							}
-						} else if (
-							$modalStore[0]
-								.component ===
-							"SelectFinding"
-						) {
-							modalStore.close();
-						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+K", "ctrl+⇧+K"],
-			},
-		},
-		{
-			name: "Unlink Finding",
-			subtitle: "Remove request from linked finding",
-			icon: Unlink,
-			keywords: "unlink test case",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (!$modalStore[0]) {
-							const requestID =
-								$drawerStore
-									?.meta
-									?.request
-									?.ID;
-							// Check if this specific request is actually linked anywhere
-							const hasLinks =
-								$findingStore.some(
-									(fnd) =>
-										fnd.Requests?.includes(
-											requestID,
-										),
-								);
-
-							if (hasLinks) {
-								const modal = {
-									type: "component",
-									component: "SelectFinding",
-									toggleShortcut:
-										{
-											key: "x",
-											shiftKey: true,
-										},
-									meta: {
-										requestID: requestID,
-										mode: "unlink",
-									},
-								};
-								modalStore.trigger(
-									modal,
-								);
-							} else {
-								toastStore.trigger(
-									{
-										message: "No findings linked to this request.",
-										background: "variant-filled-warning",
-									},
-								);
-							}
-						} else if (
-							$modalStore[0]
-								.component ===
-							"SelectFinding"
-						) {
-							modalStore.close();
-						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+X", "ctrl+⇧+X"],
-			},
-		},
-		{
-			name: "View Note",
-			subtitle: "View or modify request note",
-			icon: PenIcon,
-			keywords: "note",
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						GetNote(
-							$drawerStore?.meta
-								?.request?.ID,
-						).then((note) => {
-							const modal = {
-								type: "component",
-								component: "Notes",
-								toggleShortcut:
-									{
-										key: "n",
-										shiftKey: true,
-									},
-								title:
-									"Request " +
-									$drawerStore
-										?.meta
-										?.requestIndex +
-									" notes",
-								requestID: $drawerStore
 									?.meta
 									?.request
 									?.ID,
-								content: note,
-							};
-							if (!$modalStore[0]) {
-								modalStore.trigger(
-									modal,
-								);
-							} else if (
-								$modalStore[0]
-									.component ===
-								"Notes"
-							) {
-								modalStore.close();
-							}
-						});
+							])
+							.then(
+								(
+									testCase,
+								) => {
+									const modal =
+										{
+											type: "component",
+											component: "TestCase",
+											toggleShortcut:
+												{
+													key: "t",
+													shiftKey: true,
+												},
+											meta: {
+												testCase: testCase,
+												isNew: true,
+											},
+										};
+									modalStore.trigger(
+										modal,
+									);
+								},
+							);
+					} else if (
+						$modalStore[0]
+							.component ===
+						"TestCase"
+					) {
+						modalStore.close();
 					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+N", "ctrl+⇧+N"],
+				}
 			},
 		},
 		{
-			name: "View Metadata",
-			subtitle: "View metadata for this request",
-			keywords: "metadata",
-			icon: BracesIcon,
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						GetMetadata(
-							$drawerStore?.meta
-								?.request?.ID,
-						).then((metadata) => {
+			actionId: "ledger.drawer-open.link-test-case",
+			icon: LinkIcon,
+			handler: () => {
+				if (drawerOpened) {
+					if (!$modalStore[0]) {
+						if (
+							$testCaseStore.length >
+							0
+						) {
 							const modal = {
 								type: "component",
-								component: "Metadata",
+								component: "SelectTestCase",
 								toggleShortcut:
 									{
-										key: "m",
+									key: "b",
 										shiftKey: true,
 									},
-								content: metadata,
-								title:
-									"Request " +
-									$drawerStore
+								meta: {
+									requestID: $drawerStore
 										?.meta
-										?.requestIndex +
-									" Metadata",
+										?.request
+										?.ID,
+									mode: "link",
+								},
 							};
-							if (!$modalStore[0]) {
-								modalStore.trigger(
-									modal,
-								);
-							} else if (
-								$modalStore[0]
-									.component ===
-								"Metadata"
-							) {
-								modalStore.close();
-							}
-						});
+							modalStore.trigger(
+								modal,
+							);
+						} else {
+							toastStore.trigger(
+								{
+									message: "No existing test cases found...",
+									background: "variant-filled-warning",
+								},
+							);
+						}
+					} else if (
+						$modalStore[0]
+							.component ===
+						"SelectTestCase"
+					) {
+						modalStore.close();
 					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+M", "ctrl+⇧+M"],
+				}
 			},
 		},
 		{
-			name: "Copy URL",
-			subtitle: "Copy the request URL",
-			keywords: "request, url",
-			icon: CopyIcon,
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						const url =
-							$drawerStore?.meta
+			actionId: "ledger.drawer-open.unlink-test-case",
+			icon: Unlink,
+			handler: () => {
+				if (drawerOpened) {
+					if (!$modalStore[0]) {
+						const requestID =
+							$drawerStore
+								?.meta
 								?.request
-								?.Scheme +
-							"://" +
-							$drawerStore?.meta
-								?.request
-								?.Host +
-							$drawerStore?.meta
-								?.request?.Path;
-						navigator.clipboard
-							.writeText(url)
-							.then(() => {
-								const toastSettings =
+								?.ID;
+						// Check if this specific request is actually linked anywhere
+						const hasLinks =
+							$testCaseStore.some(
+								(tc) =>
+									tc.Requests?.includes(
+										requestID,
+									),
+							);
+
+						if (hasLinks) {
+							const modal = {
+								type: "component",
+								component: "SelectTestCase",
+								toggleShortcut:
 									{
-										message: "URL copied to clipboard",
-										background: "variant-filled-success",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							})
-							.catch((err) => {
-								const toastSettings =
-									{
-										message: "Failed to copy URL",
-										background: "variant-filled-error",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							});
+										key: "d",
+										shiftKey: true,
+									},
+								meta: {
+									requestID: requestID,
+									mode: "unlink",
+								},
+							};
+							modalStore.trigger(
+								modal,
+							);
+						} else {
+							toastStore.trigger(
+								{
+									message: "No test cases linked to this request.",
+									background: "variant-filled-warning",
+								},
+							);
+						}
+					} else if (
+						$modalStore[0]
+							.component ===
+						"SelectTestCase"
+					) {
+						modalStore.close();
 					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+U", "ctrl+⇧+U"],
+				}
 			},
 		},
 		{
-			name: "Copy Raw Request",
-			subtitle: "Copy the complete HTTP request",
-			keywords: "request, raw",
-			icon: CopyIcon,
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						navigator.clipboard
-							.writeText(
+			actionId: "ledger.drawer-open.create-finding",
+			icon: ShieldAlertIcon,
+			handler: () => {
+				if (drawerOpened) {
+					if (!$modalStore[0]) {
+						findingStore
+							.create([
 								$drawerStore
 									?.meta
 									?.request
-									?.Raw,
+									?.ID,
+							])
+							.then(
+								(
+									finding,
+								) => {
+									const modal =
+										{
+											type: "component",
+											component: "Finding",
+											toggleShortcut:
+												{
+													key: "f",
+													shiftKey: true,
+												},
+											meta: {
+												finding: finding,
+												isNew: true,
+											},
+										};
+									modalStore.trigger(
+										modal,
+									);
+								},
 							)
-							.then(() => {
-								const toastSettings =
-									{
-										message: "Request copied to clipboard",
-										background: "variant-filled-success",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							})
-							.catch((err) => {
-								const toastSettings =
-									{
-										message: "Failed to copy request",
-										background: "variant-filled-error",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							});
+							.catch((err) =>
+								console.log(
+									err,
+								),
+							);
+					} else if (
+						$modalStore[0]
+							.component ===
+						"Finding"
+					) {
+						modalStore.close();
 					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+R", "ctrl+⇧+R"],
+				}
 			},
 		},
 		{
-			name: "Copy Raw Response",
-			subtitle: "Copy the complete HTTP response",
-			keywords: "response, raw",
-			icon: CopyIcon,
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						navigator.clipboard
-							.writeText(
+			actionId: "ledger.drawer-open.link-finding",
+			icon: LinkIcon,
+			handler: () => {
+				if (drawerOpened) {
+					if (!$modalStore[0]) {
+						if (
+							$findingStore.length >
+							0
+						) {
+							const modal = {
+								type: "component",
+								component: "SelectFinding",
+								toggleShortcut:
+									{
+										key: "k",
+										shiftKey: true,
+									},
+								meta: {
+									requestID: $drawerStore
+										?.meta
+										?.request
+										?.ID,
+									mode: "link",
+								},
+							};
+							modalStore.trigger(
+								modal,
+							);
+						} else {
+							toastStore.trigger(
+								{
+									message: "No existing findings found...",
+									background: "variant-filled-warning",
+								},
+							);
+						}
+					} else if (
+						$modalStore[0]
+							.component ===
+						"SelectFinding"
+					) {
+						modalStore.close();
+					}
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.unlink-finding",
+			icon: Unlink,
+			handler: () => {
+				if (drawerOpened) {
+					if (!$modalStore[0]) {
+						const requestID =
+							$drawerStore
+								?.meta
+								?.request
+								?.ID;
+						// Check if this specific request is actually linked anywhere
+						const hasLinks =
+							$findingStore.some(
+								(fnd) =>
+									fnd.Requests?.includes(
+										requestID,
+									),
+							);
+
+						if (hasLinks) {
+							const modal = {
+								type: "component",
+								component: "SelectFinding",
+								toggleShortcut:
+									{
+										key: "x",
+										shiftKey: true,
+									},
+								meta: {
+									requestID: requestID,
+									mode: "unlink",
+								},
+							};
+							modalStore.trigger(
+								modal,
+							);
+						} else {
+							toastStore.trigger(
+								{
+									message: "No findings linked to this request.",
+									background: "variant-filled-warning",
+								},
+							);
+						}
+					} else if (
+						$modalStore[0]
+							.component ===
+						"SelectFinding"
+					) {
+						modalStore.close();
+					}
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.view-note",
+			icon: PenIcon,
+			handler: () => {
+				if (drawerOpened) {
+					GetNote(
+						$drawerStore?.meta
+							?.request?.ID,
+					).then((note) => {
+						const modal = {
+							type: "component",
+							component: "Notes",
+							toggleShortcut:
+								{
+									key: "n",
+									shiftKey: true,
+								},
+							title:
+								"Request " +
 								$drawerStore
 									?.meta
-									?.response
-									?.Raw,
-							)
-							.then(() => {
-								const toastSettings =
-									{
-										message: "Response copied to clipboard",
-										background: "variant-filled-success",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							})
-							.catch((err) => {
-								const toastSettings =
-									{
-										message: "Failed to copy response",
-										background: "variant-filled-error",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							});
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+S", "ctrl+⇧+S"],
-			},
-		},
-		{
-			name: "Toggle Fullscreen",
-			subtitle: "Expand or collapse the request drawer",
-			keywords: "toggle, expand",
-			icon: MaximizeIcon,
-			action: {
-				handler: () => {
-					if (drawerOpened) {
-						if (
-							$drawerHeight ===
-							"h-[60%]"
+									?.requestIndex +
+								" notes",
+							requestID: $drawerStore
+								?.meta
+								?.request
+								?.ID,
+							content: note,
+						};
+						if (!$modalStore[0]) {
+							modalStore.trigger(
+								modal,
+							);
+						} else if (
+							$modalStore[0]
+								.component ===
+							"Notes"
 						) {
-							$drawerHeight =
-								"h-[100%]";
-							$drawerStore.height =
-								$drawerHeight;
-						} else {
-							$drawerHeight =
-								"h-[60%]";
-							$drawerStore.height =
-								$drawerHeight;
+							modalStore.close();
 						}
-					}
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+E", "ctrl+⇧+E"],
+					});
+				}
 			},
 		},
 		{
-			name: "Toggle Word Wrap",
-			subtitle: "Wrap request / response lines",
-			keywords: "toggle, linewrap",
+			actionId: "ledger.drawer-open.view-metadata",
+			icon: BracesIcon,
+			handler: () => {
+				if (drawerOpened) {
+					GetMetadata(
+						$drawerStore?.meta
+							?.request?.ID,
+					).then((metadata) => {
+						const modal = {
+							type: "component",
+							component: "Metadata",
+							toggleShortcut:
+								{
+									key: "m",
+									shiftKey: true,
+								},
+							content: metadata,
+							title:
+								"Request " +
+								$drawerStore
+									?.meta
+									?.requestIndex +
+								" Metadata",
+						};
+						if (!$modalStore[0]) {
+							modalStore.trigger(
+								modal,
+							);
+						} else if (
+							$modalStore[0]
+								.component ===
+							"Metadata"
+						) {
+							modalStore.close();
+						}
+					});
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.copy-url",
+			icon: CopyIcon,
+			handler: () => {
+				if (drawerOpened) {
+					const url =
+						$drawerStore?.meta
+							?.request
+							?.Scheme +
+						"://" +
+						$drawerStore?.meta
+							?.request
+							?.Host +
+						$drawerStore?.meta
+							?.request?.Path;
+					navigator.clipboard
+						.writeText(url)
+						.then(() => {
+							const toastSettings =
+								{
+									message: "URL copied to clipboard",
+									background: "variant-filled-success",
+								};
+							toastStore.trigger(
+								toastSettings,
+							);
+						})
+						.catch((err) => {
+							const toastSettings =
+								{
+									message: "Failed to copy URL",
+									background: "variant-filled-error",
+								};
+							toastStore.trigger(
+								toastSettings,
+							);
+						});
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.copy-raw-request",
+			icon: CopyIcon,
+			handler: () => {
+				if (drawerOpened) {
+					navigator.clipboard
+						.writeText(
+							$drawerStore
+								?.meta
+								?.request
+								?.Raw,
+						)
+						.then(() => {
+							const toastSettings =
+								{
+									message: "Request copied to clipboard",
+									background: "variant-filled-success",
+								};
+							toastStore.trigger(
+								toastSettings,
+							);
+						})
+						.catch((err) => {
+							const toastSettings =
+								{
+									message: "Failed to copy request",
+									background: "variant-filled-error",
+								};
+							toastStore.trigger(
+								toastSettings,
+							);
+						});
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.copy-raw-response",
+			icon: CopyIcon,
+			handler: () => {
+				if (drawerOpened) {
+					navigator.clipboard
+						.writeText(
+							$drawerStore
+								?.meta
+								?.response
+								?.Raw,
+						)
+						.then(() => {
+							const toastSettings =
+								{
+									message: "Response copied to clipboard",
+									background: "variant-filled-success",
+								};
+							toastStore.trigger(
+								toastSettings,
+							);
+						})
+						.catch((err) => {
+							const toastSettings =
+								{
+									message: "Failed to copy response",
+									background: "variant-filled-error",
+								};
+							toastStore.trigger(
+								toastSettings,
+							);
+						});
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.toggle-fullscreen",
+			icon: MaximizeIcon,
+			handler: () => {
+				if (drawerOpened) {
+					if (
+						$drawerHeight ===
+						"h-[60%]"
+					) {
+						$drawerHeight =
+							"h-[100%]";
+						$drawerStore.height =
+							$drawerHeight;
+					} else {
+						$drawerHeight =
+							"h-[60%]";
+						$drawerStore.height =
+							$drawerHeight;
+					}
+				}
+			},
+		},
+		{
+			actionId: "ledger.drawer-open.toggle-word-wrap",
 			icon: WrapTextIcon,
-			action: {
-				handler: () => {
-					$lineWrap = $lineWrap ? false : true;
-				},
-				options: { scope: "ledger", single: true },
-				keys: ["⌘+⇧+W", "ctrl+⇧+W"],
+			handler: () => {
+				$lineWrap = $lineWrap ? false : true;
 			},
 		},
 	];
 	const websocketDrawerMenuItem = {
-		name: "Open WebSocket Stream",
-		subtitle: "Open the upgraded connection stream",
-		keywords: "open websocket upgrade stream frames",
+		actionId: "ledger.drawer-open.websocket.open-stream",
 		icon: RadioIcon,
-		action: {
-			handler: openWebSocketStream,
-			options: { scope: "ledger", single: true },
-			keys: ["⌘+⇧+O", "ctrl+⇧+O"],
-		},
+		handler: openWebSocketStream,
 	};
 
 	const columnHelper = createColumnHelper();
@@ -1329,19 +1176,19 @@
 		if (target < 0 || target >= rows.length) return;
 		openDrawer(rows[target].original.ID);
 	}
+	// Every Ledger action stays registered; the drawer-closed, drawer-open and
+	// WebSocket-upgrade menu contexts decide which ones a key reaches.
+	useMenuActions([...ledgerMenu, websocketDrawerMenuItem, ...drawerMenu]);
+	// The menu lists the actions of the drawer's current state.
+	$: menuOptions = !$drawerStore.open
+		? ledgerMenu
+		: isWebSocketUpgrade($drawerStore.meta)
+			? [websocketDrawerMenuItem, ...drawerMenu]
+			: drawerMenu;
+
 	onMount(() => {
 		const unsubscribe = drawerStore.subscribe((settings) => {
 			drawerOpened = settings.open ? settings.open : false;
-			if (drawerOpened)
-				menu.menuOptions = isWebSocketUpgrade(
-					settings.meta,
-				)
-					? [
-							websocketDrawerMenuItem,
-							...drawerMenu,
-						]
-					: drawerMenu;
-			else menu.menuOptions = ledgerMenu;
 		});
 		return () => {
 			drawerOpened = false;
@@ -1350,7 +1197,7 @@
 	});
 </script>
 
-<MarasiKeys bind:this={menu} scope="ledger" menuOptions={ledgerMenu} />
+<MarasiKeys {menuOptions} />
 <Accordion rounded="none">
 	<AccordionItem bind:open={accOpened}>
 		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
