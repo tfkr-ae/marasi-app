@@ -9,7 +9,7 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`, or press `Command+S` after the dashboard has mounted once. The page exposes `Marasi Settings`, the build version, Waypoints, Chrome Paths, and Chrome Profiles.
+Select the rail item titled `Settings`, or press `Command+S` from any route. The page exposes `Marasi Settings`, the build version, Waypoints, Chrome Paths, and Chrome Profiles.
 
 ## Driving it with Chrome CDP
 
