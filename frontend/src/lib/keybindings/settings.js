@@ -1,5 +1,5 @@
 import { isReservedBinding } from "./gate.js";
-import { bindingFromEvent, formatBinding } from "./keys.js";
+import { bindingFromEvent, formatBinding, normalizeBinding } from "./keys.js";
 import {
   catalogDescriptor,
   factoryKeybindings,
@@ -189,11 +189,72 @@ function actionGroups(catalog) {
   return groups;
 }
 
+// Overrides for extension actions the catalog lacks are dormant: the
+// extension (or that action of it) is missing. They stay in the profile,
+// never run, and are listed as unavailable so the researcher sees the
+// customization is kept. The ids follow catalog.js's extension id scheme;
+// other unknown ids are kept but not listed (they are not extension data).
+const EXTENSION_PAGE = /^(?:extension|extension-page)\.([a-z0-9-]+)\.([a-z0-9-.]+)$/;
+
+function unavailableAction(catalog, actionId) {
+  if (actionId.startsWith(EXTENSION_NAVIGATION)) {
+    const extension = actionId.slice(EXTENSION_NAVIGATION.length);
+    return {
+      group: "global.extensions",
+      note: "Extension unavailable",
+      action: { id: actionId, context: "global", label: extension, description: `Open ${extension}` },
+    };
+  }
+  const match = EXTENSION_PAGE.exec(actionId);
+  if (!match) return null;
+  const [, extension, slug] = match;
+  const context = `extension-page.${extension}`;
+  const installed = catalog.contexts.some((c) => c.id === context);
+  return {
+    group: context,
+    extension,
+    note: installed ? "Not offered by this extension" : "Extension unavailable",
+    action: {
+      id: actionId,
+      context,
+      label: slug === "toggle-settings" && actionId.startsWith("extension-page.") ? `Toggle ${extension} Settings` : slug,
+      description: "",
+    },
+  };
+}
+
+// Rows for the variant's dormant extension overrides, by sidebar entry id.
+// Their controls are disabled: Settings changes bindings of available
+// actions only, and the override must survive untouched until the
+// extension returns.
+function unavailableRows(catalog, profile, platform) {
+  const byGroup = new Map();
+  for (const { action: actionId, keys } of profile.overrides?.[platform] ?? []) {
+    if (catalog.has(actionId)) continue;
+    const found = unavailableAction(catalog, actionId);
+    if (!found) continue;
+    const bindings = [...new Set((keys ?? []).map(normalizeBinding).filter(Boolean))];
+    const rows = byGroup.get(found.group) ?? { extension: found.extension, rows: [] };
+    rows.rows.push({
+      action: found.action,
+      bindings,
+      display: bindings.map((binding) => formatBinding(binding, platform)),
+      customized: true,
+      available: false,
+      status: "unavailable",
+      note: found.note,
+      problem: "",
+    });
+    byGroup.set(found.group, rows);
+  }
+  return byGroup;
+}
+
 function matches(row, group, query) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
   const { action, bindings, display } = row;
-  const text = [action.label, action.description, action.keywords, group.page, group.state, ...bindings, ...display]
+  const text = [action.label, action.description, action.keywords, group.page, group.state, row.note, ...bindings, ...display]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -234,12 +295,27 @@ const count = (rows, status) => rows.filter((row) => row.status === status).leng
 // matching `query` and `filter` ("all" | "unbound" | "conflict"). A row is
 //   { action, bindings, display, customized, status, problem }
 // with `display` the palette notation of each binding, `status` "conflict"
-// (with `problem` explaining it), "unbound" or "".
+// (with `problem` explaining it), "unbound", "unavailable" or "". An
+// unavailable row (`available: false`, `note` saying why) is a dormant
+// extension override: listed after its entry's available actions, or in an
+// entry of its own for a missing extension page, and never counted as
+// unbound.
 export function browse({ catalog, profile, platform, query = "", filter = "all" }) {
   const keymap = profileKeymap(catalog, profile, platform);
   const overridden = new Set((profile.overrides?.[platform] ?? []).map((o) => o.action));
   const problems = rowProblems(catalog, profile, platform);
-  const groups = actionGroups(catalog).map((group) => {
+  const unavailable = unavailableRows(catalog, profile, platform);
+  const entries = actionGroups(catalog);
+  for (const [id, { extension }] of unavailable) {
+    if (entries.some((group) => group.id === id)) continue;
+    if (id === "global.extensions") {
+      const at = entries.findIndex((group) => group.id === "global") + 1;
+      entries.splice(at, 0, { id, page: "Extensions", state: "Open extension pages", actions: [] });
+    } else {
+      entries.push({ id, page: extension, state: "Extension unavailable", actions: [] });
+    }
+  }
+  const groups = entries.map((group) => {
     const all = group.actions.map((action) => {
       const bindings = keymap.bindingsFor(action.id);
       const problem = problems.get(action.id) ?? "";
@@ -248,10 +324,12 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
         bindings,
         display: bindings.map((binding) => formatBinding(binding, platform)),
         customized: overridden.has(action.id),
+        available: true,
         status: problem ? "conflict" : bindings.length ? "" : "unbound",
         problem,
       };
     });
+    all.push(...(unavailable.get(group.id)?.rows ?? []));
     const items = all.filter(
       (row) => matches(row, group, query) && (filter === "all" || row.status === filter),
     );

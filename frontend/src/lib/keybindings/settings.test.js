@@ -292,3 +292,122 @@ test("sidebar entries count their unbound actions", () => {
   const draft = removeBinding(withExtension, openDraft(saved([profile("default", "Default")]), withExtension), { ...home, actionId: "ledger.drawer-open.close" }, 0);
   assert.deepEqual(view({ profile: draft.profiles[0] }).groups.map((g) => g.unboundCount), [0, 0, 0, 1]);
 });
+
+// Unavailable extension actions. "Repeater" declares one menu action; the
+// researcher customizes it and Repeater's navigation, then Repeater goes
+// missing.
+const repeater = { Name: "Repeater" };
+const intruder = { Name: "Intruder" };
+const repeaterMenu = { Repeater: [{ action: "send_request", name: "Send Request", keys: ["⌘+⇧+Y", "ctrl+shift+y"] }] };
+const sendRequest = "extension.repeater.send-request";
+const openRepeater = "global.open-extension.repeater";
+const onMac = (actionId) => ({ profileId: "default", platform: MACOS, actionId });
+
+function customizedRepeater() {
+  const installed = buildCatalog({ extensions: [repeater], extensionMenus: repeaterMenu });
+  let draft = openDraft(null, installed);
+  draft = replaceBinding(installed, draft, onMac(sendRequest), 0, "meta+shift+u");
+  draft = replaceBinding(installed, draft, onMac(openRepeater), 0, "meta+alt+8");
+  return draft;
+}
+
+function rowsById(result) {
+  return Object.fromEntries(result.groups.flatMap((group) => group.all.map((row) => [row.action.id, { row, group }])));
+}
+
+test("a customized extension action shows as unavailable, keeping its bindings, while its extension is missing", () => {
+  const missing = buildCatalog({ extensions: [] });
+  const draft = openDraft({ config: customizedRepeater(), problem: "" }, missing);
+  const rows = rowsById(browse({ catalog: missing, profile: draft.profiles[0], platform: MACOS }));
+
+  const send = rows[sendRequest];
+  assert.equal(send.row.status, "unavailable");
+  assert.equal(send.row.available, false);
+  assert.deepEqual(send.row.bindings, ["meta+shift+u"]);
+  assert.deepEqual(send.row.display, ["⌘+⇧+U"]);
+  assert.equal(send.row.note, "Extension unavailable");
+  assert.equal(send.group.state, "Extension unavailable");
+
+  const open = rows[openRepeater];
+  assert.equal(open.row.status, "unavailable");
+  assert.deepEqual(open.row.bindings, ["meta+alt+8"]);
+  assert.equal(open.group.page, "Extensions");
+});
+
+test("unavailable actions are not counted or filtered as unbound, even when their override unbinds them", () => {
+  const installed = buildCatalog({ extensions: [repeater], extensionMenus: repeaterMenu });
+  const unbound = removeBinding(installed, openDraft(null, installed), onMac(sendRequest), 0);
+  const missing = buildCatalog({ extensions: [] });
+  const profile = openDraft({ config: unbound, problem: "" }, missing).profiles[0];
+
+  const all = browse({ catalog: missing, profile, platform: MACOS });
+  const send = rowsById(all)[sendRequest];
+  assert.equal(send.row.status, "unavailable");
+  assert.deepEqual(send.row.bindings, []);
+  assert.equal(all.unboundCount, 0);
+  assert.equal(send.group.unboundCount, 0);
+  assert.deepEqual(browse({ catalog: missing, profile, platform: MACOS, filter: "unbound" }).groups.flatMap(ids), []);
+  assert.deepEqual(browse({ catalog: missing, profile, platform: MACOS, query: "unavailable" }).groups.flatMap(ids), [sendRequest]);
+});
+
+test("edits saved while the extension is missing keep its customizations, which apply again when it returns", () => {
+  const missing = buildCatalog({ extensions: [] });
+  let draft = openDraft({ config: customizedRepeater(), problem: "" }, missing);
+  draft = addBinding(missing, draft, onMac("global.go-home"), "meta+shift+h");
+  // Saved and reopened while still missing (the backend settles the same way).
+  draft = openDraft({ config: draft, problem: "" }, missing);
+
+  const returned = buildCatalog({ extensions: [repeater], extensionMenus: repeaterMenu });
+  const reopened = openDraft({ config: draft, problem: "" }, returned);
+  const rows = rowsById(browse({ catalog: returned, profile: reopened.profiles[0], platform: MACOS }));
+  assert.deepEqual(rows[sendRequest].row.bindings, ["meta+shift+u"]);
+  assert.equal(rows[sendRequest].row.status, "");
+  assert.equal(rows[sendRequest].row.available, true);
+  assert.deepEqual(rows[openRepeater].row.bindings, ["meta+alt+8"]);
+
+  const live = createDispatcher({
+    catalog: returned,
+    platform: MACOS,
+    overrides: { [MACOS]: Object.fromEntries(reopened.profiles[0].overrides[MACOS].map((o) => [o.action, o.keys])) },
+  });
+  assert.deepEqual(live.bindingsFor(openRepeater), ["meta+alt+8"]);
+});
+
+test("reordering extensions keeps a customization with its extension; defaults follow the new order", () => {
+  const before = buildCatalog({ extensions: [repeater, intruder] });
+  const custom = replaceBinding(before, openDraft(null, before), onMac(openRepeater), 0, "meta+alt+8");
+
+  const after = buildCatalog({ extensions: [intruder, repeater] });
+  const rows = rowsById(browse({ catalog: after, profile: openDraft({ config: custom, problem: "" }, after).profiles[0], platform: MACOS }));
+  assert.deepEqual(rows[openRepeater].row.bindings, ["meta+alt+8"]);
+  assert.deepEqual(rows["global.open-extension.intruder"].row.bindings, ["meta+alt+1"]);
+  assert.equal(rows["global.open-extension.intruder"].row.customized, false);
+});
+
+test("an action its installed extension no longer declares is listed unavailable on that extension's page", () => {
+  const withoutMenu = buildCatalog({ extensions: [repeater, intruder] });
+  const result = browse({ catalog: withoutMenu, profile: openDraft({ config: customizedRepeater(), problem: "" }, withoutMenu).profiles[0], platform: MACOS });
+  const page = result.groups.find((g) => g.id === "extension-page.repeater");
+  assert.deepEqual(page.all.map((r) => [r.action.id, r.status]), [
+    ["extension-page.repeater.toggle-settings", ""],
+    [sendRequest, "unavailable"],
+  ]);
+  assert.equal(page.all[1].note, "Not offered by this extension");
+  assert.equal(result.groups.filter((g) => g.id === "extension-page.repeater").length, 1);
+});
+
+test("a missing extension's dormant binding runs nothing", () => {
+  const missing = buildCatalog({ extensions: [] });
+  const profile = openDraft({ config: customizedRepeater(), problem: "" }, missing).profiles[0];
+  const live = createDispatcher({
+    catalog: missing,
+    platform: MACOS,
+    overrides: { [MACOS]: Object.fromEntries(profile.overrides[MACOS].map((o) => [o.action, o.keys])) },
+  });
+  let ran = false;
+  live.register(openRepeater, () => (ran = true));
+  const event = { key: "8", code: "Digit8", metaKey: true, altKey: true, ctrlKey: false, shiftKey: false, target: null, preventDefault() {}, stopImmediatePropagation() {} };
+  assert.equal(live.resolve(event, { route: "/" }), null);
+  assert.equal(live.dispatch(event, { route: "/" }), false);
+  assert.equal(ran, false);
+});

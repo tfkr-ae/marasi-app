@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -247,6 +248,74 @@ func TestAppKeybindings(t *testing.T) {
 		}
 		if _, err := restarted.SaveKeybindings(edited, updated); err == nil {
 			t.Fatalf("wanted: duplicate with the known global.go-free default rejected\ngot: nil")
+		}
+	})
+
+	t.Run("should keep an unavailable extension's customizations through saves and restarts and apply them when it returns", func(t *testing.T) {
+		// Two extensions; navigation defaults are positional (⌘⌥1, ⌘⌥2).
+		withExtensions := func(names ...string) KeybindingCatalog {
+			catalog := testKeybindingCatalog()
+			for i, name := range names {
+				catalog.Contexts = append(catalog.Contexts, KeybindingContext{ID: "extension-page." + name})
+				catalog.Actions = append(catalog.Actions,
+					KeybindingAction{ID: "global.open-extension." + name, Context: "global", Defaults: map[string][]string{
+						"macos": {fmt.Sprintf("meta+alt+%d", i+1)}, "windows-linux": {fmt.Sprintf("ctrl+alt+%d", i+1)},
+					}},
+					KeybindingAction{ID: "extension." + name + ".send", Context: "extension-page." + name, Defaults: map[string][]string{
+						"macos": {"meta+shift+y"}, "windows-linux": {"ctrl+shift+y"},
+					}},
+				)
+			}
+			return catalog
+		}
+		customized := []KeybindingOverride{
+			{Action: "global.open-extension.repeater", Keys: []string{"meta+alt+8"}},
+			{Action: "extension.repeater.send", Keys: []string{}},
+		}
+
+		dir := t.TempDir()
+		app := loadConfigApp(t, dir)
+		config := knownKeybindings()
+		config.Profiles[0].Overrides["macos"] = slices.Clone(customized)
+		if _, err := app.SaveKeybindings(config, withExtensions("repeater", "intruder")); err != nil {
+			t.Fatalf("saving with Repeater installed: %v", err)
+		}
+
+		// Repeater is removed; an unrelated edit is saved, then the app restarts.
+		missing := withExtensions("intruder")
+		edited := app.GetKeybindings().Config
+		edited.Profiles[0].Overrides["macos"] = append(edited.Profiles[0].Overrides["macos"],
+			KeybindingOverride{Action: "global.go-home", Keys: []string{"meta+h"}})
+		if _, err := app.SaveKeybindings(edited, missing); err != nil {
+			t.Fatalf("saving with Repeater missing: %v", err)
+		}
+		restarted := loadConfigApp(t, dir)
+		kept := restarted.GetKeybindings().Config.Profiles[0].Overrides["macos"]
+		for _, want := range customized {
+			if !slices.ContainsFunc(kept, func(o KeybindingOverride) bool { return reflect.DeepEqual(o, want) }) {
+				t.Fatalf("wanted dormant override %+v kept\ngot: %+v", want, kept)
+			}
+		}
+
+		// Repeater returns, after Intruder this time.
+		returned := withExtensions("intruder", "repeater")
+		state, err := resolveActiveKeybindings(restarted.GetKeybindings().Config, returned)
+		if err != nil {
+			t.Fatalf("resolving: %v", err)
+		}
+		want := map[string][]string{
+			"global.open-extension.repeater": {"meta+alt+8"},
+			"extension.repeater.send":        {},
+			"global.open-extension.intruder": {"meta+alt+1"},
+			"global.go-home":                 {"meta+h"},
+		}
+		for id, keys := range want {
+			if !reflect.DeepEqual(state["macos"][id], keys) {
+				t.Fatalf("wanted macos %s: %v\ngot: %v", id, keys, state["macos"][id])
+			}
+		}
+		if _, err := restarted.SaveKeybindings(restarted.GetKeybindings().Config, returned); err != nil {
+			t.Fatalf("saving after Repeater returned: %v", err)
 		}
 	})
 
