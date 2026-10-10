@@ -4,6 +4,7 @@
 export const MACOS = "macos";
 export const WINDOWS_LINUX = "windows-linux";
 export const PLATFORMS = [MACOS, WINDOWS_LINUX];
+export const PLATFORM_NAMES = { [MACOS]: "macOS", [WINDOWS_LINUX]: "Windows / Linux" };
 
 // DesktopOS is Go's runtime.GOOS, reported by GetMarasiConfig.
 export function platformFromDesktopOS(desktopOS) {
