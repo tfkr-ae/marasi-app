@@ -1,5 +1,8 @@
+import { contextsConflict } from "./contexts.js";
 import { isReservedBinding } from "./gate.js";
 import { bindingFromEvent, formatBinding } from "./keys.js";
+import { OPEN_MENU } from "./keymap.js";
+import { PLATFORM_NAMES } from "./platform.js";
 import {
   catalogDescriptor,
   factoryKeybindings,
@@ -165,6 +168,12 @@ export async function saveDraft({ draft, catalog, save, apply }) {
 }
 
 const EXTENSION_NAVIGATION = "global.open-extension.";
+const EXTENSIONS_GROUP = "global.extensions";
+
+// The sidebar entry an action is listed under (see actionGroups).
+function groupIdOf(action) {
+  return action.id.startsWith(EXTENSION_NAVIGATION) ? EXTENSIONS_GROUP : action.context;
+}
 
 // Sidebar entries: one per menu context (its `page` and `state`), in catalog
 // context order, except that opening extension pages, which lives in the
@@ -181,7 +190,7 @@ function actionGroups(catalog) {
     const state = context.state ?? "";
     if (context.id === "global") {
       add("global", page, state, actions.filter((a) => !a.id.startsWith(EXTENSION_NAVIGATION)));
-      add("global.extensions", "Extensions", "Open extension pages", actions.filter((a) => a.id.startsWith(EXTENSION_NAVIGATION)));
+      add(EXTENSIONS_GROUP, "Extensions", "Open extension pages", actions.filter((a) => a.id.startsWith(EXTENSION_NAVIGATION)));
     } else {
       add(context.id, page, state, actions);
     }
@@ -200,29 +209,136 @@ function matches(row, group, query) {
   return words.every((word) => text.includes(word));
 }
 
-// One explanation per action for the variant's validation problems
-// (validateProfile), worded for the action's own row.
+// A menu context as the sidebar names it: "Ledger · Drawer closed".
+function contextName(catalog, contextId) {
+  const context = catalog.contexts.find((c) => c.id === contextId);
+  if (!context) return contextId;
+  const page = context.page ?? context.label ?? contextId;
+  return context.state && context.id !== "global" ? `${page} · ${context.state}` : page;
+}
+
+// A validateProfile problem as [actionId, message] pairs, one per action
+// involved and worded for that action's row. The first pair is the action
+// the problem is located at.
+function explain(catalog, problem) {
+  const label = (id) => catalog.get(id)?.label ?? id;
+  const where = (id) => contextName(catalog, catalog.get(id)?.context);
+  // Another action, named with its context when that differs (overlapping
+  // contexts are one collision domain but different sidebar entries).
+  const other = (id, from) =>
+    catalog.get(id)?.context === catalog.get(from)?.context ? label(id) : `${label(id)} in ${where(id)}`;
+  const [first, ...rest] = problem.actions;
+  const binding = problem.binding && formatBinding(problem.binding, problem.platform);
+  switch (problem.kind) {
+    case "menu-unbound":
+      return [[first, "The Marasi menu must have a binding"]];
+    case "reserved":
+      return [[first, `${binding} is reserved for dialogs and focus`]];
+    case "duplicate":
+      return [
+        [first, `${binding} is also bound to ${other(rest[0], first)}`],
+        [rest[0], `${binding} is also bound to ${other(first, rest[0])}`],
+      ];
+    case "menu-shadowed":
+      return [
+        [first, `${binding} is shadowed by ${rest.map((id) => other(id, first)).join(", ")}; the menu must open everywhere`],
+        ...rest.map((id) => [id, `${binding} would shadow ${label(first)}, which must open everywhere`]),
+      ];
+    default:
+      return [[first, problem.message]];
+  }
+}
+
+// The variant's explanations, per action and worded for the action's own
+// row:
+//   conflicts  validation problems (validateProfile) that block Save
+//   shadows    allowed shadowing: an action outside the global context
+//              shares a binding with a global action, so where its context
+//              is eligible it wins and the global action does not run.
+//              The global context is eligible everywhere, so this needs no
+//              eligibility analysis. Shadowing the menu opening is a
+//              conflict instead (menu-shadowed).
 function rowProblems(catalog, profile, platform) {
   const label = (id) => catalog.get(id)?.label ?? id;
+  const where = (id) => contextName(catalog, catalog.get(id)?.context);
   const key = (binding) => formatBinding(binding, platform);
-  const messages = new Map();
-  const note = (id, message) => {
-    if (!messages.has(id)) messages.set(id, message);
+  const conflicts = new Map();
+  const shadows = new Map();
+  const note = (messages, id, message) => {
+    const list = messages.get(id) ?? [];
+    if (!list.includes(message)) messages.set(id, [...list, message]);
   };
   for (const problem of validateProfile(catalog, profile)) {
     if (problem.platform !== platform) continue;
-    const [first, ...rest] = problem.actions;
-    if (problem.kind === "menu-unbound") note(first, "The Marasi menu must have a binding");
-    else if (problem.kind === "reserved") note(first, `${key(problem.binding)} is reserved for dialogs and focus`);
-    else if (problem.kind === "duplicate") {
-      note(first, `${key(problem.binding)} is also bound to ${label(rest[0])}`);
-      note(rest[0], `${key(problem.binding)} is also bound to ${label(first)}`);
-    } else if (problem.kind === "menu-shadowed") {
-      note(first, `${key(problem.binding)} is shadowed by ${rest.map(label).join(", ")}`);
-      for (const id of rest) note(id, `${key(problem.binding)} shadows ${label(first)}`);
+    for (const [id, message] of explain(catalog, problem)) note(conflicts, id, message);
+  }
+  const keymap = profileKeymap(catalog, profile, platform);
+  for (const action of catalog.actions) {
+    if (action.context === "global") continue;
+    for (const binding of keymap.bindingsFor(action.id)) {
+      for (const id of keymap.actionsFor(binding)) {
+        const shadowed = catalog.get(id);
+        if (shadowed.context !== "global" || id === OPEN_MENU) continue;
+        if (contextsConflict(catalog.contexts, shadowed.context, action.context)) continue;
+        note(shadows, action.id, `${key(binding)} shadows ${label(id)} (${where(id)}) here`);
+        note(shadows, id, `${key(binding)} is shadowed by ${label(action.id)} in ${where(action.id)}`);
+      }
     }
   }
-  return messages;
+  return { conflicts, shadows };
+}
+
+// The profile-level rules SaveKeybindings checks before any binding
+// (checkKeybindingStructure in keybinding_validation.go): valid unique ids,
+// unique nonempty names (trimmed, case-insensitive) and an active profile
+// that exists. Bindings in a draft come from capture, so they are always
+// canonical and never reserved here.
+const PROFILE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function profileProblems(draft) {
+  const problems = [];
+  const at = (profile, message) => ({ profileId: profile?.id ?? null, platform: null, groupId: null, actionId: null, message });
+  const ids = new Set();
+  const names = new Set();
+  for (const profile of draft.profiles) {
+    if (!PROFILE_ID.test(profile.id)) problems.push(at(profile, `Profile id "${profile.id}" is invalid`));
+    else if (ids.has(profile.id)) problems.push(at(profile, `Profile id "${profile.id}" is used twice`));
+    ids.add(profile.id);
+    const name = (profile.name ?? "").trim();
+    if (!name) problems.push(at(profile, "A profile has no name"));
+    else if (names.has(name.toLowerCase())) problems.push(at(profile, `Profile name "${name}" is used twice`));
+    names.add(name.toLowerCase());
+  }
+  if (!draft.profiles.some((profile) => profile.id === draft.activeProfile)) {
+    problems.push(at(null, "The active profile does not exist"));
+  }
+  return problems;
+}
+
+// Everything that blocks saving `draft`: every profile and both platform
+// variants, not only the one on screen. Each problem says where it is, so
+// one on a hidden profile or platform can still be found and shown:
+//   { profileId, platform, groupId, actionId, message }
+// `message` reads "Profile · Platform · Page · State · Action: explanation".
+// Profile-level problems have null platform, groupId and actionId. With
+// `current` ({ profileId, platform }) that variant's problems come first.
+export function saveProblems(catalog, draft, current = {}) {
+  const variant = draft.profiles.flatMap((profile) =>
+    validateProfile(catalog, profile).map((problem) => {
+      const [actionId, explanation] = explain(catalog, problem)[0];
+      const action = catalog.get(actionId);
+      const place = [profile.name, PLATFORM_NAMES[problem.platform], contextName(catalog, action.context), action.label];
+      return {
+        profileId: profile.id,
+        platform: problem.platform,
+        groupId: groupIdOf(action),
+        actionId,
+        message: `${place.join(" · ")}: ${explanation}`,
+      };
+    }),
+  );
+  const onScreen = (p) => p.profileId === current.profileId && p.platform === current.platform;
+  return [...profileProblems(draft), ...variant.filter(onScreen), ...variant.filter((p) => !onScreen(p))];
 }
 
 const count = (rows, status) => rows.filter((row) => row.status === status).length;
@@ -238,18 +354,23 @@ const count = (rows, status) => rows.filter((row) => row.status === status).leng
 export function browse({ catalog, profile, platform, query = "", filter = "all" }) {
   const keymap = profileKeymap(catalog, profile, platform);
   const overridden = new Set((profile.overrides?.[platform] ?? []).map((o) => o.action));
-  const problems = rowProblems(catalog, profile, platform);
+  const { conflicts, shadows } = rowProblems(catalog, profile, platform);
   const groups = actionGroups(catalog).map((group) => {
     const all = group.actions.map((action) => {
       const bindings = keymap.bindingsFor(action.id);
-      const problem = problems.get(action.id) ?? "";
+      const conflict = conflicts.get(action.id);
+      const shadow = shadows.get(action.id);
+      let status = "";
+      if (conflict) status = "conflict";
+      else if (!bindings.length) status = "unbound";
+      else if (shadow) status = "shadowing";
       return {
         action,
         bindings,
         display: bindings.map((binding) => formatBinding(binding, platform)),
         customized: overridden.has(action.id),
-        status: problem ? "conflict" : bindings.length ? "" : "unbound",
-        problem,
+        status,
+        problem: (conflict ?? shadow ?? []).join("; "),
       };
     });
     const items = all.filter(

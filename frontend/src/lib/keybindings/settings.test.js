@@ -15,6 +15,7 @@ import {
   replaceBinding,
   resetAction,
   saveDraft,
+  saveProblems,
 } from "./settings.js";
 
 const contexts = [
@@ -291,4 +292,102 @@ test("the real catalog's factory draft lists every page and state with nothing u
 test("sidebar entries count their unbound actions", () => {
   const draft = removeBinding(withExtension, openDraft(saved([profile("default", "Default")]), withExtension), { ...home, actionId: "ledger.drawer-open.close" }, 0);
   assert.deepEqual(view({ profile: draft.profiles[0] }).groups.map((g) => g.unboundCount), [0, 0, 0, 1]);
+});
+
+const rowOf = (result, id) => result.groups.flatMap((g) => g.all).find((r) => r.action.id === id);
+const search = { ...home, actionId: "ledger.drawer-closed.focus-query" };
+
+test("a more-specific binding that shadows a global one is shown as shadowing on both rows, not as a conflict", () => {
+  const draft = addBinding(withExtension, openDraft(saved([profile("default", "Default")]), withExtension), search, "meta+1");
+  const all = view({ profile: draft.profiles[0] });
+
+  assert.equal(all.conflictCount, 0);
+  assert.equal(rowOf(all, "ledger.drawer-closed.focus-query").status, "shadowing");
+  assert.equal(rowOf(all, "ledger.drawer-closed.focus-query").problem, "⌘+1 shadows Marasi (Global) here");
+  assert.equal(rowOf(all, "global.go-home").status, "shadowing");
+  assert.equal(rowOf(all, "global.go-home").problem, "⌘+1 is shadowed by Search in Ledger · Drawer closed");
+  assert.deepEqual(view({ profile: draft.profiles[0], filter: "conflict" }).groups.flatMap(ids), []);
+});
+
+test("an unbound or shadowed Open Marasi Menu is a conflict on the rows involved", () => {
+  const menu = { ...home, actionId: "global.open-menu" };
+  const fresh = openDraft(saved([profile("default", "Default")]), withExtension);
+
+  const unbound = view({ profile: removeBinding(withExtension, fresh, menu, 0).profiles[0] });
+  assert.equal(rowOf(unbound, "global.open-menu").status, "conflict");
+  assert.equal(rowOf(unbound, "global.open-menu").problem, "The Marasi menu must have a binding");
+  assert.equal(unbound.unboundCount, 0, "a conflict is not also counted as unbound");
+
+  const shadowed = view({ profile: addBinding(withExtension, fresh, search, "meta+k").profiles[0] });
+  assert.equal(shadowed.conflictCount, 2);
+  assert.equal(rowOf(shadowed, "global.open-menu").problem, "⌘+K is shadowed by Search in Ledger · Drawer closed; the menu must open everywhere");
+  assert.equal(rowOf(shadowed, "ledger.drawer-closed.focus-query").problem, "⌘+K would shadow Open Marasi Menu, which must open everywhere");
+});
+
+test("a duplicate across overlapping contexts names the other action's context", () => {
+  const overlapping = createCatalog(
+    [
+      ...actions,
+      { id: "ledger.drawer-open.websocket.stream", context: "ledger.drawer-open.websocket", label: "Open Stream", description: "", defaults: both("meta+shift+o", "ctrl+shift+o") },
+    ],
+    {
+      contexts: [
+        ...contexts,
+        { id: "ledger.drawer-open.websocket", tier: "drawer", label: "WS", page: "Ledger", state: "WebSocket drawer", overlaps: ["ledger.drawer-open"], isEligible: () => false },
+      ],
+    },
+  );
+  const stream = { ...home, actionId: "ledger.drawer-open.websocket.stream" };
+  const draft = addBinding(overlapping, openDraft(saved([profile("default", "Default")]), overlapping), stream, "meta+e");
+  const result = browse({ catalog: overlapping, profile: draft.profiles[0], platform: MACOS });
+  assert.equal(rowOf(result, "ledger.drawer-open.websocket.stream").problem, "⌘+E is also bound to Close in Ledger · Drawer open");
+  assert.equal(rowOf(result, "ledger.drawer-open.close").problem, "⌘+E is also bound to Open Stream in Ledger · WebSocket drawer");
+});
+
+test("save problems cover every profile and platform and say where each one is", () => {
+  const fresh = factoryDraft();
+  assert.deepEqual(saveProblems(catalog, fresh), []);
+
+  // A duplicate on the other profile's Windows/Linux variant, which is not
+  // on screen while Default/macOS is shown.
+  const hidden = addBinding(catalog, fresh, { profileId: "other", platform: WINDOWS_LINUX, actionId: "global.go-home" }, "ctrl+2");
+  assert.deepEqual(saveProblems(catalog, hidden), [
+    {
+      profileId: "other",
+      platform: WINDOWS_LINUX,
+      groupId: "global",
+      actionId: "global.go-home",
+      message: "Other · Windows / Linux · Global · Marasi: ctrl+2 is also bound to Ledger",
+    },
+  ]);
+
+  const menuless = removeBinding(catalog, hidden, { ...home, actionId: "global.open-menu" }, 0);
+  const problems = saveProblems(catalog, menuless, { profileId: "other", platform: WINDOWS_LINUX });
+  assert.deepEqual(
+    problems.map((p) => p.message),
+    [
+      "Other · Windows / Linux · Global · Marasi: ctrl+2 is also bound to Ledger",
+      "Default · macOS · Global · Open Marasi Menu: The Marasi menu must have a binding",
+    ],
+    "the variant on screen comes first",
+  );
+});
+
+test("reusing a key in mutually exclusive states is neither a save problem nor a conflict", () => {
+  const draft = addBinding(catalog, factoryDraft(), search, "meta+e");
+  assert.deepEqual(saveProblems(catalog, draft), []);
+  const result = browse({ catalog, profile: draft.profiles[0], platform: MACOS });
+  assert.equal(rowOf(result, "ledger.drawer-closed.focus-query").status, "");
+  assert.equal(rowOf(result, "ledger.drawer-open.close").status, "");
+});
+
+test("save problems include profile names and the active profile, as the backend checks them", () => {
+  const draft = factoryDraft();
+  const renamed = { ...draft, profiles: draft.profiles.map((p) => (p.id === "other" ? { ...p, name: " default " } : p)) };
+  assert.deepEqual(saveProblems(catalog, renamed), [
+    { profileId: "other", platform: null, groupId: null, actionId: null, message: "Profile name \"default\" is used twice" },
+  ]);
+  const blank = { ...draft, profiles: draft.profiles.map((p) => (p.id === "other" ? { ...p, name: "  " } : p)) };
+  assert.deepEqual(saveProblems(catalog, blank).map((p) => p.message), ["A profile has no name"]);
+  assert.deepEqual(saveProblems(catalog, { ...draft, activeProfile: "gone" }).map((p) => p.message), ["The active profile does not exist"]);
 });
