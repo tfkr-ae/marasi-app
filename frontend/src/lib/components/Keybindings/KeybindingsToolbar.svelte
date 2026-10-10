@@ -6,7 +6,7 @@
 	// is a draft edit (onEdit) that only Save persists.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { CheckCircle2, ChevronDown, Copy, Download, Pencil, Plus, RotateCcw, Trash2, Upload } from "lucide-svelte";
-	import { MACOS, WINDOWS_LINUX } from "../../keybindings/platform.js";
+	import { PLATFORM_NAMES as platformNames } from "../../keybindings/platform.js";
 	import {
 		createProfile,
 		deleteBlocker,
@@ -34,7 +34,6 @@
 	export let pending = false;
 
 	const inputClass = "bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0";
-	const platformNames = { [MACOS]: "macOS", [WINDOWS_LINUX]: "Windows / Linux" };
 	const sideButton = "btn h-10 shrink-0 variant-soft-primary !border-0 !ring-0";
 
 	let menuOpen = false;
