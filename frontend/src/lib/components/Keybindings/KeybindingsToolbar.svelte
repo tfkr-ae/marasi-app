@@ -3,10 +3,13 @@
 	// Platform (select plus Reset for that platform). Choosing a profile or
 	// platform only changes what the modal edits; it never activates a
 	// profile or changes this device's dispatch. Every Manage entry and Reset
-	// is a draft edit (onEdit) that only Save persists.
-	import { modeCurrent } from "@skeletonlabs/skeleton";
+	// is a draft edit (onEdit) that only Save persists, except Export, which
+	// writes the selected profile to a file (docs/keybinding-profile-format.md).
+	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CheckCircle2, ChevronDown, Copy, Download, Pencil, Plus, RotateCcw, Trash2, Upload } from "lucide-svelte";
+	import { ExportKeybindingProfile, ImportKeybindingProfile } from "../../wailsjs/go/main/App";
 	import { PLATFORM_NAMES as platformNames } from "../../keybindings/platform.js";
+	import { exportBlocker, exportFileName, exportProfile, importProfile } from "../../keybindings/portable.js";
 	import {
 		createProfile,
 		deleteBlocker,
@@ -36,35 +39,81 @@
 	const inputClass = "bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0";
 	const sideButton = "btn h-10 shrink-0 variant-soft-primary !border-0 !ring-0";
 
+	const toastStore = getToastStore();
+
 	let menuOpen = false;
 	let naming = null; // { title, label, value, profileId?, apply(name) }
+	let notice = null; // { title, body }: why an import or export failed
 
-	$: pending = menuOpen || Boolean(naming);
+	$: pending = menuOpen || Boolean(naming) || Boolean(notice);
 	$: profile = draft.profiles.find((p) => p.id === profileId) ?? draft.profiles[0];
 	$: variant = { profileId: profile.id, platform };
 	$: canResetPlatform = isPlatformCustomized(catalog, draft, variant);
 	$: nameProblem = naming ? profileNameProblem(draft, naming.value, naming.profileId) : "";
 	$: activeBlocker = makeActiveBlocker(draft, profile.id);
 	$: deleteReason = deleteBlocker(draft, profile.id);
+	$: exportReason = exportBlocker(catalog, draft, profile.id);
 	$: entries = [
 		{ label: "Make Active", icon: CheckCircle2, disabled: Boolean(activeBlocker), title: activeBlocker || `Use ${profile.name} once you save`, run: activate },
 		{ label: "Rename", icon: Pencil, title: `Rename ${profile.name}`, run: startRename },
 		"divider",
 		{ label: "New Profile", icon: Plus, title: "Start a profile from factory defaults", run: startCreate },
 		{ label: "Duplicate", icon: Copy, title: `Copy ${profile.name} with both platforms`, run: startDuplicate },
-		{ label: "Import", icon: Upload, disabled: true, title: "Importing profiles is not available yet" },
-		{ label: "Export", icon: Download, disabled: true, title: "Exporting profiles is not available yet" },
+		{ label: "Import", icon: Upload, title: "Add a profile from a file", run: startImport },
+		{ label: "Export", icon: Download, disabled: Boolean(exportReason), title: exportReason || `Save ${profile.name} with both platforms to a file`, run: startExport },
 		"divider",
 		{ label: "Delete", icon: Trash2, danger: true, disabled: Boolean(deleteReason), title: deleteReason || `Delete ${profile.name}`, run: confirmDelete },
 	];
 
-	// Escape and backdrop clicks: the Manage menu, then the name card, give
-	// way before anything else. Returns whether something was dismissed.
+	// Escape and backdrop clicks: the Manage menu, then the name card or the
+	// import/export notice, give way before anything else. Returns whether
+	// something was dismissed.
 	export function dismiss() {
 		if (menuOpen) menuOpen = false;
 		else if (naming) naming = null;
+		else if (notice) notice = null;
 		else return false;
 		return true;
+	}
+
+	const fileName = (path) => path.split(/[\\/]/).pop();
+
+	// The file is read whole and validated before the draft changes; a bad
+	// file leaves everything as it was. The imported profile is selected for
+	// editing, never made active, and kept only by Save.
+	async function startImport() {
+		let file;
+		try {
+			file = await ImportKeybindingProfile();
+		} catch (error) {
+			notice = { title: "Profile not imported", body: String(error) };
+			return;
+		}
+		if (!file.path) return;
+		let result;
+		try {
+			result = importProfile(catalog, draft, file.contents);
+		} catch (error) {
+			notice = { title: "Profile not imported", body: `${fileName(file.path)}: ${error.message}` };
+			return;
+		}
+		onEdit(result.draft);
+		profileId = result.profileId;
+		toastStore.trigger({
+			message: `Imported ${result.name}. It is not active; save to keep it.`,
+			background: "variant-filled-success",
+		});
+	}
+
+	// Exports the profile as the modal shows it, unsaved edits included.
+	async function startExport() {
+		const source = profile;
+		try {
+			const path = await ExportKeybindingProfile(exportFileName(source), exportProfile(source));
+			if (path) toastStore.trigger({ message: `Exported ${source.name} to ${fileName(path)}`, background: "variant-filled-success" });
+		} catch (error) {
+			notice = { title: "Profile not exported", body: String(error) };
+		}
 	}
 
 	function activate() {
@@ -245,6 +294,20 @@
 				form="keybindings-profile-name"
 				class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
 				disabled={Boolean(nameProblem)}>{naming.label}</button
+			>
+		</svelte:fragment>
+	</ModalCard>
+{/if}
+
+{#if notice}
+	<ModalCard title={notice.title} data-profile-notice>
+		<p class="break-words">{notice.body}</p>
+		<p class="text-sm opacity-70">Your profiles are unchanged.</p>
+		<svelte:fragment slot="footer">
+			<button
+				type="button"
+				class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
+				on:click={() => (notice = null)}>OK</button
 			>
 		</svelte:fragment>
 	</ModalCard>
