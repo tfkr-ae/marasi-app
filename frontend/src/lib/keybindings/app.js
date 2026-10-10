@@ -24,11 +24,18 @@ menuDispatcher.register(OPEN_MENU, () => menuPalettes.active()?.toggle());
 
 // Listens on window in the capture phase. Install it after overlay
 // isolation's own capture listener so modal toggle-close, Escape and focus
-// handling keep precedence.
+// handling keep precedence. Keys pressed in a CodeMirror editor are
+// dispatched in the bubble phase instead, after the editor handled them.
 export function installMenuShortcuts(getState) {
 	const onKeydown = (event) => menuDispatcher.dispatch(event, getState());
+	const afterEditor = (event) =>
+		menuDispatcher.dispatch(event, getState(), { afterEditor: true });
 	window.addEventListener("keydown", onKeydown, true);
-	return () => window.removeEventListener("keydown", onKeydown, true);
+	window.addEventListener("keydown", afterEditor);
+	return () => {
+		window.removeEventListener("keydown", onKeydown, true);
+		window.removeEventListener("keydown", afterEditor);
+	};
 }
 
 // Registers [{ actionId, handler }] now and returns a function that removes
