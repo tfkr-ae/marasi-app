@@ -30,6 +30,10 @@ export const WEBSOCKET_MODAL = "WebsocketStream";
 export const WEBSOCKET_TABS = ["stream", "checkpoint", "inject"];
 const websocketModalOpen = (state) => state.modal === WEBSOCKET_MODAL;
 
+// `page` and `state` name the context for people (the keybinding settings
+// sidebar shows the page with the state beneath it); `label` is the short
+// form.
+//
 // `isEligible(state)` receives the dispatcher state (see dispatcher.js). It is
 // app-defined; profiles never change it.
 //
@@ -43,6 +47,8 @@ export const CONTEXTS = [
     id: "global",
     tier: "global",
     label: "Global",
+    page: "Global",
+    state: "Every page",
     isEligible: () => true,
   },
   // The WebSocket modal: actions shared by every tab, then one context per
@@ -55,16 +61,20 @@ export const CONTEXTS = [
     id: "websocket",
     tier: "overlay",
     label: "WebSocket",
+    page: "WebSocket",
+    state: "Every tab",
     isEligible: websocketModalOpen,
   },
   ...[
-    ["stream", "WebSocket Stream tab"],
-    ["checkpoint", "WebSocket Checkpoint tab"],
-    ["inject", "WebSocket Inject tab"],
-  ].map(([tab, label]) => ({
+    ["stream", "Stream"],
+    ["checkpoint", "Checkpoint"],
+    ["inject", "Inject"],
+  ].map(([tab, name]) => ({
     id: `websocket.${tab}`,
     tier: "overlay",
-    label,
+    label: `WebSocket ${name} tab`,
+    page: "WebSocket",
+    state: `${name} tab`,
     overlaps: ["websocket"],
     isEligible: (state) => websocketModalOpen(state) && state.websocketTab === tab,
   })),
@@ -72,6 +82,8 @@ export const CONTEXTS = [
     id: "ledger.drawer-closed",
     tier: "page",
     label: "Ledger",
+    page: "Ledger",
+    state: "Drawer closed",
     isEligible: (state) => onRoute("/ledger")(state) && !drawerOpen(state),
   },
   // Listed before ledger.drawer-open: both are drawer-tier and eligible
@@ -80,6 +92,8 @@ export const CONTEXTS = [
     id: "ledger.drawer-open.websocket",
     tier: "drawer",
     label: "Ledger drawer (WebSocket upgrade)",
+    page: "Ledger",
+    state: "Drawer open on a WebSocket upgrade",
     overlaps: ["ledger.drawer-open"],
     isEligible: (state) =>
       onRoute("/ledger")(state) &&
@@ -90,12 +104,16 @@ export const CONTEXTS = [
     id: "ledger.drawer-open",
     tier: "drawer",
     label: "Ledger drawer",
+    page: "Ledger",
+    state: "Drawer open",
     isEligible: (state) => onRoute("/ledger")(state) && drawerOpen(state),
   },
   {
     id: "armory.page",
     tier: "page",
     label: "Armory",
+    page: "Armory",
+    state: "Drawer closed",
     isEligible: (state) =>
       onRoute("/armory")(state) && !requestDrawerOpen(state),
   },
@@ -103,6 +121,8 @@ export const CONTEXTS = [
     id: "armory.drawer",
     tier: "drawer",
     label: "Armory request drawer",
+    page: "Armory",
+    state: "Request drawer open",
     isEligible: (state) =>
       onRoute("/armory")(state) && requestDrawerOpen(state),
   },
@@ -116,6 +136,8 @@ export const CONTEXTS = [
     id,
     tier: "page",
     label,
+    page: label,
+    state: "Page",
     isEligible: onRoute(`/${id}`),
   })),
 ];
@@ -135,6 +157,8 @@ export function extensionPageContext(id, extensionName) {
     id,
     tier: "page",
     label: extensionName,
+    page: extensionName,
+    state: "Extension page",
     isEligible: (state) =>
       !state.modal && decodedRoute(state.route) === `/extension/${extensionName}`,
   };
