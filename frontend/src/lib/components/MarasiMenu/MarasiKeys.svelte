@@ -4,6 +4,10 @@
 	import hotkeys from "hotkeys-js";
 	import MenuItemList from "./MenuItemList.svelte";
 	import { onMount } from "svelte";
+	import {
+		menuDispatcher,
+		menuPalettes,
+	} from "../../keybindings/app.js";
 
 	let dialog;
 
@@ -13,11 +17,17 @@
 	let boundOptions = [];
 	let boundMenuOptions;
 	let previousScope = "all";
-	const commandKeys = "cmd+k, ctrl+k";
 
+	// Entries are either catalog entries ({ actionId, name, subtitle, icon,
+	// keywords }), whose keys and handlers belong to the central dispatcher,
+	// or page entries with { action: { handler, keys, options } } that are
+	// still bound through hotkeys-js in `scope` until they move to the
+	// catalog. Without page entries, `scope` can be null.
 	export let menuOptions = [];
-	export let scope = "all";
-	export let persistOptions = false;
+	export let scope = null;
+	// Menu-context tier of this menu: the menu shortcut opens the most
+	// specific mounted menu (overlay, then page, then global).
+	export let paletteTier = "page";
 	export function toggleDialog() {
 		if (!dialog) return;
 		if (!dialog.open) {
@@ -47,7 +57,9 @@
 
 	function onSelection(event) {
 		if (isOpen) closeDialog();
-		event.detail.action.handler();
+		const option = event.detail;
+		if (option.actionId) menuDispatcher.run(option.actionId);
+		else option.action.handler();
 	}
 	function handleCancel(event) {
 		event.preventDefault();
@@ -57,25 +69,22 @@
 		isOpen = false;
 	}
 
-	function handleCommandKey(event) {
-		event.preventDefault();
-		toggleDialog();
-		return false;
-	}
-
 	function bindOptions(options) {
-		options.forEach((option) => {
-			const keys = Array.isArray(option.action.keys)
-				? option.action.keys.join()
-				: option.action.keys;
-			const handler = () => {
-				if (isOpen) toggleDialog();
-				option.action.handler();
-				return false;
-			};
-			hotkeys(keys, { ...option.action.options, scope }, handler);
-			boundOptions.push({ keys, handler });
-		});
+		if (scope === null) return;
+		options
+			.filter((option) => !option.actionId)
+			.forEach((option) => {
+				const keys = Array.isArray(option.action.keys)
+					? option.action.keys.join()
+					: option.action.keys;
+				const handler = () => {
+					if (isOpen) toggleDialog();
+					option.action.handler();
+					return false;
+				};
+				hotkeys(keys, { ...option.action.options, scope }, handler);
+				boundOptions.push({ keys, handler });
+			});
 	}
 
 	function unbindOptions() {
@@ -92,18 +101,22 @@
 	}
 
 	onMount(() => {
-		previousScope = hotkeys.getScope();
-		hotkeys.setScope(scope);
-		hotkeys(commandKeys, { scope, single: true }, handleCommandKey);
+		if (scope !== null) {
+			previousScope = hotkeys.getScope();
+			hotkeys.setScope(scope);
+		}
+		const unregisterPalette = menuPalettes.register(paletteTier, {
+			toggle: toggleDialog,
+		});
 		bindOptions(menuOptions);
 		boundMenuOptions = menuOptions;
 		mounted = true;
 		return () => {
 			mounted = false;
-			if (persistOptions) boundOptions = [];
-			else unbindOptions();
-			hotkeys.unbind(commandKeys, scope, handleCommandKey);
-			if (hotkeys.getScope() === scope) hotkeys.setScope(previousScope);
+			unregisterPalette();
+			unbindOptions();
+			if (scope !== null && hotkeys.getScope() === scope)
+				hotkeys.setScope(previousScope);
 		};
 	});
 </script>
@@ -120,13 +133,6 @@
 	on:close={handleClose}
 	on:cancel={handleCancel}
 	on:click={handleClickOutside}
-	on:keydown={(event) => {
-		if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			closeDialog();
-		}
-	}}
 	aria-label="Marasi commands"
 	aria-modal="true"
 >

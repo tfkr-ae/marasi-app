@@ -275,7 +275,7 @@
 	}
 </script>
 
-<MarasiKeys scope="websocket" menuOptions={websocketMenu} />
+<MarasiKeys scope="websocket" paletteTier="overlay" menuOptions={websocketMenu} />
 
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
