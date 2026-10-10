@@ -357,6 +357,58 @@ func TestAppKeybindings(t *testing.T) {
 		}
 	})
 
+	t.Run("should unbind a moved positional default that collides with a customization after a reorder", func(t *testing.T) {
+		dir := t.TempDir()
+		app := loadConfigApp(t, dir)
+		config := knownKeybindings()
+		// Saved while Alpha was second (⌘⌥2); the customization keeps it.
+		alpha := KeybindingOverride{Action: "global.open-extension.alpha", Keys: []string{"meta+alt+2", "meta+alt+8"}}
+		config.Profiles[0].Overrides["macos"] = []KeybindingOverride{alpha}
+		if _, err := app.SaveKeybindings(config, positionalExtensionCatalog("first", "alpha", "beta")); err != nil {
+			t.Fatalf("saving before the reorder: %v", err)
+		}
+
+		// Beta moves to second place, so its new default is ⌘⌥2.
+		reordered := positionalExtensionCatalog("first", "beta", "alpha")
+		restarted := loadConfigApp(t, dir)
+		state, err := resolveActiveKeybindings(restarted.GetKeybindings().Config, reordered)
+		if err != nil {
+			t.Fatalf("resolving: %v", err)
+		}
+		want := map[string][]string{
+			"global.open-extension.alpha": {"meta+alt+2", "meta+alt+8"},
+			"global.open-extension.beta":  {},
+			"global.open-extension.first": {"meta+alt+1"},
+		}
+		for id, keys := range want {
+			if !reflect.DeepEqual(state["macos"][id], keys) {
+				t.Fatalf("wanted macos %s: %v\ngot: %v", id, keys, state["macos"][id])
+			}
+		}
+
+		saved, err := restarted.SaveKeybindings(restarted.GetKeybindings().Config, reordered)
+		if err != nil {
+			t.Fatalf("wanted: the moved default yields, so the profile stays valid\ngot: %v", err)
+		}
+		// The yield is not recorded: Beta gets ⌘⌥2 back once it is free.
+		if got := saved.Config.Profiles[0].Overrides["macos"]; !reflect.DeepEqual(got, []KeybindingOverride{alpha}) {
+			t.Fatalf("wanted macos overrides: %+v\ngot: %+v", []KeybindingOverride{alpha}, got)
+		}
+	})
+
+	t.Run("should still reject a customization that duplicates a stable default", func(t *testing.T) {
+		app := loadConfigApp(t, t.TempDir())
+		catalog := positionalExtensionCatalog("alpha")
+		config := knownKeybindings()
+		config.Profiles[0].KnownActions = append(config.Profiles[0].KnownActions, "global.open-extension.alpha")
+		config.Profiles[0].Overrides["macos"] = []KeybindingOverride{
+			{Action: "global.open-extension.alpha", Keys: []string{"meta+1"}},
+		}
+		if _, err := app.SaveKeybindings(config, catalog); err == nil {
+			t.Fatalf("wanted: duplicate with global.go-home rejected\ngot: nil")
+		}
+	})
+
 	t.Run("should report an invalid or unsupported section, keep it on disk and use factory shortcuts", func(t *testing.T) {
 		sections := map[string]struct{ yaml, problem string }{
 			"future version": {"keybindings:\n  version: 2\n  active_profile: default\n  profiles:\n    - id: default\n      name: Default\n      modes: {normal: {}}\n", "version 2 is not supported"},
@@ -453,6 +505,23 @@ func testKeybindingCatalog() KeybindingCatalog {
 			{ID: "ledger.drawer-open.close", Context: "ledger.drawer-open", Defaults: both("meta+e", "ctrl+e")},
 		},
 	}
+}
+
+// positionalExtensionCatalog adds extension navigation actions with the
+// positional ⌘⌥1–9 defaults the frontend assigns in load order.
+func positionalExtensionCatalog(names ...string) KeybindingCatalog {
+	catalog := testKeybindingCatalog()
+	for i, name := range names {
+		catalog.Actions = append(catalog.Actions, KeybindingAction{
+			ID:      "global.open-extension." + name,
+			Context: "global",
+			Defaults: map[string][]string{
+				"macos": {fmt.Sprintf("meta+alt+%d", i+1)}, "windows-linux": {fmt.Sprintf("ctrl+alt+%d", i+1)},
+			},
+			PositionalDefault: true,
+		})
+	}
+	return catalog
 }
 
 func testKnownActions() []string {

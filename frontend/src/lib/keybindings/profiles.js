@@ -119,9 +119,10 @@ export function validateKeybindings(catalog, config) {
 
 // Records the new-default decisions against `catalog`: actions the rule left
 // unbound get an explicit empty override, and every catalog action becomes
-// known. Returns a new profile. Mirrors settleKeybindings in Go, which runs on
-// every save; the Settings draft should settle on open so edits are judged
-// against known actions.
+// known. A yielded positional default is not recorded: it is decided again on
+// every resolution (see createKeymap). Returns a new profile. Mirrors
+// settleKeybindings in Go, which runs on every save; the Settings draft should
+// settle on open so edits are judged against known actions.
 export function settleProfile(catalog, profile) {
   const overrides = {};
   for (const platform of PLATFORMS) {
@@ -129,7 +130,12 @@ export function settleProfile(catalog, profile) {
     const list = (profile.overrides?.[platform] ?? []).map((o) => ({ action: o.action, keys: [...o.keys] }));
     for (const action of catalog.actions) {
       const overridden = list.some((o) => o.action === action.id);
-      if (!overridden && keymap.bindingsFor(action.id).length === 0 && action.defaults[platform].length > 0) {
+      if (
+        !overridden &&
+        !action.positionalDefault &&
+        keymap.bindingsFor(action.id).length === 0 &&
+        action.defaults[platform].length > 0
+      ) {
         list.push({ action: action.id, keys: [] });
       }
     }
@@ -147,6 +153,7 @@ export function catalogDescriptor(catalog) {
       id: action.id,
       context: action.context,
       defaults: Object.fromEntries(PLATFORMS.map((platform) => [platform, [...action.defaults[platform]]])),
+      positionalDefault: Boolean(action.positionalDefault),
     })),
     contexts: catalog.contexts.map((context) => ({ id: context.id, overlaps: [...(context.overlaps ?? [])] })),
   };

@@ -242,6 +242,13 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 // action in the same context, or with an overridden menu opening (which
 // nothing may shadow). Known actions always inherit, so a duplicate the
 // researcher makes is a conflict to fix rather than a silent unbind.
+//
+// Positional defaults (PositionalDefault, extension navigation ⌘⌥1–9 in load
+// order) move when the order changes. Known or not, an inherited positional
+// default that collides with any other resolved binding (a customization or a
+// stable default) in a conflicting context, or with the menu opening, yields
+// and the action is unbound, so a reorder never invalidates the profile.
+// Settling does not record it. Mirrors createKeymap in keymap.js.
 func resolveVariant(catalog keybindingCatalog, profile KeybindingProfile, platform string) map[string][]string {
 	known := map[string]bool{}
 	for _, id := range profile.KnownActions {
@@ -258,14 +265,34 @@ func resolveVariant(catalog keybindingCatalog, profile KeybindingProfile, platfo
 			}
 		}
 	}
+	inheritsPositional := func(action KeybindingAction) bool {
+		_, ok := overridden[action.ID]
+		return action.PositionalDefault && !ok
+	}
 	resolved := map[string][]string{}
+	held := map[string][]KeybindingAction{} // binding -> holders, positional defaults excluded
 	for _, action := range catalog.actions {
-		if bindings, ok := overridden[action.ID]; ok {
-			resolved[action.ID] = bindings
+		if inheritsPositional(action) {
+			continue
+		}
+		bindings, ok := overridden[action.ID]
+		if !ok {
+			bindings = canonicalBindings(action.Defaults[platform])
+			if !known[action.ID] && collides(catalog, action, bindings, customized) {
+				bindings = []string{}
+			}
+		}
+		resolved[action.ID] = bindings
+		for _, binding := range bindings {
+			held[binding] = append(held[binding], action)
+		}
+	}
+	for _, action := range catalog.actions {
+		if !inheritsPositional(action) {
 			continue
 		}
 		defaults := canonicalBindings(action.Defaults[platform])
-		if !known[action.ID] && collidesWithCustomization(catalog, action, defaults, customized) {
+		if collides(catalog, action, defaults, held) {
 			defaults = []string{}
 		}
 		resolved[action.ID] = defaults
@@ -273,9 +300,11 @@ func resolveVariant(catalog keybindingCatalog, profile KeybindingProfile, platfo
 	return resolved
 }
 
-func collidesWithCustomization(catalog keybindingCatalog, action KeybindingAction, defaults []string, customized map[string][]KeybindingAction) bool {
-	for _, binding := range defaults {
-		for _, other := range customized[binding] {
+// collides reports whether any of bindings is held by another action in a
+// conflicting context, or by the menu opening.
+func collides(catalog keybindingCatalog, action KeybindingAction, bindings []string, holders map[string][]KeybindingAction) bool {
+	for _, binding := range bindings {
+		for _, other := range holders[binding] {
 			if catalog.conflicting(other.Context, action.Context) || other.ID == openMenuAction {
 				return true
 			}
@@ -306,7 +335,9 @@ func resolveActiveKeybindings(config KeybindingConfig, actions KeybindingCatalog
 // settleKeybindings records the new-default decisions of every profile
 // against a validated catalog: actions the rule left unbound get an explicit
 // empty override, and every catalog action becomes known. Ids no longer in
-// the catalog stay known (dormant extension actions keep their history).
+// the catalog stay known (dormant extension actions keep their history). A
+// yielded positional default is not recorded; it is decided on every
+// resolution.
 func settleKeybindings(config KeybindingConfig, actions KeybindingCatalog) KeybindingConfig {
 	catalog, err := newKeybindingCatalog(actions)
 	if err != nil {
@@ -325,7 +356,7 @@ func settleKeybindings(config KeybindingConfig, actions KeybindingCatalog) Keybi
 			resolved := resolveVariant(catalog, profile, platform)
 			for _, action := range catalog.actions {
 				overridden := slices.ContainsFunc(overrides, func(o KeybindingOverride) bool { return o.Action == action.ID })
-				if !overridden && len(resolved[action.ID]) == 0 && len(canonicalBindings(action.Defaults[platform])) > 0 {
+				if !overridden && !action.PositionalDefault && len(resolved[action.ID]) == 0 && len(canonicalBindings(action.Defaults[platform])) > 0 {
 					overrides = append(overrides, KeybindingOverride{Action: action.ID, Keys: []string{}})
 				}
 			}

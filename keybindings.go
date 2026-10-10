@@ -130,6 +130,10 @@ type KeybindingAction struct {
 	ID       string              `json:"id"`
 	Context  string              `json:"context"`
 	Defaults map[string][]string `json:"defaults"`
+	// PositionalDefault marks defaults derived from a position (extension
+	// navigation ⌘⌥1–9 in load order). They move when the order changes, so
+	// an inherited one yields to any colliding binding; see resolveVariant.
+	PositionalDefault bool `json:"positionalDefault"`
 }
 
 // SaveKeybindings validates the complete keybindings section against the

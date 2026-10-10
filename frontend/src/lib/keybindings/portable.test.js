@@ -148,6 +148,20 @@ test("an imported profile keeps its customizations over this build's colliding n
   assert.deepEqual(imported.knownActions, allIds);
 });
 
+test("an imported customization holding another extension's positional default imports, and that extension yields", () => {
+  // Exported where Alpha was second (⌘⌥2); here Beta is second.
+  const here = buildCatalog({ extensions: [{ Name: "first" }, { Name: "beta" }, { Name: "alpha" }] });
+  const known = here.actions.map((a) => a.id);
+  const mine = profile("mine", "Mine", { [MACOS]: [{ action: "global.open-extension.alpha", keys: ["meta+alt+2", "meta+alt+8"] }] }, known);
+
+  const { draft: next, profileId } = importProfile(here, draftOf(factoryProfile()), exportProfile(mine));
+
+  const imported = next.profiles.find((p) => p.id === profileId);
+  const mac = profileKeymap(here, imported, MACOS);
+  assert.deepEqual(mac.bindingsFor("global.open-extension.alpha"), ["meta+alt+2", "meta+alt+8"]);
+  assert.deepEqual(mac.bindingsFor("global.open-extension.beta"), []);
+});
+
 test("bindings are stored in canonical form", () => {
   const text = fileWith((f) => (f.profile.overrides.macos[0].keys = ["Cmd+Shift+H", "⌘+H", "meta+h"]));
   const { draft: next, profileId } = importProfile(catalog, draftOf(profile("default", "Default")), text);

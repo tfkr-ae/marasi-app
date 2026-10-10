@@ -169,7 +169,6 @@
 		toastStore.trigger({
 			message: `Keybindings: ${reportedKeybindingProblem}`,
 			background: "variant-filled-warning",
-			autohide: false,
 		});
 	}
 

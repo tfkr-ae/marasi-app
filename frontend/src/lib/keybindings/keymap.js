@@ -24,6 +24,15 @@ function normalizedList(texts) {
 // only when none collides with a customization (an overridden action in a
 // conflicting context, see contextsConflict, or an overridden menu opening); otherwise it is unbound and
 // the customization wins. Without `knownActions` every action inherits.
+//
+// Positional defaults (`action.positionalDefault`, the extension navigation
+// ⌘⌥1–9 that follow the extension order) are unstable: after a reorder an
+// inherited one can land on a binding a customization still holds. Known or
+// not, an inherited positional default that collides with any other resolved
+// binding (a customization or a stable default) in a conflicting context, or
+// with the menu opening, yields and the action is unbound. It never makes the
+// profile invalid, and it is not recorded by settling, so the action gets its
+// default back once the binding is free.
 // Mirrors resolveVariant in keybinding_validation.go.
 export function createKeymap(catalog, platform, overrides = {}, { knownActions } = {}) {
   const known = knownActions ? new Set(knownActions) : null;
@@ -36,26 +45,42 @@ export function createKeymap(catalog, platform, overrides = {}, { knownActions }
       customized.get(binding).push(action);
     }
   }
-  const collides = (action, bindings) =>
+  const collides = (action, bindings, holders) =>
     bindings.some((binding) =>
-      (customized.get(binding) ?? []).some(
+      (holders.get(binding) ?? []).some(
         (other) =>
           contextsConflict(catalog.contexts, other.context, action.context) || other.id === OPEN_MENU,
       ),
     );
 
   const bindingsById = new Map();
-  const actionsByBinding = new Map();
+  const held = new Map(); // binding -> actions holding it, positional defaults excluded
+  const inheritsPositional = (action) =>
+    action.positionalDefault && !Object.hasOwn(overrides, action.id);
   for (const action of catalog.actions) {
+    if (inheritsPositional(action)) continue;
     let bindings;
     if (Object.hasOwn(overrides, action.id)) {
       bindings = normalizedList(overrides[action.id]);
     } else {
       bindings = normalizedList(action.defaults[platform]);
-      if (known && !known.has(action.id) && collides(action, bindings)) bindings = [];
+      if (known && !known.has(action.id) && collides(action, bindings, customized)) bindings = [];
     }
     bindingsById.set(action.id, bindings);
     for (const binding of bindings) {
+      if (!held.has(binding)) held.set(binding, []);
+      held.get(binding).push(action);
+    }
+  }
+  for (const action of catalog.actions) {
+    if (!inheritsPositional(action)) continue;
+    const bindings = normalizedList(action.defaults[platform]);
+    bindingsById.set(action.id, collides(action, bindings, held) ? [] : bindings);
+  }
+
+  const actionsByBinding = new Map();
+  for (const action of catalog.actions) {
+    for (const binding of bindingsById.get(action.id)) {
       if (!actionsByBinding.has(binding)) actionsByBinding.set(binding, []);
       actionsByBinding.get(binding).push(action.id);
     }

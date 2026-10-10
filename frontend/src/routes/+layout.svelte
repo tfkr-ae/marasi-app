@@ -770,8 +770,10 @@
 {#if $appState.isReady}
 	<AppDrawer />
 {/if}
+<!-- Bottom-right toasts would cover the Keybindings modal's Save button;
+     while it is open they show at the top, over its title. -->
 <Toast
-	position="br"
+	position={$modalStore[0]?.component === "Keybindings" ? "t" : "br"}
 	buttonAction={$modeCurrent
 		? "btn variant-ghost-primary border-0 ring-0"
 		: "btn variant-filled-primary"}

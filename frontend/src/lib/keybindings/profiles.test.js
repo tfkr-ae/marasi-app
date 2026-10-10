@@ -4,8 +4,11 @@ import { buildCatalog, createCatalog } from "./catalog.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
 import {
+  activeProfile,
   catalogDescriptor,
   factoryKeybindings,
+  factoryProfile,
+  profileKeymap,
   settleProfile,
   validateKeybindings,
 } from "./profiles.js";
@@ -238,6 +241,7 @@ test("the catalog descriptor carries what the backend validates", () => {
     id: "ledger.drawer-closed.open-item",
     context: "ledger.drawer-closed",
     defaults: { [MACOS]: ["meta+e"], [WINDOWS_LINUX]: ["ctrl+e"] },
+    positionalDefault: false,
   });
   assert.deepEqual(descriptor.contexts[2], { id: "ledger.drawer-open.websocket", overlaps: ["ledger.drawer-open"] });
   assert.deepEqual(descriptor.contexts[0], { id: "global", overlaps: [] });
@@ -252,4 +256,63 @@ test("the app's WebSocket drawer context overlaps the Ledger drawer", () => {
   const { contexts: described } = catalogDescriptor(buildCatalog());
   const websocket = described.find((context) => context.id === "ledger.drawer-open.websocket");
   assert.deepEqual(websocket.overlaps, ["ledger.drawer-open"]);
+});
+
+// Extension navigation defaults (⌘⌥1–9) follow the extension load order, so
+// they move when extensions are reordered. A customization stores the full
+// key list and can keep an old positional default; the moved default yields.
+const altMeta = (key) => keydown(key, { metaKey: true, altKey: true });
+const beforeReorder = buildCatalog({ extensions: [{ Name: "first" }, { Name: "alpha" }, { Name: "beta" }] });
+const reordered = buildCatalog({ extensions: [{ Name: "first" }, { Name: "beta" }, { Name: "alpha" }] });
+const customizedAlpha = saved([
+  {
+    ...settleProfile(beforeReorder, factoryProfile("mine", "Mine")),
+    overrides: {
+      [MACOS]: [{ action: "global.open-extension.alpha", keys: ["meta+alt+2", "meta+alt+8"] }],
+      [WINDOWS_LINUX]: [],
+    },
+  },
+]);
+
+test("after a reorder, a moved extension default that collides with a customization is unbound and the profile stays live", () => {
+  const mac = createDispatcher({ catalog: reordered, platform: MACOS, keybindings: customizedAlpha });
+  assert.deepEqual(mac.bindingsFor("global.open-extension.alpha"), ["meta+alt+2", "meta+alt+8"]);
+  assert.deepEqual(mac.bindingsFor("global.open-extension.beta"), [], "beta's new ⌘⌥2 yields");
+  assert.deepEqual(mac.bindingsFor("global.open-extension.first"), ["meta+alt+1"]);
+  assert.equal(mac.resolve(altMeta("2"), home), "global.open-extension.alpha");
+  let problem;
+  mac.subscribe((snapshot) => (problem = snapshot.problem));
+  assert.equal(problem, "", "no fallback to factory shortcuts");
+  assert.deepEqual(validateKeybindings(reordered, customizedAlpha.config), []);
+});
+
+test("the catalog descriptor marks positional defaults for the backend", () => {
+  const { actions } = catalogDescriptor(reordered);
+  const flag = (id) => actions.find((action) => action.id === id).positionalDefault;
+  assert.equal(flag("global.open-extension.beta"), true);
+  assert.equal(flag("global.go-home"), false);
+});
+
+test("settling does not record a yielded positional default, so freeing the binding restores it", () => {
+  const settled = settleProfile(reordered, activeProfile(customizedAlpha.config));
+  assert.deepEqual(settled.overrides[MACOS], [
+    { action: "global.open-extension.alpha", keys: ["meta+alt+2", "meta+alt+8"] },
+  ]);
+  const freed = { ...settled, overrides: { ...settled.overrides, [MACOS]: [{ action: "global.open-extension.alpha", keys: ["meta+alt+8"] }] } };
+  assert.deepEqual(profileKeymap(reordered, freed, MACOS).bindingsFor("global.open-extension.beta"), ["meta+alt+2"]);
+});
+
+test("a customization that takes a stable default is still a duplicate", () => {
+  const config = saved([
+    profile(
+      "a",
+      "A",
+      { [MACOS]: [{ action: "global.open-extension.alpha", keys: ["meta+1"] }] },
+      reordered.actions.map((action) => action.id),
+    ),
+  ]).config;
+  assert.deepEqual(
+    validateKeybindings(reordered, config).map(({ kind, actions }) => ({ kind, actions })),
+    [{ kind: "duplicate", actions: ["global.go-home", "global.open-extension.alpha"] }],
+  );
 });
