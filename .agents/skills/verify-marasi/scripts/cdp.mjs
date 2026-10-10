@@ -3,20 +3,25 @@
 import fs from "node:fs";
 import { deduplicateBridgeHTML } from "./bridge-html.mjs";
 import { normalizeListenerStartup } from "./listener-startup.mjs";
+import { collectExpression, pickTarget, sameBox } from "./targets.mjs";
 
 const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, action, label, shortcut] = process.argv.slice(2);
 const port = Number(portText);
 const viewport = { width: Number(widthText), height: Number(heightText) };
-const interactionDelayMs = 500;
+const pollMs = 100;
+const defaultTimeoutMs = 10000;
+const codeMirrorCommitMs = 350;
 if (!mode || !Number.isInteger(port) || !appURL || !evidenceDir || !Number.isInteger(viewport.width) || !Number.isInteger(viewport.height)) {
-	throw new Error("usage: cdp.mjs <launch|doctor|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [feature] [compare <label> <shortcut>|theme]");
+	throw new Error("usage: cdp.mjs <launch|doctor|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [feature] [compare <label> <shortcut>|steps <json>|theme]");
 }
 
+// `expected` must be text only the destination page paints. Rail labels are
+// always visible, so a bare feature name proves nothing.
 const routes = {
 	dashboard: { selector: '[title="Home"]', path: "/", expected: "Project Dashboard" },
 	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Ledger Settings" },
 	compass: { selector: '[title="Compass"]', path: "/compass", expected: "Compass Settings" },
-	checkpoint: { selector: '[title="Checkpoint"]', path: "/checkpoint", expected: "Checkpoint" },
+	checkpoint: { selector: '[title="Checkpoint"]', path: "/checkpoint", expected: "Checkpoint Settings" },
 	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Launchpad Settings" },
 	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Armory Settings" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "Logbook Settings" },
@@ -30,6 +35,8 @@ const overlayPainted = `Boolean((() => {
 	const box = card?.getBoundingClientRect();
 	return box && box.width > 100 && box.height > 100;
 })())`;
+
+const viewportMatches = `innerWidth === ${viewport.width} && innerHeight === ${viewport.height} && devicePixelRatio === 1`;
 
 const appOrigin = new URL(appURL).origin;
 const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then((response) => {
@@ -76,7 +83,7 @@ function send(method, params = {}) {
 
 async function evaluate(expression) {
 	const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-	if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+	if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
 	return result.result.value;
 }
 
@@ -84,12 +91,59 @@ function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitFor(expression, description, attempts = 60, interval = 1000) {
-	for (let attempt = 0; attempt < attempts; attempt++) {
-		if (await evaluate(expression)) return;
-		await sleep(interval);
+// Polls a page condition. A navigation can destroy the execution context
+// mid-poll; that counts as "not yet", and the last error is reported on
+// timeout.
+async function waitFor(expression, description, timeoutMs = defaultTimeoutMs) {
+	const deadline = Date.now() + timeoutMs;
+	let lastError;
+	while (true) {
+		try {
+			if (await evaluate(expression)) return;
+			lastError = undefined;
+		} catch (error) {
+			lastError = error;
+		}
+		if (Date.now() >= deadline) {
+			throw new Error(`timed out after ${timeoutMs} ms waiting for ${description}${lastError ? ` (last error: ${lastError.message})` : ""}`);
+		}
+		await sleep(pollMs);
 	}
-	throw new Error(`timed out waiting for ${description}`);
+}
+
+// Waits until `spec` names exactly one actionable control whose box held
+// still for two consecutive polls, scrolling a unique off-screen match into
+// view. Returns that control's centre and box.
+async function waitForTarget(spec, { timeoutMs = defaultTimeoutMs, nth, enabled = true } = {}) {
+	const deadline = Date.now() + timeoutMs;
+	let previous;
+	let reason = "no poll completed";
+	while (true) {
+		let candidates;
+		try {
+			candidates = await evaluate(collectExpression(spec));
+		} catch (error) {
+			candidates = null;
+			reason = `page error: ${error.message}`;
+		}
+		if (candidates) {
+			const picked = pickTarget(candidates, { nth, enabled });
+			if (picked.scroll !== undefined) {
+				await evaluate(`window.__verifyTargets[${picked.scroll}].scrollIntoView({block: "center", inline: "center"})`);
+				reason = "scrolled the match into view";
+				previous = undefined;
+			} else if (picked.target) {
+				if (sameBox(previous, picked.target)) return picked.target;
+				reason = "match is still moving";
+				previous = picked.target;
+			} else {
+				reason = picked.pending;
+				previous = undefined;
+			}
+		}
+		if (Date.now() >= deadline) throw new Error(`timed out after ${timeoutMs} ms waiting for ${JSON.stringify(spec)}: ${reason}`);
+		await sleep(pollMs);
+	}
 }
 
 async function snapshot() {
@@ -133,18 +187,16 @@ async function capture(prefix, state = null) {
 	return captured;
 }
 
-function assertPaintedPoint(point, description) {
-	if (!point || point.error) throw new Error(`${description}: ${point?.error || "not found"}`);
-	if (!(point.width > 10) || !(point.height > 10) || point.x <= 0 || point.y <= 0) {
-		throw new Error(`${description} is not painted: ${JSON.stringify(point)}`);
-	}
+async function clickPoint(point, button = "left") {
+	await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+	await send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button, clickCount: 1 });
+	await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button, clickCount: 1 });
 }
 
-async function clickPoint(point) {
-	await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
-	await send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
-	await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
-	await sleep(interactionDelayMs);
+async function clickTarget(spec, options = {}) {
+	const point = await waitForTarget(spec, options);
+	await clickPoint(point, options.button);
+	return point;
 }
 
 function parseShortcut(text) {
@@ -173,8 +225,12 @@ function keyEvent(key) {
 		",": { key: ",", code: "Comma", keyCode: 188 },
 		".": { key: ".", code: "Period", keyCode: 190 },
 		"`": { key: "`", code: "Backquote", keyCode: 192 },
+		"[": { key: "[", code: "BracketLeft", keyCode: 219 },
+		"]": { key: "]", code: "BracketRight", keyCode: 221 },
 		enter: { key: "Enter", code: "Enter", keyCode: 13 },
 		escape: { key: "Escape", code: "Escape", keyCode: 27 },
+		backspace: { key: "Backspace", code: "Backspace", keyCode: 8 },
+		tab: { key: "Tab", code: "Tab", keyCode: 9 },
 	};
 	if (!specials[key]) throw new Error(`unsupported shortcut key: ${key}`);
 	return specials[key];
@@ -209,13 +265,37 @@ async function pressShortcut(text) {
 	if (parsed.ctrl) await pressKey("keyUp", "Control", "ControlLeft", 17, modifiers & ~2);
 	if (parsed.shift) await pressKey("keyUp", "Shift", "ShiftLeft", 16, modifiers & ~8);
 	if (parsed.meta) await pressKey("keyUp", "Meta", "MetaLeft", 91, 0, { location: 1 });
-	await sleep(interactionDelayMs);
 }
 
 async function pressEscape() {
 	await pressKey("keyDown", "Escape", "Escape", 27);
 	await pressKey("keyUp", "Escape", "Escape", 27);
-	await sleep(interactionDelayMs);
+}
+
+// The focused text field or editor, as an expression usable in waits.
+const focusedEditable = `(() => {
+	const el = document.activeElement;
+	if (!el || el === document.body) return null;
+	if (el.matches("input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea")) return el;
+	return el.isContentEditable ? el : null;
+})()`;
+
+async function insertText(text) {
+	await waitFor(`Boolean(${focusedEditable})`, "a focused input or editor to insert into");
+	await send("Input.insertText", { text });
+	// The inserted text must reach the field; Vim normal mode, a read-only
+	// editor, or a focus change would otherwise drop it silently.
+	const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+	await waitFor(`(() => {
+		const el = ${focusedEditable};
+		const value = el ? ("value" in el ? el.value : el.innerText) : "";
+		return ${JSON.stringify(lines)}.every((line) => value.includes(line));
+	})()`, `inserted text ${JSON.stringify(text)} in the focused field`);
+	// svelte-codemirror-editor copies edits into the bound store only after a
+	// 300 ms debounce (node_modules/svelte-codemirror-editor CodeMirror.svelte),
+	// and nothing in the page signals the commit. A shortcut sent sooner runs
+	// the store's old code, so this is the one fixed wait the driver keeps.
+	if (await evaluate(`Boolean(document.activeElement?.closest(".cm-editor"))`)) await sleep(codeMirrorCommitMs);
 }
 
 function slug(text) {
@@ -230,76 +310,83 @@ function resultOf(state) {
 	return { kind: "page", label: null, text: null, rect: null, path: state.path };
 }
 
+const onRoute = (route) => `location.pathname === ${JSON.stringify(route.path)} && document.body.innerText.includes(${JSON.stringify(route.expected)})`;
+
 async function driveRoute(route) {
 	await capture(`${feature}-before`);
-	fs.writeFileSync(`${evidenceDir}/${feature}-action.txt`, `input=left mouse click\nselector=${route.selector}\nexpected_path=${route.path}\nexpected_text=${route.expected}\n`);
-	const point = await evaluate(`(() => {
-		const element = document.querySelector(${JSON.stringify(route.selector)});
-		if (!element) return {error: "selector not found"};
-		const box = element.getBoundingClientRect();
-		return {x: box.left + box.width / 2, y: box.top + box.height / 2, width: box.width, height: box.height};
-	})()`);
-	assertPaintedPoint(point, route.selector);
-	await clickPoint(point);
-	await waitFor(`location.pathname === ${JSON.stringify(route.path)} && document.body.innerText.includes(${JSON.stringify(route.expected)})`, `${feature} route and text`, 20);
+	const point = await clickTarget({ selector: route.selector });
+	fs.writeFileSync(`${evidenceDir}/${feature}-action.txt`, `input=left mouse click\nselector=${route.selector}\nclick=${JSON.stringify(point)}\nexpected_path=${route.path}\nexpected_text=${route.expected}\n`);
+	await waitFor(onRoute(route), `${feature} route and text`);
 	await capture(`${feature}-after`);
 	fs.writeFileSync(`${evidenceDir}/${feature}-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
 	fs.writeFileSync(`${evidenceDir}/${feature}-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
 	console.log(`feature=${feature}\nresult=path ${route.path}, visible text: ${route.expected}\nevidence=${evidenceDir}`);
 }
 
+// Overlays fill in after they paint: the Project modal shows "No recent
+// projects" until GetRecentProjects resolves. Wait until the page or overlay
+// text stops changing for `quietMs`, so the capture shows loaded content.
+async function waitForSettledText(description, quietMs = 500, timeoutMs = defaultTimeoutMs) {
+	const deadline = Date.now() + timeoutMs;
+	let last;
+	let since = Date.now();
+	while (true) {
+		const text = await evaluate(`(document.querySelector("dialog[open], [data-testid='modal-component']") || document.body).innerText`);
+		if (text !== last) {
+			last = text;
+			since = Date.now();
+		} else if (Date.now() - since >= quietMs) {
+			return;
+		}
+		if (Date.now() >= deadline) throw new Error(`timed out after ${timeoutMs} ms waiting for ${description} to stop changing`);
+		await sleep(pollMs);
+	}
+}
+
 async function driveCompare(route) {
 	if (!label || !shortcut) throw new Error("compare requires a visible label and a MarasiKeys shortcut");
-	await waitFor(`location.pathname === ${JSON.stringify(route.path)} && document.body.innerText.includes(${JSON.stringify(route.expected)})`, `${feature} route`, 20);
+	await waitFor(onRoute(route), `${feature} route`);
+	try {
+		await compareClickAndShortcut(route);
+	} finally {
+		// Never leave an overlay behind for the next drive, pass or fail.
+		if (await evaluate(overlayPainted)) {
+			await pressEscape();
+			await waitFor(`!${overlayPainted}`, "overlay closed after compare");
+		}
+	}
+}
+
+async function compareClickAndShortcut(route) {
 	const name = slug(label);
-	const point = await evaluate(`(() => {
-		const wanted = ${JSON.stringify(label)};
-		const nodes = Array.from(document.querySelectorAll("button, a, [role='button']"));
-		const painted = nodes.map((el) => {
-			const box = el.getBoundingClientRect();
-			return {
-				text: el.innerText.replace(/\\s+/g, " ").trim(),
-				x: box.left + box.width / 2,
-				y: box.top + box.height / 2,
-				width: box.width,
-				height: box.height,
-				inDialog: Boolean(el.closest("dialog")),
-			};
-		}).filter((el) => el.width > 10 && el.height > 10 && !el.inDialog && (el.text === wanted || el.text.startsWith(wanted)));
-		const exact = painted.find((el) => el.text === wanted);
-		return exact || painted[0] || {error: "painted control not found"};
-	})()`);
-	assertPaintedPoint(point, `visible "${label}"`);
+	const control = { text: label };
 
 	await capture(`${name}-click-before`);
-	fs.writeFileSync(`${evidenceDir}/${name}-click-action.txt`, `input=left mouse click\ncontrol=painted "${label}"\nclick=${JSON.stringify(point)}\n`);
-	await clickPoint(point);
-	await waitFor(`${overlayPainted} || location.pathname !== ${JSON.stringify(route.path)}`, `click of "${label}" changed the page or painted an overlay`, 20, 250);
+	const point = await clickTarget(control);
+	fs.writeFileSync(`${evidenceDir}/${name}-click-action.txt`, `input=left mouse click\ncontrol=actionable "${label}"\nclick=${JSON.stringify(point)}\n`);
+	await waitFor(`${overlayPainted} || location.pathname !== ${JSON.stringify(route.path)}`, `click of "${label}" changed the page or painted an overlay`);
+	await waitForSettledText(`the result of clicking "${label}"`);
 	const clickAfter = await capture(`${name}-click-after`);
 	const clickResult = resultOf(clickAfter);
 
 	if (clickResult.kind === "overlay") {
 		await pressEscape();
-		await waitFor(`!${overlayPainted}`, "overlay closed", 20, 250);
+		await waitFor(`!${overlayPainted}`, "overlay closed");
 	} else if (clickResult.path !== route.path) {
-		const restorePoint = await evaluate(`(() => {
-			const element = document.querySelector(${JSON.stringify(route.selector)});
-			if (!element) return {error: "feature rail not found"};
-			const box = element.getBoundingClientRect();
-			return {x: box.left + box.width / 2, y: box.top + box.height / 2, width: box.width, height: box.height};
-		})()`);
-		assertPaintedPoint(restorePoint, route.selector);
-		await clickPoint(restorePoint);
-		await waitFor(`location.pathname === ${JSON.stringify(route.path)}`, `return to ${feature}`, 20);
+		await clickTarget({ selector: route.selector });
+		await waitFor(onRoute(route), `return to ${feature}`);
 	}
+	// The shortcut must find the same starting page the click did.
+	await waitForTarget(control);
 
 	await capture(`${name}-shortcut-before`);
 	fs.writeFileSync(
 		`${evidenceDir}/${name}-shortcut-action.txt`,
-		`input=keyboard shortcut through Chrome CDP Input.dispatchKeyEvent\nshortcut=${shortcut}\nbinding=MarasiKeys\nexpected=same result as clicking painted "${label}"\n`,
+		`input=keyboard shortcut through Chrome CDP Input.dispatchKeyEvent\nshortcut=${shortcut}\nbinding=MarasiKeys\nexpected=same result as clicking "${label}"\n`,
 	);
 	await pressShortcut(shortcut);
-	await waitFor(`${overlayPainted} || location.pathname !== ${JSON.stringify(route.path)}`, `shortcut ${shortcut} changed the page or painted an overlay`, 20, 250);
+	await waitFor(`${overlayPainted} || location.pathname !== ${JSON.stringify(route.path)}`, `shortcut ${shortcut} changed the page or painted an overlay`);
+	await waitForSettledText(`the result of ${shortcut}`);
 	const shortcutAfter = await capture(`${name}-shortcut-after`);
 	const shortcutResult = resultOf(shortcutAfter);
 	const compare = {
@@ -317,84 +404,91 @@ async function driveCompare(route) {
 	if (!compare.sameKind || !compare.samePath || !compare.sameOverlay) {
 		throw new Error(`${shortcut} did not match clicking "${label}": ${JSON.stringify(compare)}`);
 	}
-	if (shortcutResult.kind === "overlay") {
-		await pressEscape();
-		await waitFor(`!${overlayPainted}`, "overlay closed after compare", 20, 250);
-	}
 	console.log(`feature=${feature}\naction=compare\nlabel=${label}\nshortcut=${shortcut}\nresult=${clickResult.kind} matched\nevidence=${evidenceDir}`);
 }
 
 async function driveTheme(route) {
-	await waitFor(`location.pathname === ${JSON.stringify(route.path)}`, "dashboard route", 20);
-	const settings = await evaluate(`(() => {
-		const element = document.querySelector('[title="Settings"]');
-		if (!element) return {error: "settings rail not found"};
-		const box = element.getBoundingClientRect();
-		return {x: box.left + box.width / 2, y: box.top + box.height / 2, width: box.width, height: box.height};
-	})()`);
-	assertPaintedPoint(settings, '[title="Settings"]');
-	await clickPoint(settings);
-	await waitFor(`location.pathname === "/settings"`, "settings route", 20);
+	await waitFor(onRoute(route), "dashboard route");
+	await clickTarget({ selector: routes.settings.selector });
+	await waitFor(onRoute(routes.settings), "settings route");
 
 	const initialDark = await evaluate(`document.documentElement.classList.contains("dark")`);
 	await capture("theme-before");
 	fs.writeFileSync(`${evidenceDir}/theme-action.txt`, "input=Command+U twice after leaving dashboard\nexpected=theme changes and returns to its initial value\n");
 	await pressShortcut("cmd+u");
-	await waitFor(`document.documentElement.classList.contains("dark") !== ${initialDark}`, "theme change", 20, 250);
+	await waitFor(`document.documentElement.classList.contains("dark") !== ${initialDark}`, "theme change");
 	await capture("theme-toggled");
 	await pressShortcut("cmd+u");
-	await waitFor(`document.documentElement.classList.contains("dark") === ${initialDark}`, "theme restoration", 20, 250);
+	await waitFor(`document.documentElement.classList.contains("dark") === ${initialDark}`, "theme restoration");
 	await capture("theme-restored");
 	fs.writeFileSync(`${evidenceDir}/theme-result.json`, `${JSON.stringify({ initialDark, toggledDark: !initialDark, restoredDark: initialDark }, null, 2)}\n`);
 	console.log(`feature=${feature}\naction=theme\nresult=Command+U changed and restored theme after leaving dashboard\nevidence=${evidenceDir}`);
 }
 
+// A visible element matching a CSS selector, as a wait expression.
+const paintedSelector = (selector) => `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).some((el) => {
+	const box = el.getBoundingClientRect();
+	return box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== "hidden";
+})`;
+
+function stepTimeout(step) {
+	if (step.timeoutMs === undefined) return defaultTimeoutMs;
+	if (!Number.isInteger(step.timeoutMs) || step.timeoutMs < 1 || step.timeoutMs > 60000) throw new Error(`timeoutMs must be 1-60000: ${JSON.stringify(step)}`);
+	return step.timeoutMs;
+}
+
+async function runStep(step) {
+	const timeoutMs = stepTimeout(step);
+	const scope = {
+		...(step.within ? { within: step.within } : {}),
+		...(step.hasText ? { hasText: step.hasText } : {}),
+	};
+	if (step.click || step.text) {
+		const spec = step.click ? { selector: step.click, ...scope } : { text: step.text, ...scope };
+		const button = step.button || "left";
+		if (!["left", "right"].includes(button)) throw new Error(`button must be left or right: ${JSON.stringify(step)}`);
+		return { click: await clickTarget(spec, { timeoutMs, nth: step.nth, button }) };
+	}
+	if (step.key) return void await pressShortcut(step.key);
+	if (typeof step.insert === "string") return void await insertText(step.insert);
+	// Scoped text waits read only the `within` roots, so text the page already
+	// shows elsewhere (an editor holding the same token) cannot satisfy them.
+	const visibleText = step.within
+		? `Array.from(document.querySelectorAll(${JSON.stringify(step.within)})).map((el) => el.innerText).join("\\n")`
+		: "document.body.innerText";
+	const where = step.within ? ` within ${step.within}` : "";
+	if (typeof step.waitText === "string") return void await waitFor(`${visibleText}.includes(${JSON.stringify(step.waitText)})`, `text ${JSON.stringify(step.waitText)}${where}`, timeoutMs);
+	if (typeof step.waitNoText === "string") return void await waitFor(`!${visibleText}.includes(${JSON.stringify(step.waitNoText)})`, `absence of ${JSON.stringify(step.waitNoText)}${where}`, timeoutMs);
+	if (typeof step.waitEnabledText === "string") return void await waitForTarget({ text: step.waitEnabledText, ...scope }, { timeoutMs, nth: step.nth });
+	if (typeof step.waitSelector === "string") return void await waitFor(paintedSelector(step.waitSelector), `visible ${step.waitSelector}`, timeoutMs);
+	if (typeof step.waitNoSelector === "string") return void await waitFor(`!(${paintedSelector(step.waitNoSelector)})`, `no visible ${step.waitNoSelector}`, timeoutMs);
+	if (typeof step.waitPath === "string") return void await waitFor(`location.pathname === ${JSON.stringify(step.waitPath)}`, `path ${step.waitPath}`, timeoutMs);
+	throw new Error(`unsupported UI step: ${JSON.stringify(step)}`);
+}
+
 async function driveSteps(route) {
 	const recipe = JSON.parse(label);
 	if (!recipe.name || !Array.isArray(recipe.steps) || !recipe.steps.length) throw new Error("steps requires {name, steps: [...]}");
-	await waitFor(`location.pathname === ${JSON.stringify(route.path)}`, `${feature} route`, 20);
+	await waitFor(onRoute(route), `${feature} route`);
 	const prefix = `${feature}-${slug(recipe.name)}`;
 	fs.writeFileSync(`${evidenceDir}/${prefix}-action.json`, `${JSON.stringify(recipe, null, 2)}\n`);
 	await capture(`${prefix}-before`);
+	const log = [];
 	try {
 		for (const [index, step] of recipe.steps.entries()) {
-			if (step.click || step.text) {
-				const point = await evaluate(`(() => {
-					const nodes = ${step.click ? `Array.from(document.querySelectorAll(${JSON.stringify(step.click)}))` : 'Array.from(document.querySelectorAll("button, a, [role=button], label"))'};
-					const el = nodes.find(el => {
-						const box = el.getBoundingClientRect();
-						return box.width > 10 && box.height > 10 && ${step.text ? `el.innerText.replace(/\\s+/g, " ").trim() === ${JSON.stringify(step.text)}` : "true"};
-					});
-					if (!el) return {error: "painted control not found"};
-					el.scrollIntoView({block: "center"});
-					const box = el.getBoundingClientRect();
-					return {x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width, height: box.height};
-				})()`);
-				assertPaintedPoint(point, step.click || step.text);
-				await clickPoint(point);
-			} else if (step.key) {
-				await pressShortcut(step.key);
-			} else if (typeof step.insert === "string") {
-				await send("Input.insertText", {text: step.insert});
-				await sleep(interactionDelayMs);
-			} else if (typeof step.waitText === "string") {
-				await waitFor(`document.body.innerText.includes(${JSON.stringify(step.waitText)})`, step.waitText, 40, 250);
-			} else if (typeof step.waitNoText === "string") {
-				await waitFor(`!document.body.innerText.includes(${JSON.stringify(step.waitNoText)})`, `absence of ${step.waitNoText}`, 40, 250);
-			} else if (typeof step.waitEnabledText === "string") {
-				await waitFor(`Array.from(document.querySelectorAll("button")).some(el => {
-					const box = el.getBoundingClientRect();
-					return box.width > 10 && box.height > 10 && !el.disabled && el.innerText.trim() === ${JSON.stringify(step.waitEnabledText)};
-				})`, `enabled ${step.waitEnabledText} button`, 40, 250);
-			} else if (Number.isInteger(step.waitMs) && step.waitMs > 0 && step.waitMs <= 10000) {
-				await sleep(step.waitMs);
-			} else {
-				throw new Error(`unsupported UI step: ${JSON.stringify(step)}`);
+			const started = Date.now();
+			try {
+				const detail = await runStep(step);
+				log.push({ step: index + 1, ...step, ...detail, ms: Date.now() - started, result: "passed" });
+			} catch (error) {
+				log.push({ step: index + 1, ...step, ms: Date.now() - started, result: "failed", error: error.message });
+				throw new Error(`step ${index + 1} ${JSON.stringify(step)} failed: ${error.message}`);
 			}
 			await capture(`${prefix}-step-${index + 1}`);
 		}
 		console.log(`feature=${feature}\naction=steps\nrecipe=${recipe.name}\nresult=passed\nevidence=${evidenceDir}`);
 	} finally {
+		fs.writeFileSync(`${evidenceDir}/${prefix}-steps.json`, `${JSON.stringify(log, null, 2)}\n`);
 		await capture(`${prefix}-after`);
 		fs.writeFileSync(`${evidenceDir}/${prefix}-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
 		fs.writeFileSync(`${evidenceDir}/${prefix}-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
@@ -402,13 +496,23 @@ async function driveSteps(route) {
 	}
 }
 
+// Size the real window so the page itself is the verification viewport.
+// An Emulation override would end with each CDP session, letting the page
+// relayout at Chrome's smaller default between drives.
+async function sizeWindow() {
+	const { windowId, bounds } = await send("Browser.getWindowForTarget");
+	const [width, height] = await evaluate("[innerWidth, innerHeight]");
+	await send("Browser.setWindowBounds", { windowId, bounds: { width: bounds.width + viewport.width - width, height: bounds.height + viewport.height - height } });
+	await waitFor(viewportMatches, `${viewport.width}x${viewport.height} viewport at device scale 1`);
+}
+
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
 await send("Network.enable");
-await send("Emulation.setDeviceMetricsOverride", { ...viewport, deviceScaleFactor: 1, mobile: false });
 
 if (mode === "launch") {
+	await sizeWindow();
 	// Fulfilled documents lose Chrome's loopback classification. Keep access
 	// limited to this isolated browser's Wails origin, not all websites.
 	await send("Browser.setPermission", { permission: { name: "loopback-network" }, setting: "granted", origin: appOrigin });
@@ -459,15 +563,21 @@ if (mode === "launch") {
 	] });
 	try {
 		await send("Page.navigate", { url: appURL });
-		for (let attempt = 0; attempt < 120; attempt++) {
+		// The first Vite compile of the app can take a minute or more.
+		const deadline = Date.now() + 120000;
+		while (true) {
 			if (interceptionError) throw interceptionError;
-			if (intercepted && listenerStartupIntercepted && await evaluate(`document.body?.innerText.includes("Project Dashboard")`)) break;
-			if (attempt === 119) throw new Error("timed out waiting for normalized Home startup");
-			await sleep(1000);
+			try {
+				if (intercepted && listenerStartupIntercepted && await evaluate(`document.body?.innerText.includes("Project Dashboard")`)) break;
+			} catch {
+				// The document is still being replaced.
+			}
+			if (Date.now() >= deadline) throw new Error("timed out waiting for normalized Home startup");
+			await sleep(pollMs);
 		}
-		await waitFor(`Array.from(document.querySelectorAll("button")).some(button => button.querySelector("span.bg-success-500"))`, "online Home listener indicator", 10, 250);
+		await waitFor(`Array.from(document.querySelectorAll("button")).some(button => button.querySelector("span.bg-success-500"))`, "online Home listener indicator");
 		await capture("launch-ready");
-		await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script", 5);
+		await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script", 5000);
 	} catch (error) {
 		await capture("launch-failed");
 		throw error;
@@ -478,8 +588,29 @@ if (mode === "launch") {
 		socket.removeEventListener("message", normalizeStartup);
 	}
 } else if (mode === "doctor") {
-	await waitFor(`location.origin === ${JSON.stringify(new URL(appURL).origin)} && window.go?.main?.App && window.runtime && innerWidth === ${viewport.width} && innerHeight === ${viewport.height} && devicePixelRatio === 1 && document.querySelector('[title="Home"]')`, "healthy Marasi browser page, Wails bridge, app rail, and viewport", 5);
-	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5);
+	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && window.go?.main?.App && window.runtime && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, Wails bridge, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
+	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5000);
+	await waitFor(`!${overlayPainted} && !(${paintedSelector(".drawer")})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
+} else if (mode === "reset") {
+	// Dismiss what an earlier drive left open with the same input a user
+	// would: Escape, then a click on the drawer backdrop.
+	const residue = `${overlayPainted} || ${paintedSelector(".drawer")}`;
+	for (let attempt = 0; attempt < 3 && await evaluate(residue); attempt++) {
+		await pressEscape();
+		try {
+			await waitFor(`!(${residue})`, "residue dismissed by Escape", 2000);
+		} catch {
+			if (await evaluate(paintedSelector(".drawer-backdrop"))) {
+				await clickPoint({ x: 5, y: 5 });
+				await waitFor(`!(${paintedSelector(".drawer")})`, "drawer dismissed by a backdrop click", 2000).catch(() => {});
+			}
+		}
+	}
+	if (await evaluate(residue)) {
+		await capture("reset-failed");
+		throw new Error("an overlay or drawer is still open after reset; run cleanup.sh and relaunch");
+	}
+	console.log("reset=clean");
 } else if (mode === "drive") {
 	const route = routes[feature];
 	if (!route) throw new Error(`unknown feature: ${feature}`);
