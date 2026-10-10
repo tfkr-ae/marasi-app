@@ -106,7 +106,7 @@ const rejected = [
   ["an invalid action id", fileWith((f) => (f.profile.overrides.macos[0].action = "Go Home")), /"Go Home".*invalid action id/],
   ["an action overridden twice", fileWith((f) => f.profile.overrides.macos.push({ action: "global.go-home", keys: [] })), /global\.go-home.*overridden twice/],
   ["an unparseable binding", fileWith((f) => (f.profile.overrides.macos[0].keys = ["meta+banana"])), /"meta\+banana" is not a binding/],
-  ["a reserved binding", fileWith((f) => (f.profile.overrides.macos[0].keys = ["shift+tab"])), /"shift\+tab" is reserved/],
+  ["a reserved binding", fileWith((f) => (f.profile.overrides.macos[0].keys = ["shift+tab"])), /Shift\+Tab is reserved for dialogs and focus/],
   ["known actions that are not ids", fileWith((f) => (f.profile.knownActions = ["global.go-home", 3])), /known actions/],
   [
     "an unbound menu opening",

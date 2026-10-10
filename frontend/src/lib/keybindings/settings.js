@@ -1,6 +1,6 @@
 import { slugify } from "./catalog.js";
 import { contextsConflict } from "./contexts.js";
-import { isReservedBinding } from "./gate.js";
+import { isReservedBinding, reservedBindingProblem } from "./gate.js";
 import { bindingFromEvent, formatBinding, normalizeBinding } from "./keys.js";
 import { OPEN_MENU } from "./keymap.js";
 import { PLATFORM_NAMES } from "./platform.js";
@@ -399,7 +399,7 @@ function explain(catalog, problem) {
     case "menu-unbound":
       return [[first, "The Marasi menu must have a binding"]];
     case "reserved":
-      return [[first, `${binding} is reserved for dialogs and focus`]];
+      return [[first, reservedBindingProblem(problem.binding)]];
     case "duplicate":
       return [
         [first, `${binding} is also bound to ${other(rest[0], first)}`],

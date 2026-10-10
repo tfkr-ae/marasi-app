@@ -9,6 +9,7 @@
 	import { SaveKeybindings } from "../../wailsjs/go/main/App";
 	import { keybindingState } from "../../../stores.js";
 	import { keybindingCapture, menuDispatcher } from "../../keybindings/app.js";
+	import { reservedBindingProblem } from "../../keybindings/gate.js";
 	import {
 		addBinding,
 		browse,
@@ -108,7 +109,7 @@
 		} else if (result.type === "reserved") {
 			capture = {
 				...capture,
-				message: "Escape, Tab and Enter stay with dialogs and focus. Press another combination.",
+				message: `${reservedBindingProblem(result.binding)}. Press another combination.`,
 			};
 		} else {
 			const at = target(capture.actionId);
