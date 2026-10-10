@@ -93,8 +93,7 @@ function flushBuffer() {
           }
         }
       }
-      // current = [...current, ...reqBatch];
-      current.push(...reqBatch);
+      current = [...current, ...reqBatch];
     }
 
     return current;

@@ -38,18 +38,10 @@ Enter runs the query at once. Typing alone runs it after a 700 ms debounce. `#le
 
 For handoff, click a row with `{"click":"tbody tr","hasText":"<path>"}`, wait for `.drawer`, then use the drawer's shortcuts. For example, `cmd+shift+l` sends the row to Launchpad and shows `Request N sent to Launchpad` with a `Jump to Launchpad` action.
 
-## Known product bug: first captured row does not render
-
-In a fresh project, the first request captured while Ledger is open never appears. It appears together with the second request, or after leaving and returning to Ledger. SQLite has the row the whole time.
-
-Cause: `flushBuffer` in `frontend/src/stores.js` appends with `current.push(...reqBatch)`. That mutates the `proxyItems` array in place, and only builds a new array (through `.map`) when a response arrives for an already-listed row. The table is `createSvelteTable` with `data: $shownRows`, and TanStack memoizes the core row model by the `data` reference. So a flush into the empty `[]` keeps the cached empty row model. A request-only flush also leaves its row hidden until the next flush that builds a new array.
-
-Proof of the mechanism: the browser receives the `request`/`response` events within milliseconds, the row is in SQLite, and a route remount shows it. Do not count a missing first row as a capture failure or as harness flakiness. Report it as this bug until the product fix lands (build a new array, as in the commented-out `current = [...current, ...reqBatch]`).
-
 ## Gotchas
 
 - `#searchBox`, the content-type chips, and pagination live inside `Ledger Settings`, which starts closed and mounts its content only while open. Open it with `{"click":"button.accordion-control"}`: while a query is active the header reads `Ledger Settings Query <query> N matches`, so an exact `{"text":"Ledger Settings"}` match fails. Wait for `#searchBox` after opening it. `⌘⇧S` toggles the panel, so it closes an open one.
-- Content-type chips exclude matching types. The defaults already hide images, fonts, media, JavaScript, CSS, PDF, archives, and office types. Use `text/html` for capture proof.
+- Content-type chips exclude matching types. The defaults already hide images, fonts, media, JavaScript, CSS, PDF, archives, and office types. Use `text/html` for capture proof. They include `application/octet-stream`, which `python3 -m http.server` sends for extensionless paths, so serve a `.html` path.
 - An empty Ledger only proves navigation. Complete capture proof needs traffic through the proxy.
 - HTTPS traffic needs the verification instance's generated certificate.
 - WebSocket flows have separate connection and message views.
