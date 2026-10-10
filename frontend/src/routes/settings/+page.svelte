@@ -18,9 +18,19 @@
 		populateWaypoints,
 		waypoints,
 	} from "../../stores";
-	import { getToastStore, SlideToggle, modeCurrent } from "@skeletonlabs/skeleton";
+	import {
+		getModalStore,
+		getToastStore,
+		SlideToggle,
+		modeCurrent,
+	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	const toastStore = getToastStore();
+	const modalStore = getModalStore();
+
+	function openKeybindings() {
+		modalStore.trigger({ type: "component", component: "Keybindings" });
+	}
 
 	let targetHost = "";
 	let override = "";
@@ -84,6 +94,18 @@
 				{buildInfo.Version}
 			</p>
 		{/if}
+	</div>
+	<div class="label">
+		<span>Keybindings</span>
+		<div>
+			<button
+				type="button"
+				class="btn {$modeCurrent
+					? 'variant-ghost-primary ring-0 shadow-none'
+					: 'variant-filled-primary'}"
+				on:click={openKeybindings}>Configure Keybindings</button
+			>
+		</div>
 	</div>
 	<SlideToggle
 		name="slider-label"
