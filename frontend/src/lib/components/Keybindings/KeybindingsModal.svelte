@@ -3,7 +3,7 @@
 	// config (settings.js); Save persists it and only then updates live
 	// bindings. Cancel, close and Escape never apply the draft, and ask before
 	// discarding edits.
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Keyboard, X } from "lucide-svelte";
 	import { SaveKeybindings } from "../../wailsjs/go/main/App";
@@ -19,6 +19,7 @@
 		replaceBinding,
 		resetAction,
 		saveDraft,
+		saveProblems,
 	} from "../../keybindings/settings.js";
 	import { interceptModalEscape } from "../../overlayIsolation.js";
 	import ActionRows from "./ActionRows.svelte";
@@ -55,9 +56,11 @@
 	}
 	$: current = visibleGroups.find((g) => g.id === selectedGroup);
 	$: dirty = isDirty(draft, opened);
+	// Every profile and platform variant, so problems off screen block Save too.
+	$: problems = saveProblems(catalog, draft, { profileId: profile.id, platform });
 	$: keybindingCapture.set(Boolean(capture));
 	$: filters = [
-		["all", "All"],
+		["all", `All (${view.groups.reduce((n, g) => n + g.all.length, 0)})`],
 		["unbound", `Unbound (${view.unboundCount})`],
 		["conflict", `Conflicts (${view.conflictCount})`],
 	];
@@ -69,6 +72,20 @@
 	function edit(next) {
 		draft = next;
 		saveError = "";
+	}
+
+	// Brings a save problem on screen: its profile, platform and sidebar
+	// entry, with search and filters cleared, then scrolls to its row.
+	async function showProblem(problem) {
+		if (problem.profileId && draft.profiles.some((p) => p.id === problem.profileId)) profileId = problem.profileId;
+		if (problem.platform) platform = problem.platform;
+		query = "";
+		filter = "all";
+		if (problem.groupId) selectedGroup = problem.groupId;
+		await tick();
+		if (problem.actionId) {
+			document.querySelector(`[data-keybindings-modal] li[data-action-id="${problem.actionId}"]`)?.scrollIntoView({ block: "nearest" });
+		}
 	}
 
 	function startCapture(actionId, index) {
@@ -222,6 +239,19 @@
 			<div class="min-w-0 text-sm" aria-live="polite">
 				{#if saveError}
 					<p class="text-error-600 dark:text-error-400" data-save-error>{saveError}</p>
+				{:else if problems.length}
+					<p class="flex min-w-0 items-center gap-2 text-error-600 dark:text-error-400" data-save-blocked>
+						<span class="min-w-0" title={problems.map((p) => p.message).join("\n")}>
+							Can't save{problems.length > 1 ? ` (${problems.length} problems)` : ""}: {problems[0].message}
+						</span>
+						{#if problems[0].platform}
+							<button
+								type="button"
+								class="btn btn-sm shrink-0 variant-soft-primary !border-0 !ring-0"
+								on:click={() => showProblem(problems[0])}>Show</button
+							>
+						{/if}
+					</p>
 				{:else if loadProblem}
 					<p class="text-warning-800 dark:text-warning-500" title={loadProblem}>
 						The saved keybindings could not be used, so factory shortcuts are active. Saving replaces them.
@@ -239,7 +269,7 @@
 				<button
 					type="button"
 					class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-					disabled={!dirty || saving}
+					disabled={!dirty || saving || problems.length > 0}
 					on:click={save}>{saving ? "Saving..." : "Save"}</button
 				>
 			</div>

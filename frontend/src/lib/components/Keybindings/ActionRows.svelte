@@ -1,6 +1,7 @@
 <script>
 	// The selected sidebar entry's actions, styled like Marasi menu entries:
-	// label, description, then the row's status (Unbound, or the conflict).
+	// label, description, then the row's status (the conflict, Unbound, or
+	// the allowed shadowing of a global binding).
 	import BindingChips from "./BindingChips.svelte";
 
 	export let rows; // browse() rows
@@ -29,6 +30,9 @@
 					<span class="text-sm text-error-600 dark:text-error-400">{row.problem}</span>
 				{:else if row.status === "unbound"}
 					<span class="text-sm text-warning-800 dark:text-warning-500">Unbound</span>
+				{:else if row.status === "shadowing"}
+					<!-- Allowed: the more specific context wins there. Not an error. -->
+					<span class="text-sm opacity-70" data-shadowing>{row.problem}</span>
 				{/if}
 			</div>
 			<BindingChips
