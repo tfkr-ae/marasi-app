@@ -52,7 +52,7 @@ The sender must finish only after the forward.
 
 - Broad rules can hold unrelated traffic. Use a unique verification host or path.
 - `Global Intercept` holds every HTTP request and response regardless of a narrow Lua rule, but only while the checkpoint extension is enabled.
-- `Edit Intercepted Item` (`⌘⇧I`) currently throws: it looks for `div[data-language="javascript"]`, which the intercepted-item editor never has. That is a product bug, not drift.
+- To verify `Edit Intercepted Item` (`⌘⇧I`), queue a request, click `No Error` to move focus away from the editor, send the shortcut, and wait for `.cm-content:focus`. Repeat with Syntax Mode set to Disabled, then restore the setting. With an empty queue, the command should leave focus unchanged.
 - Parse errors arrive asynchronously after each edit. Wait for `No Error` before `Forward`.
 - The queue view refreshes only on the next `intercepted` event or a remount. Items removed elsewhere stay visible until then.
 - A request left intercepted can keep clients waiting during cleanup.

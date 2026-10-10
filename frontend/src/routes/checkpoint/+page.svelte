@@ -46,6 +46,7 @@
 	const drawerStore = getDrawerStore();
 
 	let intercepted = "";
+	let interceptedEditor;
 	let type = "";
 	let currentId = null;
 	let error = "";
@@ -129,11 +130,7 @@
 			action: {
 				handler: () => {
 					if (interceptedCount > 0) {
-						const cmContent =
-							document.querySelector(
-								'div[data-language="javascript"]',
-							);
-						cmContent.focus();
+						interceptedEditor?.focus();
 					}
 				},
 				options: { scope: "checkpoint", single: true },
@@ -435,6 +432,7 @@
 		<div class="w-[50%]">
 			<CodeMirror
 				bind:value={intercepted}
+				on:ready={(event) => (interceptedEditor = event.detail)}
 				lang={getLang(intercepted)}
 				class="text-xs"
 				theme={$modeCurrent ? githubLight : oneDark}
