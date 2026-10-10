@@ -1,8 +1,9 @@
 <script>
 	// The selected sidebar entry's actions, styled like Marasi menu entries:
-	// label, description, then the row's status (Unbound, the conflict, or
-	// why an extension action is unavailable). Unavailable rows show their
-	// kept bindings but cannot be edited until the extension returns.
+	// label, description, then the row's status (the conflict, Unbound, the
+	// allowed shadowing of a global binding, or why an extension action is
+	// unavailable). Unavailable rows show their kept bindings but cannot be
+	// edited until the extension returns.
 	import BindingChips from "./BindingChips.svelte";
 
 	export let rows; // browse() rows
@@ -33,6 +34,9 @@
 					<span class="text-sm text-error-600 dark:text-error-400">{row.problem}</span>
 				{:else if row.status === "unbound"}
 					<span class="text-sm text-warning-800 dark:text-warning-500">Unbound</span>
+				{:else if row.status === "shadowing"}
+					<!-- Allowed: the more specific context wins there. Not an error. -->
+					<span class="text-sm opacity-70" data-shadowing>{row.problem}</span>
 				{:else if row.status === "unavailable"}
 					<span class="text-sm italic">{row.note}</span>
 				{/if}

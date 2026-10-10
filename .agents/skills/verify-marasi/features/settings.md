@@ -37,5 +37,6 @@ Keybindings: `{"text":"Configure Keybindings"}` opens the modal (`[data-keybindi
 - Clicking the `Syntax Mode:` caption activates its first nested radio and writes `syntax_mode=disabled`. Click the radio you mean.
 - Row X and pencil buttons have no labels; find the `<tr>` with `hasText` first.
 - Adding a Chrome profile only appends YAML. Deleting a profile also removes `$configDir/chrome_profiles/<name>`. Directories appear later when Chrome starts.
+- Keybinding conflicts show on the row (`… is also bound to …`) and block Save: `[data-save-blocked]` in the footer names the first problem as `Profile · Platform · Page · State · Action: …`, including problems on a profile or platform not on screen, and its `Show` button switches to it. Pick the platform with `{"click":"select","hasText":"This device"}` then `{"key":"w"}` or `{"key":"m"}`; `nth` within the modal picked the profile select.
 - The keybindings modal takes Escape and backdrop clicks over: they cancel a capture, dismiss an in-modal card, or ask `Discard changes?` before closing with unsaved edits. To simulate a failed save, make the isolated config directory unwritable (`chmod a-w`), and restore it before cleanup.
 - Ledger's palette lists only Ledger page actions; check global bindings such as Ledger's `⌘+J` in the menu on Settings or Home.
