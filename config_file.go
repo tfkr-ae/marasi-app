@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -71,11 +72,16 @@ func writeConfigKeys(path string, values map[string]any) error {
 		}
 		mapping.Content = append(mapping.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, &value)
 	}
-	data, err := yaml.Marshal(doc)
-	if err != nil {
+	var data bytes.Buffer
+	encoder := yaml.NewEncoder(&data)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(doc); err != nil {
 		return fmt.Errorf("encoding config: %w", err)
 	}
-	return writeFileAtomic(path, data)
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("encoding config: %w", err)
+	}
+	return writeFileAtomic(path, data.Bytes())
 }
 
 func writeFileAtomic(path string, data []byte) error {

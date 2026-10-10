@@ -4,7 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestAppKeybindings(t *testing.T) {
@@ -22,9 +26,10 @@ func TestAppKeybindings(t *testing.T) {
 			Version:       1,
 			ActiveProfile: "default",
 			Profiles: []KeybindingProfile{{
-				ID:        "default",
-				Name:      "Default",
-				Overrides: map[string][]KeybindingOverride{"macos": {}, "windows-linux": {}},
+				ID:           "default",
+				Name:         "Default",
+				Overrides:    map[string][]KeybindingOverride{"macos": {}, "windows-linux": {}},
+				KnownActions: []string{},
 			}},
 		}
 		if !reflect.DeepEqual(state.Config, want) {
@@ -51,8 +56,8 @@ func TestAppKeybindings(t *testing.T) {
 			Version:       1,
 			ActiveProfile: "vim-ish",
 			Profiles: []KeybindingProfile{
-				{ID: "default", Name: "Default", Overrides: map[string][]KeybindingOverride{"macos": {}, "windows-linux": {}}},
-				{ID: "vim-ish", Name: "Vim-ish", Overrides: map[string][]KeybindingOverride{
+				{ID: "default", Name: "Default", Overrides: map[string][]KeybindingOverride{"macos": {}, "windows-linux": {}}, KnownActions: testKnownActions()},
+				{ID: "vim-ish", Name: "Vim-ish", KnownActions: testKnownActions(), Overrides: map[string][]KeybindingOverride{
 					"macos": {
 						{Action: "global.go-home", Keys: []string{"meta+h", "meta+shift+h"}},
 						{Action: "global.go-ledger", Keys: []string{}},
@@ -91,7 +96,7 @@ func TestAppKeybindings(t *testing.T) {
 
 	t.Run("should reject invalid updates and leave disk and live config unchanged", func(t *testing.T) {
 		withOverrides := func(platform string, overrides ...KeybindingOverride) KeybindingConfig {
-			config := factoryKeybindings()
+			config := knownKeybindings()
 			config.Profiles[0].Overrides[platform] = overrides
 			return config
 		}
@@ -167,6 +172,123 @@ func TestAppKeybindings(t *testing.T) {
 		}
 	})
 
+	t.Run("should let new factory defaults inherit unless they collide with a customization", func(t *testing.T) {
+		dir := t.TempDir()
+		app := loadConfigApp(t, dir)
+		config := knownKeybindings()
+		config.Profiles[0].Overrides["macos"] = []KeybindingOverride{
+			{Action: "global.go-home", Keys: []string{"meta+j"}},
+			{Action: "global.open-menu", Keys: []string{"meta+m"}},
+		}
+		if _, err := app.SaveKeybindings(config, testKeybindingCatalog()); err != nil {
+			t.Fatalf("saving with the old catalog: %v", err)
+		}
+
+		// A later release adds actions whose defaults land on the
+		// customized bindings, plus one with a free default.
+		updated := append(testKeybindingCatalog(),
+			KeybindingAction{ID: "global.go-new", Context: "global", Defaults: map[string][]string{"macos": {"meta+j"}, "windows-linux": {"ctrl+j"}}},
+			KeybindingAction{ID: "ledger.drawer-open.new", Context: "ledger.drawer-open", Defaults: map[string][]string{"macos": {"meta+m"}, "windows-linux": {"ctrl+9"}}},
+			KeybindingAction{ID: "global.go-free", Context: "global", Defaults: map[string][]string{"macos": {"meta+9"}, "windows-linux": {"ctrl+8"}}},
+		)
+		restarted := loadConfigApp(t, dir)
+		state, err := resolveActiveKeybindings(restarted.GetKeybindings().Config, updated)
+		if err != nil {
+			t.Fatalf("resolving: %v", err)
+		}
+		mac := state["macos"]
+		wantMac := map[string][]string{
+			"global.go-home":         {"meta+j"},
+			"global.open-menu":       {"meta+m"},
+			"global.go-new":          {},
+			"ledger.drawer-open.new": {},
+			"global.go-free":         {"meta+9"},
+		}
+		for id, want := range wantMac {
+			if !reflect.DeepEqual(mac[id], want) {
+				t.Fatalf("wanted macos %s: %v\ngot: %v", id, want, mac[id])
+			}
+		}
+		if got := state["windows-linux"]["global.go-new"]; !reflect.DeepEqual(got, []string{"ctrl+j"}) {
+			t.Fatalf("wanted windows-linux global.go-new to inherit: [ctrl+j]\ngot: %v", got)
+		}
+
+		// Saving with the new catalog settles the decision: the new actions
+		// become known, and the colliding ones are explicitly unbound, so a
+		// later change to the customization does not rebind them.
+		saved, err := restarted.SaveKeybindings(restarted.GetKeybindings().Config, updated)
+		if err != nil {
+			t.Fatalf("wanted: colliding new defaults left unbound, so the profile stays valid\ngot: %v", err)
+		}
+		profile := saved.Config.Profiles[0]
+		wantOverrides := []KeybindingOverride{
+			{Action: "global.go-home", Keys: []string{"meta+j"}},
+			{Action: "global.open-menu", Keys: []string{"meta+m"}},
+			{Action: "global.go-new", Keys: []string{}},
+			{Action: "ledger.drawer-open.new", Keys: []string{}},
+		}
+		if !reflect.DeepEqual(profile.Overrides["macos"], wantOverrides) {
+			t.Fatalf("wanted macos overrides: %+v\ngot: %+v", wantOverrides, profile.Overrides["macos"])
+		}
+		if len(profile.Overrides["windows-linux"]) != 0 {
+			t.Fatalf("wanted: no windows-linux overrides\ngot: %+v", profile.Overrides["windows-linux"])
+		}
+		if !slices.Contains(profile.KnownActions, "global.go-new") || !slices.Contains(profile.KnownActions, "global.go-free") {
+			t.Fatalf("wanted: new actions known\ngot: %v", profile.KnownActions)
+		}
+
+		// Once known, a duplicate is a conflict to fix, not a silent unbind.
+		edited := saved.Config
+		edited.Profiles[0].Overrides = map[string][]KeybindingOverride{
+			"macos": append(slices.Clone(wantOverrides), KeybindingOverride{Action: "global.go-ledger", Keys: []string{"meta+9"}}),
+		}
+		if _, err := restarted.SaveKeybindings(edited, updated); err == nil {
+			t.Fatalf("wanted: duplicate with the known global.go-free default rejected\ngot: nil")
+		}
+	})
+
+	t.Run("should report an invalid or unsupported section, keep it on disk and use factory shortcuts", func(t *testing.T) {
+		sections := map[string]struct{ yaml, problem string }{
+			"future version": {"keybindings:\n  version: 2\n  active_profile: default\n  profiles:\n    - id: default\n      name: Default\n      modes: {normal: {}}\n", "version 2 is not supported"},
+			"wrong shape":    {"keybindings:\n  version: 1\n  activeProfile: Mine\n  profiles: nope\n", "invalid keybindings section"},
+			"bad binding":    {"keybindings:\n  version: 1\n  active_profile: mine\n  profiles:\n    - id: mine\n      name: Mine\n      overrides:\n        macos:\n          - action: global.go-home\n            keys: [\"meta+\"]\n", `"meta+" is not a binding`},
+		}
+		for name, section := range sections {
+			t.Run(name, func(t *testing.T) {
+				dir := t.TempDir()
+				original := "default_address: 127.0.0.1\ndefault_port: \"8080\"\nfirst_run: false\nsyntax_mode: auto\nvim_enabled: true\n" + section.yaml
+				writeAppConfig(t, dir, original)
+
+				app := loadConfigApp(t, dir)
+				state := app.GetKeybindings()
+				if !strings.Contains(state.Problem, section.problem) {
+					t.Fatalf("wanted problem containing: %q\ngot: %q", section.problem, state.Problem)
+				}
+				if !reflect.DeepEqual(state.Config, factoryKeybindings()) {
+					t.Fatalf("wanted factory profile in memory: %+v\ngot: %+v", factoryKeybindings(), state.Config)
+				}
+				if got := readAppConfig(t, dir); got != original {
+					t.Fatalf("wanted file untouched by startup:\n%s\ngot:\n%s", original, got)
+				}
+
+				if _, err := app.ToggleFlag("vim_enabled"); err != nil {
+					t.Fatalf("toggling vim: %v", err)
+				}
+				restarted := loadConfigApp(t, dir)
+				if restarted.GetKeybindings().Problem == "" {
+					t.Fatalf("wanted: problem still reported after a flag write\ngot: none")
+				}
+				if restarted.GetMarasiConfig().VimEnabled {
+					t.Fatalf("wanted: the flag write applied\ngot: vim still enabled")
+				}
+				want, got := keybindingsSection(t, original), keybindingsSection(t, readAppConfig(t, dir))
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("wanted section kept after a flag write: %v\ngot: %v", want, got)
+				}
+			})
+		}
+	})
+
 	t.Run("should leave disk and live config unchanged when the write fails", func(t *testing.T) {
 		dir := t.TempDir()
 		app := loadConfigApp(t, dir)
@@ -212,6 +334,23 @@ func testKeybindingCatalog() []KeybindingAction {
 	}
 }
 
+func testKnownActions() []string {
+	var ids []string
+	for _, action := range testKeybindingCatalog() {
+		ids = append(ids, action.ID)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// knownKeybindings is the factory section after the Settings modal settled it
+// against testKeybindingCatalog: every catalog action is known.
+func knownKeybindings() KeybindingConfig {
+	config := factoryKeybindings()
+	config.Profiles[0].KnownActions = testKnownActions()
+	return config
+}
+
 // loadConfigApp loads the app config in dir as a fresh app start would.
 func loadConfigApp(t *testing.T, dir string) *App {
 	t.Helper()
@@ -231,6 +370,17 @@ func writeAppConfig(t *testing.T, dir, content string) {
 	if err := os.WriteFile(appConfigPath(dir), []byte(content), 0600); err != nil {
 		t.Fatalf("writing app config: %v", err)
 	}
+}
+
+// keybindingsSection is the parsed keybindings value of an app config file,
+// compared as data so the test does not depend on YAML whitespace.
+func keybindingsSection(t *testing.T, content string) any {
+	t.Helper()
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(content), &parsed); err != nil {
+		t.Fatalf("parsing app config: %v", err)
+	}
+	return parsed["keybindings"]
 }
 
 func readAppConfig(t *testing.T, dir string) string {

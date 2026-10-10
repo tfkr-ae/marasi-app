@@ -31,10 +31,14 @@ type KeybindingOverride struct {
 
 // KeybindingProfile is a named set of overrides with a stable identity.
 // Overrides is keyed by platform variant: "macos" and "windows-linux".
+// KnownActions lists the catalog action ids the profile was last saved
+// against; an action missing from it is new to the profile, and its factory
+// defaults inherit only when they do not collide with a customization.
 type KeybindingProfile struct {
-	ID        string                          `json:"id" yaml:"id"`
-	Name      string                          `json:"name" yaml:"name"`
-	Overrides map[string][]KeybindingOverride `json:"overrides" yaml:"overrides"`
+	ID           string                          `json:"id" yaml:"id"`
+	Name         string                          `json:"name" yaml:"name"`
+	Overrides    map[string][]KeybindingOverride `json:"overrides" yaml:"overrides"`
+	KnownActions []string                        `json:"knownActions" yaml:"known_actions"`
 }
 
 // KeybindingConfig is the persisted keybindings section.
@@ -57,9 +61,10 @@ func factoryKeybindings() KeybindingConfig {
 		Version:       keybindingsVersion,
 		ActiveProfile: "default",
 		Profiles: []KeybindingProfile{{
-			ID:        "default",
-			Name:      "Default",
-			Overrides: map[string][]KeybindingOverride{platformMacOS: {}, platformWindowsLinux: {}},
+			ID:           "default",
+			Name:         "Default",
+			Overrides:    map[string][]KeybindingOverride{platformMacOS: {}, platformWindowsLinux: {}},
+			KnownActions: []string{},
 		}},
 	}
 }
@@ -70,6 +75,14 @@ func parseKeybindings(node *yaml.Node) (KeybindingConfig, error) {
 	var config KeybindingConfig
 	if node == nil {
 		return config, fmt.Errorf("keybindings section is missing")
+	}
+	// Check the version first: a future format may add fields this version
+	// does not know, which is "unsupported", not "invalid".
+	var versioned struct {
+		Version int `yaml:"version"`
+	}
+	if err := node.Decode(&versioned); err == nil && versioned.Version > keybindingsVersion {
+		return config, fmt.Errorf("keybindings version %d is not supported (this Marasi reads version %d)", versioned.Version, keybindingsVersion)
 	}
 	raw, err := yaml.Marshal(node)
 	if err != nil {
@@ -114,6 +127,7 @@ func (a *App) SaveKeybindings(config KeybindingConfig, catalog []KeybindingActio
 	if err := validateKeybindings(config, catalog); err != nil {
 		return current, fmt.Errorf("invalid keybindings: %w", err)
 	}
+	config = settleKeybindings(config, catalog)
 	if err := writeConfigKeys(cfg.path(), map[string]any{keybindingsKey: config}); err != nil {
 		return current, fmt.Errorf("saving keybindings: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -216,20 +217,112 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 // resolveVariant returns each catalog action's bindings in one platform
 // variant: the override when present, otherwise the factory defaults.
 // Overrides for actions missing from the catalog are dormant and ignored.
-func resolveVariant(catalog keybindingCatalog, platform string, overrides []KeybindingOverride) map[string][]string {
+//
+// New-default rule (ADR 0001): an action the profile does not know yet
+// (missing from KnownActions) inherits its factory defaults only when none
+// collides with a customization; otherwise it is unbound and the
+// customization wins. A collision is a binding shared with an overridden
+// action in the same context, or with an overridden menu opening (which
+// nothing may shadow). Known actions always inherit, so a duplicate the
+// researcher makes is a conflict to fix rather than a silent unbind.
+func resolveVariant(catalog keybindingCatalog, profile KeybindingProfile, platform string) map[string][]string {
+	known := map[string]bool{}
+	for _, id := range profile.KnownActions {
+		known[id] = true
+	}
 	overridden := map[string][]string{}
-	for _, override := range overrides {
-		overridden[override.Action] = override.Keys
+	customized := map[string][]KeybindingAction{} // binding -> overridden catalog actions
+	for _, override := range profile.Overrides[platform] {
+		bindings := canonicalBindings(override.Keys)
+		overridden[override.Action] = bindings
+		if action, ok := catalog.byID[override.Action]; ok {
+			for _, binding := range bindings {
+				customized[binding] = append(customized[binding], action)
+			}
+		}
 	}
 	resolved := map[string][]string{}
 	for _, action := range catalog.actions {
-		source, ok := overridden[action.ID]
-		if !ok {
-			source = action.Defaults[platform]
+		if bindings, ok := overridden[action.ID]; ok {
+			resolved[action.ID] = bindings
+			continue
 		}
-		resolved[action.ID] = canonicalBindings(source)
+		defaults := canonicalBindings(action.Defaults[platform])
+		if !known[action.ID] && collidesWithCustomization(action, defaults, customized) {
+			defaults = []string{}
+		}
+		resolved[action.ID] = defaults
 	}
 	return resolved
+}
+
+func collidesWithCustomization(action KeybindingAction, defaults []string, customized map[string][]KeybindingAction) bool {
+	for _, binding := range defaults {
+		for _, other := range customized[binding] {
+			if other.Context == action.Context || other.ID == openMenuAction {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// resolveActiveKeybindings resolves the active profile for both platform
+// variants: platform -> action id -> bindings.
+func resolveActiveKeybindings(config KeybindingConfig, actions []KeybindingAction) (map[string]map[string][]string, error) {
+	catalog, err := newKeybindingCatalog(actions)
+	if err != nil {
+		return nil, err
+	}
+	for _, profile := range config.Profiles {
+		if profile.ID == config.ActiveProfile {
+			resolved := map[string]map[string][]string{}
+			for _, platform := range keybindingPlatforms {
+				resolved[platform] = resolveVariant(catalog, profile, platform)
+			}
+			return resolved, nil
+		}
+	}
+	return nil, fmt.Errorf("active profile %q does not exist", config.ActiveProfile)
+}
+
+// settleKeybindings records the new-default decisions of every profile
+// against a validated catalog: actions the rule left unbound get an explicit
+// empty override, and every catalog action becomes known. Ids no longer in
+// the catalog stay known (dormant extension actions keep their history).
+func settleKeybindings(config KeybindingConfig, actions []KeybindingAction) KeybindingConfig {
+	catalog, err := newKeybindingCatalog(actions)
+	if err != nil {
+		return config
+	}
+	settled := config
+	settled.Profiles = make([]KeybindingProfile, len(config.Profiles))
+	for i, profile := range config.Profiles {
+		next := profile
+		next.Overrides = map[string][]KeybindingOverride{}
+		for _, platform := range keybindingPlatforms {
+			overrides := slices.Clone(profile.Overrides[platform])
+			if overrides == nil {
+				overrides = []KeybindingOverride{}
+			}
+			resolved := resolveVariant(catalog, profile, platform)
+			for _, action := range catalog.actions {
+				overridden := slices.ContainsFunc(overrides, func(o KeybindingOverride) bool { return o.Action == action.ID })
+				if !overridden && len(resolved[action.ID]) == 0 && len(canonicalBindings(action.Defaults[platform])) > 0 {
+					overrides = append(overrides, KeybindingOverride{Action: action.ID, Keys: []string{}})
+				}
+			}
+			next.Overrides[platform] = overrides
+		}
+		known := slices.Clone(profile.KnownActions)
+		for _, action := range catalog.actions {
+			known = append(known, action.ID)
+		}
+		slices.Sort(known)
+		next.KnownActions = slices.Compact(known)
+		settled.Profiles[i] = next
+	}
+	return settled
 }
 
 func canonicalBindings(keys []string) []string {
@@ -257,7 +350,7 @@ func validateKeybindings(config KeybindingConfig, actions []KeybindingAction) er
 	var problems []error
 	for _, profile := range config.Profiles {
 		for _, platform := range keybindingPlatforms {
-			resolved := resolveVariant(catalog, platform, profile.Overrides[platform])
+			resolved := resolveVariant(catalog, profile, platform)
 			for _, problem := range variantProblems(catalog, resolved) {
 				problems = append(problems, fmt.Errorf("profile %q (%s): %s", profile.Name, platform, problem))
 			}
