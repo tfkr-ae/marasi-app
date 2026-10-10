@@ -168,3 +168,40 @@ test("reconfiguring the keymap changes dispatch and notifies subscribers", () =>
   assert.equal(dispatcher.resolve(keydown("h", "KeyH", { ctrlKey: true }), home), null);
   assert.equal(dispatcher.resolve(keydown("1", "Digit1", { ctrlKey: true }), home), "global.go-home");
 });
+
+// Keys pressed in a CodeMirror editor reach the editor first, as they did
+// when shortcuts listened on document in the bubble phase: ⌘] indents the
+// line, then Launchpad's Next Tab runs.
+const codeMirror = {
+  tagName: "DIV",
+  isContentEditable: true,
+  closest: (selector) => (selector.includes(".cm-editor") ? {} : null),
+};
+const launchpad = { ...home, route: "/launchpad" };
+
+test("a key pressed in an editor is left to the editor, and its menu action runs after it", () => {
+  const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: MACOS });
+  const { calls, handler } = recorder();
+  dispatcher.register("launchpad.next-tab", handler("next-tab"));
+  const event = cmd("]", "BracketRight", { target: codeMirror });
+
+  assert.equal(dispatcher.dispatch(event, launchpad), false);
+  assert.deepEqual(calls, []);
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(event.propagationStopped, false);
+
+  assert.equal(dispatcher.dispatch(event, launchpad, { afterEditor: true }), true);
+  assert.deepEqual(calls, ["next-tab"]);
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(event.propagationStopped, true);
+});
+
+test("a key pressed outside an editor runs its menu action once, before the page sees it", () => {
+  const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: MACOS });
+  const { calls, handler } = recorder();
+  dispatcher.register("launchpad.next-tab", handler("next-tab"));
+  const event = cmd("]", "BracketRight");
+  assert.equal(dispatcher.dispatch(event, launchpad), true);
+  assert.equal(dispatcher.dispatch(event, launchpad, { afterEditor: true }), false);
+  assert.deepEqual(calls, ["next-tab"]);
+});

@@ -29,13 +29,17 @@ function blockedByFormField(event, state) {
   return target.id !== MENU_SEARCH_ID;
 }
 
+// Whether the target is inside a CodeMirror editor: its contenteditable
+// content or the editor's wrapper elements.
+export function isInEditor(target) {
+  return Boolean(target?.closest?.(".cm-editor"));
+}
+
 // Inputs, textareas, selects, contenteditable hosts and editor surfaces.
-// CodeMirror's content is contenteditable; `.cm-editor` also covers focus on
-// the editor's wrapper elements.
 function isEditable(target) {
   if (!target) return false;
   if (FORM_FIELD_TAGS.has(target.tagName) || target.isContentEditable) return true;
-  return Boolean(target.closest?.(".cm-editor"));
+  return isInEditor(target);
 }
 
 // Escape-to-close/cancel, Tab/Shift+Tab focus traversal and dialog or query
