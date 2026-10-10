@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { deduplicateBridgeHTML } from "./bridge-html.mjs";
+import { normalizeListenerStartup } from "./listener-startup.mjs";
 
 const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, action, label, shortcut] = process.argv.slice(2);
 const port = Number(portText);
@@ -99,6 +101,7 @@ async function snapshot() {
 			path: location.pathname,
 			title: document.title,
 			viewport: {width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio},
+			bridgeScripts: Object.fromEntries(["/wails/ipc.js", "/wails/runtime.js"].map(path => [path, Array.from(document.scripts).filter(script => script.src === location.origin + path).length])),
 			text: document.body.innerText,
 			overlay: overlay && rect && rect.width > 100 && rect.height > 100 ? {
 				label: overlay.getAttribute("aria-label") || overlay.querySelector("h2")?.textContent || null,
@@ -408,11 +411,77 @@ await send("Network.enable");
 await send("Emulation.setDeviceMetricsOverride", { ...viewport, deviceScaleFactor: 1, mobile: false });
 
 if (mode === "launch") {
-	await send("Page.navigate", { url: appURL });
-	await waitFor(`document.body?.innerText.includes("Project Dashboard")`, "dashboard readiness", 120);
-	await capture("launch-ready");
+	// Fulfilled documents lose Chrome's loopback classification. Keep access
+	// limited to this isolated browser's Wails origin, not all websites.
+	await send("Browser.setPermission", { permission: { name: "loopback-network" }, setting: "granted", origin: appOrigin });
+	let interceptionError;
+	let intercepted = false;
+	let listenerStartupIntercepted = false;
+	const normalizeStartup = async ({ data }) => {
+		const message = JSON.parse(data);
+		if (message.method !== "Fetch.requestPaused") return;
+		const request = message.params;
+		try {
+			// Vite also serves the layout's CSS as a JavaScript import.
+			if (new URL(request.request.url).searchParams.get("type") === "style") {
+				await send("Fetch.continueRequest", { requestId: request.requestId });
+				return;
+			}
+			const isRoot = request.resourceType === "Document";
+			if (request.responseStatusCode !== 200) throw new Error(`Startup response returned ${request.responseStatusCode}`);
+			const response = await send("Fetch.getResponseBody", { requestId: request.requestId });
+			const original = response.base64Encoded ? Buffer.from(response.body, "base64").toString("utf8") : response.body;
+			const { body, counts } = isRoot ? deduplicateBridgeHTML(original) : normalizeListenerStartup(original);
+			if (isRoot) {
+				fs.writeFileSync(`${evidenceDir}/launch-bridge.json`, `${JSON.stringify({ url: request.request.url, originalScriptCounts: counts, removedDuplicateScripts: Object.values(counts).reduce((sum, count) => sum + count - 1, 0) }, null, 2)}\n`);
+			} else {
+				fs.writeFileSync(`${evidenceDir}/launch-listener-startup.json`, `${JSON.stringify({ url: request.request.url, normalizedStartupCalls: 1 }, null, 2)}\n`);
+			}
+			const prefix = isRoot ? "launch-root" : "launch-layout";
+			const extension = isRoot ? "html" : "js";
+			fs.writeFileSync(`${evidenceDir}/${prefix}-original.${extension}`, original);
+			fs.writeFileSync(`${evidenceDir}/${prefix}-normalized.${extension}`, body);
+			await send("Fetch.fulfillRequest", {
+				requestId: request.requestId,
+				responseCode: request.responseStatusCode,
+				responseHeaders: request.responseHeaders.filter(({ name }) => !["content-length", "content-encoding", "transfer-encoding"].includes(name.toLowerCase())),
+				body: Buffer.from(body).toString("base64"),
+			});
+			if (isRoot) intercepted = true;
+			else listenerStartupIntercepted = true;
+		} catch (error) {
+			interceptionError = error;
+			await send("Fetch.failRequest", { requestId: request.requestId, errorReason: "Failed" });
+		}
+	};
+	socket.addEventListener("message", normalizeStartup);
+	await send("Fetch.enable", { patterns: [
+		{ urlPattern: new URL(appURL).href, resourceType: "Document", requestStage: "Response" },
+		{ urlPattern: `${appOrigin}/src/routes/+layout.svelte*`, resourceType: "Script", requestStage: "Response" },
+	] });
+	try {
+		await send("Page.navigate", { url: appURL });
+		for (let attempt = 0; attempt < 120; attempt++) {
+			if (interceptionError) throw interceptionError;
+			if (intercepted && listenerStartupIntercepted && await evaluate(`document.body?.innerText.includes("Project Dashboard")`)) break;
+			if (attempt === 119) throw new Error("timed out waiting for normalized Home startup");
+			await sleep(1000);
+		}
+		await waitFor(`Array.from(document.querySelectorAll("button")).some(button => button.querySelector("span.bg-success-500"))`, "online Home listener indicator", 10, 250);
+		await capture("launch-ready");
+		await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script", 5);
+	} catch (error) {
+		await capture("launch-failed");
+		throw error;
+	} finally {
+		fs.writeFileSync(`${evidenceDir}/launch-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
+		fs.writeFileSync(`${evidenceDir}/launch-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
+		await send("Fetch.disable");
+		socket.removeEventListener("message", normalizeStartup);
+	}
 } else if (mode === "doctor") {
 	await waitFor(`location.origin === ${JSON.stringify(new URL(appURL).origin)} && window.go?.main?.App && window.runtime && innerWidth === ${viewport.width} && innerHeight === ${viewport.height} && devicePixelRatio === 1 && document.querySelector('[title="Home"]')`, "healthy Marasi browser page, Wails bridge, app rail, and viewport", 5);
+	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5);
 } else if (mode === "drive") {
 	const route = routes[feature];
 	if (!route) throw new Error(`unknown feature: ${feature}`);

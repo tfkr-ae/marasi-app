@@ -17,6 +17,12 @@ Run from the repository root on macOS:
 
 The helper runs `wails dev -m -nosyncgomod -nocolour -devserver localhost:34115` with `GOWORK=off`, creates an isolated home directory, and writes verification-only config with `first_run: false`. It starts an isolated headless Chrome against the Wails dev server with the app's `1600x900` window size. It defaults to proxy port `18080`; set `MARASI_VERIFY_PROXY_PORT` before launch to choose another free port. It returns after browser JavaScript sees the scratchpad dashboard through the real Go bindings.
 
+Chrome still starts on Home so its menus and global hotkeys initialize. During that first navigation, the driver intercepts the root HTML response and removes duplicate Wails bridge script tags; Wails v2.10.1 injects them alongside the explicit tags in `app.html`. The real backend and runtime scripts remain unchanged, and the native GUI still runs. Chrome needs the `loopback-network` DevTools permission, granted only to the Wails origin in the isolated profile, because response interception loses the document's loopback classification.
+
+The driver also intercepts Chrome's compiled layout module during startup. Both the native GUI and Chrome bootstrap the listener; the second `StartProxy` rejects with `listener already active`, which otherwise makes Chrome's UI offline despite a running proxy. Only that startup rejection falls back to the real `UpdateProxy` with the configured address and port. Other failures retain the application's error path, and interactive listener controls remain unchanged. Launch requires the Home listener indicator to be online. Application source files are untouched; this is verification-only response normalization, not a production fix.
+
+Each fresh verification run follows launch → checks → cleanup, so both startup normalizations are reapplied automatically at the next launch. The reload caveat applies only within an active run: `drive.sh` and `doctor.sh` reuse that instance rather than relaunching it. Use in-app navigation during checks. If Chrome is fully refreshed, Vite triggers a full-page reload, or the backend restarts, clean up and relaunch before continuing; reloads can restore duplicate bridges or offline startup behavior after interception detaches. Doctor checks for exactly one copy of each bridge script.
+
 The state directory defaults to `${TMPDIR}/verify-marasi`. Launch refuses to reuse existing state or occupied ports `5173`, `34115`, and `18080`. Chrome chooses a free DevTools port. It does not use the normal `~/Library/Application Support/Marasi` directory. Configure alternate dev and fixed CDP ports with `MARASI_VERIFY_DEV_PORT` and `MARASI_VERIFY_CDP_PORT`. Vite is fixed to `5173` in this repo, so only one verification run can use the default checkout at a time.
 
 Teardown only the instance recorded by the helper:
@@ -83,6 +89,7 @@ Each launch creates `.artifacts/verify-marasi/<UTC timestamp>/`. Keep these file
 - `launch.txt` records the build, PID, isolated home, and selected port.
 - `app.log` records backend startup and proxy messages.
 - `launch-ready.json` and `launch-ready.png` capture the first ready dashboard.
+- `launch-bridge.json`, `launch-root-original.html`, and `launch-root-normalized.html` record the startup-only bridge deduplication. `launch-listener-startup.json` and `launch-layout-{original,normalized}.js` record the listener-startup fallback; `launch-console.json` records whether it ran, and `launch-network.json` records browser startup, including IPC connections.
 - `<feature>-before.json` and `<feature>-before.png` capture the state before navigation.
 - `<feature>-action.txt` records the exact user input.
 - `<feature>-after.json` and `<feature>-after.png` capture the resulting DOM and screen.
