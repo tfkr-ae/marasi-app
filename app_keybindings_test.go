@@ -95,6 +95,44 @@ func TestAppKeybindings(t *testing.T) {
 		}
 	})
 
+	t.Run("should persist profile creation, duplication, rename, activation and deletion with stable ids", func(t *testing.T) {
+		dir := t.TempDir()
+		app := loadConfigApp(t, dir)
+		emptyVariants := func() map[string][]KeybindingOverride {
+			return map[string][]KeybindingOverride{"macos": {}, "windows-linux": {}}
+		}
+		work := KeybindingProfile{ID: "work", Name: "Work", KnownActions: testKnownActions(), Overrides: map[string][]KeybindingOverride{
+			"macos":         {{Action: "global.go-home", Keys: []string{"meta+1", "meta+h"}}, {Action: "extension.gone.do-thing", Keys: []string{"meta+alt+9"}}},
+			"windows-linux": {{Action: "global.go-ledger", Keys: []string{}}},
+		}}
+		first := KeybindingConfig{Version: 1, ActiveProfile: "default", Profiles: []KeybindingProfile{
+			{ID: "default", Name: "Default", Overrides: emptyVariants(), KnownActions: testKnownActions()},
+			work,
+			{ID: "scratch", Name: "Scratch", Overrides: emptyVariants(), KnownActions: testKnownActions()},
+		}}
+		if _, err := app.SaveKeybindings(first, testKeybindingCatalog()); err != nil {
+			t.Fatalf("saving the created profiles: %v", err)
+		}
+
+		// One draft: rename work, duplicate it, activate the copy, delete scratch.
+		copied := work
+		copied.ID, copied.Name = "work-copy", "Work Copy"
+		renamed := work
+		renamed.Name = "Client Work"
+		second := KeybindingConfig{Version: 1, ActiveProfile: "work-copy", Profiles: []KeybindingProfile{first.Profiles[0], renamed, copied}}
+		if _, err := app.SaveKeybindings(second, testKeybindingCatalog()); err != nil {
+			t.Fatalf("saving the profile changes: %v", err)
+		}
+
+		got := loadConfigApp(t, dir).GetKeybindings()
+		if got.Problem != "" || !reflect.DeepEqual(got.Config, second) {
+			t.Fatalf("wanted after restart: %+v\ngot: %+v (problem %q)", second, got.Config, got.Problem)
+		}
+		if strings.Contains(readAppConfig(t, dir), "scratch") {
+			t.Fatalf("wanted: the deleted profile gone from disk\ngot:\n%s", readAppConfig(t, dir))
+		}
+	})
+
 	t.Run("should reject invalid updates and leave disk and live config unchanged", func(t *testing.T) {
 		withOverrides := func(platform string, overrides ...KeybindingOverride) KeybindingConfig {
 			config := knownKeybindings()

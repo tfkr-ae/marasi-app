@@ -1,3 +1,4 @@
+import { slugify } from "./catalog.js";
 import { contextsConflict } from "./contexts.js";
 import { isReservedBinding } from "./gate.js";
 import { bindingFromEvent, formatBinding, normalizeBinding } from "./keys.js";
@@ -6,6 +7,7 @@ import { PLATFORM_NAMES } from "./platform.js";
 import {
   catalogDescriptor,
   factoryKeybindings,
+  factoryProfile,
   profileKeymap,
   settleProfile,
   validateProfile,
@@ -107,6 +109,120 @@ export function removeBinding(catalog, draft, target, index) {
 // Returns one action to its factory default in that variant only.
 export function resetAction(draft, target) {
   return updateVariant(draft, target, (list) => list.filter((o) => o.action !== target.actionId));
+}
+
+// A variant: one profile's platform bindings, { profileId, platform }.
+
+// Whether any available action of the variant has its own binding list,
+// so resetting the platform would change something.
+export function isPlatformCustomized(catalog, draft, { profileId, platform }) {
+  const profile = draft.profiles.find((item) => item.id === profileId);
+  return (profile?.overrides?.[platform] ?? []).some((o) => catalog.has(o.action));
+}
+
+// Returns every action of the variant to its factory default. The other
+// platform is untouched. Overrides of actions missing from the catalog
+// (an extension that is not installed) are kept: they have no row to
+// restore them from.
+export function resetPlatform(catalog, draft, variant) {
+  return updateVariant(draft, variant, (list) => list.filter((o) => !catalog.has(o.action)));
+}
+
+// Profile lifecycle. Profiles are created, duplicated, renamed, activated
+// and deleted in the draft like any other edit; only Save persists them.
+// A profile's id is its stable identity: it is chosen once, from the name
+// at creation, and never changes when the profile is renamed.
+
+// A profile id (lowercase letters, digits and single dashes, as the backend
+// requires) derived from `name` and unused in the draft.
+export function newProfileId(draft, name) {
+  const base = slugify(name) || "profile";
+  const taken = new Set(draft.profiles.map((p) => p.id));
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+// Why `name` cannot name a profile in the draft ("" when it can). Names
+// are trimmed and compared case-insensitively, as the backend does.
+// `exceptId` is the profile being renamed, which may keep its own name.
+export function profileNameProblem(draft, name, exceptId) {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return "Enter a profile name";
+  const other = draft.profiles.find((p) => p.id !== exceptId && p.name.trim().toLowerCase() === wanted);
+  return other ? `Another profile is already named ${other.name.trim()}` : "";
+}
+
+function checkName(draft, name, exceptId) {
+  const problem = profileNameProblem(draft, name, exceptId);
+  if (problem) throw new Error(problem);
+  return name.trim();
+}
+
+function updateProfile(draft, profileId, update) {
+  return { ...draft, profiles: draft.profiles.map((p) => (p.id === profileId ? update(p) : p)) };
+}
+
+// Renames a profile. Its id, and so its identity, stays the same.
+export function renameProfile(draft, profileId, name) {
+  const trimmed = checkName(draft, name, profileId);
+  return updateProfile(draft, profileId, (p) => ({ ...p, name: trimmed }));
+}
+
+function addProfile(draft, profile) {
+  return { ...draft, profiles: [...draft.profiles, profile] };
+}
+
+// `base`, or `base 2`, `base 3`, ... : the first that no profile uses.
+export function suggestProfileName(draft, base) {
+  let name = base;
+  for (let n = 2; profileNameProblem(draft, name); n++) name = `${base} ${n}`;
+  return name;
+}
+
+// Adds a profile with factory defaults, settled against the catalog like
+// every profile in the draft. It is not activated.
+export function createProfile(catalog, draft, name) {
+  const trimmed = checkName(draft, name);
+  return addProfile(draft, settleProfile(catalog, factoryProfile(newProfileId(draft, trimmed), trimmed)));
+}
+
+// Adds a copy of a profile under a new identity and name. The copy keeps
+// both platform variants, every override (unbinding and dormant extension
+// overrides included) and the known actions, so it resolves exactly like
+// the source. It is not activated.
+export function duplicateProfile(draft, sourceId, name) {
+  const trimmed = checkName(draft, name);
+  const source = draft.profiles.find((p) => p.id === sourceId);
+  return addProfile(draft, { ...structuredClone(source), id: newProfileId(draft, trimmed), name: trimmed });
+}
+
+const profileName = (draft, profileId) => draft.profiles.find((p) => p.id === profileId)?.name ?? profileId;
+
+// Why the profile cannot be made active ("" when it can).
+export function makeActiveBlocker(draft, profileId) {
+  return draft.activeProfile === profileId ? `${profileName(draft, profileId)} is already the active profile` : "";
+}
+
+// Chooses the profile dispatch uses once the draft is saved.
+export function makeActive(draft, profileId) {
+  return { ...draft, activeProfile: profileId };
+}
+
+// Why the profile cannot be deleted ("" when it can): the last profile
+// stays, and the active one needs a replacement made active first.
+export function deleteBlocker(draft, profileId) {
+  if (draft.profiles.length <= 1) return "The last profile cannot be deleted";
+  if (draft.activeProfile === profileId) {
+    return `Make another profile active before deleting ${profileName(draft, profileId)}`;
+  }
+  return "";
+}
+
+export function deleteProfile(draft, profileId) {
+  const blocker = deleteBlocker(draft, profileId);
+  if (blocker) throw new Error(blocker);
+  return { ...draft, profiles: draft.profiles.filter((p) => p.id !== profileId) };
 }
 
 // A comparable form of a config: override order is not meaningful.
