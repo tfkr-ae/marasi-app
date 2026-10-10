@@ -47,6 +47,7 @@ export const CONTEXTS = [
     id: "ledger.drawer-open.websocket",
     tier: "drawer",
     label: "Ledger drawer (WebSocket upgrade)",
+    overlaps: ["ledger.drawer-open"],
     isEligible: (state) =>
       onRoute("/ledger")(state) &&
       drawerOpen(state) &&
@@ -85,6 +86,18 @@ export const CONTEXTS = [
     isEligible: onRoute(`/${id}`),
   })),
 ];
+
+// Collision domains for validation. `overlaps` (optional, on either side)
+// names same-tier contexts that can be eligible at the same time: precedence
+// cannot pick between them, so a binding shared with one is a duplicate, like
+// one shared within a context. Contexts that are mutually exclusive, or that
+// overlap in a different tier (shadowing), stay separate. Mirrored by
+// keybindingCatalog.conflicting in keybinding_validation.go.
+export function contextsConflict(contexts, a, b) {
+  if (a === b) return true;
+  const byId = (id) => contexts.find((context) => context.id === id);
+  return Boolean(byId(a)?.overlaps?.includes(b) || byId(b)?.overlaps?.includes(a));
+}
 
 export function tierRank(tier) {
   const rank = TIERS.indexOf(tier);

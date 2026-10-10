@@ -1,9 +1,10 @@
 import { eligibleContextIds } from "./contexts.js";
 import { shortcutGate } from "./gate.js";
 import { bindingFromEvent } from "./keys.js";
-import { createKeymap } from "./keymap.js";
+import { createKeymap, OPEN_MENU } from "./keymap.js";
+import { liveKeybindings } from "./profiles.js";
 
-export const OPEN_MENU = "global.open-menu";
+export { OPEN_MENU };
 
 // The central shortcut dispatcher. It owns the keymap (catalog + current
 // platform + overrides) and a live handler registry keyed by action id. For
@@ -16,9 +17,14 @@ export const OPEN_MENU = "global.open-menu";
 // The winner's most recently registered handler runs; registration order
 // never chooses between different actions.
 //
-// `overrides` is keyed by platform variant: { macos: {id: [...]}, ... }.
-export function createDispatcher({ catalog, platform, overrides = {} }) {
+// `keybindings` is the saved state from GetKeybindings ({ config, problem });
+// the active profile's variant for the current platform is live, or the
+// factory bindings when it is unusable (`problem` in the snapshot says why).
+// `overrides` (keyed by platform variant: { macos: {id: [...]}, ... }) sets
+// raw overrides directly and is used when no `keybindings` are given.
+export function createDispatcher({ catalog, platform, overrides = {}, keybindings = null }) {
   let keymap;
+  let problem = "";
   const handlers = new Map();
   const subscribers = new Set();
 
@@ -27,6 +33,7 @@ export function createDispatcher({ catalog, platform, overrides = {} }) {
       catalog: keymap.catalog,
       platform: keymap.platform,
       bindingsFor: keymap.bindingsFor,
+      problem,
     };
   }
 
@@ -34,7 +41,12 @@ export function createDispatcher({ catalog, platform, overrides = {} }) {
     catalog = next.catalog ?? catalog;
     platform = next.platform ?? platform;
     overrides = next.overrides ?? overrides;
-    keymap = createKeymap(catalog, platform, overrides[platform] ?? {});
+    keybindings = next.keybindings ?? keybindings;
+    const live = keybindings
+      ? liveKeybindings(keybindings, catalog, platform)
+      : { overrides: overrides[platform] ?? {}, problem: "" };
+    problem = live.problem;
+    keymap = createKeymap(catalog, platform, live.overrides, { knownActions: live.knownActions });
     const current = snapshot();
     for (const fn of subscribers) fn(current);
   }

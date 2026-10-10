@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/spf13/viper"
 )
@@ -43,6 +44,32 @@ type Config struct {
 	// TestCaseProfile holds the parsed test cases profile.
 	// Ignored by the main application viper instance.
 	TestCaseProfile TestCaseProfile `mapstructure:"-"`
+
+	// mu serializes every write to marasi_appconfig.yaml (flags and
+	// keybindings) and guards the fields below.
+	mu sync.Mutex
+	// v reads the flat preferences. Writes never go through viper: they patch
+	// the YAML document on disk (see writeConfigKeys), so sections viper would
+	// reformat, such as a preserved invalid keybindings section, stay intact.
+	v *viper.Viper
+	// keybindings is the saved keybindings section, or the in-memory factory
+	// profile when keybindingsProblem is set.
+	keybindings        KeybindingConfig
+	keybindingsProblem string
+}
+
+const appConfigName = "marasi_appconfig"
+
+var configDefaults = map[string]any{
+	"first_run":       true,
+	"vim_enabled":     true,
+	"default_address": "127.0.0.1",
+	"syntax_mode":     "auto",
+	"default_port":    "8080",
+}
+
+func (cfg *Config) path() string {
+	return filepath.Join(cfg.ConfigDir, appConfigName+".yaml")
 }
 
 // ToggleFlag toggles a boolean configuration flag and saves the configuration to disk.
@@ -53,19 +80,13 @@ type Config struct {
 // Returns:
 //   - error: Configuration error if the flag doesn't exist or save fails
 func (cfg *Config) ToggleFlag(name string) error {
-	if !viper.IsSet(name) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+	if !cfg.v.IsSet(name) {
 		// Key doesn't exist
 		return fmt.Errorf("checking if %s exists", name)
 	}
-	flag := viper.GetBool(name)
-	viper.Set(name, !flag)
-	if err := viper.WriteConfig(); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return fmt.Errorf("unmarshalling config to struct : %w", err)
-	}
-	return nil
+	return cfg.writeFlag(name, !cfg.v.GetBool(name))
 }
 
 // SetFlag sets a configuration flag to a specific value and saves the configuration to disk.
@@ -77,15 +98,23 @@ func (cfg *Config) ToggleFlag(name string) error {
 // Returns:
 //   - error: Configuration error if the flag doesn't exist or save fails
 func (cfg *Config) SetFlag(name string, value string) error {
-	if !viper.IsSet(name) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+	if !cfg.v.IsSet(name) {
 		// Key doesn't exist
 		return fmt.Errorf("checking if %s exists", name)
 	}
-	viper.Set(name, value)
-	if err := viper.WriteConfig(); err != nil {
+	return cfg.writeFlag(name, value)
+}
+
+// writeFlag persists one flag, then updates viper and the struct. On failure
+// neither the file nor the in-memory config changes. Callers hold mu.
+func (cfg *Config) writeFlag(name string, value any) error {
+	if err := writeConfigKeys(cfg.path(), map[string]any{name: value}); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
-	if err := viper.Unmarshal(&cfg); err != nil {
+	cfg.v.Set(name, value)
+	if err := cfg.v.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("unmarshalling config to struct : %w", err)
 	}
 	return nil
@@ -104,45 +133,61 @@ func LoadConfig(appConfigDir string) (*Config, error) {
 			return nil, fmt.Errorf("checking if directory exists %s: %w", appConfigDir, err)
 		}
 	}
-	viper.SetConfigName("marasi_appconfig")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(appConfigDir)
-	viper.SetDefault("first_run", true)
-	viper.SetDefault("vim_enabled", true)
-	viper.SetDefault("default_address", "127.0.0.1")
-	viper.SetDefault("syntax_mode", "auto")
-	viper.SetDefault("default_port", "8080")
-	err = viper.ReadInConfig()
+	config := &Config{ConfigDir: appConfigDir}
+
+	// Add missing preferences and, on first upgrade, the default keybinding
+	// profile. Values already in the file, including an invalid keybindings
+	// section, are never rewritten here.
+	doc, err := readConfigDocument(config.path())
 	if err != nil {
-		// need to check if the error is config file doesn't exist
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file is not found
-			err = viper.SafeWriteConfig()
-			if err != nil {
-				return nil, fmt.Errorf("writing config file : %w", err)
-			}
-		} else {
+		return nil, fmt.Errorf("reading config file : %w", err)
+	}
+	missing := map[string]any{}
+	for key, value := range configDefaults {
+		if documentValue(doc, key) == nil {
+			missing[key] = value
+		}
+	}
+	if documentValue(doc, keybindingsKey) == nil {
+		missing[keybindingsKey] = factoryKeybindings()
+	}
+	if len(missing) > 0 {
+		if err := writeConfigKeys(config.path(), missing); err != nil {
+			return nil, fmt.Errorf("writing config file : %w", err)
+		}
+		if doc, err = readConfigDocument(config.path()); err != nil {
 			return nil, fmt.Errorf("reading config file : %w", err)
 		}
 	}
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+
+	config.v = viper.New()
+	config.v.SetConfigName(appConfigName)
+	config.v.SetConfigType("yaml")
+	config.v.AddConfigPath(appConfigDir)
+	for key, value := range configDefaults {
+		config.v.SetDefault(key, value)
+	}
+	if err := config.v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("reading config file : %w", err)
+	}
+	if err := config.v.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("unmarshalling config to struct : %w", err)
 	}
-
 	config.DesktopOS = runtime.GOOS
 	config.ConfigDir = appConfigDir
-	// Rewrite entire file from struct
-	err = viper.WriteConfig()
+
+	config.keybindings, err = parseKeybindings(documentValue(doc, keybindingsKey))
 	if err != nil {
-		return nil, fmt.Errorf("writing config after unmarshalling : %w", err)
+		config.keybindingsProblem = err.Error()
+		config.keybindings = factoryKeybindings()
+		log.Printf("[!] keybindings in %s left untouched, using factory shortcuts: %v", config.path(), err)
 	}
 
-	if err := loadTestCases(appConfigDir, &config); err != nil {
+	if err := loadTestCases(appConfigDir, config); err != nil {
 		return nil, fmt.Errorf("loading test cases: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 // loadTestCases handles the extraction and parsing of test_cases.yml
