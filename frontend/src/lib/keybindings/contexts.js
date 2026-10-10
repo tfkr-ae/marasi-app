@@ -15,13 +15,31 @@ export function isWebSocketUpgrade(meta) {
   );
 }
 
-const onRoute = (route) => (state) => state.route === route;
+// A page (and its drawers) is eligible on its route while no modal covers
+// it. Only the WebSocket modal lets menu actions through the gate; under it,
+// its own overlay contexts and the global context are eligible, never the
+// page or drawer beneath.
+const onRoute = (route) => (state) => state.route === route && !state.modal;
 const drawerOpen = (state) => Boolean(state.drawer?.open);
 const requestDrawerOpen = (state) =>
   drawerOpen(state) && state.drawer.id === "request-response";
 
+export const WEBSOCKET_MODAL = "WebsocketStream";
+// The WebSocket modal's tabs, in tab order. The modal publishes the open one
+// as `state.websocketTab`.
+export const WEBSOCKET_TABS = ["stream", "checkpoint", "inject"];
+const websocketModalOpen = (state) => state.modal === WEBSOCKET_MODAL;
+
 // `isEligible(state)` receives the dispatcher state (see dispatcher.js). It is
-// app-defined; profiles never change it. Ticket 04 adds overlay contexts here.
+// app-defined; profiles never change it.
+//
+// `coOccursWith` lists the other contexts that can be eligible at the same
+// time as this one (the relation is symmetric; declaring it on one side is
+// enough, and the global context co-occurs with every context implicitly).
+// Validation uses it with tiers: co-occurring contexts of the same tier form
+// one collision domain (a key may not be bound twice across them), and a
+// more specific co-occurring context shadows a broader one. Contexts that
+// never co-occur may reuse keys freely.
 //
 // A drawer that replaces its page's menu is expressed by eligibility: the
 // page context is ineligible while the drawer is open, so its actions never
@@ -35,6 +53,25 @@ export const CONTEXTS = [
     label: "Global",
     isEligible: () => true,
   },
+  // The WebSocket modal: actions shared by every tab, then one context per
+  // tab. A tab context and the shared one are eligible together.
+  {
+    id: "websocket",
+    tier: "overlay",
+    label: "WebSocket",
+    isEligible: websocketModalOpen,
+    coOccursWith: WEBSOCKET_TABS.map((tab) => `websocket.${tab}`),
+  },
+  ...[
+    ["stream", "WebSocket Stream tab"],
+    ["checkpoint", "WebSocket Checkpoint tab"],
+    ["inject", "WebSocket Inject tab"],
+  ].map(([tab, label]) => ({
+    id: `websocket.${tab}`,
+    tier: "overlay",
+    label,
+    isEligible: (state) => websocketModalOpen(state) && state.websocketTab === tab,
+  })),
   {
     id: "ledger.drawer-closed",
     tier: "page",
@@ -51,6 +88,7 @@ export const CONTEXTS = [
       onRoute("/ledger")(state) &&
       drawerOpen(state) &&
       isWebSocketUpgrade(state.drawer.meta),
+    coOccursWith: ["ledger.drawer-open"],
   },
   {
     id: "ledger.drawer-open",
@@ -86,10 +124,42 @@ export const CONTEXTS = [
   })),
 ];
 
+function decodedRoute(route) {
+  try {
+    return decodeURIComponent(route ?? "");
+  } catch {
+    return route;
+  }
+}
+
+// An extension's page, `/extension/<name>`. Built per loaded extension (see
+// buildCatalog), so it is not in CONTEXTS.
+export function extensionPageContext(id, extensionName) {
+  return {
+    id,
+    tier: "page",
+    label: extensionName,
+    isEligible: (state) =>
+      !state.modal && decodedRoute(state.route) === `/extension/${extensionName}`,
+  };
+}
+
 export function tierRank(tier) {
   const rank = TIERS.indexOf(tier);
   if (rank === -1) throw new Error(`unknown menu context tier: ${tier}`);
   return rank;
+}
+
+// Whether two contexts can be eligible at the same time: the same context,
+// either one is global, or either declares the other in `coOccursWith`.
+export function contextsCoOccur(a, b, contexts = CONTEXTS) {
+  if (a === b) return true;
+  const byId = (id) => contexts.find((context) => context.id === id);
+  const [first, second] = [byId(a), byId(b)];
+  if (first?.tier === "global" || second?.tier === "global") return true;
+  return Boolean(
+    first?.coOccursWith?.includes(b) || second?.coOccursWith?.includes(a),
+  );
 }
 
 // Ids of the contexts eligible in `state`, most specific first. Ties within a
