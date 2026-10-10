@@ -3,6 +3,7 @@ import {
   GetProxyItems,
   GetLogs,
   GetMarasiConfig,
+  GetKeybindings,
   GetFilters,
   GetExtensionCode,
   GetWaypoints,
@@ -170,6 +171,18 @@ export let marasiConfig = writable({});
 export async function readConfig() {
   const config = await GetMarasiConfig();
   marasiConfig.set(config);
+  await readKeybindings();
+}
+
+// Saved keybinding profiles ({ config, problem }) from the app config; the
+// global menu hands them to the shortcut dispatcher.
+export const keybindingState = writable(null);
+export async function readKeybindings() {
+  try {
+    keybindingState.set(await GetKeybindings());
+  } catch (error) {
+    console.error("reading keybindings, using factory shortcuts:", error);
+  }
 }
 
 // Launchpad navigation state persistence

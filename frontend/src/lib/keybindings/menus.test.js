@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
-import { CONTEXTS, contextsCoOccur } from "./contexts.js";
+import { CONTEXTS, contextsConflict } from "./contexts.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
+import { factoryKeybindings, validateKeybindings } from "./profiles.js";
 
 // Page and drawer menus resolved through the app's real catalog and menu
 // contexts, against the layout's dispatcher state shape.
@@ -174,33 +175,32 @@ test("page actions never run on another page", () => {
   assert.deepEqual(calls, []);
 });
 
-test("contexts that are eligible together are declared to co-occur", () => {
-  const coOccur = (a, b) => contextsCoOccur(a, b, CONTEXTS);
-  assert.ok(coOccur("websocket", "websocket.inject"));
-  assert.ok(coOccur("websocket.inject", "websocket"));
-  assert.ok(coOccur("ledger.drawer-open", "ledger.drawer-open.websocket"));
-  assert.ok(coOccur("websocket.stream", "global"));
-  assert.ok(coOccur("global", "armory.page"));
-  assert.ok(coOccur("launchpad", "launchpad"));
-  assert.ok(!coOccur("websocket.stream", "websocket.inject"));
-  assert.ok(!coOccur("websocket.stream", "ledger.drawer-open"));
-  assert.ok(!coOccur("ledger.drawer-open", "ledger.drawer-closed"));
+test("each WebSocket tab overlaps the modal's shared context but not the other tabs", () => {
+  const conflict = (a, b) => contextsConflict(CONTEXTS, a, b);
+  for (const tab of ["websocket.stream", "websocket.checkpoint", "websocket.inject"]) {
+    assert.ok(conflict(tab, "websocket"), tab);
+    assert.ok(conflict("websocket", tab), tab);
+  }
+  assert.ok(!conflict("websocket.stream", "websocket.inject"));
+  assert.ok(!conflict("websocket.checkpoint", "websocket.inject"));
 });
 
-test("no key is bound twice across co-occurring contexts of one tier", () => {
-  const catalog = buildCatalog();
-  for (const platform of [MACOS, WINDOWS_LINUX]) {
-    for (const a of catalog.actions) {
-      for (const b of catalog.actions) {
-        if (a.id >= b.id) continue;
-        const tierA = catalog.contexts.find((c) => c.id === a.context).tier;
-        const tierB = catalog.contexts.find((c) => c.id === b.context).tier;
-        if (tierA !== tierB || !contextsCoOccur(a.context, b.context, catalog.contexts)) continue;
-        const shared = a.defaults[platform].filter((binding) => b.defaults[platform].includes(binding));
-        assert.deepEqual(shared, [], `${platform}: ${a.id} and ${b.id}`);
-      }
-    }
-  }
+test("the factory profile is valid with WebSocket and extension actions in the catalog", () => {
+  const catalog = buildCatalog({
+    extensions: [{ Name: "workshop" }, { Name: "Port Scanner" }],
+    extensionMenus: {
+      "Port Scanner": [
+        { name: "Scan", action: "scan", keys: ["⌘+⇧+H", "ctrl+⇧+H"] },
+        { name: "Settings clash", action: "settings", keys: ["⌘+P", "ctrl+P"] },
+        { name: "Menu clash", action: "menu", keys: ["⌘+K", "ctrl+K"] },
+        { name: "Scan again", action: "scan-again", keys: ["⌘+⇧+H", "ctrl+⇧+H"] },
+        { name: "Reserved", action: "reserved", keys: ["shift+enter", "escape"] },
+      ],
+    },
+  });
+  assert.deepEqual(validateKeybindings(catalog, factoryKeybindings()), []);
+  assert.deepEqual(catalog.get("extension.port-scanner.scan").defaults[MACOS], ["meta+shift+h"]);
+  assert.deepEqual(catalog.get("extension.port-scanner.scan-again").defaults[MACOS], []);
 });
 
 const websocketModal = (websocketTab, drawer = requestDrawer(websocketUpgrade)) => ({

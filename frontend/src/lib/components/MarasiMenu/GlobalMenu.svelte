@@ -44,6 +44,7 @@
 		extensions,
 		extensions_ui,
 		interceptFlag,
+		keybindingState,
 		marasiConfig,
 	} from "../../../stores.js";
 	import {
@@ -154,6 +155,23 @@
 			extensionMenus: JSON.parse(extensionMenusJSON),
 		}),
 	});
+	// The saved profile: the dispatcher resolves its active variant for the
+	// current platform, or keeps factory shortcuts and reports a problem.
+	$: if ($keybindingState) {
+		menuDispatcher.configure({ keybindings: $keybindingState });
+	}
+	let reportedKeybindingProblem = "";
+	$: if (
+		$menuDispatcher.problem &&
+		$menuDispatcher.problem !== reportedKeybindingProblem
+	) {
+		reportedKeybindingProblem = $menuDispatcher.problem;
+		toastStore.trigger({
+			message: `Keybindings: ${reportedKeybindingProblem}`,
+			background: "variant-filled-warning",
+			autohide: false,
+		});
+	}
 
 	// Extension navigation handlers follow the loaded extensions.
 	let unregisterExtensions = [];

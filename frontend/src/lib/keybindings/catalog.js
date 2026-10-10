@@ -1,5 +1,7 @@
 import { CONTEXTS, extensionPageContext } from "./contexts.js";
+import { isReservedBinding } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
+import { OPEN_MENU } from "./keymap.js";
 import { MACOS, PLATFORMS, WINDOWS_LINUX } from "./platform.js";
 
 // The menu action catalog: stable identity, menu context, label/description
@@ -249,6 +251,34 @@ function extensionItemDefaults(keys) {
   return { [MACOS]: both, [WINDOWS_LINUX]: [...both] };
 }
 
+// Factory defaults must form a valid profile (decision 5), and extension
+// data must not break that: an extension default is dropped when it is a
+// reserved key, opens the Marasi menu, or is already bound on the same page
+// (Toggle Settings or an earlier item). The action stays, unbound for that
+// key; the researcher can bind it.
+function takenOnExtensionPage(toggleSettings) {
+  const menu = FACTORY_ACTIONS.find((a) => a.id === OPEN_MENU);
+  return Object.fromEntries(
+    PLATFORMS.map((platform) => [
+      platform,
+      new Set(
+        [...menu.defaults[platform], ...toggleSettings.defaults[platform]].map(normalizeBinding),
+      ),
+    ]),
+  );
+}
+
+function claimDefaults(defaults, taken) {
+  const claimed = {};
+  for (const platform of PLATFORMS) {
+    claimed[platform] = defaults[platform].filter(
+      (binding) => !isReservedBinding(binding) && !taken[platform].has(binding),
+    );
+    claimed[platform].forEach((binding) => taken[platform].add(binding));
+  }
+  return claimed;
+}
+
 // Each extension page's menu: Marasi's Toggle Settings, then the actions the
 // extension declares with `marasi:render("menu", ...)`. `menus` maps an
 // extension name to its rendered menu items. A declared action's identity is
@@ -273,6 +303,7 @@ export function extensionPageMenus(extensions = [], menus = {}) {
     );
     const items = Array.isArray(menus?.[name]) ? menus[name] : [];
     const seen = new Set();
+    const taken = takenOnExtensionPage(actions.at(-1));
     for (const item of items) {
       const id = extensionMenuActionId(name, typeof item?.action === "string" ? item.action : "");
       if (!id || seen.has(id)) continue;
@@ -283,7 +314,7 @@ export function extensionPageMenus(extensions = [], menus = {}) {
           String(item.name ?? item.action),
           String(item.subtitle ?? ""),
           String(item.keywords ?? ""),
-          extensionItemDefaults(item.keys),
+          claimDefaults(extensionItemDefaults(item.keys), taken),
           context,
         ),
       );

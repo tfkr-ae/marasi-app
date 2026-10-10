@@ -6,6 +6,7 @@ require (
 	github.com/google/martian v2.1.0+incompatible
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v2 v2.10.1
+	go.yaml.in/yaml/v3 v3.0.4
 )
 
 require (
@@ -33,7 +34,6 @@ require (
 	github.com/yosssi/gohtml v0.0.0-20201013000340-ee4748c638f4 // indirect
 	go.einride.tech/aip v0.86.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250528174236-200df99c418a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250528174236-200df99c418a // indirect

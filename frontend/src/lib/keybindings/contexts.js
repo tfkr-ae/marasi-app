@@ -33,14 +33,6 @@ const websocketModalOpen = (state) => state.modal === WEBSOCKET_MODAL;
 // `isEligible(state)` receives the dispatcher state (see dispatcher.js). It is
 // app-defined; profiles never change it.
 //
-// `coOccursWith` lists the other contexts that can be eligible at the same
-// time as this one (the relation is symmetric; declaring it on one side is
-// enough, and the global context co-occurs with every context implicitly).
-// Validation uses it with tiers: co-occurring contexts of the same tier form
-// one collision domain (a key may not be bound twice across them), and a
-// more specific co-occurring context shadows a broader one. Contexts that
-// never co-occur may reuse keys freely.
-//
 // A drawer that replaces its page's menu is expressed by eligibility: the
 // page context is ineligible while the drawer is open, so its actions never
 // run there, whatever the tier order. Drawers that only add a panel
@@ -54,13 +46,16 @@ export const CONTEXTS = [
     isEligible: () => true,
   },
   // The WebSocket modal: actions shared by every tab, then one context per
-  // tab. A tab context and the shared one are eligible together.
+  // tab. Each tab is eligible together with the shared context in the same
+  // tier, so they overlap (one collision domain); the tabs never co-occur,
+  // so they may reuse keys. Beneath the modal only the global context stays
+  // eligible (pages and drawers are not, see onRoute): that is shadowing
+  // across tiers and needs no declaration.
   {
     id: "websocket",
     tier: "overlay",
     label: "WebSocket",
     isEligible: websocketModalOpen,
-    coOccursWith: WEBSOCKET_TABS.map((tab) => `websocket.${tab}`),
   },
   ...[
     ["stream", "WebSocket Stream tab"],
@@ -70,6 +65,7 @@ export const CONTEXTS = [
     id: `websocket.${tab}`,
     tier: "overlay",
     label,
+    overlaps: ["websocket"],
     isEligible: (state) => websocketModalOpen(state) && state.websocketTab === tab,
   })),
   {
@@ -84,11 +80,11 @@ export const CONTEXTS = [
     id: "ledger.drawer-open.websocket",
     tier: "drawer",
     label: "Ledger drawer (WebSocket upgrade)",
+    overlaps: ["ledger.drawer-open"],
     isEligible: (state) =>
       onRoute("/ledger")(state) &&
       drawerOpen(state) &&
       isWebSocketUpgrade(state.drawer.meta),
-    coOccursWith: ["ledger.drawer-open"],
   },
   {
     id: "ledger.drawer-open",
@@ -144,22 +140,22 @@ export function extensionPageContext(id, extensionName) {
   };
 }
 
+// Collision domains for validation. `overlaps` (optional, on either side)
+// names same-tier contexts that can be eligible at the same time: precedence
+// cannot pick between them, so a binding shared with one is a duplicate, like
+// one shared within a context. Contexts that are mutually exclusive, or that
+// overlap in a different tier (shadowing), stay separate. Mirrored by
+// keybindingCatalog.conflicting in keybinding_validation.go.
+export function contextsConflict(contexts, a, b) {
+  if (a === b) return true;
+  const byId = (id) => contexts.find((context) => context.id === id);
+  return Boolean(byId(a)?.overlaps?.includes(b) || byId(b)?.overlaps?.includes(a));
+}
+
 export function tierRank(tier) {
   const rank = TIERS.indexOf(tier);
   if (rank === -1) throw new Error(`unknown menu context tier: ${tier}`);
   return rank;
-}
-
-// Whether two contexts can be eligible at the same time: the same context,
-// either one is global, or either declares the other in `coOccursWith`.
-export function contextsCoOccur(a, b, contexts = CONTEXTS) {
-  if (a === b) return true;
-  const byId = (id) => contexts.find((context) => context.id === id);
-  const [first, second] = [byId(a), byId(b)];
-  if (first?.tier === "global" || second?.tier === "global") return true;
-  return Boolean(
-    first?.coOccursWith?.includes(b) || second?.coOccursWith?.includes(a),
-  );
 }
 
 // Ids of the contexts eligible in `state`, most specific first. Ties within a
