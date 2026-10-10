@@ -29,9 +29,10 @@ const routes = {
 	settings: { selector: '[title="Settings"]', path: "/settings", expected: "Marasi Settings" },
 };
 
+// Skeleton's modal wrapper is display: contents, so measure its card.
 const overlayPainted = `Boolean((() => {
 	const overlay = document.querySelector("dialog[open], [data-testid='modal-component']");
-	const card = overlay?.querySelector(".modal-example-form") || overlay;
+	const card = overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
 	const box = card?.getBoundingClientRect();
 	return box && box.width > 100 && box.height > 100;
 })())`;
@@ -149,7 +150,7 @@ async function waitForTarget(spec, { timeoutMs = defaultTimeoutMs, nth, enabled 
 async function snapshot() {
 	return evaluate(`(() => {
 		const overlay = document.querySelector("dialog[open], [data-testid='modal-component']");
-		const card = overlay?.querySelector(".modal-example-form") || overlay;
+		const card = overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
 		const rect = card?.getBoundingClientRect?.();
 		return {
 			url: location.href,
@@ -256,7 +257,13 @@ async function pressShortcut(text) {
 	if (parsed.shift) await pressKey("keyDown", "Shift", "ShiftLeft", 16, modifiers);
 	if (parsed.ctrl) await pressKey("keyDown", "Control", "ControlLeft", 17, modifiers);
 	if (parsed.alt) await pressKey("keyDown", "Alt", "AltLeft", 18, modifiers);
-	await pressKey("rawKeyDown", event.key, event.code, event.keyCode, modifiers, {
+	// A bare character types itself, so a focused <select> can jump to it.
+	const typed = event.key.length === 1 && !parsed.meta && !parsed.ctrl && !parsed.alt
+		? (parsed.shift ? event.key.toUpperCase() : event.key)
+		: null;
+	if (typed) {
+		await pressKey("keyDown", typed, event.code, event.keyCode, modifiers, { text: typed, unmodifiedText: event.key });
+	} else await pressKey("rawKeyDown", event.key, event.code, event.keyCode, modifiers, {
 		text: "", unmodifiedText: "",
 		...(parsed.meta && parsed.key === "a" ? {commands: ["selectAll"]} : {}),
 	});

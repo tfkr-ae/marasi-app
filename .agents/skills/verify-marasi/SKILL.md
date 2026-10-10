@@ -39,7 +39,7 @@ Run this first whenever startup, automation, or a result looks wrong:
 .agents/skills/verify-marasi/scripts/doctor.sh
 ```
 
-It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. It also fails while a modal, command palette, or drawer from an earlier drive is still open. Doctor and drive attach to the Chrome page whose URL matches the Wails origin, not the first `type=page` target. Headless Chrome can also keep `chrome://settings/help` and omnibox pages around. A green doctor writes `doctor.txt` and prints the exact paths.
+It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. It also fails while a modal, command palette, or drawer from an earlier drive is still open. Skeleton's modal wrapper uses `display: contents`, so doctor measures the wrapper's card instead. Doctor and drive attach to the Chrome page whose URL matches the Wails origin, not the first `type=page` target. Headless Chrome can also keep `chrome://settings/help` and omnibox pages around. A green doctor writes `doctor.txt` and prints the exact paths.
 
 Launch sizes the headless window so the page itself is `1600x900`. Drives do not use a per-session viewport override: that override ends when each CDP session closes, and the page then relayouts at Chrome's smaller default (`1600x813`), which pushes the Settings rail item off screen.
 
@@ -103,7 +103,7 @@ For behavioral actions beyond navigation, use a named sequence of real UI inputs
 | --- | --- |
 | `{"click": "<css>"}` | Click the one actionable match. Add `"hasText"` to keep matches whose text contains it (for example `{"click":"tbody tr","hasText":"/probe"}`), `"within": "<css>"` to scope, `"nth": n` to pick among several on purpose, `"button": "right"` for a context menu. |
 | `{"text": "<label>"}` | Click the one actionable button, link, switch, tab, label, or summary whose normalized text, `aria-label`, or `title` equals the label. Wrappers around a matching control collapse to the control. `within` and `nth` apply. |
-| `{"key": "cmd+shift+r"}` | Shortcut, same syntax as compare. Also `escape`, `enter`, `tab`, `backspace`, `[`, `]`. |
+| `{"key": "cmd+shift+r"}` | Shortcut, same syntax as compare. Also `escape`, `enter`, `tab`, `backspace`, `[`, `]`. A bare character without `cmd`, `ctrl`, or `alt` (for example `{"key":"l"}`) types itself, so a focused `<select>` jumps to the first option that starts with it. |
 | `{"insert": "<text>"}` | Waits for a focused input or editor, inserts, then waits until the text is in that field. |
 | `{"waitText": "…"}`, `{"waitNoText": "…"}` | Visible `innerText` contains or lacks the text. Add `within` to read only matching roots, so text the editor already holds cannot satisfy the wait. |
 | `{"waitEnabledText": "<label>"}` | The labelled control is actionable and enabled. |
