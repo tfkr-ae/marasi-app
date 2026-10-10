@@ -4,7 +4,8 @@ import { buildCatalog, createCatalog } from "./catalog.js";
 import { CONTEXTS, contextsConflict } from "./contexts.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
-import { factoryKeybindings, validateKeybindings } from "./profiles.js";
+import { factoryKeybindings } from "./profiles.js";
+import { validateKeybindings } from "./testing.js";
 
 // Page and drawer menus resolved through the app's real catalog and menu
 // contexts, against the layout's dispatcher state shape.

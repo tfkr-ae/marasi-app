@@ -56,6 +56,10 @@ type KeybindingState struct {
 	Problem string           `json:"problem"`
 }
 
+func unsupportedKeybindingsVersion(version int) error {
+	return fmt.Errorf("keybindings version %d is not supported (this Marasi reads version %d)", version, keybindingsVersion)
+}
+
 func factoryKeybindings() KeybindingConfig {
 	return KeybindingConfig{
 		Version:       keybindingsVersion,
@@ -82,7 +86,7 @@ func parseKeybindings(node *yaml.Node) (KeybindingConfig, error) {
 		Version int `yaml:"version"`
 	}
 	if err := node.Decode(&versioned); err == nil && versioned.Version > keybindingsVersion {
-		return config, fmt.Errorf("keybindings version %d is not supported (this Marasi reads version %d)", versioned.Version, keybindingsVersion)
+		return config, unsupportedKeybindingsVersion(versioned.Version)
 	}
 	raw, err := yaml.Marshal(node)
 	if err != nil {
@@ -109,8 +113,8 @@ func (a *App) GetKeybindings() KeybindingState {
 
 // KeybindingCatalog describes the menu action catalog for validation. The
 // catalog is defined in the frontend (it includes actions derived from
-// extensions), so the frontend sends it with every save; see
-// notes/persistence.md.
+// extensions), so the frontend sends it with every save and
+// keybinding_validation.go checks the profiles against it.
 type KeybindingCatalog struct {
 	Actions  []KeybindingAction  `json:"actions"`
 	Contexts []KeybindingContext `json:"contexts"`
@@ -147,7 +151,10 @@ func (a *App) SaveKeybindings(config KeybindingConfig, catalog KeybindingCatalog
 	if err := validateKeybindings(config, catalog); err != nil {
 		return current, fmt.Errorf("invalid keybindings: %w", err)
 	}
-	config = settleKeybindings(config, catalog)
+	config, err := settleKeybindings(config, catalog)
+	if err != nil {
+		return current, fmt.Errorf("invalid keybindings: %w", err)
+	}
 	if err := writeConfigKeys(cfg.path(), map[string]any{keybindingsKey: config}); err != nil {
 		return current, fmt.Errorf("saving keybindings: %w", err)
 	}

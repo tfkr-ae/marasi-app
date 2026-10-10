@@ -8,7 +8,6 @@ import {
   addBinding,
   browse,
   captureKey,
-  isCustomized,
   isDirty,
   openDraft,
   removeBinding,
@@ -80,6 +79,13 @@ function factoryDraft() {
   return openDraft(saved([profile("default", "Default"), profile("other", "Other")]), catalog);
 }
 
+// Whether the target's row offers Reset.
+function resettable(draft, target, at = catalog) {
+  const profile = draft.profiles.find((p) => p.id === target.profileId);
+  const rows = browse({ catalog: at, profile, platform: target.platform }).groups.flatMap((g) => g.all);
+  return rows.find((row) => row.action.id === target.actionId).resettable;
+}
+
 function bindings(draft, target = home) {
   const p = draft.profiles.find((item) => item.id === target.profileId);
   return actionBindings(catalog, p, target.platform, target.actionId);
@@ -93,7 +99,7 @@ test("adding an alternative keeps the defaults, dedupes a repeat, and leaves the
   assert.deepEqual(bindings(draft, { ...home, platform: WINDOWS_LINUX }), ["ctrl+1"]);
   assert.deepEqual(bindings(draft, { ...home, profileId: "other" }), ["meta+1"]);
   assert.deepEqual(bindings(before), ["meta+1"]);
-  assert.equal(isCustomized(draft, home), true);
+  assert.equal(resettable(draft, home), true);
 });
 
 test("replacing a chip records the new key in its place", () => {
@@ -112,13 +118,42 @@ test("removing the last binding unbinds the action explicitly", () => {
 test("reset returns one action to inheriting its default and an edit back to the default is not a customization", () => {
   let draft = removeBinding(catalog, factoryDraft(), home, 0);
   draft = addBinding(catalog, draft, { ...home, actionId: "global.go-ledger" }, "meta+9");
+  assert.equal(resettable(draft, home), true);
   const reset = resetAction(draft, home);
   assert.deepEqual(bindings(reset), ["meta+1"]);
-  assert.equal(isCustomized(reset, home), false);
+  assert.equal(resettable(reset, home), false);
   assert.deepEqual(bindings(reset, { ...home, actionId: "global.go-ledger" }), ["meta+2", "meta+9"]);
 
   const back = addBinding(catalog, draft, home, "meta+1");
-  assert.equal(isCustomized(back, home), false);
+  assert.equal(resettable(back, home), false);
+});
+
+test("Reset does not apply when the action's keys already equal what resetting would give", () => {
+  const extra = createCatalog(
+    [
+      ...actions,
+      { id: "global.toggle-vim", context: "global", label: "Vim", description: "Toggle Vim mode", defaults: { [MACOS]: [], [WINDOWS_LINUX]: [] } },
+      { id: "global.open-extension.repeater", context: "global", label: "Repeater", description: "Open Repeater", defaults: both("meta+alt+1", "ctrl+alt+1"), positionalDefault: true },
+    ],
+    { contexts },
+  );
+  const at = (actionId) => ({ ...home, actionId });
+  // A saved override equal to the default, an explicit unbinding of an
+  // action whose default is empty, and an explicit unbinding of a
+  // positional default that yields to Home's customization anyway.
+  const overrides = {
+    [MACOS]: [
+      { action: "global.go-ledger", keys: ["meta+2"] },
+      { action: "global.toggle-vim", keys: [] },
+      { action: "global.go-home", keys: ["meta+alt+1"] },
+      { action: "global.open-extension.repeater", keys: [] },
+    ],
+  };
+  const draft = openDraft(saved([profile("default", "Default", overrides, extra.actions.map((a) => a.id))]), extra);
+  assert.equal(resettable(draft, at("global.go-ledger"), extra), false);
+  assert.equal(resettable(draft, at("global.toggle-vim"), extra), false);
+  assert.equal(resettable(draft, at("global.open-extension.repeater"), extra), false);
+  assert.equal(resettable(draft, home, extra), true);
 });
 
 test("a draft is dirty only while it differs from what was opened", () => {
@@ -249,7 +284,7 @@ test("unbound actions are flagged, counted and filterable", () => {
 test("rows report whether Reset applies", () => {
   const draft = addBinding(withExtension, openDraft(saved([profile("default", "Default")]), withExtension), home, "meta+h");
   const rows = browse({ catalog: withExtension, profile: draft.profiles[0], platform: MACOS, query: "", filter: "all" }).groups[0].all;
-  assert.deepEqual(rows.map((r) => r.customized), [false, true, false]);
+  assert.deepEqual(rows.map((r) => r.resettable), [false, true, false]);
 });
 
 test("actions in a same-context duplicate are conflicts, counted per entry and filterable", () => {
@@ -351,6 +386,20 @@ test("unavailable actions are not counted or filtered as unbound, even when thei
   assert.deepEqual(browse({ catalog: missing, profile, platform: MACOS, query: "unavailable" }).groups.flatMap(ids), [sendRequest]);
 });
 
+test("action counts leave out unavailable rows, which are still listed", () => {
+  const missing = buildCatalog({ extensions: [] });
+  const draft = openDraft({ config: customizedRepeater(), problem: "" }, missing);
+  const result = browse({ catalog: missing, profile: draft.profiles[0], platform: MACOS });
+  const rows = rowsById(result);
+  for (const id of [openRepeater, sendRequest]) {
+    assert.equal(rows[id].group.all.length, 1, `${id} is listed`);
+    assert.equal(rows[id].group.actionCount, 0, `${id} is not counted`);
+  }
+  assert.equal(result.actionCount, missing.actions.length);
+  const global = result.groups.find((g) => g.id === "global");
+  assert.equal(global.actionCount, global.all.length);
+});
+
 test("edits saved while the extension is missing keep its customizations, which apply again when it returns", () => {
   const missing = buildCatalog({ extensions: [] });
   let draft = openDraft({ config: customizedRepeater(), problem: "" }, missing);
@@ -382,7 +431,7 @@ test("reordering extensions keeps a customization with its extension; defaults f
   const rows = rowsById(browse({ catalog: after, profile: openDraft({ config: custom, problem: "" }, after).profiles[0], platform: MACOS }));
   assert.deepEqual(rows[openRepeater].row.bindings, ["meta+alt+8"]);
   assert.deepEqual(rows["global.open-extension.intruder"].row.bindings, ["meta+alt+1"]);
-  assert.equal(rows["global.open-extension.intruder"].row.customized, false);
+  assert.equal(rows["global.open-extension.intruder"].row.resettable, false);
 });
 
 test("an action its installed extension no longer declares is listed unavailable on that extension's page", () => {

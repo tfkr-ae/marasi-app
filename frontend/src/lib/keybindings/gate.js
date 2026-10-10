@@ -44,12 +44,19 @@ function isEditable(target) {
 
 // Escape-to-close/cancel, Tab/Shift+Tab focus traversal and dialog or query
 // Enter (with or without Shift) belong to the page, never to a menu action.
-// Validation (05) and capture (07) can use this to refuse them as bindings.
+// Profile validation, import and shortcut capture refuse them as bindings.
 const INTERACTION_KEYS = new Set(["escape", "tab", "enter"]);
 
 export function isReservedBinding(binding) {
   if (!binding || isModifiedBinding(binding)) return false;
   return INTERACTION_KEYS.has(binding.replace(/^shift\+/, ""));
+}
+
+// Why a reserved binding cannot be bound, naming its keys as printed on the
+// keyboard: "Shift+Tab is reserved for dialogs and focus".
+export function reservedBindingProblem(binding) {
+  const keys = binding.split("+").map((key) => key.charAt(0).toUpperCase() + key.slice(1));
+  return `${keys.join("+")} is reserved for dialogs and focus`;
 }
 
 // Unmodified keys are left to the page: always for interaction keys, and for

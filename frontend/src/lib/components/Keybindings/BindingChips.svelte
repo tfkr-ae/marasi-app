@@ -46,8 +46,8 @@
 	<button
 		type="button"
 		class={iconButton}
-		disabled={disabled || !row.customized}
-		title={row.available === false ? row.note : row.customized ? "Reset to default" : "Already the default"}
+		disabled={disabled || !row.resettable}
+		title={row.available === false ? row.note : row.resettable ? "Reset to default" : "Already the default"}
 		aria-label="Reset {row.action.label}"
 		on:click={onReset}><RotateCcw size={16} /></button
 	>

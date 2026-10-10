@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
 import { createDispatcher } from "./dispatcher.js";
+import { reservedBindingProblem } from "./gate.js";
 import { MACOS } from "./platform.js";
 
 // Typing suppression, observed through the dispatcher: an unmodified
@@ -129,4 +130,10 @@ test("factory shortcuts still fire from the Ledger query box and from CodeMirror
   const queryBox = element("INPUT", { id: "searchBox" });
   assert.equal(dispatcher.resolve(goHome(queryBox), { ...home, route: "/ledger" }), "global.go-home");
   assert.equal(dispatcher.resolve(goHome(codeMirror), { ...home, route: "/armory" }), "global.go-home");
+});
+
+test("a reserved binding's problem names its keys the way the keyboard does", () => {
+  assert.equal(reservedBindingProblem("tab"), "Tab is reserved for dialogs and focus");
+  assert.equal(reservedBindingProblem("shift+enter"), "Shift+Enter is reserved for dialogs and focus");
+  assert.equal(reservedBindingProblem("escape"), "Escape is reserved for dialogs and focus");
 });

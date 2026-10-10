@@ -9,6 +9,7 @@
 	import { SaveKeybindings } from "../../wailsjs/go/main/App";
 	import { keybindingState } from "../../../stores.js";
 	import { keybindingCapture, menuDispatcher } from "../../keybindings/app.js";
+	import { reservedBindingProblem } from "../../keybindings/gate.js";
 	import {
 		addBinding,
 		browse,
@@ -59,10 +60,22 @@
 	$: current = visibleGroups.find((g) => g.id === selectedGroup);
 	$: dirty = isDirty(draft, opened);
 	// Every profile and platform variant, so problems off screen block Save too.
-	$: problems = saveProblems(catalog, draft, { profileId: profile.id, platform });
+	$: problems = saveProblems(catalog, draft);
+	// The footer shows one problem at a time: the one Next stepped to while it
+	// remains, else a profile-level one, else one on screen, else the first.
+	// Next walks the whole list, so a problem on a hidden profile or platform
+	// is always reachable.
+	let steppedTo = null; // problemKey of the problem Next brought up
+	const problemKey = (p) => [p.profileId, p.platform, p.actionId, p.message].join("\n");
+	$: shownProblem =
+		problems.find((p) => problemKey(p) === steppedTo) ??
+		problems.find((p) => !p.platform) ??
+		problems.find((p) => p.profileId === profile.id && p.platform === platform) ??
+		problems[0];
+	$: shownAt = problems.indexOf(shownProblem);
 	$: keybindingCapture.set(Boolean(capture));
 	$: filters = [
-		["all", `All (${view.groups.reduce((n, g) => n + g.all.length, 0)})`],
+		["all", `All (${view.actionCount})`],
 		["unbound", `Unbound (${view.unboundCount})`],
 		["conflict", `Conflicts (${view.conflictCount})`],
 	];
@@ -90,6 +103,12 @@
 		}
 	}
 
+	function nextProblem() {
+		const next = problems[(shownAt + 1) % problems.length];
+		steppedTo = problemKey(next);
+		if (next.platform) showProblem(next);
+	}
+
 	function startCapture(actionId, index) {
 		capture = { actionId, index, label: catalog.get(actionId)?.label ?? actionId };
 	}
@@ -108,7 +127,7 @@
 		} else if (result.type === "reserved") {
 			capture = {
 				...capture,
-				message: "Escape, Tab and Enter stay with dialogs and focus. Press another combination.",
+				message: `${reservedBindingProblem(result.binding)}. Press another combination.`,
 			};
 		} else {
 			const at = target(capture.actionId);
@@ -150,6 +169,22 @@
 		if (!onBackdrop || !(capture || toolbarPending || confirmation || dirty)) return;
 		event.stopPropagation();
 		if (event.type === "mousedown") dismiss();
+	}
+
+	// The saved section could not be read (invalid, or from a newer Marasi).
+	// It stays untouched on disk until the researcher agrees to replace it.
+	let replaceConfirmed = false;
+	function requestSave() {
+		if (!loadProblem || replaceConfirmed) return save();
+		confirmation = {
+			title: "Replace saved keybindings?",
+			body: "Marasi could not read your saved keybindings, so they are still on disk unchanged. Saving replaces them with these profiles. Cancel keeps them.",
+			label: "Replace",
+			run: () => {
+				replaceConfirmed = true;
+				save();
+			},
+		};
 	}
 
 	async function save() {
@@ -252,16 +287,24 @@
 			<div class="min-w-0 text-sm" aria-live="polite">
 				{#if saveError}
 					<p class="text-error-600 dark:text-error-400" data-save-error>{saveError}</p>
-				{:else if problems.length}
+				{:else if shownProblem}
 					<p class="flex min-w-0 items-center gap-2 text-error-600 dark:text-error-400" data-save-blocked>
 						<span class="min-w-0" title={problems.map((p) => p.message).join("\n")}>
-							Can't save{problems.length > 1 ? ` (${problems.length} problems)` : ""}: {problems[0].message}
+							Can't save{problems.length > 1 ? ` (${shownAt + 1} of ${problems.length} problems)` : ""}: {shownProblem.message}
 						</span>
-						{#if problems[0].platform}
+						{#if shownProblem.platform}
 							<button
 								type="button"
 								class="btn btn-sm shrink-0 variant-soft-primary !border-0 !ring-0"
-								on:click={() => showProblem(problems[0])}>Show</button
+								on:click={() => showProblem(shownProblem)}>Show</button
+							>
+						{/if}
+						{#if problems.length > 1}
+							<button
+								type="button"
+								class="btn btn-sm shrink-0 variant-soft-primary !border-0 !ring-0"
+								title="Show the next problem"
+								on:click={nextProblem}>Next</button
 							>
 						{/if}
 					</p>
@@ -283,7 +326,7 @@
 					type="button"
 					class="btn {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
 					disabled={!dirty || saving || problems.length > 0}
-					on:click={save}>{saving ? "Saving..." : "Save"}</button
+					on:click={requestSave}>{saving ? "Saving..." : "Save"}</button
 				>
 			</div>
 		</footer>

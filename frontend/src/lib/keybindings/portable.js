@@ -1,5 +1,5 @@
 import { slugify } from "./catalog.js";
-import { isReservedBinding } from "./gate.js";
+import { isReservedBinding, reservedBindingProblem } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
 import { PLATFORM_NAMES, PLATFORMS } from "./platform.js";
 import { settleProfile, validateProfile } from "./profiles.js";
@@ -81,7 +81,7 @@ function readVariant(list, platform) {
     const keys = override.keys.map((key) => {
       const binding = normalizeBinding(key);
       if (!binding) throw new Error(`${where}: ${show(key)} is not a binding`);
-      if (isReservedBinding(binding)) throw new Error(`${where}: ${show(key)} is reserved for dialogs and focus`);
+      if (isReservedBinding(binding)) throw new Error(`${where}: ${reservedBindingProblem(binding)}`);
       return binding;
     });
     return { action: override.action, keys: [...new Set(keys)] };

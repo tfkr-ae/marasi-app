@@ -17,10 +17,6 @@ import (
 
 const openMenuAction = "global.open-menu"
 
-// globalContext is eligible in every app state, so a binding there overlaps
-// every other context.
-const globalContext = "global"
-
 var (
 	actionIDPattern  = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$`)
 	profileIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -171,7 +167,7 @@ func newKeybindingCatalog(described KeybindingCatalog) (keybindingCatalog, error
 func checkKeybindingStructure(config KeybindingConfig) error {
 	if config.Version != keybindingsVersion {
 		if config.Version > keybindingsVersion {
-			return fmt.Errorf("keybindings version %d is not supported (this Marasi reads version %d)", config.Version, keybindingsVersion)
+			return unsupportedKeybindingsVersion(config.Version)
 		}
 		return fmt.Errorf("keybindings version %d is invalid", config.Version)
 	}
@@ -197,7 +193,7 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 		}
 		names[name] = true
 		for platform, overrides := range profile.Overrides {
-			if platform != platformMacOS && platform != platformWindowsLinux {
+			if !slices.Contains(keybindingPlatforms, platform) {
 				return fmt.Errorf("profile %q has unknown platform %q", profile.Name, platform)
 			}
 			actions := map[string]bool{}
@@ -243,8 +239,8 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 // nothing may shadow). Known actions always inherit, so a duplicate the
 // researcher makes is a conflict to fix rather than a silent unbind.
 //
-// Positional defaults (PositionalDefault, extension navigation ⌘⌥1–9 in load
-// order) move when the order changes. Known or not, an inherited positional
+// Positional defaults (ADR 0002; PositionalDefault, extension navigation
+// ⌘⌥1–9 in load order) move when the order changes. Known or not, an inherited positional
 // default that collides with any other resolved binding (a customization or a
 // stable default) in a conflicting context, or with the menu opening, yields
 // and the action is unbound, so a reorder never invalidates the profile.
@@ -313,35 +309,16 @@ func collides(catalog keybindingCatalog, action KeybindingAction, bindings []str
 	return false
 }
 
-// resolveActiveKeybindings resolves the active profile for both platform
-// variants: platform -> action id -> bindings.
-func resolveActiveKeybindings(config KeybindingConfig, actions KeybindingCatalog) (map[string]map[string][]string, error) {
-	catalog, err := newKeybindingCatalog(actions)
-	if err != nil {
-		return nil, err
-	}
-	for _, profile := range config.Profiles {
-		if profile.ID == config.ActiveProfile {
-			resolved := map[string]map[string][]string{}
-			for _, platform := range keybindingPlatforms {
-				resolved[platform] = resolveVariant(catalog, profile, platform)
-			}
-			return resolved, nil
-		}
-	}
-	return nil, fmt.Errorf("active profile %q does not exist", config.ActiveProfile)
-}
-
 // settleKeybindings records the new-default decisions of every profile
 // against a validated catalog: actions the rule left unbound get an explicit
 // empty override, and every catalog action becomes known. Ids no longer in
 // the catalog stay known (dormant extension actions keep their history). A
 // yielded positional default is not recorded; it is decided on every
-// resolution.
-func settleKeybindings(config KeybindingConfig, actions KeybindingCatalog) KeybindingConfig {
+// resolution. Mirrors settleProfile in profiles.js.
+func settleKeybindings(config KeybindingConfig, actions KeybindingCatalog) (KeybindingConfig, error) {
 	catalog, err := newKeybindingCatalog(actions)
 	if err != nil {
-		return config
+		return KeybindingConfig{}, err
 	}
 	settled := config
 	settled.Profiles = make([]KeybindingProfile, len(config.Profiles))
@@ -370,7 +347,7 @@ func settleKeybindings(config KeybindingConfig, actions KeybindingCatalog) Keybi
 		next.KnownActions = slices.Compact(known)
 		settled.Profiles[i] = next
 	}
-	return settled
+	return settled, nil
 }
 
 func canonicalBindings(keys []string) []string {

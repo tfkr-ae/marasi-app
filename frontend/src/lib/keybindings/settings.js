@@ -1,6 +1,6 @@
 import { slugify } from "./catalog.js";
 import { contextsConflict } from "./contexts.js";
-import { isReservedBinding } from "./gate.js";
+import { isReservedBinding, reservedBindingProblem } from "./gate.js";
 import { bindingFromEvent, formatBinding, normalizeBinding } from "./keys.js";
 import { OPEN_MENU } from "./keymap.js";
 import { PLATFORM_NAMES } from "./platform.js";
@@ -39,17 +39,6 @@ export function actionBindings(catalog, profile, platform, actionId) {
 
 // An edit target: one action in one profile's platform variant.
 //   { profileId, platform, actionId }
-
-function overrideFor(draft, { profileId, platform, actionId }) {
-  const profile = draft.profiles.find((item) => item.id === profileId);
-  return profile?.overrides?.[platform]?.find((o) => o.action === actionId) ?? null;
-}
-
-// Whether the action has its own binding list in that variant (Reset
-// applies), rather than inheriting its factory default.
-export function isCustomized(draft, target) {
-  return overrideFor(draft, target) !== null;
-}
 
 function updateVariant(draft, { profileId, platform }, update) {
   return {
@@ -364,7 +353,7 @@ function unavailableRows(catalog, profile, platform) {
       action: found.action,
       bindings,
       display: bindings.map((binding) => formatBinding(binding, platform)),
-      customized: true,
+      resettable: false,
       available: false,
       status: "unavailable",
       note: found.note,
@@ -410,7 +399,7 @@ function explain(catalog, problem) {
     case "menu-unbound":
       return [[first, "The Marasi menu must have a binding"]];
     case "reserved":
-      return [[first, `${binding} is reserved for dialogs and focus`]];
+      return [[first, reservedBindingProblem(problem.binding)]];
     case "duplicate":
       return [
         [first, `${binding} is also bound to ${other(rest[0], first)}`],
@@ -520,22 +509,34 @@ export function saveProblems(catalog, draft, current = {}) {
 
 const count = (rows, status) => rows.filter((row) => row.status === status).length;
 
+// Whether resetting the action would change its bindings in the variant.
+// An override equal to what inheriting gives (the factory default, an empty
+// default, or a positional default that yields anyway) is already at its
+// default, so Reset does not apply.
+function resetChanges(catalog, profile, platform, actionId, bindings) {
+  const list = profile.overrides?.[platform] ?? [];
+  if (!list.some((o) => o.action === actionId)) return false;
+  const inherited = { ...profile, overrides: { ...profile.overrides, [platform]: list.filter((o) => o.action !== actionId) } };
+  return !sameSet(bindings, profileKeymap(catalog, inherited, platform).bindingsFor(actionId));
+}
+
 // The modal's view of one profile's platform variant:
-//   { groups: [group], unboundCount, conflictCount }
-//   group = { id, page, state, all: [row], items: [row], unboundCount, conflictCount }
-// `all` is every action of the entry (sidebar counts), `items` those
-// matching `query` and `filter` ("all" | "unbound" | "conflict"). A row is
-//   { action, bindings, display, customized, status, problem }
-// with `display` the palette notation of each binding, `status` "conflict"
+//   { groups: [group], actionCount, unboundCount, conflictCount }
+//   group = { id, page, state, all: [row], items: [row], actionCount, unboundCount, conflictCount }
+// `all` is every row of the entry, `items` those matching `query` and
+// `filter` ("all" | "unbound" | "conflict"), and `actionCount` the available
+// actions (the sidebar's plain count). A row is
+//   { action, bindings, display, resettable, status, problem }
+// with `display` the palette notation of each binding, `resettable` whether
+// Reset would change its bindings, `status` "conflict"
 // (with `problem` explaining it), "unbound", "shadowing" (allowed, with
 // `problem`), "unavailable" or "". An unavailable row (`available: false`,
 // `note` saying why) is a dormant extension override: its status comes
 // before any other, it is listed after its entry's available actions (or in
 // an entry of its own for a missing extension page), and it is never counted
-// or filtered as unbound or conflicting.
+// as an action, unbound or conflicting, or filtered as unbound or conflicting.
 export function browse({ catalog, profile, platform, query = "", filter = "all" }) {
   const keymap = profileKeymap(catalog, profile, platform);
-  const overridden = new Set((profile.overrides?.[platform] ?? []).map((o) => o.action));
   const { conflicts, shadows } = rowProblems(catalog, profile, platform);
   const unavailable = unavailableRows(catalog, profile, platform);
   const entries = actionGroups(catalog);
@@ -561,7 +562,7 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
         action,
         bindings,
         display: bindings.map((binding) => formatBinding(binding, platform)),
-        customized: overridden.has(action.id),
+        resettable: resetChanges(catalog, profile, platform, action.id, bindings),
         available: true,
         status,
         problem: (conflict ?? shadow ?? []).join("; "),
@@ -577,10 +578,16 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
       state: group.state,
       all,
       items,
+      actionCount: all.filter((row) => row.available).length,
       unboundCount: count(all, "unbound"),
       conflictCount: count(all, "conflict"),
     };
   });
   const total = (field) => groups.reduce((sum, group) => sum + group[field], 0);
-  return { groups, unboundCount: total("unboundCount"), conflictCount: total("conflictCount") };
+  return {
+    groups,
+    actionCount: total("actionCount"),
+    unboundCount: total("unboundCount"),
+    conflictCount: total("conflictCount"),
+  };
 }
