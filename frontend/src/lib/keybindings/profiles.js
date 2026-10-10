@@ -1,12 +1,12 @@
 import { contextsConflict } from "./contexts.js";
-import { isReservedBinding } from "./gate.js";
+import { isReservedBinding, reservedBindingProblem } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
 import { createKeymap, OPEN_MENU } from "./keymap.js";
 import { PLATFORMS } from "./platform.js";
 
 // Keybinding profiles (ADR 0001), independent of where they are stored:
-// the app config (GetKeybindings/SaveKeybindings) and, later, export files
-// use this same shape.
+// the app config (GetKeybindings/SaveKeybindings) and profile files
+// (portable.js, docs/keybinding-profile-format.md) use this same shape.
 //
 //   config  = { version, activeProfile, profiles: [profile] }
 //   profile = { id, name, overrides: { macos: [o], "windows-linux": [o] }, knownActions: [id] }
@@ -16,7 +16,8 @@ import { PLATFORMS } from "./platform.js";
 // catalog actions the profile was last saved against; see createKeymap for
 // the new-default rule. Overrides for ids missing from the catalog are
 // dormant: kept, never executed. Validation mirrors
-// keybinding_validation.go; see notes/persistence.md.
+// keybinding_validation.go, which checks every save against the catalog the
+// frontend sends (catalogDescriptor).
 
 export const KEYBINDINGS_VERSION = 1;
 
@@ -79,7 +80,7 @@ export function validateProfile(catalog, profile) {
       for (const text of keys ?? []) {
         const binding = normalizeBinding(text);
         if (binding && isReservedBinding(binding)) {
-          problems.push(problem(profile, platform, "reserved", [action], binding, `${binding} is reserved for dialogs and focus`));
+          problems.push(problem(profile, platform, "reserved", [action], binding, reservedBindingProblem(binding)));
         }
       }
     }
@@ -110,11 +111,6 @@ export function validateProfile(catalog, profile) {
     }
   }
   return problems;
-}
-
-// Every problem in every profile and both platform variants.
-export function validateKeybindings(catalog, config) {
-  return (config?.profiles ?? []).flatMap((profile) => validateProfile(catalog, profile));
 }
 
 // Records the new-default decisions against `catalog`: actions the rule left

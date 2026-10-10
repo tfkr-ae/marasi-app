@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createCatalog } from "./catalog.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
-import { validateKeybindings } from "./profiles.js";
+import { validateKeybindings } from "./testing.js";
 import {
   actionBindings,
   addBinding,

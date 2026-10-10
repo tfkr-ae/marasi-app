@@ -10,8 +10,8 @@ import {
   factoryProfile,
   profileKeymap,
   settleProfile,
-  validateKeybindings,
 } from "./profiles.js";
+import { validateKeybindings } from "./testing.js";
 
 // Ledger's drawer-open and drawer-closed contexts are mutually exclusive; the
 // WebSocket drawer context is eligible together with drawer-open, in the same

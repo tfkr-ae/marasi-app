@@ -254,7 +254,8 @@ function extensionItemDefaults(keys) {
   return { [MACOS]: both, [WINDOWS_LINUX]: [...both] };
 }
 
-// Factory defaults must form a valid profile (decision 5), and extension
+// Factory defaults must form a valid profile (see validateProfile in
+// profiles.js; the menu tests check the real catalog), and extension
 // data must not break that: an extension default is dropped when it is a
 // reserved key, opens the Marasi menu, or is already bound on the same page
 // (Toggle Settings or an earlier item). The action stays, unbound for that
