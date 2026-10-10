@@ -409,6 +409,14 @@ func TestAppKeybindings(t *testing.T) {
 		}
 	})
 
+	t.Run("should report a catalog error from settling instead of returning the profiles unsettled", func(t *testing.T) {
+		catalog := testKeybindingCatalog()
+		catalog.Actions = append(catalog.Actions, catalog.Actions[0])
+		if _, err := settleKeybindings(knownKeybindings(), catalog); err == nil {
+			t.Fatalf("wanted: duplicate catalog action error\ngot: nil")
+		}
+	})
+
 	t.Run("should report an invalid or unsupported section, keep it on disk and use factory shortcuts", func(t *testing.T) {
 		sections := map[string]struct{ yaml, problem string }{
 			"future version": {"keybindings:\n  version: 2\n  active_profile: default\n  profiles:\n    - id: default\n      name: Default\n      modes: {normal: {}}\n", "version 2 is not supported"},
@@ -580,4 +588,23 @@ func readAppConfig(t *testing.T, dir string) string {
 		t.Fatalf("reading app config: %v", err)
 	}
 	return string(data)
+}
+
+// resolveActiveKeybindings is a test helper: it resolves the active profile for both platform
+// variants: platform -> action id -> bindings.
+func resolveActiveKeybindings(config KeybindingConfig, actions KeybindingCatalog) (map[string]map[string][]string, error) {
+	catalog, err := newKeybindingCatalog(actions)
+	if err != nil {
+		return nil, err
+	}
+	for _, profile := range config.Profiles {
+		if profile.ID == config.ActiveProfile {
+			resolved := map[string]map[string][]string{}
+			for _, platform := range keybindingPlatforms {
+				resolved[platform] = resolveVariant(catalog, profile, platform)
+			}
+			return resolved, nil
+		}
+	}
+	return nil, fmt.Errorf("active profile %q does not exist", config.ActiveProfile)
 }
