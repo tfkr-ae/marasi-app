@@ -3,9 +3,31 @@
 // contexts bind the same key, the most specific tier wins.
 export const TIERS = ["overlay", "drawer", "page", "global"];
 
+// Whether the request in a drawer's meta is a WebSocket upgrade, so its
+// stream can be opened.
+export function isWebSocketUpgrade(meta) {
+  const response = meta?.incomingResponse || meta?.response;
+  return (
+    meta?.metadata?.protocol === "websocket" ||
+    response?.StatusCode === 101 ||
+    response?.ContentType === "websocket" ||
+    Boolean(meta?.metadata?.["websocket.state"])
+  );
+}
+
+const onRoute = (route) => (state) => state.route === route;
+const drawerOpen = (state) => Boolean(state.drawer?.open);
+const requestDrawerOpen = (state) =>
+  drawerOpen(state) && state.drawer.id === "request-response";
+
 // `isEligible(state)` receives the dispatcher state (see dispatcher.js). It is
-// app-defined; profiles never change it. Tickets 03/04 add page, drawer and
-// overlay contexts here.
+// app-defined; profiles never change it. Ticket 04 adds overlay contexts here.
+//
+// A drawer that replaces its page's menu is expressed by eligibility: the
+// page context is ineligible while the drawer is open, so its actions never
+// run there, whatever the tier order. Drawers that only add a panel
+// (Checkpoint and Compass logs, the Logbook report export) leave their page
+// context eligible.
 export const CONTEXTS = [
   {
     id: "global",
@@ -13,6 +35,55 @@ export const CONTEXTS = [
     label: "Global",
     isEligible: () => true,
   },
+  {
+    id: "ledger.drawer-closed",
+    tier: "page",
+    label: "Ledger",
+    isEligible: (state) => onRoute("/ledger")(state) && !drawerOpen(state),
+  },
+  // Listed before ledger.drawer-open: both are drawer-tier and eligible
+  // together on a WebSocket upgrade request, and table order breaks the tie.
+  {
+    id: "ledger.drawer-open.websocket",
+    tier: "drawer",
+    label: "Ledger drawer (WebSocket upgrade)",
+    isEligible: (state) =>
+      onRoute("/ledger")(state) &&
+      drawerOpen(state) &&
+      isWebSocketUpgrade(state.drawer.meta),
+  },
+  {
+    id: "ledger.drawer-open",
+    tier: "drawer",
+    label: "Ledger drawer",
+    isEligible: (state) => onRoute("/ledger")(state) && drawerOpen(state),
+  },
+  {
+    id: "armory.page",
+    tier: "page",
+    label: "Armory",
+    isEligible: (state) =>
+      onRoute("/armory")(state) && !requestDrawerOpen(state),
+  },
+  {
+    id: "armory.drawer",
+    tier: "drawer",
+    label: "Armory request drawer",
+    isEligible: (state) =>
+      onRoute("/armory")(state) && requestDrawerOpen(state),
+  },
+  ...[
+    ["launchpad", "Launchpad"],
+    ["checkpoint", "Checkpoint"],
+    ["logbook", "Logbook"],
+    ["compass", "Compass"],
+    ["workshop", "Workshop"],
+  ].map(([id, label]) => ({
+    id,
+    tier: "page",
+    label,
+    isEligible: onRoute(`/${id}`),
+  })),
 ];
 
 export function tierRank(tier) {
