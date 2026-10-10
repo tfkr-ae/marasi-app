@@ -37,7 +37,8 @@
 	let showTestCaseSearch = false;
 	let displayedRequests = [];
 	let requestSearchTimeout;
-	let lastSeenScore = null;
+	// Seeded with the saved score so opening a finding keeps a manually set severity.
+	let lastSeenScore = finding.CVSSScore;
 
 	$: autocompleteTestCases = [...$testCaseStore]
 		.reverse()
