@@ -46,6 +46,8 @@
 	let confirmation = null; // { title, body, label, run }
 	let saving = false;
 	let saveError = "";
+	let toolbar;
+	let toolbarPending = false; // the Manage menu or the profile name card is open
 
 	$: profile = draft.profiles.find((p) => p.id === profileId) ?? draft.profiles[0];
 	$: view = browse({ catalog, profile, platform, query, filter });
@@ -119,6 +121,7 @@
 	// Escape and backdrop clicks: the innermost thing gives way first.
 	function dismiss() {
 		if (capture) capture = null;
+		else if (toolbar?.dismiss()) return;
 		else if (confirmation) confirmation = null;
 		else requestClose();
 	}
@@ -127,7 +130,7 @@
 	// click over while there is something to dismiss first.
 	function onBackdropPointer(event) {
 		const onBackdrop = event.target?.classList?.contains("modal-backdrop") || event.target?.classList?.contains("modal-transition");
-		if (!onBackdrop || !(capture || confirmation || dirty)) return;
+		if (!onBackdrop || !(capture || toolbarPending || confirmation || dirty)) return;
 		event.stopPropagation();
 		if (event.type === "mousedown") dismiss();
 	}
@@ -180,7 +183,17 @@
 			<button type="button" class="text-2xl leading-none" aria-label="Close" on:click={requestClose}><X /></button>
 		</header>
 
-		<KeybindingsToolbar {draft} bind:profileId bind:platform {devicePlatform} />
+		<KeybindingsToolbar
+			bind:this={toolbar}
+			bind:pending={toolbarPending}
+			{catalog}
+			{draft}
+			bind:profileId
+			bind:platform
+			{devicePlatform}
+			onEdit={edit}
+			onConfirm={(next) => (confirmation = next)}
+		/>
 
 		<div class="flex items-center gap-4">
 			<input
