@@ -107,9 +107,25 @@ func (a *App) GetKeybindings() KeybindingState {
 	return KeybindingState{Config: a.Config.keybindings, Problem: a.Config.keybindingsProblem}
 }
 
-// KeybindingAction describes one catalog action for validation. The catalog
-// is defined in the frontend (it includes actions derived from extensions),
-// so the frontend sends it with every save; see notes/persistence.md.
+// KeybindingCatalog describes the menu action catalog for validation. The
+// catalog is defined in the frontend (it includes actions derived from
+// extensions), so the frontend sends it with every save; see
+// notes/persistence.md.
+type KeybindingCatalog struct {
+	Actions  []KeybindingAction  `json:"actions"`
+	Contexts []KeybindingContext `json:"contexts"`
+}
+
+// KeybindingContext is a menu context's collision data. Overlaps lists
+// same-tier contexts that can be eligible at the same time; a binding shared
+// with one of them is a duplicate, like one shared within the context.
+type KeybindingContext struct {
+	ID       string   `json:"id"`
+	Overlaps []string `json:"overlaps"`
+}
+
+// KeybindingAction is one catalog action: identity, menu context and
+// factory defaults per platform variant.
 type KeybindingAction struct {
 	ID       string              `json:"id"`
 	Context  string              `json:"context"`
@@ -119,7 +135,7 @@ type KeybindingAction struct {
 // SaveKeybindings validates the complete keybindings section against the
 // catalog, writes it atomically, and only then makes it the live config. On
 // any error the file and the in-memory config are unchanged.
-func (a *App) SaveKeybindings(config KeybindingConfig, catalog []KeybindingAction) (KeybindingState, error) {
+func (a *App) SaveKeybindings(config KeybindingConfig, catalog KeybindingCatalog) (KeybindingState, error) {
 	cfg := a.Config
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()

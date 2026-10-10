@@ -1,3 +1,4 @@
+import { contextsConflict } from "./contexts.js";
 import { isReservedBinding } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
 import { createKeymap, OPEN_MENU } from "./keymap.js";
@@ -62,7 +63,8 @@ function problem(profile, platform, kind, actions, binding, message) {
 // Problems in one profile, per platform variant, in a stable order:
 //   menu-unbound   the menu opening has no binding
 //   reserved       Escape/Tab/Enter (optionally with Shift) is assigned
-//   duplicate      two actions share a binding in the same menu context
+//   duplicate      two actions share a binding in the same menu context or
+//                  in overlapping contexts (contextsConflict)
 //   menu-shadowed  an action in another context shares a menu-opening
 //                  binding (the global context is always eligible, so it
 //                  would win wherever that context is)
@@ -87,17 +89,15 @@ export function validateProfile(catalog, profile) {
         if (reported.has(binding)) continue;
         reported.add(binding);
         const owners = keymap.actionsFor(binding).map((id) => catalog.get(id));
-        const byContext = new Map();
-        for (const owner of owners) {
-          byContext.set(owner.context, [...(byContext.get(owner.context) ?? []), owner]);
-        }
-        for (const [context, group] of byContext) {
-          if (group.length > 1) {
-            problems.push(
-              problem(profile, platform, "duplicate", group.map((a) => a.id), binding, `${binding} is bound to ${group.map((a) => a.id).join(" and ")} in ${context}`),
-            );
+        owners.forEach((first, i) => {
+          for (const second of owners.slice(i + 1)) {
+            if (contextsConflict(catalog.contexts, first.context, second.context)) {
+              problems.push(
+                problem(profile, platform, "duplicate", [first.id, second.id], binding, `${binding} is bound to both ${first.id} (${first.context}) and ${second.id} (${second.context})`),
+              );
+            }
           }
-        }
+        });
         if (owners.some((owner) => owner.id === OPEN_MENU)) {
           const shadows = owners.filter((owner) => owner.context !== "global");
           if (shadows.length) {
@@ -139,14 +139,17 @@ export function settleProfile(catalog, profile) {
   return { ...profile, overrides, knownActions };
 }
 
-// The catalog as SaveKeybindings expects it: the backend cannot import the
-// JS catalog, so every save describes it.
+// The catalog as SaveKeybindings expects it (main.KeybindingCatalog): the
+// backend cannot import the JS catalog, so every save describes it.
 export function catalogDescriptor(catalog) {
-  return catalog.actions.map((action) => ({
-    id: action.id,
-    context: action.context,
-    defaults: Object.fromEntries(PLATFORMS.map((platform) => [platform, [...action.defaults[platform]]])),
-  }));
+  return {
+    actions: catalog.actions.map((action) => ({
+      id: action.id,
+      context: action.context,
+      defaults: Object.fromEntries(PLATFORMS.map((platform) => [platform, [...action.defaults[platform]]])),
+    })),
+    contexts: catalog.contexts.map((context) => ({ id: context.id, overlaps: [...(context.overlaps ?? [])] })),
+  };
 }
 
 // What the dispatcher runs for the saved state from GetKeybindings

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createCatalog } from "./catalog.js";
+import { buildCatalog, createCatalog } from "./catalog.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
 import {
@@ -10,11 +10,15 @@ import {
   validateKeybindings,
 } from "./profiles.js";
 
-// Ledger's drawer-open and drawer-closed contexts are mutually exclusive.
+// Ledger's drawer-open and drawer-closed contexts are mutually exclusive; the
+// WebSocket drawer context is eligible together with drawer-open, in the same
+// tier, so it declares the overlap.
+const drawerOpen = (s) => s.route === "/ledger" && Boolean(s.drawer?.open);
 const contexts = [
   { id: "global", tier: "global", label: "Global", isEligible: () => true },
   { id: "ledger.drawer-closed", tier: "page", label: "Ledger", isEligible: (s) => s.route === "/ledger" && !s.drawer?.open },
-  { id: "ledger.drawer-open", tier: "drawer", label: "Ledger drawer", isEligible: (s) => s.route === "/ledger" && Boolean(s.drawer?.open) },
+  { id: "ledger.drawer-open.websocket", tier: "drawer", label: "WebSocket", overlaps: ["ledger.drawer-open"], isEligible: (s) => drawerOpen(s) && s.drawer.websocket },
+  { id: "ledger.drawer-open", tier: "drawer", label: "Ledger drawer", isEligible: drawerOpen },
 ];
 
 function both(mac, other) {
@@ -27,6 +31,7 @@ const baseActions = [
   { id: "global.go-ledger", context: "global", label: "Ledger", defaults: both("meta+2", "ctrl+2") },
   { id: "ledger.drawer-closed.open-item", context: "ledger.drawer-closed", label: "Open", defaults: both("meta+e", "ctrl+e") },
   { id: "ledger.drawer-open.close", context: "ledger.drawer-open", label: "Close", defaults: both("meta+e", "ctrl+e") },
+  { id: "ledger.drawer-open.websocket.stream", context: "ledger.drawer-open.websocket", label: "Stream", defaults: both("meta+shift+o", "ctrl+shift+o") },
 ];
 const catalog = createCatalog(baseActions, { contexts });
 const knownIds = baseActions.map((action) => action.id).sort();
@@ -192,6 +197,16 @@ test("reusing a binding in mutually exclusive contexts is valid", () => {
   assert.deepEqual(validateKeybindings(catalog, config), []);
 });
 
+test("sharing a binding with an overlapping context is a duplicate", () => {
+  const config = saved([
+    profile("a", "A", { [MACOS]: [{ action: "ledger.drawer-open.websocket.stream", keys: ["meta+e"] }] }),
+  ]).config;
+  assert.deepEqual(
+    validateKeybindings(catalog, config).map(({ kind, actions }) => ({ kind, actions })),
+    [{ kind: "duplicate", actions: ["ledger.drawer-open.close", "ledger.drawer-open.websocket.stream"] }],
+  );
+});
+
 test("a reported problem with the saved section falls back to factory shortcuts", () => {
   const dispatcher = createDispatcher({
     catalog,
@@ -218,9 +233,23 @@ test("a hand-edited active variant that strands the menu falls back to factory s
 });
 
 test("the catalog descriptor carries what the backend validates", () => {
-  assert.deepEqual(catalogDescriptor(catalog)[3], {
+  const descriptor = catalogDescriptor(catalog);
+  assert.deepEqual(descriptor.actions[3], {
     id: "ledger.drawer-closed.open-item",
     context: "ledger.drawer-closed",
     defaults: { [MACOS]: ["meta+e"], [WINDOWS_LINUX]: ["ctrl+e"] },
   });
+  assert.deepEqual(descriptor.contexts[2], { id: "ledger.drawer-open.websocket", overlaps: ["ledger.drawer-open"] });
+  assert.deepEqual(descriptor.contexts[0], { id: "global", overlaps: [] });
+});
+
+test("the factory profile is valid against the app catalog", () => {
+  const app = buildCatalog({ extensions: [{ Name: "workshop" }, { Name: "fuzzer" }, { Name: "notes" }] });
+  assert.deepEqual(validateKeybindings(app, factoryKeybindings()), []);
+});
+
+test("the app's WebSocket drawer context overlaps the Ledger drawer", () => {
+  const { contexts: described } = catalogDescriptor(buildCatalog());
+  const websocket = described.find((context) => context.id === "ledger.drawer-open.websocket");
+  assert.deepEqual(websocket.overlaps, ["ledger.drawer-open"]);
 });

@@ -128,12 +128,29 @@ func isReservedBinding(binding string) bool {
 
 // keybindingCatalog indexes the catalog sent by the frontend.
 type keybindingCatalog struct {
-	actions []KeybindingAction
-	byID    map[string]KeybindingAction
+	actions  []KeybindingAction
+	byID     map[string]KeybindingAction
+	overlaps map[[2]string]bool
 }
 
-func newKeybindingCatalog(actions []KeybindingAction) (keybindingCatalog, error) {
-	catalog := keybindingCatalog{actions: actions, byID: map[string]KeybindingAction{}}
+// conflicting reports whether two contexts form one collision domain: the
+// same context, or contexts declared as overlapping (same tier, eligible at
+// the same time, so table order and not precedence would pick the winner).
+// A binding shared across any other pair of contexts is either reuse in
+// mutually exclusive states or shadowing by a more specific tier.
+func (c keybindingCatalog) conflicting(a, b string) bool {
+	return a == b || c.overlaps[[2]string{a, b}]
+}
+
+func newKeybindingCatalog(described KeybindingCatalog) (keybindingCatalog, error) {
+	actions := described.Actions
+	catalog := keybindingCatalog{actions: actions, byID: map[string]KeybindingAction{}, overlaps: map[[2]string]bool{}}
+	for _, context := range described.Contexts {
+		for _, other := range context.Overlaps {
+			catalog.overlaps[[2]string{context.ID, other}] = true
+			catalog.overlaps[[2]string{other, context.ID}] = true
+		}
+	}
 	for _, action := range actions {
 		if !actionIDPattern.MatchString(action.ID) || action.Context == "" {
 			return catalog, fmt.Errorf("invalid catalog action %q", action.ID)
@@ -248,7 +265,7 @@ func resolveVariant(catalog keybindingCatalog, profile KeybindingProfile, platfo
 			continue
 		}
 		defaults := canonicalBindings(action.Defaults[platform])
-		if !known[action.ID] && collidesWithCustomization(action, defaults, customized) {
+		if !known[action.ID] && collidesWithCustomization(catalog, action, defaults, customized) {
 			defaults = []string{}
 		}
 		resolved[action.ID] = defaults
@@ -256,10 +273,10 @@ func resolveVariant(catalog keybindingCatalog, profile KeybindingProfile, platfo
 	return resolved
 }
 
-func collidesWithCustomization(action KeybindingAction, defaults []string, customized map[string][]KeybindingAction) bool {
+func collidesWithCustomization(catalog keybindingCatalog, action KeybindingAction, defaults []string, customized map[string][]KeybindingAction) bool {
 	for _, binding := range defaults {
 		for _, other := range customized[binding] {
-			if other.Context == action.Context || other.ID == openMenuAction {
+			if catalog.conflicting(other.Context, action.Context) || other.ID == openMenuAction {
 				return true
 			}
 		}
@@ -269,7 +286,7 @@ func collidesWithCustomization(action KeybindingAction, defaults []string, custo
 
 // resolveActiveKeybindings resolves the active profile for both platform
 // variants: platform -> action id -> bindings.
-func resolveActiveKeybindings(config KeybindingConfig, actions []KeybindingAction) (map[string]map[string][]string, error) {
+func resolveActiveKeybindings(config KeybindingConfig, actions KeybindingCatalog) (map[string]map[string][]string, error) {
 	catalog, err := newKeybindingCatalog(actions)
 	if err != nil {
 		return nil, err
@@ -290,7 +307,7 @@ func resolveActiveKeybindings(config KeybindingConfig, actions []KeybindingActio
 // against a validated catalog: actions the rule left unbound get an explicit
 // empty override, and every catalog action becomes known. Ids no longer in
 // the catalog stay known (dormant extension actions keep their history).
-func settleKeybindings(config KeybindingConfig, actions []KeybindingAction) KeybindingConfig {
+func settleKeybindings(config KeybindingConfig, actions KeybindingCatalog) KeybindingConfig {
 	catalog, err := newKeybindingCatalog(actions)
 	if err != nil {
 		return config
@@ -339,7 +356,7 @@ func canonicalBindings(keys []string) []string {
 
 // validateKeybindings checks the whole section: its structure, then every
 // profile and platform variant against the catalog.
-func validateKeybindings(config KeybindingConfig, actions []KeybindingAction) error {
+func validateKeybindings(config KeybindingConfig, actions KeybindingCatalog) error {
 	if err := checkKeybindingStructure(config); err != nil {
 		return err
 	}
@@ -381,8 +398,8 @@ func variantProblems(catalog keybindingCatalog, resolved map[string][]string) []
 					break // report each pair once, in catalog order
 				}
 				switch {
-				case other.Context == action.Context:
-					problems = append(problems, fmt.Sprintf("%s is bound to both %s and %s in context %s", binding, other.ID, action.ID, action.Context))
+				case catalog.conflicting(other.Context, action.Context):
+					problems = append(problems, fmt.Sprintf("%s is bound to both %s (%s) and %s (%s)", binding, other.ID, other.Context, action.ID, action.Context))
 				case other.ID == openMenuAction || action.ID == openMenuAction:
 					problems = append(problems, fmt.Sprintf("%s opens the menu but %s shadows it", binding, nonMenu(other, action).ID))
 				}

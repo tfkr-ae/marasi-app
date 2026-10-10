@@ -1,3 +1,4 @@
+import { contextsConflict } from "./contexts.js";
 import { normalizeBinding } from "./keys.js";
 
 export const OPEN_MENU = "global.open-menu";
@@ -20,8 +21,8 @@ function normalizedList(texts) {
 //
 // `knownActions` (a profile's known action ids) enables the new-default rule
 // of ADR 0001: an action the profile does not know yet inherits its defaults
-// only when none collides with a customization (an overridden action in the
-// same context, or an overridden menu opening); otherwise it is unbound and
+// only when none collides with a customization (an overridden action in a
+// conflicting context, see contextsConflict, or an overridden menu opening); otherwise it is unbound and
 // the customization wins. Without `knownActions` every action inherits.
 // Mirrors resolveVariant in keybinding_validation.go.
 export function createKeymap(catalog, platform, overrides = {}, { knownActions } = {}) {
@@ -38,7 +39,8 @@ export function createKeymap(catalog, platform, overrides = {}, { knownActions }
   const collides = (action, bindings) =>
     bindings.some((binding) =>
       (customized.get(binding) ?? []).some(
-        (other) => other.context === action.context || other.id === OPEN_MENU,
+        (other) =>
+          contextsConflict(catalog.contexts, other.context, action.context) || other.id === OPEN_MENU,
       ),
     );
 

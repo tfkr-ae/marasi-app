@@ -114,6 +114,8 @@ func TestAppKeybindings(t *testing.T) {
 				KeybindingOverride{Action: "global.go-home", Keys: []string{"escape"}}),
 			"reserved dialog key (Shift+Tab)": withOverrides("windows-linux",
 				KeybindingOverride{Action: "global.go-home", Keys: []string{"shift+tab"}}),
+			"duplicate across overlapping contexts": withOverrides("macos",
+				KeybindingOverride{Action: "ledger.drawer-open.websocket.stream", Keys: []string{"meta+e"}}),
 			"unknown platform variant": withOverrides("linux"),
 			"unparseable binding": withOverrides("macos",
 				KeybindingOverride{Action: "global.go-home", Keys: []string{"meta+"}}),
@@ -186,7 +188,8 @@ func TestAppKeybindings(t *testing.T) {
 
 		// A later release adds actions whose defaults land on the
 		// customized bindings, plus one with a free default.
-		updated := append(testKeybindingCatalog(),
+		updated := testKeybindingCatalog()
+		updated.Actions = append(updated.Actions,
 			KeybindingAction{ID: "global.go-new", Context: "global", Defaults: map[string][]string{"macos": {"meta+j"}, "windows-linux": {"ctrl+j"}}},
 			KeybindingAction{ID: "ledger.drawer-open.new", Context: "ledger.drawer-open", Defaults: map[string][]string{"macos": {"meta+m"}, "windows-linux": {"ctrl+9"}}},
 			KeybindingAction{ID: "global.go-free", Context: "global", Defaults: map[string][]string{"macos": {"meta+9"}, "windows-linux": {"ctrl+8"}}},
@@ -320,23 +323,34 @@ func TestAppKeybindings(t *testing.T) {
 }
 
 // testKeybindingCatalog describes a small catalog the way the frontend sends
-// it: Ledger's drawer-open and drawer-closed contexts are mutually exclusive.
-func testKeybindingCatalog() []KeybindingAction {
+// it: Ledger's drawer-open and drawer-closed contexts are mutually exclusive,
+// while the WebSocket drawer context overlaps drawer-open (both eligible at
+// once in the same tier).
+func testKeybindingCatalog() KeybindingCatalog {
 	both := func(mac, other string) map[string][]string {
 		return map[string][]string{"macos": {mac}, "windows-linux": {other}}
 	}
-	return []KeybindingAction{
-		{ID: "global.open-menu", Context: "global", Defaults: both("meta+k", "ctrl+k")},
-		{ID: "global.go-home", Context: "global", Defaults: both("meta+1", "ctrl+1")},
-		{ID: "global.go-ledger", Context: "global", Defaults: both("meta+2", "ctrl+2")},
-		{ID: "ledger.drawer-closed.open-item", Context: "ledger.drawer-closed", Defaults: both("meta+e", "ctrl+e")},
-		{ID: "ledger.drawer-open.close", Context: "ledger.drawer-open", Defaults: both("meta+e", "ctrl+e")},
+	return KeybindingCatalog{
+		Contexts: []KeybindingContext{
+			{ID: "global"},
+			{ID: "ledger.drawer-closed"},
+			{ID: "ledger.drawer-open.websocket", Overlaps: []string{"ledger.drawer-open"}},
+			{ID: "ledger.drawer-open"},
+		},
+		Actions: []KeybindingAction{
+			{ID: "global.open-menu", Context: "global", Defaults: both("meta+k", "ctrl+k")},
+			{ID: "global.go-home", Context: "global", Defaults: both("meta+1", "ctrl+1")},
+			{ID: "global.go-ledger", Context: "global", Defaults: both("meta+2", "ctrl+2")},
+			{ID: "ledger.drawer-closed.open-item", Context: "ledger.drawer-closed", Defaults: both("meta+e", "ctrl+e")},
+			{ID: "ledger.drawer-open.websocket.stream", Context: "ledger.drawer-open.websocket", Defaults: both("meta+shift+o", "ctrl+shift+o")},
+			{ID: "ledger.drawer-open.close", Context: "ledger.drawer-open", Defaults: both("meta+e", "ctrl+e")},
+		},
 	}
 }
 
 func testKnownActions() []string {
 	var ids []string
-	for _, action := range testKeybindingCatalog() {
+	for _, action := range testKeybindingCatalog().Actions {
 		ids = append(ids, action.ID)
 	}
 	slices.Sort(ids)
