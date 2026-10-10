@@ -45,13 +45,18 @@ printf '%s\n' "$EVIDENCE_DIR" > "$EVIDENCE_FILE"
 printf '%s\n' "$PORT" > "$PORT_FILE"
 printf '%s\n' "$DEV_PORT" > "$DEV_PORT_FILE"
 
-cat > "$APP_CONFIG_DIR/marasi_appconfig.yaml" <<EOF
+# restart.sh relaunches with MARASI_VERIFY_KEEP_CONFIG=1 so saved preferences survive.
+if [ "${MARASI_VERIFY_KEEP_CONFIG:-0}" = 1 ] && [ -f "$APP_CONFIG_DIR/marasi_appconfig.yaml" ]; then
+	printf 'Keeping existing config %s\n' "$APP_CONFIG_DIR/marasi_appconfig.yaml"
+else
+	cat > "$APP_CONFIG_DIR/marasi_appconfig.yaml" <<EOF
 default_address: 127.0.0.1
 default_port: "$PORT"
 first_run: false
 syntax_mode: auto
 vim_enabled: true
 EOF
+fi
 
 cd "$REPO_ROOT"
 {

@@ -31,6 +31,16 @@ Teardown only the instance recorded by the helper:
 .agents/skills/verify-marasi/scripts/cleanup.sh
 ```
 
+## Restart
+
+To prove that a saved preference survives an app restart, restart the recorded instance instead of cleaning up:
+
+```bash
+.agents/skills/verify-marasi/scripts/restart.sh
+```
+
+Restart stops the recorded Chrome and Wails processes, keeps the isolated home (including `marasi_appconfig.yaml` and the scratch project), and relaunches with `MARASI_VERIFY_KEEP_CONFIG=1`, so launch reads the existing config instead of rewriting it. It creates a new evidence directory. Inspect the YAML before and after the restart. `cleanup.sh` still removes everything at the end.
+
 ## Doctor
 
 Run this first whenever startup, automation, or a result looks wrong:
