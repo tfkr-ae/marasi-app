@@ -1,5 +1,7 @@
-import { CONTEXTS } from "./contexts.js";
+import { CONTEXTS, extensionPageContext } from "./contexts.js";
+import { isReservedBinding } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
+import { OPEN_MENU } from "./keymap.js";
 import { MACOS, PLATFORMS, WINDOWS_LINUX } from "./platform.js";
 
 // The menu action catalog: stable identity, menu context, label/description
@@ -139,6 +141,28 @@ export const FACTORY_ACTIONS = [
     ["update-code", "Update Workshop", "Execute Workshop Code", "execute, code", primary("shift+r")],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
+  ...pageActions("websocket", [
+    ["previous-tab", "Previous WebSocket Tab", "Move to the previous WebSocket tab", "websocket previous tab stream checkpoint inject", primary("[")],
+    ["next-tab", "Next WebSocket Tab", "Move to the next WebSocket tab", "websocket next tab stream checkpoint inject", primary("]")],
+    ["close-connection", "Close WebSocket Connection", "Close the active WebSocket connection", "websocket close disconnect", primary("shift+x")],
+  ]),
+  ...pageActions("websocket.stream", [
+    ["previous-frame", "Previous WebSocket Frame", "Select the previous frame in the stream", "websocket previous frame message", primary("shift+[")],
+    ["next-frame", "Next WebSocket Frame", "Select the next frame in the stream", "websocket next frame message", primary("shift+]")],
+    ["jump-to-bottom", "Jump to Bottom", "Jump to the newest frame and resume auto-scroll", "websocket stream bottom newest follow auto-scroll", primary("shift+down")],
+    ["toggle-frame-metadata", "Toggle Frame Metadata", "Switch between the frame payload and metadata", "websocket frame metadata payload", primary("shift+m")],
+    ["copy-frame-to-inject", "Copy Frame to Inject", "Copy the selected frame into the Inject tab", "websocket frame copy inject", primary("shift+i")],
+  ]),
+  ...pageActions("websocket.checkpoint", [
+    ["toggle-intercept", "Toggle WebSocket Intercept", "Enable or disable WebSocket interception", "websocket checkpoint intercept toggle", primary("shift+i")],
+    ["forward-frame", "Forward WebSocket Frame", "Forward the current intercepted frame", "websocket checkpoint forward frame", primary("shift+f")],
+    ["drop-frame", "Drop WebSocket Frame", "Drop the current intercepted frame", "websocket checkpoint drop frame", primary("shift+d")],
+  ]),
+  ...pageActions("websocket.inject", [
+    ["toggle-direction", "Toggle Inject Direction", "Switch the injected frame direction", "websocket inject direction client server", primary("shift+d")],
+    ["cycle-opcode", "Cycle Inject Opcode", "Select the next WebSocket opcode", "websocket inject opcode cycle", primary("shift+o")],
+    ["inject-frame", "Inject WebSocket Frame", "Inject the current message into the connection", "websocket inject send frame message", primary("shift+enter")],
+  ]),
 ];
 
 // Lowercase dot/dash-safe slug used inside action ids.
@@ -152,8 +176,41 @@ export function slugify(name) {
 // Compass and Checkpoint are extensions with their own navigation actions.
 const BUILT_IN_EXTENSIONS = new Set(["compass", "checkpoint"]);
 
+// Extension action ids. Each prefix belongs to one kind of action, so an
+// extension can never declare an id Marasi uses for it:
+// - global.open-extension.<extension>: Marasi's navigation to its page;
+// - extension-page.<extension>.<slug>: Marasi's own actions on that page
+//   (and the page's menu context id is extension-page.<extension>);
+// - extension.<extension>.<declared action>: actions the extension declares.
+// <extension> is the slug of the extension name (stable across projects,
+// unlike its per-project ID); nothing uses list positions.
 export function extensionNavigationActionId(extensionName) {
   return `global.open-extension.${slugify(extensionName)}`;
+}
+
+export function extensionPageContextId(extensionName) {
+  return `extension-page.${slugify(extensionName)}`;
+}
+
+export function extensionPageActionId(extensionName, slug) {
+  return `${extensionPageContextId(extensionName)}.${slug}`;
+}
+
+export function extensionMenuActionId(extensionName, declaredAction) {
+  const slug = slugify(declaredAction ?? "");
+  return slug ? `extension.${slugify(extensionName)}.${slug}` : null;
+}
+
+// Extensions with a page and a navigation action, in load order. Names whose
+// slug is empty or already taken keep only the first extension.
+function navigableExtensions(extensions) {
+  const seen = new Set();
+  return extensions.filter((extension) => {
+    const slug = slugify(extension?.Name ?? "");
+    if (!slug || BUILT_IN_EXTENSIONS.has(extension.Name) || seen.has(slug)) return false;
+    seen.add(slug);
+    return true;
+  });
 }
 
 // Opening an extension page from the global menu. Identity comes from the
@@ -162,16 +219,7 @@ export function extensionNavigationActionId(extensionName) {
 // override (keyed by id) never moves to another extension when the order
 // changes. Extensions past the ninth have no default.
 export function extensionNavigationActions(extensions = []) {
-  const seen = new Set();
-  const navigable = extensions.filter((extension) => {
-    const id = extensionNavigationActionId(extension.Name);
-    if (BUILT_IN_EXTENSIONS.has(extension.Name) || !slugify(extension.Name) || seen.has(id)) {
-      return false;
-    }
-    seen.add(id);
-    return true;
-  });
-  return navigable.map((extension, index) =>
+  return navigableExtensions(extensions).map((extension, index) =>
     action(
       extensionNavigationActionId(extension.Name),
       extension.Name,
@@ -180,6 +228,99 @@ export function extensionNavigationActions(extensions = []) {
       index < 9 ? primary(`alt+${index + 1}`) : { [MACOS]: [], [WINDOWS_LINUX]: [] },
     ),
   );
+}
+
+// An extension menu item's `keys`: `[mac, windows/linux]`, or one string in
+// hotkeys-js notation ("⌘+⇧+V, ctrl+⇧+V") used on both platforms, as before.
+// Entries that do not parse are dropped: extension data never breaks the
+// catalog.
+function extensionItemDefaults(keys) {
+  const parse = (list) =>
+    list.map((text) => (typeof text === "string" ? normalizeBinding(text) : null)).filter(Boolean);
+  if (Array.isArray(keys)) {
+    return { [MACOS]: parse(keys.slice(0, 1)), [WINDOWS_LINUX]: parse(keys.slice(1, 2)) };
+  }
+  if (typeof keys !== "string") return { [MACOS]: [], [WINDOWS_LINUX]: [] };
+  // hotkeys-js splits on commas; an empty piece is the "," key itself.
+  const pieces = [];
+  for (const piece of keys.replace(/\s/g, "").split(",")) {
+    if (piece === "" && pieces.length) pieces[pieces.length - 1] += ",";
+    else if (piece !== "") pieces.push(piece);
+  }
+  const both = [...new Set(parse(pieces))];
+  return { [MACOS]: both, [WINDOWS_LINUX]: [...both] };
+}
+
+// Factory defaults must form a valid profile (decision 5), and extension
+// data must not break that: an extension default is dropped when it is a
+// reserved key, opens the Marasi menu, or is already bound on the same page
+// (Toggle Settings or an earlier item). The action stays, unbound for that
+// key; the researcher can bind it.
+function takenOnExtensionPage(toggleSettings) {
+  const menu = FACTORY_ACTIONS.find((a) => a.id === OPEN_MENU);
+  return Object.fromEntries(
+    PLATFORMS.map((platform) => [
+      platform,
+      new Set(
+        [...menu.defaults[platform], ...toggleSettings.defaults[platform]].map(normalizeBinding),
+      ),
+    ]),
+  );
+}
+
+function claimDefaults(defaults, taken) {
+  const claimed = {};
+  for (const platform of PLATFORMS) {
+    claimed[platform] = defaults[platform].filter(
+      (binding) => !isReservedBinding(binding) && !taken[platform].has(binding),
+    );
+    claimed[platform].forEach((binding) => taken[platform].add(binding));
+  }
+  return claimed;
+}
+
+// Each extension page's menu: Marasi's Toggle Settings, then the actions the
+// extension declares with `marasi:render("menu", ...)`. `menus` maps an
+// extension name to its rendered menu items. A declared action's identity is
+// its `action` (the Lua function it calls); items without one run nothing
+// and are not catalog actions. A repeated action slug keeps the first item.
+export function extensionPageMenus(extensions = [], menus = {}) {
+  const contexts = [];
+  const actions = [];
+  for (const extension of navigableExtensions(extensions)) {
+    const name = extension.Name;
+    const context = extensionPageContextId(name);
+    contexts.push(extensionPageContext(context, name));
+    actions.push(
+      action(
+        extensionPageActionId(name, "toggle-settings"),
+        `Toggle ${name} Settings`,
+        "Toggle Settings Accordian",
+        "settings, toggle",
+        primary("p"),
+        context,
+      ),
+    );
+    const items = Array.isArray(menus?.[name]) ? menus[name] : [];
+    const seen = new Set();
+    const taken = takenOnExtensionPage(actions.at(-1));
+    for (const item of items) {
+      const id = extensionMenuActionId(name, typeof item?.action === "string" ? item.action : "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      actions.push(
+        action(
+          id,
+          String(item.name ?? item.action),
+          String(item.subtitle ?? ""),
+          String(item.keywords ?? ""),
+          claimDefaults(extensionItemDefaults(item.keys), taken),
+          context,
+        ),
+      );
+    }
+  }
+  return { contexts, actions };
 }
 
 export function createCatalog(definitions, { contexts = CONTEXTS } = {}) {
@@ -216,7 +357,11 @@ export function createCatalog(definitions, { contexts = CONTEXTS } = {}) {
 }
 
 // The app's catalog: factory actions plus actions derived from app data
-// (currently the loaded extensions).
-export function buildCatalog({ extensions = [] } = {}) {
-  return createCatalog([...FACTORY_ACTIONS, ...extensionNavigationActions(extensions)]);
+// (the loaded extensions and the menus their pages have rendered).
+export function buildCatalog({ extensions = [], extensionMenus = {} } = {}) {
+  const pages = extensionPageMenus(extensions, extensionMenus);
+  return createCatalog(
+    [...FACTORY_ACTIONS, ...extensionNavigationActions(extensions), ...pages.actions],
+    { contexts: [...CONTEXTS, ...pages.contexts] },
+  );
 }

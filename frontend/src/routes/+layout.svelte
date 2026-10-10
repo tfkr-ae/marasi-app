@@ -84,10 +84,12 @@
 	import { isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
-	import hotkeys from "hotkeys-js";
 	import { get } from "svelte/store";
-	import { installMenuShortcuts } from "../lib/keybindings/app.js";
-	import { shortcutGate } from "../lib/keybindings/gate.js";
+	import {
+		installMenuShortcuts,
+		menuDispatcher,
+		websocketTab,
+	} from "../lib/keybindings/app.js";
 	let appRailIndex = 0;
 	let showChef = false;
 	let showExcali = false;
@@ -189,7 +191,13 @@
 			modal: get(modalStore)[0]?.component ?? null,
 			dialogOpen: Boolean(document.querySelector("dialog[open]")),
 			drawer: get(drawerStore),
+			websocketTab: get(websocketTab),
 		};
+	}
+	// A modal triggered with `toggleAction: <menu action id>` closes on that
+	// action's current binding (overlayIsolation asks before Escape handling).
+	function isModalToggle(event, actionId) {
+		return menuDispatcher.isModalToggle(event, actionId, shortcutState());
 	}
 	let removeMenuShortcuts = () => {};
 	onMount(() => {
@@ -217,10 +225,6 @@
 					modalStore.trigger(modal);
 				}
 			}
-			// One gate for the central dispatcher and the page menus still
-			// bound through hotkeys-js.
-			hotkeys.filter = (event) =>
-				shortcutGate(event, shortcutState()) === "open";
 			removeMenuShortcuts = installMenuShortcuts(shortcutState);
 			$appState.isReady = true;
 
@@ -402,7 +406,7 @@
 
 <div
 	class="flex flex-col h-screen"
-	use:isolateOverlays={{ modalStore, drawerStore, toastStore }}
+	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle }}
 >
 	<div class="flex flex-1 h-screen">
 		{#if $appState.isReady}

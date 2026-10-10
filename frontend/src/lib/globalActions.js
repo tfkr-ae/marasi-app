@@ -86,7 +86,7 @@ export function projectModal(toastStore) {
 	return {
 		type: "component",
 		component: "Project",
-		toggleShortcut: { key: "o" },
+		toggleAction: "global.open-project",
 		title: "Switch Projects",
 		response: (r) => {
 			if (r) openProjectFile(r, toastStore);
@@ -98,7 +98,7 @@ export function listenerModal(toastStore) {
 	return {
 		type: "component",
 		component: "Interface",
-		toggleShortcut: { key: "l" },
+		toggleAction: "global.setup-listener",
 		title: "Setup Listener",
 		response: (r) => {
 			if (r) setupListener(r, toastStore);

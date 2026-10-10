@@ -131,7 +131,7 @@
 		modalStore.trigger({
 			type: "component",
 			component: "WebsocketStream",
-			toggleShortcut: { key: "o", shiftKey: true },
+			toggleAction: "ledger.drawer-open.websocket.open-stream",
 			meta: {
 				upgradeRequest: structuredClone({
 					Metadata: meta.metadata,
@@ -258,11 +258,7 @@
 						const modal = {
 							type: "component",
 							component: "MenuInput",
-							toggleShortcut:
-								{
-									key: "o",
-									shiftKey: true,
-								},
+							toggleAction: "ledger.drawer-closed.open-request",
 							title: "Open request",
 							response: (
 								r,
@@ -400,11 +396,7 @@
 										{
 											type: "component",
 											component: "TestCase",
-											toggleShortcut:
-												{
-													key: "t",
-													shiftKey: true,
-												},
+											toggleAction: "ledger.drawer-open.create-test-case",
 											meta: {
 												testCase: testCase,
 												isNew: true,
@@ -438,11 +430,7 @@
 							const modal = {
 								type: "component",
 								component: "SelectTestCase",
-								toggleShortcut:
-									{
-									key: "b",
-										shiftKey: true,
-									},
+								toggleAction: "ledger.drawer-open.link-test-case",
 								meta: {
 									requestID: $drawerStore
 										?.meta
@@ -496,11 +484,7 @@
 							const modal = {
 								type: "component",
 								component: "SelectTestCase",
-								toggleShortcut:
-									{
-										key: "d",
-										shiftKey: true,
-									},
+								toggleAction: "ledger.drawer-open.unlink-test-case",
 								meta: {
 									requestID: requestID,
 									mode: "unlink",
@@ -548,11 +532,7 @@
 										{
 											type: "component",
 											component: "Finding",
-											toggleShortcut:
-												{
-													key: "f",
-													shiftKey: true,
-												},
+											toggleAction: "ledger.drawer-open.create-finding",
 											meta: {
 												finding: finding,
 												isNew: true,
@@ -591,11 +571,7 @@
 							const modal = {
 								type: "component",
 								component: "SelectFinding",
-								toggleShortcut:
-									{
-										key: "k",
-										shiftKey: true,
-									},
+								toggleAction: "ledger.drawer-open.link-finding",
 								meta: {
 									requestID: $drawerStore
 										?.meta
@@ -649,11 +625,7 @@
 							const modal = {
 								type: "component",
 								component: "SelectFinding",
-								toggleShortcut:
-									{
-										key: "x",
-										shiftKey: true,
-									},
+								toggleAction: "ledger.drawer-open.unlink-finding",
 								meta: {
 									requestID: requestID,
 									mode: "unlink",
@@ -692,11 +664,7 @@
 						const modal = {
 							type: "component",
 							component: "Notes",
-							toggleShortcut:
-								{
-									key: "n",
-									shiftKey: true,
-								},
+							toggleAction: "ledger.drawer-open.view-note",
 							title:
 								"Request " +
 								$drawerStore
@@ -736,11 +704,7 @@
 						const modal = {
 							type: "component",
 							component: "Metadata",
-							toggleShortcut:
-								{
-									key: "m",
-									shiftKey: true,
-								},
+							toggleAction: "ledger.drawer-open.view-metadata",
 							content: metadata,
 							title:
 								"Request " +
@@ -1560,10 +1524,7 @@
 				const modal = {
 					type: "component",
 					component: "Notes",
-					toggleShortcut: {
-						key: "n",
-						shiftKey: true,
-					},
+					toggleAction: "ledger.drawer-open.view-note",
 					title:
 						"Request " +
 						pairNumber(selectedPairID) +
@@ -1629,10 +1590,7 @@
 					const modal = {
 						type: "component",
 						component: "TestCase",
-						toggleShortcut: {
-							key: "t",
-							shiftKey: true,
-						},
+						toggleAction: "ledger.drawer-open.create-test-case",
 						meta: {
 							testCase: testCase,
 							isNew: true,
@@ -1650,10 +1608,7 @@
 					const modal = {
 						type: "component",
 						component: "Finding",
-						toggleShortcut: {
-							key: "f",
-							shiftKey: true,
-						},
+						toggleAction: "ledger.drawer-open.create-finding",
 						meta: {
 							finding: finding,
 							isNew: true,

@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
+import { CONTEXTS, contextsConflict } from "./contexts.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
+import { factoryKeybindings, validateKeybindings } from "./profiles.js";
 
 // Page and drawer menus resolved through the app's real catalog and menu
 // contexts, against the layout's dispatcher state shape.
@@ -171,4 +173,133 @@ test("page actions never run on another page", () => {
   assert.equal(dispatcher.dispatch(cmd("p", "KeyP"), on("/")), false);
   assert.equal(dispatcher.dispatch(cmd("p", "KeyP"), on("/settings")), false);
   assert.deepEqual(calls, []);
+});
+
+test("each WebSocket tab overlaps the modal's shared context but not the other tabs", () => {
+  const conflict = (a, b) => contextsConflict(CONTEXTS, a, b);
+  for (const tab of ["websocket.stream", "websocket.checkpoint", "websocket.inject"]) {
+    assert.ok(conflict(tab, "websocket"), tab);
+    assert.ok(conflict("websocket", tab), tab);
+  }
+  assert.ok(!conflict("websocket.stream", "websocket.inject"));
+  assert.ok(!conflict("websocket.checkpoint", "websocket.inject"));
+});
+
+test("the factory profile is valid with WebSocket and extension actions in the catalog", () => {
+  const catalog = buildCatalog({
+    extensions: [{ Name: "workshop" }, { Name: "Port Scanner" }],
+    extensionMenus: {
+      "Port Scanner": [
+        { name: "Scan", action: "scan", keys: ["⌘+⇧+H", "ctrl+⇧+H"] },
+        { name: "Settings clash", action: "settings", keys: ["⌘+P", "ctrl+P"] },
+        { name: "Menu clash", action: "menu", keys: ["⌘+K", "ctrl+K"] },
+        { name: "Scan again", action: "scan-again", keys: ["⌘+⇧+H", "ctrl+⇧+H"] },
+        { name: "Reserved", action: "reserved", keys: ["shift+enter", "escape"] },
+      ],
+    },
+  });
+  assert.deepEqual(validateKeybindings(catalog, factoryKeybindings()), []);
+  assert.deepEqual(catalog.get("extension.port-scanner.scan").defaults[MACOS], ["meta+shift+h"]);
+  assert.deepEqual(catalog.get("extension.port-scanner.scan-again").defaults[MACOS], []);
+});
+
+const websocketModal = (websocketTab, drawer = requestDrawer(websocketUpgrade)) => ({
+  ...on("/ledger", drawer),
+  modal: "WebsocketStream",
+  websocketTab,
+});
+
+test("the WebSocket modal's shared and per-tab shortcuts run the open tab's action", () => {
+  const dispatcher = mac();
+  const expected = [
+    ["stream", cmdShift("D", "KeyD"), null],
+    ["checkpoint", cmdShift("D", "KeyD"), "websocket.checkpoint.drop-frame"],
+    ["inject", cmdShift("D", "KeyD"), "websocket.inject.toggle-direction"],
+    ["stream", cmdShift("I", "KeyI"), "websocket.stream.copy-frame-to-inject"],
+    ["checkpoint", cmdShift("I", "KeyI"), "websocket.checkpoint.toggle-intercept"],
+    ["stream", cmdShift("Enter", "Enter"), null],
+    ["inject", cmdShift("Enter", "Enter"), "websocket.inject.inject-frame"],
+    ["inject", cmdShift("O", "KeyO"), "websocket.inject.cycle-opcode"],
+    ["stream", cmdShift("{", "BracketLeft"), "websocket.stream.previous-frame"],
+    ["stream", cmdShift("}", "BracketRight"), "websocket.stream.next-frame"],
+    ["stream", cmdShift("M", "KeyM"), "websocket.stream.toggle-frame-metadata"],
+    ["stream", cmdShift("ArrowDown", "ArrowDown"), "websocket.stream.jump-to-bottom"],
+  ];
+  for (const [tab, event, actionId] of expected) {
+    assert.equal(dispatcher.resolve(event, websocketModal(tab)), actionId, `${tab} ${event.key}`);
+  }
+  for (const tab of ["stream", "checkpoint", "inject"]) {
+    assert.equal(dispatcher.resolve(cmd("[", "BracketLeft"), websocketModal(tab)), "websocket.previous-tab");
+    assert.equal(dispatcher.resolve(cmd("]", "BracketRight"), websocketModal(tab)), "websocket.next-tab");
+    assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), websocketModal(tab)), "websocket.close-connection");
+  }
+});
+
+test("the WebSocket modal keeps global actions but not the drawer or page beneath it", () => {
+  const dispatcher = mac();
+  for (const drawer of [requestDrawer(websocketUpgrade), requestDrawer()]) {
+    const state = websocketModal("stream", drawer);
+    assert.equal(dispatcher.resolve(cmd("1", "Digit1"), state), "global.go-home");
+    assert.equal(dispatcher.resolve(cmd("k", "KeyK"), state), "global.open-menu");
+    // Ledger drawer shortcuts with no WebSocket counterpart stay inert.
+    assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), state), null);
+    assert.equal(dispatcher.resolve(cmdShift("]", "BracketRight"), state), "websocket.stream.next-frame");
+    assert.equal(dispatcher.resolve(cmdShift("O", "KeyO"), state), null);
+  }
+  // Armory's request drawer opens the modal too.
+  const armory = { ...websocketModal("checkpoint"), route: "/armory" };
+  assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), armory), "websocket.checkpoint.forward-frame");
+  assert.equal(dispatcher.resolve(cmdShift("[", "BracketLeft"), armory), null);
+});
+
+test("a modal closes on its opening action's binding for the current platform", () => {
+  const dispatcher = mac();
+  const finding = { ...on("/ledger", requestDrawer()), modal: "Finding" };
+  const toggle = "ledger.drawer-open.create-finding";
+  assert.equal(dispatcher.isModalToggle(cmdShift("F", "KeyF"), toggle, finding), true);
+  assert.equal(dispatcher.isModalToggle(cmd("f", "KeyF"), toggle, finding), false);
+  assert.equal(
+    dispatcher.isModalToggle(keydown("F", "KeyF", { ctrlKey: true, shiftKey: true }), toggle, finding),
+    false,
+  );
+  // The toggle follows the binding, wherever the modal was opened from.
+  dispatcher.configure({ overrides: { [MACOS]: { [toggle]: ["meta+alt+f"] } } });
+  const armory = { ...finding, route: "/armory" };
+  assert.equal(dispatcher.isModalToggle(keydown("ƒ", "KeyF", { metaKey: true, altKey: true }), toggle, armory), true);
+  assert.equal(dispatcher.isModalToggle(cmdShift("F", "KeyF"), toggle, armory), false);
+});
+
+test("the WebSocket modal closes on ⌘⇧O except where its open tab binds the key", () => {
+  const dispatcher = mac();
+  dispatcher.register("websocket.inject.cycle-opcode", () => {});
+  const toggle = "ledger.drawer-open.websocket.open-stream";
+  const press = () => cmdShift("O", "KeyO");
+  assert.equal(dispatcher.isModalToggle(press(), toggle, websocketModal("stream")), true);
+  assert.equal(dispatcher.isModalToggle(press(), toggle, websocketModal("checkpoint")), true);
+  assert.equal(dispatcher.isModalToggle(press(), toggle, websocketModal("inject")), false);
+});
+
+test("an extension's menu actions run only on that extension's page", () => {
+  const dispatcher = createDispatcher({
+    catalog: buildCatalog({
+      extensions: [{ Name: "Port Scanner" }, { Name: "notes" }],
+      extensionMenus: {
+        "Port Scanner": [{ name: "Scan", action: "scan", keys: ["⌘+⇧+H", "ctrl+⇧+H"] }],
+        notes: [{ name: "Jot", action: "jot", keys: ["⌘+⇧+H", "ctrl+⇧+H"] }],
+      },
+    }),
+    platform: MACOS,
+  });
+  const press = () => cmdShift("H", "KeyH");
+  assert.equal(dispatcher.resolve(press(), on("/extension/Port%20Scanner")), "extension.port-scanner.scan");
+  assert.equal(dispatcher.resolve(press(), on("/extension/notes")), "extension.notes.jot");
+  assert.equal(dispatcher.resolve(cmd("p", "KeyP"), on("/extension/notes")), "extension-page.notes.toggle-settings");
+  assert.equal(dispatcher.resolve(press(), on("/ledger")), null);
+  assert.equal(dispatcher.resolve(cmd("1", "Digit1"), on("/extension/notes")), "global.go-home");
+});
+
+test("WebSocket tab actions are inert while the modal is closed", () => {
+  const dispatcher = mac();
+  const state = { ...on("/ledger", requestDrawer(websocketUpgrade)), websocketTab: "inject" };
+  assert.equal(dispatcher.resolve(cmdShift("D", "KeyD"), state), "ledger.drawer-open.unlink-test-case");
 });

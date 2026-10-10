@@ -74,6 +74,79 @@ test("extension navigation defaults follow today's ⌘⌥1–9 order of the exte
   assert.deepEqual(catalog.get("global.open-extension.ext9").defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
 });
 
+const scanner = { Name: "Port Scanner" };
+const scannerMenu = [
+  { name: "Scan", subtitle: "Scan ports", keywords: "scan", action: "scanPorts", keys: ["⌘+⇧+H", "ctrl+⇧+H"] },
+  { name: "Stop", action: "stop_scan", keys: ["⌘+⇧+J", "ctrl+⇧+J"] },
+];
+
+test("an extension's declared menu actions are identified by extension and action, not position", () => {
+  const catalog = buildCatalog({
+    extensions: [{ Name: "workshop" }, scanner],
+    extensionMenus: { "Port Scanner": scannerMenu },
+  });
+  const scan = catalog.get("extension.port-scanner.scanports");
+  assert.equal(scan.context, "extension-page.port-scanner");
+  assert.equal(scan.label, "Scan");
+  assert.equal(scan.description, "Scan ports");
+  assert.equal(scan.keywords, "scan");
+  assert.deepEqual(scan.defaults, { [MACOS]: ["meta+shift+h"], [WINDOWS_LINUX]: ["ctrl+shift+h"] });
+
+  const reordered = buildCatalog({
+    extensions: [scanner, { Name: "workshop" }],
+    extensionMenus: { "Port Scanner": [...scannerMenu].reverse() },
+  });
+  assert.deepEqual(reordered.get("extension.port-scanner.scanports").defaults, scan.defaults);
+  assert.deepEqual(reordered.get("extension.port-scanner.stop-scan").defaults[MACOS], ["meta+shift+j"]);
+});
+
+test("every extension page has a Toggle Settings action bound to ⌘P", () => {
+  const catalog = buildCatalog({ extensions: [scanner] });
+  const toggle = catalog.get("extension-page.port-scanner.toggle-settings");
+  assert.equal(toggle.context, "extension-page.port-scanner");
+  assert.equal(toggle.label, "Toggle Port Scanner Settings");
+  assert.deepEqual(toggle.defaults, { [MACOS]: ["meta+p"], [WINDOWS_LINUX]: ["ctrl+p"] });
+});
+
+test("extension-declared ids never clash with Marasi's own extension actions", () => {
+  const catalog = buildCatalog({
+    extensions: [scanner],
+    extensionMenus: {
+      "Port Scanner": [
+        { name: "Open", action: "open", keys: ["⌘+⇧+Y", "ctrl+⇧+Y"] },
+        { name: "Settings", action: "toggle-settings", keys: ["⌘+⇧+G", "ctrl+⇧+G"] },
+      ],
+    },
+  });
+  assert.ok(catalog.get("global.open-extension.port-scanner"));
+  assert.ok(catalog.get("extension-page.port-scanner.toggle-settings"));
+  assert.ok(catalog.get("extension.port-scanner.open"));
+  assert.ok(catalog.get("extension.port-scanner.toggle-settings"));
+});
+
+test("malformed extension menu items never break the catalog", () => {
+  const catalog = buildCatalog({
+    extensions: [scanner],
+    extensionMenus: {
+      "Port Scanner": [
+        { name: "No action", keys: ["⌘+⇧+Q", "ctrl+⇧+Q"] },
+        { name: "Bad keys", action: "bad", keys: ["⌘+⇧", "hyper+x"] },
+        { name: "Same key both", action: "both", keys: "⌘+⇧+V, ctrl+⇧+V" },
+        { name: "Duplicate", action: "Bad", keys: ["⌘+⇧+Z", "ctrl+⇧+Z"] },
+        "not an item",
+      ],
+      Missing: [{ name: "Ghost", action: "ghost" }],
+    },
+  });
+  const ids = catalog.actions.map((a) => a.id).filter((id) => id.startsWith("extension."));
+  assert.deepEqual(ids, ["extension.port-scanner.bad", "extension.port-scanner.both"]);
+  assert.deepEqual(catalog.get("extension.port-scanner.bad").defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
+  assert.deepEqual(catalog.get("extension.port-scanner.both").defaults, {
+    [MACOS]: ["meta+shift+v", "ctrl+shift+v"],
+    [WINDOWS_LINUX]: ["meta+shift+v", "ctrl+shift+v"],
+  });
+});
+
 test("an action outside the lowercase dot/dash id format is rejected", () => {
   const define = (id) => () =>
     createCatalog([{ id, context: "global", label: "x", defaults: {} }]);

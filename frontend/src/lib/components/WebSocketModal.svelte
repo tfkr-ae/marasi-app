@@ -21,7 +21,10 @@
 		Unplug,
 		XIcon,
 	} from "lucide-svelte";
+	import { onDestroy } from "svelte";
 	import MarasiKeys from "./MarasiMenu/MarasiKeys.svelte";
+	import { useMenuActions, websocketTab } from "../keybindings/app.js";
+	import { WEBSOCKET_TABS } from "../keybindings/contexts.js";
 	import WebSocketCheckpoint from "./WebSocketCheckpoint.svelte";
 	import WebSocketInject from "./WebSocketInject.svelte";
 	import WebSocketMessagesTable from "./WebSocketMessagesTable.svelte";
@@ -44,180 +47,98 @@
 		tabSet = (tabSet + 1) % 3;
 	}
 
+	// Menu actions by context; labels and keys come from the catalog. All
+	// handlers stay registered while the modal is open, and the open tab
+	// (published as websocketTab) decides which tab actions a key reaches.
 	const commonMenu = [
 		{
-			name: "Previous WebSocket Tab",
-			subtitle: "Move to the previous WebSocket tab",
-			keywords: "websocket previous tab stream checkpoint inject",
+			actionId: "websocket.previous-tab",
 			icon: ChevronLeft,
-			action: {
-				handler: previousTab,
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+[", "ctrl+["],
-			},
+			handler: previousTab,
 		},
 		{
-			name: "Next WebSocket Tab",
-			subtitle: "Move to the next WebSocket tab",
-			keywords: "websocket next tab stream checkpoint inject",
+			actionId: "websocket.next-tab",
 			icon: ChevronRight,
-			action: {
-				handler: nextTab,
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+]", "ctrl+]"],
-			},
+			handler: nextTab,
 		},
 		{
-			name: "Close WebSocket Connection",
-			subtitle: "Close the active WebSocket connection",
-			keywords: "websocket close disconnect",
+			actionId: "websocket.close-connection",
 			icon: Unplug,
-			action: {
-				handler: closeConnection,
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+X", "ctrl+⇧+X"],
-			},
+			handler: closeConnection,
 		},
 	];
 
-	const streamMenu = [
-		{
-			name: "Previous WebSocket Frame",
-			subtitle: "Select the previous frame in the stream",
-			keywords: "websocket previous frame message",
-			icon: ChevronLeft,
-			action: {
+	const tabMenus = {
+		stream: [
+			{
+				actionId: "websocket.stream.previous-frame",
+				icon: ChevronLeft,
 				handler: () => messagesTable?.selectPreviousFrame(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+[", "ctrl+⇧+["],
 			},
-		},
-		{
-			name: "Next WebSocket Frame",
-			subtitle: "Select the next frame in the stream",
-			keywords: "websocket next frame message",
-			icon: ChevronRight,
-			action: {
+			{
+				actionId: "websocket.stream.next-frame",
+				icon: ChevronRight,
 				handler: () => messagesTable?.selectNextFrame(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+]", "ctrl+⇧+]"],
 			},
-		},
-		{
-			name: "Jump to Bottom",
-			subtitle: "Jump to the newest frame and resume auto-scroll",
-			keywords: "websocket stream bottom newest follow auto-scroll",
-			icon: ArrowDown,
-			action: {
+			{
+				actionId: "websocket.stream.jump-to-bottom",
+				icon: ArrowDown,
 				handler: () => messagesTable?.jumpToBottom(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+down", "ctrl+⇧+down"],
 			},
-		},
-		{
-			name: "Toggle Frame Metadata",
-			subtitle: "Switch between the frame payload and metadata",
-			keywords: "websocket frame metadata payload",
-			icon: Braces,
-			action: {
+			{
+				actionId: "websocket.stream.toggle-frame-metadata",
+				icon: Braces,
 				handler: () => messagesTable?.toggleView(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+M", "ctrl+⇧+M"],
 			},
-		},
-		{
-			name: "Copy Frame to Inject",
-			subtitle: "Copy the selected frame into the Inject tab",
-			keywords: "websocket frame copy inject",
-			icon: SendIcon,
-			action: {
+			{
+				actionId: "websocket.stream.copy-frame-to-inject",
+				icon: SendIcon,
 				handler: () => messagesTable?.copyToInject(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+I", "ctrl+⇧+I"],
 			},
-		},
-	];
-
-	const checkpointMenu = [
-		{
-			name: "Toggle WebSocket Intercept",
-			subtitle: "Enable or disable WebSocket interception",
-			keywords: "websocket checkpoint intercept toggle",
-			icon: ToggleLeft,
-			action: {
+		],
+		checkpoint: [
+			{
+				actionId: "websocket.checkpoint.toggle-intercept",
+				icon: ToggleLeft,
 				handler: () => checkpoint?.toggleIntercept(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+I", "ctrl+⇧+I"],
 			},
-		},
-		{
-			name: "Forward WebSocket Frame",
-			subtitle: "Forward the current intercepted frame",
-			keywords: "websocket checkpoint forward frame",
-			icon: Forward,
-			action: {
+			{
+				actionId: "websocket.checkpoint.forward-frame",
+				icon: Forward,
 				handler: () => checkpoint?.forward(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+F", "ctrl+⇧+F"],
 			},
-		},
-		{
-			name: "Drop WebSocket Frame",
-			subtitle: "Drop the current intercepted frame",
-			keywords: "websocket checkpoint drop frame",
-			icon: CornerLeftDown,
-			action: {
+			{
+				actionId: "websocket.checkpoint.drop-frame",
+				icon: CornerLeftDown,
 				handler: () => checkpoint?.drop(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+D", "ctrl+⇧+D"],
 			},
-		},
-	];
-
-	const injectMenu = [
-		{
-			name: "Toggle Inject Direction",
-			subtitle: "Switch the injected frame direction",
-			keywords: "websocket inject direction client server",
-			icon: ArrowLeftRight,
-			action: {
+		],
+		inject: [
+			{
+				actionId: "websocket.inject.toggle-direction",
+				icon: ArrowLeftRight,
 				handler: () => injectEditor?.toggleDirection(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+D", "ctrl+⇧+D"],
 			},
-		},
-		{
-			name: "Cycle Inject Opcode",
-			subtitle: "Select the next WebSocket opcode",
-			keywords: "websocket inject opcode cycle",
-			icon: RotateCw,
-			action: {
+			{
+				actionId: "websocket.inject.cycle-opcode",
+				icon: RotateCw,
 				handler: () => injectEditor?.cycleOpcode(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+O", "ctrl+⇧+O"],
 			},
-		},
-		{
-			name: "Inject WebSocket Frame",
-			subtitle: "Inject the current message into the connection",
-			keywords: "websocket inject send frame message",
-			icon: SendIcon,
-			action: {
+			{
+				actionId: "websocket.inject.inject-frame",
+				icon: SendIcon,
 				handler: () => injectEditor?.inject(),
-				options: { scope: "websocket", single: true },
-				keys: ["⌘+⇧+↩", "ctrl+⇧+enter"],
 			},
-		},
-	];
+		],
+	};
 
-	$: websocketMenu = [
-		...commonMenu,
-		...(tabSet === 0
-			? streamMenu
-			: tabSet === 1
-				? checkpointMenu
-				: injectMenu),
-	];
+	useMenuActions([...commonMenu, ...Object.values(tabMenus).flat()]);
+
+	$: openTab = WEBSOCKET_TABS[tabSet];
+	$: websocketTab.set(openTab);
+	onDestroy(() => websocketTab.set(null));
+
+	$: websocketMenu = [...commonMenu, ...tabMenus[openTab]];
 
 	$: request = $modalStore[0]?.meta?.upgradeRequest;
 	$: requestId =
@@ -275,7 +196,7 @@
 	}
 </script>
 
-<MarasiKeys scope="websocket" paletteTier="overlay" menuOptions={websocketMenu} />
+<MarasiKeys paletteTier="overlay" menuOptions={websocketMenu} />
 
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->

@@ -87,6 +87,19 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
     return run(actionId);
   }
 
+  // Whether a keydown closes the open modal that `actionId` opened: the
+  // event is one of that action's current bindings (looked up by id, so it
+  // works wherever the modal was opened from), and no eligible menu action
+  // with a live handler claims the event. A menu context the modal itself
+  // provides is more specific than the action that opened it, so the
+  // WebSocket Inject tab keeps ⌘⇧O for Cycle Inject Opcode.
+  function isModalToggle(event, actionId, state) {
+    const binding = bindingFromEvent(event);
+    if (!binding || !keymap.bindingsFor(actionId).includes(binding)) return false;
+    const claimed = resolve(event, state);
+    return !(claimed && handlerFor(claimed));
+  }
+
   // Registers the live handler for an action. Returns a function that
   // removes exactly this registration.
   function register(actionId, handler) {
@@ -112,6 +125,7 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
     configure,
     resolve,
     dispatch,
+    isModalToggle,
     run,
     register,
     subscribe,

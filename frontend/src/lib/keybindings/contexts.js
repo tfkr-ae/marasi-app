@@ -15,13 +15,23 @@ export function isWebSocketUpgrade(meta) {
   );
 }
 
-const onRoute = (route) => (state) => state.route === route;
+// A page (and its drawers) is eligible on its route while no modal covers
+// it. Only the WebSocket modal lets menu actions through the gate; under it,
+// its own overlay contexts and the global context are eligible, never the
+// page or drawer beneath.
+const onRoute = (route) => (state) => state.route === route && !state.modal;
 const drawerOpen = (state) => Boolean(state.drawer?.open);
 const requestDrawerOpen = (state) =>
   drawerOpen(state) && state.drawer.id === "request-response";
 
+export const WEBSOCKET_MODAL = "WebsocketStream";
+// The WebSocket modal's tabs, in tab order. The modal publishes the open one
+// as `state.websocketTab`.
+export const WEBSOCKET_TABS = ["stream", "checkpoint", "inject"];
+const websocketModalOpen = (state) => state.modal === WEBSOCKET_MODAL;
+
 // `isEligible(state)` receives the dispatcher state (see dispatcher.js). It is
-// app-defined; profiles never change it. Ticket 04 adds overlay contexts here.
+// app-defined; profiles never change it.
 //
 // A drawer that replaces its page's menu is expressed by eligibility: the
 // page context is ineligible while the drawer is open, so its actions never
@@ -35,6 +45,29 @@ export const CONTEXTS = [
     label: "Global",
     isEligible: () => true,
   },
+  // The WebSocket modal: actions shared by every tab, then one context per
+  // tab. Each tab is eligible together with the shared context in the same
+  // tier, so they overlap (one collision domain); the tabs never co-occur,
+  // so they may reuse keys. Beneath the modal only the global context stays
+  // eligible (pages and drawers are not, see onRoute): that is shadowing
+  // across tiers and needs no declaration.
+  {
+    id: "websocket",
+    tier: "overlay",
+    label: "WebSocket",
+    isEligible: websocketModalOpen,
+  },
+  ...[
+    ["stream", "WebSocket Stream tab"],
+    ["checkpoint", "WebSocket Checkpoint tab"],
+    ["inject", "WebSocket Inject tab"],
+  ].map(([tab, label]) => ({
+    id: `websocket.${tab}`,
+    tier: "overlay",
+    label,
+    overlaps: ["websocket"],
+    isEligible: (state) => websocketModalOpen(state) && state.websocketTab === tab,
+  })),
   {
     id: "ledger.drawer-closed",
     tier: "page",
@@ -86,6 +119,26 @@ export const CONTEXTS = [
     isEligible: onRoute(`/${id}`),
   })),
 ];
+
+function decodedRoute(route) {
+  try {
+    return decodeURIComponent(route ?? "");
+  } catch {
+    return route;
+  }
+}
+
+// An extension's page, `/extension/<name>`. Built per loaded extension (see
+// buildCatalog), so it is not in CONTEXTS.
+export function extensionPageContext(id, extensionName) {
+  return {
+    id,
+    tier: "page",
+    label: extensionName,
+    isEligible: (state) =>
+      !state.modal && decodedRoute(state.route) === `/extension/${extensionName}`,
+  };
+}
 
 // Collision domains for validation. `overlaps` (optional, on either side)
 // names same-tier contexts that can be eligible at the same time: precedence

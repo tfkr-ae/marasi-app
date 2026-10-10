@@ -33,15 +33,12 @@ function getActiveOverlay({ modalOpen, drawerOpen }) {
   return null;
 }
 
-function isModalToggleShortcut(event, modal) {
-  const shortcut = modal.toggleShortcut;
-
+// A modal triggered with `toggleAction` (the id of the menu action that
+// opens it) closes again on that action's binding. `stores.isModalToggle`
+// resolves the binding through the keybinding dispatcher.
+function isModalToggleShortcut(event, modal, stores) {
   return Boolean(
-    shortcut &&
-      (event.metaKey || event.ctrlKey) &&
-      event.altKey === Boolean(shortcut.altKey) &&
-      event.shiftKey === Boolean(shortcut.shiftKey) &&
-      event.key.toLowerCase() === shortcut.key,
+    modal.toggleAction && stores.isModalToggle?.(event, modal.toggleAction),
   );
 }
 
@@ -215,7 +212,7 @@ export function isolateOverlays(appRoot, stores) {
     if (
       overlay.matches(".modal-backdrop") &&
       currentModal &&
-      isModalToggleShortcut(event, currentModal)
+      isModalToggleShortcut(event, currentModal, stores)
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();

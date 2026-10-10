@@ -139,8 +139,21 @@
 	$: menuDispatcher.configure({
 		platform: platformFromDesktopOS($marasiConfig.DesktopOS),
 	});
+	// Extension pages' rendered menus join the catalog. Extensions re-render
+	// often (panels, icons), so the catalog is rebuilt only when a menu's
+	// content changes.
+	$: extensionMenusJSON = JSON.stringify(
+		Object.fromEntries(
+			Object.entries($extensions_ui)
+				.filter(([, ui]) => Array.isArray(ui?.menu))
+				.map(([name, ui]) => [name, ui.menu]),
+		),
+	);
 	$: menuDispatcher.configure({
-		catalog: buildCatalog({ extensions: $extensions }),
+		catalog: buildCatalog({
+			extensions: $extensions,
+			extensionMenus: JSON.parse(extensionMenusJSON),
+		}),
 	});
 	// The saved profile: the dispatcher resolves its active variant for the
 	// current platform, or keeps factory shortcuts and reports a problem.
