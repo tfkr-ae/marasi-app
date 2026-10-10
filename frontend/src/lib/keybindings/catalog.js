@@ -217,17 +217,20 @@ function navigableExtensions(extensions) {
 // extension name; the factory default keeps today's positional ⌘⌥1–9
 // (Ctrl+Alt+1–9) taken from the current extension order, so a persisted
 // override (keyed by id) never moves to another extension when the order
-// changes. Extensions past the ninth have no default.
+// changes. Extensions past the ninth have no default. These defaults are
+// marked `positionalDefault`: they move with the order, so an inherited one
+// yields to any binding that collides with it (see createKeymap).
 export function extensionNavigationActions(extensions = []) {
-  return navigableExtensions(extensions).map((extension, index) =>
-    action(
+  return navigableExtensions(extensions).map((extension, index) => ({
+    ...action(
       extensionNavigationActionId(extension.Name),
       extension.Name,
       `Open ${extension.Name}`,
       `${extension.Name}`,
       index < 9 ? primary(`alt+${index + 1}`) : { [MACOS]: [], [WINDOWS_LINUX]: [] },
     ),
-  );
+    positionalDefault: true,
+  }));
 }
 
 // An extension menu item's `keys`: `[mac, windows/linux]`, or one string in
