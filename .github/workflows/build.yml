@@ -34,6 +34,13 @@ jobs:
       # main.go embeds frontend/build, which only exists after a frontend build.
       - run: mkdir -p frontend/build && touch frontend/build/.keep
       - run: go test -v -race -tags webkit2_41 ./...
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
 
   build:
     needs: test
