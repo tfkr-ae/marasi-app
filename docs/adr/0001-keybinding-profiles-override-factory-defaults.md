@@ -1,0 +1,3 @@
+# Keybinding profiles override recoverable factory defaults
+
+Marasi menu keybinding profiles store customizations over immutable factory defaults, rather than treating each profile as a frozen full copy of today's keymap. The initially selected profile remains editable, reset restores inheritance, and an explicit empty binding list preserves intentional unbinding. This lets new menu actions acquire nonconflicting defaults after an update without erasing user choices; if a new default collides with a customization, the customization wins and the new action is left visibly unbound. Both platform variants and dormant extension customizations must retain these semantics through YAML persistence and profile sharing.

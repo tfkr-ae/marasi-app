@@ -29,3 +29,17 @@ _Avoid_: updates, live results
 **Content-type exclusion**:
 The project's list of content types the ledger hides, in both the live view and query results. A pair with no content type yet is never hidden by it.
 _Avoid_: filter, content type filter
+
+### Marasi menu keybindings
+
+**Menu action**:
+A Marasi-defined operation exposed through the Marasi menu, such as navigating to a page or focusing an editor. Its behavior and availability are not changed by rebinding its keys.
+_Avoid_: editable action, user-defined command
+
+**Menu context**:
+A Marasi-defined page or interface state that determines which menu actions are available, such as Ledger with its drawer open or closed.
+_Avoid_: keybinding mode
+
+**Keybinding profile**:
+A named collection of bindings for Marasi menu actions that a researcher can select and customize. Factory defaults remain recoverable independently of those customizations.
+_Avoid_: Vim mode, Chrome profile
