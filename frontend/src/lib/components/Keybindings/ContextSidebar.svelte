@@ -1,7 +1,7 @@
 <script>
 	// One entry per page and state, styled like Marasi menu items. Each ends
 	// in a fixed-width count slot: conflicts, else unbound, else the number
-	// of actions.
+	// of available actions (an entry listing only unavailable ones shows none).
 	export let groups; // browse() groups
 	export let selected; // group id
 	export let onSelect; // (groupId) => void
@@ -30,8 +30,8 @@
 					<span class="badge variant-filled-error" title="{group.conflictCount} conflicting">{group.conflictCount}</span>
 				{:else if group.unboundCount}
 					<span class="badge variant-filled-warning" title="{group.unboundCount} unbound">{group.unboundCount}</span>
-				{:else}
-					<span class="text-sm opacity-50" title="{group.all.length} actions">{group.all.length}</span>
+				{:else if group.actionCount}
+					<span class="text-sm opacity-50" title="{group.actionCount} actions">{group.actionCount}</span>
 				{/if}
 			</span>
 		</button>

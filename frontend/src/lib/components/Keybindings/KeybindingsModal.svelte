@@ -62,7 +62,7 @@
 	$: problems = saveProblems(catalog, draft, { profileId: profile.id, platform });
 	$: keybindingCapture.set(Boolean(capture));
 	$: filters = [
-		["all", `All (${view.groups.reduce((n, g) => n + g.all.length, 0)})`],
+		["all", `All (${view.actionCount})`],
 		["unbound", `Unbound (${view.unboundCount})`],
 		["conflict", `Conflicts (${view.conflictCount})`],
 	];
