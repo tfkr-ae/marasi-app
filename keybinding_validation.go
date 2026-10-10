@@ -239,8 +239,8 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 // nothing may shadow). Known actions always inherit, so a duplicate the
 // researcher makes is a conflict to fix rather than a silent unbind.
 //
-// Positional defaults (PositionalDefault, extension navigation ⌘⌥1–9 in load
-// order) move when the order changes. Known or not, an inherited positional
+// Positional defaults (ADR 0002; PositionalDefault, extension navigation
+// ⌘⌥1–9 in load order) move when the order changes. Known or not, an inherited positional
 // default that collides with any other resolved binding (a customization or a
 // stable default) in a conflicting context, or with the menu opening, yields
 // and the action is unbound, so a reorder never invalidates the profile.

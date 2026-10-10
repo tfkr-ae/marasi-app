@@ -25,7 +25,7 @@ function normalizedList(texts) {
 // conflicting context, see contextsConflict, or an overridden menu opening); otherwise it is unbound and
 // the customization wins. Without `knownActions` every action inherits.
 //
-// Positional defaults (`action.positionalDefault`, the extension navigation
+// Positional defaults (ADR 0002; `action.positionalDefault`, the extension navigation
 // ⌘⌥1–9 that follow the extension order) are unstable: after a reorder an
 // inherited one can land on a binding a customization still holds. Known or
 // not, an inherited positional default that collides with any other resolved
