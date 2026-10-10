@@ -81,11 +81,13 @@
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
 	import FindingModal from "../lib/components/FindingModal.svelte";
-	import {
-		hasBlockingOverlay,
-		isolateOverlays,
-	} from "../lib/overlayIsolation.js";
+	import { isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
+	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
+	import hotkeys from "hotkeys-js";
+	import { get } from "svelte/store";
+	import { installMenuShortcuts } from "../lib/keybindings/app.js";
+	import { shortcutGate } from "../lib/keybindings/gate.js";
 	let appRailIndex = 0;
 	let showChef = false;
 	let showExcali = false;
@@ -180,6 +182,16 @@
 				});
 		});
 	});
+	// The state menu contexts and the shortcut gate are resolved against.
+	function shortcutState() {
+		return {
+			route: get(page).url.pathname,
+			modal: get(modalStore)[0]?.component ?? null,
+			dialogOpen: Boolean(document.querySelector("dialog[open]")),
+			drawer: get(drawerStore),
+		};
+	}
+	let removeMenuShortcuts = () => {};
 	onMount(() => {
 		EventsOn("log", (log) => {
 			const message = projectOpenMessage(log);
@@ -205,37 +217,11 @@
 					modalStore.trigger(modal);
 				}
 			}
-			hotkeys.filter = (event) => {
-				if (
-					hasBlockingOverlay(modalStore) &&
-					$modalStore[0]?.component !==
-						"WebsocketStream"
-				)
-					return false;
-				switch ($page.url.pathname) {
-					case "/ledger":
-						return true;
-					case "/logbook":
-						return true;
-					default:
-						var target =
-							event.target ||
-							event.srcElement;
-						var tagName = target.tagName;
-						return (
-							!(
-								tagName ==
-									"INPUT" ||
-								tagName ==
-									"SELECT" ||
-								tagName ==
-									"TEXTAREA"
-							) ||
-							target.id ===
-								"commandmenu"
-						);
-				}
-			};
+			// One gate for the central dispatcher and the page menus still
+			// bound through hotkeys-js.
+			hotkeys.filter = (event) =>
+				shortcutGate(event, shortcutState()) === "open";
+			removeMenuShortcuts = installMenuShortcuts(shortcutState);
 			$appState.isReady = true;
 
 			function handleNewLog(newLog) {
@@ -399,6 +385,7 @@
 			);
 		});
 		return () => {
+			removeMenuShortcuts();
 			EventsOff("request");
 			EventsOff("response");
 			EventsOff("ws-message");
@@ -419,6 +406,7 @@
 >
 	<div class="flex flex-1 h-screen">
 		{#if $appState.isReady}
+			<GlobalMenu />
 			<AppRail
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"
