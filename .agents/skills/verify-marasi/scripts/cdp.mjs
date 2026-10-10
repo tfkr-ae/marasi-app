@@ -7,6 +7,7 @@ import { normalizeListenerStartup } from "./listener-startup.mjs";
 const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, action, label, shortcut] = process.argv.slice(2);
 const port = Number(portText);
 const viewport = { width: Number(widthText), height: Number(heightText) };
+const interactionDelayMs = 500;
 if (!mode || !Number.isInteger(port) || !appURL || !evidenceDir || !Number.isInteger(viewport.width) || !Number.isInteger(viewport.height)) {
 	throw new Error("usage: cdp.mjs <launch|doctor|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [feature] [compare <label> <shortcut>|theme]");
 }
@@ -143,6 +144,7 @@ async function clickPoint(point) {
 	await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
 	await send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
 	await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+	await sleep(interactionDelayMs);
 }
 
 function parseShortcut(text) {
@@ -207,11 +209,13 @@ async function pressShortcut(text) {
 	if (parsed.ctrl) await pressKey("keyUp", "Control", "ControlLeft", 17, modifiers & ~2);
 	if (parsed.shift) await pressKey("keyUp", "Shift", "ShiftLeft", 16, modifiers & ~8);
 	if (parsed.meta) await pressKey("keyUp", "Meta", "MetaLeft", 91, 0, { location: 1 });
+	await sleep(interactionDelayMs);
 }
 
 async function pressEscape() {
 	await pressKey("keyDown", "Escape", "Escape", 27);
 	await pressKey("keyUp", "Escape", "Escape", 27);
+	await sleep(interactionDelayMs);
 }
 
 function slug(text) {
@@ -271,14 +275,12 @@ async function driveCompare(route) {
 	fs.writeFileSync(`${evidenceDir}/${name}-click-action.txt`, `input=left mouse click\ncontrol=painted "${label}"\nclick=${JSON.stringify(point)}\n`);
 	await clickPoint(point);
 	await waitFor(`${overlayPainted} || location.pathname !== ${JSON.stringify(route.path)}`, `click of "${label}" changed the page or painted an overlay`, 20, 250);
-	await sleep(400);
 	const clickAfter = await capture(`${name}-click-after`);
 	const clickResult = resultOf(clickAfter);
 
 	if (clickResult.kind === "overlay") {
 		await pressEscape();
 		await waitFor(`!${overlayPainted}`, "overlay closed", 20, 250);
-		await sleep(200);
 	} else if (clickResult.path !== route.path) {
 		const restorePoint = await evaluate(`(() => {
 			const element = document.querySelector(${JSON.stringify(route.selector)});
@@ -298,7 +300,6 @@ async function driveCompare(route) {
 	);
 	await pressShortcut(shortcut);
 	await waitFor(`${overlayPainted} || location.pathname !== ${JSON.stringify(route.path)}`, `shortcut ${shortcut} changed the page or painted an overlay`, 20, 250);
-	await sleep(400);
 	const shortcutAfter = await capture(`${name}-shortcut-after`);
 	const shortcutResult = resultOf(shortcutAfter);
 	const compare = {
@@ -319,7 +320,6 @@ async function driveCompare(route) {
 	if (shortcutResult.kind === "overlay") {
 		await pressEscape();
 		await waitFor(`!${overlayPainted}`, "overlay closed after compare", 20, 250);
-		await sleep(200);
 	}
 	console.log(`feature=${feature}\naction=compare\nlabel=${label}\nshortcut=${shortcut}\nresult=${clickResult.kind} matched\nevidence=${evidenceDir}`);
 }
@@ -341,11 +341,9 @@ async function driveTheme(route) {
 	fs.writeFileSync(`${evidenceDir}/theme-action.txt`, "input=Command+U twice after leaving dashboard\nexpected=theme changes and returns to its initial value\n");
 	await pressShortcut("cmd+u");
 	await waitFor(`document.documentElement.classList.contains("dark") !== ${initialDark}`, "theme change", 20, 250);
-	await sleep(400);
 	await capture("theme-toggled");
 	await pressShortcut("cmd+u");
 	await waitFor(`document.documentElement.classList.contains("dark") === ${initialDark}`, "theme restoration", 20, 250);
-	await sleep(400);
 	await capture("theme-restored");
 	fs.writeFileSync(`${evidenceDir}/theme-result.json`, `${JSON.stringify({ initialDark, toggledDark: !initialDark, restoredDark: initialDark }, null, 2)}\n`);
 	console.log(`feature=${feature}\naction=theme\nresult=Command+U changed and restored theme after leaving dashboard\nevidence=${evidenceDir}`);
@@ -378,6 +376,7 @@ async function driveSteps(route) {
 				await pressShortcut(step.key);
 			} else if (typeof step.insert === "string") {
 				await send("Input.insertText", {text: step.insert});
+				await sleep(interactionDelayMs);
 			} else if (typeof step.waitText === "string") {
 				await waitFor(`document.body.innerText.includes(${JSON.stringify(step.waitText)})`, step.waitText, 40, 250);
 			} else if (typeof step.waitNoText === "string") {
@@ -392,7 +391,6 @@ async function driveSteps(route) {
 			} else {
 				throw new Error(`unsupported UI step: ${JSON.stringify(step)}`);
 			}
-			await sleep(250);
 			await capture(`${prefix}-step-${index + 1}`);
 		}
 		console.log(`feature=${feature}\naction=steps\nrecipe=${recipe.name}\nresult=passed\nevidence=${evidenceDir}`);

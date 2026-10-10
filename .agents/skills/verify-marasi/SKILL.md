@@ -60,6 +60,8 @@ Use the executable driver with one mapped route:
 
 The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse press to a painted control, and fails unless the expected route or overlay appears. A painted control has a bounding box wider and taller than 10px and is not inside `dialog`. Hidden MarasiKeys menu nodes reuse the same labels at `0,0`; matching innerText alone is not a click.
 
+All driver paths pause 500 ms after each completed click, keyboard shortcut (including Escape), or text insertion before continuing. Readiness checks still wait for the expected UI state; explicit `waitMs` steps add their requested delay.
+
 Most in-app actions have that painted control plus a MarasiKeys binding. Root bindings live in `frontend/src/routes/+page.svelte` as `⌘+key`. Page bindings live in that route's MarasiKeys menu as `⌘+⇧+key` on macOS. Prove both paths with:
 
 ```bash
