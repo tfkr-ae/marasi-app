@@ -43,6 +43,7 @@
 	} from "lucide-svelte";
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryCompletionSource } from "../../lib/autocomplete/armory";
 	import { armoryStore } from "../../stores/armoryStore";
 	import {
@@ -101,7 +102,6 @@
 	let validationRequest = 0;
 	let accOpened = false;
 	let drawerOpened = false;
-	let menu;
 	let templateList;
 	let runList;
 	let paginatedRunId = null;
@@ -607,190 +607,109 @@
 
 	const armoryMenu = [
 		{
-			name: "Toggle Armory Settings",
-			subtitle: "Toggle attack configuration",
-			keywords: "settings, toggle, configuration",
+			actionId: "armory.page.toggle-settings",
 			icon: ToggleLeft,
-			action: {
-				handler: () => {
-					if (!$modalStore[0]) accOpened = !accOpened;
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+P", "ctrl+P"],
+			handler: () => {
+				if (!$modalStore[0]) accOpened = !accOpened;
 			},
 		},
 		{
-			name: "Next Template",
-			subtitle: "Select the next Armory template",
-			keywords: "next template",
+			actionId: "armory.page.next-template",
 			icon: ArrowRight,
-			action: {
-				handler: () => cycleTemplate(1),
-				options: { scope: "armory", single: true },
-				keys: ["⌘+]", "ctrl+]"],
-			},
+			handler: () => cycleTemplate(1),
 		},
 		{
-			name: "Previous Template",
-			subtitle: "Select the previous Armory template",
-			keywords: "previous template",
+			actionId: "armory.page.previous-template",
 			icon: ArrowLeft,
-			action: {
-				handler: () => cycleTemplate(-1),
-				options: { scope: "armory", single: true },
-				keys: ["⌘+[", "ctrl+["],
-			},
+			handler: () => cycleTemplate(-1),
 		},
 		{
-			name: "Next Run",
-			subtitle: "Select the next run for this template",
-			keywords: "next run",
+			actionId: "armory.page.next-run",
 			icon: ArrowRight,
-			action: {
-				handler: () => cycleRun(1),
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+]", "ctrl+⇧+]"],
-			},
+			handler: () => cycleRun(1),
 		},
 		{
-			name: "Previous Run",
-			subtitle: "Select the previous run for this template",
-			keywords: "previous run",
+			actionId: "armory.page.previous-run",
 			icon: ArrowLeft,
-			action: {
-				handler: () => cycleRun(-1),
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+[", "ctrl+⇧+["],
-			},
+			handler: () => cycleRun(-1),
 		},
 		{
-			name: "Open First Request",
-			subtitle: "Open the first request in the selected run",
-			keywords: "open request drawer",
+			actionId: "armory.page.open-first-request",
 			icon: SquareArrowUpRight,
-			action: {
-				handler: () => {
-					if (requests.length > 0) openRequest(requests[0], 0);
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+O", "ctrl+⇧+O"],
+			handler: () => {
+				if (requests.length > 0) openRequest(requests[0], 0);
 			},
 		},
 		{
-			name: "Edit Armory Template",
-			subtitle: "Jump to the request template editor",
-			keywords: "edit template request",
+			actionId: "armory.page.edit-template",
 			icon: Edit,
-			action: {
-				handler: () => {
-					document.querySelector(".editor .cm-content")?.focus();
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+E", "ctrl+⇧+E"],
+			handler: () => {
+				document.querySelector(".editor .cm-content")?.focus();
 			},
 		},
 		{
-			name: "Create Armory Template",
-			subtitle: "Create a new request template",
-			keywords: "create, new, template",
+			actionId: "armory.page.create-template",
 			icon: FilePlus2,
-			action: {
-				handler: () => {
-					if (!$modalStore[0]) createTemplate();
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+T", "ctrl+⇧+T"],
+			handler: () => {
+				if (!$modalStore[0]) createTemplate();
 			},
 		},
 		{
-			name: "Save Armory Template",
-			subtitle: "Save the selected request template",
-			keywords: "save, template",
+			actionId: "armory.page.save-template",
 			icon: Save,
-			action: {
-				handler: () => {
-					if (!$modalStore[0] && selectedTemplate)
-						saveTemplate();
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+S", "ctrl+⇧+S"],
+			handler: () => {
+				if (!$modalStore[0] && selectedTemplate)
+					saveTemplate();
 			},
 		},
 		{
-			name: "Launch Armory Run",
-			subtitle: "Save the template and start a run",
-			keywords: "launch, start, run",
+			actionId: "armory.page.launch-run",
 			icon: Rocket,
-			action: {
-				handler: () => {
-					if (!$modalStore[0] && selectedTemplate)
-						createRun(true);
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+L", "ctrl+⇧+L"],
+			handler: () => {
+				if (!$modalStore[0] && selectedTemplate)
+					createRun(true);
 			},
 		},
 		{
-			name: "Cancel Armory Run",
-			subtitle: "Cancel the selected active run",
-			keywords: "cancel, stop, run",
+			actionId: "armory.page.cancel-run",
 			icon: CircleStop,
-			action: {
-				handler: () => {
-					if (
-						!$modalStore[0] &&
-						selectedRun?.Status ===
-							"in_progress"
-					) {
-						cancelRun(selectedRun);
-					}
-				},
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+C", "ctrl+⇧+C"],
+			handler: () => {
+				if (
+					!$modalStore[0] &&
+					selectedRun?.Status ===
+						"in_progress"
+				) {
+					cancelRun(selectedRun);
+				}
 			},
 		},
 		{
-			name: "Refresh Armory Runs",
-			subtitle: "Refresh run status",
-			keywords: "refresh, runs, traffic",
+			actionId: "armory.page.refresh-runs",
 			icon: RefreshCw,
-			action: {
-				handler: refreshRuns,
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+R", "ctrl+⇧+R"],
-			},
+			handler: refreshRuns,
 		},
 	];
 	const drawerMenu = [
 		{
-			name: "Next Request",
-			subtitle: "Open the next request in this run",
-			keywords: "next request",
+			actionId: "armory.drawer.next-request",
 			icon: ArrowRight,
-			action: {
-				handler: () => cycleRequest(1),
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+]", "ctrl+⇧+]"],
-			},
+			handler: () => cycleRequest(1),
 		},
 		{
-			name: "Previous Request",
-			subtitle: "Open the previous request in this run",
-			keywords: "previous request",
+			actionId: "armory.drawer.previous-request",
 			icon: ArrowLeft,
-			action: {
-				handler: () => cycleRequest(-1),
-				options: { scope: "armory", single: true },
-				keys: ["⌘+⇧+[", "ctrl+⇧+["],
-			},
+			handler: () => cycleRequest(-1),
 		},
 	];
+	// The armory.page and armory.drawer menu contexts decide which of these
+	// a key reaches; the menu lists the actions of the drawer's state.
+	useMenuActions([...armoryMenu, ...drawerMenu]);
+	$: menuOptions = drawerOpened ? drawerMenu : armoryMenu;
 
 	onMount(() => {
 		validationReady = true;
 		const unsubscribe = drawerStore.subscribe((settings) => {
 			drawerOpened = settings.open && settings.id === "request-response";
-			menu.menuOptions = drawerOpened ? drawerMenu : armoryMenu;
 		});
 		const interval = setInterval(async () => {
 			const project = $activeProject;
@@ -815,7 +734,7 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col overflow-hidden">
-	<MarasiKeys bind:this={menu} scope="armory" menuOptions={armoryMenu} />
+	<MarasiKeys {menuOptions} />
 	<Accordion rounded="none" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
 		<AccordionItem bind:open={accOpened}>
 			<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>

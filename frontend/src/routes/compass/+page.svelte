@@ -14,6 +14,7 @@
     import CodeMirror from "svelte-codemirror-editor";
     import { RunExtension } from "../../lib/wailsjs/go/main/App";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
         EditIcon,
         FileCode,
@@ -30,92 +31,69 @@
     const drawerStore = getDrawerStore();
     let compassMenu = [
         {
-            name: "Toggle Compass Settings",
-            subtitle: "Toggle Settings Accordian",
+            actionId: "compass.toggle-settings",
             icon: ToggleLeftIcon,
-            keywords: "settings, toggle",
-            action: {
-                handler: () => {
-                    accOpened = !accOpened;
-                },
-                options: { scope: "compass", single: true },
-                keys: ["⌘+P", "ctrl+P"],
+            handler: () => {
+                accOpened = !accOpened;
             },
         },
         {
-            name: "Update Compass Code",
-            subtitle: "Execute compass code",
+            actionId: "compass.update-rules",
             icon: SquarePlay,
-            keywords: "compass, toggle",
-            action: {
-                handler: () => {
-                    RunExtension("compass", $compassCode)
-                        .then(() => {
-                            const toastSettings = {
-                                message: "Updated Compass",
-                                background: "variant-filled-success",
-                            };
-                            toastStore.trigger(toastSettings);
-                        })
-                        .catch((error) => {
-                            const toastSettings = {
-                                message: "Error updating rules",
-                                background: "variant-filled-error",
-                            };
-                            toastStore.trigger(toastSettings);
-                        });
-                },
-                options: { scope: "compass", single: true },
-                keys: ["⌘+⇧+R", "ctrl+⇧+R"],
-            },
-        },
-        {
-            name: "Edit Compass",
-            subtitle: "Jump to Code Editor",
-            keywords: "code, editor",
-            icon: EditIcon,
-            action: {
-                handler: () => {
-                    const cmContent = document.querySelector(
-                        'div[data-language="lua"]',
-                    );
-                    cmContent.focus();
-                },
-                options: { scope: "compass", single: true },
-                keys: ["⌘+⇧+E", "ctrl+⇧+E"],
-            },
-        },
-        {
-            name: "Show Logs",
-            subtitle: "Show Extension Logs",
-            keywords: "logs, lua",
-            icon: FileCode,
-            action: {
-                handler: () => {
-                    if ($drawerStore.open) {
-                        drawerStore.close();
-                    } else {
-                        const drawerSettings = {
-                            id: "extension-logs",
-                            meta: {
-                                extensionName: "compass",
-                            },
-                            height: "h-full",
-                            width: "w-3/5",
-                            position: "right",
+            handler: () => {
+                RunExtension("compass", $compassCode)
+                    .then(() => {
+                        const toastSettings = {
+                            message: "Updated Compass",
+                            background: "variant-filled-success",
                         };
-                        drawerStore.open(drawerSettings);
-                    }
-                },
-                options: { scope: "compass", single: true },
-                keys: ["⌘+⇧+L", "ctrl+⇧+L"],
+                        toastStore.trigger(toastSettings);
+                    })
+                    .catch((error) => {
+                        const toastSettings = {
+                            message: "Error updating rules",
+                            background: "variant-filled-error",
+                        };
+                        toastStore.trigger(toastSettings);
+                    });
+            },
+        },
+        {
+            actionId: "compass.edit-rules",
+            icon: EditIcon,
+            handler: () => {
+                const cmContent = document.querySelector(
+                    'div[data-language="lua"]',
+                );
+                cmContent.focus();
+            },
+        },
+        {
+            actionId: "compass.show-logs",
+            icon: FileCode,
+            handler: () => {
+                if ($drawerStore.open) {
+                    drawerStore.close();
+                } else {
+                    const drawerSettings = {
+                        id: "extension-logs",
+                        meta: {
+                            extensionName: "compass",
+                        },
+                        height: "h-full",
+                        width: "w-3/5",
+                        position: "right",
+                    };
+                    drawerStore.open(drawerSettings);
+                }
             },
         },
     ];
+    useMenuActions(compassMenu);
     let accOpened = false;
 </script>
 
-<MarasiKeys scope="compass" menuOptions={compassMenu} />
+<MarasiKeys menuOptions={compassMenu} />
 <Accordion rounded="false" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>

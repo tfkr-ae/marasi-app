@@ -9,6 +9,7 @@
         modeCurrent,
     } from "@skeletonlabs/skeleton";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
         ArrowDownIcon,
         ArrowLeftIcon,
@@ -181,183 +182,118 @@
 
     const launchpadMenu = [
         {
-            name: "Toggle Launchpad Settings",
-            subtitle: "Toggle Settings Accordian",
-            keywords: "settings, toggle",
+            actionId: "launchpad.toggle-settings",
             icon: ToggleLeftIcon,
-            action: {
-                handler: () => (accOpened = !accOpened),
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+P", "ctrl+P"],
-            },
+            handler: () => (accOpened = !accOpened),
         },
         {
-            name: "Next Tab",
-            subtitle: "Go to next Launchpad tab",
-            keywords: "next, tab",
+            actionId: "launchpad.next-tab",
             icon: ArrowRightIcon,
-            action: {
-                handler: () => navLaunchpad(1),
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+]", "ctrl+]"],
-            },
+            handler: () => navLaunchpad(1),
         },
         {
-            name: "Previous Tab",
-            subtitle: "Go to previous Launchpad tab",
-            keywords: "previous, tab",
+            actionId: "launchpad.previous-tab",
             icon: ArrowLeftIcon,
-            action: {
-                handler: () => navLaunchpad(-1),
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+[", "ctrl+["],
-            },
+            handler: () => navLaunchpad(-1),
         },
         {
-            name: "Next Entry",
-            subtitle: "Go to next Launchpad entry",
-            keywords: "next, entry, tab",
+            actionId: "launchpad.next-entry",
             icon: ArrowDownIcon,
-            action: {
-                handler: () => navEntry(1),
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+]", "ctrl+⇧+]"],
-            },
+            handler: () => navEntry(1),
         },
         {
-            name: "Previous Entry",
-            subtitle: "Go to previous Launchpad entry",
-            keywords: "previous, entry, tab",
+            actionId: "launchpad.previous-entry",
             icon: ArrowDownIcon,
-            action: {
-                handler: () => navEntry(-1),
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+[", "ctrl+⇧+["],
-            },
+            handler: () => navEntry(-1),
         },
         {
-            name: "Delete Tab",
-            subtitle: "Delete Current Launchpad Tab",
-            keywords: "delete, tab",
+            actionId: "launchpad.delete-tab",
             icon: TrashIcon,
-            action: {
-                handler: () => {
-                    if (!activeLaunchpad) return;
-                    modalStore.trigger({
-                        type: "confirm",
-                        title: `Deleting ${activeLaunchpad.Name}`,
-                        body: "Are you sure you wish to proceed?",
-                        response: (r) => {
-                            if (r) {
-                                DeleteLaunchpad($activeLaunchpadID).then(() => {
-                                    populateLaunchpads();
-                                });
-                            }
-                        },
-                    });
-                },
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+D", "ctrl+⇧+D"],
+            handler: () => {
+                if (!activeLaunchpad) return;
+                modalStore.trigger({
+                    type: "confirm",
+                    title: `Deleting ${activeLaunchpad.Name}`,
+                    body: "Are you sure you wish to proceed?",
+                    response: (r) => {
+                        if (r) {
+                            DeleteLaunchpad($activeLaunchpadID).then(() => {
+                                populateLaunchpads();
+                            });
+                        }
+                    },
+                });
             },
         },
         {
-            name: "Edit Request",
-            subtitle: "Edit Current Entry Request",
-            keywords: "edit, entry, request",
+            actionId: "launchpad.edit-request",
             icon: PenIcon,
-            action: {
-                handler: () => {
-                    const cmContent = document.querySelector(
-                        'div[data-language="http"]',
-                    );
-                    if (cmContent) cmContent.focus();
-                },
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+E", "ctrl+⇧+E"],
+            handler: () => {
+                const cmContent = document.querySelector(
+                    'div[data-language="http"]',
+                );
+                if (cmContent) cmContent.focus();
             },
         },
         {
-            name: "Toggle TLS",
-            subtitle: "Toggle TLS Flag",
-            keywords: "toggle, tls, https",
+            actionId: "launchpad.toggle-tls",
             icon: LockIcon,
-            action: {
-                handler: () => (useHttps = !useHttps),
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+T", "ctrl+⇧+T"],
-            },
+            handler: () => (useHttps = !useHttps),
         },
         {
-            name: "Launch",
-            subtitle: "Send request through proxy",
-            keywords: "send, launchpad, repeat",
+            actionId: "launchpad.launch",
             icon: PlayIcon,
-            action: {
-                handler: sendRequest,
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+L", "ctrl+⇧+L"],
-            },
+            handler: sendRequest,
         },
         {
-            name: "View Notes",
-            subtitle: "View or edit request notes",
-            keywords: "notes",
+            actionId: "launchpad.view-notes",
             icon: PenIcon,
-            action: {
-                handler: () => {
-                    if (!currentEntry?.ID) return;
-                    GetNote(currentEntry.ID).then((note) => {
-                        const modal = {
-                            type: "component",
-                            component: "Notes",
-                            toggleShortcut: { key: "n", shiftKey: true },
-                            title: `Request ${$currentEntryIndex + 1} Notes`,
-                            content: note,
-                            requestID: currentEntry.ID,
-                        };
-                        if (!$modalStore[0]) {
-                            modalStore.trigger(modal);
-                        } else if ($modalStore[0].component === "Notes") {
-                            modalStore.close();
-                        }
-                    });
-                },
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+N", "ctrl+⇧+N"],
+            handler: () => {
+                if (!currentEntry?.ID) return;
+                GetNote(currentEntry.ID).then((note) => {
+                    const modal = {
+                        type: "component",
+                        component: "Notes",
+                        toggleShortcut: { key: "n", shiftKey: true },
+                        title: `Request ${$currentEntryIndex + 1} Notes`,
+                        content: note,
+                        requestID: currentEntry.ID,
+                    };
+                    if (!$modalStore[0]) {
+                        modalStore.trigger(modal);
+                    } else if ($modalStore[0].component === "Notes") {
+                        modalStore.close();
+                    }
+                });
             },
         },
         {
-            name: "View Metadata",
-            subtitle: "View request Metadata",
-            keywords: "metadata",
+            actionId: "launchpad.view-metadata",
             icon: BracesIcon,
-            action: {
-                handler: () => {
-                    if (!currentEntry?.ID) return;
-                    GetMetadata(currentEntry.ID).then((metadata) => {
-                        const modal = {
-                            type: "component",
-                            component: "Metadata",
-                            toggleShortcut: { key: "m", shiftKey: true },
-                            title: `Request ${$currentEntryIndex + 1} Metadata`,
-                            content: metadata,
-                            requestID: currentEntry.ID,
-                        };
-                        if (!$modalStore[0]) {
-                            modalStore.trigger(modal);
-                        } else if ($modalStore[0].component === "Metadata") {
-                            modalStore.close();
-                        }
-                    });
-                },
-                options: { scope: "launchpad", single: true },
-                keys: ["⌘+⇧+M", "ctrl+⇧+M"],
+            handler: () => {
+                if (!currentEntry?.ID) return;
+                GetMetadata(currentEntry.ID).then((metadata) => {
+                    const modal = {
+                        type: "component",
+                        component: "Metadata",
+                        toggleShortcut: { key: "m", shiftKey: true },
+                        title: `Request ${$currentEntryIndex + 1} Metadata`,
+                        content: metadata,
+                        requestID: currentEntry.ID,
+                    };
+                    if (!$modalStore[0]) {
+                        modalStore.trigger(modal);
+                    } else if ($modalStore[0].component === "Metadata") {
+                        modalStore.close();
+                    }
+                });
             },
         },
     ];
+    useMenuActions(launchpadMenu);
 </script>
 
-<MarasiKeys scope="launchpad" menuOptions={launchpadMenu} />
+<MarasiKeys menuOptions={launchpadMenu} />
 
 <Accordion rounded="none" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
     <AccordionItem bind:open={accOpened}>

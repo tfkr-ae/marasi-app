@@ -1,5 +1,6 @@
 // App wiring for the keybinding engine: the single dispatcher and palette
 // registry used by every component, and the window keydown listener.
+import { onMount } from "svelte";
 import { buildCatalog } from "./catalog.js";
 import { createDispatcher, OPEN_MENU } from "./dispatcher.js";
 import { createPaletteRegistry } from "./palettes.js";
@@ -23,4 +24,17 @@ export function installMenuShortcuts(getState) {
 	const onKeydown = (event) => menuDispatcher.dispatch(event, getState());
 	window.addEventListener("keydown", onKeydown, true);
 	return () => window.removeEventListener("keydown", onKeydown, true);
+}
+
+// Registers a page's menu action handlers, [{ actionId, handler }], for the
+// lifetime of the calling component. Call it during component setup. All of
+// a page's handlers stay registered; menu contexts decide which of them a
+// key reaches (opening a drawer changes eligibility, not registrations).
+export function useMenuActions(actions) {
+	onMount(() => {
+		const unregister = actions.map(({ actionId, handler }) =>
+			menuDispatcher.register(actionId, handler),
+		);
+		return () => unregister.forEach((fn) => fn());
+	});
 }

@@ -22,13 +22,13 @@
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { logbookSearchInput } from "../../stores";
 
 	const modalStore = getModalStore();
 	const drawerStore = getDrawerStore();
 	let accOpened = false;
 	let tabSet = 0;
-	let menu = [];
 
 	function getScoreBadgeClass(severity) {
 		switch (severity) {
@@ -164,114 +164,85 @@
 		});
 	let logbookMenu = [
 		{
-			name: "Toggle Logbook Settings",
-			subtitle: "Toggle Settings Accordian",
-			keywords: "settings, toggle",
+			actionId: "logbook.toggle-settings",
 			icon: ToggleLeftIcon,
-			action: {
-				handler: () => {
-					if (!$modalStore[0]) {
-						accOpened = !accOpened;
-					}
-				},
-				options: { scope: "logbook", single: true },
-				keys: ["⌘+P", "ctrl+P"],
+			handler: () => {
+				if (!$modalStore[0]) {
+					accOpened = !accOpened;
+				}
 			},
 		},
 		{
-			name: "Search Logbook",
-			subtitle: "Jump to search input",
-			keywords: "search",
+			actionId: "logbook.focus-search",
 			icon: Search,
-			action: {
-				handler: () => {
-					if (!$modalStore[0]) {
-						accOpened = !accOpened;
-						setTimeout(() => {
-							const searchBox =
-								document.getElementById(
-									"logbookSearch",
-								);
-							if (
-								document.activeElement ===
-								searchBox
-							)
-								searchBox.blur();
-							else searchBox.focus();
-						}, 10);
-					}
-				},
-				options: { scope: "logbook", single: true },
-				keys: ["⌘+⇧+S", "ctrl+⇧+S"],
+			handler: () => {
+				if (!$modalStore[0]) {
+					accOpened = !accOpened;
+					setTimeout(() => {
+						const searchBox =
+							document.getElementById(
+								"logbookSearch",
+							);
+						if (
+							document.activeElement ===
+							searchBox
+						)
+							searchBox.blur();
+						else searchBox.focus();
+					}, 10);
+				}
 			},
 		},
 		{
-			name: "Create Finding",
-			subtitle: "Create a new draft finding",
-			keywords: "create, new, finding",
+			actionId: "logbook.create-finding",
 			icon: ShieldAlert,
-			action: {
-				handler: () => {
-					if (!$modalStore[0])
-						findingStore
-							.create([])
-							.then((finding) =>
-								openFindingModal(
-									finding,
-									true,
-								),
-							);
-					else if (
-						$modalStore[0].component ===
-						"Finding"
-					)
-						modalStore.close();
-				},
-				options: { scope: "logbook", single: true },
-				keys: ["⌘+⇧+F", "ctrl+⇧+F"],
+			handler: () => {
+				if (!$modalStore[0])
+					findingStore
+						.create([])
+						.then((finding) =>
+							openFindingModal(
+								finding,
+								true,
+							),
+						);
+				else if (
+					$modalStore[0].component ===
+					"Finding"
+				)
+					modalStore.close();
 			},
 		},
 		{
-			name: "Create Test Case",
-			subtitle: "Draft a new blank test case",
-			keywords: "create, new, test, case",
+			actionId: "logbook.create-test-case",
 			icon: BookCheck,
-			action: {
-				handler: () => {
-					if (!$modalStore[0])
-						testCaseStore
-							.create([])
-							.then((testCase) =>
-								openTestCaseModal(
-									testCase,
-									true,
-								),
-							);
-					else if (
-						$modalStore[0].component ===
-						"TestCase"
-					)
-						modalStore.close();
-				},
-				options: { scope: "logbook", single: true },
-				keys: ["⌘+⇧+T", "ctrl+⇧+T"],
+			handler: () => {
+				if (!$modalStore[0])
+					testCaseStore
+						.create([])
+						.then((testCase) =>
+							openTestCaseModal(
+								testCase,
+								true,
+							),
+						);
+				else if (
+					$modalStore[0].component ===
+					"TestCase"
+				)
+					modalStore.close();
 			},
 		},
 		{
-			name: "Export Report",
-			subtitle: "Create a report from logbook",
-			keywords: "report, template, findings",
+			actionId: "logbook.export-report",
 			icon: SquareArrowRightIcon,
-			action: {
-				handler: openExportDrawer,
-				options: { scope: "logbook", single: true },
-				keys: ["⌘+⇧+E", "ctrl+⇧+E"],
-			},
+			handler: openExportDrawer,
 		},
 	];
+	useMenuActions(logbookMenu);
 </script>
 
-<MarasiKeys bind:this={menu} scope="logbook" menuOptions={logbookMenu} />
+<MarasiKeys menuOptions={logbookMenu} />
 <Accordion rounded="none" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
 	<AccordionItem bind:open={accOpened}>
 		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
