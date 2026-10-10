@@ -14,6 +14,7 @@
     import CodeMirror from "svelte-codemirror-editor";
     import { DoExtender, RunExtension } from "../../lib/wailsjs/go/main/App";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
         EditIcon,
         FileCode,
@@ -30,92 +31,69 @@
     const drawerStore = getDrawerStore();
     const workshopMenu = [
         {
-            name: "Toggle Workshop Settings",
-            subtitle: "Toggle Settings Accordian",
-            keywords: "settings, toggle",
+            actionId: "workshop.toggle-settings",
             icon: ToggleLeftIcon,
-            action: {
-                handler: () => {
-                    accOpened = !accOpened;
-                },
-                options: { scope: "workshop", single: true },
-                keys: ["⌘+P", "ctrl+P"],
+            handler: () => {
+                accOpened = !accOpened;
             },
         },
         {
-            name: "Edit Workshop",
-            subtitle: "Jump to code editor",
-            keywords: "edit, code",
+            actionId: "workshop.edit-code",
             icon: EditIcon,
-            action: {
-                handler: () => {
-                    const cmContent = document.querySelector(
-                        'div[data-language="lua"]',
-                    );
-                    cmContent.focus();
-                },
-                options: { scope: "workshop", single: true },
-                keys: ["⌘+⇧+E", "ctrl+⇧+E"],
+            handler: () => {
+                const cmContent = document.querySelector(
+                    'div[data-language="lua"]',
+                );
+                cmContent.focus();
             },
         },
         {
-            name: "Update Workshop",
-            subtitle: "Execute Workshop Code",
-            keywords: "execute, code",
+            actionId: "workshop.update-code",
             icon: SquarePlay,
-            action: {
-                handler: () => {
-                    RunExtension("workshop", $workshopCode)
-                        .then(() => {
-                            const toastSettings = {
-                                message: "Updated Workshop",
-                                background: "variant-filled-success",
-                            };
-                            toastStore.trigger(toastSettings);
-                        })
-                        .catch((error) => {
-                            const toastSettings = {
-                                message: "Error updating " + error,
-                                background: "variant-filled-error",
-                            };
-                            toastStore.trigger(toastSettings);
-                        });
-                },
-                options: { scope: "workshop", single: true },
-                keys: ["⌘+⇧+R", "ctrl+⇧+R"],
+            handler: () => {
+                RunExtension("workshop", $workshopCode)
+                    .then(() => {
+                        const toastSettings = {
+                            message: "Updated Workshop",
+                            background: "variant-filled-success",
+                        };
+                        toastStore.trigger(toastSettings);
+                    })
+                    .catch((error) => {
+                        const toastSettings = {
+                            message: "Error updating " + error,
+                            background: "variant-filled-error",
+                        };
+                        toastStore.trigger(toastSettings);
+                    });
             },
         },
         {
-            name: "Show Logs",
-            subtitle: "Show Extension Logs",
-            keywords: "logs, lua",
+            actionId: "workshop.show-logs",
             icon: FileCode,
-            action: {
-                handler: () => {
-                    console.log($drawerStore);
-                    if ($drawerStore.open) {
-                        drawerStore.close();
-                    } else {
-                        const drawerSettings = {
-                            id: "extension-logs",
-                            meta: {
-                                extensionName: "workshop",
-                            },
-                            height: "h-full",
-                            width: "w-3/5",
-                            position: "right",
-                        };
-                        drawerStore.open(drawerSettings);
-                    }
-                },
-                options: { scope: "workshop", single: true },
-                keys: ["⌘+⇧+L", "ctrl+⇧+L"],
+            handler: () => {
+                console.log($drawerStore);
+                if ($drawerStore.open) {
+                    drawerStore.close();
+                } else {
+                    const drawerSettings = {
+                        id: "extension-logs",
+                        meta: {
+                            extensionName: "workshop",
+                        },
+                        height: "h-full",
+                        width: "w-3/5",
+                        position: "right",
+                    };
+                    drawerStore.open(drawerSettings);
+                }
             },
         },
     ];
+    useMenuActions(workshopMenu);
 </script>
 
-<MarasiKeys scope="workshop" menuOptions={workshopMenu} />
+<MarasiKeys menuOptions={workshopMenu} />
 <Accordion rounded="false" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>

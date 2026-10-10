@@ -18,11 +18,12 @@
 	let boundMenuOptions;
 	let previousScope = "all";
 
-	// Entries are either catalog entries ({ actionId, name, subtitle, icon,
-	// keywords }), whose keys and handlers belong to the central dispatcher,
-	// or page entries with { action: { handler, keys, options } } that are
-	// still bound through hotkeys-js in `scope` until they move to the
-	// catalog. Without page entries, `scope` can be null.
+	// Entries are either catalog entries ({ actionId, icon }, optionally
+	// overriding name, subtitle or keywords), whose text, keys and handlers
+	// come from the catalog and the central dispatcher, or legacy entries
+	// with { action: { handler, keys, options } } that are still bound
+	// through hotkeys-js in `scope` until they move to the catalog. Without
+	// legacy entries, `scope` can be null.
 	export let menuOptions = [];
 	export let scope = null;
 	// Menu-context tier of this menu: the menu shortcut opens the most
@@ -94,6 +95,21 @@
 		boundOptions = [];
 	}
 
+	function withCatalogText(option, catalog) {
+		const action = option.actionId && catalog.get(option.actionId);
+		if (!action) return option;
+		return {
+			name: action.label,
+			subtitle: action.description,
+			keywords: action.keywords,
+			...option,
+		};
+	}
+
+	$: entries = menuOptions.map((option) =>
+		withCatalogText(option, $menuDispatcher.catalog),
+	);
+
 	$: if (mounted && menuOptions !== boundMenuOptions) {
 		unbindOptions();
 		bindOptions(menuOptions);
@@ -147,7 +163,7 @@
 	<div class="card w-full" tabindex="-1">
 		<MenuItemList
 			bind:input={commandInput}
-			options={menuOptions}
+			options={entries}
 			on:selection={onSelection}
 		/>
 	</div>

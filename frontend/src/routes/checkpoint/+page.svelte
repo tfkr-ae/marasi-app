@@ -23,6 +23,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import {
 		CornerLeftDown,
 		EditIcon,
@@ -53,150 +54,109 @@
 	let accOpened;
 	const checkpointMenu = [
 		{
-			name: "Toggle Checkpoint Settings",
-			subtitle: "Toggle Settings Accordian",
+			actionId: "checkpoint.toggle-settings",
 			icon: ToggleLeft,
-			keywords: "settings, toggle",
-			action: {
-				handler: () => {
-					accOpened = !accOpened;
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+P", "ctrl+P"],
+			handler: () => {
+				accOpened = !accOpened;
 			},
 		},
 		{
-			name: "Edit Checkpoint",
-			subtitle: "Jump to code editor",
-			keywords: "edit, toggle",
+			actionId: "checkpoint.edit-rules",
 			icon: EditIcon,
-			action: {
-				handler: () => {
-					if (!accOpened) {
-						accOpened = true;
-					}
-					setTimeout(() => {
-						const cmContent =
-							document.querySelector(
-								'div[data-language="lua"]',
-							);
-						cmContent.focus();
-					}, 300);
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+⇧+E", "ctrl+⇧+E"],
-			},
-		},
-		{
-			name: "Update Checkpoint Code",
-			subtitle: "Execute Checkpoint code",
-			keywords: "edit, toggle",
-			icon: SquarePlay,
-			action: {
-				handler: () => {
-					RunExtension(
-						"checkpoint",
-						$checkpointCode,
-					)
-						.then(() => {
-							const toastSettings = {
-								message: "Updated checkpoint rules",
-								background: "variant-filled-success",
-							};
-							toastStore.trigger(
-								toastSettings,
-							);
-						})
-						.catch((error) => {
-							console.log("Error");
-							const toastSettings = {
-								message: "Error updating rules",
-								background: "variant-filled-error",
-							};
-							toastStore.trigger(
-								toastSettings,
-							);
-						});
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+⇧+R", "ctrl+⇧+R"],
-			},
-		},
-		{
-			name: "Edit Intercepted Item",
-			subtitle: "Jump to intercepted item editor",
-			keywords: "intercept, toggle",
-			icon: FilePenLine,
-			action: {
-				handler: () => {
-					if (interceptedCount > 0) {
-						interceptedEditor?.focus();
-					}
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+⇧+I", "ctrl+⇧+I"],
-			},
-		},
-		{
-			name: "Forward Intercepted Item",
-			subtitle: "Forward current item",
-			keywords: "forward, toggle",
-			icon: Forward,
-			action: {
-				handler: () => {
-					if (interceptedCount > 0) {
-						forward(intercepted);
-					}
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+⇧+F", "ctrl+⇧+F"],
-			},
-		},
-		{
-			name: "Drop Intercepted Item",
-			subtitle: "Drop current item",
-			keywords: "drop, toggle",
-			icon: CornerLeftDown,
-			action: {
-				handler: () => {
-					if (interceptedCount > 0) {
-						drop();
-					}
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+⇧+D", "ctrl+⇧+D"],
-			},
-		},
-		{
-			name: "Show Logs",
-			subtitle: "Show Extension Logs",
-			keywords: "logs, lua",
-			icon: FileCode,
-			action: {
-				handler: () => {
-					if ($drawerStore.open) {
-						drawerStore.close();
-					} else {
-						const drawerSettings = {
-							id: "extension-logs",
-							meta: {
-								extensionName:
-									"checkpoint",
-							},
-							height: "h-full",
-							width: "w-3/5",
-							position: "right",
-						};
-						drawerStore.open(
-							drawerSettings,
+			handler: () => {
+				if (!accOpened) {
+					accOpened = true;
+				}
+				setTimeout(() => {
+					const cmContent =
+						document.querySelector(
+							'div[data-language="lua"]',
 						);
-					}
-				},
-				options: { scope: "checkpoint", single: true },
-				keys: ["⌘+⇧+L", "ctrl+⇧+L"],
+					cmContent.focus();
+				}, 300);
+			},
+		},
+		{
+			actionId: "checkpoint.update-rules",
+			icon: SquarePlay,
+			handler: () => {
+				RunExtension(
+					"checkpoint",
+					$checkpointCode,
+				)
+					.then(() => {
+						const toastSettings = {
+							message: "Updated checkpoint rules",
+							background: "variant-filled-success",
+						};
+						toastStore.trigger(
+							toastSettings,
+						);
+					})
+					.catch((error) => {
+						console.log("Error");
+						const toastSettings = {
+							message: "Error updating rules",
+							background: "variant-filled-error",
+						};
+						toastStore.trigger(
+							toastSettings,
+						);
+					});
+			},
+		},
+		{
+			actionId: "checkpoint.edit-intercepted",
+			icon: FilePenLine,
+			handler: () => {
+				if (interceptedCount > 0) {
+					interceptedEditor?.focus();
+				}
+			},
+		},
+		{
+			actionId: "checkpoint.forward-intercepted",
+			icon: Forward,
+			handler: () => {
+				if (interceptedCount > 0) {
+					forward(intercepted);
+				}
+			},
+		},
+		{
+			actionId: "checkpoint.drop-intercepted",
+			icon: CornerLeftDown,
+			handler: () => {
+				if (interceptedCount > 0) {
+					drop();
+				}
+			},
+		},
+		{
+			actionId: "checkpoint.show-logs",
+			icon: FileCode,
+			handler: () => {
+				if ($drawerStore.open) {
+					drawerStore.close();
+				} else {
+					const drawerSettings = {
+						id: "extension-logs",
+						meta: {
+							extensionName:
+								"checkpoint",
+						},
+						height: "h-full",
+						width: "w-3/5",
+						position: "right",
+					};
+					drawerStore.open(
+						drawerSettings,
+					);
+				}
 			},
 		},
 	];
+	useMenuActions(checkpointMenu);
 	$: {
 		CheckSyntax(intercepted);
 	}
@@ -300,7 +260,7 @@
 	});
 </script>
 
-<MarasiKeys scope="checkpoint" menuOptions={checkpointMenu} />
+<MarasiKeys menuOptions={checkpointMenu} />
 <Accordion rounded="false">
 	<AccordionItem bind:open={accOpened}>
 		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
