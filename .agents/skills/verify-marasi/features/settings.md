@@ -6,6 +6,7 @@
 - Waypoint management
 - Chrome executable paths and profiles
 - Build version displayed below the page heading (`dev` in a local development build)
+- Keybindings modal (`Configure Keybindings`): rebind menu actions per profile and platform, saved to the `keybindings` section of `marasi_appconfig.yaml`
 
 ## How to get to it (user POV)
 
@@ -19,7 +20,13 @@ Run `scripts/drive.sh settings` for route proof. For persistence, toggle Vim and
 {"name":"vim-off","steps":[{"click":"[data-testid=\"slide-toggle\"]"},{"waitSelector":"[role=switch][aria-checked=false]"}]}
 ```
 
-`{"text":"Vim Enabled"}` clicks the same control. The checkbox inside is `display:none`; read state from `[role=switch]`'s `aria-checked`.
+`{"text":"Vim Enabled"}` clicks the same control.
+
+Keybindings: `{"text":"Configure Keybindings"}` opens the modal (`[data-keybindings-modal]`). Row controls have labels: `button[aria-label="Add binding to Ledger"]`, `button[aria-label="Remove ⌘+J from Ledger"]`, `button[aria-label="Reset Ledger"]`. Adding or re-recording a chip opens `[data-key-capture]`; send the combination with a `key` step. Escape cancels only the capture. Save closes the modal with a `Keybindings saved` toast; a failed save shows `[data-save-error]` and keeps the draft. Prove the result with the shortcut itself and the isolated YAML, then close with Cancel and `Discard` (or Escape when nothing changed) so doctor sees no residue:
+
+```json
+{"name":"kb-save","steps":[{"text":"Configure Keybindings"},{"waitText":"Every page"},{"click":"button[aria-label=\"Add binding to Ledger\"]"},{"waitSelector":"[data-key-capture]"},{"key":"cmd+j"},{"waitText":"Unsaved changes"},{"text":"Save"},{"waitText":"Keybindings saved"},{"key":"cmd+j"},{"waitPath":"/ledger"}]}
+``` The checkbox inside is `display:none`; read state from `[role=switch]`'s `aria-checked`.
 
 ## Gotchas
 
@@ -30,3 +37,5 @@ Run `scripts/drive.sh settings` for route proof. For persistence, toggle Vim and
 - Clicking the `Syntax Mode:` caption activates its first nested radio and writes `syntax_mode=disabled`. Click the radio you mean.
 - Row X and pencil buttons have no labels; find the `<tr>` with `hasText` first.
 - Adding a Chrome profile only appends YAML. Deleting a profile also removes `$configDir/chrome_profiles/<name>`. Directories appear later when Chrome starts.
+- The keybindings modal takes Escape and backdrop clicks over: they cancel a capture, dismiss an in-modal card, or ask `Discard changes?` before closing with unsaved edits. To simulate a failed save, make the isolated config directory unwritable (`chmod a-w`), and restore it before cleanup.
+- Ledger's palette lists only Ledger page actions; check global bindings such as Ledger's `⌘+J` in the menu on Settings or Home.

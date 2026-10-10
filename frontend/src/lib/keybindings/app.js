@@ -19,6 +19,11 @@ export const menuPalettes = createPaletteRegistry();
 // `state.websocketTab`.
 export const websocketTab = writable(null);
 
+// True while the keybinding settings modal records a shortcut. The
+// dispatcher state carries it as `state.capturing`, and the gate then lets
+// no menu action run.
+export const keybindingCapture = writable(false);
+
 // Opening the Marasi menu toggles the most specific mounted menu.
 menuDispatcher.register(OPEN_MENU, () => menuPalettes.active()?.toggle());
 
