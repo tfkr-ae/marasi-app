@@ -1,5 +1,5 @@
 import { eligibleContextIds } from "./contexts.js";
-import { shortcutGate } from "./gate.js";
+import { isInEditor, shortcutGate } from "./gate.js";
 import { bindingFromEvent } from "./keys.js";
 import { createKeymap, OPEN_MENU } from "./keymap.js";
 import { liveKeybindings } from "./profiles.js";
@@ -79,7 +79,15 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
 
   // Runs the winning action for a keydown event. Returns true and consumes
   // the event when an action ran.
-  function dispatch(event, state) {
+  //
+  // Editor-owned keys: a key pressed in a CodeMirror editor goes to the
+  // editor first, then to the menu action, as it did when shortcuts listened
+  // on document in the bubble phase. ⌘[ / ⌘] indent the line and still
+  // switch the Launchpad tab. The window capture listener therefore skips
+  // editor events, and a window bubble listener passes `afterEditor: true`
+  // to dispatch only those.
+  function dispatch(event, state, { afterEditor = false } = {}) {
+    if (isInEditor(event.target) !== afterEditor) return false;
     const actionId = resolve(event, state);
     if (!actionId || !handlerFor(actionId)) return false;
     event.preventDefault();
