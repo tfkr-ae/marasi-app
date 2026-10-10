@@ -52,7 +52,7 @@
 			modalStore.trigger({
 				type: "component",
 				component: "Finding",
-				toggleShortcut: { key: "f", shiftKey: true },
+				toggleAction: "logbook.create-finding",
 				meta: { finding: finding, isNew: isNew },
 			});
 		}
@@ -63,7 +63,7 @@
 			modalStore.trigger({
 				type: "component",
 				component: "TestCase",
-				toggleShortcut: { key: "t", shiftKey: true },
+				toggleAction: "logbook.create-test-case",
 				meta: { testCase: testCase, isNew: isNew },
 			});
 		}

@@ -254,7 +254,7 @@
                     const modal = {
                         type: "component",
                         component: "Notes",
-                        toggleShortcut: { key: "n", shiftKey: true },
+                        toggleAction: "launchpad.view-notes",
                         title: `Request ${$currentEntryIndex + 1} Notes`,
                         content: note,
                         requestID: currentEntry.ID,
@@ -276,7 +276,7 @@
                     const modal = {
                         type: "component",
                         component: "Metadata",
-                        toggleShortcut: { key: "m", shiftKey: true },
+                        toggleAction: "launchpad.view-metadata",
                         title: `Request ${$currentEntryIndex + 1} Metadata`,
                         content: metadata,
                         requestID: currentEntry.ID,

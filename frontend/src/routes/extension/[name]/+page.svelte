@@ -1,4 +1,5 @@
 <script>
+    import { onDestroy } from "svelte";
     import { page } from "$app/stores";
     import { extensions, extensions_ui } from "../../../stores.js";
     import ExtensionUI from "../../../lib/extensions/ExtensionUI.svelte";
@@ -6,6 +7,11 @@
     import { SettingsIcon, ToggleLeftIcon } from "lucide-svelte";
     import * as Icons from "lucide-svelte";
     import MarasiKeys from "../../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import { registerMenuActions } from "../../../lib/keybindings/app.js";
+    import {
+        extensionMenuActionId,
+        extensionPageActionId,
+    } from "../../../lib/keybindings/catalog.js";
     import { EventsEmit } from "../../../lib/wailsjs/runtime/runtime.js";
     let accOpened = false;
 
@@ -15,44 +21,66 @@
     $: menuSchema = $extensions_ui[extensionName]?.menu;
     $: mainSchema = $extensions_ui[extensionName]?.main;
     $: panelSchema = $extensions_ui[extensionName]?.panel;
+
+    function callExtension(action) {
+        EventsEmit("extension_call_function", {
+            extensionID: extensionData.ID,
+            function: action,
+            state: $extensions_ui[extensionData.Name],
+        });
+    }
+
+    // Declared items keep their catalog identity (extension + action), so
+    // the first item wins when two declare the same action, as in the
+    // catalog. Items without an action are listed but run nothing.
+    function declaredMenu(name, schema) {
+        const seen = new Set();
+        return (Array.isArray(schema) ? schema : []).flatMap((item) => {
+            if (!item || typeof item !== "object") return [];
+            const actionId = extensionMenuActionId(
+                name,
+                typeof item.action === "string" ? item.action : "",
+            );
+            if (actionId && seen.has(actionId)) return [];
+            if (actionId) seen.add(actionId);
+            return [
+                {
+                    ...(actionId && {
+                        actionId,
+                        handler: () => callExtension(item.action),
+                    }),
+                    name: item.name,
+                    subtitle: item.subtitle || "",
+                    keywords: item.keywords || "",
+                    icon: Icons[item.icon] || Icons.HelpCircle,
+                },
+            ];
+        });
+    }
+
     $: menuOptions = [
         {
+            actionId: extensionPageActionId(extensionName, "toggle-settings"),
             name: `Toggle ${extensionName} Settings`,
-            subtitle: "Toggle Settings Accordian",
-            keywords: "settings, toggle",
             icon: ToggleLeftIcon,
-            action: {
-                handler: () => (accOpened = !accOpened),
-                options: { scope: extensionName, single: true },
-                keys: ["⌘+P", "ctrl+P"],
-            },
+            handler: () => (accOpened = !accOpened),
         },
-        ...(Array.isArray(menuSchema) ? menuSchema : []).map((item) => ({
-            name: item.name,
-            subtitle: item.subtitle || "",
-            keywords: item.keywords || "",
-            icon: Icons[item.icon] || Icons.HelpCircle,
-            action: {
-                handler: () => {
-                    if (item.action) {
-                        EventsEmit("extension_call_function", {
-                            extensionID: extensionData.ID,
-                            function: item.action,
-                            state: $extensions_ui[extensionData.Name],
-                        });
-                    }
-                },
-                options: {
-                    scope: extensionName,
-                    single: true,
-                },
-                keys: item.keys || [],
-            },
-        })),
+        ...declaredMenu(extensionName, menuSchema),
     ];
+
+    // The page component is reused when navigating between extensions, so
+    // handlers follow the current extension and menu.
+    let unregisterMenu = () => {};
+    $: {
+        unregisterMenu();
+        unregisterMenu = registerMenuActions(
+            menuOptions.filter((option) => option.actionId),
+        );
+    }
+    onDestroy(() => unregisterMenu());
 </script>
 
-<MarasiKeys scope={extensionName} {menuOptions} />
+<MarasiKeys {menuOptions} />
 <Accordion rounded="false">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>

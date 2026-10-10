@@ -1,7 +1,6 @@
 <svelte:options accessors />
 
 <script>
-	import hotkeys from "hotkeys-js";
 	import MenuItemList from "./MenuItemList.svelte";
 	import { onMount } from "svelte";
 	import {
@@ -13,19 +12,12 @@
 
 	let isOpen = false;
 	let commandInput = "";
-	let mounted = false;
-	let boundOptions = [];
-	let boundMenuOptions;
-	let previousScope = "all";
 
-	// Entries are either catalog entries ({ actionId, icon }, optionally
-	// overriding name, subtitle or keywords), whose text, keys and handlers
-	// come from the catalog and the central dispatcher, or legacy entries
-	// with { action: { handler, keys, options } } that are still bound
-	// through hotkeys-js in `scope` until they move to the catalog. Without
-	// legacy entries, `scope` can be null.
+	// Catalog entries: { actionId, icon }, optionally overriding name,
+	// subtitle or keywords. Text, keys and handlers come from the catalog and
+	// the central dispatcher. An entry without an actionId (an extension menu
+	// item that declares no action) is listed without keys and runs nothing.
 	export let menuOptions = [];
-	export let scope = null;
 	// Menu-context tier of this menu: the menu shortcut opens the most
 	// specific mounted menu (overlay, then page, then global).
 	export let paletteTier = "page";
@@ -60,7 +52,6 @@
 		if (isOpen) closeDialog();
 		const option = event.detail;
 		if (option.actionId) menuDispatcher.run(option.actionId);
-		else option.action.handler();
 	}
 	function handleCancel(event) {
 		event.preventDefault();
@@ -68,31 +59,6 @@
 	}
 	function handleClose() {
 		isOpen = false;
-	}
-
-	function bindOptions(options) {
-		if (scope === null) return;
-		options
-			.filter((option) => !option.actionId)
-			.forEach((option) => {
-				const keys = Array.isArray(option.action.keys)
-					? option.action.keys.join()
-					: option.action.keys;
-				const handler = () => {
-					if (isOpen) toggleDialog();
-					option.action.handler();
-					return false;
-				};
-				hotkeys(keys, { ...option.action.options, scope }, handler);
-				boundOptions.push({ keys, handler });
-			});
-	}
-
-	function unbindOptions() {
-		boundOptions.forEach(({ keys, handler }) => {
-			hotkeys.unbind(keys, scope, handler);
-		});
-		boundOptions = [];
 	}
 
 	function withCatalogText(option, catalog) {
@@ -110,31 +76,11 @@
 		withCatalogText(option, $menuDispatcher.catalog),
 	);
 
-	$: if (mounted && menuOptions !== boundMenuOptions) {
-		unbindOptions();
-		bindOptions(menuOptions);
-		boundMenuOptions = menuOptions;
-	}
-
-	onMount(() => {
-		if (scope !== null) {
-			previousScope = hotkeys.getScope();
-			hotkeys.setScope(scope);
-		}
-		const unregisterPalette = menuPalettes.register(paletteTier, {
+	onMount(() =>
+		menuPalettes.register(paletteTier, {
 			toggle: toggleDialog,
-		});
-		bindOptions(menuOptions);
-		boundMenuOptions = menuOptions;
-		mounted = true;
-		return () => {
-			mounted = false;
-			unregisterPalette();
-			unbindOptions();
-			if (scope !== null && hotkeys.getScope() === scope)
-				hotkeys.setScope(previousScope);
-		};
-	});
+		}),
+	);
 </script>
 
 <!-- 

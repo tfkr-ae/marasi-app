@@ -13,7 +13,6 @@
 <script>
 	import { createEventDispatcher } from "svelte";
 	import { flip } from "svelte/animate";
-	import { marasiConfig } from "../../../stores.js";
 	import { menuDispatcher } from "../../keybindings/app.js";
 	import { formatBinding } from "../../keybindings/keys.js";
 
@@ -166,22 +165,6 @@
 											)}</kbd
 										>
 									{/each}
-								{:else if Array.isArray(option.action.keys)}
-									{#if $marasiConfig.DesktopOS === "darwin"}
-										<kbd
-											class="kbd text-surface-400 text-sm"
-											>{option.action.keys[0]}</kbd
-										>
-									{:else}
-										<kbd
-											class="kbd text-surface-400 text-sm"
-											>{option.action.keys[1]}</kbd
-										>
-									{/if}
-								{:else}
-									<kbd class="kbd text-surface-400 text-sm"
-										>{option.action.keys}</kbd
-									>
 								{/if}
 							</div>
 						</button>

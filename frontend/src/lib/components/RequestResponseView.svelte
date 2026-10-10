@@ -106,7 +106,7 @@
 			const modal = {
 				type: "component",
 				component: "Notes",
-				toggleShortcut: { key: "n", shiftKey: true },
+				toggleAction: "ledger.drawer-open.view-note",
 				title: titleText + " notes",
 				requestID: request_id,
 				content: note,
@@ -122,7 +122,7 @@
 			const modal = {
 				type: "component",
 				component: "Metadata",
-				toggleShortcut: { key: "m", shiftKey: true },
+				toggleAction: "ledger.drawer-open.view-metadata",
 				content: metadata,
 				title: titleText + " Metadata",
 			};
@@ -137,7 +137,7 @@
 			const modal = {
 				type: "component",
 				component: "TestCase",
-				toggleShortcut: { key: "t", shiftKey: true },
+				toggleAction: "ledger.drawer-open.create-test-case",
 				meta: {
 					testCase: testCase,
 					isNew: true,
@@ -154,7 +154,7 @@
 			const modal = {
 				type: "component",
 				component: "Finding",
-				toggleShortcut: { key: "f", shiftKey: true },
+				toggleAction: "ledger.drawer-open.create-finding",
 				meta: {
 					finding: finding,
 					isNew: true,
@@ -200,7 +200,7 @@
 		const modal = {
 			type: "component",
 			component: "WebsocketStream",
-			toggleShortcut: { key: "o", shiftKey: true },
+			toggleAction: "ledger.drawer-open.websocket.open-stream",
 			meta: {
 				upgradeRequest: structuredClone(selectedRow),
 			},
