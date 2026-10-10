@@ -83,12 +83,14 @@
 	import FindingModal from "../lib/components/FindingModal.svelte";
 	import { isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
+	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
 	import { get } from "svelte/store";
 	import {
 		installMenuShortcuts,
 		menuDispatcher,
 		websocketTab,
+		keybindingCapture,
 	} from "../lib/keybindings/app.js";
 	let appRailIndex = 0;
 	let showChef = false;
@@ -152,6 +154,7 @@
 		SelectFinding: { ref: SelectFindingModal },
 		SelectWordlist: { ref: SelectWordlistModal },
 		"extension-modal": { ref: ModalWrapper },
+		Keybindings: { ref: KeybindingsModal },
 	};
 	const StartupRoutine2 = new Promise((resolve) => {
 		readConfig().then(() => {
@@ -192,6 +195,7 @@
 			dialogOpen: Boolean(document.querySelector("dialog[open]")),
 			drawer: get(drawerStore),
 			websocketTab: get(websocketTab),
+			capturing: get(keybindingCapture),
 		};
 	}
 	// A modal triggered with `toggleAction: <menu action id>` closes on that
