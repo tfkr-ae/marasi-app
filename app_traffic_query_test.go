@@ -377,3 +377,16 @@ func TestQueryTrafficReturnsGoErrorWhenTheDatabaseFails(t *testing.T) {
 		t.Fatalf("wanted no query error from a closed database, got %+v", *result.QueryError)
 	}
 }
+
+func TestQueryTrafficAcceptsTrailingWhitespaceUnderExclusion(t *testing.T) {
+	app := newScratchpadApp(t)
+	capturePair(t, app, capturedPair{host: "api.acme.test", path: "/a", statusCode: 500, contentType: "text/html"})
+	capturePair(t, app, capturedPair{host: "api.acme.test", path: "/b", statusCode: 200, contentType: "text/html"})
+	excludeContentTypes(t, app, "image/png")
+
+	result := queryTraffic(t, app, "status_code >= 500 ", nil)
+
+	if len(result.Items) != 1 {
+		t.Fatalf("wanted 1 item for a query ending in a space, got %d", len(result.Items))
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -29,6 +30,10 @@ type TrafficQueryError struct {
 
 // QueryTraffic runs the researcher's query against the project's traffic.
 func (a *App) QueryTraffic(query string, cursor *uuid.UUID) (TrafficQueryResult, error) {
+	// Marasi rejects whitespace before the ")" that apply adds, and the query
+	// box leaves a space after a chosen suggestion. Trimming only the end
+	// keeps error positions in the researcher's text unchanged.
+	query = strings.TrimRightFunc(query, unicode.IsSpace)
 	traffic, err := a.Proxy.GetTrafficRepo()
 	if err != nil {
 		return TrafficQueryResult{}, fmt.Errorf("querying traffic: %w", err)
