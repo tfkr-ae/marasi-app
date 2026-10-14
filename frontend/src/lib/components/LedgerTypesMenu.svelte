@@ -3,7 +3,7 @@
 	// exclusion (exact types) and reports each change through a "change"
 	// event; the page stores it.
 	import { createEventDispatcher, onMount, tick } from "svelte";
-	import { FilterIcon, Search, Plus, ChevronDown } from "lucide-svelte";
+	import { FilterIcon, Search, Plus, ChevronDown, X } from "lucide-svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { CountContentTypes } from "../wailsjs/go/main/App";
 	import {
@@ -144,7 +144,9 @@
 		>
 			<div class="flex flex-col gap-2 border-b border-primary-500 p-2">
 				<div
-					class="input-group input-group-divider grid-cols-[auto_minmax(0,1fr)]"
+					class="input-group input-group-divider {find
+						? 'grid-cols-[auto_minmax(0,1fr)_auto]'
+						: 'grid-cols-[auto_minmax(0,1fr)]'}"
 				>
 					<div class="input-group-shim"><Search size={14} /></div>
 					<input
@@ -158,6 +160,21 @@
 						spellcheck="false"
 						placeholder="Find or add a type…"
 					/>
+					{#if find}
+						<button
+							id="ledgerTypesFindClear"
+							type="button"
+							class="input-group-shim"
+							title="Clear"
+							aria-label="Clear the find box"
+							on:click={() => {
+								find = "";
+								findBox?.focus();
+							}}
+						>
+							<X size={14} />
+						</button>
+					{/if}
 				</div>
 				<div class="flex flex-wrap gap-1">
 					{#each CONTENT_TYPE_GROUPS as group}
@@ -176,7 +193,7 @@
 				</div>
 			</div>
 
-			<div class="overflow-auto pb-1">
+			<div class="scrollbar-minimal overflow-auto pb-1">
 				{#if lists.addable}
 					<button
 						type="button"

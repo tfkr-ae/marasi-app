@@ -50,3 +50,19 @@ html:not(.dark) a.variant-ghost-success:hover {
   background-color: rgb(var(--color-success-200)) !important;
   filter: none !important;
 }
+
+/* A thin scrollbar with no track, for menus and panels. */
+.scrollbar-minimal {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--color-surface-400) / 0.5) transparent;
+}
+.scrollbar-minimal::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-minimal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-minimal::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-surface-400) / 0.5);
+}
