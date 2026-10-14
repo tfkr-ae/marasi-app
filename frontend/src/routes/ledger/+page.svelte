@@ -56,9 +56,9 @@
 		CircleHelp,
 		TriangleAlert,
 	} from "lucide-svelte";
-	import QueryFieldList from "../../lib/components/QueryFieldList.svelte";
+	import LedgerQueryBox from "../../lib/components/LedgerQueryBox.svelte";
 	import LedgerTypesMenu from "../../lib/components/LedgerTypesMenu.svelte";
-	import { appendToQuery } from "../../lib/ledgerQueryFields";
+	import { QUERY_SYNTAX } from "../../lib/ledgerQueryFields";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { canOpenDrawerStream } from "../../lib/websocket/presentation.js";
@@ -96,7 +96,6 @@
 		runQuery,
 		rerunQuery,
 		clearQuery,
-		markQueryError,
 		queryPageIndex,
 		matchCountLabel,
 		queryStatusLabel,
@@ -923,7 +922,11 @@
 		loadOlderPage();
 	}
 
-	$: queryErrorMark = markQueryError($ledgerQuery.error);
+	// Marasi's error for the text in the query box, underlined there.
+	$: queryBoxError =
+		$ledgerQuery.error && $ledgerQuery.error.query === $queryText
+			? $ledgerQuery.error
+			: null;
 
 	// After a query change or a change in the loaded results (a merge of new
 	// matches or an older page), the selected row and the open drawer stay
@@ -974,23 +977,10 @@
 
 	let queryFieldsOpen = false;
 
-	// Appends a field-list example to the query box and runs it like typing.
-	function insertQueryExample(example) {
-		const text = appendToQuery($queryText, example);
+	// Typing runs the query after QUERY_DELAY_MS; Enter runs it at once.
+	function onQueryChange(text) {
 		queryText.set(text);
 		scheduleQuery(text);
-		document.getElementById("searchBox")?.focus();
-	}
-
-	function onQueryKeydown(e) {
-		if (e.key === "Enter") {
-			e.preventDefault();
-			runQuery($queryText);
-		} else if (e.key === "Escape") {
-			e.preventDefault();
-			e.stopPropagation();
-			clearQuery();
-		}
 	}
 
 	// Stores the Types menu's new content-type exclusion, then runs the active query again so
@@ -1145,18 +1135,23 @@
 		{:else}
 			<Search size={16} class="shrink-0" />
 		{/if}
-		<input
-			id="searchBox"
-			class="h-full min-w-0 flex-1 border-0 bg-transparent p-0 font-mono text-sm focus:outline-none focus:ring-0"
-			type="text"
-			autocomplete="off"
-			spellcheck="false"
-			placeholder="Search traffic…"
-			bind:value={$queryText}
-			on:input={() => scheduleQuery($queryText)}
-			on:keydown={onQueryKeydown}
+		<LedgerQueryBox
+			value={$queryText}
+			error={queryBoxError}
+			on:change={(e) => onQueryChange(e.detail)}
+			on:run={() => runQuery($queryText)}
+			on:clear={() => clearQuery()}
 		/>
-		{#if $queryActive}
+		{#if queryBoxError}
+			<span
+				id="ledgerQueryError"
+				class="max-w-[24rem] truncate text-xs text-error-500"
+				role="alert"
+				title={queryBoxError.position
+					? `Position ${queryBoxError.position}: ${queryBoxError.message}`
+					: queryBoxError.message}>{queryBoxError.message}</span
+			>
+		{:else if $queryActive}
 			<span
 				id="ledgerQueryMatchCount"
 				class="whitespace-nowrap text-xs opacity-70"
@@ -1188,8 +1183,8 @@
 			class="h-full px-2 {queryFieldsOpen
 				? 'text-primary-500'
 				: 'opacity-70 hover:opacity-100'}"
-			title="Query fields"
-			aria-label="Query fields"
+			title="Query syntax"
+			aria-label="Query syntax"
 			aria-expanded={queryFieldsOpen}
 			aria-controls="ledgerQueryFields"
 			on:click={() => (queryFieldsOpen = !queryFieldsOpen)}
@@ -1262,26 +1257,10 @@
 		</select>
 	</div>
 </div>
-{#if $ledgerQuery.error || $queryStatusLabel || $indexWarning}
+{#if $queryStatusLabel || $indexWarning}
 	<div
 		class="flex flex-col gap-1 border-b border-surface-300-600-token px-3 py-1.5 text-xs"
 	>
-		{#if $ledgerQuery.error}
-			<div class="text-error-500" role="alert">
-				{#if queryErrorMark}
-					<pre
-						class="whitespace-pre-wrap break-all font-mono">{queryErrorMark.before}<mark
-							class="bg-error-500 text-white">{queryErrorMark.at}</mark
-						>{queryErrorMark.after}</pre>
-					<span
-						>Position {$ledgerQuery.error.position}: {$ledgerQuery
-							.error.message}</span
-					>
-				{:else}
-					<span>{$ledgerQuery.error.message}</span>
-				{/if}
-			</div>
-		{/if}
 		{#if $queryStatusLabel}
 			<div class="opacity-70">{$queryStatusLabel}</div>
 		{/if}
@@ -1291,11 +1270,20 @@
 	</div>
 {/if}
 {#if queryFieldsOpen}
+	<!-- Field help lives in the query box's suggestions; this is the syntax in one line. -->
 	<div
 		id="ledgerQueryFields"
-		class="max-h-[50vh] overflow-auto border-b border-surface-300-600-token p-3"
+		class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-surface-300-600-token px-3 py-1.5 text-xs"
 	>
-		<QueryFieldList on:insert={(e) => insertQueryExample(e.detail)} />
+		{#each QUERY_SYNTAX as part}
+			<span
+				><span class="font-mono font-semibold">{part.token}</span>
+				<span class="opacity-60">{part.meaning}</span></span
+			>
+		{/each}
+		<span class="ml-auto opacity-60"
+			>Ctrl-Space suggests · Enter runs now · typing runs after a pause</span
+		>
 	</div>
 {/if}
 

@@ -1,14 +1,8 @@
-// The fields a ledger query can name, shown by the "?" toggle beside the query
+// The fields a ledger query can name, offered as suggestions in the query
 // box. Hard-coded to match marasi's traffic query grammar
 // (marasi db/traffic_query.go): update it when that grammar changes.
 //
 // Plain module: no Svelte component dependencies.
-
-/** How bare text and the boolean operators work, shown above the fields. */
-export const QUERY_PREAMBLE =
-  "Bare text, for example eyJhbGci, matches pairs that contain it in any text part: request, response, note or metadata. " +
-  "Text terms need 3 or more characters. " +
-  "Combine conditions with AND, OR, NOT, - and parentheses; a space between them means AND.";
 
 /**
  * One entry per field: its name, the operators it accepts, an example that
@@ -34,10 +28,28 @@ export const QUERY_FIELDS = [
 ];
 
 /**
- * Returns the query text with `example` appended, separated from any existing
- * text by one space.
+ * Queries offered when the query box is empty. Each works on any project:
+ * no host, path or note specific to one engagement.
  */
-export function appendToQuery(text, example) {
-  if (!text) return example;
-  return /\s$/.test(text) ? text + example : `${text} ${example}`;
-}
+export const READY_MADE_QUERIES = [
+  { label: "Server errors", query: "status_code >= 500" },
+  { label: "Client errors", query: "status_code >= 400 AND status_code < 500" },
+  { label: "Redirects", query: "status_code >= 300 AND status_code < 400" },
+  { label: "JSON responses", query: 'content_type = "application/json*"' },
+  { label: "Writes", query: 'method = "POST" OR method = "PUT" OR method = "PATCH" OR method = "DELETE"' },
+  { label: "Auth headers sent", query: 'request_head:"authorization"' },
+  { label: "Cookies set", query: 'response_head:"set-cookie"' },
+  { label: "JWTs in responses", query: 'response_body:"eyJhbGci"' },
+  { label: "In any launchpad", query: "launchpad:*" },
+];
+
+/** The query syntax in brief, for the one-line legend under the toolbar. */
+export const QUERY_SYNTAX = [
+  { token: "text", meaning: "bare text, 3+ characters, any text part" },
+  { token: "AND", meaning: "both; a space means AND" },
+  { token: "OR", meaning: "either" },
+  { token: "NOT  -", meaning: "exclude" },
+  { token: "( )", meaning: "group" },
+  { token: "*", meaning: "wildcard at the start or end" },
+  { token: '"…"', meaning: "quote values" },
+];

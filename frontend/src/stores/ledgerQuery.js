@@ -379,20 +379,3 @@ if (typeof window !== "undefined") {
     }
   });
 }
-
-/**
- * Splits an invalid query around marasi's 1-based error position, counting
- * characters rather than UTF-16 units, so the problem can be marked:
- * { before, at, after }. `at` is a space when the position is past the end.
- * Returns null when the error has no position.
- */
-export function markQueryError(error) {
-  if (!error?.position) return null;
-  const chars = Array.from(error.query);
-  const index = Math.min(Math.max(error.position - 1, 0), chars.length);
-  return {
-    before: chars.slice(0, index).join(""),
-    at: chars[index] ?? " ",
-    after: chars.slice(index + 1).join(""),
-  };
-}
