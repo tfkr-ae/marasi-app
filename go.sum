@@ -118,8 +118,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-github.com/tfkr-ae/marasi v0.0.0-20261013204709-47a9aefb1b49 h1:uYUTWfhht5iOREx9BOKSrKwrrO9RMo5bWtwU33TXoZY=
-github.com/tfkr-ae/marasi v0.0.0-20261013204709-47a9aefb1b49/go.mod h1:MMQAjum7TFzG7oUdpI1ozKKeH1btoReg4y3vltjORqQ=
+github.com/tfkr-ae/marasi v0.0.0-20261014092310-3648af7f87d4 h1:CzlgBKZQbkDRagq2JW8tMzM6OqIuPmrqaL8wZf4tmi4=
+github.com/tfkr-ae/marasi v0.0.0-20261014092310-3648af7f87d4/go.mod h1:MMQAjum7TFzG7oUdpI1ozKKeH1btoReg4y3vltjORqQ=
 github.com/tkrajina/go-reflector v0.5.8 h1:yPADHrwmUbMq4RGEyaOUpz2H90sRsETNVpjzo3DLVQQ=
 github.com/tkrajina/go-reflector v0.5.8/go.mod h1:ECbqLgccecY5kPmPmXg1MrHW585yMcDkVl6IvJe64T4=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=

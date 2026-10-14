@@ -19,7 +19,7 @@ if (!mode || !Number.isInteger(port) || !appURL || !evidenceDir || !Number.isInt
 // always visible, so a bare feature name proves nothing.
 const routes = {
 	dashboard: { selector: '[title="Home"]', path: "/", expected: "Project Dashboard" },
-	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Ledger Settings" },
+	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Content Length" },
 	compass: { selector: '[title="Compass"]', path: "/compass", expected: "Compass Settings" },
 	checkpoint: { selector: '[title="Checkpoint"]', path: "/checkpoint", expected: "Checkpoint Settings" },
 	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Group by status" },

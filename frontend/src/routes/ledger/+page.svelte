@@ -15,7 +15,6 @@
 		sorting,
 		pagination,
 		contentTypeFilter,
-		contentTypeFilterInput,
 		lineWrap,
 	} from "../../stores";
 	import { derived } from "svelte/store";
@@ -24,9 +23,6 @@
 		getDrawerStore,
 		getModalStore,
 		getToastStore,
-		Accordion,
-		AccordionItem,
-		InputChip,
 		ListBoxItem,
 		ListBox,
 		modeCurrent,
@@ -37,7 +33,6 @@
 		ChevronRight,
 		ChevronsLeft,
 		ChevronsRight,
-		SettingsIcon,
 		ToggleLeftIcon,
 		SearchIcon,
 		FilterIcon,
@@ -59,10 +54,10 @@
 		X,
 		LoaderCircle,
 		CircleHelp,
-		CircleAlert,
 		TriangleAlert,
 	} from "lucide-svelte";
 	import QueryFieldList from "../../lib/components/QueryFieldList.svelte";
+	import LedgerTypesMenu from "../../lib/components/LedgerTypesMenu.svelte";
 	import { appendToQuery } from "../../lib/ledgerQueryFields";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
@@ -115,7 +110,7 @@
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
-	let accOpened = false;
+	let typesMenu;
 	let drawerOpened = false;
 	let contextMenu;
 	let selectedPairID;
@@ -178,7 +173,7 @@
 			icon: ToggleLeftIcon,
 			handler: () => {
 				drawerStore.close();
-				accOpened = !accOpened;
+				typesMenu?.toggle();
 			},
 		},
 		{
@@ -186,21 +181,12 @@
 			icon: SearchIcon,
 			handler: () => {
 				drawerStore.close();
-				accOpened = !accOpened;
-				setTimeout(() => {
-					const searchBox =
-						document.getElementById(
-							"searchBox",
-						);
-					if (
-						document.activeElement ===
-						searchBox
-					) {
-						searchBox.blur();
-					} else {
-						searchBox.focus();
-					}
-				}, 10);
+				const searchBox = document.getElementById("searchBox");
+				if (document.activeElement === searchBox) {
+					searchBox.blur();
+				} else {
+					searchBox?.focus();
+				}
 			},
 		},
 		{
@@ -208,21 +194,7 @@
 			icon: FilterIcon,
 			handler: () => {
 				drawerStore.close();
-				accOpened = !accOpened;
-				setTimeout(() => {
-					const filterBox =
-						document.querySelector(
-							'input[placeholder="Filter by Content Type"]',
-						);
-					if (
-						document.activeElement ===
-						filterBox
-					) {
-						filterBox.blur();
-					} else {
-						filterBox.focus();
-					}
-				}, 10);
+				typesMenu?.focusFind();
 			},
 		},
 		{
@@ -1021,15 +993,16 @@
 		}
 	}
 
-	// Stores the content-type exclusion, then runs the active query again so
+	// Stores the Types menu's new content-type exclusion, then runs the active query again so
 	// its results reflect it. The QueryTraffic binding reads the stored
 	// exclusion itself.
-	async function saveContentTypeExclusion() {
+	async function saveContentTypeExclusion(excluded) {
+		contentTypeFilter.set(excluded);
 		setLedgerPagination((old) => ({
 			...old,
 			pageIndex: 0,
 		}));
-		await SetFilters($contentTypeFilter);
+		await SetFilters(excluded);
 		await rerunQuery();
 	}
 
@@ -1162,268 +1135,169 @@
 </script>
 
 <MarasiKeys {menuOptions} />
-<Accordion rounded="none">
-	<AccordionItem bind:open={accOpened}>
-		<svelte:fragment slot="lead"><SettingsIcon /></svelte:fragment>
-		<svelte:fragment slot="summary">
-			<div class="flex min-w-0 items-center gap-2">
-				<span class="whitespace-nowrap">Ledger Settings</span>
-				{#if $queryActive}
-					<span
-						id="ledgerQueryBadge"
-						class="badge {primaryClass}">Query</span
-					>
-					<span
-						class="min-w-0 truncate font-mono text-xs opacity-80"
-						title={$ledgerQuery.ranQuery}
-						>{$ledgerQuery.ranQuery}</span
-					>
-					<span
-						id="ledgerQueryMatchCount"
-						class="whitespace-nowrap text-xs opacity-70"
-						>{$matchCountLabel}</span
-					>
-					{#if !$ledgerQuery.indexComplete}
-						<span
-							class="text-warning-500"
-							title="Indexing older traffic — text matches may be incomplete"
-							><TriangleAlert size={14} /></span
-						>
-					{/if}
-				{/if}
-				{#if $ledgerQuery.error?.query === $queryText && !accOpened}
-					<span
-						id="ledgerQueryErrorMarker"
-						class="text-error-500"
-						title="Invalid query: {$ledgerQuery.error.message}"
-						><CircleAlert size={14} /></span
-					>
-				{/if}
-			</div>
-		</svelte:fragment>
-		<svelte:fragment slot="content">
-			<div class="flex flex-col gap-4 p-2">
-				<div class="flex flex-col gap-1">
-					<div
-						class="input-group input-group-divider {$queryText
-							? 'grid-cols-[auto_minmax(0,1fr)_auto_auto]'
-							: 'grid-cols-[auto_minmax(0,1fr)_auto]'}"
-					>
-						<div class="input-group-shim">
-							{#if $queryPending}
-								<LoaderCircle
-									size={24}
-									class="animate-spin"
-								/>
-							{:else}
-								<Search size={24} />
-							{/if}
-						</div>
-						<input
-							id="searchBox"
-							class="min-w-0 font-mono"
-							type="text"
-							autocomplete="off"
-							spellcheck="false"
-							placeholder="Search traffic…"
-							bind:value={$queryText}
-							on:input={() =>
-								scheduleQuery($queryText)}
-							on:keydown={onQueryKeydown}
-						/>
-						{#if $queryText}
-							<button
-								id="ledgerQueryClear"
-								type="button"
-								class="input-group-shim"
-								title="Clear query (Esc)"
-								aria-label="Clear query"
-								on:click={() => clearQuery()}
-							>
-								<X size={16} />
-							</button>
-						{/if}
-						<button
-							id="ledgerQueryFieldsToggle"
-							type="button"
-							class="input-group-shim {queryFieldsOpen
-								? primaryClass
-								: ''}"
-							title="Query fields"
-							aria-label="Query fields"
-							aria-expanded={queryFieldsOpen}
-							aria-controls="ledgerQueryFields"
-							on:click={() =>
-								(queryFieldsOpen = !queryFieldsOpen)}
-						>
-							<CircleHelp size={16} />
-						</button>
-					</div>
-					{#if $ledgerQuery.error}
-						<div
-							class="text-error-500 text-xs"
-							role="alert"
-						>
-							{#if queryErrorMark}
-								<pre
-									class="font-mono whitespace-pre-wrap break-all">{queryErrorMark.before}<mark
-										class="bg-error-500 text-white"
-										>{queryErrorMark.at}</mark
-									>{queryErrorMark.after}</pre>
-								<span
-									>Position {$ledgerQuery
-										.error
-										.position}: {$ledgerQuery
-										.error
-										.message}</span
-								>
-							{:else}
-								<span
-									>{$ledgerQuery.error
-										.message}</span
-								>
-							{/if}
-						</div>
-					{/if}
-					{#if $queryStatusLabel}
-						<div class="text-xs opacity-70">
-							{$queryStatusLabel}
-						</div>
-					{/if}
-					{#if $indexWarning}
-						<div
-							class="text-warning-500 text-xs"
-							role="status"
-						>
-							{$indexWarning}
-						</div>
-					{/if}
-				</div>
-				{#if queryFieldsOpen}
-					<div
-						id="ledgerQueryFields"
-						class="card max-h-[50vh] overflow-auto p-3"
-					>
-						<QueryFieldList
-							on:insert={(e) =>
-								insertQueryExample(e.detail)}
-						/>
-					</div>
-				{/if}
-				<InputChip
-					bind:input={$contentTypeFilterInput}
-					bind:value={$contentTypeFilter}
-					name="chips"
-					placeholder="Filter by Content Type"
-					rounded="none"
-					on:add={saveContentTypeExclusion}
-					on:remove={saveContentTypeExclusion}
-				></InputChip>
-
-				<div
-					class="flex flex-wrap items-center justify-between gap-2 text-sm"
+<div
+	id="ledgerToolbar"
+	class="flex h-11 items-stretch border-b border-surface-300-600-token bg-surface-100-800-token"
+>
+	<div class="flex min-w-0 flex-1 items-center gap-2 pl-3">
+		{#if $queryPending}
+			<LoaderCircle size={16} class="shrink-0 animate-spin" />
+		{:else}
+			<Search size={16} class="shrink-0" />
+		{/if}
+		<input
+			id="searchBox"
+			class="h-full min-w-0 flex-1 border-0 bg-transparent p-0 font-mono text-sm focus:outline-none focus:ring-0"
+			type="text"
+			autocomplete="off"
+			spellcheck="false"
+			placeholder="Search traffic…"
+			bind:value={$queryText}
+			on:input={() => scheduleQuery($queryText)}
+			on:keydown={onQueryKeydown}
+		/>
+		{#if $queryActive}
+			<span
+				id="ledgerQueryMatchCount"
+				class="whitespace-nowrap text-xs opacity-70"
+				>{$matchCountLabel}</span
+			>
+			{#if !$ledgerQuery.indexComplete}
+				<span
+					class="text-warning-500"
+					title="Indexing older traffic — text matches may be incomplete"
+					><TriangleAlert size={14} /></span
 				>
-					<div class="flex items-center gap-2">
-						<span class="opacity-70"
-							>Rows per page:</span
-						>
-						<select
-							class="select select-sm w-20"
-							value={$pagination.pageSize}
-							on:change={(e) => {
-								const val = e
-									.target
-									.value
-									? Number(
-											e
-												.target
-												.value,
-										)
-									: 10;
-								setLedgerPagination(
-									(
-										old,
-									) => ({
-										...old,
-										pageSize: val,
-									}),
-								);
-							}}
-						>
-							{#each [10, 20, 30, 40, 50, 100] as pageSize}
-								<option
-									value={pageSize}
-									>{pageSize}</option
-								>
-							{/each}
-						</select>
-					</div>
-
-					<div class="flex items-center gap-2">
-						<span class="opacity-70">
-							Page {$table.getState()
-								.pagination
-								.pageIndex + 1} of
-							{$table
-								.getPageCount()
-								.toLocaleString()}
-						</span>
-
-						<div
-							class="btn-group btn-group-sm {$modeCurrent ? 'bg-surface-200 text-surface-900' : 'variant-filled-surface'}"
-						>
-							<button
-								disabled={!$table.getCanPreviousPage()}
-								on:click={() =>
-									$table.setPageIndex(
-										0,
-									)}
-								title="First Page"
-							>
-								<ChevronsLeft
-									size={16}
-								/>
-							</button>
-							<button
-								disabled={!$table.getCanPreviousPage()}
-								on:click={() =>
-									$table.previousPage()}
-								title="Previous Page"
-							>
-								<ChevronLeft
-									size={16}
-								/>
-							</button>
-							<button
-								disabled={!$table.getCanNextPage()}
-								on:click={() =>
-									$table.nextPage()}
-								title="Next Page"
-							>
-								<ChevronRight
-									size={16}
-								/>
-							</button>
-							<button
-								disabled={!$table.getCanNextPage()}
-								on:click={() =>
-									$table.setPageIndex(
-										$table.getPageCount() -
-											1,
-									)}
-								title="Last Page"
-							>
-								<ChevronsRight
-									size={16}
-								/>
-							</button>
-						</div>
-					</div>
-				</div>
+			{/if}
+		{/if}
+		{#if $queryText}
+			<button
+				id="ledgerQueryClear"
+				type="button"
+				class="opacity-70 hover:opacity-100"
+				title="Clear query (Esc)"
+				aria-label="Clear query"
+				on:click={() => clearQuery()}
+			>
+				<X size={16} />
+			</button>
+		{/if}
+		<button
+			id="ledgerQueryFieldsToggle"
+			type="button"
+			class="h-full px-2 {queryFieldsOpen
+				? 'text-primary-500'
+				: 'opacity-70 hover:opacity-100'}"
+			title="Query fields"
+			aria-label="Query fields"
+			aria-expanded={queryFieldsOpen}
+			aria-controls="ledgerQueryFields"
+			on:click={() => (queryFieldsOpen = !queryFieldsOpen)}
+		>
+			<CircleHelp size={16} />
+		</button>
+	</div>
+	<div class="border-l border-surface-300-600-token">
+		<LedgerTypesMenu
+			bind:this={typesMenu}
+			excluded={$contentTypeFilter ?? []}
+			{primaryClass}
+			on:change={(e) => saveContentTypeExclusion(e.detail)}
+		/>
+	</div>
+	<div
+		class="flex items-center gap-2 border-l border-surface-300-600-token px-2 text-xs"
+	>
+		<span class="whitespace-nowrap opacity-70">
+			Page {$table.getState().pagination.pageIndex + 1} of
+			{$table.getPageCount().toLocaleString()}
+		</span>
+		<div class="flex">
+			<button
+				class="btn-icon btn-icon-sm"
+				disabled={!$table.getCanPreviousPage()}
+				on:click={() => $table.setPageIndex(0)}
+				title="First Page"
+			>
+				<ChevronsLeft size={16} />
+			</button>
+			<button
+				class="btn-icon btn-icon-sm"
+				disabled={!$table.getCanPreviousPage()}
+				on:click={() => $table.previousPage()}
+				title="Previous Page"
+			>
+				<ChevronLeft size={16} />
+			</button>
+			<button
+				class="btn-icon btn-icon-sm"
+				disabled={!$table.getCanNextPage()}
+				on:click={() => $table.nextPage()}
+				title="Next Page"
+			>
+				<ChevronRight size={16} />
+			</button>
+			<button
+				class="btn-icon btn-icon-sm"
+				disabled={!$table.getCanNextPage()}
+				on:click={() =>
+					$table.setPageIndex($table.getPageCount() - 1)}
+				title="Last Page"
+			>
+				<ChevronsRight size={16} />
+			</button>
+		</div>
+		<select
+			class="select w-24 py-0.5 text-xs"
+			title="Rows per page"
+			value={$pagination.pageSize}
+			on:change={(e) => {
+				const val = e.target.value ? Number(e.target.value) : 10;
+				setLedgerPagination((old) => ({ ...old, pageSize: val }));
+			}}
+		>
+			{#each [10, 20, 30, 40, 50, 100] as pageSize}
+				<option value={pageSize}>{pageSize} / page</option>
+			{/each}
+		</select>
+	</div>
+</div>
+{#if $ledgerQuery.error || $queryStatusLabel || $indexWarning}
+	<div
+		class="flex flex-col gap-1 border-b border-surface-300-600-token px-3 py-1.5 text-xs"
+	>
+		{#if $ledgerQuery.error}
+			<div class="text-error-500" role="alert">
+				{#if queryErrorMark}
+					<pre
+						class="whitespace-pre-wrap break-all font-mono">{queryErrorMark.before}<mark
+							class="bg-error-500 text-white">{queryErrorMark.at}</mark
+						>{queryErrorMark.after}</pre>
+					<span
+						>Position {$ledgerQuery.error.position}: {$ledgerQuery
+							.error.message}</span
+					>
+				{:else}
+					<span>{$ledgerQuery.error.message}</span>
+				{/if}
 			</div>
-		</svelte:fragment>
-	</AccordionItem>
-</Accordion>
+		{/if}
+		{#if $queryStatusLabel}
+			<div class="opacity-70">{$queryStatusLabel}</div>
+		{/if}
+		{#if $indexWarning}
+			<div class="text-warning-500" role="status">{$indexWarning}</div>
+		{/if}
+	</div>
+{/if}
+{#if queryFieldsOpen}
+	<div
+		id="ledgerQueryFields"
+		class="max-h-[50vh] overflow-auto border-b border-surface-300-600-token p-3"
+	>
+		<QueryFieldList on:insert={(e) => insertQueryExample(e.detail)} />
+	</div>
+{/if}
 
 <div class="no-select font-mono text-xs">
 	{#if $queryActive && $ledgerQuery.newMatches.length > 0}

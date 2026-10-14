@@ -57,9 +57,9 @@ export const FACTORY_ACTIONS = [
   action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u")),
   action("global.toggle-intercept", "Toggle Intercept", "Toggle the Global Intercept On or Off", "intercept, toggle, global", primary("i")),
   ...pageActions("ledger.drawer-closed", [
-    ["toggle-settings", "Toggle Ledger Settings", "Toggle Settings Accordian", "settings, toggle", primary("p")],
+    ["toggle-settings", "Content Types", "Open or close the content types menu", "types, content type, exclusion, settings, toggle", primary("p")],
     ["focus-query", "Search", "Jump to search input", "search", primary("shift+s")],
-    ["focus-exclusion", "Filter", "Jump to filter input", "filter", primary("shift+f")],
+    ["focus-exclusion", "Find Content Type", "Jump to the content types menu's find box", "filter, types, content type, exclusion", primary("shift+f")],
     ["next-page", "Next", "Go to next page", "next", primary("]")],
     ["previous-page", "Previous", "Go to the previous page", "previous", primary("[")],
     ["open-request", "Open", "Open Request Drawer", "open", primary("shift+o")],
