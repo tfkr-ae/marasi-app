@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,12 +25,19 @@ type bundleInstaller struct {
 	// signed by, or "" when it has none. The real one runs codesign
 	// (codesignTeam); tests read a file.
 	teamOf func(bundle string) (string, error)
+	// original returns the bundle Gatekeeper translocated to a path, the
+	// one the researcher opened. The real one asks macOS
+	// (translocationOriginal); tests return a temp bundle. When it is nil
+	// or fails, a translocated bundle cannot be updated.
+	original func(translocated string) (string, error)
 }
 
 func (b bundleInstaller) asset() string { return b.assetName }
 
 // locate walks up from the executable (Marasi.app/Contents/MacOS/marasi-app)
-// to the .app bundle that encloses it.
+// to the .app bundle that encloses it. A translocated bundle's location is
+// the bundle it was translocated from, so an app opened straight from
+// Downloads updates in Downloads.
 func (b bundleInstaller) locate(executable string) (string, error) {
 	path, err := filepath.EvalSymlinks(executable)
 	if err != nil {
@@ -37,14 +45,28 @@ func (b bundleInstaller) locate(executable string) (string, error) {
 	}
 	for dir := filepath.Dir(path); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
 		if strings.EqualFold(filepath.Ext(dir), ".app") {
-			return dir, nil
+			return b.untranslocated(dir), nil
 		}
 	}
 	return "", fmt.Errorf("%s is not inside an app bundle", path)
 }
 
+// untranslocated is the bundle location was translocated from, or location
+// itself when it is not translocated or the original cannot be found.
+func (b bundleInstaller) untranslocated(location string) string {
+	if !translocated(location) || b.original == nil {
+		return location
+	}
+	original, err := b.original(location)
+	if err != nil {
+		log.Printf("finding where Marasi was translocated from: %v", err)
+		return location
+	}
+	return original
+}
+
 // translocatedReason is what the panel says when Gatekeeper runs Marasi
-// from a translocated copy.
+// from a translocated copy and macOS does not say where it came from.
 const translocatedReason = "Move Marasi to Applications to enable updates"
 
 // checkReplaceable refuses a translocated bundle, then tries to create a
@@ -68,7 +90,8 @@ func (b bundleInstaller) checkReplaceable(location string) error {
 // for example), such as
 // /private/var/folders/xx/yyyy/T/AppTranslocation/<UUID>/d/Marasi.app. The
 // copy is on a read-only mount, and replacing it would not update the app
-// the researcher opens, so it is never replaced.
+// the researcher opens, so it is never replaced: locate replaces the
+// original instead.
 func translocated(location string) bool {
 	for _, part := range strings.Split(filepath.ToSlash(location), "/") {
 		if part == "AppTranslocation" {

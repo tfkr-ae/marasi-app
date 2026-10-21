@@ -6,6 +6,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,7 +217,7 @@ func TestRunningAppWithoutADeveloperTeamRefusesTheUpdate(t *testing.T) {
 	assertBundleFailed(t, app, events, result, unsigned, UpdateFailureTeam, InstallStepVerify, "developer team")
 }
 
-func TestAppRunFromDownloadsAsksToBeMovedToApplications(t *testing.T) {
+func TestATranslocatedAppWhoseOriginalIsUnknownAsksToBeMovedToApplications(t *testing.T) {
 	releases := newFakeReleaseServer(t)
 	keys := newSigningKeys(t)
 	publishSignedBundle(releases, keys, "17.10.2026", zipBundle(t, updateBundle))
@@ -239,6 +240,69 @@ func TestAppRunFromDownloadsAsksToBeMovedToApplications(t *testing.T) {
 	if releases.requestCount() != requests {
 		t.Fatalf("wanted nothing downloaded, got %v", releases.requested())
 	}
+}
+
+func TestAnAppOpenedFromDownloadsUpdatesInDownloads(t *testing.T) {
+	releases := newFakeReleaseServer(t)
+	keys := newSigningKeys(t)
+	publishSignedBundle(releases, keys, "17.10.2026", zipBundle(t, updateBundle))
+	app, events := newBundleApp(t, releases, keys, filepath.Join("Downloads", "Marasi.app"))
+	downloads := app.installLocation
+	// Gatekeeper runs the quarantined app from a read-only copy of it.
+	translocated := filepath.Join(t.TempDir(), "T", "AppTranslocation", "6A1E4E1B-6B5C-4C1E-9F6A-2B7E7E0A4C11", "d", "Marasi.app")
+	writeBundle(t, translocated, runningBundle)
+	installer := app.installer.(bundleInstaller)
+	installer.original = func(location string) (string, error) {
+		if location != mustEvalSymlinks(t, translocated) {
+			return "", fmt.Errorf("%s was not translocated", location)
+		}
+		return downloads, nil
+	}
+	app.installer = installer
+	location, err := installer.locate(filepath.Join(translocated, "Contents", "MacOS", "marasi-app"))
+	if err != nil || location != downloads {
+		t.Fatalf("wanted the translocated app located at %s, got %q (%v)", downloads, location, err)
+	}
+	app.installLocation = location
+
+	result, err := app.InstallUpdate()
+
+	if err != nil || result.Outcome != InstallOutcomeInstalled {
+		t.Fatalf("wanted the update installed, got %+v (%v)", result, err)
+	}
+	assertBundle(t, downloads, updateBundle)
+	assertOnlyFile(t, downloads)
+	assertBundle(t, translocated, runningBundle)
+	if !events.has(updateInstalledEvent) {
+		t.Fatalf("wanted a %s event, got %v", updateInstalledEvent, events.names)
+	}
+}
+
+func TestATranslocatedAppWhoseOriginalIsUnknownStaysWhereItRuns(t *testing.T) {
+	translocated := filepath.Join(t.TempDir(), "T", "AppTranslocation", "6A1E4E1B-6B5C-4C1E-9F6A-2B7E7E0A4C11", "d", "Marasi.app")
+	writeBundle(t, translocated, runningBundle)
+	installer := bundleInstaller{
+		assetName: "marasi-app.app.zip",
+		teamOf:    teamFile,
+		original:  func(string) (string, error) { return "", errors.New("not translocated") },
+	}
+
+	got, err := installer.locate(filepath.Join(translocated, "Contents", "MacOS", "marasi-app"))
+
+	if want := mustEvalSymlinks(t, translocated); err != nil || got != want {
+		t.Fatalf("wanted %s, got %q (%v)", want, got, err)
+	}
+}
+
+// mustEvalSymlinks is path with its symlinks resolved, as locate sees it:
+// the temp directory is under /var, a symlink to /private/var, on macOS.
+func mustEvalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("resolving %s: %v", path, err)
+	}
+	return resolved
 }
 
 func TestTheInstallLocationIsTheEnclosingAppBundle(t *testing.T) {

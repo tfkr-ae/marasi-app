@@ -11,9 +11,10 @@ import (
 
 // defaultInstaller replaces the running Marasi.app with the one in
 // marasi-app.app.zip, once codesign confirms it is signed by the same Apple
-// developer team.
+// developer team. A translocated Marasi.app is replaced where it was opened
+// from.
 func defaultInstaller() platformInstaller {
-	return bundleInstaller{assetName: "marasi-app.app.zip", teamOf: codesignTeam}
+	return bundleInstaller{assetName: "marasi-app.app.zip", teamOf: codesignTeam, original: translocationOriginal}
 }
 
 // codesignTeam is the Apple developer team the bundle is signed by, read
