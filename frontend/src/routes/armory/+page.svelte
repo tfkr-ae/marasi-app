@@ -45,6 +45,7 @@
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryCompletionSource } from "../../lib/autocomplete/armory";
+	import { longStrings } from "../../lib/longStrings.js";
 	import { armoryStore } from "../../stores/armoryStore";
 	import {
 		activeProject,
@@ -869,29 +870,12 @@
 						bind:value={rawTemplate}
 						class="text-xs"
 						theme={$modeCurrent ? githubLight : oneDark}
-						extensions={$marasiConfig.VimEnabled
-							? [
-									vim(),
-									StreamLanguage.define(
-										http,
-									),
-									autocompletion({
-										override: [
-											armoryCompletionSource,
-										],
-									}),
-								]
-							: [
-									StreamLanguage.define(
-										http,
-									),
-									autocompletion({
-										override: [
-											armoryCompletionSource,
-										],
-									}),
-								]}
-						lineWrapping={$lineWrap}
+						extensions={[
+							...($marasiConfig.VimEnabled ? [vim()] : []),
+							StreamLanguage.define(http),
+							autocompletion({ override: [armoryCompletionSource] }),
+							longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode }),
+						]}
 					/>
 				</section>
 

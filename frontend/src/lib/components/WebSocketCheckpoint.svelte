@@ -14,6 +14,7 @@
 		ToggleRight,
 	} from "lucide-svelte";
 	import { marasiConfig, lineWrap } from "../../stores";
+	import { longStrings } from "../longStrings.js";
 	import { connectionStore } from "../../stores/connectionStore";
 	import WebSocketMessageProperties from "./WebSocketMessageProperties.svelte";
 
@@ -175,8 +176,7 @@
 				class="h-full w-full text-xs"
 				bind:value={payloadText}
 				theme={$modeCurrent ? githubLight : oneDark}
-				extensions={$marasiConfig.VimEnabled ? [vim()] : []}
-				lineWrapping={$lineWrap}
+				extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 			/>
 		</div>
 	{:else if loading}

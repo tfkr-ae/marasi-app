@@ -11,6 +11,8 @@
 	import { modeCurrent, ProgressRadial, SlideToggle } from "@skeletonlabs/skeleton";
 	import { Check, GitCompare, Globe, Pencil, RotateCcw, Send, Trash2, X } from "lucide-svelte";
 	import { lineWrap, marasiConfig } from "../../stores";
+	import { WRAP_SUSPENDED } from "../lineWrap.js";
+	import { longStrings } from "../longStrings.js";
 	import { isDraftDirty, launchOf, pendingLaunchOf } from "../../stores/launchpadStore";
 	import { DELETE_LAUNCHPAD_PENDING_HINT } from "../launchPending.js";
 	import { browserViewRefusal } from "../browserView.js";
@@ -41,6 +43,17 @@
 	$: primary = primaryVariant($modeCurrent);
 	$: theme = $modeCurrent ? githubLight : oneDark;
 	$: vimExtensions = $marasiConfig.VimEnabled ? [vim()] : [];
+	// Long strings fold in both editors; the panes' titles say when a shown
+	// one stopped the lines wrapping.
+	let draftPaused = false;
+	let responsePaused = false;
+	const onDraftSuspend = (suspended) => (draftPaused = suspended);
+	const onResponseSuspend = (suspended) => (responsePaused = suspended);
+	$: draftExtensions = [...vimExtensions, longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onDraftSuspend })];
+	$: responseExtensions = [
+		...vimExtensions,
+		longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onResponseSuspend }),
+	];
 	$: compare = compareView(state);
 	$: comparing = !!compare?.comparing;
 
@@ -212,6 +225,9 @@
 						{dirty ? "Request draft" : "Request"}
 						{#if dirty}<span class="ml-1 text-warning-500" title="Unsaved draft">●</span>{/if}
 					</span>
+					{#if draftPaused}
+						<span class="lp-wrap-suspended opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
+					{/if}
 				</div>
 				<!-- svelte-ignore a11y-no-static-element-interactions -->
 				<div class="lp-editor lp-scroll min-h-0 flex-1 overflow-auto dark:bg-[#282c34]" on:focusin={onEditorFocus}>
@@ -223,8 +239,7 @@
 							class="text-xs"
 							lang={lang(draft?.raw)}
 							{theme}
-							extensions={vimExtensions}
-							lineWrapping={$lineWrap}
+							extensions={draftExtensions}
 						/>
 					{/key}
 				</div>
@@ -236,6 +251,9 @@
 						{#if details?.Response}
 							· <span class={statusClass(details.Response.StatusCode)}>{details.Response.StatusCode}</span>
 							· {details.Response.Length} B
+						{/if}
+						{#if details?.Response && responsePaused}
+							<span class="lp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 						{/if}
 					</span>
 					{#if selectedId}
@@ -263,8 +281,7 @@
 							class="text-xs"
 							lang={lang(details.Response.Raw)}
 							{theme}
-							extensions={vimExtensions}
-							lineWrapping={$lineWrap}
+							extensions={responseExtensions}
 						/>
 					{:else if selectedId}
 						<p class="p-4 text-sm opacity-60">Loading…</p>

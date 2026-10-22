@@ -11,7 +11,8 @@
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { ArrowLeftRight, GitCompare } from "lucide-svelte";
-	import { lineWrap } from "../../stores";
+	import { lineWrap, marasiConfig } from "../../stores";
+	import { wrapsLines } from "../lineWrap.js";
 	import { changedLineCount, COMPARE_SIDES, compareView, lengthSummary } from "./compare.js";
 	import { primaryVariant, statusClass } from "./format.js";
 
@@ -38,14 +39,16 @@
 			: tab === "response" && (!leftDetails.Response || !rightDetails.Response)
 				? "One side has no response yet."
 				: "";
+	$: leftText = leftDetails?.[part]?.Raw ?? "";
+	$: rightText = rightDetails?.[part]?.Raw ?? "";
 	$: merge = {
 		leftId: view?.left?.entry.ID,
 		rightId: view?.right?.entry.ID,
 		part,
-		a: leftDetails?.[part]?.Raw ?? "",
-		b: rightDetails?.[part]?.Raw ?? "",
+		a: leftText,
+		b: rightText,
 		light: $modeCurrent,
-		wrap: $lineWrap,
+		wrap: wrapsLines(leftText, $lineWrap, $marasiConfig.WrapMode) && wrapsLines(rightText, $lineWrap, $marasiConfig.WrapMode),
 	};
 
 	let changes = 0;

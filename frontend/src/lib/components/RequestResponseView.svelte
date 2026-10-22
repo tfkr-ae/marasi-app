@@ -42,6 +42,8 @@
 	import { armoryStore } from "../../stores/armoryStore";
 	import { upgradeFromRequest, upgradePresentation } from "../websocket/presentation.js";
 	import { prettifiedBody } from "../prettified.js";
+	import { WRAP_SUSPENDED } from "../lineWrap.js";
+	import { longStrings } from "../longStrings.js";
 
 	const modalStore = getModalStore();
 	const drawerStore = getDrawerStore();
@@ -60,6 +62,11 @@
 	export let userEdited = false;
 
 	let responseBody = "";
+	// Whether a shown long string stopped an editor wrapping (longStrings.js).
+	let requestPaused = false;
+	let responsePaused = false;
+	const onRequestSuspend = (suspended) => (requestPaused = suspended);
+	const onResponseSuspend = (suspended) => (responsePaused = suspended);
 	let selectedRow;
 	let loading = true;
 	// The request and response editors. Heights are matched only between
@@ -498,6 +505,9 @@
 					class="flex items-center space-x-2 flex-shrink-0"
 				>
 					<span class="text-sm">Linewrap</span>
+					{#if requestPaused || responsePaused}
+						<span class="text-xs opacity-60" title={WRAP_SUSPENDED}>not wrapped</span>
+					{/if}
 					<button
 						class="p-1 rounded {$lineWrap
 							? 'bg-warning-500 text-slate-500'
@@ -549,11 +559,11 @@
 					theme={$modeCurrent
 						? githubLight
 						: oneDark}
-					extensions={$marasiConfig.VimEnabled
-						? [vim()]
-						: []}
+					extensions={[
+						...($marasiConfig.VimEnabled ? [vim()] : []),
+						longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onRequestSuspend }),
+					]}
 					readonly={requestReadOnly}
-					lineWrapping={$lineWrap}
 				></CodeMirror>
 			</div>
 			<div class="flex-1 p-1 overflow-auto">
@@ -564,11 +574,11 @@
 					theme={$modeCurrent
 						? githubLight
 						: oneDark}
-					extensions={$marasiConfig.VimEnabled
-						? [vim()]
-						: []}
+					extensions={[
+						...($marasiConfig.VimEnabled ? [vim()] : []),
+						longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onResponseSuspend }),
+					]}
 					readonly={responseReadOnly}
-					lineWrapping={$lineWrap}
 				></CodeMirror>
 			</div>
 		</div>

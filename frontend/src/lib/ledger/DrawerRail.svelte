@@ -34,6 +34,7 @@
 	import { shortcutLabel } from "../keybindings/keys.js";
 	import { statusClass } from "../launchpad/format.js";
 	import { formatSize, statusText } from "./table.js";
+	import { WRAP_SUSPENDED } from "../lineWrap.js";
 
 	/** The focused pair's table row, and its request number. */
 	export let pair;
@@ -57,6 +58,8 @@
 	export let timing = "";
 	export let prettify = true;
 	export let wrap = false;
+	/** Whether Wrap lines is on but a showing body has a line too long to wrap. */
+	export let wrapPaused = false;
 	/** Whether the pair is a WebSocket upgrade whose stream can open. */
 	export let canOpenStream = false;
 
@@ -296,8 +299,12 @@
 			><span class="flex-1">Pretty</span>
 			<input type="checkbox" class="checkbox h-3 w-3" bind:checked={prettify} />
 		</label>
-		<label class="{row} mb-2">
-			<WrapText size={13} class="flex-none opacity-70" /><span class="flex-1">Wrap lines</span>
+		<label class="{row} mb-2" title={wrapPaused ? WRAP_SUSPENDED : null}>
+			<span class="relative flex-none"
+				><WrapText size={13} class="opacity-70" />{#if wrapPaused}<span
+						class="ledger-drawer-wrap-suspended absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-warning-500"
+					></span>{/if}</span
+			><span class="flex-1">Wrap lines</span>
 			<kbd class="text-[10px] opacity-50">{shortcutLabel(keymap, `${DRAWER}.toggle-word-wrap`)}</kbd>
 			<input type="checkbox" class="checkbox h-3 w-3" bind:checked={wrap} />
 		</label>
@@ -387,11 +394,14 @@
 				><Sparkles size={14} />{#if indexing}<span class="ledger-drawer-indexing {indexingDot}"></span>{/if}</button
 			>
 			<button
-				class="{railButton} {wrap ? 'text-primary-500' : ''}"
-				title={tip("Wrap lines", `${DRAWER}.toggle-word-wrap`, keymap)}
+				class="relative {railButton} {wrap ? 'text-primary-500' : ''}"
+				title={wrapPaused
+					? `${tip("Wrap lines", `${DRAWER}.toggle-word-wrap`, keymap)}. ${WRAP_SUSPENDED}`
+					: tip("Wrap lines", `${DRAWER}.toggle-word-wrap`, keymap)}
 				aria-label="Wrap lines"
 				aria-pressed={wrap}
-				on:click={() => (wrap = !wrap)}><WrapText size={14} /></button
+				on:click={() => (wrap = !wrap)}
+				><WrapText size={14} />{#if wrapPaused}<span class="ledger-drawer-wrap-suspended {indexingDot}"></span>{/if}</button
 			>
 		</div>
 	</nav>

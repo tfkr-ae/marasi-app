@@ -41,6 +41,7 @@ type Config struct {
 	DefaultAddress string `mapstructure:"default_address"` // Default proxy server address
 	DefaultPort    string `mapstructure:"default_port"`    // Default proxy server port
 	SyntaxMode     string `mapstructure:"syntax_mode"`
+	WrapMode       string `mapstructure:"wrap_mode"` // "auto", "enabled" or "disabled": whether editors wrap a line too long to wrap quickly
 
 	// TestCaseProfile holds the parsed test cases profile.
 	// Ignored by the main application viper instance.
@@ -84,6 +85,7 @@ var configDefaults = map[string]any{
 	"vim_enabled":     true,
 	"default_address": "127.0.0.1",
 	"syntax_mode":     "auto",
+	"wrap_mode":       "auto",
 	"default_port":    "8080",
 }
 

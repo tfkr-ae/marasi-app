@@ -7,6 +7,7 @@
 	import { Send } from "lucide-svelte";
 	import { InjectWebSocketMessage } from "../wailsjs/go/main/App";
 	import { marasiConfig, lineWrap } from "../../stores";
+	import { longStrings } from "../longStrings.js";
 	import {
 		connectionStore,
 		wsInjectDraft,
@@ -165,8 +166,7 @@
 			class="h-full w-full text-xs"
 			bind:value={payloadText}
 			theme={$modeCurrent ? githubLight : oneDark}
-			extensions={$marasiConfig.VimEnabled ? [vim()] : []}
-			lineWrapping={$lineWrap}
+			extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 		/>
 	</div>
 </div>

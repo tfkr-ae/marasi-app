@@ -22,6 +22,7 @@
 	} from "../../lib/wailsjs/go/main/App";
 	import {
 		keybindingState,
+		lineWrap,
 		marasiConfig,
 		populateWaypoints,
 		waypoints,
@@ -34,6 +35,7 @@
 	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { page } from "$app/stores";
+	import { wrapStartsOn } from "../../lib/lineWrap.js";
 	import { goto } from "$app/navigation";
 	import {
 		channelSwitchNotice,
@@ -142,6 +144,14 @@
 	function setFlag(name, value) {
 		SetFlag(name, value).then((config) => {
 			marasiConfig.set(config);
+		});
+	}
+	// Choosing a Line wrapping mode also turns Wrap lines on, or off for
+	// Disabled, as a launch does.
+	function setWrapMode(value) {
+		SetFlag("wrap_mode", value).then((config) => {
+			marasiConfig.set(config);
+			lineWrap.set(wrapStartsOn(config.WrapMode));
 		});
 	}
 	function saveWaypoint() {
@@ -438,6 +448,27 @@
 									? 'variant-filled-primary'
 									: 'variant-soft-primary !text-surface-900 dark:!text-surface-50'}"
 								on:click={() => setFlag("syntax_mode", value)}>{label}</button
+							>
+						{/each}
+					</div>
+				</div>
+				<div class={row}>
+					<div>
+						<p>Line wrapping</p>
+						<p class="text-xs opacity-70">
+							Auto leaves a line over 100,000 characters unwrapped, as wrapping it freezes the editor
+						</p>
+					</div>
+					<div class="{control} grid grid-cols-3 text-sm" role="radiogroup" aria-label="Line wrapping">
+						{#each syntaxModes as [value, label]}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={$marasiConfig.WrapMode === value}
+								class="btn btn-sm !border-0 !ring-0 {$marasiConfig.WrapMode === value
+									? 'variant-filled-primary'
+									: 'variant-soft-primary !text-surface-900 dark:!text-surface-50'}"
+								on:click={() => setWrapMode(value)}>{label}</button
 							>
 						{/each}
 					</div>

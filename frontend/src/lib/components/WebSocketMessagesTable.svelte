@@ -25,6 +25,7 @@
 		wsInjectDraft,
 	} from "../../stores/connectionStore";
 	import { marasiConfig, lineWrap } from "../../stores";
+	import { longStrings } from "../longStrings.js";
 	import { messageRow } from "../websocket/presentation.js";
 	import WebSocketMessageProperties from "./WebSocketMessageProperties.svelte";
 
@@ -527,11 +528,8 @@
 							theme={$modeCurrent
 								? githubLight
 								: oneDark}
-							extensions={$marasiConfig.VimEnabled
-								? [vim()]
-								: []}
+							extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 							readonly={true}
-							lineWrapping={$lineWrap}
 						/>
 					{/if}
 				</div>

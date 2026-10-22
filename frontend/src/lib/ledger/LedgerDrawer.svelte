@@ -103,6 +103,11 @@
 	$: bodies = drawerBodies(details, { prettify: $prettify, incomingResponse });
 	$: syntaxMode = $marasiConfig.SyntaxMode;
 	$: hasResponse = Boolean(bodies.response);
+	// Wrap lines is on but a shown long string stopped an editor wrapping;
+	// the rail's Wrap lines button shows it as an amber dot.
+	let requestPaused = false;
+	let responsePaused = false;
+	$: wrapPaused = requestPaused || (pane === null && hasResponse && responsePaused);
 
 	const message = "p-3 text-[11px] opacity-50";
 	// The panes start a few pixels below the drawer's red top line, on the
@@ -125,6 +130,7 @@
 		{note}
 		{noteStatus}
 		indexing={prettifiedMoving}
+		{wrapPaused}
 		{findings}
 		{testCases}
 		{pane}
@@ -152,6 +158,7 @@
 						value={bodies.request}
 						lang={usesSyntax(bodies.request, syntaxMode) ? "http" : undefined}
 						wrap={$lineWrap}
+						on:suspend={(e) => (requestPaused = e.detail)}
 					/>
 				{/if}
 			</div>
@@ -186,6 +193,7 @@
 							value={bodies.response}
 							lang={usesSyntax(bodies.response, syntaxMode) ? "http" : undefined}
 							wrap={$lineWrap}
+							on:suspend={(e) => (responsePaused = e.detail)}
 						/>
 					{:else if details !== null}
 						<p class={message}>Waiting for the response…</p>

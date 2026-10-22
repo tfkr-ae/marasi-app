@@ -22,6 +22,7 @@ import { sitemapStore } from "./stores/sitemapStore";
 import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { savedQueriesStore } from "./stores/savedQueriesStore";
+import { wrapStartsOn } from "./lib/lineWrap.js";
 import {
   loadSignals,
   openingFor,
@@ -91,6 +92,7 @@ export let marasiConfig = writable({});
 export async function readConfig() {
   const config = await GetMarasiConfig();
   marasiConfig.set(config);
+  lineWrap.set(wrapStartsOn(config.WrapMode));
   await Promise.all([readKeybindings(), readHighlights()]);
 }
 

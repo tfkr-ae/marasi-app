@@ -43,6 +43,7 @@
 	import { autocompletion } from "@codemirror/autocomplete";
 	import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
 	import { EventsOn } from "../../lib/wailsjs/runtime/runtime";
+	import { longStrings } from "../../lib/longStrings.js";
 	const toastStore = getToastStore();
 	const drawerStore = getDrawerStore();
 
@@ -398,10 +399,7 @@
 				class="text-xs"
 				styles={{ "&": { fontSize: "11px" } }}
 				theme={$modeCurrent ? githubLight : oneDark}
-				extensions={$marasiConfig.VimEnabled
-					? [vim()]
-					: []}
-				lineWrapping={$lineWrap}
+				extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 			/>
 		</div>
 	</div>
