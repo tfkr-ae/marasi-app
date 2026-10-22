@@ -456,7 +456,7 @@
 					<div>
 						<p>Line wrapping</p>
 						<p class="text-xs opacity-70">
-							Auto leaves a line over 100,000 characters unwrapped, as wrapping it freezes the editor
+							Auto leaves a line over 100,000 characters unwrapped
 						</p>
 					</div>
 					<div class="{control} grid grid-cols-3 text-sm" role="radiogroup" aria-label="Line wrapping">
