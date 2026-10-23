@@ -21,7 +21,9 @@ const routes = {
 	dashboard: { selector: '[title="Home"]', path: "/", expected: "Project Dashboard" },
 	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Saved queries" },
 	compass: { selector: '[title="Compass"]', path: "/compass", expected: "Compass Settings" },
-	checkpoint: { selector: '[title="Checkpoint"]', path: "/checkpoint", expected: "Checkpoint Settings" },
+	// The rail icon's title gains " · N intercepted" while items are held.
+	// "Intercepted" is the dock's header, or its strip label when collapsed.
+	checkpoint: { selector: '[title="Checkpoint"], [title^="Checkpoint · "]', path: "/checkpoint", expected: "Intercepted" },
 	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Group by status" },
 	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Armory Settings" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "Logbook Settings" },

@@ -1,436 +1,276 @@
 <script>
-	import CodeMirror from "svelte-codemirror-editor";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "@codemirror/legacy-modes/mode/http";
-	import { lua } from "@codemirror/legacy-modes/mode/lua";
-	import { oneDark } from "@codemirror/theme-one-dark";
-	import { githubLight } from "@uiw/codemirror-theme-github";
-	import { vim } from "@replit/codemirror-vim";
-	import {
-		GetCheckpointItems,
-		CheckHTTPParse,
-		ForwardCheckpoint,
-		DropCheckpoint,
-		RunExtension,
-		ToggleIntercept,
-	} from "../../lib/wailsjs/go/main/App";
-	import { onMount } from "svelte";
-	import {
-		Accordion,
-		AccordionItem,
-		getDrawerStore,
-		getToastStore,
-		modeCurrent,
-	} from "@skeletonlabs/skeleton";
+	// The Checkpoint page: the dock lists every intercepted item, grouped by
+	// host; the workspace shows the selected item, or the rules behind its
+	// Items | Rules switch. State lives in checkpointStore (see
+	// stores/createCheckpointStore.js); this file wires the actions, the
+	// confirmations, the toasts and the checkpoint.* shortcuts.
+	import { onDestroy } from "svelte";
+	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
+	import { RunExtension } from "../../lib/wailsjs/go/main/App";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
-	import {
-		CornerLeftDown,
-		EditIcon,
-		FileCode,
-		FilePenLine,
-		Forward,
-		SettingsIcon,
-		SquarePlay,
-		ToggleLeft,
-	} from "lucide-svelte";
-	import {
-		checkpointCode,
-		marasiConfig,
-		interceptFlag,
-		lineWrap,
-	} from "../../stores";
-	import { autocompletion } from "@codemirror/autocomplete";
-	import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
-	import { EventsOn } from "../../lib/wailsjs/runtime/runtime";
-	import { longStrings } from "../../lib/longStrings.js";
-	const toastStore = getToastStore();
-	const drawerStore = getDrawerStore();
+	import { checkpointItemContext as itemContext, checkpointStore } from "../../stores/checkpointStore";
+	import { launchpadStore } from "../../stores/launchpadStore";
+	import { checkpointCode, checkpointCodeApplied, interceptFlag } from "../../stores";
+	import { primaryVariant, UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
+	import CheckpointDock from "../../lib/checkpoint/CheckpointDock.svelte";
+	import ItemWorkspace from "../../lib/checkpoint/ItemWorkspace.svelte";
+	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
+	import { keyOf } from "../../lib/checkpoint/itemContext.js";
+	import { bulkTargets, dropTitle, groupByHost, summarize, treeOrder } from "../../lib/checkpoint/items.js";
 
-	let intercepted = "";
-	let interceptedEditor;
-	let type = "";
-	let currentId = null;
-	let error = "";
-	let accOpened;
+	const toastStore = getToastStore();
+	const modalStore = getModalStore();
+	const drawerStore = getDrawerStore();
+	const store = checkpointStore;
+
+	/** "item" or "rules": the workspace's Items | Rules switch. */
+	let view = "item";
+	let collapsed = new Set();
+	let workspace;
+	let rulesEditor;
+
+	let now = Date.now();
+	const clock = setInterval(() => (now = Date.now()), 1000);
+	onDestroy(() => clearInterval(clock));
+
+	// The layout loads $itemContext for every held item.
+	$: state = $store;
+	$: primary = primaryVariant($modeCurrent);
+	$: rulesChanged = $checkpointCode !== $checkpointCodeApplied;
+
+	// The launchpad an item was launched from: a launch's id is its pair's id.
+	function launchpadNameOf(id, lp) {
+		const launch = lp.launchesById[id];
+		if (!launch) return null;
+		const launchpad = lp.launchpads.find((l) => l.ID === launch.LaunchpadID);
+		return launchpad?.Name || UNTITLED_LAUNCHPAD;
+	}
+
+	function entryOf(item, contexts, lp) {
+		const context = contexts[keyOf(item)];
+		return {
+			ID: item.ID,
+			item,
+			context,
+			summary: summarize(item, item.text, context),
+			launch: item.Type === "websocket" ? null : launchpadNameOf(item.ID, lp),
+		};
+	}
+
+	// Labels come from the text as held, so an edit doesn't move an item.
+	$: entries = state.items.map((item) => entryOf(item, $itemContext, $launchpadStore));
+	$: groups = groupByHost(entries, (entry) => entry.summary.host);
+	$: selected = entries.find((entry) => entry.ID === state.selectedId) ?? null;
+	$: index = selected ? entries.indexOf(selected) : -1;
+
+	function toast(message, background = "variant-filled-surface") {
+		toastStore.trigger({ message, background, timeout: 3000 });
+	}
+	function failed(what, err) {
+		console.error(`${what} failed:`, err);
+		toast(`${what} failed`, "variant-filled-error");
+	}
+
+	// A forward or drop of an item that had already left removes it.
+	const GONE = "Already gone";
+
+	async function forward(id, options = {}) {
+		if (!id) return;
+		try {
+			const result = await store.forward(id, options);
+			if (result === "unparsed") toast("Edit doesn't parse", "variant-filled-warning");
+			if (result === "gone") toast(GONE);
+		} catch (err) {
+			failed("Forward", err);
+		}
+	}
+
+	async function drop(id) {
+		if (!id) return;
+		try {
+			if ((await store.drop(id)) === "gone") toast(GONE);
+		} catch (err) {
+			failed("Drop", err);
+		}
+	}
+
+	async function runBulk(kind, ids) {
+		try {
+			const result = await store.bulk(kind, ids);
+			toast(result.text, result.failed ? "variant-filled-warning" : "variant-filled-success");
+		} catch (err) {
+			failed(kind === "forward" ? "Forward" : "Drop", err);
+		}
+	}
+
+	// Forward n doesn't ask; Drop n does. Both act on the ids at the click.
+	function bulk(kind, ids) {
+		const snapshot = [...ids];
+		if (!snapshot.length) return;
+		if (kind === "forward") return runBulk(kind, snapshot);
+		modalStore.trigger({
+			type: "confirm",
+			title: dropTitle(snapshot.length),
+			body: "",
+			buttonTextConfirm: "Drop",
+			response: (ok) => ok && runBulk(kind, snapshot),
+		});
+	}
+
+	async function toggleIntercept() {
+		try {
+			await store.toggleIntercept();
+		} catch (err) {
+			failed("Intercept all", err);
+		}
+	}
+
+	async function updateRules() {
+		const code = $checkpointCode;
+		try {
+			await RunExtension("checkpoint", code);
+			checkpointCodeApplied.set(code);
+			toast("Rules updated", "variant-filled-success");
+		} catch (err) {
+			failed("Update rules", err);
+		}
+	}
+
+	function showRules(focus = false) {
+		view = "rules";
+		if (focus) setTimeout(() => rulesEditor?.focusEditor(), 0);
+	}
+
+	function showItem(focus = false) {
+		view = "item";
+		if (focus) setTimeout(() => workspace?.focusEditor(), 0);
+	}
+
+	// ↑/↓ move the selection in the tree's on-screen order, outside editors,
+	// fields and modals.
+	function onKeydown(event) {
+		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		if (event.metaKey || event.ctrlKey || event.altKey || $modalStore.length) return;
+		if (event.target?.closest?.("input, textarea, select, [contenteditable], .cm-editor")) return;
+		const order = treeOrder(groups, collapsed);
+		if (!order.length) return;
+		event.preventDefault();
+		const at = order.indexOf(state.selectedId);
+		const step = event.key === "ArrowDown" ? 1 : -1;
+		const next = order[Math.min(order.length - 1, Math.max(0, at < 0 ? 0 : at + step))];
+		if (next && next !== state.selectedId) store.pick(next);
+	}
+
 	const checkpointMenu = [
 		{
 			actionId: "checkpoint.toggle-settings",
 			icon: ToggleLeft,
-			handler: () => {
-				accOpened = !accOpened;
-			},
+			handler: () => (view === "rules" ? showItem() : showRules()),
 		},
 		{
 			actionId: "checkpoint.edit-rules",
 			icon: EditIcon,
-			handler: () => {
-				if (!accOpened) {
-					accOpened = true;
-				}
-				setTimeout(() => {
-					const cmContent =
-						document.querySelector(
-							'div[data-language="lua"]',
-						);
-					cmContent.focus();
-				}, 300);
-			},
+			handler: () => showRules(true),
 		},
 		{
 			actionId: "checkpoint.update-rules",
 			icon: SquarePlay,
-			handler: () => {
-				RunExtension(
-					"checkpoint",
-					$checkpointCode,
-				)
-					.then(() => {
-						const toastSettings = {
-							message: "Updated checkpoint rules",
-							background: "variant-filled-success",
-						};
-						toastStore.trigger(
-							toastSettings,
-						);
-					})
-					.catch((error) => {
-						console.log("Error");
-						const toastSettings = {
-							message: "Error updating rules",
-							background: "variant-filled-error",
-						};
-						toastStore.trigger(
-							toastSettings,
-						);
-					});
-			},
+			handler: updateRules,
 		},
 		{
 			actionId: "checkpoint.edit-intercepted",
 			icon: FilePenLine,
-			handler: () => {
-				if (interceptedCount > 0) {
-					interceptedEditor?.focus();
-				}
-			},
+			handler: () => selected && showItem(true),
 		},
 		{
 			actionId: "checkpoint.forward-intercepted",
 			icon: Forward,
-			handler: () => {
-				if (interceptedCount > 0) {
-					forward(intercepted);
-				}
-			},
+			handler: () => forward(state.selectedId),
 		},
 		{
 			actionId: "checkpoint.drop-intercepted",
 			icon: CornerLeftDown,
-			handler: () => {
-				if (interceptedCount > 0) {
-					drop();
-				}
-			},
+			handler: () => drop(state.selectedId),
+		},
+		{
+			actionId: "checkpoint.forward-intercept-response",
+			icon: CornerDownRight,
+			handler: () => selected?.item.Type === "request" && forward(selected.ID, { interceptResponse: true }),
+		},
+		{
+			actionId: "checkpoint.forward-picked",
+			icon: ListChecks,
+			handler: () => bulk("forward", bulkTargets($store)),
+		},
+		{
+			actionId: "checkpoint.drop-picked",
+			icon: ListX,
+			handler: () => bulk("drop", bulkTargets($store)),
 		},
 		{
 			actionId: "checkpoint.show-logs",
 			icon: FileCode,
 			handler: () => {
-				if ($drawerStore.open) {
-					drawerStore.close();
-				} else {
-					const drawerSettings = {
-						id: "extension-logs",
-						meta: {
-							extensionName:
-								"checkpoint",
-						},
-						height: "h-full",
-						width: "w-3/5",
-						position: "right",
-					};
-					drawerStore.open(
-						drawerSettings,
-					);
-				}
+				if ($drawerStore.open) return drawerStore.close();
+				drawerStore.open({
+					id: "extension-logs",
+					meta: { extensionName: "checkpoint" },
+					height: "h-full",
+					width: "w-3/5",
+					position: "right",
+				});
 			},
 		},
 	];
 	useMenuActions(checkpointMenu);
-	$: {
-		CheckSyntax(intercepted);
-	}
-	let interceptedCount = 0;
-	function dumpText(item) {
-		const raw = item?.Raw;
-		if (!raw) {
-			return "";
-		}
-		if (typeof raw === "string") {
-			try {
-				const binary = atob(raw);
-				return new TextDecoder().decode(
-					Uint8Array.from(binary, (char) =>
-						char.charCodeAt(0),
-					),
-				);
-			} catch {
-				return raw;
-			}
-		}
-		if (raw instanceof Uint8Array) {
-			return new TextDecoder().decode(raw);
-		}
-		if (Array.isArray(raw)) {
-			return new TextDecoder().decode(Uint8Array.from(raw));
-		}
-		return "";
-	}
-	function CheckSyntax(text) {
-		if (!type) {
-			error = "";
-			return;
-		}
-		CheckHTTPParse(text, type).then((response) => {
-			error = response;
-		});
-	}
-	function forwardAndInterceptResponse() {
-		if (!currentId) {
-			return;
-		}
-		ForwardCheckpoint(currentId, intercepted, true).then(() => {
-			GetNext();
-		});
-	}
-	function drop() {
-		if (!currentId) {
-			return;
-		}
-		DropCheckpoint(currentId).then(() => {
-			GetNext();
-		});
-	}
-	function forward(body) {
-		if (!currentId) {
-			return;
-		}
-		ForwardCheckpoint(currentId, body, false).then(() => {
-			GetNext();
-		});
-	}
-	function GetNext() {
-		GetCheckpointItems().then((items) => {
-			const httpItems = (items || []).filter((item) => {
-				return item.Type === "request" || item.Type === "response";
-			});
-			interceptedCount = httpItems.length;
-			const item = httpItems[0];
-			if (item) {
-				currentId = item.ID;
-				intercepted = dumpText(item);
-				type = item.Type;
-				return;
-			}
-			currentId = null;
-			intercepted = "No item in queue";
-			type = "";
-		});
-	}
-	function getLang(body) {
-		switch ($marasiConfig.SyntaxMode) {
-			case "disabled":
-				return undefined;
-			case "auto":
-				if (body.length < 75000)
-					return StreamLanguage.define(http);
-				return undefined;
-			case "enabled":
-				return StreamLanguage.define(http);
-		}
-	}
-	onMount(() => {
-		const unsubscribe = EventsOn("intercepted", () => {
-			GetNext();
-		});
-		GetNext();
-		return () => {
-			unsubscribe();
-		};
-	});
+
+	// As the Launchpad's Request | Response switch.
+	// Reactive, so the tabs take the new variant when the theme changes.
+	$: tab = (on) => `btn btn-sm gap-1 px-3 py-0.5 text-xs ${on ? primary : "variant-soft"}`;
 </script>
 
+<svelte:window on:keydown={onKeydown} />
 <MarasiKeys menuOptions={checkpointMenu} />
-<Accordion rounded="false" padding="py-3 px-3" regionControl="text-sm font-bold">
-	<AccordionItem bind:open={accOpened}>
-		<svelte:fragment slot="lead"><SettingsIcon size="16" /></svelte:fragment>
-		<svelte:fragment slot="summary"
-			>Checkpoint Settings</svelte:fragment
-		>
-		<svelte:fragment slot="content">
-			<CodeMirror
-				bind:value={$checkpointCode}
-				class="text-xs"
-				styles={{ "&": { fontSize: "11px" } }}
-				theme={$modeCurrent ? githubLight : oneDark}
-				extensions={$marasiConfig.VimEnabled
-					? [
-							vim(),
-							StreamLanguage.define(
-								lua,
-							),
-							autocompletion({
-								override: [
-									marasiCompletionSource,
-								],
-							}),
-						]
-					: [
-							StreamLanguage.define(
-								lua,
-							),
-							autocompletion({
-								override: [
-									marasiCompletionSource,
-								],
-							}),
-						]}
-			/>
-			<div class="flex justify-end mt-2">
-				<button
-					type="button"
-					class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-					on:click={() => {
-						RunExtension(
-							"checkpoint",
-							$checkpointCode,
-						)
-							.then(() => {
-								const toastSettings =
-									{
-										message: "Updated checkpoint rules",
-										background: "variant-filled-success",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							})
-							.catch((error) => {
-								console.log(
-									"Error",
-								);
-								const toastSettings =
-									{
-										message: "Error updating rules",
-										background: "variant-filled-error",
-									};
-								toastStore.trigger(
-									toastSettings,
-								);
-							});
-					}}>Update Intercept Rules</button
-				>
-			</div>
-		</svelte:fragment>
-	</AccordionItem>
-</Accordion>
-<div class="p-1 flex flex-col items-center text-sm">
-	<div class={$modeCurrent ? "btn-group btn-group-sm checkpoint-ghost-group" : "btn-group btn-group-sm variant-filled-primary"}>
-		<button
-			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
-			disabled={error !== "" || interceptedCount == 0}
-			on:click={() => {
-				forward(intercepted);
-			}}>Forward</button
-		>
-		<button
-			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
-			disabled={error !== "" || type !== "request"}
-			on:click={() => {
-				forwardAndInterceptResponse();
-			}}>Intercept Response</button
-		>
-		<button
-			class={$modeCurrent
-				? $interceptFlag
-					? "btn variant-ghost-success ring-0 shadow-none"
-					: "btn variant-ghost-primary ring-0 shadow-none"
-				: $interceptFlag
-					? "btn variant-filled-success hover:variant-filled-success"
-					: "btn variant-filled-primary"}
-			on:click={() => {
-				ToggleIntercept().then((flag) => {
-					interceptFlag.set(flag);
-				});
-			}}
-			>{$interceptFlag
-				? "Global Intercept (On)"
-				: "Global Intercept (Off)"}</button
-		>
-		<button
-			class={$modeCurrent ? "variant-ghost-primary ring-0 shadow-none" : ""}
-			disabled={interceptedCount == 0}
-			on:click={() => {
-				drop();
-			}}>Drop</button
-		>
-	</div>
-	<div class="mt-1 text-center text-sm">
-		{#if interceptedCount > 0}
-			<p>Intercept Queue: {interceptedCount}</p>
-		{:else}
-			<p>No items in interception queue</p>
-		{/if}
-	</div>
-	<div class="text-center text-xs opacity-70">
-		{#if error === ""}
-			<p>No Error</p>
-		{:else}
-			<p>{error}</p>
-		{/if}
-	</div>
-	<div class="w-full flex justify-center dark:bg-[#282c34]">
-		<div class="w-[50%]">
-			<CodeMirror
-				bind:value={intercepted}
-				on:ready={(event) => (interceptedEditor = event.detail)}
-				lang={getLang(intercepted)}
-				class="text-xs"
-				styles={{ "&": { fontSize: "11px" } }}
-				theme={$modeCurrent ? githubLight : oneDark}
-				extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
-			/>
+
+<div class="cp-page relative flex h-full min-h-0">
+	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} />
+
+	<div class="flex min-w-0 flex-1 flex-col">
+		<!-- py-0.5 keeps this row as tall as the dock's header, so their borders line up. -->
+		<div class="cp-switch flex items-center gap-1 border-b border-surface-500/30 bg-surface-50 px-3 py-0.5 text-xs dark:bg-surface-900" role="tablist">
+			<button class={tab(view === "item")} role="tab" aria-selected={view === "item"} on:click={() => showItem()}>Items</button>
+			<button class={tab(view === "rules")} role="tab" aria-selected={view === "rules"} on:click={() => showRules()}>
+				<FileCode size={12} />Rules
+				{#if rulesChanged}<span class="text-warning-500" title="Not applied">●</span>{/if}
+			</button>
+		</div>
+		<div class="min-h-0 flex-1">
+			{#if view === "rules"}
+				<RulesEditor bind:this={rulesEditor} onUpdate={updateRules} />
+			{:else if selected}
+				<ItemWorkspace
+					bind:this={workspace}
+					{store}
+					entry={selected}
+					{index}
+					total={entries.length}
+					{now}
+					onForward={forward}
+					onDrop={drop}
+				/>
+			{:else}
+				<div class="cp-empty flex h-full flex-col items-center justify-center gap-2">
+					<div class="text-center opacity-60">
+						<h3 class="text-base font-bold">Nothing intercepted</h3>
+						<p class="text-xs">{$interceptFlag ? "Intercept all is on" : "Rules decide what's intercepted"}</p>
+					</div>
+					<button class="btn btn-sm {primary}" on:click={() => showRules(true)}>
+						<FileCode size={14} class="mr-1" />Edit rules
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 </div>
-
-<style>
-	:global(.checkpoint-ghost-group) {
-		--tw-ring-shadow: 0 0 #0000;
-		box-shadow: none;
-	}
-	:global(.checkpoint-ghost-group > *) {
-		--tw-ring-inset: ;
-		--tw-ring-offset-shadow: 0 0 #0000;
-		--tw-ring-shadow: 0 0 #0000;
-		box-shadow: none !important;
-		border: 0 !important;
-	}
-	:global(.checkpoint-ghost-group > * + *) {
-		border-left-width: 0 !important;
-	}
-	:global(.checkpoint-ghost-group > *:disabled:hover) {
-		background-color: rgb(var(--color-primary-500) / 0.2) !important;
-		filter: none !important;
-		--tw-brightness: brightness(1);
-	}
-	:global(.checkpoint-ghost-group > .variant-ghost-primary:not(:disabled):hover) {
-		background-color: rgb(var(--color-primary-200)) !important;
-		filter: none !important;
-	}
-	:global(.checkpoint-ghost-group > .variant-ghost-success:not(:disabled):hover) {
-		background-color: rgb(var(--color-success-200)) !important;
-		filter: none !important;
-	}
-</style>

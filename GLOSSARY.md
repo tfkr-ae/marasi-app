@@ -80,6 +80,30 @@ _Avoid_: copy, transfer, relink
 The working request of a launchpad, held only in memory, seeded from one launchpad entry and sent by Launch. It is dirty when it differs from the request of the entry it was seeded from, and it is lost when the project closes. When that entry moves to another launchpad, the draft moves with it. Marasi asks for confirmation only before something discards a dirty draft, such as seeding over it, removing its entry, deleting its launchpad, or switching the project or quitting. A clean draft is replaced without asking, and Cancel changes nothing. Switching the project or quitting asks once for all dirty drafts.
 _Avoid_: edit, buffer, saved request
 
+### Checkpoint
+
+**Checkpoint item**:
+A request, response or WebSocket message that Checkpoint holds, as Marasi defines it. The app lists every held item in hold order, oldest first, and the researcher can forward or drop any of them in any order.
+_Avoid_: intercepted item, intercept, queue item, paused request
+_Note_: The UI copy says "Intercepted" by design, and the time an item was held is named `InterceptedAt`; elsewhere, say Checkpoint item.
+
+**Hold**:
+What Checkpoint does to an item until the researcher forwards it, the researcher drops it, or its client leaves. A held item is "held", not "intercepted".
+_Avoid_: intercept, pause, catch
+_Note_: The UI copy keeps "intercepted" and "Intercept" by design ("Nothing intercepted", "Forward + intercept response"), as does `InterceptedAt`; elsewhere, say hold.
+
+**Intercept all**:
+The switch that makes Checkpoint hold every request and response, whatever its rules say. The name is the UI's, kept by design.
+_Avoid_: hold all, intercept mode
+
+**Forward**:
+Releasing a held item to continue on its way, with any edits the researcher made to it.
+_Avoid_: send, release, continue, accept
+
+**Drop**:
+Ending a held item so it never reaches its destination. Marasi drops an item itself when its client leaves.
+_Avoid_: discard, cancel, block, reject
+
 ### Marasi menu keybindings
 
 **Menu action**:

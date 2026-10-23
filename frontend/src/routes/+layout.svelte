@@ -60,6 +60,13 @@
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
+	import {
+		checkpointItemContext,
+		checkpointStore,
+	} from "../stores/checkpointStore";
+	import { checkpointBadge } from "../lib/checkpointBadge.js";
+	import { keyOf } from "../lib/checkpoint/itemContext.js";
+	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { sitemapStore } from "../stores/sitemapStore";
 	import { recentTraffic } from "../stores/recentTrafficStore";
@@ -158,6 +165,12 @@
 	const modalStore = getModalStore();
 	// The Settings icon's update indicator (see settingsIconIndicator).
 	$: settingsIndicator = settingsIconIndicator($updateState);
+	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
+	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// Each held item's context, for the Checkpoint page and the abandon
+	// toast, which shows on any page.
+	$: checkpointItemContext.load($checkpointStore.items);
+	let stopAbandonToasts;
 	// Full class names, so Tailwind keeps them.
 	const dotTones = {
 		success: { dot: "bg-success-500", ping: "bg-success-400" },
@@ -280,6 +293,16 @@
 			function handleNewLog(newLog) {
 				$logItems = [...$logItems, newLog];
 			}
+			function readCheckpointItems() {
+				checkpointStore
+					.onIntercepted()
+					.catch((err) =>
+						console.error(
+							"Reading Checkpoint items failed:",
+							err,
+						),
+					);
+			}
 			EventsOn("request", (newRequest) => {
 				ledgerStore.onRequest(newRequest);
 				sitemapStore.onRequest(newRequest);
@@ -315,13 +338,7 @@
 			);
 			EventsOn("ws-intercepted", (msg) => {
 				connectionStore.upsertInterception(msg);
-				const direction =
-					msg.Direction === "client"
-						? "client to server"
-						: "server to client";
-				toastStore.trigger({
-					message: `WebSocket message intercepted (${direction})`,
-				});
+				readCheckpointItems();
 			});
 			EventsOn("ws-open", (conn) => {
 				connectionStore.upsertConnection(conn);
@@ -348,50 +365,42 @@
 				}
 				handleNewLog(newLog);
 			});
-			EventsOn("intercepted", (intercepted) => {
-				if ($page.url.pathname !== "/checkpoint") {
-					switch (intercepted) {
-						case "request":
-							const reqToastID =
-								toastStore.trigger(
-									{
-										message: "Request Intercepted",
-										action: {
-											label: "Jump to Checkpoint",
-											response: () => {
-												goto(
-													"/checkpoint",
-												);
-												toastStore.close(
-													reqToastID,
-												);
-											},
-										},
-									},
-								);
-							break;
-						case "response":
-							const resToastID =
-								toastStore.trigger(
-									{
-										message: "Response Intercepted",
-										action: {
-											label: "Jump to Checkpoint",
-											response: () => {
-												goto(
-													"/checkpoint",
-												);
-												toastStore.close(
-													resToastID,
-												);
-											},
-										},
-									},
-								);
-							break;
-					}
-				}
+			// Marasi dropped a held item because its client left. The
+			// toast shows on any page.
+			EventsOn("checkpoint-abandoned", (item) =>
+				checkpointStore.onAbandoned(item),
+			);
+			stopAbandonToasts = checkpointStore.onAbandon(
+				({ item, editLost }) => {
+					const context =
+						get(checkpointItemContext)[keyOf(item)];
+					toastStore.trigger({
+						message: abandonText(
+							abandonLabel(item, context),
+							editLost,
+						),
+						background: editLost
+							? "variant-filled-warning"
+							: "variant-filled-surface",
+						timeout: 3000,
+					});
+				},
+			);
+			// A held item was forwarded or dropped, on the Checkpoint page
+			// or in the WebSocket modal; both drop it.
+			EventsOn("checkpoint-settled", (item) => {
+				readCheckpointItems();
+				connectionStore
+					.onSettled(item)
+					.catch((err) =>
+						console.error(
+							"Reading WebSocket Checkpoint failed:",
+							err,
+						),
+					);
 			});
+			// The Checkpoint rail badge shows the count; no toast.
+			EventsOn("intercepted", () => readCheckpointItems());
 			EventsOn(
 				"extension_gui_render",
 				({ extensionName, target, schema }) => {
@@ -469,6 +478,9 @@
 			EventsOff("ws-progress");
 			EventsOff("ws-state");
 			EventsOff("intercepted");
+			EventsOff("checkpoint-abandoned");
+			EventsOff("checkpoint-settled");
+			stopAbandonToasts?.();
 			EventsOff("log");
 			EventsOff("update-available");
 			EventsOff("update-progress");
@@ -576,13 +588,20 @@
 					bind:group={currentTile}
 					name="Checkpoint"
 					value={appRailIndex++}
-					title="Checkpoint"
+					title={heldBadge.title}
 				>
 					<svelte:fragment slot="lead">
 						<div
-							class="flex justify-center items-center w-full"
+							class="relative flex justify-center items-center w-full"
 						>
 							<FlagIcon size="20" />
+							{#if heldBadge.label}
+								<span
+									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-[10px] leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+									data-testid="checkpoint-badge"
+									aria-label="{heldBadge.label} intercepted"
+								>{heldBadge.label}</span>
+							{/if}
 						</div>
 					</svelte:fragment>
 					<span>Checkpoint</span>

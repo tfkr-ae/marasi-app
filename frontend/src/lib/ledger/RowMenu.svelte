@@ -43,7 +43,7 @@
 	import { filterMenu, isPartialSelection, isRunnable, isSwatchRow, menuFor, selectionSummary } from "./rowMenu.js";
 	import { menuDispatcher } from "../keybindings/app.js";
 	import { shortcutLabel } from "../keybindings/keys.js";
-	import { statusClass } from "../launchpad/format.js";
+	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
 	import { plural } from "./counts.js";
 	import { statusText } from "./table.js";
 
@@ -92,12 +92,6 @@
 		down: ArrowDown,
 		bottom: ArrowDownToLine,
 		globe: Globe,
-	};
-	const METHOD_CLASS = {
-		POST: "text-tertiary-700 dark:text-tertiary-500",
-		PUT: "text-warning-800 dark:text-warning-500",
-		PATCH: "text-warning-800 dark:text-warning-500",
-		DELETE: "text-error-500",
 	};
 	const SEVERITY_CLASS = {
 		Critical: "bg-red-600 text-white",

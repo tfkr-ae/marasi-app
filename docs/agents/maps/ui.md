@@ -6,7 +6,7 @@ Which component draws each part of the app, and the type sizes the pages share. 
 
 `routes/+layout.svelte` draws everything around a page:
 
-- **App rail.** Skeleton's `AppRail`, with one `AppRailAnchor` per page, then one per extension with an interface, then Settings. The Settings icon carries the update indicator (`settingsIconIndicator`).
+- **App rail.** Skeleton's `AppRail`, with one `AppRailAnchor` per page, then one per extension with an interface, then Settings. Two icons carry an indicator: Settings shows the update dot (`settingsIconIndicator`), and Checkpoint shows the count of intercepted items (`checkpointBadge.js`, `data-testid="checkpoint-badge"`) and adds it to its title.
 - **Marasi menu.** `GlobalMenu.svelte` (in `lib/components/MarasiMenu/`) is mounted once here. It runs the `global.*` actions, such as going to a page. ⌘K opens a `MarasiKeys.svelte` dialog, which each page also mounts with its own actions (see `keybindings-and-menus.md`).
 - **Modals.** Components are registered by name in `modalRegistery` and opened with `modalStore.trigger({ type: "component", component: "<name>" })`. Most are `lib/components/*Modal.svelte`.
 - **Drawer.** `AppDrawer.svelte` is the Skeleton drawer that Compass, Checkpoint, Armory, Logbook and Workshop open through `drawerStore`. The Ledger has its own drawer instead (see `ledger.md`).
@@ -23,7 +23,8 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Home | `routes/+page.svelte` | `Dashboard.svelte`, `LogTable.svelte` |
 | Ledger | `routes/ledger/` | `lib/ledger/`, `lib/dock/Dock.svelte` |
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
-| Compass, Checkpoint, Armory, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
+| Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |
+| Compass, Armory, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
 | Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. |
@@ -38,8 +39,9 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 - `LedgerQueryBox.svelte` is the Ledger's query editor.
 - `LaunchpadWorkspace.svelte` holds the Launchpad draft.
 - `WebSocketInject.svelte`, `WebSocketCheckpoint.svelte` and `WebSocketMessagesTable.svelte` are the WebSocket editors.
+- `lib/checkpoint/ItemWorkspace.svelte` holds the intercepted item and its context; `lib/checkpoint/RulesEditor.svelte` holds the Checkpoint rules.
 - `lib/extensions/components/Editor.svelte` is the editor an extension interface gets.
-- Compass, Armory, Checkpoint and Workshop create their own in the route file.
+- Compass, Armory and Workshop create their own in the route file.
 
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 

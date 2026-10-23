@@ -7,6 +7,9 @@ export const DOCK = { default: 400, min: 260, max: 640, snap: 170 };
 /** The Ledger dock's limits, in px. */
 export const LEDGER_DOCK = { default: 320, min: 240, max: 560, snap: 170 };
 
+/** The Checkpoint dock's limits, in px. */
+export const CHECKPOINT_DOCK = { default: 360, min: 260, max: 560, snap: 170 };
+
 /** The live width while dragging `delta` px from `startWidth`. */
 export function dragWidth(startWidth, delta, limits = DOCK) {
   return Math.min(limits.max, Math.max(0, startWidth + delta));

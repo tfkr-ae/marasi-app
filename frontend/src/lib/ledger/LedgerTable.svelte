@@ -31,7 +31,7 @@
 		visibleRange,
 	} from "./table.js";
 	import { sameID } from "./pairs.js";
-	import { shortTime, statusClass } from "../launchpad/format.js";
+	import { METHOD_CLASS, shortTime, statusClass } from "../launchpad/format.js";
 
 	/** The rows, top to bottom. */
 	/** True when the drawer's border runs right under the table. */
@@ -62,13 +62,6 @@
 	const dispatch = createEventDispatcher();
 	const template = rowTemplate(LEDGER_COLUMNS);
 	const OVERSCAN = 15;
-	const METHOD_CLASS = {
-		POST: "text-tertiary-700 dark:text-tertiary-500",
-		// warning-500 is unreadable on a light surface.
-		PUT: "text-warning-800 dark:text-warning-500",
-		PATCH: "text-warning-800 dark:text-warning-500",
-		DELETE: "text-error-500",
-	};
 
 	let viewport;
 	let scrollTop = 0;

@@ -226,7 +226,13 @@ func newCheckpointApp(t *testing.T) *App {
 
 func startAppRequestHold(t *testing.T, app *App) (*http.Request, uuid.UUID, <-chan error) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "https://marasi.app", nil)
+	return startAppRequestHoldContext(t, app, context.Background())
+}
+
+// startAppRequestHoldContext holds a request whose client leaves when ctx ends.
+func startAppRequestHoldContext(t *testing.T, app *App, ctx context.Context) (*http.Request, uuid.UUID, <-chan error) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "https://marasi.app", nil).WithContext(ctx)
 	_, remove, err := martian.TestContext(req, nil, nil)
 	if err != nil {
 		t.Fatalf("applying martian context: %v", err)
@@ -267,7 +273,7 @@ func startAppWebSocketHold(t *testing.T, app *App) (*marasiws.Message, <-chan er
 	return message, done
 }
 
-func waitForAppCheckpoint(t *testing.T, app *App, n int) []domain.CheckpointItem {
+func waitForAppCheckpoint(t *testing.T, app *App, n int) []CheckpointItem {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

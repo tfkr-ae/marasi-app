@@ -9,13 +9,19 @@ import { codeIDs } from "./errorCodes.js";
 export const heldCheckpointIDs = (error) => codeIDs(error, "checkpoint_held");
 
 /**
+ * True when a forward or drop failed because the item had already left
+ * Checkpoint: "checkpoint_gone (<id>)" in the error's text.
+ */
+export const isCheckpointGone = (error) => codeIDs(error, "checkpoint_gone") !== null;
+
+/**
  * The confirm modal for a switch refused over held items. Its buttons take
  * the layout's Modal variants; Open Checkpoint calls `open`.
  */
 export function checkpointHeldModal(open) {
   return {
     type: "confirm",
-    title: "Checkpoint has held items",
+    title: "Checkpoint has intercepted items",
     body: "Forward or drop them to switch projects.",
     buttonTextConfirm: "Open Checkpoint",
     buttonTextCancel: "Cancel",
