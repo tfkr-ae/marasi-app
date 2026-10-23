@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		CreateWaypoint,
 		DeleteWaypoint,
@@ -61,6 +61,11 @@
 	import { select } from "../../lib/storeSelect.js";
 	import { groupBuilding, jobLabel, jobsStore, jobStatus } from "../../stores/jobsStore";
 	import {
+		selectionWarning,
+		upstreamAddress,
+		upstreamProxyStore,
+	} from "../../stores/upstreamProxyStore.js";
+	import {
 		exclusionGroups,
 	} from "../../lib/ledger/contentTypes.js";
 	const toastStore = getToastStore();
@@ -71,6 +76,7 @@
 		{ id: "listener", name: "Listener", hint: "Default interface and port", icon: Globe },
 		{ id: "waypoints", name: "Waypoints", hint: "Host overrides", icon: Replace },
 		{ id: "browser", name: "Browser", hint: "Chrome paths and profiles", icon: Chrome },
+		{ id: "upstream", name: "Upstream Proxy", hint: "Route traffic through a proxy", icon: Network },
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
@@ -242,6 +248,61 @@
 		if (!contentTypeList.addable) return;
 		saveDefaultExclusion([...$defaultExclusion, contentTypeList.addable]);
 		contentTypeFind = "";
+	}
+
+	// Settings → Upstream Proxy. The list is this machine's and the selection
+	// the open project's; reading again on each visit shows edits another
+	// instance made.
+	let upstreamName = "";
+	let upstreamURL = "";
+	let checkTarget = "https://example.com";
+	$: if (section === "upstream") {
+		upstreamProxyStore.load().catch((error) => toastError(toastStore, "Error reading upstream proxies", error));
+	}
+	$: upstreamWarning = selectionWarning($upstreamProxyStore);
+	$: upstreamOptionsKey = JSON.stringify([
+		$upstreamProxyStore.items.map((item) => item.name),
+		$upstreamProxyStore.selected,
+		$upstreamProxyStore.configured,
+	]);
+	function addUpstreamProxy() {
+		upstreamProxyStore
+			.add(upstreamName.trim(), upstreamURL.trim())
+			.then(() => {
+				upstreamName = "";
+				upstreamURL = "";
+			})
+			.catch((error) => toastError(toastStore, "Error adding upstream proxy", error));
+	}
+	function useUpstreamProxy(name) {
+		upstreamProxyStore.use(name).catch((error) => {
+			toastError(toastStore, "Error choosing upstream proxy", error);
+			upstreamProxyStore.load().catch(() => {});
+		});
+	}
+	function editUpstreamProxy(item) {
+		modalStore.trigger({
+			type: "component",
+			component: "UpstreamProxy",
+			meta: { name: item.name, address: upstreamAddress(item), hasCA: item.has_ca },
+		});
+	}
+	// Removing the selected entry keeps the selection, so the project's
+	// requests fail closed: ask first.
+	function removeUpstreamProxy(name) {
+		const remove = () =>
+			upstreamProxyStore.remove(name).catch((error) => toastError(toastStore, "Error removing upstream proxy", error));
+		if (name !== $upstreamProxyStore.selected) {
+			remove();
+			return;
+		}
+		modalStore.trigger({
+			type: "confirm",
+			title: `Remove ${name}?`,
+			body: "This project uses it. Its requests fail until you choose another.",
+			buttonTextConfirm: "Remove",
+			response: (ok) => ok && remove(),
+		});
 	}
 
 	// Rebuilding resets the job and redoes it over every pair; the notices
@@ -756,6 +817,143 @@
 										class="btn btn-sm w-full {primary}"
 										disabled={selectedProfile === ""}
 										on:click={addChromeProfile}>Add Profile</button
+									>
+								</td>
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+			{:else if section === "upstream"}
+				<h3 class="text-sm font-bold">Upstream Proxy</h3>
+				<p class="mb-4 text-xs opacity-70">
+					This machine's list. Each project picks one; requests it can't carry fail, never go direct.
+				</p>
+				<div class={row}>
+					<div>
+						<p>This project</p>
+						<p class="text-xs opacity-70">Where this project's traffic goes</p>
+					</div>
+					<div class={control}>
+						<!-- Redrawn when the options change: a select keeps the value it
+						     falls back to when its option goes, even though the
+						     selection did not change. -->
+						{#key upstreamOptionsKey}
+						<select
+							class={tableField}
+							aria-label="This project's upstream proxy"
+							value={$upstreamProxyStore.selected}
+							on:change={(event) => useUpstreamProxy(event.currentTarget.value)}
+						>
+							<option value="">Direct</option>
+							{#each $upstreamProxyStore.items as item}
+								<option value={item.name}>{item.name}</option>
+							{/each}
+							{#if !$upstreamProxyStore.configured}
+								<option value={$upstreamProxyStore.selected} disabled
+									>{$upstreamProxyStore.selected} (not set up)</option
+								>
+							{/if}
+						</select>
+						{/key}
+					</div>
+				</div>
+				{#if upstreamWarning}
+					<p class="mt-2 text-xs text-error-500" role="alert" data-testid="upstream-warning">{upstreamWarning}</p>
+				{/if}
+				<div class={row}>
+					<div>
+						<p>Test target</p>
+						<p class="text-xs opacity-70">The URL Test connects to</p>
+					</div>
+					<div class={control}>
+						<input type="text" class="{tableField} font-mono" aria-label="Test target" bind:value={checkTarget} />
+					</div>
+				</div>
+				<div class="table-container mt-4">
+					<table class="table table-dense">
+						<thead>
+							<tr>
+								<th class="w-40">Name</th>
+								<th>Address</th>
+								<th class="w-16">CA</th>
+								<th>Last test</th>
+								<th class="w-44"></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each $upstreamProxyStore.items as item (item.name)}
+								{@const result = $upstreamProxyStore.checks[item.name]}
+								<tr>
+									<td>{item.name}</td>
+									<td class="font-mono">
+										{#if upstreamAddress(item)}
+											{upstreamAddress(item)}{#if item.has_credentials}<span class="ml-2 opacity-60"
+													>with credentials</span
+												>{/if}
+										{:else}
+											<span class="text-error-500">URL doesn't parse</span>
+										{/if}
+									</td>
+									<td>{item.has_ca ? "Yes" : ""}</td>
+									<td
+										class={result?.outcome === "ok" ? "text-success-700 dark:text-success-400" : "text-error-500"}
+										title={result?.message ?? ""}
+									>
+										{#if $upstreamProxyStore.checking === item.name}
+											<span class="text-surface-900-50-token opacity-70">Testing…</span>
+										{:else if result}
+											{result.outcome === "ok" ? "Connected" : result.message}
+										{/if}
+									</td>
+									<td>
+										<div class="flex items-center justify-end gap-1">
+											<button
+												type="button"
+												class="btn btn-sm {primary}"
+												disabled={$upstreamProxyStore.checking !== "" || checkTarget.trim() === ""}
+												on:click={() => upstreamProxyStore.check(item.name, checkTarget.trim())}>Test</button
+											>
+											<button
+												type="button"
+												class={iconButton}
+												title="Edit"
+												on:click={() => editUpstreamProxy(item)}><Pencil size={15} /></button
+											>
+											<button
+												type="button"
+												class={iconButton}
+												title="Delete"
+												on:click={() => removeUpstreamProxy(item.name)}><X size={15} /></button
+											>
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+						<tfoot>
+							<tr>
+								<td>
+									<input
+										type="text"
+										placeholder="Name"
+										class={tableField}
+										bind:value={upstreamName}
+									/>
+								</td>
+								<td colspan="3">
+									<input
+										type="text"
+										placeholder="http://, https:// or socks5://[user:pass@]host:port"
+										class="{tableField} font-mono"
+										bind:value={upstreamURL}
+									/>
+								</td>
+								<td>
+									<button
+										type="button"
+										class="btn btn-sm w-full {primary}"
+										disabled={upstreamName.trim() === "" || upstreamURL.trim() === ""}
+										on:click={addUpstreamProxy}>Add Upstream Proxy</button
 									>
 								</td>
 							</tr>
