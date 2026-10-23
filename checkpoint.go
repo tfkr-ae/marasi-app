@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -22,6 +22,15 @@ type CheckpointItem struct {
 type CheckpointAbandoned struct {
 	ID   uuid.UUID
 	Type string
+}
+
+// CheckpointSettled is the checkpoint-settled event's payload: an item that
+// left Checkpoint because it was forwarded or dropped. RequestID is a
+// WebSocket message's upgrade request, so the connection's view can refresh.
+type CheckpointSettled struct {
+	ID        uuid.UUID
+	Type      string
+	RequestID uuid.UUID
 }
 
 // checkpointTimes records when each held item was intercepted, by item id.
@@ -108,14 +117,32 @@ func (a *App) GetCheckpointItems() []CheckpointItem {
 }
 
 // settleCheckpoint runs a forward or drop of id and forgets its interception
-// time once the item has left Checkpoint.
+// time once the item has left Checkpoint. A forward or drop that succeeds
+// emits checkpoint-settled, so the Checkpoint page and the WebSocket modal
+// both drop the item whichever of them acted.
 func (a *App) settleCheckpoint(id uuid.UUID, settle func() error) error {
 	at, known := a.checkpointTimes.get(id)
+	item, held := a.Proxy.GetCheckpoint(id)
 	err := settle()
 	if known && (err == nil || errors.Is(err, marasi.ErrCheckpointNotFound)) {
 		a.checkpointTimes.forgetIf(id, at)
 	}
+	if err == nil && held {
+		a.emitEvent("checkpoint-settled", CheckpointSettled{ID: id, Type: item.Type, RequestID: item.RequestID})
+	}
+	if errors.Is(err, marasi.ErrCheckpointNotFound) {
+		return checkpointGoneError(id, err)
+	}
 	return err
+}
+
+// checkpointGone is the code of a forward or drop of an item that has
+// already left Checkpoint: "settling Checkpoint item: checkpoint_gone
+// (<uuid>): ...". The frontend treats the item as gone rather than failed.
+const checkpointGone = "checkpoint_gone"
+
+func checkpointGoneError(id uuid.UUID, err error) error {
+	return codedError("settling Checkpoint item", checkpointGone, []string{id.String()}, err)
 }
 
 // CheckpointForwardItem is one item of a ForwardCheckpoints call. Body
@@ -126,16 +153,18 @@ type CheckpointForwardItem struct {
 }
 
 // CheckpointBulkResult counts a bulk action's items: Done were forwarded or
-// dropped, Gone had already left Checkpoint.
+// dropped, Gone had already left Checkpoint, Failed are still held because
+// their forward or drop failed.
 type CheckpointBulkResult struct {
-	Done int
-	Gone int
+	Done   int
+	Gone   int
+	Failed int
 }
 
 // ForwardCheckpoints forwards each item as ForwardCheckpoint does, without
 // intercepting the response. It acts on the ids given, so items held during
-// the call stay held. An id that has already left counts as gone. Other
-// failures do not stop the rest; they are joined into the error.
+// the call stay held. An id that has already left counts as gone; any other
+// failure counts as failed, is logged, and does not stop the rest.
 func (a *App) ForwardCheckpoints(items []CheckpointForwardItem) (CheckpointBulkResult, error) {
 	return settleCheckpoints(len(items), func(i int) (uuid.UUID, error) {
 		return items[i].ID, a.ForwardCheckpoint(items[i].ID, items[i].Body, false)
@@ -152,7 +181,6 @@ func (a *App) DropCheckpoints(ids []uuid.UUID) (CheckpointBulkResult, error) {
 
 func settleCheckpoints(n int, settle func(i int) (uuid.UUID, error)) (CheckpointBulkResult, error) {
 	var result CheckpointBulkResult
-	var errs []error
 	for i := range n {
 		id, err := settle(i)
 		switch {
@@ -161,8 +189,9 @@ func settleCheckpoints(n int, settle func(i int) (uuid.UUID, error)) (Checkpoint
 		case errors.Is(err, marasi.ErrCheckpointNotFound):
 			result.Gone++
 		default:
-			errs = append(errs, fmt.Errorf("%s: %w", id, err))
+			result.Failed++
+			log.Printf("settling Checkpoint item %s: %v", id, err)
 		}
 	}
-	return result, errors.Join(errs...)
+	return result, nil
 }

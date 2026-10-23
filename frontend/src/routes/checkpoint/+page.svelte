@@ -4,30 +4,26 @@
 	// Item | Rules switch. State lives in checkpointStore (see
 	// stores/createCheckpointStore.js); this file wires the actions, the
 	// confirmations, the toasts and the checkpoint.* shortcuts.
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
-	import { GetRawDetails, GetWebSocketConnection, RunExtension } from "../../lib/wailsjs/go/main/App";
+	import { RunExtension } from "../../lib/wailsjs/go/main/App";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
-	import { checkpointStore } from "../../stores/checkpointStore";
+	import { checkpointItemContext as itemContext, checkpointStore } from "../../stores/checkpointStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { checkpointCode, checkpointCodeApplied, interceptFlag } from "../../stores";
 	import { primaryVariant, UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
 	import CheckpointDock from "../../lib/checkpoint/CheckpointDock.svelte";
 	import ItemWorkspace from "../../lib/checkpoint/ItemWorkspace.svelte";
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
-	import { createItemContext, keyOf } from "../../lib/checkpoint/itemContext.js";
-	import { abandonText, bulkTargets, dropTitle, groupByHost, itemTitle, summarize, treeOrder } from "../../lib/checkpoint/items.js";
+	import { keyOf } from "../../lib/checkpoint/itemContext.js";
+	import { bulkTargets, dropTitle, groupByHost, summarize, treeOrder } from "../../lib/checkpoint/items.js";
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
 	const drawerStore = getDrawerStore();
 	const store = checkpointStore;
-	const itemContext = createItemContext({
-		getRow: (id) => GetRawDetails(id),
-		getConnection: (id) => GetWebSocketConnection(id),
-	});
 
 	/** "item" or "rules": the workspace's Item | Rules switch. */
 	let view = "item";
@@ -39,8 +35,8 @@
 	const clock = setInterval(() => (now = Date.now()), 1000);
 	onDestroy(() => clearInterval(clock));
 
+	// The layout loads $itemContext for every held item.
 	$: state = $store;
-	$: itemContext.load(state.items);
 	$: primary = primaryVariant($modeCurrent);
 	$: rulesChanged = $checkpointCode !== $checkpointCodeApplied;
 
@@ -77,10 +73,15 @@
 		toast(`${what} failed`, "variant-filled-error");
 	}
 
+	// A forward or drop of an item that had already left removes it.
+	const GONE = "Already gone";
+
 	async function forward(id, options = {}) {
 		if (!id) return;
 		try {
-			if (!(await store.forward(id, options))) toast("Edit doesn't parse", "variant-filled-warning");
+			const result = await store.forward(id, options);
+			if (result === "unparsed") toast("Edit doesn't parse", "variant-filled-warning");
+			if (result === "gone") toast(GONE);
 		} catch (err) {
 			failed("Forward", err);
 		}
@@ -89,7 +90,7 @@
 	async function drop(id) {
 		if (!id) return;
 		try {
-			await store.drop(id);
+			if ((await store.drop(id)) === "gone") toast(GONE);
 		} catch (err) {
 			failed("Drop", err);
 		}
@@ -98,7 +99,7 @@
 	async function runBulk(kind, ids) {
 		try {
 			const result = await store.bulk(kind, ids);
-			toast(result.text, "variant-filled-success");
+			toast(result.text, result.failed ? "variant-filled-warning" : "variant-filled-success");
 		} catch (err) {
 			failed(kind === "forward" ? "Forward" : "Drop", err);
 		}
@@ -161,17 +162,6 @@
 		const next = order[Math.min(order.length - 1, Math.max(0, at < 0 ? 0 : at + step))];
 		if (next && next !== state.selectedId) store.pick(next);
 	}
-
-	// Marasi dropped an item because its client left.
-	onMount(() =>
-		store.onAbandon(({ item, editLost }) => {
-			const context = $itemContext[keyOf(item)];
-			const summary = summarize(item, item.text, context);
-			const number = context?.request?.Number;
-			const label = number ? `#${number}` : itemTitle(summary);
-			toast(abandonText(label, editLost), editLost ? "variant-filled-warning" : "variant-filled-surface");
-		}),
-	);
 
 	const checkpointMenu = [
 		{
@@ -236,8 +226,8 @@
 	];
 	useMenuActions(checkpointMenu);
 
-	const tab = (on) =>
-		`-mb-px flex items-center gap-1 border-b-2 px-2 pb-1 ${on ? "border-primary-500 font-bold" : "border-transparent opacity-70 hover:opacity-100"}`;
+	// As the Launchpad's Request | Response switch.
+	const tab = (on) => `btn btn-sm gap-1 px-3 py-0.5 text-xs ${on ? primary : "variant-soft"}`;
 </script>
 
 <svelte:window on:keydown={onKeydown} />
@@ -247,7 +237,7 @@
 	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} />
 
 	<div class="flex min-w-0 flex-1 flex-col">
-		<div class="cp-switch flex items-center gap-1 border-b border-surface-500/30 bg-surface-50 px-3 pt-1.5 text-xs dark:bg-surface-900" role="tablist">
+		<div class="cp-switch flex items-center gap-1 border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900" role="tablist">
 			<button class={tab(view === "item")} role="tab" aria-selected={view === "item"} on:click={() => showItem()}>Item</button>
 			<button class={tab(view === "rules")} role="tab" aria-selected={view === "rules"} on:click={() => showRules()}>
 				<FileCode size={12} />Rules

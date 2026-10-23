@@ -663,7 +663,7 @@ func (a *App) ForwardCheckpoint(id uuid.UUID, body string, interceptResponse boo
 	if body != "" {
 		item, ok := a.Proxy.GetCheckpoint(id)
 		if !ok {
-			return fmt.Errorf("%w: %s", marasi.ErrCheckpointNotFound, id)
+			return checkpointGoneError(id, fmt.Errorf("%w: %s", marasi.ErrCheckpointNotFound, id))
 		}
 		raw := []byte(body)
 		if item.Type == domain.CheckpointTypeWebSocket {

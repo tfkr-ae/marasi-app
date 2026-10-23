@@ -12,7 +12,7 @@
 	import { ChevronDown, ChevronRight, Forward, Globe, Rocket, X } from "lucide-svelte";
 	import Dock from "../dock/Dock.svelte";
 	import { CHECKPOINT_DOCK } from "../dock/dock.js";
-	import { primaryVariant, statusClass } from "../launchpad/format.js";
+	import { METHOD_CLASS, primaryVariant, statusClass } from "../launchpad/format.js";
 	import { isDirty, parseErrorOf } from "../../stores/checkpointStore";
 	import { interceptFlag } from "../../stores/interceptFlag.js";
 	import { bulkTargets, interceptedFor, treeOrder } from "./items.js";
@@ -30,13 +30,6 @@
 
 	const dockState = writable({ width: savedWidth ?? CHECKPOINT_DOCK.default, collapsed: false });
 	$: savedWidth = $dockState.width;
-
-	const METHOD_CLASS = {
-		POST: "text-tertiary-700 dark:text-tertiary-500",
-		PUT: "text-warning-800 dark:text-warning-500",
-		PATCH: "text-warning-800 dark:text-warning-500",
-		DELETE: "text-error-500",
-	};
 
 	$: state = $store;
 	$: primary = primaryVariant($modeCurrent);
@@ -108,7 +101,7 @@
 		{#if state.picked.length}
 			<div class="flex items-center justify-between border-b border-surface-500/30 bg-primary-500/10 px-2 py-0.5 text-[10px]">
 				<span>{state.picked.length} picked</span>
-				<button class="opacity-70 hover:opacity-100" on:click={() => state.selectedId && store.pick(state.selectedId)}>Clear</button>
+				<button class="cp-clear-picks btn btn-sm {primary} px-2 py-0 text-[10px]" on:click={() => state.selectedId && store.pick(state.selectedId)}>Clear</button>
 			</div>
 		{/if}
 		<div class="cp-tree min-h-0 flex-1 overflow-auto" role="tree" aria-label="Intercepted items">

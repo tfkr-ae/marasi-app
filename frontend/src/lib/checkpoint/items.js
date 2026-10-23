@@ -2,7 +2,8 @@
 // called, how the dock groups items by host, and what Forward n and Drop n
 // act on. Pure, so they load under node --test.
 
-const KINDS = { request: "REQ", response: "RES", websocket: "WS" };
+/** An item's kind tag by Type, as the dock and KindTag show it. */
+export const KIND_LABELS = { request: "REQ", response: "RES", websocket: "WS" };
 
 const firstLine = (text) => (text ?? "").split(/\r?\n/, 1)[0];
 
@@ -37,7 +38,7 @@ function requestLine(text) {
  * message's connection ({ Host, Path }).
  */
 export function summarize(item, text, context = {}) {
-  const kind = KINDS[item.Type] ?? "";
+  const kind = KIND_LABELS[item.Type] ?? "";
   if (item.Type === "websocket") {
     const connection = context.connection ?? {};
     return {
@@ -80,6 +81,15 @@ export function itemTitle(summary, number = 0) {
   if (summary.kind === "WS") return `WS ${summary.method} · ${summary.host}${summary.path}`;
   const line = `${summary.method} ${summary.path}`.trim();
   return number ? `#${number} · ${line}` : line;
+}
+
+/**
+ * What the abandon toast calls an item: "#412" once Marasi has stored its
+ * pair, else its title. `context` is the item's, as for summarize.
+ */
+export function abandonLabel(item, context) {
+  const number = context?.request?.Number;
+  return number ? `#${number}` : itemTitle(summarize(item, item.text, context ?? {}));
 }
 
 /** The toast for an item Marasi dropped because its client left. */

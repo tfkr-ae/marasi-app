@@ -20,6 +20,15 @@ export function statusClass(code) {
   return "text-error-500";
 }
 
+/** Text colour class by HTTP method; methods not listed take none. */
+export const METHOD_CLASS = {
+  POST: "text-tertiary-700 dark:text-tertiary-500",
+  // warning-500 is unreadable on a light surface.
+  PUT: "text-warning-800 dark:text-warning-500",
+  PATCH: "text-warning-800 dark:text-warning-500",
+  DELETE: "text-error-500",
+};
+
 /**
  * How a launch that did not complete ended, for the tree and the response
  * pane: "Cancelled", "Failed: upstream_error", or null when it is pending,

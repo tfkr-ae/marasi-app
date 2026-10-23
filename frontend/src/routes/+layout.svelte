@@ -60,8 +60,13 @@
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
-	import { checkpointStore } from "../stores/checkpointStore";
+	import {
+		checkpointItemContext,
+		checkpointStore,
+	} from "../stores/checkpointStore";
 	import { checkpointBadge } from "../lib/checkpointBadge.js";
+	import { keyOf } from "../lib/checkpoint/itemContext.js";
+	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { sitemapStore } from "../stores/sitemapStore";
 	import { recentTraffic } from "../stores/recentTrafficStore";
@@ -162,6 +167,10 @@
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// Each held item's context, for the Checkpoint page and the abandon
+	// toast, which shows on any page.
+	$: checkpointItemContext.load($checkpointStore.items);
+	let stopAbandonToasts;
 	// Full class names, so Tailwind keeps them.
 	const dotTones = {
 		success: { dot: "bg-success-500", ping: "bg-success-400" },
@@ -356,10 +365,40 @@
 				}
 				handleNewLog(newLog);
 			});
-			// Marasi dropped a held item because its client left.
+			// Marasi dropped a held item because its client left. The
+			// toast shows on any page.
 			EventsOn("checkpoint-abandoned", (item) =>
 				checkpointStore.onAbandoned(item),
 			);
+			stopAbandonToasts = checkpointStore.onAbandon(
+				({ item, editLost }) => {
+					const context =
+						get(checkpointItemContext)[keyOf(item)];
+					toastStore.trigger({
+						message: abandonText(
+							abandonLabel(item, context),
+							editLost,
+						),
+						background: editLost
+							? "variant-filled-warning"
+							: "variant-filled-surface",
+						timeout: 3000,
+					});
+				},
+			);
+			// A held item was forwarded or dropped, on the Checkpoint page
+			// or in the WebSocket modal; both drop it.
+			EventsOn("checkpoint-settled", (item) => {
+				readCheckpointItems();
+				connectionStore
+					.onSettled(item)
+					.catch((err) =>
+						console.error(
+							"Reading WebSocket Checkpoint failed:",
+							err,
+						),
+					);
+			});
 			// The Checkpoint rail badge shows the count; no toast.
 			EventsOn("intercepted", () => readCheckpointItems());
 			EventsOn(
@@ -440,6 +479,8 @@
 			EventsOff("ws-state");
 			EventsOff("intercepted");
 			EventsOff("checkpoint-abandoned");
+			EventsOff("checkpoint-settled");
+			stopAbandonToasts?.();
 			EventsOff("log");
 			EventsOff("update-available");
 			EventsOff("update-progress");

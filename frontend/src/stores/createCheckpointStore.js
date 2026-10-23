@@ -4,12 +4,14 @@
 // checkpointStore.js for the Wails one), so this module loads under
 // node --test.
 import { get, writable } from "svelte/store";
+import { isCheckpointGone } from "../lib/checkpointHeld.js";
 
 function initialState() {
   // items: Checkpoint items as GetCheckpointItems returns them, each with
   // `text`, its held raw request or response, or its WebSocket payload.
   // editsById: the edited text by item id; parseErrorsById: why an edited
-  // HTTP item's text doesn't parse, by item id.
+  // HTTP item's text doesn't parse, by item id; checking: ids whose parse
+  // check hasn't come back yet.
   // picked: ids picked with ⌘-click or shift-click; anchor: where a
   // shift-click range starts.
   return {
@@ -19,12 +21,18 @@ function initialState() {
     anchor: null,
     editsById: {},
     parseErrorsById: {},
+    checking: [],
   };
 }
 
 /** Why the item's edit doesn't parse, or "" when it does or isn't edited. */
 export function parseErrorOf(state, id) {
   return isDirty(state, id) ? (state.parseErrorsById[id] ?? "") : "";
+}
+
+/** True while the item's latest edit is being checked. */
+export function isChecking(state, id) {
+  return state.checking.includes(id);
 }
 
 /** The picked ids in hold order. */
@@ -128,6 +136,7 @@ function withItems(state, items) {
     picked: state.picked.filter((id) => held.has(id)),
     editsById: keptFor(state.editsById, state.items, items),
     parseErrorsById: keptFor(state.parseErrorsById, state.items, items),
+    checking: state.checking.filter((id) => held.has(id)),
   };
 }
 
@@ -136,11 +145,12 @@ function without(state, gone) {
   return withItems(state, state.items.filter((item) => !gone.has(item.ID)));
 }
 
-// "Forwarded 6 · 1 skipped · 1 gone", leaving out counts of zero.
-function bulkText(kind, { done, skipped, gone }) {
+// "Forwarded 6 · 1 skipped · 1 gone · 1 failed", leaving out counts of zero.
+function bulkText(kind, { done, skipped, gone, failed }) {
   const parts = [`${kind === "forward" ? "Forwarded" : "Dropped"} ${done}`];
   if (skipped) parts.push(`${skipped} skipped`);
   if (gone) parts.push(`${gone} gone`);
+  if (failed) parts.push(`${failed} failed`);
   return parts.join(" · ");
 }
 
@@ -181,6 +191,14 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
 
   // The latest parse check by item id; an older reply is ignored.
   const parseSeq = {};
+  // The latest parse check still on its way, by item id.
+  const parseChecks = {};
+
+  const setChecking = (id, on) =>
+    store.update((state) => ({
+      ...state,
+      checking: on ? [...state.checking.filter((c) => c !== id), id] : state.checking.filter((c) => c !== id),
+    }));
 
   /**
    * Keeps the researcher's text for the item until it leaves, and checks
@@ -191,44 +209,86 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
     const item = itemOf(get(store), id);
     if (!item || item.Type === "websocket") return;
     const seq = (parseSeq[id] = (parseSeq[id] ?? 0) + 1);
-    const error = (await api.checkParse(text, item.Type)) ?? "";
-    if (seq !== parseSeq[id] || itemOf(get(store), id)?.Type !== item.Type) return;
-    store.update((state) => ({
-      ...state,
-      parseErrorsById: { ...state.parseErrorsById, [id]: error },
-    }));
+    const check = (async () => {
+      try {
+        const error = (await api.checkParse(text, item.Type)) ?? "";
+        if (seq !== parseSeq[id] || itemOf(get(store), id)?.Type !== item.Type) return;
+        store.update((state) => ({
+          ...state,
+          parseErrorsById: { ...state.parseErrorsById, [id]: error },
+        }));
+      } finally {
+        if (seq === parseSeq[id]) {
+          delete parseChecks[id];
+          setChecking(id, false);
+        }
+      }
+    })();
+    parseChecks[id] = check;
+    setChecking(id, true);
+    await check;
+  }
+
+  // Waits until none of `ids` has a parse check on its way.
+  async function parsed(ids) {
+    for (;;) {
+      const pending = ids.map((id) => parseChecks[id]).filter(Boolean);
+      if (!pending.length) return;
+      await Promise.allSettled(pending);
+    }
+  }
+
+  // Runs a single forward or drop. An item that had already left is
+  // removed and reported as "gone"; any other failure reads the queue
+  // again, since the item may have left anyway, and rethrows.
+  async function settleOne(id, send, done) {
+    try {
+      await send();
+    } catch (err) {
+      if (isCheckpointGone(err)) {
+        await settled([id]);
+        return "gone";
+      }
+      await refresh();
+      throw err;
+    }
+    await settled([id]);
+    return done;
   }
 
   /**
-   * Forwards the item, edited if it is dirty, else as held. Resolves to
-   * false, without forwarding, when its edit doesn't parse.
+   * Forwards the item, edited if it is dirty, else as held, once its parse
+   * check is back. Resolves to "forwarded", "unparsed" (not forwarded,
+   * since its edit doesn't parse) or "gone" (it had already left).
    */
   async function forward(id, { interceptResponse = false } = {}) {
+    await parsed([id]);
     const state = get(store);
-    if (parseErrorOf(state, id)) return false;
+    if (parseErrorOf(state, id)) return "unparsed";
     const body = isDirty(state, id) ? state.editsById[id] : "";
-    await api.forward(id, body, interceptResponse);
-    await settled([id]);
-    return true;
+    return settleOne(id, () => api.forward(id, body, interceptResponse), "forwarded");
   }
 
-  async function drop(id) {
-    await api.drop(id);
-    await settled([id]);
+  /** Drops the item. Resolves to "dropped", or "gone" if it had already left. */
+  function drop(id) {
+    return settleOne(id, () => api.drop(id), "dropped");
   }
 
   /**
    * Forward n or Drop n over `ids`, frozen at the click: items held during
-   * it stay held. Forward skips items whose edit doesn't parse. Resolves to
-   * { done, skipped, gone, text }, where gone counts items that had already
-   * left and text reads like "Forwarded 6 · 1 skipped · 1 gone".
+   * it stay held. Forward waits for pending parse checks and skips items
+   * whose edit doesn't parse. Resolves to { done, skipped, gone, failed,
+   * text }, where gone counts items that had already left, failed those
+   * still held because their forward or drop failed, and text reads like
+   * "Forwarded 6 · 1 skipped · 1 gone · 1 failed".
    */
   async function bulk(kind, ids) {
     const snapshot = [...ids];
+    if (kind === "forward") await parsed(snapshot);
     const state = get(store);
     const skipped = kind === "forward" ? snapshot.filter((id) => parseErrorOf(state, id)) : [];
     const sent = snapshot.filter((id) => !skipped.includes(id));
-    let result = { Done: 0, Gone: 0 };
+    let result = { Done: 0, Gone: 0, Failed: 0 };
     if (sent.length) {
       try {
         result =
@@ -238,13 +298,21 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
               )
             : await api.dropMany(sent);
       } catch (err) {
-        // Some items failed; the queue says which are still held.
+        // The call failed; the queue says which are still held.
         await refresh();
         throw err;
       }
-      await settled(sent);
+      // Failed items stay held with their edits, so only the queue knows
+      // which left.
+      if (result.Failed) await refresh();
+      else await settled(sent);
     }
-    const counts = { done: result.Done, skipped: skipped.length, gone: result.Gone };
+    const counts = {
+      done: result.Done,
+      skipped: skipped.length,
+      gone: result.Gone,
+      failed: result.Failed ?? 0,
+    };
     return { ...counts, text: bulkText(kind, counts) };
   }
 
@@ -288,6 +356,7 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
   function clear() {
     readSeq++;
     for (const id of Object.keys(parseSeq)) parseSeq[id]++;
+    for (const id of Object.keys(parseChecks)) delete parseChecks[id];
     store.set(initialState());
   }
 

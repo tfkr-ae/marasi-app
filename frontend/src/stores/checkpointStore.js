@@ -8,12 +8,16 @@ import {
   ForwardCheckpoints,
   GetCheckpointItems,
   GetInterceptFlag,
+  GetRawDetails,
+  GetWebSocketConnection,
   ToggleIntercept,
 } from "../lib/wailsjs/go/main/App";
+import { createItemContext } from "../lib/checkpoint/itemContext.js";
 import { createCheckpointStore } from "./createCheckpointStore.js";
 import { interceptFlag } from "./interceptFlag.js";
 
 export {
+  isChecking,
   isDirty,
   parseErrorOf,
   pickedIds,
@@ -33,3 +37,11 @@ export const checkpointStore = createCheckpointStore(
   },
   { interceptFlag },
 );
+
+// The held items' context (a response's request, a WebSocket message's
+// connection), read once per item. The layout loads it for every held item,
+// so the page and the abandon toast share it.
+export const checkpointItemContext = createItemContext({
+  getRow: (id) => GetRawDetails(id),
+  getConnection: (id) => GetWebSocketConnection(id),
+});

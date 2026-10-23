@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -170,6 +171,100 @@ func TestAppCheckpointBulk(t *testing.T) {
 			t.Fatalf("wanted only %s held\ngot: %v", keptID, items)
 		}
 		dropAppHolds(t, app, keptDone)
+	})
+}
+
+func TestAppCheckpointSettled(t *testing.T) {
+	t.Run("should emit checkpoint-settled with the item once a request is forwarded", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		events := &recordedEvents{}
+		app.emitEvent = events.emit
+		_, reqID, done := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 1)
+
+		if err := app.ForwardCheckpoint(reqID, "", false); err != nil {
+			t.Fatalf("forwarding: %v", err)
+		}
+		receiveAppHoldResult(t, done)
+
+		data := waitForEvent(t, events, "checkpoint-settled")
+		want := CheckpointSettled{ID: reqID, Type: domain.CheckpointTypeRequest}
+		if got, ok := data[0].(CheckpointSettled); !ok || got != want {
+			t.Fatalf("wanted: %+v\ngot: %#v", want, data[0])
+		}
+	})
+
+	t.Run("should emit checkpoint-settled with the connection's request id once a WebSocket message is dropped", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		events := &recordedEvents{}
+		app.emitEvent = events.emit
+		message, done := startAppWebSocketHold(t, app)
+		waitForAppCheckpoint(t, app, 1)
+
+		if err := app.DropWSIntercepted(message.ID); err != nil {
+			t.Fatalf("dropping: %v", err)
+		}
+		receiveAppHoldResult(t, done)
+
+		data := waitForEvent(t, events, "checkpoint-settled")
+		want := CheckpointSettled{ID: message.ID, Type: domain.CheckpointTypeWebSocket, RequestID: message.RequestID}
+		if got, ok := data[0].(CheckpointSettled); !ok || got != want {
+			t.Fatalf("wanted: %+v\ngot: %#v", want, data[0])
+		}
+	})
+
+	t.Run("should refuse an item that had already left with checkpoint_gone and emit nothing", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		events := &recordedEvents{}
+		app.emitEvent = events.emit
+		gone := uuid.New()
+
+		for name, err := range map[string]error{
+			"drop":         app.DropCheckpoint(gone),
+			"forward":      app.ForwardCheckpoint(gone, "", false),
+			"forward body": app.ForwardCheckpoint(gone, "GET / HTTP/1.1\r\nHost: x\r\n\r\n", false),
+			"forward ws":   app.ForwardWSIntercepted(gone, 1, "edited"),
+		} {
+			if !errors.Is(err, marasi.ErrCheckpointNotFound) {
+				t.Fatalf("%s: wanted: %v\ngot: %v", name, marasi.ErrCheckpointNotFound, err)
+			}
+			if want := checkpointGone + " (" + gone.String() + ")"; !strings.Contains(err.Error(), want) {
+				t.Fatalf("%s: wanted the error to carry %q\ngot: %v", name, want, err)
+			}
+		}
+		if events.has("checkpoint-settled") {
+			t.Fatal("wanted no checkpoint-settled event")
+		}
+	})
+}
+
+func TestAppCheckpointBulkFailures(t *testing.T) {
+	t.Run("should count an item that fails to forward and keep forwarding the rest", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		_, badID, badDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 1)
+		_, goodID, goodDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 2)
+
+		got, err := app.ForwardCheckpoints([]CheckpointForwardItem{
+			{ID: badID, Body: "not a request"},
+			{ID: goodID},
+			{ID: uuid.New()},
+		})
+		if err != nil {
+			t.Fatalf("wanted: nil\ngot: %v", err)
+		}
+		if want := (CheckpointBulkResult{Done: 1, Gone: 1, Failed: 1}); got != want {
+			t.Fatalf("wanted: %+v\ngot: %+v", want, got)
+		}
+		if err := receiveAppHoldResult(t, goodDone); err != nil {
+			t.Fatalf("wanted the good item forwarded\ngot: %v", err)
+		}
+		items := app.GetCheckpointItems()
+		if len(items) != 1 || items[0].ID != badID {
+			t.Fatalf("wanted only %s held\ngot: %v", badID, items)
+		}
+		dropAppHolds(t, app, badDone)
 	})
 }
 

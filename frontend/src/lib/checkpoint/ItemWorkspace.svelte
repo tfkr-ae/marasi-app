@@ -13,7 +13,7 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, Forward, X } from "lucide-svelte";
 	import { lineWrap, marasiConfig } from "../../stores";
-	import { isDirty, parseErrorOf, textOf } from "../../stores/checkpointStore";
+	import { isChecking, isDirty, parseErrorOf, textOf } from "../../stores/checkpointStore";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import { longStrings } from "../longStrings.js";
 	import { usesSyntax } from "../ledger/drawer.js";
@@ -37,6 +37,8 @@
 	$: text = textOf(state, item.ID);
 	$: dirty = isDirty(state, item.ID);
 	$: error = parseErrorOf(state, item.ID);
+	// Forward waits for the edit's parse check, so it greys out meanwhile.
+	$: checking = isChecking(state, item.ID);
 	$: primary = primaryVariant($modeCurrent);
 	$: theme = $modeCurrent ? githubLight : oneDark;
 	$: vimExtensions = $marasiConfig.VimEnabled ? [vim()] : [];
@@ -77,13 +79,13 @@
 			</p>
 		</div>
 		<div class="flex flex-none items-center gap-2">
-			<button class="cp-forward btn btn-sm {primary}" disabled={!!error} title="Forward" on:click={() => onForward(item.ID)}>
+			<button class="cp-forward btn btn-sm {primary}" disabled={!!error || checking} title="Forward" on:click={() => onForward(item.ID)}>
 				<Forward size={14} class="mr-1" />Forward
 			</button>
 			{#if item.Type === "request"}
 				<button
 					class="cp-forward-intercept btn btn-sm {primary}"
-					disabled={!!error}
+					disabled={!!error || checking}
 					title="Forward and intercept its response"
 					on:click={() => onForward(item.ID, { interceptResponse: true })}
 				>
@@ -123,7 +125,7 @@
 							{/if}
 						</span>
 						{#if heldLeft && dirty}
-							<button class="cp-revert opacity-60 hover:opacity-100" on:click={revert}>Revert</button>
+							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-[11px]" on:click={revert}>Revert</button>
 						{/if}
 					</div>
 					<div class="cp-request min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
@@ -177,7 +179,7 @@
 							{/if}
 						</span>
 						{#if dirty}
-							<button class="cp-revert opacity-60 hover:opacity-100" on:click={revert}>Revert</button>
+							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-[11px]" on:click={revert}>Revert</button>
 						{/if}
 					</div>
 					<div class="cp-response min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">

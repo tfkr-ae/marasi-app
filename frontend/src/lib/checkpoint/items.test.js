@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  abandonLabel,
   abandonText,
   bulkTargets,
   dropTitle,
@@ -119,4 +120,10 @@ test("a WebSocket message is titled by its connection", () => {
 test("an abandoned item's toast says the client left, and whether an edit went with it", () => {
   assert.equal(abandonText("#412", true), "#412 dropped · client left · edit lost");
   assert.equal(abandonText("GET /x", false), "GET /x dropped · client left");
+});
+
+test("an abandoned item is named by its pair number once stored, else by its title", () => {
+  const response = { ID: "r", Type: "response", text: "HTTP/1.1 200 OK\r\n\r\n" };
+  assert.equal(abandonLabel(response, { request: { Number: 412, Method: "GET", Path: "/x" } }), "#412");
+  assert.equal(abandonLabel(request("a", "POST /login HTTP/1.1\r\nHost: shop.test\r\n\r\n")), "POST /login");
 });

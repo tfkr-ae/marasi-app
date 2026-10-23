@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { get, writable } from "svelte/store";
 import {
   createCheckpointStore,
+  isChecking,
   isDirty,
   parseErrorOf,
   pickedIds,
@@ -19,9 +20,17 @@ const request = (id, path = `/${id}`) => ({
   InterceptedAt: "2026-10-23T10:00:00Z",
 });
 
+// The error the app's Go side returns for an item that has already left.
+const goneError = (id) =>
+  new Error(`settling Checkpoint item: checkpoint_gone (${id}): checkpoint item not found: ${id}`);
+
 // An in-memory Checkpoint: `held` is the queue in hold order.
 function fakeApi(held = []) {
   const calls = [];
+  const settle = (id) => {
+    if (!api.held.some((item) => item.ID === id)) throw goneError(id);
+    api.held = api.held.filter((item) => item.ID !== id);
+  };
   const api = {
     calls,
     held,
@@ -30,7 +39,7 @@ function fakeApi(held = []) {
     toggleIntercept: async () => true,
     forward: async (id, body, interceptResponse) => {
       calls.push(["forward", id, body, interceptResponse]);
-      api.held = api.held.filter((item) => item.ID !== id);
+      settle(id);
     },
     // CheckHTTPParse: an error string, empty when the text parses.
     checkParse: async (text, type) => {
@@ -49,7 +58,7 @@ function fakeApi(held = []) {
     },
     drop: async (id) => {
       calls.push(["drop", id]);
-      api.held = api.held.filter((item) => item.ID !== id);
+      settle(id);
     },
   };
   function settleMany(ids) {
@@ -242,12 +251,78 @@ test("an edit that doesn't parse has a parse error and is not forwarded", async 
   assert.equal(parseErrorOf(get(store), "a"), "malformed HTTP request");
   assert.equal(parseErrorOf(get(store), "b"), "");
 
-  assert.equal(await store.forward("a"), false);
+  assert.equal(await store.forward("a"), "unparsed");
   assert.deepEqual(ids(get(store)), ["a", "b"]);
 
   await store.edit("a", "GET /admin HTTP/1.1\r\nHost: x\r\n\r\n");
   assert.equal(parseErrorOf(get(store), "a"), "");
-  assert.equal(await store.forward("a"), true);
+  assert.equal(await store.forward("a"), "forwarded");
+});
+
+// A checkParse whose replies the test releases, in order.
+function heldParses(api) {
+  const pending = [];
+  api.checkParse = (text, type) =>
+    new Promise((resolve) => {
+      api.calls.push(["checkParse", text, type]);
+      pending.push(() => resolve(text.startsWith("BROKEN") ? `malformed HTTP ${type}` : ""));
+    });
+  return () => pending.shift()();
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("forward waits for the edit's parse check and doesn't send an edit that doesn't parse", async () => {
+  const { api, store } = await loaded([request("a")]);
+  const release = heldParses(api);
+  store.edit("a", "BROKEN /admin");
+  assert.equal(isChecking(get(store), "a"), true);
+
+  const forwarding = store.forward("a");
+  await tick();
+  assert.deepEqual(callsTo(api, "forward"), []);
+  release();
+
+  assert.equal(await forwarding, "unparsed");
+  assert.equal(isChecking(get(store), "a"), false);
+  assert.deepEqual(callsTo(api, "forward"), []);
+  assert.deepEqual(ids(get(store)), ["a"]);
+});
+
+test("bulk forward waits for pending parse checks before it sends", async () => {
+  const { api, store } = await loaded([request("a"), request("b")]);
+  const release = heldParses(api);
+  store.edit("b", "BROKEN");
+
+  const bulk = store.bulk("forward", ["a", "b"]);
+  await tick();
+  assert.deepEqual(callsTo(api, "forwardMany"), []);
+  release();
+
+  const result = await bulk;
+  assert.deepEqual(callsTo(api, "forwardMany"), [["forwardMany", [{ ID: "a", Body: "" }]]]);
+  assert.equal(result.text, "Forwarded 1 · 1 skipped");
+});
+
+test("a forward or drop of an item that already left removes it as gone", async () => {
+  const { api, store } = await loaded([request("a"), request("b")]);
+  // Both left elsewhere, before their events arrived.
+  api.held = [];
+
+  assert.equal(await store.forward("a"), "gone");
+  assert.equal(await store.drop("b"), "gone");
+  assert.deepEqual(ids(get(store)), []);
+});
+
+test("a forward that fails reads the queue again and rethrows", async () => {
+  const { api, store } = await loaded([request("a"), request("b")]);
+  api.forward = async () => {
+    api.held = api.held.filter((item) => item.ID !== "b");
+    throw new Error("connection reset");
+  };
+
+  await assert.rejects(store.forward("a"), /connection reset/);
+  assert.deepEqual(ids(get(store)), ["a"]);
 });
 
 test("WebSocket payloads are not parsed", async () => {
@@ -284,10 +359,24 @@ test("bulk forward acts on the ids at the click, skipping parse errors and count
       ],
     ],
   ]);
-  assert.deepEqual(result, { done: 2, skipped: 1, gone: 1, text: "Forwarded 2 · 1 skipped · 1 gone" });
+  assert.deepEqual(result, { done: 2, skipped: 1, gone: 1, failed: 0, text: "Forwarded 2 · 1 skipped · 1 gone" });
   assert.deepEqual(ids(get(store)), ["c", "e"]);
   assert.equal(get(store).selectedId, "c");
   assert.equal(isDirty(get(store), "c"), true);
+});
+
+test("bulk counts items that failed and keeps them held", async () => {
+  const { api, store } = await loaded([request("a"), request("b"), request("c")]);
+  await store.edit("b", "GET /b2 HTTP/1.1\r\nHost: x\r\n\r\n");
+  api.dropMany = async (ids_) => {
+    api.held = api.held.filter((item) => item.ID === "b");
+    return { Done: ids_.length - 1, Gone: 0, Failed: 1 };
+  };
+
+  const result = await store.bulk("drop", ["a", "b", "c"]);
+  assert.deepEqual(result, { done: 2, skipped: 0, gone: 0, failed: 1, text: "Dropped 2 · 1 failed" });
+  assert.deepEqual(ids(get(store)), ["b"]);
+  assert.equal(isDirty(get(store), "b"), true);
 });
 
 test("bulk keeps skipped items picked", async () => {
@@ -304,7 +393,7 @@ test("bulk drop drops edits that don't parse too", async () => {
   await store.edit("b", "BROKEN");
   const result = await store.bulk("drop", ["a", "b"]);
   assert.deepEqual(callsTo(api, "dropMany"), [["dropMany", ["a", "b"]]]);
-  assert.deepEqual(result, { done: 2, skipped: 0, gone: 0, text: "Dropped 2" });
+  assert.deepEqual(result, { done: 2, skipped: 0, gone: 0, failed: 0, text: "Dropped 2" });
   assert.deepEqual(ids(get(store)), ["c"]);
 });
 
