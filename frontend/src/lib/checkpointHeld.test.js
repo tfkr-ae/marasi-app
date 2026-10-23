@@ -11,6 +11,7 @@ test("Open Checkpoint opens it and Cancel does nothing", () => {
   let opened = 0;
   const modal = checkpointHeldModal(() => opened++);
   assert.equal(modal.type, "confirm");
+  assert.equal(modal.title, "Checkpoint has intercepted items");
   assert.equal(modal.buttonTextConfirm, "Open Checkpoint");
   modal.response(false);
   assert.equal(opened, 0);
