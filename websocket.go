@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/martian"
 	"github.com/google/martian/fifo"
@@ -31,6 +32,7 @@ func (a *App) configureWebSocketHandlers() {
 			return nil
 		}),
 		marasi.WithWebSocketInterceptHandler(func(msg domain.WebSocketMessage) error {
+			a.checkpointTimes.set(msg.ID, time.Now())
 			a.emitEvent("ws-intercepted", msg)
 			return nil
 		}),
@@ -168,12 +170,14 @@ func (a *App) GetWSIntercepted(requestID uuid.UUID) *domain.WebSocketMessage {
 
 func (a *App) ForwardWSIntercepted(messageID uuid.UUID, opcode int, payload string) error {
 	body := []byte(payload)
-	return a.Proxy.ForwardCheckpoint(messageID, marasi.CheckpointForward{
-		Payload: &body,
-		Opcode:  &opcode,
+	return a.settleCheckpoint(messageID, func() error {
+		return a.Proxy.ForwardCheckpoint(messageID, marasi.CheckpointForward{
+			Payload: &body,
+			Opcode:  &opcode,
+		})
 	})
 }
 
 func (a *App) DropWSIntercepted(messageID uuid.UUID) error {
-	return a.Proxy.DropCheckpoint(messageID)
+	return a.DropCheckpoint(messageID)
 }

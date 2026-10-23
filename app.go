@@ -45,6 +45,9 @@ type App struct {
 	projects  *service.ProjectLifecycle
 	chrome    *service.Chrome
 	Config    *Config
+	// checkpointTimes records when each held Checkpoint item was
+	// intercepted (checkpoint.go).
+	checkpointTimes checkpointTimes
 	// attachFrontendLog sends the project lifecycle's log to the frontend
 	// once startup has the Wails context. Nil in tests.
 	attachFrontendLog func(slog.Handler)
@@ -160,13 +163,14 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 	app.chrome = service.NewChrome(proxy, listener, logWriter)
 	app.configureWebSocketHandlers()
 	app.configureLaunchHandlers()
+	app.configureCheckpointHandlers()
 	return app
 }
 
 // startup is called when the app starts. It saves the context for the
 // runtime methods, sends the project lifecycle's log to the frontend, and
-// sets Marasi's request, response, log and intercept handlers. Those four
-// call runtime.EventsEmit directly, so a test's emitEvent does not see them.
+// sets Marasi's request, response and log handlers. Those three call
+// runtime.EventsEmit directly, so a test's emitEvent does not see them.
 // It opens no project and starts no listener: the frontend does both.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
@@ -186,10 +190,6 @@ func (a *App) startup(ctx context.Context) {
 		}),
 		marasi.WithLogHandler(func(logItem domain.Log) error {
 			runtime.EventsEmit(a.ctx, "log", logItem)
-			return nil
-		}),
-		marasi.WithInterceptHandler(func(item domain.CheckpointItem) error {
-			runtime.EventsEmit(a.ctx, "intercepted", item.Type)
 			return nil
 		}),
 		marasi.WithLogger(logHandler),
@@ -650,10 +650,6 @@ func (a *App) GetResponse(id uuid.UUID) *domain.ProxyResponse {
 	return response
 }
 
-func (a *App) GetCheckpointItems() []domain.CheckpointItem {
-	return a.Proxy.CheckpointItems()
-}
-
 func (a *App) GetCheckpoint(id uuid.UUID) *domain.CheckpointItem {
 	item, ok := a.Proxy.GetCheckpoint(id)
 	if !ok {
@@ -676,11 +672,11 @@ func (a *App) ForwardCheckpoint(id uuid.UUID, body string, interceptResponse boo
 			fwd.Raw = &raw
 		}
 	}
-	return a.Proxy.ForwardCheckpoint(id, fwd)
+	return a.settleCheckpoint(id, func() error { return a.Proxy.ForwardCheckpoint(id, fwd) })
 }
 
 func (a *App) DropCheckpoint(id uuid.UUID) error {
-	return a.Proxy.DropCheckpoint(id)
+	return a.settleCheckpoint(id, func() error { return a.Proxy.DropCheckpoint(id) })
 }
 
 // Launch sends raw from the launchpad and returns the launch id, which is
