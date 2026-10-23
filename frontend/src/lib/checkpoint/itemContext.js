@@ -4,6 +4,9 @@
 // Marasi stores it only once it is forwarded.
 import { writable } from "svelte/store";
 
+const ZERO_ID = "00000000-0000-0000-0000-000000000000";
+const isId = (id) => typeof id === "string" && id !== "" && id !== ZERO_ID;
+
 const RETRIES = 3;
 const RETRY_MS = 500;
 
@@ -22,7 +25,11 @@ export function createItemContext(api) {
         const row = await api.getRow(item.ID);
         if (row?.Request) context = { request: row.Request };
       } else {
-        const connection = await api.getConnection(item.RequestID || item.ConnectionID);
+        // The stored connection is found by its upgrade request's id, a
+        // live one by its own id.
+        const connection =
+          (isId(item.RequestID) && (await api.getConnection(item.RequestID))) ||
+          (isId(item.ConnectionID) && (await api.getConnection(item.ConnectionID)));
         if (connection) context = { connection };
       }
     } catch (err) {

@@ -51,6 +51,7 @@
 	];
 	const lang = (body) => (usesSyntax(body, $marasiConfig.SyntaxMode) ? StreamLanguage.define(http) : undefined);
 
+	const OPCODES = { 0: "continuation", 1: "text", 2: "binary", 8: "close", 9: "ping", 10: "pong" };
 	$: heldLeft = item.Type === "request";
 	const head =
 		"flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900";
@@ -109,7 +110,7 @@
 						<dt class="opacity-60">Direction</dt>
 						<dd>{item.Direction === "client" ? "Client → server" : "Server → client"}</dd>
 						<dt class="opacity-60">Opcode</dt>
-						<dd>{item.Opcode}{item.Opcode === 1 ? " · text" : item.Opcode === 2 ? " · binary" : ""}</dd>
+						<dd>{item.Opcode}{OPCODES[item.Opcode] ? ` · ${OPCODES[item.Opcode]}` : ""}</dd>
 					</dl>
 				{:else}
 					<div class="{head} {heldLeft ? heldHead : ''}">
