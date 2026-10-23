@@ -149,3 +149,7 @@ _Avoid_: project lock (Marasi's file lock behind ownership), in use, busy (Maras
 **Database upgrade**:
 The one-time step that brings an older project's database up to the running build, which Marasi runs as it opens the project. The app shows it as the Upgrade step while opening.
 _Avoid_: migration in what researchers see; not to be confused with an update
+
+**Upstream proxy**:
+A named proxy on this machine that a project's traffic goes through on its way to the origin, as Marasi defines it. The list is shared by every project on the machine; each project selects at most one, or none for a direct connection. A request the selected upstream proxy can't carry fails and is never sent direct.
+_Avoid_: upstream on its own (it means the origin), proxy chain, outbound proxy

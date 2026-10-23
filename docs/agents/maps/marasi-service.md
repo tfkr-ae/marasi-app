@@ -8,7 +8,7 @@ The app pins `github.com/tfkr-ae/marasi` in `go.mod`. `GOWORK=off go list -m -f 
 
 ## What the app holds
 
-`App.Proxy` is the `*marasi.Proxy`. Its repositories are nil until a project opens, so call the checked getters (`GetTrafficRepo`, `GetConfigRepo` and the rest), which return an error instead. `App.projects` is marasi's `service.ProjectLifecycle` (open, shut down, background jobs), `App.listener` is the proxy listener, and `App.chrome` launches Chrome. `newApp` sets all four. `NewApp` builds the proxy, and tests pass their own.
+`App.Proxy` is the `*marasi.Proxy`. Its repositories are nil until a project opens, so call the checked getters (`GetTrafficRepo`, `GetConfigRepo` and the rest), which return an error instead. `App.projects` is marasi's `service.ProjectLifecycle` (open, shut down, background jobs), `App.listener` is the proxy listener, `App.chrome` launches Chrome, and `App.upstreamProxies` is marasi's `service.UpstreamProxies`. `newApp` sets all five. `NewApp` builds the proxy, and tests pass their own.
 
 ## Bindings
 
@@ -35,3 +35,4 @@ The frontend can only match error text, so an error it must act on carries a cod
 - **Per-project settings** are client settings in the project file, under the client `appClient` (`client_settings.go`). Stores call the generic bindings with their own key prefixes. A key that both Go and JS use is written out in both.
 - **App default with a project override.** `content_type_exclusion.go` is the pattern, from [Ledger settings are app defaults with project overrides, stored by the app](../../adr/2026-10-16-app-defaults-with-project-overrides.md).
 - `marasi_config.yaml` is Marasi's own config, which service instances share. The app does not keep its settings there.
+- **Upstream proxies** (`upstream_proxy.go`). The list is in `marasi_config.yaml` and the selection is a project setting under Marasi's reserved client, so both go through `service.UpstreamProxies`, the same methods the control API handlers call. Its edits take the config lock that every instance shares. It sends the app no events, so Settings reads the list again each time the section opens. Opening a project applies that project's selection, through `ProjectLifecycle`. A selection this machine doesn't list fails the project's traffic closed, and `UpstreamProxyState.configured` reports it.
