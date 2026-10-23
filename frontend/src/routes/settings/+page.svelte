@@ -839,7 +839,7 @@
 						     selection did not change. -->
 						{#key upstreamOptionsKey}
 						<select
-							class={tableField}
+							class="select h-8 w-full py-1 text-sm"
 							aria-label="This project's upstream proxy"
 							value={$upstreamProxyStore.selected}
 							on:change={(event) => useUpstreamProxy(event.currentTarget.value)}
@@ -866,7 +866,7 @@
 						<p class="text-xs opacity-70">The URL Test connects to</p>
 					</div>
 					<div class={control}>
-						<input type="text" class="{tableField} font-mono" aria-label="Test target" bind:value={checkTarget} />
+						<input type="text" class="input h-8 w-full py-1 font-mono text-sm" aria-label="Test target" bind:value={checkTarget} />
 					</div>
 				</div>
 				<div class="table-container mt-4">
@@ -883,7 +883,7 @@
 						<tbody>
 							{#each $upstreamProxyStore.items as item (item.name)}
 								{@const result = $upstreamProxyStore.checks[item.name]}
-								<tr>
+								<tr class="[&>td]:!align-middle">
 									<td>{item.name}</td>
 									<td class="font-mono">
 										{#if upstreamAddress(item)}
