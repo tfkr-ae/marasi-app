@@ -37,12 +37,12 @@ Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/
 
 The scratchpad stays open (doctor still reports `scratchpad.marasi`). Afterwards kill both the `flock` process and its `sleep` child (the child inherits the lock, so killing `flock` alone keeps the project locked); the empty `locked-probe.marasi.lock` stays in the isolated config until cleanup.
 
-While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has held items` (`Forward or drop them to switch projects.`) instead of the picker, with `Open Checkpoint` (goes to `/checkpoint`) and `Cancel`; `⌘O` closes it again. An item held after the picker opened makes `OpenProject` refuse with `checkpoint_held` (`app.go`), and the same modal shows. Hold one with the Checkpoint `narrow-rule` recipe and a background request (see `checkpoint.md`), then, from Home:
+While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has intercepted items` (`Forward or drop them to switch projects.`) instead of the picker, with `Open Checkpoint` (goes to `/checkpoint`) and `Cancel`; `⌘O` closes it again. An item held after the picker opened makes `OpenProject` refuse with `checkpoint_held` (`app.go`), and the same modal shows. Hold one with the Checkpoint `narrow-rule` recipe and a background request (see `checkpoint.md`), then, from Home:
 
 ```json
 {"name":"held-switch-open-checkpoint","steps":[
- {"key":"cmd+o"},{"waitText":"Checkpoint has held items"},{"waitText":"Forward or drop them to switch projects."},{"waitNoText":"Switch Projects"},
- {"text":"Open Checkpoint"},{"waitText":"Intercept Queue: 1"},{"waitNoText":"Checkpoint has held items"}]}
+ {"key":"cmd+o"},{"waitText":"Checkpoint has intercepted items"},{"waitText":"Forward or drop them to switch projects."},{"waitNoText":"Switch Projects"},
+ {"text":"Open Checkpoint"},{"waitText":"Intercept Queue: 1"},{"waitNoText":"Checkpoint has intercepted items"}]}
 ```
 
 After `Forward`, `⌘O` opens `Switch Projects` again.

@@ -15,7 +15,7 @@ export const heldCheckpointIDs = (error) => codeIDs(error, "checkpoint_held");
 export function checkpointHeldModal(open) {
   return {
     type: "confirm",
-    title: "Checkpoint has held items",
+    title: "Checkpoint has intercepted items",
     body: "Forward or drop them to switch projects.",
     buttonTextConfirm: "Open Checkpoint",
     buttonTextCancel: "Cancel",
