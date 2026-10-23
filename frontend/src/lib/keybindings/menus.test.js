@@ -177,6 +177,20 @@ test("each page's shared shortcuts run that page's action", () => {
   }
 });
 
+test("Checkpoint forwards picked items on ⌘⇧A, drops them on ⌘⇧X and intercepts the response on ⌘⌥F", () => {
+  const dispatcher = mac();
+  const page = on("/checkpoint");
+  assert.equal(dispatcher.resolve(cmdShift("A", "KeyA"), page), "checkpoint.forward-picked");
+  assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), page), "checkpoint.drop-picked");
+  assert.equal(dispatcher.resolve(keydown("ƒ", "KeyF", { metaKey: true, altKey: true }), page), "checkpoint.forward-intercept-response");
+  // The single-item keys stay where they were.
+  assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), page), "checkpoint.forward-intercepted");
+  assert.equal(dispatcher.resolve(cmdShift("D", "KeyD"), page), "checkpoint.drop-intercepted");
+  // An editor keeps none of them: the item and rules editors are where you work.
+  const editor = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" ? {} : null) };
+  assert.equal(dispatcher.resolve(keydown("A", "KeyA", { metaKey: true, shiftKey: true }, editor), page), "checkpoint.forward-picked");
+});
+
 test("the Launchpad renames on ⌘R and swaps compared entries on ⌘⇧X", () => {
   const dispatcher = mac();
   assert.equal(dispatcher.resolve(cmd("r", "KeyR"), on("/launchpad")), "launchpad.toggle-settings");

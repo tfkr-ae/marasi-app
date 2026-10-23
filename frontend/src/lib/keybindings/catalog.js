@@ -67,7 +67,7 @@ export const FACTORY_ACTIONS = [
   action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t")),
   action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u")),
   action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u")),
-  action("global.toggle-intercept", "Toggle Intercept", "Toggle the Global Intercept On or Off", "intercept, toggle, global", primary("i")),
+  action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i")),
   ...pageActions("ledger.drawer-closed", [
     ["toggle-settings", "Toggle Query Fields", "Show or hide the query fields and examples", "settings, toggle, query, fields, help", primary("p")],
     ["focus-query", "Search", "Jump to search input", "search", primary("s")],
@@ -167,13 +167,21 @@ export const FACTORY_ACTIONS = [
     ["move-entries-top", "Move Entries to Top", "Move the selected entries to the start of their launchpad", "move, top, first, order, reorder, entries", both("alt+shift+arrowup"), { yieldsToEditors: true }],
     ["move-entries-bottom", "Move Entries to Bottom", "Move the selected entries to the end of their launchpad", "move, bottom, last, end, order, reorder, entries", both("alt+shift+arrowdown"), { yieldsToEditors: true }],
   ]),
+  // Ids predate the redesigned page (a settings accordion) and stay put so
+  // saved profiles keep their overrides; toggle-settings now switches the
+  // workspace between Item and Rules.
   ...pageActions("checkpoint", [
-    ["toggle-settings", "Toggle Checkpoint Settings", "Toggle Settings Accordian", "settings, toggle", primary("p")],
-    ["edit-rules", "Edit Checkpoint", "Jump to code editor", "edit, toggle", primary("shift+e")],
-    ["update-rules", "Update Checkpoint Code", "Execute Checkpoint code", "edit, toggle", primary("shift+r")],
-    ["edit-intercepted", "Edit Intercepted Item", "Jump to intercepted item editor", "intercept, toggle", primary("shift+i")],
-    ["forward-intercepted", "Forward Intercepted Item", "Forward current item", "forward, toggle", primary("shift+f")],
-    ["drop-intercepted", "Drop Intercepted Item", "Drop current item", "drop, toggle", primary("shift+d")],
+    ["toggle-settings", "Toggle Rules", "Switch the workspace between the item and the rules", "rules, item, switch, lua, toggle", primary("p")],
+    ["edit-rules", "Edit Rules", "Open the rules and focus their editor", "rules, lua, code, edit", primary("shift+e")],
+    ["update-rules", "Update Rules", "Apply the rules", "rules, lua, code, apply, run", primary("shift+r")],
+    ["edit-intercepted", "Edit Intercepted Item", "Focus the selected item's intercepted side", "intercept, edit, focus", primary("shift+i")],
+    ["forward-intercepted", "Forward Intercepted Item", "Forward the selected item", "forward, intercept", primary("shift+f")],
+    ["drop-intercepted", "Drop Intercepted Item", "Drop the selected item", "drop, intercept", primary("shift+d")],
+    // The dock's Forward n and Drop n: the picked items, or every item when
+    // none are picked.
+    ["forward-picked", "Forward Picked Items", "Forward the picked items, or every item when none are picked", "forward, bulk, picked, all, intercept", primary("shift+a")],
+    ["drop-picked", "Drop Picked Items", "Drop the picked items, or every item when none are picked", "drop, bulk, picked, all, intercept", primary("shift+x")],
+    ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("alt+f")],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
   ...pageActions("logbook", [

@@ -6,7 +6,7 @@
 	// confirmations, the toasts and the checkpoint.* shortcuts.
 	import { onDestroy, onMount } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
-	import { CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, SquarePlay, ToggleLeft } from "lucide-svelte";
+	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
 	import { GetRawDetails, GetWebSocketConnection, RunExtension } from "../../lib/wailsjs/go/main/App";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
@@ -18,7 +18,7 @@
 	import ItemWorkspace from "../../lib/checkpoint/ItemWorkspace.svelte";
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
 	import { createItemContext, keyOf } from "../../lib/checkpoint/itemContext.js";
-	import { abandonText, dropTitle, groupByHost, itemTitle, summarize, treeOrder } from "../../lib/checkpoint/items.js";
+	import { abandonText, bulkTargets, dropTitle, groupByHost, itemTitle, summarize, treeOrder } from "../../lib/checkpoint/items.js";
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -203,6 +203,21 @@
 			actionId: "checkpoint.drop-intercepted",
 			icon: CornerLeftDown,
 			handler: () => drop(state.selectedId),
+		},
+		{
+			actionId: "checkpoint.forward-intercept-response",
+			icon: CornerDownRight,
+			handler: () => selected?.item.Type === "request" && forward(selected.ID, { interceptResponse: true }),
+		},
+		{
+			actionId: "checkpoint.forward-picked",
+			icon: ListChecks,
+			handler: () => bulk("forward", bulkTargets($store)),
+		},
+		{
+			actionId: "checkpoint.drop-picked",
+			icon: ListX,
+			handler: () => bulk("drop", bulkTargets($store)),
 		},
 		{
 			actionId: "checkpoint.show-logs",

@@ -272,3 +272,29 @@ test("the Launchpad page offers search, create, sidebar, grouping, compare and j
     assert.deepEqual(action.defaults, { [MACOS]: [mac], [WINDOWS_LINUX]: [win] }, id);
   }
 });
+
+// Checkpoint ids predate the redesigned page (a settings accordion) and stay
+// put so saved profiles keep their overrides; only the menu text follows the
+// Item | Rules page.
+test("Checkpoint actions keep their ids and keys but name the Item | Rules page", () => {
+  const catalog = buildCatalog();
+  const expected = [
+    ["checkpoint.toggle-settings", "Toggle Rules", "meta+p", "ctrl+p"],
+    ["checkpoint.edit-rules", "Edit Rules", "meta+shift+e", "ctrl+shift+e"],
+    ["checkpoint.update-rules", "Update Rules", "meta+shift+r", "ctrl+shift+r"],
+    ["checkpoint.edit-intercepted", "Edit Intercepted Item", "meta+shift+i", "ctrl+shift+i"],
+    ["checkpoint.forward-intercepted", "Forward Intercepted Item", "meta+shift+f", "ctrl+shift+f"],
+    ["checkpoint.drop-intercepted", "Drop Intercepted Item", "meta+shift+d", "ctrl+shift+d"],
+    ["checkpoint.show-logs", "Show Logs", "meta+shift+l", "ctrl+shift+l"],
+  ];
+  for (const [id, label, mac, win] of expected) {
+    const action = catalog.get(id);
+    assert.ok(action, id);
+    assert.equal(action.context, "checkpoint", id);
+    assert.equal(action.label, label, id);
+    assert.deepEqual(action.defaults, { [MACOS]: [mac], [WINDOWS_LINUX]: [win] }, id);
+  }
+  for (const action of catalog.inContext("checkpoint")) {
+    assert.doesNotMatch(`${action.label} | ${action.description} | ${action.keywords}`, /accordi|settings/i, action.id);
+  }
+});
