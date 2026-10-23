@@ -44,7 +44,10 @@ type App struct {
 	listener  service.ListenerLifecycle
 	projects  *service.ProjectLifecycle
 	chrome    *service.Chrome
-	Config    *Config
+	// upstreamProxies edits this machine's upstream proxy list and the open
+	// project's selection (upstream_proxy.go).
+	upstreamProxies *service.UpstreamProxies
+	Config          *Config
 	// checkpointTimes records when each held Checkpoint item was
 	// intercepted (checkpoint.go).
 	checkpointTimes checkpointTimes
@@ -161,6 +164,7 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 	listener.BindProject(app.projects)
 	app.listener = listener
 	app.chrome = service.NewChrome(proxy, listener, logWriter)
+	app.upstreamProxies = service.NewUpstreamProxies(proxy)
 	app.configureWebSocketHandlers()
 	app.configureLaunchHandlers()
 	app.configureCheckpointHandlers()
