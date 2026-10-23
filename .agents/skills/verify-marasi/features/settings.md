@@ -2,7 +2,7 @@
 
 ## Sub-features
 
-- Vim, syntax mode, default interface, and default port
+- Vim, syntax mode, line wrapping (`wrap_mode`), default interface, and default port
 - Waypoint management
 - Chrome executable paths and profiles
 - Highlight colours and app labels (Highlights section): the 8 highlights' colours and app-wide labels, saved to `highlights` in `marasi_appconfig.yaml`, with Reset to defaults
