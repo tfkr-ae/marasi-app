@@ -42,7 +42,7 @@ While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has i
 ```json
 {"name":"held-switch-open-checkpoint","steps":[
  {"key":"cmd+o"},{"waitText":"Checkpoint has intercepted items"},{"waitText":"Forward or drop them to switch projects."},{"waitNoText":"Switch Projects"},
- {"text":"Open Checkpoint"},{"waitText":"Intercept Queue: 1"},{"waitNoText":"Checkpoint has intercepted items"}]}
+ {"text":"Open Checkpoint"},{"waitText":"item 1 of 1"},{"waitNoText":"Checkpoint has intercepted items"}]}
 ```
 
 After `Forward`, `⌘O` opens `Switch Projects` again.

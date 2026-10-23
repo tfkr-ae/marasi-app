@@ -8,6 +8,7 @@ Maps live in `docs/agents/maps/`. Read the map there before you change or ask ab
 
 - `ledger.md`: the Ledger page, its row menu, drawer, bulk changes, sitemap or live traffic.
 - `launchpad.md`: the Launchpad page, its entry menu, launches and their pending state, or unsaved drafts.
+- `checkpoint.md`: the Checkpoint page, its held items, edits, bulk Forward and Drop, the rail badge, or the interception rules.
 - `keybindings-and-menus.md`: a shortcut, a ⌘K menu item, the action catalog, menu contexts, or keybinding profiles.
 - `project-open.md`: startup, the scratchpad, opening or switching a project, or the opening screen.
 - `updates.md`: checking for, installing or relaunching into an update, channels, signing, or the release workflows.
