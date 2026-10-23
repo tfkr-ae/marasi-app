@@ -57,6 +57,12 @@ test("add sends no CA unless one is given", async () => {
   assert.deepEqual(calls, [["add", "corp", "http://10.0.0.1:3128", ""]]);
 });
 
+test("add passes the CA it is given", async () => {
+  const { store, calls } = setup();
+  await store.add("corp", "https://10.0.0.1:3128", "PEM");
+  assert.deepEqual(calls, [["add", "corp", "https://10.0.0.1:3128", "PEM"]]);
+});
+
 test("use keeps the new selection", async () => {
   const { store } = setup();
   await store.use("corp");

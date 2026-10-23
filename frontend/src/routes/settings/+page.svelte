@@ -127,7 +127,8 @@
 	$: primary = primaryVariant($modeCurrent);
 	// Home's Open Project button: the app's neutral style.
 	$: neutral = neutralVariant($modeCurrent);
-	$: iconButton = `btn-icon inline-flex items-center justify-center p-1 w-auto h-auto ${primary}`;
+	// Square, the height of a btn-sm beside it.
+	$: iconButton = `btn btn-sm h-8 w-8 shrink-0 p-0 ${primary}`;
 	const tableField =
 		"input h-8 w-full bg-white dark:bg-surface-700 border-0 py-1 text-sm ring-0 focus:border-0 focus:ring-0";
 	const row =
@@ -255,6 +256,7 @@
 	// instance made.
 	let upstreamName = "";
 	let upstreamURL = "";
+	let upstreamCA = "";
 	let checkTarget = "https://example.com";
 	$: if (section === "upstream") {
 		upstreamProxyStore.load().catch((error) => toastError(toastStore, "Error reading upstream proxies", error));
@@ -267,10 +269,11 @@
 	]);
 	function addUpstreamProxy() {
 		upstreamProxyStore
-			.add(upstreamName.trim(), upstreamURL.trim())
+			.add(upstreamName.trim(), upstreamURL.trim(), upstreamCA.trim())
 			.then(() => {
 				upstreamName = "";
 				upstreamURL = "";
+				upstreamCA = "";
 			})
 			.catch((error) => toastError(toastStore, "Error adding upstream proxy", error));
 	}
@@ -585,7 +588,7 @@
 						</thead>
 						<tbody>
 							{#each Object.keys($waypoints) as host}
-								<tr>
+								<tr class="[&>td]:!align-middle">
 									<td class="font-mono">{host}</td>
 									<td class="font-mono">{$waypoints[host]}</td>
 									<td class="text-center">
@@ -734,7 +737,7 @@
 						</thead>
 						<tbody>
 							{#each chromePaths as path}
-								<tr>
+								<tr class="[&>td]:!align-middle">
 									<td class="font-mono">{path.Path}</td>
 									<td>{path.OS}</td>
 									<td class="text-center">
@@ -788,7 +791,7 @@
 						</thead>
 						<tbody>
 							{#each chromeProfiles as profile}
-								<tr>
+								<tr class="[&>td]:!align-middle">
 									<td>{profile}</td>
 									<td class="text-center">
 										<button
@@ -909,7 +912,7 @@
 										<div class="flex items-center justify-end gap-1">
 											<button
 												type="button"
-												class="btn btn-sm {primary}"
+												class="btn btn-sm h-8 {primary}"
 												disabled={$upstreamProxyStore.checking !== "" || checkTarget.trim() === ""}
 												on:click={() => upstreamProxyStore.check(item.name, checkTarget.trim())}>Test</button
 											>
@@ -956,6 +959,17 @@
 										on:click={addUpstreamProxy}>Add Upstream Proxy</button
 									>
 								</td>
+							</tr>
+							<tr>
+								<td colspan="4">
+									<textarea
+										class="textarea h-20 w-full border-0 bg-white py-1 font-mono text-[11px] ring-0 focus:border-0 focus:ring-0 dark:bg-surface-700"
+										placeholder="CA certificate (optional): paste a PEM to trust its CA"
+										aria-label="CA certificate"
+										bind:value={upstreamCA}
+									></textarea>
+								</td>
+								<td></td>
 							</tr>
 						</tfoot>
 					</table>
