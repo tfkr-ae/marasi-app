@@ -14,6 +14,8 @@ import (
 	"log/slog"
 	"math/big"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +144,39 @@ func TestAppUpstreamProxy(t *testing.T) {
 		result, err := app.CheckUpstreamProxy("corp", "http://example.com")
 		if err != nil || result.Outcome != "refused" {
 			t.Fatalf("\nwanted:\nrefused\ngot:\n%+v, %v", result, err)
+		}
+	})
+
+	// The native file dialog cannot be driven; MARASI_UPSTREAM_PROXY_CA_FILE
+	// stands in for the path the user would pick.
+	t.Run("should read a CA file and add it with an entry", func(t *testing.T) {
+		app := newScratchpadApp(t)
+		path := filepath.Join(t.TempDir(), "corp-ca.pem")
+		if err := os.WriteFile(path, []byte(testCA(t)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(upstreamProxyCAFileEnv, path)
+
+		ca, err := app.ReadUpstreamProxyCAFile()
+		if err != nil {
+			t.Fatalf("reading the CA file: %v", err)
+		}
+		state, err := app.AddUpstreamProxy("corp", "https://10.0.0.1:3128", ca)
+		if err != nil || len(state.Items) != 1 || !state.Items[0].HasCA {
+			t.Fatalf("\nwanted:\ncorp with a CA\ngot:\n%+v, %v", state, err)
+		}
+	})
+
+	t.Run("should refuse a CA file over 1 MiB", func(t *testing.T) {
+		app := newScratchpadApp(t)
+		path := filepath.Join(t.TempDir(), "huge.pem")
+		if err := os.WriteFile(path, make([]byte, maxUpstreamProxyCAFileSize+1), 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(upstreamProxyCAFileEnv, path)
+
+		if _, err := app.ReadUpstreamProxyCAFile(); err == nil || !strings.Contains(err.Error(), "too large") {
+			t.Fatalf("\nwanted:\ntoo large\ngot:\n%v", err)
 		}
 	})
 }

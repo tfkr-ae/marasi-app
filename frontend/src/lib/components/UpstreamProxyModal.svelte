@@ -4,7 +4,7 @@
 	// meta: { name, address, hasCA }.
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { X } from "lucide-svelte";
-	import { upstreamProxyStore } from "../../stores/upstreamProxyStore.js";
+	import { readUpstreamProxyCAFile, upstreamProxyStore } from "../../stores/upstreamProxyStore.js";
 	import { primaryVariant } from "../launchpad/format.js";
 
 	export let parent;
@@ -20,6 +20,15 @@
 
 	$: primary = primaryVariant($modeCurrent);
 	$: changed = url.trim() !== "" || ca.trim() !== "" || removeCA;
+
+	function readFile() {
+		error = "";
+		readUpstreamProxyCAFile()
+			.then((contents) => {
+				if (contents) ca = contents;
+			})
+			.catch((readError) => (error = String(readError)));
+	}
 
 	function save() {
 		if (!changed || saving) return;
@@ -59,15 +68,24 @@
 				/>
 				<span class="block text-xs opacity-70">Leave empty to keep. Include user:pass@ if it needs them.</span>
 			</label>
-			<label class="block space-y-1">
-				<span class="text-xs">CA certificate</span>
+			<div class="space-y-1">
+				<div class="flex items-center justify-between">
+					<span class="text-xs">CA certificate</span>
+					<button
+						type="button"
+						class="btn btn-sm {parent.buttonNeutral}"
+						disabled={removeCA}
+						on:click={readFile}>Read from File</button
+					>
+				</div>
 				<textarea
 					class="textarea h-28 bg-white py-1 font-mono text-[11px] ring-0 dark:bg-surface-700 border-0 focus:border-0 focus:ring-0"
 					placeholder={meta.hasCA ? "Paste a PEM to replace the CA" : "Paste a PEM to trust its CA"}
+					aria-label="CA certificate"
 					disabled={removeCA}
 					bind:value={ca}
 				></textarea>
-			</label>
+			</div>
 			{#if meta.hasCA}
 				<label class="flex items-center gap-2 text-xs">
 					<input type="checkbox" class="checkbox" bind:checked={removeCA} />

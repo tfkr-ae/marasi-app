@@ -4,6 +4,7 @@ import {
   AddUpstreamProxy,
   CheckUpstreamProxy,
   GetUpstreamProxies,
+  ReadUpstreamProxyCAFile,
   RemoveUpstreamProxy,
   UpdateUpstreamProxy,
   UseUpstreamProxy,
@@ -24,3 +25,6 @@ export const upstreamProxyStore = createUpstreamProxyStore({
   use: (name) => UseUpstreamProxy(name),
   check: (name, target) => CheckUpstreamProxy(name, target),
 });
+
+/** Asks for a CA file and resolves to its text, or "" when cancelled. */
+export const readUpstreamProxyCAFile = () => ReadUpstreamProxyCAFile();

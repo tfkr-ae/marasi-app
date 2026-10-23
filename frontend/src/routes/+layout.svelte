@@ -105,6 +105,7 @@
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
+	import UpstreamProxyCAModal from "../lib/components/UpstreamProxyCAModal.svelte";
 	import {
 		updateState,
 		refreshUpdateState,
@@ -206,6 +207,7 @@
 		Keybindings: { ref: KeybindingsModal },
 		Update: { ref: UpdateModal },
 		UpstreamProxy: { ref: UpstreamProxyModal },
+		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 	};
 	// Startup opens the scratchpad, and carries on once the first project
 	// has opened and loaded: the scratchpad, or one picked on the opening

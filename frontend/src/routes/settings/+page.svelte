@@ -267,6 +267,16 @@
 		$upstreamProxyStore.selected,
 		$upstreamProxyStore.configured,
 	]);
+	function chooseUpstreamCA() {
+		modalStore.trigger({
+			type: "component",
+			component: "UpstreamProxyCA",
+			meta: { ca: upstreamCA },
+			response: (ca) => {
+				if (typeof ca === "string") upstreamCA = ca;
+			},
+		});
+	}
 	function addUpstreamProxy() {
 		upstreamProxyStore
 			.add(upstreamName.trim(), upstreamURL.trim(), upstreamCA.trim())
@@ -878,8 +888,8 @@
 							<tr>
 								<th class="w-40">Name</th>
 								<th>Address</th>
-								<th class="w-16">CA</th>
 								<th>Last test</th>
+								<th class="w-28">CA</th>
 								<th class="w-44"></th>
 							</tr>
 						</thead>
@@ -897,7 +907,6 @@
 											<span class="text-error-500">URL doesn't parse</span>
 										{/if}
 									</td>
-									<td>{item.has_ca ? "Yes" : ""}</td>
 									<td
 										class={result?.outcome === "ok" ? "text-success-700 dark:text-success-400" : "text-error-500"}
 										title={result?.message ?? ""}
@@ -908,6 +917,7 @@
 											{result.outcome === "ok" ? "Connected" : result.message}
 										{/if}
 									</td>
+									<td>{item.has_ca ? "Yes" : ""}</td>
 									<td>
 										<div class="flex items-center justify-end gap-1">
 											<button
@@ -943,7 +953,7 @@
 										bind:value={upstreamName}
 									/>
 								</td>
-								<td colspan="3">
+								<td colspan="2">
 									<input
 										type="text"
 										placeholder="http://, https:// or socks5://[user:pass@]host:port"
@@ -955,21 +965,18 @@
 									<button
 										type="button"
 										class="btn btn-sm w-full {primary}"
+										title={upstreamCA ? "Change the CA" : "Add a CA certificate"}
+										on:click={chooseUpstreamCA}>{upstreamCA ? "CA Added" : "Add CA"}</button
+									>
+								</td>
+								<td>
+									<button
+										type="button"
+										class="btn btn-sm w-full {primary}"
 										disabled={upstreamName.trim() === "" || upstreamURL.trim() === ""}
 										on:click={addUpstreamProxy}>Add Upstream Proxy</button
 									>
 								</td>
-							</tr>
-							<tr>
-								<td colspan="4">
-									<textarea
-										class="textarea h-20 w-full border-0 bg-white py-1 font-mono text-[11px] ring-0 focus:border-0 focus:ring-0 dark:bg-surface-700"
-										placeholder="CA certificate (optional): paste a PEM to trust its CA"
-										aria-label="CA certificate"
-										bind:value={upstreamCA}
-									></textarea>
-								</td>
-								<td></td>
 							</tr>
 						</tfoot>
 					</table>
