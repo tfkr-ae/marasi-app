@@ -5,7 +5,6 @@ import {
   GetKeybindings,
   GetExtensionCode,
   GetWaypoints,
-  GetInterceptFlag,
   GetExtensions,
   LoadExtensions,
   GetUserName,
@@ -16,6 +15,8 @@ import { findingStore } from "./stores/findingStore";
 import { connectionStore } from "./stores/connectionStore";
 import { armoryStore } from "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
+import { checkpointStore } from "./stores/checkpointStore";
+import { interceptFlag } from "./stores/interceptFlag.js";
 import { highlightsStore, readHighlights } from "./stores/highlightsStore";
 import { ledgerStore } from "./stores/ledgerStore";
 import { sitemapStore } from "./stores/sitemapStore";
@@ -77,7 +78,7 @@ export const waypoints = writable({});
 
 // Checkpont
 export const checkpointCode = writable("");
-export const interceptFlag = writable(false);
+export { interceptFlag } from "./stores/interceptFlag.js";
 
 // Workshop
 export const workshopCode = writable("");
@@ -246,6 +247,7 @@ export async function openProject() {
   connectionStore.clear();
   armoryStore.clear();
   launchpadStore.clear();
+  checkpointStore.clear();
   // The Ledger's first page and its exclusion load in the background, and
   // first: it is the page researchers open, and its rows don't wait on the
   // project's extensions.
@@ -315,9 +317,10 @@ export async function populateCheckpoint() {
     .catch((error) => {
       console.log(error);
     });
-  GetInterceptFlag().then((flag) => {
-    interceptFlag.set(flag);
-  });
+  // The held items and the Intercept all flag.
+  checkpointStore
+    .populate()
+    .catch((err) => console.error("Failed to read Checkpoint items:", err));
 }
 export async function populateScope() {
   GetExtensionCode("compass")

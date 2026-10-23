@@ -60,6 +60,7 @@
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { checkpointStore } from "../stores/checkpointStore";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { sitemapStore } from "../stores/sitemapStore";
 	import { recentTraffic } from "../stores/recentTrafficStore";
@@ -280,6 +281,16 @@
 			function handleNewLog(newLog) {
 				$logItems = [...$logItems, newLog];
 			}
+			function readCheckpointItems() {
+				checkpointStore
+					.onIntercepted()
+					.catch((err) =>
+						console.error(
+							"Reading Checkpoint items failed:",
+							err,
+						),
+					);
+			}
 			EventsOn("request", (newRequest) => {
 				ledgerStore.onRequest(newRequest);
 				sitemapStore.onRequest(newRequest);
@@ -315,6 +326,7 @@
 			);
 			EventsOn("ws-intercepted", (msg) => {
 				connectionStore.upsertInterception(msg);
+				readCheckpointItems();
 				const direction =
 					msg.Direction === "client"
 						? "client to server"
@@ -348,7 +360,12 @@
 				}
 				handleNewLog(newLog);
 			});
+			// Marasi dropped a held item because its client left.
+			EventsOn("checkpoint-abandoned", (item) =>
+				checkpointStore.onAbandoned(item),
+			);
 			EventsOn("intercepted", (intercepted) => {
+				readCheckpointItems();
 				if ($page.url.pathname !== "/checkpoint") {
 					switch (intercepted) {
 						case "request":
@@ -469,6 +486,7 @@
 			EventsOff("ws-progress");
 			EventsOff("ws-state");
 			EventsOff("intercepted");
+			EventsOff("checkpoint-abandoned");
 			EventsOff("log");
 			EventsOff("update-available");
 			EventsOff("update-progress");
