@@ -85,10 +85,16 @@ _Avoid_: edit, buffer, saved request
 **Checkpoint item**:
 A request, response or WebSocket message that Checkpoint holds, as Marasi defines it. The app lists every held item in hold order, oldest first, and the researcher can forward or drop any of them in any order.
 _Avoid_: intercepted item, intercept, queue item, paused request
+_Note_: The UI copy says "Intercepted" by design, and the time an item was held is named `InterceptedAt`; elsewhere, say Checkpoint item.
 
 **Hold**:
 What Checkpoint does to an item until the researcher forwards it, the researcher drops it, or its client leaves. A held item is "held", not "intercepted".
 _Avoid_: intercept, pause, catch
+_Note_: The UI copy keeps "intercepted" and "Intercept" by design ("Nothing intercepted", "Forward + intercept response"), as does `InterceptedAt`; elsewhere, say hold.
+
+**Intercept all**:
+The switch that makes Checkpoint hold every request and response, whatever its rules say. The name is the UI's, kept by design.
+_Avoid_: hold all, intercept mode
 
 **Forward**:
 Releasing a held item to continue on its way, with any edits the researcher made to it.

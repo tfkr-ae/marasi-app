@@ -96,6 +96,10 @@ Edits and a client that leaves: hold `/cp-a`, then `/cp-c` with `curl -m 15 …`
 
 The upstream logs `/cp-edited`, never `/cp-a` or `/cp-lost`.
 
+The `dropped · client left` toast shows on any page, once. To prove it, turn `Intercept all` on, go to the Ledger, hold a request with `curl -m 6 …`, and wait for `GET /cp-leave dropped · client left` (`timeoutMs` 20000) while the badge goes.
+
+A Forward shortcut sent straight after an edit waits for the edit's parse check: insert `BROKEN` into `.cp-request .cm-content`, press `cmd+shift+f` at once, and wait for `Edit doesn't parse` with the item still held. Forward is greyed out while a check is on its way. A Forward or Drop of an item that already left removes it with the toast `Already gone`.
+
 The Item | Rules switch and focus, with one item held:
 
 ```json
@@ -124,11 +128,37 @@ The WebSocket modal's Checkpoint tab keeps its own per-connection queue. Open th
 
 Prove each path on one connection: turn `Intercept On`, send a message, then forward one unchanged, edit and forward another (the peer receives the edit), and drop a third. In Stream, forwarded rows read `Forwarded intercepted message` on hover and the dropped row is struck through with the `Dropped` flag. Turn `Intercept Off` afterwards.
 
+#### The page and the modal stay in step
+
+A forward or drop on either side emits `checkpoint-settled`, so the other side drops the message too. A real connection needs no npm package: from a scratch directory outside the repo, run a Node upstream that answers the upgrade with `101` and logs each text frame it receives, and a Node client that opens a raw TCP socket to `127.0.0.1:18080`, sends `GET http://127.0.0.1:<port>/socket HTTP/1.1` with the upgrade headers, and writes a masked text frame for each line appended to a control file. Run both in the background and stop them yourself before `cleanup.sh`.
+
+The upgrade's `101` row has no content type and reads as `application/octet-stream`, which the default Types filter hides (`1 hidden`). Show it before opening the row: `{"click":"#ledgerTypesButton"}`, `{"click":".ledger-types-row[data-type=\"application/octet-stream\"] input"}`, then `{"click":".ledger-status"}`.
+
+Open the modal and turn interception on:
+
+```json
+{"name":"ws-on","steps":[
+ {"click":".ledger-row","hasText":"/socket"},{"waitSelector":".ledger-drawer"},
+ {"click":"[aria-label=\"Open WebSocket stream\"]"},{"waitText":"Connection"},
+ {"text":"Checkpoint"},{"waitText":"Queue empty"},{"text":"Intercept Off"},{"waitText":"Intercept On"}]}
+```
+
+Send one message, then forward it from the modal. The rail badge clears with the modal still open, and the Checkpoint page then reads `Nothing intercepted`:
+
+```json
+{"name":"modal-forward","steps":[
+ {"waitText":"1 message queued"},{"waitSelector":"[data-testid=checkpoint-badge]"},
+ {"click":"button","hasText":"Forward","within":".card"},{"waitText":"Queue empty"},
+ {"waitNoSelector":"[data-testid=checkpoint-badge]"},{"key":"escape"},{"waitNoText":"Queue empty"}]}
+```
+
+Then on the Checkpoint page, send another and forward it with `{"waitSelector":".cp-entry","hasText":"WS"}`, `{"click":".cp-forward"}`, `{"waitText":"Nothing intercepted"}`. Back in the Ledger, reopen the modal's `Checkpoint` tab: it reads `Queue empty`, not `1 message queued`. `Drop` in the modal clears the badge the same way, and the upstream never logs the dropped message.
+
 ## Gotchas
 
 - Broad rules can hold unrelated traffic. Use a unique verification host or path.
 - `Intercept all` holds every HTTP request and response regardless of a narrow Lua rule, but only while the checkpoint extension is enabled.
-- An edit that doesn't parse shows under the intercepted pane and as `!` in the tree; Forward is disabled until it parses. `Forward n` skips such items (`Forwarded 1 · 1 skipped`).
+- An edit that doesn't parse shows under the intercepted pane and as `!` in the tree; Forward is disabled until it parses. `Forward n` skips such items (`Forwarded 1 · 1 skipped`). An item whose forward or drop fails on the Go side stays held and counts as `· 1 failed` in a warning toast.
 - Wait for an item's own text (`item 1 of 2`, its path) before acting: items arrive through the `intercepted` event, after the sender starts.
 - A request left intercepted keeps its client waiting during cleanup.
 - WebSocket interception has its own `Intercept On`/`Intercept Off` toggle, independent of `Intercept all`; both need the checkpoint extension enabled. The toggle is process-global and holds every message on every connection; the modal's queues are per connection. With it off, `interceptWebSocketMessage` in the Lua rules decides.
