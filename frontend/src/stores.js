@@ -78,6 +78,8 @@ export const waypoints = writable({});
 
 // Checkpont
 export const checkpointCode = writable("");
+// The rules Checkpoint runs: what the project loaded, then each Update rules.
+export const checkpointCodeApplied = writable("");
 export { interceptFlag } from "./stores/interceptFlag.js";
 
 // Workshop
@@ -231,6 +233,7 @@ export async function openProject() {
   compassCode.set("");
   testerInput.set("");
   checkpointCode.set("");
+  checkpointCodeApplied.set("");
   interceptFlag.set(false);
   workshopCode.set("");
   waypoints.set({});
@@ -313,6 +316,7 @@ export async function populateCheckpoint() {
   GetExtensionCode("checkpoint")
     .then((code) => {
       checkpointCode.set(code);
+      checkpointCodeApplied.set(code);
     })
     .catch((error) => {
       console.log(error);
