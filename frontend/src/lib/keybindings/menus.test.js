@@ -177,12 +177,12 @@ test("each page's shared shortcuts run that page's action", () => {
   }
 });
 
-test("Checkpoint forwards picked items on ⌘⇧A, drops them on ⌘⇧X and intercepts the response on ⌘⌥F", () => {
+test("Checkpoint forwards picked items on ⌘⇧A, drops them on ⌘⇧X and intercepts the response on ⌘⇧S", () => {
   const dispatcher = mac();
   const page = on("/checkpoint");
   assert.equal(dispatcher.resolve(cmdShift("A", "KeyA"), page), "checkpoint.forward-picked");
   assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), page), "checkpoint.drop-picked");
-  assert.equal(dispatcher.resolve(keydown("ƒ", "KeyF", { metaKey: true, altKey: true }), page), "checkpoint.forward-intercept-response");
+  assert.equal(dispatcher.resolve(cmdShift("S", "KeyS"), page), "checkpoint.forward-intercept-response");
   // The single-item keys stay where they were.
   assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), page), "checkpoint.forward-intercepted");
   assert.equal(dispatcher.resolve(cmdShift("D", "KeyD"), page), "checkpoint.drop-intercepted");

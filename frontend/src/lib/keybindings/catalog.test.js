@@ -275,8 +275,8 @@ test("the Launchpad page offers search, create, sidebar, grouping, compare and j
 
 // Checkpoint ids predate the redesigned page (a settings accordion) and stay
 // put so saved profiles keep their overrides; only the menu text follows the
-// Item | Rules page.
-test("Checkpoint actions keep their ids and keys but name the Item | Rules page", () => {
+// Items | Rules page.
+test("Checkpoint actions keep their ids and keys but name the Items | Rules page", () => {
   const catalog = buildCatalog();
   const expected = [
     ["checkpoint.toggle-settings", "Toggle Rules", "meta+p", "ctrl+p"],

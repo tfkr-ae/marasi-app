@@ -17,7 +17,7 @@ Select the Checkpoint rail item or press `Command+4`. With items held, the rail 
 The page is a dock and a workspace:
 
 - **Dock.** The header reads `Intercepted n`; collapsed, the strip reads `Intercepted`. Below it sit the `Intercept all` toggle and `Forward n` / `Drop n`, where n counts the picked items, or every item when none are picked. The tree groups entries (`.cp-entry`) by host. Each shows `REQ`/`RES`/`WS`, the method, status or direction, the path, ● (title `Edited`) when edited, `!` on a parse error, and how long it has been intercepted. A click selects; ⌘-click and shift-click pick (`N picked`, `Clear`). With nothing held, the tree reads `Nothing intercepted`.
-- **Workspace.** An `Item | Rules` switch at the top. Item shows the title (`#pair · METHOD path`, or `METHOD path` for a held request, which has no pair number yet), the line `host · intercepted 1m ago · item i of n`, and `Forward`, `Forward + intercept response` (requests only) and `Drop`. Below is the request | response split: the intercepted side is marked `Intercepted` and editable, with `Revert` once edited. A held request's response side reads `Not sent yet`. With nothing held, Item shows `Nothing intercepted` and an `Edit rules` button. Rules shows the full-width Lua editor and `Update rules`, with `Not applied` (and ● on the Rules tab) until the editor matches the applied rules.
+- **Workspace.** An `Items | Rules` switch at the top. Items shows the title (`#pair · METHOD path`, or `METHOD path` for a held request, which has no pair number yet), the line `host · intercepted 1m ago · item i of n`, and `Forward`, `Forward + intercept response` (requests only) and `Drop`. Below is the request | response split: the intercepted side is marked `Intercepted` and editable, with `Revert` once edited. A held request's response side reads `Not sent yet`. With nothing held, Items shows `Nothing intercepted` and an `Edit rules` button. Rules shows the full-width Lua editor and `Update rules`, with `Not applied` (and ● on the Rules tab) until the editor matches the applied rules.
 
 Palette commands and shortcuts:
 
@@ -29,7 +29,7 @@ Palette commands and shortcuts:
 | `Edit Intercepted Item` | `⌘⇧I` |
 | `Forward Intercepted Item` | `⌘⇧F` |
 | `Drop Intercepted Item` | `⌘⇧D` |
-| `Forward + Intercept Response` | `⌘⌥F` |
+| `Forward + Intercept Response` | `⌘⇧S` |
 | `Forward Picked Items` | `⌘⇧A` |
 | `Drop Picked Items` | `⌘⇧X` |
 | `Show Logs` | `⌘⇧L` |
@@ -51,7 +51,7 @@ Rules run without Lua's `string` library: `string.sub`, `path:find` and the like
  {"insert":"local held = { [\"/cp-a\"] = true, [\"/cp-b\"] = true, [\"/cp-c\"] = true }\nfunction interceptRequest(request)\nreturn held[request:path()] == true\nend\nfunction interceptResponse(response)\nreturn false\nend\nfunction interceptWebSocketMessage(message)\nreturn false\nend"},
  {"waitText":"Not applied"},
  {"text":"Update rules"},{"waitText":"Rules updated"},{"waitNoText":"Not applied"},
- {"text":"Item"},{"waitText":"Nothing intercepted"}]}
+ {"text":"Items"},{"waitText":"Nothing intercepted"}]}
 ```
 
 Serve an upstream that logs each request it receives, such as `python3 -I -m http.server 18765 --bind 127.0.0.1` run from an empty directory. Start each sender in the background and record its timing, one at a time, in this order: `curl -s -o /dev/null -w 'status=%{http_code} at=%{time_total}s\n' -x http://127.0.0.1:18080 http://127.0.0.1:18765/cp-a &`, then `/cp-b`, then `/cp-c`. A sender must finish only after its forward. A dropped request never reaches the upstream, and its sender gets status `200`.
@@ -61,7 +61,7 @@ With `/cp-a`, `/cp-b` and `/cp-c` held, the shortcuts:
 ```json
 {"name":"shortcuts-forward","steps":[
  {"waitText":"item 1 of 3"},{"waitText":"/cp-a"},
- {"key":"cmd+alt+f"},{"waitText":"404"},{"waitText":"item 1 of 3"},
+ {"key":"cmd+shift+s"},{"waitText":"404"},{"waitText":"item 1 of 3"},
  {"click":".cp-entry","hasText":"404"},{"waitText":"item 3 of 3"},
  {"key":"cmd+shift+f"},{"waitNoText":"404"},{"waitText":"item 2 of 2"},
  {"click":".cp-entry","hasText":"/cp-b"},{"waitText":"item 1 of 2"},
@@ -70,7 +70,7 @@ With `/cp-a`, `/cp-b` and `/cp-c` held, the shortcuts:
  {"key":"cmd+shift+a"},{"waitText":"Forwarded 2"},{"waitText":"Nothing intercepted"}]}
 ```
 
-`⌘⌥F` forwards `/cp-a` and holds its response, which joins the tree last as a `RES 404` entry. After a forward or drop the selection moves to the next item in hold order, or to the previous one when the last item left.
+`⌘⇧S` forwards `/cp-a` and holds its response, which joins the tree last as a `RES 404` entry. After a forward or drop the selection moves to the next item in hold order, or to the previous one when the last item left.
 
 Hold `/cp-a` and `/cp-b` again. `Drop n` asks; `Drop` on one item doesn't:
 
@@ -100,7 +100,7 @@ The `dropped · client left` toast shows on any page, once. To prove it, turn `I
 
 A Forward shortcut sent straight after an edit waits for the edit's parse check: insert `BROKEN` into `.cp-request .cm-content`, press `cmd+shift+f` at once, and wait for `Edit doesn't parse` with the item still held. Forward is greyed out while a check is on its way. A Forward or Drop of an item that already left removes it with the toast `Already gone`.
 
-The Item | Rules switch and focus, with one item held:
+The Items | Rules switch and focus, with one item held:
 
 ```json
 {"name":"switch-keys","steps":[

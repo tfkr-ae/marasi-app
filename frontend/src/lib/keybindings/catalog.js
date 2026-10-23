@@ -171,7 +171,7 @@ export const FACTORY_ACTIONS = [
   // saved profiles keep their overrides; toggle-settings now switches the
   // workspace between Item and Rules.
   ...pageActions("checkpoint", [
-    ["toggle-settings", "Toggle Rules", "Switch the workspace between the item and the rules", "rules, item, switch, lua, toggle", primary("p")],
+    ["toggle-settings", "Toggle Rules", "Switch the workspace between the items and the rules", "rules, item, switch, lua, toggle", primary("p")],
     ["edit-rules", "Edit Rules", "Open the rules and focus their editor", "rules, lua, code, edit", primary("shift+e")],
     ["update-rules", "Update Rules", "Apply the rules", "rules, lua, code, apply, run", primary("shift+r")],
     ["edit-intercepted", "Edit Intercepted Item", "Focus the selected item's intercepted side", "intercept, edit, focus", primary("shift+i")],
@@ -181,7 +181,7 @@ export const FACTORY_ACTIONS = [
     // none are picked.
     ["forward-picked", "Forward Picked Items", "Forward the picked items, or every item when none are picked", "forward, bulk, picked, all, intercept", primary("shift+a")],
     ["drop-picked", "Drop Picked Items", "Drop the picked items, or every item when none are picked", "drop, bulk, picked, all, intercept", primary("shift+x")],
-    ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("alt+f")],
+    ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("shift+s")],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
   ...pageActions("logbook", [

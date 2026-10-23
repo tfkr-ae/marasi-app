@@ -4,7 +4,7 @@ Which files work together on the Checkpoint page, how a held item reaches the pa
 
 ## Files
 
-- `frontend/src/routes/checkpoint/+page.svelte` wires everything together: the dock, the workspace's Item | Rules switch, the toasts, Drop n's confirmation, ↑/↓, and `checkpointMenu` for `useMenuActions` and ⌘K.
+- `frontend/src/routes/checkpoint/+page.svelte` wires everything together: the dock, the workspace's Items | Rules switch, the toasts, Drop n's confirmation, ↑/↓, and `checkpointMenu` for `useMenuActions` and ⌘K.
 - `frontend/src/stores/createCheckpointStore.js` holds the state, the selectors and the event reducers: the held items in hold order, the selection and picks, per-item edits and parse errors, and the bulk actions. It takes its API as an argument. `frontend/src/stores/checkpointStore.js` maps that API to Wails bindings. Tests: `checkpointStore.test.js`.
 - `frontend/src/lib/checkpoint/`:
   - `CheckpointDock.svelte` is the dock (`lib/dock/Dock.svelte` with `CHECKPOINT_DOCK` limits): Intercept all, `Forward n` / `Drop n`, and the host tree;

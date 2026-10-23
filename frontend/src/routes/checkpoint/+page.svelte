@@ -1,7 +1,7 @@
 <script>
 	// The Checkpoint page: the dock lists every intercepted item, grouped by
 	// host; the workspace shows the selected item, or the rules behind its
-	// Item | Rules switch. State lives in checkpointStore (see
+	// Items | Rules switch. State lives in checkpointStore (see
 	// stores/createCheckpointStore.js); this file wires the actions, the
 	// confirmations, the toasts and the checkpoint.* shortcuts.
 	import { onDestroy } from "svelte";
@@ -25,7 +25,7 @@
 	const drawerStore = getDrawerStore();
 	const store = checkpointStore;
 
-	/** "item" or "rules": the workspace's Item | Rules switch. */
+	/** "item" or "rules": the workspace's Items | Rules switch. */
 	let view = "item";
 	let collapsed = new Set();
 	let workspace;
@@ -227,7 +227,8 @@
 	useMenuActions(checkpointMenu);
 
 	// As the Launchpad's Request | Response switch.
-	const tab = (on) => `btn btn-sm gap-1 px-3 py-0.5 text-xs ${on ? primary : "variant-soft"}`;
+	// Reactive, so the tabs take the new variant when the theme changes.
+	$: tab = (on) => `btn btn-sm gap-1 px-3 py-0.5 text-xs ${on ? primary : "variant-soft"}`;
 </script>
 
 <svelte:window on:keydown={onKeydown} />
@@ -237,8 +238,9 @@
 	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} />
 
 	<div class="flex min-w-0 flex-1 flex-col">
-		<div class="cp-switch flex items-center gap-1 border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900" role="tablist">
-			<button class={tab(view === "item")} role="tab" aria-selected={view === "item"} on:click={() => showItem()}>Item</button>
+		<!-- py-0.5 keeps this row as tall as the dock's header, so their borders line up. -->
+		<div class="cp-switch flex items-center gap-1 border-b border-surface-500/30 bg-surface-50 px-3 py-0.5 text-xs dark:bg-surface-900" role="tablist">
+			<button class={tab(view === "item")} role="tab" aria-selected={view === "item"} on:click={() => showItem()}>Items</button>
 			<button class={tab(view === "rules")} role="tab" aria-selected={view === "rules"} on:click={() => showRules()}>
 				<FileCode size={12} />Rules
 				{#if rulesChanged}<span class="text-warning-500" title="Not applied">●</span>{/if}
