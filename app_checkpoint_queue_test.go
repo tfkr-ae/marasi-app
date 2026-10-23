@@ -114,6 +114,65 @@ func TestAppCheckpointInterceptedAt(t *testing.T) {
 	})
 }
 
+func TestAppCheckpointBulk(t *testing.T) {
+	t.Run("should forward the given items and count a missing id as gone", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		first, firstID, firstDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 1)
+		_, secondID, secondDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 2)
+		edited := "POST / HTTP/1.1\r\nHost: marasi.app\r\nContent-Length: 4\r\nContent-Type: text/plain\r\n\r\nbulk"
+
+		got, err := app.ForwardCheckpoints([]CheckpointForwardItem{
+			{ID: firstID, Body: edited},
+			{ID: uuid.New()},
+			{ID: secondID},
+		})
+		if err != nil {
+			t.Fatalf("forwarding checkpoints: %v", err)
+		}
+		if want := (CheckpointBulkResult{Done: 2, Gone: 1}); got != want {
+			t.Fatalf("wanted: %+v\ngot: %+v", want, got)
+		}
+		if err := receiveAppHoldResult(t, firstDone); err != nil {
+			t.Fatalf("wanted first forwarded\ngot: %v", err)
+		}
+		if err := receiveAppHoldResult(t, secondDone); err != nil {
+			t.Fatalf("wanted second forwarded\ngot: %v", err)
+		}
+		if first.Method != http.MethodPost {
+			t.Fatalf("wanted the edited body forwarded\ngot method: %s", first.Method)
+		}
+		if remaining := app.GetCheckpointItems(); len(remaining) != 0 {
+			t.Fatalf("wanted empty list, got %d items", len(remaining))
+		}
+	})
+
+	t.Run("should drop the given ids only and count a missing id as gone", func(t *testing.T) {
+		app := newCheckpointApp(t)
+		_, firstID, firstDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 1)
+		_, keptID, keptDone := startAppRequestHold(t, app)
+		waitForAppCheckpoint(t, app, 2)
+
+		got, err := app.DropCheckpoints([]uuid.UUID{firstID, uuid.New(), uuid.New()})
+		if err != nil {
+			t.Fatalf("dropping checkpoints: %v", err)
+		}
+		if want := (CheckpointBulkResult{Done: 1, Gone: 2}); got != want {
+			t.Fatalf("wanted: %+v\ngot: %+v", want, got)
+		}
+		if err := receiveAppHoldResult(t, firstDone); !errors.Is(err, marasi.ErrDropped) {
+			t.Fatalf("wanted: %v\ngot: %v", marasi.ErrDropped, err)
+		}
+		items := app.GetCheckpointItems()
+		if len(items) != 1 || items[0].ID != keptID {
+			t.Fatalf("wanted only %s held\ngot: %v", keptID, items)
+		}
+		dropAppHolds(t, app, keptDone)
+	})
+}
+
 // dropAppHolds drops every held item and waits for each hold to end.
 func dropAppHolds(t *testing.T, app *App, done ...<-chan error) {
 	t.Helper()

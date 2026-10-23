@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -115,4 +116,53 @@ func (a *App) settleCheckpoint(id uuid.UUID, settle func() error) error {
 		a.checkpointTimes.forgetIf(id, at)
 	}
 	return err
+}
+
+// CheckpointForwardItem is one item of a ForwardCheckpoints call. Body
+// follows ForwardCheckpoint: empty forwards the item as held.
+type CheckpointForwardItem struct {
+	ID   uuid.UUID
+	Body string
+}
+
+// CheckpointBulkResult counts a bulk action's items: Done were forwarded or
+// dropped, Gone had already left Checkpoint.
+type CheckpointBulkResult struct {
+	Done int
+	Gone int
+}
+
+// ForwardCheckpoints forwards each item as ForwardCheckpoint does, without
+// intercepting the response. It acts on the ids given, so items held during
+// the call stay held. An id that has already left counts as gone. Other
+// failures do not stop the rest; they are joined into the error.
+func (a *App) ForwardCheckpoints(items []CheckpointForwardItem) (CheckpointBulkResult, error) {
+	return settleCheckpoints(len(items), func(i int) (uuid.UUID, error) {
+		return items[i].ID, a.ForwardCheckpoint(items[i].ID, items[i].Body, false)
+	})
+}
+
+// DropCheckpoints drops each id as DropCheckpoint does, with the same
+// counting as ForwardCheckpoints.
+func (a *App) DropCheckpoints(ids []uuid.UUID) (CheckpointBulkResult, error) {
+	return settleCheckpoints(len(ids), func(i int) (uuid.UUID, error) {
+		return ids[i], a.DropCheckpoint(ids[i])
+	})
+}
+
+func settleCheckpoints(n int, settle func(i int) (uuid.UUID, error)) (CheckpointBulkResult, error) {
+	var result CheckpointBulkResult
+	var errs []error
+	for i := range n {
+		id, err := settle(i)
+		switch {
+		case err == nil:
+			result.Done++
+		case errors.Is(err, marasi.ErrCheckpointNotFound):
+			result.Gone++
+		default:
+			errs = append(errs, fmt.Errorf("%s: %w", id, err))
+		}
+	}
+	return result, errors.Join(errs...)
 }
