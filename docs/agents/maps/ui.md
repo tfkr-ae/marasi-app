@@ -24,7 +24,8 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Ledger | `routes/ledger/` | `lib/ledger/`, `lib/dock/Dock.svelte` |
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
 | Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |
-| Compass, Armory, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
+| Armory | `routes/armory/` | `lib/armory/` (`ArmoryDock`, `TemplateHeader`, `TemplateEditor`, `RunSettings`, `TrafficRegion`), `lib/dock/Dock.svelte` |
+| Compass, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
 | Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. |
@@ -41,7 +42,8 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 - `WebSocketInject.svelte`, `WebSocketCheckpoint.svelte` and `WebSocketMessagesTable.svelte` are the WebSocket editors.
 - `lib/checkpoint/ItemWorkspace.svelte` holds the intercepted item and its context; `lib/checkpoint/RulesEditor.svelte` holds the Checkpoint rules.
 - `lib/extensions/components/Editor.svelte` is the editor an extension interface gets.
-- Compass, Armory and Workshop create their own in the route file.
+- `lib/armory/TemplateEditor.svelte` holds the Armory request template.
+- Compass and Workshop create their own in the route file.
 
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 
