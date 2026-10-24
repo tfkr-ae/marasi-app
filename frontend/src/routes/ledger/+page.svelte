@@ -70,7 +70,11 @@
 	import { plural, requestCount, unchangedText } from "../../lib/ledger/counts.js";
 	import { LAUNCHPADS_EACH_MAX, sameID } from "../../lib/ledger/pairs.js";
 	import { select } from "../../lib/storeSelect.js";
-	import { toastError as showError } from "../../lib/toasts.js";
+	import {
+		handoffBackground as handoffStyle,
+		toastError as showError,
+		toastJump as showJump,
+	} from "../../lib/toasts.js";
 	import { incompleteJobs, incompleteText } from "../../lib/ledger/selectionIncomplete.js";
 	import { toastLaunchingRefusal } from "../../lib/launchPending.js";
 	import { BROWSER_VIEW_COPIED, browserViewURL } from "../../lib/browserView.js";
@@ -187,9 +191,7 @@
 	// Rows are numbered by their position in the results.
 
 	// The toast style the Ledger's handoffs use.
-	$: handoffBackground = $modeCurrent
-		? "bg-surface-50 text-surface-900 border border-surface-300"
-		: "bg-surface-100 text-surface-900";
+	$: handoffBackground = handoffStyle($modeCurrent);
 
 	// "N new" in the newest-first live view: back to the top, with them.
 	function showNewAtTop() {
@@ -275,17 +277,7 @@
 
 	// A toast with a button that leaves for another page.
 	function toastJump(message, label, path) {
-		const toastId = toastStore.trigger({
-			message,
-			background: handoffBackground,
-			action: {
-				label,
-				response: () => {
-					toastStore.close(toastId);
-					goto(path);
-				},
-			},
-		});
+		showJump(toastStore, message, label, $modeCurrent, () => goto(path));
 	}
 
 	// "Request 4", or "3 requests".

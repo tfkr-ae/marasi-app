@@ -5,6 +5,9 @@
 	let savedTrafficOpen = true;
 	// Whether the drawer shows its details column, as in the Ledger.
 	let savedDrawerExpanded = false;
+	// The project state these belong to; a project opened since the last
+	// visit puts them back to their defaults.
+	let savedVersion = null;
 </script>
 
 <script>
@@ -16,7 +19,7 @@
 	// armoryStore in step.
 	import { onMount } from "svelte";
 	import { get, writable } from "svelte/store";
-	import { getModalStore, getToastStore } from "@skeletonlabs/skeleton";
+	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import {
 		ArrowLeft,
 		ArrowRight,
@@ -45,7 +48,8 @@
 	import { runTraffic } from "../../lib/armoryRunTraffic.js";
 	import { sameID } from "../../lib/ledger/pairs.js";
 	import { linkedTo } from "../../lib/ledger/drawer.js";
-	import { toastError } from "../../lib/toasts.js";
+	import { toastError, toastJump } from "../../lib/toasts.js";
+	import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
 	import { stepRequest } from "../../lib/armory/traffic.js";
 	import { armoryMenuFor } from "../../lib/armory/rowMenu.js";
 	import RowMenu from "../../lib/ledger/RowMenu.svelte";
@@ -61,6 +65,12 @@
 	const toastStore = getToastStore();
 
 	const savedArmoryState = get(armoryStore);
+	if (savedVersion !== savedArmoryState.projectStateVersion) {
+		savedVersion = savedArmoryState.projectStateVersion;
+		savedSettingsOpen = true;
+		savedTrafficOpen = true;
+		savedDrawerExpanded = false;
+	}
 	const savedTemplateId = savedArmoryState.selectedTemplateId;
 	const savedTemplateDraft = savedArmoryState.templateDraft?.templateId ===
 		savedTemplateId
@@ -170,6 +180,7 @@
 	$: armoryDrawer.set({ open: drawerOpen });
 	$: if ($armoryStore.projectStateVersion !== projectStateVersion) {
 		projectStateVersion = $armoryStore.projectStateVersion;
+		savedVersion = projectStateVersion;
 		search = $armoryStore.search;
 		selectedTemplateId = null;
 		selectedRunId = null;
@@ -184,6 +195,7 @@
 		handledRouteTemplateId = null;
 		settingsOpen = true;
 		trafficOpen = true;
+		drawerExpanded = false;
 		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
 	}
 	$: if (selectedRunId !== paginatedRunId) {
@@ -553,37 +565,20 @@
 				})
 			: [];
 
+	// The Ledger's handoff toast.
 	function notifyJump(message, path) {
-		const toastId = toastStore.trigger({
-			message,
-			background: "variant-filled-success",
-			action: {
-				label: "Jump to Launchpad",
-				response: () => {
-					toastStore.close(toastId);
-					goto(path);
-				},
-			},
-		});
+		toastJump(toastStore, message, "Jump to Launchpad", $modeCurrent, () => goto(path));
 	}
 
 	const refreshLaunchpads = () =>
 		launchpadStore.populate().catch((err) => console.error("Refreshing launchpads failed:", err));
 
 	async function sendToNewLaunchpad(pair) {
-		// The Ledger names the launchpad after the pair's number, which it
-		// only knows for pairs it has loaded; Armory's row knows it.
-		const unnamed = ledgerStore.pairNumber(pair.ID) === "?" && pair.Number;
+		// The Ledger knows numbers only for pairs it has loaded; Armory's row
+		// knows its own.
+		const numberOf = (id) => pair.Number || ledgerStore.pairNumber(id);
 		try {
-			const { launchpadId } = await ledgerStore.sendToNewLaunchpad({ ids: [String(pair.ID)] }, 1);
-			if (unnamed) {
-				await launchpadStore
-					.updateLaunchpad(launchpadId, {
-						name: `Request ${pair.Number}`,
-						description: `Launchpad for Request ${pair.Number}`,
-					})
-					.catch((err) => console.error("Naming the launchpad failed:", err));
-			}
+			const { launchpadId } = await ledgerStore.sendToNewLaunchpad({ ids: [String(pair.ID)] }, 1, { numberOf });
 			refreshLaunchpads();
 			notifyJump("Sent to a new launchpad", `/launchpad?id=${launchpadId}`);
 		} catch (error) {
@@ -595,7 +590,7 @@
 		try {
 			const count = await ledgerStore.addToLaunchpad({ ids: [String(pair.ID)] }, launchpadId);
 			refreshLaunchpads();
-			if (count) notifyJump(`Added to "${name || "Untitled launchpad"}"`, `/launchpad?id=${launchpadId}`);
+			if (count) notifyJump(`Added to "${name || UNTITLED_LAUNCHPAD}"`, `/launchpad?id=${launchpadId}`);
 		} catch (error) {
 			toastError(toastStore, "Failed to add to the launchpad", error);
 		}

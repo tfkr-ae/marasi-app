@@ -1944,8 +1944,8 @@ export function createLedgerStore(api) {
   }
 
   // A launchpad named for its pairs: "Request N", or "N requests".
-  function launchpadName(ids) {
-    const numbers = ids.map(pairNumber);
+  function launchpadName(ids, numberOf = pairNumber) {
+    const numbers = ids.map((id) => numberOf(id));
     if (ids.length === 1) {
       return ["Request " + numbers[0], "Launchpad for Request " + numbers[0]];
     }
@@ -1954,11 +1954,13 @@ export function createLedgerStore(api) {
 
   /**
    * Creates one launchpad and links the selection to it. Listed pairs name
-   * it after their numbers; a ⌘A selection after `count`.
+   * it after their numbers; a ⌘A selection after `count`. `numberOf(id)`
+   * gives a pair's number when the caller knows pairs the Ledger hasn't
+   * loaded.
    */
-  async function sendToNewLaunchpad(selection, count = null) {
+  async function sendToNewLaunchpad(selection, count = null, { numberOf = pairNumber } = {}) {
     const name = selection.ids
-      ? launchpadName(selection.ids)
+      ? launchpadName(selection.ids, numberOf)
       : count == null
         ? ["Matching requests", "Launchpad for the matching requests"]
         : [requestCount(count), `Launchpad for ${requestCount(count)}`];

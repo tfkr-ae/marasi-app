@@ -257,6 +257,15 @@ test("a new launchpad for listed pairs is named after their request numbers", as
   ]);
 });
 
+test("a new launchpad takes the caller's number for a pair the Ledger hasn't loaded", async () => {
+  const { store, api } = await storeWith();
+  await store.sendToNewLaunchpad({ ids: ["elsewhere"] }, null, { numberOf: () => 42 });
+  assert.deepEqual(api.calls.filter(([name]) => name === "createLaunchpad"), [
+    ["createLaunchpad", "Request 42", "Launchpad for Request 42"],
+  ]);
+  assert.equal(api.calls.filter(([name]) => name === "updateLaunchpad").length, 0, "one write names it");
+});
+
 test("one launchpad each links each pair on its own", async () => {
   const { store, api } = await storeWith();
   const result = await store.sendToLaunchpadsEach([idOf(1)]);
