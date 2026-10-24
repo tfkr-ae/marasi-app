@@ -838,14 +838,9 @@
 				</div>
 			{:else if section === "upstream"}
 				<h3 class="text-sm font-bold">Upstream Proxy</h3>
-				<p class="mb-4 text-xs opacity-70">
-					This machine's list. Each project picks one; requests it can't carry fail, never go direct.
-				</p>
+				<p class="mb-4 text-xs opacity-70">Send a project's traffic through another proxy.</p>
 				<div class={row}>
-					<div>
-						<p>This project</p>
-						<p class="text-xs opacity-70">Where this project's traffic goes</p>
-					</div>
+					<p>This project</p>
 					<div class={control}>
 						<!-- Redrawn when the options change: a select keeps the value it
 						     falls back to when its option goes, even though the
@@ -854,6 +849,7 @@
 						<select
 							class="select h-8 w-full py-1 text-sm"
 							aria-label="This project's upstream proxy"
+							title="Requests the proxy can't carry fail; they never go direct"
 							value={$upstreamProxyStore.selected}
 							on:change={(event) => useUpstreamProxy(event.currentTarget.value)}
 						>
@@ -874,10 +870,7 @@
 					<p class="mt-2 text-xs text-error-500" role="alert" data-testid="upstream-warning">{upstreamWarning}</p>
 				{/if}
 				<div class={row}>
-					<div>
-						<p>Test target</p>
-						<p class="text-xs opacity-70">The URL Test connects to</p>
-					</div>
+					<p>Test target</p>
 					<div class={control}>
 						<input type="text" class="input h-8 w-full py-1 font-mono text-sm" aria-label="Test target" bind:value={checkTarget} />
 					</div>
