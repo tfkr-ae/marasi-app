@@ -27,6 +27,7 @@
 	<CodeMirror
 		bind:value
 		class="text-xs"
+		styles={{ "&": { fontSize: "11px" } }}
 		theme={$modeCurrent ? githubLight : oneDark}
 		extensions={[
 			...($marasiConfig.VimEnabled ? [vim()] : []),
