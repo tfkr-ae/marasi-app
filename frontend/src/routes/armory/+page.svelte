@@ -947,5 +947,6 @@
 	pairs={rowMenu.pair ? [rowMenu.pair] : []}
 	items={rowMenuItems}
 	context={{ numberOf: () => rowMenu.number }}
+	extendHint={false}
 	on:action={(e) => runRowAction(e.detail, rowMenu.pair)}
 />

@@ -65,6 +65,8 @@
 	export let noun = ["request", "requests"];
 	/** Where the pairs are, shown after the count ("in Login"); hosts when null. */
 	export let scope = null;
+	/** Whether the footer hints at ⇧-click, for tables that multi-select. */
+	export let extendHint = true;
 
 	const dispatch = createEventDispatcher();
 
@@ -532,7 +534,7 @@
 		</div>
 		<div class="flex justify-between border-t border-surface-300-600-token px-3 py-1 text-[10px] opacity-50">
 			<span>↑↓ move · → open · ↵ run</span>
-			<span>⇧-click to extend</span>
+			{#if extendHint}<span>⇧-click to extend</span>{/if}
 		</div>
 	</div>
 {/if}
