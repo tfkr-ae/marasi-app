@@ -1,6 +1,8 @@
 <script context="module">
-	// Whether Run settings is open survives page visits within a session.
+	// Whether Run settings and the traffic panel are open survives page
+	// visits within a session.
 	let savedSettingsOpen = true;
+	let savedTrafficOpen = true;
 </script>
 
 <script>
@@ -83,7 +85,10 @@
 	let handledRouteTemplateId = null;
 	let projectStateVersion = savedArmoryState.projectStateVersion;
 
+	let trafficOpen = savedTrafficOpen;
+
 	$: savedSettingsOpen = settingsOpen;
+	$: savedTrafficOpen = trafficOpen;
 
 	const trafficPagination = writable({
 		pageIndex: selectedRunId
@@ -153,6 +158,7 @@
 		paginatedRunId = null;
 		handledRouteTemplateId = null;
 		settingsOpen = true;
+		trafficOpen = true;
 		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
 	}
 	$: if (selectedRunId !== paginatedRunId) {
@@ -720,9 +726,11 @@
 					{/if}
 				</section>
 			</div>
-			<div class="h-[38%] min-h-36 flex-none border-t border-surface-500/30">
+			<div class="flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}">
 				<TrafficRegion
+					bind:open={trafficOpen}
 					requests={selectedRun ? requests : null}
+					openId={drawerOpened ? $drawerStore.meta?.request?.ID : null}
 					pagination={trafficPagination}
 					onPaginationChange={setTrafficPagination}
 					onPageChange={closeRequestDrawer}
