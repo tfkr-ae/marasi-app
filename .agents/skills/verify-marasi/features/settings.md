@@ -5,6 +5,7 @@
 - Vim, syntax mode, line wrapping (`wrap_mode`), default interface, and default port
 - Waypoint management
 - Chrome executable paths and profiles
+- Upstream proxies (Upstream Proxy section): this machine's list in `upstream_proxies` of `marasi_config.yaml`, the open project's selection (`marasi`/`upstream_proxy.active` in `client_setting`), Edit (URL and CA), and Test
 - Highlight colours and app labels (Highlights section): the 8 highlights' colours and app-wide labels, saved to `highlights` in `marasi_appconfig.yaml`, with Reset to defaults
 - App default content-type exclusion (Content Types section): the types the Ledger hides in projects that follow the default, saved to `ledger_content_type_exclusion` in `marasi_appconfig.yaml`
 - Maintenance section: Marasi's background jobs for the open project (search index, sitemap, formatted bodies) with their state, and Rebuild for the search index and the sitemap
@@ -14,7 +15,7 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Keyboard & Editor (default), Listener, Waypoints, Browser, Highlights, Content Types, Maintenance, Updates and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`.
+Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Keyboard & Editor (default), Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `global` (Settings has no page menu) in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
@@ -52,6 +53,7 @@ Keybindings: `{"text":"Configure Keybindings"}` opens the modal (`[data-keybindi
 ```
 
 - While an update is known (a release or nightly build only), the rail's Settings icon carries a dot or download ring and its title becomes `Settings · <status>` (for example `Settings · Update available: <version>`), so `drive.sh settings`, which clicks `[title="Settings"]`, cannot find it; it also links to `/settings?section=updates`.
+- Upstream Proxy: the add row is `tfoot input` 1 (name) and 2 (URL), `{"text":"Add CA"}` (a modal: paste into `[aria-label="CA certificate"]` or `Read from File`, then `Done`; the button then reads `CA Added`; `Read from File` uses a native dialog, so launch with `MARASI_UPSTREAM_PROXY_CA_FILE=<absolute path>` and it reads that file instead), then `{"text":"Add Upstream Proxy"}`. The selection is `select[aria-label="This project's upstream proxy"]`: click it, then a bare `key` with the option's first letter (`d` for Direct). Test connects to `[aria-label="Test target"]` and shows `Connected` or the failure in the row's Last Test cell. Edit opens a modal (`Edit <name>`) whose URL field starts empty, because Marasi never returns credentials. Deleting the selected entry first asks `Remove <name>?`. Afterwards the select reads `<name> (not set up)` and `[data-testid=upstream-warning]` shows. To prove routing, run a local CONNECT proxy and an origin, send `curl --proxy http://127.0.0.1:18080` and read the proxy's log. A pair's route is in `request.upstream_proxy_name` and `upstream_proxy_address`, and a failed route gives a 502 and one ERROR row in `logs`.
 - Row X and pencil buttons have `title="Delete"` / `title="Edit"`; find the `<tr>` with `hasText` first. Each table's add row is its `<tfoot>`.
 - Adding a Chrome profile only appends YAML. Deleting a profile also removes `$configDir/chrome_profiles/<name>`. Directories appear later when Chrome starts.
 - Keybinding conflicts show on the row (`… is also bound to …`) and block Save: `[data-save-blocked]` in the footer names one problem as `Profile · Platform · Page · State · Action: …` (with `(i of N problems)` when there are several), including problems on a profile or platform not on screen. `Show` switches to it; `Next` steps to the next problem in a fixed order (every profile, macOS before Windows / Linux) and switches to it. When the saved section failed to load (for example `version: 99`, set up by editing the isolated YAML and running `restart.sh`), Save first asks `Replace saved keybindings?` in `[role=alertdialog]`; its Cancel leaves the YAML untouched.
