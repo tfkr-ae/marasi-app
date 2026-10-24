@@ -710,7 +710,7 @@
 						<span class={settingsOpen ? "" : "lg:[writing-mode:vertical-rl]"}>Run settings</span>
 					</button>
 					{#if settingsOpen}
-						<div class="max-h-64 min-h-0 overflow-y-auto lg:max-h-none lg:flex-1">
+						<div class="flex max-h-80 min-h-0 flex-col lg:max-h-none lg:flex-1">
 							<RunSettings
 								bind:attackType
 								bind:useHTTPS
