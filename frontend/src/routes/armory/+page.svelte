@@ -55,7 +55,7 @@
 	import RowMenu from "../../lib/ledger/RowMenu.svelte";
 	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
 	import ArmoryDrawer from "../../lib/armory/ArmoryDrawer.svelte";
-	import ArmoryLinked from "../../lib/armory/ArmoryLinked.svelte";
+	import DrawerLinked from "../../lib/ledger/DrawerLinked.svelte";
 	import RunSettings from "../../lib/armory/RunSettings.svelte";
 	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
@@ -914,7 +914,7 @@
 						onActions={openDrawerMenu}
 					>
 						<svelte:fragment slot="details">
-							<ArmoryLinked
+							<DrawerLinked
 								findings={linkedFindings}
 								testCases={linkedTestCases}
 								onUnlink={(kind, target, title) =>

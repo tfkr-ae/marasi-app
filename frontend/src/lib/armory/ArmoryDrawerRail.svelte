@@ -19,8 +19,7 @@
 	} from "lucide-svelte";
 	import { menuDispatcher } from "../keybindings/app.js";
 	import { shortcutLabel } from "../keybindings/keys.js";
-	import { statusClass } from "../launchpad/format.js";
-	import { formatSize, statusText } from "../ledger/table.js";
+	import DrawerFacts from "../ledger/DrawerFacts.svelte";
 
 	/** The open pair's table row, and its request number. */
 	export let pair;
@@ -53,7 +52,7 @@
 		return key ? `${label} (${key})` : label;
 	}
 	$: keymap = $menuDispatcher;
-	$: maximiseLabel = maximised ? "Restore" : "Maximise the drawer";
+	$: maximiseLabel = maximised ? "Restore the workspace" : "Maximise the drawer";
 	$: ExpandIcon = expanded ? PanelLeftClose : PanelLeftOpen;
 
 	const railButton =
@@ -105,22 +104,7 @@
 			>
 		</div>
 
-		<div class="armory-drawer-facts flex-none space-y-0.5 px-3 py-2 font-mono text-[11px] leading-4">
-			<div class="flex flex-wrap gap-x-2">
-				<b>{pair.Method ?? ""}</b>
-				<span class={statusClass(pair.StatusCode)}>{hasResponse ? statusText(pair.StatusCode) : "pending"}</span>
-				{#if timing}<span class="opacity-60">{timing}</span>{/if}
-			</div>
-			<!-- One line; the whole URL is in the tooltip. -->
-			<div class="truncate" title="{pair.Host ?? ''}{pair.Path ?? ''}">
-				<span class="opacity-70">{pair.Host ?? ""}</span>{pair.Path ?? ""}
-			</div>
-			<div class="opacity-60">
-				{pair.ContentType || (hasResponse ? "no content type" : "no response yet")}{formatSize(pair.Length)
-					? ` · ${formatSize(pair.Length)}`
-					: ""}
-			</div>
-		</div>
+		<DrawerFacts {pair} {timing} prefix="armory" />
 
 		<slot name="details" />
 

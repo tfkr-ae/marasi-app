@@ -32,8 +32,8 @@
 	} from "lucide-svelte";
 	import { menuDispatcher } from "../keybindings/app.js";
 	import { shortcutLabel } from "../keybindings/keys.js";
-	import { statusClass } from "../launchpad/format.js";
-	import { formatSize, statusText } from "./table.js";
+	import DrawerFacts from "./DrawerFacts.svelte";
+	import DrawerLinked from "./DrawerLinked.svelte";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 
 	/** The focused pair's table row, and its request number. */
@@ -91,7 +91,6 @@
 	$: hasNote = note != null ? note.length > 0 : pair.Metadata?.has_note == 1;
 	$: maximiseLabel = maximised ? "Restore the table" : "Maximise the drawer";
 	$: ExpandIcon = expanded ? PanelLeftClose : PanelLeftOpen;
-	$: hasResponse = Number(pair.StatusCode) > 0;
 
 	// The note button's dot: neutral grey when the pair has a note (the
 	// primary colour is red, so it would read as the failure), amber while
@@ -195,22 +194,7 @@
 			>
 		</div>
 
-		<div class="ledger-drawer-facts flex-none space-y-0.5 px-3 py-2 font-mono text-[11px] leading-4">
-			<div class="flex flex-wrap gap-x-2">
-				<b>{pair.Method ?? ""}</b>
-				<span class={statusClass(pair.StatusCode)}>{hasResponse ? statusText(pair.StatusCode) : "pending"}</span>
-				{#if timing}<span class="opacity-60">{timing}</span>{/if}
-			</div>
-			<!-- One line; the whole URL is in the tooltip. -->
-			<div class="ledger-drawer-url truncate" title="{pair.Host ?? ''}{pair.Path ?? ''}">
-				<span class="opacity-70">{pair.Host ?? ""}</span>{pair.Path ?? ""}
-			</div>
-			<div class="opacity-60">
-				{pair.ContentType || (hasResponse ? "no content type" : "no response yet")}{formatSize(pair.Length)
-					? ` · ${formatSize(pair.Length)}`
-					: ""}
-			</div>
-		</div>
+		<DrawerFacts {pair} {timing} prefix="ledger" />
 
 		<div class={heading}>Highlight</div>
 		<div class="ledger-drawer-swatches flex flex-none flex-wrap gap-1 px-3" role="radiogroup" aria-label="Highlight">
@@ -254,23 +238,7 @@
 			<p class="mx-3 flex-none text-[11px] opacity-40">{note === null ? "…" : "No note"}</p>
 		{/if}
 
-		{#if findings.length || testCases.length}
-			<div class={heading}>Linked</div>
-			{#each findings as finding (finding.ID)}
-				<div class="flex flex-none items-center gap-2 px-3 py-0.5" title="Finding">
-					<ShieldAlert size={12} class="flex-none text-error-500" /><span class="truncate"
-						>{finding.Title || "Untitled finding"}</span
-					>
-				</div>
-			{/each}
-			{#each testCases as testCase (testCase.ID)}
-				<div class="flex flex-none items-center gap-2 px-3 py-0.5" title="Test case">
-					<BookCheck size={12} class="flex-none text-tertiary-500" /><span class="truncate"
-						>{testCase.Title || "Untitled test case"}</span
-					>
-				</div>
-			{/each}
-		{/if}
+		<DrawerLinked {findings} {testCases} />
 
 		<div class={heading}>Actions</div>
 		{#each actions as action}
