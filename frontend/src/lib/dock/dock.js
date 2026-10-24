@@ -10,6 +10,9 @@ export const LEDGER_DOCK = { default: 320, min: 240, max: 560, snap: 170 };
 /** The Checkpoint dock's limits, in px. */
 export const CHECKPOINT_DOCK = { default: 360, min: 260, max: 560, snap: 170 };
 
+/** The Armory dock's limits, in px. */
+export const ARMORY_DOCK = { default: 300, min: 240, max: 520, snap: 170 };
+
 /** The live width while dragging `delta` px from `startWidth`. */
 export function dragWidth(startWidth, delta, limits = DOCK) {
   return Math.min(limits.max, Math.max(0, startWidth + delta));

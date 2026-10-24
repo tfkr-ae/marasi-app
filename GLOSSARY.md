@@ -43,7 +43,7 @@ The pairs a researcher has picked in the ledger for a context-menu action to app
 _Avoid_: checked rows, marked rows, batch
 
 **Drawer**:
-The ledger's pane, below the table, that shows one pair's request and response side by side.
+A pane that shows one pair's request and response side by side: in the ledger, below the table; in the Armory, over the bottom of the workspace for a pair from the selected run's traffic.
 _Avoid_: inspector, detail view
 
 **Query results**:

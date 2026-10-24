@@ -25,11 +25,16 @@ const routes = {
 	// "Intercepted" is the dock's header, or its strip label when collapsed.
 	checkpoint: { selector: '[title="Checkpoint"], [title^="Checkpoint · "]', path: "/checkpoint", expected: "Intercepted" },
 	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Group by status" },
-	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Armory Settings" },
+	// "Templates" is the dock's header, or its strip label when collapsed.
+	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Templates" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "Logbook Settings" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
 	settings: { selector: '[title="Settings"]', path: "/settings", expected: "Marasi Settings" },
 };
+
+// Drawers an earlier drive can leave open: Skeleton's, and the Armory
+// page's own, which sits inside the page and has no backdrop.
+const openDrawers = ".drawer, .armory-drawer-box";
 
 // Skeleton's modal wrapper is display: contents, so measure its card. The
 // Marasi menu is an open native <dialog>; measure the dialog itself, because
@@ -708,11 +713,11 @@ if (mode === "launch") {
 } else if (mode === "doctor") {
 	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && window.go?.main?.App && window.runtime && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, Wails bridge, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
 	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5000);
-	await waitFor(`!${overlayPainted} && !(${paintedSelector(".drawer")})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
+	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {
 	// Dismiss what an earlier drive left open with the same input a user
 	// would: Escape, then a click on the drawer backdrop.
-	const residue = `${overlayPainted} || ${paintedSelector(".drawer")}`;
+	const residue = `${overlayPainted} || ${paintedSelector(openDrawers)}`;
 	for (let attempt = 0; attempt < 3 && await evaluate(residue); attempt++) {
 		await pressEscape();
 		try {
@@ -720,7 +725,7 @@ if (mode === "launch") {
 		} catch {
 			if (await evaluate(paintedSelector(".drawer-backdrop"))) {
 				await clickPoint({ x: 5, y: 5 });
-				await waitFor(`!(${paintedSelector(".drawer")})`, "drawer dismissed by a backdrop click", 2000).catch(() => {});
+				await waitFor(`!(${paintedSelector(openDrawers)})`, "drawer dismissed by a backdrop click", 2000).catch(() => {});
 			}
 		}
 	}

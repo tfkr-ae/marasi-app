@@ -9,7 +9,7 @@ Which component draws each part of the app, and the type sizes the pages share. 
 - **App rail.** Skeleton's `AppRail`, with one `AppRailAnchor` per page, then one per extension with an interface, then Settings. Two icons carry an indicator: Settings shows the update dot (`settingsIconIndicator`), and Checkpoint shows the count of intercepted items (`checkpointBadge.js`, `data-testid="checkpoint-badge"`) and adds it to its title.
 - **Marasi menu.** `GlobalMenu.svelte` (in `lib/components/MarasiMenu/`) is mounted once here. It runs the `global.*` actions, such as going to a page. ⌘K opens a `MarasiKeys.svelte` dialog, which each page also mounts with its own actions (see `keybindings-and-menus.md`).
 - **Modals.** Components are registered by name in `modalRegistery` and opened with `modalStore.trigger({ type: "component", component: "<name>" })`. Most are `lib/components/*Modal.svelte`.
-- **Drawer.** `AppDrawer.svelte` is the Skeleton drawer that Compass, Checkpoint, Armory, Logbook and Workshop open through `drawerStore`. The Ledger has its own drawer instead (see `ledger.md`).
+- **Drawer.** `AppDrawer.svelte` is the Skeleton drawer that Compass, Checkpoint, Logbook and Workshop open through `drawerStore`. The Ledger has its own drawer instead (see `ledger.md`), and so does the Armory: `lib/armory/ArmoryDrawer.svelte` and `ArmoryDrawerRail.svelte`. Both details columns draw the facts with `lib/ledger/DrawerFacts.svelte` and the Linked section with `lib/ledger/DrawerLinked.svelte` (the Armory passes `onUnlink`). The Armory page reports whether it is open to the menu contexts through `armoryDrawer` in `lib/keybindings/app.js`.
 - **Chef, Excalidraw and Interactsh.** They are loaded the first time their rail icon is clicked, then stay mounted in the layout, so they keep their state. Their routes only show or hide them.
 - **Opening screen and toasts.** `OpeningScreen.svelte` (see `project-open.md`) and Skeleton's `Toast`.
 - **The page** renders in `{#key $pagesKey}<slot />`.
@@ -24,7 +24,8 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Ledger | `routes/ledger/` | `lib/ledger/`, `lib/dock/Dock.svelte` |
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
 | Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |
-| Compass, Armory, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
+| Armory | `routes/armory/` | `lib/armory/` (`ArmoryDock`, `TemplateHeader`, `TemplateEditor`, `RunSettings`, `TrafficRegion`, `ArmoryDrawer`, `ArmoryDrawerRail`; `rowMenu.js` builds the traffic row menu from the Ledger's item builders, and `RowMenu` draws it), `lib/dock/Dock.svelte` |
+| Compass, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
 | Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. |
@@ -41,7 +42,8 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 - `WebSocketInject.svelte`, `WebSocketCheckpoint.svelte` and `WebSocketMessagesTable.svelte` are the WebSocket editors.
 - `lib/checkpoint/ItemWorkspace.svelte` holds the intercepted item and its context; `lib/checkpoint/RulesEditor.svelte` holds the Checkpoint rules.
 - `lib/extensions/components/Editor.svelte` is the editor an extension interface gets.
-- Compass, Armory and Workshop create their own in the route file.
+- `lib/armory/TemplateEditor.svelte` holds the Armory request template.
+- Compass and Workshop create their own in the route file.
 
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 

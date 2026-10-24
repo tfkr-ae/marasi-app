@@ -5,7 +5,7 @@ How a keyboard shortcut or a ⌘K menu item reaches its handler, and where a new
 ## How a key reaches a handler
 
 1. **Catalog.** `FACTORY_ACTIONS` in `catalog.js` holds every built-in action. `buildCatalog` adds the extension actions. Page and drawer ids are `<context>.<slug>` (`pageActions`).
-2. **Contexts.** `CONTEXTS` in `contexts.js` says when each context applies (`isEligible`) and how specific it is (tier). They read the state that `shortcutState` in `frontend/src/routes/+layout.svelte` builds.
+2. **Contexts.** `CONTEXTS` in `contexts.js` says when each context applies (`isEligible`) and how specific it is (tier). They read the state that `shortcutState` in `frontend/src/routes/+layout.svelte` builds. The Armory page has its own drawer, so it reports it through `armoryDrawer` in `app.js`, and the `armory.page` and `armory.drawer` contexts read `state.armoryDrawer`.
 3. **Dispatcher.** `installMenuShortcuts` in `app.js` sends each keydown to `menuDispatcher` (`createDispatcher` in `dispatcher.js`). `shortcutGate` in `gate.js` first decides whether shortcuts may run, for example while a modal is open. The most specific eligible context with a live handler for the key wins.
 4. **Handlers.** A page registers `{actionId, handler}` with `useMenuActions` for its whole lifetime. Contexts, not registrations, decide which action a key reaches. `GlobalMenu.svelte` holds the handlers and icons for `global.*`.
 5. **⌘K.** `MarasiKeys.svelte` lists the `menuOptions` a page passes it, with text from the catalog. The global list comes from the catalog's `global` context.

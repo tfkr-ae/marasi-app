@@ -167,8 +167,26 @@ function linkState(target, pairs, partial) {
   return count === 0 ? false : count === pairs.length ? true : "mixed";
 }
 
-// The Finding and Test case submenus share a shape.
-function linkMenu({ key, noun, pairs, one, n, partial, targets, newActionId, newType, linkType, unlinkType }) {
+/**
+ * A Finding or Test case submenu's `badge` and `sub` over `pairs` and the
+ * `targets` (each with the pair IDs it links as Requests). `one` and `n`
+ * word the New item (one pair, else "with n requests"); `partial` marks a
+ * selection holding pairs not loaded; `newActionId` names the New item's
+ * keybinding. Armory's row menu (lib/armory/rowMenu.js) uses it too.
+ */
+export function linkMenu({
+  key,
+  noun,
+  pairs,
+  one = pairs.length === 1,
+  n = pairs.length,
+  partial = false,
+  targets,
+  newActionId,
+  newType,
+  linkType,
+  unlinkType,
+}) {
   const states = targets.map((target) => [target, linkState(target, pairs, partial)]);
   // With the state unknown, any of them can be unlinked.
   const linked = partial ? states : states.filter(([, state]) => state);
@@ -217,6 +235,36 @@ function linkMenu({ key, noun, pairs, one, n, partial, targets, newActionId, new
           ]
         : []),
     ],
+  };
+}
+
+/**
+ * Send to Launchpad's New item: for one pair, else "with `many` entries".
+ * `actionId` names its keybinding, if any.
+ */
+export function newLaunchpadItem(one, many, actionId) {
+  return {
+    id: "lp-new",
+    label: one ? "New launchpad" : `New launchpad with ${many} entries`,
+    icon: "plus",
+    actionId,
+    action: { type: "new-launchpad" },
+  };
+}
+
+/** Send to Launchpad's "Add to launchpad" item, listing `launchpads`. */
+export function addToLaunchpadItem(launchpads) {
+  return {
+    id: "lp-add",
+    label: "Add to launchpad",
+    icon: "link",
+    disabled: !launchpads.length,
+    hint: "No launchpads yet",
+    sub: launchpads.map((launchpad) => ({
+      id: `lp-${launchpad.ID}`,
+      label: launchpad.Name || UNTITLED_LAUNCHPAD,
+      action: { type: "add-to-launchpad", id: launchpad.ID, name: launchpad.Name },
+    })),
   };
 }
 
@@ -317,13 +365,7 @@ export function menuFor(
       label: "Send to Launchpad",
       icon: "send",
       sub: [
-        {
-          id: "lp-new",
-          label: one ? "New launchpad" : `New launchpad with ${many} entries`,
-          icon: "plus",
-          actionId: "ledger.drawer-open.send-to-launchpad",
-          action: { type: "new-launchpad" },
-        },
+        newLaunchpadItem(one, many, "ledger.drawer-open.send-to-launchpad"),
         ...(!one
           ? [
               {
@@ -335,18 +377,7 @@ export function menuFor(
               },
             ]
           : []),
-        {
-          id: "lp-add",
-          label: "Add to launchpad",
-          icon: "link",
-          disabled: !launchpads.length,
-          hint: "No launchpads yet",
-          sub: launchpads.map((launchpad) => ({
-            id: `lp-${launchpad.ID}`,
-            label: launchpad.Name || UNTITLED_LAUNCHPAD,
-            action: { type: "add-to-launchpad", id: launchpad.ID, name: launchpad.Name },
-          })),
-        },
+        addToLaunchpadItem(launchpads),
         // The pairs' launchpads aren't loaded with them, so every launchpad
         // is offered; Marasi reports how many were in it.
         ...(launchpads.length
