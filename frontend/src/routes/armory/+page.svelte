@@ -3,16 +3,20 @@
 	// visits within a session.
 	let savedSettingsOpen = true;
 	let savedTrafficOpen = true;
+	// Whether the drawer shows its details column, as in the Ledger.
+	let savedDrawerExpanded = false;
 </script>
 
 <script>
 	// The Armory page: the template dock (lib/armory/ArmoryDock.svelte) on
 	// the left; on the right the selected template's header and editor, its
-	// Run settings, and the selected run's traffic at the bottom. The page
-	// holds the selection, draft and settings and keeps armoryStore in step.
+	// Run settings, and the selected run's traffic at the bottom. A traffic
+	// row opens ArmoryDrawer over the bottom of the workspace, right of the
+	// dock. The page holds the selection, draft and settings and keeps
+	// armoryStore in step.
 	import { onMount } from "svelte";
 	import { get, writable } from "svelte/store";
-	import { getDrawerStore, getModalStore, getToastStore } from "@skeletonlabs/skeleton";
+	import { getModalStore, getToastStore } from "@skeletonlabs/skeleton";
 	import {
 		ArrowLeft,
 		ArrowRight,
@@ -29,18 +33,20 @@
 	} from "lucide-svelte";
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
-	import { useMenuActions } from "../../lib/keybindings/app.js";
+	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryStore } from "../../stores/armoryStore";
-	import { activeProject, appState, drawerHeight } from "../../stores";
+	import { activeProject, appState } from "../../stores";
 	import { recentTraffic } from "../../stores/recentTrafficStore";
 	import { runTraffic } from "../../lib/armoryRunTraffic.js";
+	import { sameID } from "../../lib/ledger/pairs.js";
+	import { stepRequest } from "../../lib/armory/traffic.js";
 	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
+	import ArmoryDrawer from "../../lib/armory/ArmoryDrawer.svelte";
 	import RunSettings from "../../lib/armory/RunSettings.svelte";
 	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
 	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
 
-	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 
@@ -79,7 +85,11 @@
 	let validationTimer;
 	let validationRequest = 0;
 	let settingsOpen = savedSettingsOpen;
-	let drawerOpened = false;
+	// The drawer's pair, by ID: its row comes from `requests`, so it follows
+	// the live traffic (a response arriving).
+	let openId = null;
+	let drawerMaximised = false;
+	let drawerExpanded = savedDrawerExpanded;
 	let templateEditor;
 	let paginatedRunId = null;
 	let handledRouteTemplateId = null;
@@ -89,6 +99,7 @@
 
 	$: savedSettingsOpen = settingsOpen;
 	$: savedTrafficOpen = trafficOpen;
+	$: savedDrawerExpanded = drawerExpanded;
 
 	const trafficPagination = writable({
 		pageIndex: selectedRunId
@@ -143,6 +154,10 @@
 	$: requests = selectedRun
 		? runTraffic(loadedRunTraffic, $recentTraffic, selectedRunId)
 		: [];
+	$: openIndex = openId == null ? -1 : requests.findIndex((row) => sameID(row.ID, openId));
+	$: openRow = openIndex === -1 ? null : requests[openIndex];
+	$: drawerOpen = openRow != null;
+	$: armoryDrawer.set({ open: drawerOpen });
 	$: if ($armoryStore.projectStateVersion !== projectStateVersion) {
 		projectStateVersion = $armoryStore.projectStateVersion;
 		search = $armoryStore.search;
@@ -169,7 +184,7 @@
 				: 0,
 			pageSize: $armoryStore.trafficPageSize,
 		});
-		if (drawerOpened) drawerStore.close();
+		closeRequestDrawer();
 	}
 	$: if (
 		$trafficPagination.pageIndex >
@@ -437,19 +452,8 @@
 		});
 	}
 
-	function openRequest(row, index) {
-		drawerStore.open({
-			id: "request-response",
-			meta: {
-				metadata: row.Metadata,
-				request: { ID: row.ID },
-				requestIndex: index + 1,
-				isFiltered: false,
-			},
-			height: $drawerHeight,
-			width: "w-full",
-			position: "bottom",
-		});
+	function openRequest(row) {
+		openId = row.ID;
 	}
 
 	function adjacent(
@@ -482,22 +486,36 @@
 		if (target) selectRun(target.item);
 	}
 
+	// Steps through the run's traffic, turning the table's page with it.
 	function cycleRequest(direction) {
-		const currentIndex = requests.findIndex(
-			(row) => row.ID === $drawerStore.meta?.request?.ID,
-		);
-		const index = currentIndex + direction;
-		if (currentIndex !== -1 && requests[index]) {
-			setTrafficPagination((old) => ({
-				...old,
-				pageIndex: Math.floor(index / old.pageSize),
-			}));
-			openRequest(requests[index], index);
-		}
+		const index = stepRequest(requests, openId, direction);
+		if (index === -1) return;
+		setTrafficPagination((old) => ({
+			...old,
+			pageIndex: Math.floor(index / old.pageSize),
+		}));
+		openRequest(requests[index]);
 	}
 
 	function closeRequestDrawer() {
-		if (drawerOpened) drawerStore.close();
+		openId = null;
+		drawerMaximised = false;
+	}
+
+	// Esc closes the drawer, unless a modal or a text field has the key.
+	function onWindowKeydown(event) {
+		if (event.key !== "Escape" || !drawerOpen || $modalStore[0]) return;
+		if (event.target?.closest?.("input, textarea, [contenteditable='true'], .cm-editor")) return;
+		event.preventDefault();
+		closeRequestDrawer();
+	}
+
+	const COPIED = { request: "Request copied", response: "Response copied", url: "URL copied" };
+	function copyFromDrawer(text, what) {
+		navigator.clipboard
+			.writeText(text)
+			.then(() => notify(COPIED[what]))
+			.catch(() => notify("Copy failed", "variant-filled-error"));
 	}
 
 	async function refreshRuns() {
@@ -565,7 +583,7 @@
 			actionId: "armory.page.open-first-request",
 			icon: SquareArrowUpRight,
 			handler: () => {
-				if (requests.length > 0) openRequest(requests[0], 0);
+				if (requests.length > 0) openRequest(requests[0]);
 			},
 		},
 		{
@@ -630,13 +648,10 @@
 	// The armory.page and armory.drawer menu contexts decide which of these
 	// a key reaches; the menu lists the actions of the drawer's state.
 	useMenuActions([...armoryMenu, ...drawerMenu]);
-	$: menuOptions = drawerOpened ? drawerMenu : armoryMenu;
+	$: menuOptions = drawerOpen ? drawerMenu : armoryMenu;
 
 	onMount(() => {
 		validationReady = true;
-		const unsubscribe = drawerStore.subscribe((settings) => {
-			drawerOpened = settings.open && settings.id === "request-response";
-		});
 		const interval = setInterval(async () => {
 			const project = $activeProject;
 			try {
@@ -649,15 +664,15 @@
 		}, 1500);
 
 		return () => {
-			drawerOpened = false;
-			drawerStore.close();
+			armoryDrawer.set({ open: false });
 			modalStore.close();
-			unsubscribe();
 			clearInterval(interval);
 			clearTimeout(validationTimer);
 		};
 	});
 </script>
+
+<svelte:window on:keydown={onWindowKeydown} />
 
 <div class="flex h-full min-h-0 overflow-hidden text-sm">
 	<MarasiKeys {menuOptions} />
@@ -730,13 +745,40 @@
 				<TrafficRegion
 					bind:open={trafficOpen}
 					requests={selectedRun ? requests : null}
-					openId={drawerOpened ? $drawerStore.meta?.request?.ID : null}
+					openId={openRow?.ID ?? null}
 					pagination={trafficPagination}
 					onPaginationChange={setTrafficPagination}
 					onPageChange={closeRequestDrawer}
 					onOpen={openRequest}
 				/>
 			</div>
+			{#if openRow}
+				<!-- Over the bottom of the workspace only, so it moves with the
+				     dock. The red top line is drawn over the drawer, as in the
+				     Ledger, so CodeMirror's sticky gutters can't paint over it. -->
+				<div
+					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised
+						? 'top-0'
+						: 'h-[62%]'}"
+				>
+					{#if !drawerMaximised}
+						<div
+							class="pointer-events-none absolute inset-x-0 top-0 z-[300] h-px bg-primary-500"
+							aria-hidden="true"
+						></div>
+					{/if}
+					<ArmoryDrawer
+						pair={openRow}
+						number={openRow.Number || openIndex + 1}
+						maximised={drawerMaximised}
+						bind:expanded={drawerExpanded}
+						onClose={closeRequestDrawer}
+						onStep={cycleRequest}
+						onMaximise={() => (drawerMaximised = !drawerMaximised)}
+						onCopy={copyFromDrawer}
+					/>
+				</div>
+			{/if}
 		{:else}
 			<div class="flex h-full items-center justify-center p-8 text-center opacity-60">
 				<div>
