@@ -973,15 +973,20 @@
 		? "btn variant-ghost-primary border-0 ring-0"
 		: "btn variant-filled-primary"}
 />
+<!-- The built-in confirm, alert and prompt dialogs take the type scale the
+     component modals use: a text-base title, text-sm body and btn-sm buttons. -->
 <Modal
 	components={modalRegistery}
 	background="bg-surface-50 dark:bg-surface-800 text-surface-900-50-token"
+	spacing="space-y-3"
+	regionHeader="text-base font-bold"
+	regionBody="max-h-[200px] overflow-hidden text-sm"
 	buttonPositive={$modeCurrent
-		? "variant-ghost-primary border-0 ring-0"
-		: "variant-filled-primary"}
+		? "btn-sm variant-ghost-primary border-0 ring-0"
+		: "btn-sm variant-filled-primary"}
 	buttonNeutral={$modeCurrent
-		? "variant-ghost-surface border-0 ring-0"
-		: "variant-ghost-surface"}
+		? "btn-sm variant-ghost-surface border-0 ring-0"
+		: "btn-sm variant-ghost-surface"}
 />
 
 <style>
