@@ -31,17 +31,27 @@
 		SquareArrowUpRight,
 		ToggleLeft,
 	} from "lucide-svelte";
+	import { goto } from "$app/navigation";
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryStore } from "../../stores/armoryStore";
 	import { activeProject, appState } from "../../stores";
 	import { recentTraffic } from "../../stores/recentTrafficStore";
+	import { ledgerStore } from "../../stores/ledgerStore";
+	import { launchpadStore } from "../../stores/launchpadStore";
+	import { findingStore } from "../../stores/findingStore";
+	import { testCaseStore } from "../../stores/testCaseStore";
 	import { runTraffic } from "../../lib/armoryRunTraffic.js";
 	import { sameID } from "../../lib/ledger/pairs.js";
+	import { linkedTo } from "../../lib/ledger/drawer.js";
+	import { toastError } from "../../lib/toasts.js";
 	import { stepRequest } from "../../lib/armory/traffic.js";
+	import { armoryMenuFor } from "../../lib/armory/rowMenu.js";
+	import RowMenu from "../../lib/ledger/RowMenu.svelte";
 	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
 	import ArmoryDrawer from "../../lib/armory/ArmoryDrawer.svelte";
+	import ArmoryLinked from "../../lib/armory/ArmoryLinked.svelte";
 	import RunSettings from "../../lib/armory/RunSettings.svelte";
 	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
@@ -518,6 +528,135 @@
 			.catch(() => notify("Copy failed", "variant-filled-error"));
 	}
 
+	// The traffic row menu (lib/armory/rowMenu.js, drawn by the Ledger's
+	// RowMenu), opened by right-clicking a row or by the drawer's Actions.
+	// Its actions run through the Ledger's store methods, as the Ledger's
+	// row menu does, on the one pair it was opened for.
+	let rowMenu = { open: false, x: 0, y: 0, pair: null, number: null };
+
+	function openRowMenu(row, index, event) {
+		rowMenu = { open: true, x: event.clientX, y: event.clientY, pair: row, number: row.Number || index + 1 };
+	}
+
+	function openDrawerMenu(event) {
+		if (!openRow) return;
+		const rect = event.currentTarget.getBoundingClientRect();
+		rowMenu = { open: true, x: rect.left, y: rect.bottom, pair: openRow, number: openRow.Number || openIndex + 1 };
+	}
+
+	$: rowMenuItems =
+		rowMenu.open && rowMenu.pair
+			? armoryMenuFor([rowMenu.pair], {
+					launchpads: $launchpadStore.launchpads,
+					findings: $findingStore,
+					testCases: $testCaseStore,
+				})
+			: [];
+
+	function notifyJump(message, path) {
+		const toastId = toastStore.trigger({
+			message,
+			background: "variant-filled-success",
+			action: {
+				label: "Jump to Launchpad",
+				response: () => {
+					toastStore.close(toastId);
+					goto(path);
+				},
+			},
+		});
+	}
+
+	const refreshLaunchpads = () =>
+		launchpadStore.populate().catch((err) => console.error("Refreshing launchpads failed:", err));
+
+	async function sendToNewLaunchpad(pair) {
+		// The Ledger names the launchpad after the pair's number, which it
+		// only knows for pairs it has loaded; Armory's row knows it.
+		const unnamed = ledgerStore.pairNumber(pair.ID) === "?" && pair.Number;
+		try {
+			const { launchpadId } = await ledgerStore.sendToNewLaunchpad({ ids: [String(pair.ID)] }, 1);
+			if (unnamed) {
+				await launchpadStore
+					.updateLaunchpad(launchpadId, {
+						name: `Request ${pair.Number}`,
+						description: `Launchpad for Request ${pair.Number}`,
+					})
+					.catch((err) => console.error("Naming the launchpad failed:", err));
+			}
+			refreshLaunchpads();
+			notifyJump("Sent to a new launchpad", `/launchpad?id=${launchpadId}`);
+		} catch (error) {
+			toastError(toastStore, "Failed to create a launchpad", error);
+		}
+	}
+
+	async function addToLaunchpad(pair, launchpadId, name) {
+		try {
+			const count = await ledgerStore.addToLaunchpad({ ids: [String(pair.ID)] }, launchpadId);
+			refreshLaunchpads();
+			if (count) notifyJump(`Added to "${name || "Untitled launchpad"}"`, `/launchpad?id=${launchpadId}`);
+		} catch (error) {
+			toastError(toastStore, "Failed to add to the launchpad", error);
+		}
+	}
+
+	// Links or unlinks the pair and a finding or test case.
+	const LINKS = {
+		"link-finding": ["link", "Linked to", "finding", (sel, id) => ledgerStore.linkToFinding(sel, id)],
+		"unlink-finding": ["unlink", "Unlinked from", "finding", (sel, id) => ledgerStore.unlinkFromFinding(sel, id)],
+		"link-test-case": ["link", "Linked to", "test case", (sel, id) => ledgerStore.linkToTestCase(sel, id)],
+		"unlink-test-case": ["unlink", "Unlinked from", "test case", (sel, id) =>
+			ledgerStore.unlinkFromTestCase(sel, id)],
+	};
+	async function changeLink(pair, type, id, title) {
+		const [verb, done, noun, run] = LINKS[type];
+		try {
+			const count = await run({ ids: [String(pair.ID)] }, id);
+			if (count) notify(`${done} ${noun} "${title}"`);
+		} catch (error) {
+			toastError(toastStore, `Failed to ${verb} the ${noun}`, error);
+		}
+	}
+
+	// A draft finding or test case with the pair as its request, opened in
+	// its modal, as the Ledger does.
+	function createRecord(pair, kind) {
+		const finding = kind === "finding";
+		(finding ? ledgerStore.createFinding : ledgerStore.createTestCase)([pair.ID])
+			.then((record) =>
+				modalStore.trigger({
+					type: "component",
+					component: finding ? "Finding" : "TestCase",
+					meta: finding ? { finding: record, isNew: true } : { testCase: record, isNew: true },
+				}),
+			)
+			.catch((error) => toastError(toastStore, `Failed to create a ${kind}`, error));
+	}
+
+	/** Runs a row menu action (lib/armory/rowMenu.js) on `pair`. */
+	function runRowAction(action, pair) {
+		if (!action || !pair) return;
+		switch (action.type) {
+			case "new-launchpad":
+				return sendToNewLaunchpad(pair);
+			case "add-to-launchpad":
+				return addToLaunchpad(pair, action.id, action.name);
+			case "new-finding":
+				return createRecord(pair, "finding");
+			case "new-test-case":
+				return createRecord(pair, "test case");
+			case "link-finding":
+			case "unlink-finding":
+			case "link-test-case":
+			case "unlink-test-case":
+				return changeLink(pair, action.type, action.id, action.title);
+		}
+	}
+
+	$: linkedFindings = openRow ? linkedTo(openRow.ID, $findingStore) : [];
+	$: linkedTestCases = openRow ? linkedTo(openRow.ID, $testCaseStore) : [];
+
 	async function refreshRuns() {
 		if (!selectedTemplateId) return;
 		try {
@@ -750,6 +889,7 @@
 					onPaginationChange={setTrafficPagination}
 					onPageChange={closeRequestDrawer}
 					onOpen={openRequest}
+					onMenu={openRowMenu}
 				/>
 			</div>
 			{#if openRow}
@@ -776,7 +916,22 @@
 						onStep={cycleRequest}
 						onMaximise={() => (drawerMaximised = !drawerMaximised)}
 						onCopy={copyFromDrawer}
-					/>
+						onActions={openDrawerMenu}
+					>
+						<svelte:fragment slot="details">
+							<ArmoryLinked
+								findings={linkedFindings}
+								testCases={linkedTestCases}
+								onUnlink={(kind, target, title) =>
+									changeLink(
+										openRow,
+										kind === "finding" ? "unlink-finding" : "unlink-test-case",
+										target.ID,
+										title,
+									)}
+							/>
+						</svelte:fragment>
+					</ArmoryDrawer>
 				</div>
 			{/if}
 		{:else}
@@ -789,3 +944,13 @@
 		{/if}
 	</div>
 </div>
+
+<RowMenu
+	bind:open={rowMenu.open}
+	x={rowMenu.x}
+	y={rowMenu.y}
+	pairs={rowMenu.pair ? [rowMenu.pair] : []}
+	items={rowMenuItems}
+	context={{ numberOf: () => rowMenu.number }}
+	on:action={(e) => runRowAction(e.detail, rowMenu.pair)}
+/>
