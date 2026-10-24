@@ -24,7 +24,7 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Ledger | `routes/ledger/` | `lib/ledger/`, `lib/dock/Dock.svelte` |
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
 | Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |
-| Armory | `routes/armory/` | `lib/armory/` (`ArmoryDock`, `TemplateHeader`, `TemplateEditor`, `RunSettings`, `TrafficRegion`), `lib/dock/Dock.svelte` |
+| Armory | `routes/armory/` | `lib/armory/` (`ArmoryDock`, `TemplateHeader`, `TemplateEditor`, `RunSettings`, `TrafficRegion`, `ArmoryDrawer`, `ArmoryDrawerRail`, `ArmoryLinked`; `rowMenu.js` builds the traffic row menu that `RowMenu` draws), `lib/dock/Dock.svelte` |
 | Compass, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
