@@ -44,6 +44,9 @@ function on(route, drawer = { open: false }) {
 }
 
 const requestDrawer = (meta = {}) => ({ open: true, id: "request-response", meta });
+// Armory's drawer is part of its page too; the layout reports it as
+// `armoryDrawer`.
+const armoryDrawerOpen = () => ({ ...on("/armory"), armoryDrawer: { open: true } });
 const websocketUpgrade = { metadata: { protocol: "websocket" } };
 
 const mac = () => createDispatcher({ catalog: buildCatalog(), platform: MACOS });
@@ -154,13 +157,12 @@ test("⌘⇧] steps Armory runs on the page and the run's requests in its reques
   const dispatcher = mac();
   const press = () => cmdShift("]", "BracketRight");
   assert.equal(dispatcher.resolve(press(), on("/armory")), "armory.page.next-run");
-  assert.equal(dispatcher.resolve(press(), on("/armory", requestDrawer())), "armory.drawer.next-request");
-  assert.equal(dispatcher.resolve(cmd("p", "KeyP"), on("/armory", requestDrawer())), null);
-  // Only the request drawer replaces the Armory menu.
-  assert.equal(
-    dispatcher.resolve(press(), on("/armory", { open: true, id: "extension-logs" })),
-    "armory.page.next-run",
-  );
+  assert.equal(dispatcher.resolve(press(), armoryDrawerOpen()), "armory.drawer.next-request");
+  assert.equal(dispatcher.resolve(cmd("p", "KeyP"), armoryDrawerOpen()), null);
+  // Only Armory's own drawer replaces the Armory menu, not Skeleton's.
+  for (const drawer of [requestDrawer(), { open: true, id: "extension-logs" }]) {
+    assert.equal(dispatcher.resolve(press(), on("/armory", drawer)), "armory.page.next-run", drawer.id);
+  }
 });
 
 test("each page's shared shortcuts run that page's action", () => {
@@ -213,7 +215,7 @@ test("a logs or report drawer keeps its page's menu", () => {
 
 test("global actions stay available on pages and in drawers", () => {
   const dispatcher = mac();
-  for (const state of [on("/ledger"), on("/ledger", requestDrawer()), on("/armory", requestDrawer()), on("/workshop")]) {
+  for (const state of [on("/ledger"), on("/ledger", requestDrawer()), armoryDrawerOpen(), on("/workshop")]) {
     assert.equal(dispatcher.resolve(cmd("1", "Digit1"), state), "global.go-home", state.route);
   }
 });

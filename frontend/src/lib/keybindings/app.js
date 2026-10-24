@@ -19,6 +19,10 @@ export const menuPalettes = createPaletteRegistry();
 // `state.websocketTab`.
 export const websocketTab = writable(null);
 
+// Whether the Armory page's request drawer is open. The page publishes it;
+// the armory contexts read it as `state.armoryDrawer` ({ open }).
+export const armoryDrawer = writable({ open: false });
+
 // True while the keybinding settings modal records a shortcut. The
 // dispatcher state carries it as `state.capturing`, and the gate then lets
 // no menu action run.

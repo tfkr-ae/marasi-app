@@ -10,12 +10,12 @@ export const TIERS = ["overlay", "drawer", "page", "global"];
 // its own overlay contexts and the global context are eligible, never the
 // page or drawer beneath.
 const onRoute = (route) => (state) => state.route === route && !state.modal;
-const drawerOpen = (state) => Boolean(state.drawer?.open);
-const requestDrawerOpen = (state) =>
-  drawerOpen(state) && state.drawer.id === "request-response";
 // The Ledger's drawer is part of the page, held by the Ledger store; the
 // layout reports it as `state.ledgerDrawer` ({ open, meta }).
 const ledgerDrawerOpen = (state) => Boolean(state.ledgerDrawer?.open);
+// Armory's drawer is part of its page too; the layout reports it as
+// `state.armoryDrawer` ({ open }).
+const armoryDrawerOpen = (state) => Boolean(state.armoryDrawer?.open);
 
 export const WEBSOCKET_MODAL = "WebsocketStream";
 // The WebSocket modal's tabs, in tab order. The modal publishes the open one
@@ -116,7 +116,7 @@ export const CONTEXTS = [
     page: "Armory",
     state: "Drawer closed",
     isEligible: (state) =>
-      onRoute("/armory")(state) && !requestDrawerOpen(state),
+      onRoute("/armory")(state) && !armoryDrawerOpen(state),
   },
   {
     id: "armory.drawer",
@@ -125,7 +125,7 @@ export const CONTEXTS = [
     page: "Armory",
     state: "Request drawer open",
     isEligible: (state) =>
-      onRoute("/armory")(state) && requestDrawerOpen(state),
+      onRoute("/armory")(state) && armoryDrawerOpen(state),
   },
   ...[
     ["launchpad", "Launchpad"],
