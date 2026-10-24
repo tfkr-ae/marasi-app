@@ -22,7 +22,7 @@
 	/** The pager changed the page; the open request drawer closes. */
 	export let onPageChange = () => {};
 	export let onOpen = (row, index) => {};
-	/** A right-click on a row; nothing listens yet. */
+	/** A right-click on a row: the page opens the row menu. */
 	export let onMenu = (row, index, event) => {};
 
 	$: neutral = neutralVariant($modeCurrent);

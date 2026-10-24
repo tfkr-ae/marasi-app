@@ -9,7 +9,7 @@
 	import { sameID } from "../ledger/pairs.js";
 	import { pairURL } from "../ledger/rowMenu.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
-	import { GetRawDetails } from "../wailsjs/go/main/App";
+	import { ledgerStore } from "../../stores/ledgerStore";
 	import ArmoryDrawerRail from "./ArmoryDrawerRail.svelte";
 
 	/** The open pair's traffic row, and its request number. */
@@ -28,9 +28,9 @@
 
 	$: hasResponse = Number(pair.StatusCode) > 0;
 
-	// The full pair (GetRawDetails): undefined while it loads, null when the
-	// read failed. It is read again when the response arrives; a newer
-	// pair's read wins.
+	// The full pair (ledgerStore.getDetails): undefined while it loads, null
+	// when the read failed. It is read again when the response arrives; a
+	// newer pair's read wins.
 	let details;
 	let detailsFor = null;
 	let detailsAnswered = false;
@@ -44,7 +44,8 @@
 		detailsAnswered = answered;
 		if (moved) details = undefined;
 		const current = ++read;
-		reading = GetRawDetails(id)
+		reading = ledgerStore
+			.getDetails(id)
 			.catch((error) => {
 				console.error("Reading the request failed:", error);
 				return null;
