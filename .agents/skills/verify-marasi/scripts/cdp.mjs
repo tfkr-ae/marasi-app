@@ -37,15 +37,19 @@ const routes = {
 const openDrawers = ".drawer, .armory-drawer-box";
 
 // Skeleton's modal wrapper is display: contents, so measure its card. The
-// Marasi menu is an open native <dialog>; measure the dialog itself, because
-// its first child is the 48 px search input, and a filtered menu stays under
-// 100 px tall.
+// built-in confirm, alert and prompt dialogs carry data-testid="modal" on the
+// card itself, and a one-line confirm is about 130 px tall. The Marasi menu
+// is an open native <dialog>; measure the dialog itself, because its first
+// child is the 48 px search input, and a filtered menu stays under 100 px
+// tall.
 const overlayPainted = `Boolean((() => {
 	const menu = Array.from(document.querySelectorAll("dialog[open]")).some((dialog) => {
 		const box = dialog.getBoundingClientRect();
 		return box.width > 100 && box.height > 40;
 	});
 	if (menu) return true;
+	const builtIn = document.querySelector("[data-testid='modal']")?.getBoundingClientRect();
+	if (builtIn && builtIn.width > 100 && builtIn.height > 60) return true;
 	const overlay = document.querySelector("[data-testid='modal-component']");
 	const card = overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
 	const box = card?.getBoundingClientRect();
@@ -164,8 +168,8 @@ async function waitForTarget(spec, { timeoutMs = defaultTimeoutMs, nth, enabled 
 
 async function snapshot() {
 	return evaluate(`(() => {
-		const overlay = document.querySelector("dialog[open], [data-testid='modal-component']");
-		const card = overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
+		const overlay = document.querySelector("dialog[open], [data-testid='modal'], [data-testid='modal-component']");
+		const card = overlay?.matches("[data-testid='modal']") ? overlay : overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
 		const rect = card?.getBoundingClientRect?.();
 		return {
 			url: location.href,
@@ -417,7 +421,7 @@ async function waitForSettledText(description, quietMs = 500, timeoutMs = defaul
 	let last;
 	let since = Date.now();
 	while (true) {
-		const text = await evaluate(`(document.querySelector("dialog[open], [data-testid='modal-component']") || document.body).innerText`);
+		const text = await evaluate(`(document.querySelector("dialog[open], [data-testid='modal'], [data-testid='modal-component']") || document.body).innerText`);
 		if (text !== last) {
 			last = text;
 			since = Date.now();

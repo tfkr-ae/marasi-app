@@ -237,6 +237,7 @@
 							nodebounce
 							on:change={(e) => store.updateDraft(launchpadId, e.detail)}
 							class="text-xs"
+							styles={{ "&": { fontSize: "11px" } }}
 							lang={lang(draft?.raw)}
 							{theme}
 							extensions={draftExtensions}
@@ -279,6 +280,7 @@
 							value={details.Response.Raw}
 							readonly
 							class="text-xs"
+							styles={{ "&": { fontSize: "11px" } }}
 							lang={lang(details.Response.Raw)}
 							{theme}
 							extensions={responseExtensions}

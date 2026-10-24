@@ -5,6 +5,8 @@
 	let savedTrafficOpen = true;
 	// Whether the drawer shows its details column, as in the Ledger.
 	let savedDrawerExpanded = false;
+	// The drawer's share of the workspace height, set by dragging its edge.
+	let savedDrawerSplit = 0.62;
 	// The project state these belong to; a project opened since the last
 	// visit puts them back to their defaults.
 	let savedVersion = null;
@@ -42,6 +44,7 @@
 	import { activeProject, appState } from "../../stores";
 	import { recentTraffic } from "../../stores/recentTrafficStore";
 	import { ledgerStore } from "../../stores/ledgerStore";
+	import { clampDrawerSplit } from "../../stores/createLedgerStore.js";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
@@ -70,6 +73,7 @@
 		savedSettingsOpen = true;
 		savedTrafficOpen = true;
 		savedDrawerExpanded = false;
+		savedDrawerSplit = 0.62;
 	}
 	const savedTemplateId = savedArmoryState.selectedTemplateId;
 	const savedTemplateDraft = savedArmoryState.templateDraft?.templateId ===
@@ -110,6 +114,8 @@
 	let openId = null;
 	let drawerMaximised = false;
 	let drawerExpanded = savedDrawerExpanded;
+	let drawerSplit = savedDrawerSplit;
+	let workspace;
 	let templateEditor;
 	let paginatedRunId = null;
 	let handledRouteTemplateId = null;
@@ -120,6 +126,7 @@
 	$: savedSettingsOpen = settingsOpen;
 	$: savedTrafficOpen = trafficOpen;
 	$: savedDrawerExpanded = drawerExpanded;
+	$: savedDrawerSplit = drawerSplit;
 
 	const trafficPagination = writable({
 		pageIndex: selectedRunId
@@ -196,6 +203,7 @@
 		settingsOpen = true;
 		trafficOpen = true;
 		drawerExpanded = false;
+		drawerSplit = 0.62;
 		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
 	}
 	$: if (selectedRunId !== paginatedRunId) {
@@ -524,12 +532,33 @@
 		drawerMaximised = false;
 	}
 
-	// Esc closes the drawer, unless a modal or a text field has the key.
+	// Esc closes the drawer wherever focus is, unless a modal, the Marasi
+	// menu or the row menu has the key. It runs in the capture phase, before
+	// an editor can stop it, and leaves the key to a focused field or editor
+	// too, so Vim still leaves insert mode. The row menu's own capture
+	// listener runs first (Svelte adds this one after the page's children)
+	// and claims the key with preventDefault as it closes.
 	function onWindowKeydown(event) {
-		if (event.key !== "Escape" || !drawerOpen || $modalStore[0]) return;
-		if (event.target?.closest?.("input, textarea, [contenteditable='true'], .cm-editor")) return;
-		event.preventDefault();
+		if (event.key !== "Escape" || event.defaultPrevented) return;
+		if (!drawerOpen || $modalStore[0] || rowMenu.open) return;
+		if (document.querySelector("dialog[open]")) return;
+		if (!event.target?.closest?.("input, textarea, select, [contenteditable='true'], .cm-editor")) {
+			event.preventDefault();
+		}
 		closeRequestDrawer();
+	}
+
+	// Drag the drawer's top edge to resize it, as in the Ledger.
+	function startDrawerResize(event) {
+		event.preventDefault();
+		const rect = workspace.getBoundingClientRect();
+		const move = (e) => (drawerSplit = clampDrawerSplit((rect.bottom - e.clientY) / rect.height));
+		const up = () => {
+			window.removeEventListener("pointermove", move);
+			window.removeEventListener("pointerup", up);
+		};
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", up);
 	}
 
 	const COPIED = { request: "Request copied", response: "Response copied", url: "URL copied" };
@@ -806,7 +835,7 @@
 	});
 </script>
 
-<svelte:window on:keydown={onWindowKeydown} />
+<svelte:window on:keydown|capture={onWindowKeydown} />
 
 <div class="flex h-full min-h-0 overflow-hidden text-sm">
 	<MarasiKeys {menuOptions} />
@@ -827,7 +856,7 @@
 		onDeleteRun={deleteRun}
 	/>
 
-	<div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+	<div bind:this={workspace} class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
 		{#if selectedTemplate}
 			<TemplateHeader
 				bind:name
@@ -892,14 +921,20 @@
 				     dock. The red top line is drawn over the drawer, as in the
 				     Ledger, so CodeMirror's sticky gutters can't paint over it. -->
 				<div
-					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised
-						? 'top-0'
-						: 'h-[62%]'}"
+					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised ? 'top-0' : ''}"
+					style={drawerMaximised ? "" : `height: ${drawerSplit * 100}%`}
 				>
 					{#if !drawerMaximised}
 						<div
 							class="pointer-events-none absolute inset-x-0 top-0 z-[300] h-px bg-primary-500"
 							aria-hidden="true"
+						></div>
+						<!-- The handle takes no room: it straddles the red top line. -->
+						<!-- svelte-ignore a11y-no-static-element-interactions -->
+						<div
+							class="armory-drawer-resize absolute inset-x-0 -top-1 z-[301] h-2 cursor-row-resize hover:bg-primary-500/50"
+							title="Drag to resize the drawer"
+							on:pointerdown={startDrawerResize}
 						></div>
 					{/if}
 					<ArmoryDrawer
