@@ -1,72 +1,46 @@
+<script context="module">
+	// Whether Run settings is open survives page visits within a session.
+	let savedSettingsOpen = true;
+</script>
+
 <script>
-	import { onMount, tick } from "svelte";
-	import { derived, get, writable } from "svelte/store";
-	import {
-		createColumnHelper,
-		createSvelteTable,
-		getCoreRowModel,
-	} from "@tanstack/svelte-table";
-	import CodeMirror from "svelte-codemirror-editor";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "@codemirror/legacy-modes/mode/http";
-	import { oneDark } from "@codemirror/theme-one-dark";
-	import { githubLight } from "@uiw/codemirror-theme-github";
-	import { vim } from "@replit/codemirror-vim";
-	import { autocompletion } from "@codemirror/autocomplete";
-	import {
-		Accordion,
-		AccordionItem,
-		getDrawerStore,
-		getModalStore,
-		getToastStore,
-		SlideToggle,
-		modeCurrent,
-	} from "@skeletonlabs/skeleton";
+	// The Armory page: the template dock (lib/armory/ArmoryDock.svelte) on
+	// the left; on the right the selected template's header and editor, its
+	// Run settings, and the selected run's traffic at the bottom. The page
+	// holds the selection, draft and settings and keeps armoryStore in step.
+	import { onMount } from "svelte";
+	import { get, writable } from "svelte/store";
+	import { getDrawerStore, getModalStore, getToastStore } from "@skeletonlabs/skeleton";
 	import {
 		ArrowLeft,
 		ArrowRight,
-		ChevronLeft,
+		ChevronDown,
 		ChevronRight,
 		CircleStop,
 		Edit,
 		FilePlus2,
-		Plus,
 		RefreshCw,
 		Rocket,
 		Save,
-		Search,
-		SettingsIcon,
 		SquareArrowUpRight,
 		ToggleLeft,
-		Trash2,
-		X,
 	} from "lucide-svelte";
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
-	import { armoryCompletionSource } from "../../lib/autocomplete/armory";
-	import { longStrings } from "../../lib/longStrings.js";
 	import { armoryStore } from "../../stores/armoryStore";
-	import {
-		activeProject,
-		appState,
-		drawerHeight,
-		lineWrap,
-		marasiConfig,
-	} from "../../stores";
+	import { activeProject, appState, drawerHeight } from "../../stores";
 	import { recentTraffic } from "../../stores/recentTrafficStore";
 	import { runTraffic } from "../../lib/armoryRunTraffic.js";
+	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
+	import RunSettings from "../../lib/armory/RunSettings.svelte";
+	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
+	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
+	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
-	const attackTypes = ["harpoon", "broadside", "tandem", "maelstrom"];
-	const attackDescriptions = {
-		harpoon: "Applies one payload set to each template input in turn.",
-		broadside: "Applies the same payload to every template input.",
-		tandem: "Advances multiple payload sets together.",
-		maelstrom: "Generates every combination of the selected payload sets.",
-	};
 
 	const savedArmoryState = get(armoryStore);
 	const savedTemplateId = savedArmoryState.selectedTemplateId;
@@ -102,29 +76,21 @@
 	let validationReady = false;
 	let validationTimer;
 	let validationRequest = 0;
-	let accOpened = false;
+	let settingsOpen = savedSettingsOpen;
 	let drawerOpened = false;
-	let templateList;
-	let runList;
+	let templateEditor;
 	let paginatedRunId = null;
 	let handledRouteTemplateId = null;
 	let projectStateVersion = savedArmoryState.projectStateVersion;
 
-	const armoryTraffic = writable([]);
+	$: savedSettingsOpen = settingsOpen;
+
 	const trafficPagination = writable({
 		pageIndex: selectedRunId
 			? savedArmoryState.trafficPageByRun[selectedRunId] || 0
 			: 0,
 		pageSize: savedArmoryState.trafficPageSize,
 	});
-	const columnHelper = createColumnHelper();
-	const trafficColumns = [
-		columnHelper.accessor("Method", { id: "method" }),
-		columnHelper.accessor((row) => `${row.Host}${row.Path}`, {
-			id: "url",
-		}),
-		columnHelper.accessor("StatusCode", { id: "status" }),
-	];
 
 	function setTrafficPagination(updater) {
 		trafficPagination.update((old) => {
@@ -133,24 +99,6 @@
 			return next;
 		});
 	}
-
-	const trafficTableOptions = derived(
-		[armoryTraffic, trafficPagination],
-		([$data, $pagination]) => {
-			const start = $pagination.pageIndex * $pagination.pageSize;
-			return {
-				data: $data.slice(start, start + $pagination.pageSize),
-				columns: trafficColumns,
-				autoResetPageIndex: false,
-				manualPagination: true,
-				pageCount: Math.ceil($data.length / $pagination.pageSize),
-				state: { pagination: $pagination },
-				onPaginationChange: setTrafficPagination,
-				getCoreRowModel: getCoreRowModel(),
-			};
-		},
-	);
-	const trafficTable = createSvelteTable(trafficTableOptions);
 
 	$: query = search.trim().toLowerCase();
 	$: filteredTemplates = $armoryStore.templates.filter(
@@ -190,7 +138,6 @@
 	$: requests = selectedRun
 		? runTraffic(loadedRunTraffic, $recentTraffic, selectedRunId)
 		: [];
-	$: armoryTraffic.set(requests);
 	$: if ($armoryStore.projectStateVersion !== projectStateVersion) {
 		projectStateVersion = $armoryStore.projectStateVersion;
 		search = $armoryStore.search;
@@ -205,7 +152,7 @@
 		maxConcurrent = 10;
 		paginatedRunId = null;
 		handledRouteTemplateId = null;
-		accOpened = false;
+		settingsOpen = true;
 		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
 	}
 	$: if (selectedRunId !== paginatedRunId) {
@@ -320,6 +267,10 @@
 		useHTTPS = selection.settings.useHTTPS;
 		selectedWordlists = [...selection.settings.selectedWordlists];
 		maxConcurrent = selection.settings.maxConcurrent;
+		await loadRuns(template);
+	}
+
+	async function loadRuns(template) {
 		try {
 			await armoryStore.loadRuns(template.ID);
 		} catch (error) {
@@ -398,23 +349,6 @@
 		});
 	}
 
-	function removeWordlist(index) {
-		selectedWordlists = selectedWordlists.filter((_, i) => i !== index);
-	}
-
-	function openWordlistModal() {
-		if ($modalStore[0]) return;
-		modalStore.trigger({
-			type: "component",
-			component: "SelectWordlist",
-			response: (name) => {
-				if (name) {
-					selectedWordlists = [...selectedWordlists, name];
-				}
-			},
-		});
-	}
-
 	async function createRun(start) {
 		if (!selectedTemplate || validating || validationError) return;
 		launching = true;
@@ -443,11 +377,18 @@
 		armoryStore.selectRun(selectedTemplateId, run.ID);
 	}
 
+	// A run picked in the dock may belong to another template; that template
+	// is selected first.
+	function selectTemplateRun(template, run) {
+		if (template.ID !== selectedTemplateId) selectTemplate(template);
+		selectRun(run);
+	}
+
 	async function startRun(run) {
 		try {
 			await armoryStore.startRun(run.ID);
-			selectedRunId = run.ID;
-			armoryStore.selectRun(selectedTemplateId, run.ID);
+			if (run.TemplateID === selectedTemplateId) selectedRunId = run.ID;
+			armoryStore.selectRun(run.TemplateID, run.ID);
 			notify("Run started");
 		} catch (error) {
 			reportError(error);
@@ -520,31 +461,19 @@
 		return { item: items[index], index };
 	}
 
-	async function revealSelection(list) {
-		await tick();
-		list
-			?.querySelector('[aria-current="true"]')
-			?.scrollIntoView({ block: "nearest" });
-	}
-
+	// The dock keeps the newly selected row in view.
 	function cycleTemplate(direction) {
 		const target = adjacent(
 			$armoryStore.templates,
 			selectedTemplateId,
 			direction,
 		);
-		if (target) {
-			selectTemplate(target.item);
-			revealSelection(templateList);
-		}
+		if (target) selectTemplate(target.item);
 	}
 
 	function cycleRun(direction) {
 		const target = adjacent(runs, selectedRunId, direction);
-		if (target) {
-			selectRun(target.item);
-			revealSelection(runList);
-		}
+		if (target) selectRun(target.item);
 	}
 
 	function cycleRequest(direction) {
@@ -553,39 +482,16 @@
 		);
 		const index = currentIndex + direction;
 		if (currentIndex !== -1 && requests[index]) {
-			$trafficTable.setPageIndex(
-				Math.floor(index / $trafficPagination.pageSize),
-			);
+			setTrafficPagination((old) => ({
+				...old,
+				pageIndex: Math.floor(index / old.pageSize),
+			}));
 			openRequest(requests[index], index);
 		}
 	}
 
-	function changeTrafficPage(changePage) {
+	function closeRequestDrawer() {
 		if (drawerOpened) drawerStore.close();
-		changePage();
-	}
-
-	function changeTrafficPageSize(event) {
-		if (drawerOpened) drawerStore.close();
-		setTrafficPagination({
-			pageIndex: 0,
-			pageSize: Number(event.currentTarget.value),
-		});
-	}
-
-	function statusClass(status) {
-		switch (status) {
-			case "complete":
-				return "variant-filled-success";
-			case "in_progress":
-				return "variant-filled-primary";
-			case "failed":
-				return "variant-filled-error";
-			case "cancelled":
-				return "variant-filled-warning";
-			default:
-				return "variant-filled";
-		}
 	}
 
 	async function refreshRuns() {
@@ -622,10 +528,11 @@
 
 	const armoryMenu = [
 		{
+			// The id predates the redesign; it now shows or hides Run settings.
 			actionId: "armory.page.toggle-settings",
 			icon: ToggleLeft,
 			handler: () => {
-				if (!$modalStore[0]) accOpened = !accOpened;
+				if (!$modalStore[0]) settingsOpen = !settingsOpen;
 			},
 		},
 		{
@@ -658,9 +565,7 @@
 		{
 			actionId: "armory.page.edit-template",
 			icon: Edit,
-			handler: () => {
-				document.querySelector(".editor .cm-content")?.focus();
-			},
+			handler: () => templateEditor?.focus(),
 		},
 		{
 			actionId: "armory.page.create-template",
@@ -748,513 +653,89 @@
 	});
 </script>
 
-<div class="flex h-full min-h-0 flex-col overflow-hidden text-sm">
+<div class="flex h-full min-h-0 overflow-hidden text-sm">
 	<MarasiKeys {menuOptions} />
-	<Accordion rounded="none" padding="py-3 px-3" regionControl="text-sm font-bold" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
-		<AccordionItem bind:open={accOpened}>
-			<svelte:fragment slot="lead"><SettingsIcon size="16" /></svelte:fragment>
-			<svelte:fragment slot="summary">Armory Settings</svelte:fragment>
-			<svelte:fragment slot="content">Armory Settings</svelte:fragment>
-		</AccordionItem>
-	</Accordion>
-	<div class="grid min-h-0 flex-1 grid-cols-[20%_minmax(0,1fr)_30%] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
-			<header
-				class="col-start-1 row-start-1 space-y-2 border-b border-r border-surface-500/30 p-3"
-			>
-				<div class="flex h-8 items-center justify-between gap-2">
-					<h2 class="text-sm font-bold">Templates</h2>
+	<ArmoryDock
+		templates={filteredTemplates}
+		runsByTemplate={$armoryStore.runsByTemplate}
+		{selectedTemplateId}
+		{selectedRunId}
+		{projectStateVersion}
+		bind:search
+		onSelectTemplate={selectTemplate}
+		onSelectRun={selectTemplateRun}
+		onExpand={loadRuns}
+		onCreate={createTemplate}
+		onRefresh={refreshRuns}
+		onStartRun={startRun}
+		onCancelRun={cancelRun}
+		onDeleteRun={deleteRun}
+	/>
+
+	<div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+		{#if selectedTemplate}
+			<TemplateHeader
+				bind:name
+				bind:description
+				{saving}
+				onSave={saveTemplate}
+				onDelete={deleteTemplate}
+			/>
+			<!-- Editor and Run settings side by side when wide, stacked when narrow. -->
+			<div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+				<section class="min-h-24 min-w-0 flex-1">
+					<TemplateEditor bind:this={templateEditor} bind:value={rawTemplate} />
+				</section>
+				<section
+					class="flex flex-none flex-col border-t border-surface-500/30 lg:border-l lg:border-t-0 {settingsOpen
+						? 'lg:w-80'
+						: 'lg:w-9'}"
+				>
 					<button
 						type="button"
-						class="btn btn-sm px-2 {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-						aria-label="Create template"
-						on:click={createTemplate}
+						class="flex flex-none items-center gap-1.5 bg-surface-50 px-3 py-1.5 text-left text-xs font-bold dark:bg-surface-900 {settingsOpen
+							? 'border-b border-surface-500/30'
+							: 'lg:h-full lg:flex-col lg:px-0 lg:py-2'}"
+						aria-expanded={settingsOpen}
+						title={settingsOpen ? "Hide run settings" : "Show run settings"}
+						on:click={() => (settingsOpen = !settingsOpen)}
 					>
-						<Plus size={14} />
+						{#if settingsOpen}<ChevronDown size={13} />{:else}<ChevronRight size={13} />{/if}
+						<span class={settingsOpen ? "" : "lg:[writing-mode:vertical-rl]"}>Run settings</span>
 					</button>
-				</div>
-				<div
-					class="input-group input-group-divider h-8 grid-cols-[auto_1fr]"
-				>
-					<div class="input-group-shim">
-						<Search size={14} />
-					</div>
-					<input
-						type="search"
-						class="text-sm"
-						placeholder="Search templates..."
-						bind:value={search}
-					/>
-				</div>
-			</header>
-
-			<div
-				bind:this={templateList}
-				class="col-start-1 row-start-2 row-span-2 min-h-0 space-y-2 overflow-y-auto border-r border-surface-500/30 p-2"
-			>
-				{#if filteredTemplates.length === 0}
-					<p
-						class="p-4 text-center text-xs opacity-60"
-					>
-						{query
-							? "No matching templates"
-							: "No templates yet"}
-					</p>
-				{:else}
-					{#each filteredTemplates as template (template.ID)}
-						<button
-							type="button"
-							aria-current={template.ID === selectedTemplateId}
-							class="w-full border-l-4 p-3 text-left transition-colors {template.ID ===
-							selectedTemplateId
-								? 'border-primary-500 bg-surface-200-700-token'
-								: 'border-transparent hover:bg-surface-100-800-token'}"
-							on:click={() =>
-								selectTemplate(
-									template,
-								)}
-						>
-							<p
-								class="truncate text-sm font-bold"
-							>
-								{template.Name}
-							</p>
-							{#if template.Description}
-								<p
-									class="mt-1 truncate text-xs opacity-60"
-								>
-									{template.Description}
-								</p>
-							{/if}
-						</button>
-					{/each}
-				{/if}
-			</div>
-
-			{#if selectedTemplate}
-				<header
-					class="col-start-2 row-start-1 space-y-2 border-b border-surface-500/30 p-3"
-				>
-					<div class="flex h-8 gap-2">
-						<input
-							class="input h-full flex-1 py-1 text-sm"
-							placeholder="Template name"
-							bind:value={name}
-						/>
-						<button
-							type="button"
-							class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-							disabled={saving}
-							on:click={saveTemplate}
-						>
-							<Save size={14} class="mr-1" /> Save
-						</button>
-						<button
-							type="button"
-							class="btn btn-sm px-2 {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-							on:click={deleteTemplate}
-						>
-							<Trash2 size={14} />
-						</button>
-					</div>
-					<input
-						class="input h-8 py-1 text-sm"
-						placeholder="Description"
-						bind:value={description}
-					/>
-				</header>
-
-				<section
-					class="editor col-start-2 row-start-2 min-h-0 overflow-hidden dark:bg-[#282c34]"
-				>
-					<CodeMirror
-						bind:value={rawTemplate}
-						class="text-xs"
-						theme={$modeCurrent ? githubLight : oneDark}
-						extensions={[
-							...($marasiConfig.VimEnabled ? [vim()] : []),
-							StreamLanguage.define(http),
-							autocompletion({ override: [armoryCompletionSource] }),
-							longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode }),
-						]}
-					/>
-				</section>
-
-				<section
-					class="col-start-2 row-start-3 space-y-3 border-t border-surface-500/30 p-3"
-				>
-					<div class="grid grid-cols-2 gap-3">
-						<label class="label text-sm">
-							<span>Attack type</span>
-							<select
-								class="select h-8 py-1 text-sm"
-								bind:value={
-									attackType
-								}
-							>
-								{#each attackTypes as type}
-									<option
-										value={type}
-										>{type}</option
-									>
-								{/each}
-							</select>
-							<span class="truncate text-xs opacity-60">
-								{attackDescriptions[attackType]}
-							</span>
-						</label>
-						<label class="label text-sm">
-							<span>Concurrency</span>
-							<input
-								class="input h-8 py-1 text-sm"
-								type="number"
-								min="1"
-								max="100"
-								bind:value={
-									maxConcurrent
-								}
+					{#if settingsOpen}
+						<div class="max-h-64 min-h-0 overflow-y-auto lg:max-h-none lg:flex-1">
+							<RunSettings
+								bind:attackType
+								bind:useHTTPS
+								bind:selectedWordlists
+								bind:maxConcurrent
+								{launching}
+								{validating}
+								{validationError}
+								onLaunch={() => createRun(true)}
+								onDraft={() => createRun(false)}
 							/>
-						</label>
-					</div>
-
-					<div class="flex items-center gap-2">
-						<span class="text-sm font-bold">HTTPS</span>
-						<SlideToggle
-							name="Armory HTTPS"
-							size="sm"
-							bind:checked={useHTTPS}
-						/>
-					</div>
-					<div>
-						<div class="mb-2 flex items-center justify-between">
-							<p class="text-sm font-bold">Wordlists</p>
-							<button
-								type="button"
-								class="btn btn-sm variant-soft"
-								on:click={openWordlistModal}
-							>
-								<Plus size={14} class="mr-1" /> Add Wordlist
-							</button>
 						</div>
-						<div class="flex max-h-24 flex-wrap gap-2 overflow-y-auto">
-							{#if selectedWordlists.length === 0}
-								<span class="text-xs opacity-60">No wordlists selected</span>
-							{:else}
-								{#each selectedWordlists as wordlist, index}
-									<span class="chip variant-soft-primary inline-flex items-center gap-1 px-2 py-0.5 text-xs">
-										{wordlist}
-										<button
-											type="button"
-											class="inline-flex"
-											aria-label={`Remove ${wordlist}`}
-											on:click={() => removeWordlist(index)}
-										>
-											<X size={12} />
-										</button>
-									</span>
-								{/each}
-							{/if}
-						</div>
-					</div>
-					<div class="flex items-center justify-end gap-2">
-						<button
-							type="button"
-							class="btn btn-sm variant-soft"
-							disabled={launching ||
-								validating ||
-								!!validationError}
-							on:click={() =>
-								createRun(
-									false,
-								)}
-							>Create Draft</button
-						>
-						<button
-							type="button"
-							class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-							disabled={launching ||
-								validating ||
-								!!validationError}
-							on:click={() =>
-								createRun(
-									true,
-								)}
-						>
-							<Rocket
-								size={14}
-								class="mr-1"
-							/> Launch
-						</button>
-					</div>
-					<p
-						class="min-h-4 text-xs {String(
-							validationError,
-						).includes('requires exactly one wordlist')
-							? 'text-primary-500'
-							: 'text-error-500'}"
-						class:invisible={!validationError}
-						aria-live="polite"
-					>
-						{validationError || "Valid Armory configuration"}
-					</p>
+					{/if}
 				</section>
-			{:else}
-				<div
-					class="col-start-2 row-start-1 row-span-3 flex h-full items-center justify-center p-8 text-center opacity-60"
-				>
-					<div>
-						<h2 class="text-base font-bold">
-							No template selected
-						</h2>
-						<p class="mt-1 text-xs">
-							Create or select a
-							template to begin.
-						</p>
-					</div>
+			</div>
+			<div class="h-[38%] min-h-36 flex-none border-t border-surface-500/30">
+				<TrafficRegion
+					requests={selectedRun ? requests : null}
+					pagination={trafficPagination}
+					onPaginationChange={setTrafficPagination}
+					onPageChange={closeRequestDrawer}
+					onOpen={openRequest}
+				/>
+			</div>
+		{:else}
+			<div class="flex h-full items-center justify-center p-8 text-center opacity-60">
+				<div>
+					<h2 class="text-base font-bold">No template selected</h2>
+					<p class="mt-1 text-xs">Create or select a template to begin.</p>
 				</div>
-			{/if}
-
-				<header
-					class="col-start-3 row-start-1 flex items-start justify-between gap-2 border-b border-l border-surface-500/30 p-3"
-				>
-					<h2 class="flex h-8 items-center text-sm font-bold">Runs</h2>
-					<button
-						type="button"
-						class="btn btn-sm variant-ghost px-2"
-						aria-label="Refresh runs"
-						disabled={!selectedTemplateId}
-						on:click={refreshRuns}
-					>
-						<RefreshCw size={14} />
-					</button>
-				</header>
-				<div
-					bind:this={runList}
-					class="col-start-3 row-start-2 min-h-0 space-y-2 overflow-y-auto border-l border-surface-500/30 p-2"
-				>
-					{#if runs.length === 0}
-						<p
-							class="p-4 text-center text-xs opacity-60"
-						>
-							No runs for this
-							template
-						</p>
-					{:else}
-						{#each runs as run (run.ID)}
-							<div
-								class="card cursor-pointer space-y-2 border-l-4 p-3 {run.ID ===
-								selectedRunId
-									? 'border-primary-500 bg-surface-200-700-token'
-									: 'border-transparent bg-surface-100-800-token'}"
-								role="button"
-								aria-current={run.ID === selectedRunId}
-								tabindex="0"
-								on:click={() =>
-									selectRun(
-										run,
-									)}
-								on:keydown={(
-									event,
-								) =>
-									event.key ===
-										"Enter" &&
-									selectRun(
-										run,
-									)}
-							>
-								<div
-									class="flex items-center justify-between gap-2"
-								>
-									<span
-										class="text-sm font-bold capitalize"
-										>{run.AttackType}</span
-									>
-									<span
-										class="badge text-[10px] {statusClass(
-											run.Status,
-										)}"
-										>{run.Status.replace(
-											"_",
-											" ",
-										)}</span
-									>
-								</div>
-								<div
-									class="flex items-center justify-between text-xs opacity-60"
-								>
-									<span
-										>{run.MaxConcurrent}
-										workers</span
-									>
-									<span
-										>{new Date(
-											run.CreatedAt,
-										).toLocaleString()}</span
-									>
-								</div>
-								<div
-									class="flex justify-end gap-2"
-								>
-									{#if run.Status === "draft"}
-										<button
-											type="button"
-											class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-											on:click|stopPropagation={() =>
-												startRun(
-													run,
-												)}
-										>
-											<Rocket
-												size={14}
-												class="mr-1"
-											/>
-											Start
-										</button>
-									{:else if run.Status === "in_progress"}
-										<button
-											type="button"
-											class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-											on:click|stopPropagation={() =>
-												cancelRun(
-													run,
-												)}
-										>
-											<CircleStop
-												size={14}
-												class="mr-1"
-											/>
-											Cancel
-										</button>
-									{/if}
-									{#if run.Status !== "in_progress"}
-										<button
-											type="button"
-											class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-											on:click|stopPropagation={() =>
-												deleteRun(
-													run,
-												)}
-										>
-											<Trash2
-												size={14}
-											/>
-										</button>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					{/if}
-				</div>
-				<section class="col-start-3 row-start-3 flex h-0 min-h-full flex-col overflow-hidden border-l border-t border-surface-500/30">
-				<header
-					class="flex items-center justify-between gap-2 border-b border-surface-500/30 p-3"
-				>
-					<div class="shrink-0">
-						<h2 class="text-sm font-bold">Traffic</h2>
-						{#if selectedRun}
-							<p class="whitespace-nowrap text-xs opacity-60">
-								{requests.length.toLocaleString()} items
-							</p>
-						{/if}
-					</div>
-					{#if selectedRun && requests.length > 0}
-						<div class="flex shrink-0 items-center gap-1.5 text-xs">
-							<label class="flex items-center gap-1">
-								<span class="sr-only">Rows per page</span>
-								<select
-									class="select select-sm w-20"
-									value={$trafficPagination.pageSize}
-									on:change={changeTrafficPageSize}
-								>
-									{#each [10, 20, 30, 40, 50, 100] as pageSize}
-										<option value={pageSize}>{pageSize}</option>
-									{/each}
-								</select>
-							</label>
-							<span class="whitespace-nowrap opacity-70">
-								{($trafficPagination.pageIndex + 1).toLocaleString()} /
-								{$trafficTable.getPageCount().toLocaleString()}
-							</span>
-							<div class="btn-group btn-group-sm">
-								<button
-									type="button"
-									disabled={!$trafficTable.getCanPreviousPage()}
-									on:click={() =>
-										changeTrafficPage(() =>
-											$trafficTable.previousPage(),
-										)}
-									title="Previous page"
-									aria-label="Previous page"
-								>
-									<ChevronLeft size={14} />
-								</button>
-								<button
-									type="button"
-									disabled={!$trafficTable.getCanNextPage()}
-									on:click={() =>
-										changeTrafficPage(() =>
-											$trafficTable.nextPage(),
-										)}
-									title="Next page"
-									aria-label="Next page"
-								>
-									<ChevronRight size={14} />
-								</button>
-							</div>
-						</div>
-					{/if}
-				</header>
-				<div class="min-h-0 flex-1 overflow-y-auto">
-					{#if !selectedRun}
-						<p
-							class="p-4 text-center text-xs opacity-60"
-						>
-							Select a run to view
-							traffic
-						</p>
-					{:else if requests.length === 0}
-						<p
-							class="p-4 text-center text-xs opacity-60"
-						>
-							No requests captured yet
-						</p>
-					{:else}
-						{#each $trafficTable.getRowModel().rows as tableRow (tableRow.original.ID)}
-							{@const absoluteIndex =
-								$trafficPagination.pageIndex *
-									$trafficPagination.pageSize +
-								tableRow.index}
-							<button
-								type="button"
-								class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-surface-500/20 px-3 py-2 text-left hover:bg-surface-100-800-token"
-								on:click={() =>
-									openRequest(tableRow.original, absoluteIndex)}
-							>
-								<span
-									class="badge variant-soft-primary font-mono text-[10px]"
-									>{tableRow.original.Method}</span
-								>
-								<span
-									class="truncate text-xs"
-									>{tableRow.original.Host}{tableRow.original.Path}</span
-								>
-								<span
-									class="font-mono text-xs"
-									>{tableRow.original.StatusCode >
-									0
-										? tableRow.original.StatusCode
-										: "-"}</span
-								>
-							</button>
-						{/each}
-					{/if}
-				</div>
-			</section>
+			</div>
+		{/if}
 	</div>
 </div>
-
-<style>
-	.editor :global(.codemirror-wrapper),
-	.editor :global(.cm-editor) {
-		height: 100%;
-	}
-</style>
