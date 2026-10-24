@@ -130,7 +130,9 @@
 						<span class="text-right tabular-nums {dim}">{row.Number || ""}</span>
 						<span class={dim}>{shortTime(row.RequestedAt)}</span>
 						<span class={METHOD_CLASS[row.Method] ?? ""}>{row.Method ?? ""}</span>
-						<span title="{row.Host ?? ''}{row.Path ?? ''}"><span class={dim}>{row.Host ?? ""}</span>{row.Path ?? ""}</span>
+						<span class="tr-url" title="{row.Host ?? ''}{row.Path ?? ''}"
+							><span class="tr-host {dim}">{row.Host ?? ""}</span><span class="tr-path">{row.Path ?? ""}</span></span
+						>
 						<span class="text-right {statusClass(row.StatusCode)}">{statusText(row.StatusCode)}</span>
 						<span class="text-right {dim}">{formatSize(row.Length)}</span>
 					</button>
@@ -155,5 +157,22 @@
 		text-overflow: ellipsis;
 		text-box: trim-both cap alphabetic;
 		padding: 0 6px;
+	}
+	/* Host and path share the cell, but the host gives up its room first,
+	   so a narrow table still shows the path. */
+	.tr-row > .tr-url {
+		display: flex;
+	}
+	.tr-url > span {
+		min-width: 0;
+		overflow-x: clip;
+		text-overflow: ellipsis;
+		text-box: trim-both cap alphabetic;
+	}
+	.tr-host {
+		flex: 0 1000 auto;
+	}
+	.tr-path {
+		flex: 0 1 auto;
 	}
 </style>
