@@ -1,6 +1,7 @@
 <script>
 	// The Armory drawer: the open pair's request and response side by side in
-	// the Ledger's 11px editors, with the rail (or, expanded, the details
+	// the Ledger's 11px editors (request over response when the panes are
+	// narrow), with the rail (or, expanded, the details
 	// column) on the left. It fills the box the page gives it, inside the
 	// workspace right of the dock. The `details` slot passes through to the
 	// expanded column.
@@ -68,7 +69,12 @@
 	const message = "p-3 text-[11px] opacity-50";
 	// As in the Ledger drawer, the panes start a few pixels below the red top
 	// line, on the editors' own background.
-	const paneBox = "relative min-w-0 flex-1 pt-[3px] bg-white dark:bg-[#282c34]";
+	const paneBox = "relative min-h-0 min-w-0 flex-1 pt-[3px] bg-white dark:bg-[#282c34]";
+
+	// Below this width the panes stack, so each editor keeps the full width.
+	const STACK_BELOW = 480;
+	let panesWidth = Infinity;
+	$: stacked = panesWidth < STACK_BELOW;
 </script>
 
 <div class="armory-drawer flex h-full min-h-0 bg-surface-50 text-[11px] dark:bg-surface-900">
@@ -87,7 +93,11 @@
 	>
 		<svelte:fragment slot="details"><slot name="details" /></svelte:fragment>
 	</ArmoryDrawerRail>
-	<div class="flex min-h-0 min-w-0 flex-1">
+	<div
+		class="armory-drawer-panes flex min-h-0 min-w-0 flex-1 {stacked ? 'flex-col' : ''}"
+		data-stacked={stacked}
+		bind:clientWidth={panesWidth}
+	>
 		<div class="armory-drawer-request {paneBox}">
 			{#if details === undefined}
 				<p class={message}>Loading…</p>
@@ -101,7 +111,11 @@
 				/>
 			{/if}
 		</div>
-		<div class="armory-drawer-response {paneBox} flex flex-col border-l border-surface-300-600-token">
+		<div
+			class="armory-drawer-response {paneBox} flex flex-col border-surface-300-600-token {stacked
+				? 'border-t'
+				: 'border-l'}"
+		>
 			{#if details === undefined}
 				<p class={message}>Loading…</p>
 			{:else if bodies.response}
