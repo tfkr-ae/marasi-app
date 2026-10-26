@@ -637,6 +637,10 @@ await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
 await send("Network.enable");
+// A browser extension can open its own tab in front of Marasi (a
+// force-installed password manager's welcome page does). Chrome then stops
+// painting the hidden page, so screenshots and drives stall for minutes.
+await send("Page.bringToFront");
 
 if (mode === "launch") {
 	await sizeWindow();
@@ -717,6 +721,7 @@ if (mode === "launch") {
 } else if (mode === "doctor") {
 	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && window.go?.main?.App && window.runtime && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, Wails bridge, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
 	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5000);
+	await waitFor(`document.visibilityState === "visible"`, "the Marasi page in front, not hidden behind another tab", 2000);
 	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {
 	// Dismiss what an earlier drive left open with the same input a user

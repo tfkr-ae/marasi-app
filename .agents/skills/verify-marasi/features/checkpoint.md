@@ -72,12 +72,13 @@ With `/cp-a`, `/cp-b` and `/cp-c` held, the shortcuts:
 
 `⌘⇧S` forwards `/cp-a` and holds its response, which joins the tree last as a `RES 404` entry. After a forward or drop the selection moves to the next item in hold order, or to the previous one when the last item left.
 
-Hold `/cp-a` and `/cp-b` again. `Drop n` asks; `Drop` on one item doesn't:
+Hold `/cp-a` and `/cp-b` again. `Drop n` asks; `Drop` on one item doesn't. The recipe runs `Drop Picked Items` from the Marasi menu, because on Linux an extension can own `Ctrl+Shift+X` (see SKILL.md):
 
 ```json
 {"name":"drop-n","steps":[
  {"waitText":"Drop 2"},
- {"key":"cmd+shift+x"},{"waitText":"Drop 2 intercepted items?"},
+ {"key":"cmd+k"},{"waitSelector":"#commandmenu"},{"click":"#commandmenu"},{"key":"cmd+a"},{"insert":"drop"},
+ {"click":"dialog[open] li","hasText":"Drop Picked Items"},{"waitText":"Drop 2 intercepted items?"},
  {"text":"Drop","within":".modal-footer"},{"waitText":"Dropped 2"},{"waitText":"Nothing intercepted"}]}
 ```
 
