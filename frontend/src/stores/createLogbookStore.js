@@ -223,19 +223,42 @@ export function openRecordOf(state) {
   return record ? { kind: state.open.kind, record } : null;
 }
 
+const sameID = (a, b) => a != null && b != null && String(a) === String(b);
+
+/**
+ * The records linked to `record`, as [{ kind, record }], whatever the
+ * filters: a finding's test case, or a test case's findings, most severe
+ * first.
+ */
+export function linkedOf(state, kind, record) {
+  if (kind === "finding")
+    return state.testCases
+      .filter((t) => sameID(t.ID, record.TestCaseID))
+      .map((t) => ({ kind: "testCase", record: t }));
+  return state.findings
+    .filter((f) => sameID(f.TestCaseID, record.ID))
+    .sort(findingOrder)
+    .map((f) => ({ kind: "finding", record: f }));
+}
+
 /**
  * The record Next opens, as { kind, record }: the one after the open record
- * in the listed findings, then test cases, wrapping to the top. With no
- * status filter it skips Done records. Null with nothing open or nothing
- * else to go to.
+ * in the order the tester sees, the findings then the test cases in their
+ * groups, wrapping to the top. A test case under several tags counts at its
+ * first. With no status filter it skips Done records. Null with nothing
+ * open or nothing else to go to.
  */
 export function nextOf(state) {
   if (!state.open) return null;
-  const { findings, testCases } = filteredOf(state);
+  const groups = groupsOf(state);
+  const seen = new Set();
   const list = [
-    ...findings.map((record) => ({ kind: "finding", record })),
-    ...testCases.map((record) => ({ kind: "testCase", record })),
-  ];
+    ...groups.findings.flatMap((g) => g.items.map((record) => ({ kind: "finding", record }))),
+    ...groups.testCases.flatMap((g) => g.items.map((record) => ({ kind: "testCase", record }))),
+  ].filter(({ kind, record }) => {
+    const key = `${kind}:${record.ID}`;
+    return !seen.has(key) && seen.add(key);
+  });
   const isOpen = ({ kind, record }) => kind === state.open.kind && record.ID === state.open.id;
   const at = list.findIndex(isOpen);
   const after = [...list.slice(at + 1), ...list.slice(0, Math.max(at, 0))];
@@ -652,6 +675,12 @@ export function createLogbookStore(api) {
     addArtifacts,
     removeArtifact,
     restoreArtifact,
+    // Evidence reads: a linked pair in full (GetRawDetails), an artifact
+    // with its bytes (GetArtifact), and saving an artifact through the
+    // native Save dialog (DownloadArtifact, false when cancelled).
+    readPair: (id) => api.getPair(id),
+    readArtifact: (id) => api.getArtifact(id),
+    downloadArtifact: (id) => api.downloadArtifact(id),
     populate,
     clear,
     setRecords,

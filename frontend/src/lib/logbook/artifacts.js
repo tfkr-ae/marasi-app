@@ -1,52 +1,69 @@
-// How the Logbook previews an artifact, and the bytes behind it.
-import { DownloadArtifact, GetArtifact } from "../wailsjs/go/main/App";
+// How the Logbook previews an artifact: by its content type, or by its file
+// name's extension when the type says nothing useful, with its bytes read
+// from GetArtifact's base64.
 
-/** The largest artifact a record takes. */
-export const MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;
+const TEXT_TYPE = /^text\/|json|xml|yaml|csv|javascript|\bhar\b/;
+const TEXT_EXT = new Set(["txt", "log", "md", "json", "har", "csv", "xml", "yaml", "yml", "html", "htm", "js"]);
+const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]);
+const VIDEO_EXT = new Set(["mp4", "webm", "mov", "ogv"]);
 
-const TEXTUAL = /^(text\/|application\/(json|xml|yaml|x-yaml|har\+json|csv|javascript|x-ndjson))|\+json$|\+xml$/;
-const TEXT_NAME = /\.(txt|log|json|har|csv|xml|ya?ml|md|html?|js|css)$/i;
+const extensionOf = (name) => {
+  const at = (name ?? "").lastIndexOf(".");
+  return at < 0 ? "" : name.slice(at + 1).toLowerCase();
+};
 
-/** How an artifact previews: "image", "video", "pdf", "text" or "other". */
-export function previewKind(artifact) {
-  const type = artifact?.MimeType ?? "";
-  if (type.startsWith("image/")) return "image";
-  if (type.startsWith("video/")) return "video";
-  if (type === "application/pdf") return "pdf";
-  if (TEXTUAL.test(type) || TEXT_NAME.test(artifact?.Filename ?? "")) return "text";
-  return "other";
+function byType(mime) {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "application/pdf") return "pdf";
+  if (TEXT_TYPE.test(mime)) return "text";
+  return null;
 }
 
-/** Text to show for an artifact's text: JSON and HAR pretty-printed. */
-export function prettyText(artifact, text) {
-  if (/json|har/.test(artifact?.MimeType ?? "") || /\.(json|har)$/i.test(artifact?.Filename ?? "")) {
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      return text;
-    }
-  }
-  return text;
-}
-
-/** "12 KB" and the like. */
-export function sizeText(bytes) {
-  if (!(bytes >= 0)) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+function byExtension(ext) {
+  if (IMAGE_EXT.has(ext)) return "image";
+  if (VIDEO_EXT.has(ext)) return "video";
+  if (ext === "pdf") return "pdf";
+  if (TEXT_EXT.has(ext)) return "text";
+  return "file";
 }
 
 /**
- * The artifact's bytes as a Blob: a staged one's own File, or a stored one
- * read with GetArtifact (its Data arrives base64).
+ * How an artifact ({ MimeType, Filename }) previews: "image", "video",
+ * "pdf", "text", or "file" for a Download card.
  */
-export async function artifactBlob(artifact) {
-  if (artifact.File) return artifact.File;
-  const stored = await GetArtifact(artifact.ID);
-  const bytes = Uint8Array.from(atob(stored.Data ?? ""), (c) => c.charCodeAt(0));
-  return new Blob([bytes], { type: artifact.MimeType });
+export const previewOf = (artifact) =>
+  byType((artifact?.MimeType ?? "").toLowerCase()) ?? byExtension(extensionOf(artifact?.Filename));
+
+/** An artifact's bytes from GetArtifact's Data: Go's []byte as base64, or a list of numbers. */
+export function artifactBytes(data) {
+  if (data == null) return new Uint8Array();
+  if (typeof data !== "string") return Uint8Array.from(data);
+  return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
 }
 
-/** Saves a stored artifact through the native Save dialog; false when cancelled. */
-export const downloadArtifact = (artifact) => DownloadArtifact(artifact.ID);
+const isJson = (artifact) =>
+  /json|\bhar\b/.test((artifact?.MimeType ?? "").toLowerCase()) ||
+  ["json", "har"].includes(extensionOf(artifact?.Filename));
+
+/** A text artifact's bytes as text, JSON and HAR pretty-printed. */
+export function artifactText(bytes, artifact) {
+  const text = new TextDecoder().decode(bytes);
+  if (!isJson(artifact)) return text;
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}
+
+/** A size in bytes as "512 B", "2 KB" or "1.5 MB". */
+export function formatSize(size) {
+  const n = Number(size) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** The largest file a record takes as an artifact. */
+export const MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;

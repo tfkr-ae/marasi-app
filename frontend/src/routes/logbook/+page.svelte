@@ -6,8 +6,9 @@
 <script>
 	// The Logbook page, in the Ledger's frame: the dock holds the outline
 	// and the create and status controls, the toolbar filters, and the
-	// workspace shows the summary. A record still opens in today's finding
-	// or test case modal.
+	// workspace shows the summary, or a record in its place. Back and Esc
+	// return to the list, Next and N move through it. Edit still opens
+	// today's finding or test case modal.
 	import { getDrawerStore, getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { writable } from "svelte/store";
 	import { BookCheck, Search, ShieldAlert, SquareArrowRightIcon, ToggleLeftIcon } from "lucide-svelte";
@@ -15,9 +16,12 @@
 	import { LEDGER_DOCK } from "../../lib/dock/dock.js";
 	import { primaryVariant } from "../../lib/launchpad/format.js";
 	import LogbookOutline from "../../lib/logbook/LogbookOutline.svelte";
+	import LogbookRecord from "../../lib/logbook/LogbookRecord.svelte";
 	import LogbookSummary from "../../lib/logbook/LogbookSummary.svelte";
 	import LogbookToolbar from "../../lib/logbook/LogbookToolbar.svelte";
-	import { logbookStore } from "../../stores/logbookStore";
+	import { findingStore } from "../../stores/findingStore";
+	import { testCaseStore } from "../../stores/testCaseStore";
+	import { logbookStore, nextOf, openRecordOf } from "../../stores/logbookStore";
 	import { RECORD_MODAL, editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
@@ -34,14 +38,53 @@
 	$: tertiary = $modeCurrent ? "variant-ghost-tertiary ring-0 shadow-none" : "variant-filled-tertiary";
 	$: empty = $logbookStore.findings.length === 0 && $logbookStore.testCases.length === 0;
 
-	// Marks the record in the outline and opens it in the modal.
+	$: opened = openRecordOf($logbookStore);
+	$: next = nextOf($logbookStore);
+	$: nextTitle = $logbookStore.filters.status === "all" ? "Next in progress (N)" : "Next (N)";
+
+	// Opens the record in the workspace, in place of the list.
 	function openRecord(kind, id) {
 		if ($modalStore[0]) return;
-		const records = kind === "finding" ? $logbookStore.findings : $logbookStore.testCases;
-		const record = records.find((r) => r.ID === id);
-		if (!record) return;
 		logbookStore.open(kind, id);
-		editRecord(modalStore, kind, id);
+	}
+
+	// Edit opens the record in the modal, over its edit session.
+	function editOpened() {
+		if (opened) editRecord(modalStore, opened.kind, opened.record.ID);
+	}
+
+	function deleteRecord() {
+		if (!opened || $modalStore[0]) return;
+		const { kind, record } = opened;
+		const finding = kind === "finding";
+		modalStore.trigger({
+			type: "confirm",
+			title: finding ? "Delete finding" : "Delete test case",
+			body: `Delete "${record.Title}"?`,
+			buttonTextConfirm: "Delete",
+			response: (yes) => {
+				if (!yes) return;
+				logbookStore.close();
+				(finding ? findingStore : testCaseStore).delete(record.ID);
+			},
+		});
+	}
+
+	// N opens the next record and Esc goes back to the list, unless a modal,
+	// a field or an editor has the key. Whether a modal was open is noted
+	// before the key reaches it, since its own Esc closes it first.
+	let modalHadKey = false;
+	const noteModal = () => (modalHadKey = !!$modalStore[0]);
+	function onWindowKeydown(event) {
+		if (!opened || modalHadKey || $modalStore[0] || event.metaKey || event.ctrlKey || event.altKey) return;
+		if (event.target?.closest?.("input, textarea, select, [contenteditable='true'], .cm-editor")) return;
+		if (event.key === "Escape") {
+			event.preventDefault();
+			logbookStore.close();
+		} else if (event.key === "n") {
+			event.preventDefault();
+			logbookStore.openNext();
+		}
 	}
 
 	function newFinding() {
@@ -91,6 +134,8 @@
 	useMenuActions(logbookMenu);
 </script>
 
+<svelte:window on:keydown|capture={noteModal} on:keydown={onWindowKeydown} />
+
 <MarasiKeys menuOptions={logbookMenu} />
 
 <div class="logbook-page relative flex h-full min-h-0 overflow-hidden text-xs">
@@ -128,7 +173,22 @@
 			exportDisabled={empty}
 		/>
 		<div class="min-h-0 flex-1 bg-surface-50 dark:bg-surface-900">
-			<LogbookSummary store={logbookStore} onOpen={openRecord} />
+			{#if opened}
+				<LogbookRecord
+					store={logbookStore}
+					kind={opened.kind}
+					record={opened.record}
+					hasNext={!!next}
+					{nextTitle}
+					onBack={logbookStore.close}
+					onNext={logbookStore.openNext}
+					onEdit={editOpened}
+					onDelete={deleteRecord}
+					onOpen={openRecord}
+				/>
+			{:else}
+				<LogbookSummary store={logbookStore} onOpen={openRecord} />
+			{/if}
 		</div>
 	</section>
 </div>

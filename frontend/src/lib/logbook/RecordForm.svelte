@@ -9,7 +9,7 @@
 	import TestCasePicker from "./TestCasePicker.svelte";
 	import TemplatePicker from "./TemplatePicker.svelte";
 	import TagInput from "./TagInput.svelte";
-	import { SEVERITY_CLASS } from "./severityClass.js";
+	import { SEVERITY_BADGE as SEVERITY_CLASS } from "./severity.js";
 
 	export let session;
 	/** The long-text field that has the whole modal, or null. */

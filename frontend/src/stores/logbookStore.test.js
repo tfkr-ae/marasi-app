@@ -7,6 +7,7 @@ import {
   createLogbookStore,
   filteredOf,
   groupsOf,
+  linkedOf,
   nextOf,
   openRecordOf,
   severityCountsOf,
@@ -602,4 +603,71 @@ test("the category and tag menus list every value, counting what the other filte
       { value: "web", count: 0 },
     ],
   );
+});
+
+// Each linked record as [kind, id].
+const links = (store, kind, id) => {
+  const state = get(store);
+  const record = (kind === "finding" ? state.findings : state.testCases).find((r) => r.ID === id);
+  return linkedOf(state, kind, record).map((entry) => [entry.kind, entry.record.ID]);
+};
+
+test("a finding links to its test case; a test case to its findings, most severe first", async () => {
+  const { store } = await loaded({
+    findings: [
+      finding("f-low", { Severity: "Low", TestCaseID: "t1" }),
+      finding("f-crit", { Severity: "Critical", TestCaseID: "t1" }),
+      finding("f-none", { TestCaseID: null }),
+      finding("f-gone", { TestCaseID: "deleted" }),
+    ],
+    testCases: [testCase("t1"), testCase("t2")],
+  });
+  assert.deepEqual(links(store, "finding", "f-low"), [["testCase", "t1"]]);
+  assert.deepEqual(links(store, "finding", "f-none"), []);
+  assert.deepEqual(links(store, "finding", "f-gone"), [], "a test case no longer in the Logbook");
+  assert.deepEqual(links(store, "testCase", "t1"), [
+    ["finding", "f-crit"],
+    ["finding", "f-low"],
+  ]);
+  assert.deepEqual(links(store, "testCase", "t2"), []);
+});
+
+test("linked records ignore the filters", async () => {
+  const { store } = await loaded({
+    findings: [finding("f1", { Severity: "High", TestCaseID: "t1" })],
+    testCases: [testCase("t1")],
+  });
+  store.setKind("testCases");
+  assert.deepEqual(links(store, "testCase", "t1"), [["finding", "f1"]]);
+});
+
+test("Next follows the test cases as their groups show them", async () => {
+  const { store } = await loaded({
+    testCases: [
+      testCase("a", { Title: "A", Category: "Web", Note: "" }),
+      testCase("b", { Title: "B", Category: "Auth", Note: "" }),
+      testCase("c", { Title: "C", Category: "Web", Note: "" }),
+    ],
+  });
+  store.open("testCase", "b");
+  assert.deepEqual(next(store), ["testCase", "a"], "Auth, then Web");
+  store.open("testCase", "a");
+  assert.deepEqual(next(store), ["testCase", "c"]);
+  store.open("testCase", "c");
+  assert.deepEqual(next(store), ["testCase", "b"], "wraps");
+});
+
+test("grouped by tag, Next visits a test case once, under its first tag", async () => {
+  const { store } = await loaded({
+    testCases: [
+      testCase("a", { Title: "A", Tags: ["web"], Note: "" }),
+      testCase("b", { Title: "B", Tags: ["api", "web"], Note: "" }),
+      testCase("c", { Title: "C", Tags: [], Note: "" }),
+    ],
+  });
+  store.setGrouping("testCases", "tag");
+  store.open("testCase", "b");
+  assert.deepEqual(next(store), ["testCase", "a"], "api: b; web: a, b; No tags: c");
+  store.open("testCase", "a");
+  assert.deepEqual(next(store), ["testCase", "c"], "b already visited under api");
 });

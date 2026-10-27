@@ -5,15 +5,14 @@
 	// with Undo until Save or Discard.
 	import { onDestroy } from "svelte";
 	import { getToastStore } from "@skeletonlabs/skeleton";
-	import { FileIcon, ImageIcon, Search, Undo2, Upload, Video, X } from "lucide-svelte";
+	import { FileIcon, FileText, ImageIcon, Search, Undo2, Upload, Video, X } from "lucide-svelte";
 	import { logbookStore } from "../../stores/logbookStore.js";
 	import { ledgerStore } from "../../stores/ledgerStore.js";
 	import { createRequestPicker } from "../requestPicker.js";
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
-	import { MAX_ARTIFACT_BYTES, previewKind, sizeText } from "./artifacts.js";
-	import { optionRow, requestDetails, requestRow } from "./requestDetails.js";
-	import PairView from "./PairView.svelte";
-	import ArtifactViewer from "./ArtifactViewer.svelte";
+	import { MAX_ARTIFACT_BYTES, formatSize, previewOf } from "./artifacts.js";
+	import RequestPair from "./RequestPair.svelte";
+	import ArtifactPreview from "./ArtifactPreview.svelte";
 
 	export let session;
 	export let tab = "requests";
@@ -23,6 +22,28 @@
 	$: original = session.original;
 	$: kept = (id) => draft.Requests.includes(id);
 
+	// Each pair is read once here; the list rows and the viewer share it.
+	const pairs = new Map();
+	function readPair(id) {
+		const key = String(id);
+		if (!pairs.has(key)) pairs.set(key, logbookStore.readPair(id).catch(() => null));
+		return pairs.get(key);
+	}
+
+	// A list row from a pair (GetRawDetails) or a traffic search option.
+	const rowOf = (details) => ({
+		number: details.Request?.Number ?? null,
+		method: details.Request?.Method ?? "",
+		url: `${details.Request?.Host ?? ""}${details.Request?.Path ?? ""}`,
+		status: details.Response?.StatusCode ?? 0,
+	});
+	const optionRow = (option) => ({
+		number: option.Number ?? null,
+		method: option.Method ?? "",
+		url: `${option.Host ?? ""}${option.Path ?? ""}`,
+		status: option.StatusCode ?? 0,
+	});
+
 	// Requests: the draft's, then the record's own that the draft unlinked.
 	$: requestIds = [...draft.Requests, ...original.Requests.filter((id) => !draft.Requests.includes(id))];
 	let rows = {};
@@ -30,9 +51,20 @@
 	async function loadRow(id) {
 		if (rows[id]) return;
 		rows[id] = { method: "", url: "…", status: 0, number: null };
-		const details = await requestDetails(id);
-		rows[id] = details ? requestRow(details) : { method: "", url: "Couldn't read this request", status: 0, number: null };
+		const details = await readPair(id);
+		rows[id] = details ? rowOf(details) : { method: "", url: "Couldn't read this request", status: 0, number: null };
 	}
+
+	// The artifact viewer reads a staged file from the file itself; it has
+	// nothing stored to download yet.
+	const artifactReader = {
+		readArtifact: async (id) => {
+			const staged = $logbookStore.session?.draft.Artifacts.find((a) => a.ID === id && a.File);
+			if (!staged) return logbookStore.readArtifact(id);
+			return { Data: new Uint8Array(await staged.File.arrayBuffer()) };
+		},
+		downloadArtifact: async (id) => (String(id).startsWith("staged-") ? false : logbookStore.downloadArtifact(id)),
+	};
 
 	let selectedRequest = session.draft.Requests[0] ?? null;
 	$: if (!draft.Requests.includes(selectedRequest)) selectedRequest = draft.Requests[0] ?? null;
@@ -81,7 +113,7 @@
 		if (added) selectedArtifact = added.ID;
 	}
 
-	const ICONS = { image: ImageIcon, video: Video };
+	const ICONS = { image: ImageIcon, video: Video, text: FileText };
 	const rowClass = (selected) =>
 		`group relative flex items-center gap-2 py-1 pl-2 pr-1 text-[11px] ${selected ? "bg-primary-500/20" : "hover:bg-surface-200-700-token"}`;
 	const newBadge = "badge flex-none rounded-sm bg-primary-500/20 px-1 py-0 font-sans text-[10px]";
@@ -159,7 +191,7 @@
 		</div>
 		<div class="min-h-0 min-w-0 flex-1">
 			{#if selectedRequest}
-				<PairView id={selectedRequest} />
+				<RequestPair id={selectedRequest} read={readPair} />
 			{:else}
 				<p class="p-8 text-center text-[11px] opacity-60">Link a request to view it</p>
 			{/if}
@@ -193,10 +225,10 @@
 					<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 					<div class="{rowClass(selectedArtifact === artifact.ID)} {gone ? '' : 'cursor-pointer'}" data-artifact-row on:click={() => !gone && (selectedArtifact = artifact.ID)}>
 						{#if selectedArtifact === artifact.ID}<span class="absolute bottom-0 left-0 top-0 w-[3px] bg-primary-500"></span>{/if}
-						<svelte:component this={ICONS[previewKind(artifact)] ?? FileIcon} size={13} class="flex-none {gone ? 'opacity-40' : 'text-primary-500'}" />
+						<svelte:component this={ICONS[previewOf(artifact)] ?? FileIcon} size={13} class="flex-none {gone ? 'opacity-40' : 'text-primary-500'}" />
 						<span class="min-w-0 flex-1 truncate {gone ? 'line-through opacity-40' : ''}" title={artifact.Filename}>{artifact.Filename}</span>
 						{#if !originalIds.has(artifact.ID)}<span class={newBadge}>new</span>{/if}
-						<span class="flex-none text-[10px] opacity-50">{sizeText(artifact.Size)}</span>
+						<span class="flex-none text-[10px] opacity-50">{formatSize(artifact.Size)}</span>
 						{#if gone}
 							<button type="button" class={rowButton} title="Undo remove" aria-label="Undo remove" on:click|stopPropagation={() => logbookStore.restoreArtifact(artifact.ID)}><Undo2 size={12} /></button>
 						{:else}
@@ -209,7 +241,7 @@
 			</div>
 		</div>
 		<div class="min-h-0 min-w-0 flex-1">
-			<ArtifactViewer artifact={shownArtifact} />
+			<ArtifactPreview artifact={shownArtifact} store={artifactReader} />
 		</div>
 	{/if}
 </div>
