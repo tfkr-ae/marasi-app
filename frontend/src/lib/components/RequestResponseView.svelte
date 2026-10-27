@@ -37,8 +37,7 @@
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { goto } from "$app/navigation";
-	import { testCaseStore } from "../../stores/testCaseStore";
-	import { findingStore } from "../../stores/findingStore";
+	import { newRecord } from "../logbook/recordEditor.js";
 	import { armoryStore } from "../../stores/armoryStore";
 	import { upgradeFromRequest, upgradePresentation } from "../websocket/presentation.js";
 	import { prettifiedBody } from "../prettified.js";
@@ -144,39 +143,9 @@
 		});
 	}
 
-	function createTestCase() {
-		testCaseStore.create([request_id]).then((testCase) => {
-			const modal = {
-				type: "component",
-				component: "TestCase",
-				toggleAction: "ledger.drawer-open.create-test-case",
-				meta: {
-					testCase: testCase,
-					isNew: true,
-				},
-			};
-			if (!$modalStore[0]) {
-				modalStore.trigger(modal);
-			}
-		});
-	}
-
-	function createFinding() {
-		findingStore.create([request_id]).then((finding) => {
-			const modal = {
-				type: "component",
-				component: "Finding",
-				toggleAction: "ledger.drawer-open.create-finding",
-				meta: {
-					finding: finding,
-					isNew: true,
-				},
-			};
-			if (!$modalStore[0]) {
-				modalStore.trigger(modal);
-			}
-		});
-	}
+	// A new test case or finding with this request, in the Logbook modal.
+	const createTestCase = () => newRecord(modalStore, "testCase", { requestIds: [request_id] });
+	const createFinding = () => newRecord(modalStore, "finding", { requestIds: [request_id] });
 
 	async function sendToArmory() {
 		try {

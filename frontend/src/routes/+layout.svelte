@@ -198,12 +198,9 @@
 		Notes: { ref: NotesModal },
 		MenuInput: { ref: MenuModal },
 		Metadata: { ref: MetadataModal },
-		// The finding and test case modal. "Finding" and "TestCase" are the
-		// names older callers still open it by.
+		// The finding and test case modal (lib/logbook/recordEditor.js).
 		LogbookRecord: { ref: RecordModal },
-		TestCase: { ref: RecordModal },
 		SelectTestCase: { ref: SelectTestCaseModal },
-		Finding: { ref: RecordModal },
 		WebsocketStream: { ref: WebSocketModal },
 		SelectFinding: { ref: SelectFindingModal },
 		SelectWordlist: { ref: SelectWordlistModal },
