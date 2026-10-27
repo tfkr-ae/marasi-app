@@ -53,7 +53,7 @@ It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoi
 
 Launch sizes the headless window so the page itself is `1600x900`. Drives do not use a per-session viewport override: that override ends when each CDP session closes, and the page then relayouts at Chrome's smaller default (`1600x813`), which pushes the Settings rail item off screen.
 
-When doctor reports a leftover overlay or drawer, dismiss it with real input (Escape, then a backdrop click) and re-run doctor:
+When doctor reports a leftover overlay or drawer, dismiss it with real input (Escape, then a backdrop click, or `Discard` on the Logbook record modal's unsaved-changes prompt) and re-run doctor:
 
 ```bash
 .agents/skills/verify-marasi/scripts/reset.sh
@@ -111,12 +111,12 @@ For behavioral actions beyond navigation, use a named sequence of real UI inputs
 
 | Step | Meaning |
 | --- | --- |
-| `{"click": "<css>"}` | Click the one actionable match. Add `"hasText"` to keep matches whose text contains it (for example `{"click":"tbody tr","hasText":"/probe"}`), `"within": "<css>"` to scope, `"nth": n` (1-based) to pick among several on purpose, `"button": "right"` for a context menu, `"clickCount": 2` for a double-click, `"modifiers": ["cmd", "shift"]` to hold keys during the click (`cmd` is Meta on macOS, Ctrl elsewhere). |
+| `{"click": "<css>"}` | Click the one actionable match. Add `"hasText"` to keep matches whose text contains it (for example `{"click":"tbody tr","hasText":"/probe"}`), `"within": "<css>"` to scope, `"nth": n` (1-based) to pick among several on purpose, `"button": "right"` for a context menu, `"clickCount": 2` for a double-click, `"modifiers": ["cmd", "shift"]` to hold keys during the click (`cmd` is Meta on macOS, Ctrl elsewhere), `"edge": "top"` or `"bottom"` to click 3 px inside that edge instead of the centre (a modal backdrop, whose centre the modal covers). |
 | `{"drag": "<css>", "to": "<css>"}` | Press on the one actionable match (`hasText`/`within` scope it), move onto the `to` match (`toHasText` scopes it; `within` applies to both) with the button held, and release there. For a sweep across Ledger rows: `{"drag":".ledger-row","hasText":"/a","to":".ledger-row","toHasText":"/c"}`. `"toEdge": "top"` or `"bottom"` releases 3 px inside that edge of the `to` match instead of its centre, for drops that read which half of a row the pointer is on. `"hold": true` keeps the button down, so the next steps (and their captures) see the drag in progress; end it with a `release` step, or send `escape` first to cancel it. A recipe that stops while holding sends Escape and then releases. |
 | `{"release": true}` | Releases a held drag where it stopped. |
 | `{"wheel": "<css>", "deltaY": n}` | One real wheel turn of `n` px over the one actionable match (same rules and scoping as `click`), for scrolling a container, for example when sticky rows cover the control to click. The driver does not wait for the hidden page to acknowledge it, so wait for the scrolled state next. |
 | `{"text": "<label>"}` | Click the one actionable button, link, switch, tab, label, or summary whose normalized text, `aria-label`, or `title` equals the label. Wrappers around a matching control collapse to the control. `within` and `nth` apply. |
-| `{"hover": "<css>"}` | Move the pointer onto the one actionable match (same rules and `hasText`/`within`/`nth` as `click`), for controls shown only on hover, such as a saved query's Rename, Move and Delete buttons. The pointer stays there until the next click. |
+| `{"hover": "<css>"}` | Move the pointer onto the one actionable match (same rules and `hasText`/`within`/`nth` as `click`, except that a disabled match counts), for controls shown only on hover, such as a saved query's Rename, Move and Delete buttons. The pointer stays there until the next click. `-steps.json` records the match's box, so hovers prove a control kept its place. |
 | `{"key": "cmd+shift+r"}` | Shortcut, same syntax as compare. Also `escape`, `enter`, `tab`, `backspace`, `[`, `]`, `\` (escaped as `\\` in JSON), `up`, `down`, with `alt` as well (`alt+shift+up`). A bare character without `cmd`, `ctrl`, or `alt` (for example `{"key":"l"}`) types itself, so a focused `<select>` jumps to the first option that starts with it. |
 | `{"insert": "<text>"}` | Waits for a focused input or editor, inserts, then waits until the text is in that field. |
 | `{"waitText": "…"}`, `{"waitNoText": "…"}` | Visible `innerText` contains or lacks the text. Add `within` to read only matching roots, so text the editor already holds cannot satisfy the wait. |

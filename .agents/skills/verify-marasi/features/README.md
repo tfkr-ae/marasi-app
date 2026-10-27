@@ -10,7 +10,7 @@ Marasi's primary user interface is the Wails desktop app. Verification drives th
 | Request interception | [checkpoint.md](checkpoint.md) | Checkpoint route opens and a real proxied request reaches an observable forward/drop state |
 | Request replay | [launchpad.md](launchpad.md) | Launchpad route opens and replay produces a response plus persisted request data |
 | Request fuzzing | [armory.md](armory.md) | Armory route opens and a controlled run produces persisted traffic |
-| Findings and test cases | [logbook.md](logbook.md) | Logbook route opens and an edited item persists in the project |
+| Findings and test cases | [logbook.md](logbook.md) | Logbook route opens, a record saved from the modal or an inline fix persists, and a discarded one leaves nothing in the project |
 | Lua workshop | [workshop.md](workshop.md) | Workshop route opens and saved code executes with visible log output |
 | Application settings | [settings.md](settings.md) | Settings route opens and a reversible setting persists to isolated config |
 
