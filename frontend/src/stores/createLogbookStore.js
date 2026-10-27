@@ -219,6 +219,24 @@ export function openRecordOf(state) {
   return record ? { kind: state.open.kind, record } : null;
 }
 
+const sameID = (a, b) => a != null && b != null && String(a) === String(b);
+
+/**
+ * The records linked to `record`, as [{ kind, record }], whatever the
+ * filters: a finding's test case, or a test case's findings, most severe
+ * first.
+ */
+export function linkedOf(state, kind, record) {
+  if (kind === "finding")
+    return state.testCases
+      .filter((t) => sameID(t.ID, record.TestCaseID))
+      .map((t) => ({ kind: "testCase", record: t }));
+  return state.findings
+    .filter((f) => sameID(f.TestCaseID, record.ID))
+    .sort(findingOrder)
+    .map((f) => ({ kind: "finding", record: f }));
+}
+
 /**
  * The record Next opens, as { kind, record }: the one after the open record
  * in the order the tester sees, the findings then the test cases in their
@@ -361,6 +379,12 @@ export function createLogbookStore(api) {
 
   return {
     subscribe: store.subscribe,
+    // Evidence reads: a linked pair in full (GetRawDetails), an artifact
+    // with its bytes (GetArtifact), and saving an artifact through the
+    // native Save dialog (DownloadArtifact, false when cancelled).
+    readPair: (id) => api.getPair(id),
+    readArtifact: (id) => api.getArtifact(id),
+    downloadArtifact: (id) => api.downloadArtifact(id),
     populate,
     clear,
     setRecords,

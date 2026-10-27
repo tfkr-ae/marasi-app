@@ -1,6 +1,12 @@
 // The app's Logbook store, bound to the Wails backend. The logic lives in
 // createLogbookStore.js, which tests load with a fake API.
-import { ListFindings, ListTestCases } from "../lib/wailsjs/go/main/App";
+import {
+  DownloadArtifact,
+  GetArtifact,
+  GetRawDetails,
+  ListFindings,
+  ListTestCases,
+} from "../lib/wailsjs/go/main/App";
 import { createLogbookStore } from "./createLogbookStore.js";
 import { findingStore } from "./findingStore";
 import { testCaseStore } from "./testCaseStore";
@@ -13,6 +19,7 @@ export {
   completenessOf,
   filteredOf,
   groupsOf,
+  linkedOf,
   nextOf,
   openRecordOf,
   severityCountsOf,
@@ -22,6 +29,9 @@ export {
 export const logbookStore = createLogbookStore({
   listFindings: () => ListFindings(),
   listTestCases: () => ListTestCases(),
+  getPair: (id) => GetRawDetails(id),
+  getArtifact: (id) => GetArtifact(id),
+  downloadArtifact: (id) => DownloadArtifact(id),
 });
 
 // Today's finding and test case modals, the Ledger and the request view
