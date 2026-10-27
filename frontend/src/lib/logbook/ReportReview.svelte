@@ -17,7 +17,9 @@
 
 	$: review = reportOf($store, { includeTestCases });
 	$: missing = new Set(review.gaps.map((g) => `${g.kind}:${g.record.ID}`));
-	$: summary = review.gapGroups.map((g) => `${g.items.length} ${g.label.toLowerCase()}`).join(", ");
+	// "No CVSS" reads "no CVSS" mid-sentence.
+	const lower = (label) => label.charAt(0).toLowerCase() + label.slice(1);
+	$: summary = review.gapGroups.map((g) => `${g.items.length} ${lower(g.label)}`).join(", ");
 	const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 	const number = (prefix, i) => `${prefix}-${String(i + 1).padStart(2, "0")}`;
 	const heading = "mb-2 text-sm font-bold";

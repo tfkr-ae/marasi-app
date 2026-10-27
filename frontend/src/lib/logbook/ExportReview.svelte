@@ -105,7 +105,7 @@
 
 {#if $modalStore[0]}
 	<div
-		class="logbook-export card flex h-[86vh] max-h-[760px] w-[min(1120px,94vw)] flex-col overflow-hidden rounded-none text-xs shadow-xl bg-surface-50-800-token text-surface-900-50-token"
+		class="logbook-export card flex h-[min(680px,86vh)] w-[min(1120px,94vw)] flex-col overflow-hidden rounded-none text-xs shadow-xl bg-surface-50-800-token text-surface-900-50-token"
 	>
 		<header class="flex h-11 flex-none items-center gap-2 border-b border-surface-500/30 px-3">
 			<FileText size={16} class="text-primary-500" />
