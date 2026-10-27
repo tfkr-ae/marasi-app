@@ -64,3 +64,6 @@ export function formatSize(size) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** The largest file a record takes as an artifact. */
+export const MAX_ARTIFACT_BYTES = 20 * 1024 * 1024;

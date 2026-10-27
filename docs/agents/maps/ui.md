@@ -36,7 +36,8 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 
 Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 
-- `RequestResponseView.svelte` shows a request and its response. `AppDrawer`, the Launchpad workspace and the finding and test-case modals use it.
+- `RequestResponseView.svelte` shows a request and its response. `AppDrawer` and the Launchpad workspace use it.
+- `lib/logbook/RecordModal.svelte` is the finding and test case modal (registered as `LogbookRecord`, and as `Finding` and `TestCase` for older callers), over the Logbook store's edit session; open it with `newRecord`/`editRecord` from `lib/logbook/recordEditor.js`.
 - `lib/ledger/DrawerEditor.svelte` is the Ledger drawer's editor.
 - `LedgerQueryBox.svelte` is the Ledger's query editor.
 - `LaunchpadWorkspace.svelte` holds the Launchpad draft.

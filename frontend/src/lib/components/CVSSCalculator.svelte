@@ -15,6 +15,8 @@
 	export let score = null;
 	/** Whether the metrics show under the score row. */
 	export let open = true;
+	/** One group above the other, for a narrow host such as the modal form. */
+	export let stacked = false;
 
 	const dispatch = createEventDispatcher();
 	const SEVERITY_CLASS = {
@@ -143,7 +145,7 @@
 	{/if}
 
 	{#if open}
-		<div class="grid gap-x-4 gap-y-3 border-t border-surface-500/30 p-2 md:grid-cols-2">
+		<div class="grid gap-x-4 gap-y-3 border-t border-surface-500/30 p-2 {stacked ? '' : 'md:grid-cols-2'}">
 			{#each CVSS_GROUPS as group}
 				<div class="space-y-1">
 					<div class="text-[10px] font-bold uppercase tracking-wider opacity-50">{group.name}</div>

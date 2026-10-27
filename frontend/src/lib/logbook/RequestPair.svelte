@@ -3,7 +3,9 @@
 	// editor, side by side or stacked, with Wrap lines. Expand opens the pair
 	// nearly full screen; Esc or a click outside closes only that, even over
 	// a modal.
+	import { onDestroy } from "svelte";
 	import { Maximize2, WrapText, X } from "lucide-svelte";
+	import { interceptModalEscape } from "../overlayIsolation.js";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, usesSyntax } from "../ledger/drawer.js";
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
@@ -41,6 +43,16 @@
 		event.stopImmediatePropagation();
 		big = false;
 	}
+
+	// Inside a modal, overlay isolation takes Esc before the window
+	// listener above; take it there while expanded.
+	let releaseEscape = null;
+	$: if (big && !releaseEscape) releaseEscape = interceptModalEscape(() => (big = false));
+	$: if (!big && releaseEscape) {
+		releaseEscape();
+		releaseEscape = null;
+	}
+	onDestroy(() => releaseEscape?.());
 </script>
 
 <svelte:window on:keydown|capture={onKeydown} />

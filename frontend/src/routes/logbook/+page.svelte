@@ -22,6 +22,7 @@
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { logbookStore, nextOf, openRecordOf } from "../../stores/logbookStore";
+	import { RECORD_MODAL, editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 
@@ -36,26 +37,6 @@
 	$: tertiary = $modeCurrent ? "variant-ghost-tertiary ring-0 shadow-none" : "variant-filled-tertiary";
 	$: empty = $logbookStore.findings.length === 0 && $logbookStore.testCases.length === 0;
 
-	function openFindingModal(finding, isNew) {
-		if ($modalStore[0]) return;
-		modalStore.trigger({
-			type: "component",
-			component: "Finding",
-			toggleAction: "logbook.create-finding",
-			meta: { finding, isNew },
-		});
-	}
-
-	function openTestCaseModal(testCase, isNew) {
-		if ($modalStore[0]) return;
-		modalStore.trigger({
-			type: "component",
-			component: "TestCase",
-			toggleAction: "logbook.create-test-case",
-			meta: { testCase, isNew },
-		});
-	}
-
 	$: opened = openRecordOf($logbookStore);
 	$: next = nextOf($logbookStore);
 	$: nextTitle = $logbookStore.filters.status === "all" ? "Next in progress (N)" : "Next (N)";
@@ -66,10 +47,9 @@
 		logbookStore.open(kind, id);
 	}
 
-	function editRecord() {
-		if (!opened) return;
-		if (opened.kind === "finding") openFindingModal(opened.record, false);
-		else openTestCaseModal(opened.record, false);
+	// Edit opens the record in the modal, over its edit session.
+	function editOpened() {
+		if (opened) editRecord(modalStore, opened.kind, opened.record.ID);
 	}
 
 	function deleteRecord() {
@@ -107,13 +87,13 @@
 	}
 
 	function newFinding() {
-		if (!$modalStore[0]) findingStore.create([]).then((finding) => openFindingModal(finding, true));
-		else if ($modalStore[0].component === "Finding") modalStore.close();
+		if (!$modalStore[0]) newRecord(modalStore, "finding");
+		else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 	}
 
 	function newTestCase() {
-		if (!$modalStore[0]) testCaseStore.create([]).then((testCase) => openTestCaseModal(testCase, true));
-		else if ($modalStore[0].component === "TestCase") modalStore.close();
+		if (!$modalStore[0]) newRecord(modalStore, "testCase");
+		else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 	}
 
 	function openExport() {
@@ -194,7 +174,7 @@
 					{nextTitle}
 					onBack={logbookStore.close}
 					onNext={logbookStore.openNext}
-					onEdit={editRecord}
+					onEdit={editOpened}
 					onDelete={deleteRecord}
 					onOpen={openRecord}
 				/>

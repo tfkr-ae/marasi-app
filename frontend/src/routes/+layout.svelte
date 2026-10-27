@@ -77,7 +77,7 @@
 	} from "../lib/wailsjs/runtime/runtime";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
-	import TestCaseModal from "../lib/components/TestCaseModal.svelte";
+	import RecordModal from "../lib/logbook/RecordModal.svelte";
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import {
@@ -98,7 +98,6 @@
 	import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
-	import FindingModal from "../lib/components/FindingModal.svelte";
 	import { isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
@@ -199,9 +198,12 @@
 		Notes: { ref: NotesModal },
 		MenuInput: { ref: MenuModal },
 		Metadata: { ref: MetadataModal },
-		TestCase: { ref: TestCaseModal },
+		// The finding and test case modal. "Finding" and "TestCase" are the
+		// names older callers still open it by.
+		LogbookRecord: { ref: RecordModal },
+		TestCase: { ref: RecordModal },
 		SelectTestCase: { ref: SelectTestCaseModal },
-		Finding: { ref: FindingModal },
+		Finding: { ref: RecordModal },
 		WebsocketStream: { ref: WebSocketModal },
 		SelectFinding: { ref: SelectFindingModal },
 		SelectWordlist: { ref: SelectWordlistModal },
