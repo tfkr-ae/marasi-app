@@ -352,6 +352,19 @@ test("choosing a kind drops the filters that don't apply to it", async () => {
   assert.deepEqual(listed(store), ["f-high", "f-low", "t-auth", "t-none"]);
 });
 
+test("unpressing the kind clears the filters that only one kind has", async () => {
+  const { store } = await loaded(mixed);
+  store.setSeverities(["High"]);
+  store.setKind("all");
+  assert.deepEqual(toolbar(store), { kind: "all", manualKind: false, severities: [], categories: [], tags: [] });
+  assert.deepEqual(listed(store), ["f-high", "f-low", "t-auth", "t-none"]);
+  store.setCategories(["Auth"]);
+  store.setTags(["login"]);
+  store.setKind("all");
+  assert.deepEqual(toolbar(store), { kind: "all", manualKind: false, severities: [], categories: [], tags: [] });
+  assert.deepEqual(listed(store), ["f-high", "f-low", "t-auth", "t-none"]);
+});
+
 test("clearing every filter brings back the whole Logbook", async () => {
   const { store } = await loaded(mixed);
   store.setKind("findings");

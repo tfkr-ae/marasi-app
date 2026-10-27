@@ -554,16 +554,17 @@ export function createLogbookStore(api) {
 
   /**
    * Shows "all", "findings" or "testCases", and drops the filters that
-   * don't apply to it. A kind other than "all" counts as chosen by hand.
+   * don't apply to it. "all" drops them all, since each narrows to one
+   * kind. A kind other than "all" counts as chosen by hand.
    */
   const setKind = (kind) =>
     setFilters((filters) => ({
       ...filters,
       kind,
       manualKind: kind !== "all",
-      severities: kind === "testCases" ? [] : filters.severities,
-      categories: kind === "findings" ? [] : filters.categories,
-      tags: kind === "findings" ? [] : filters.tags,
+      severities: kind === "findings" ? filters.severities : [],
+      categories: kind === "testCases" ? filters.categories : [],
+      tags: kind === "testCases" ? filters.tags : [],
     }));
 
   // The kind once the contextual filters are cleared: both, unless the
