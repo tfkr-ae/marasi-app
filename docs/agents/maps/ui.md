@@ -9,7 +9,7 @@ Which component draws each part of the app, and the type sizes the pages share. 
 - **App rail.** Skeleton's `AppRail`, with one `AppRailAnchor` per page, then one per extension with an interface, then Settings. Two icons carry an indicator: Settings shows the update dot (`settingsIconIndicator`), and Checkpoint shows the count of intercepted items (`checkpointBadge.js`, `data-testid="checkpoint-badge"`) and adds it to its title.
 - **Marasi menu.** `GlobalMenu.svelte` (in `lib/components/MarasiMenu/`) is mounted once here. It runs the `global.*` actions, such as going to a page. ⌘K opens a `MarasiKeys.svelte` dialog, which each page also mounts with its own actions (see `keybindings-and-menus.md`).
 - **Modals.** Components are registered by name in `modalRegistery` and opened with `modalStore.trigger({ type: "component", component: "<name>" })`. Most are `lib/components/*Modal.svelte`. Skeleton's built-in `confirm`, `alert` and `prompt` modals take the type scale from the `<Modal>` props here (`regionHeader`, `regionBody`, and `btn-sm` in `buttonPositive`/`buttonNeutral`).
-- **Drawer.** `AppDrawer.svelte` is the Skeleton drawer that Compass, Checkpoint, Logbook and Workshop open through `drawerStore`. The Ledger has its own drawer instead (see `ledger.md`), and so does the Armory: `lib/armory/ArmoryDrawer.svelte` and `ArmoryDrawerRail.svelte`. Both details columns draw the facts with `lib/ledger/DrawerFacts.svelte` and the Linked section with `lib/ledger/DrawerLinked.svelte` (the Armory passes `onUnlink`). The Armory page reports whether it is open to the menu contexts through `armoryDrawer` in `lib/keybindings/app.js`.
+- **Drawer.** `AppDrawer.svelte` is the Skeleton drawer that Compass, Checkpoint and Workshop open through `drawerStore`. The Ledger has its own drawer instead (see `ledger.md`), and so does the Armory: `lib/armory/ArmoryDrawer.svelte` and `ArmoryDrawerRail.svelte`. Both details columns draw the facts with `lib/ledger/DrawerFacts.svelte` and the Linked section with `lib/ledger/DrawerLinked.svelte` (the Armory passes `onUnlink`). The Armory page reports whether it is open to the menu contexts through `armoryDrawer` in `lib/keybindings/app.js`.
 - **Chef, Excalidraw and Interactsh.** They are loaded the first time their rail icon is clicked, then stay mounted in the layout, so they keep their state. Their routes only show or hide them.
 - **Opening screen and toasts.** `OpeningScreen.svelte` (see `project-open.md`) and Skeleton's `Toast`.
 - **The page** renders in `{#key $pagesKey}<slot />`.
@@ -25,7 +25,7 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
 | Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |
 | Armory | `routes/armory/` | `lib/armory/` (`ArmoryDock`, `TemplateHeader`, `TemplateEditor`, `RunSettings`, `TrafficRegion`, `ArmoryDrawer`, `ArmoryDrawerRail`; `rowMenu.js` builds the traffic row menu from the Ledger's item builders, and `RowMenu` draws it), `lib/dock/Dock.svelte` |
-| Logbook | `routes/logbook/` | `lib/logbook/` (`LogbookOutline`, `LogbookToolbar`, `LogbookSummary`), `lib/dock/Dock.svelte`, `stores/logbookStore.js` |
+| Logbook | `routes/logbook/` | `lib/logbook/` (`LogbookToolbar`, `LogbookOutline`, `LogbookSummary`; the open record is `LogbookRecord`; the modals are `RecordModal` and `ExportReview`), `lib/dock/Dock.svelte`, `stores/logbookStore.js` (see `logbook.md`) |
 | Compass, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
@@ -37,7 +37,7 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 
 - `RequestResponseView.svelte` shows a request and its response. `AppDrawer` and the Launchpad workspace use it.
-- `lib/logbook/RecordModal.svelte` is the finding and test case modal (registered as `LogbookRecord`, and as `Finding` and `TestCase` for older callers), over the Logbook store's edit session; open it with `newRecord`/`editRecord` from `lib/logbook/recordEditor.js`.
+- `lib/logbook/RequestPair.svelte` shows a finding's or test case's linked request and response with the Ledger's `DrawerEditor`, in the Logbook's record view and in `RecordModal.svelte`, the finding and test case modal (registered as `LogbookRecord`; see `logbook.md`).
 - `lib/ledger/DrawerEditor.svelte` is the Ledger drawer's editor.
 - `LedgerQueryBox.svelte` is the Ledger's query editor.
 - `LaunchpadWorkspace.svelte` holds the Launchpad draft.
