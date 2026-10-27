@@ -134,8 +134,39 @@ export const filteredOf = (state) => listed(state, state.filters);
 /** The same list with any status, for the status toggle's counts. */
 export const anyStatusOf = (state) => listed(state, { ...state.filters, status: "all" });
 
-const sortedSet = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
-const nonEmpty = (groups) => groups.filter((group) => group.items.length);
+/**
+ * Findings per severity, { Critical: n, … }, of those the search and status
+ * leave. The severity filter itself is ignored, so each severity still
+ * shows what picking it would add.
+ */
+export function severityCountsOf(state) {
+  const { findings } = listed(state, { ...state.filters, kind: "all", severities: [] });
+  return Object.fromEntries(
+    SEVERITIES.map((severity) => [severity, findings.filter((f) => f.Severity === severity).length]),
+  );
+}
+
+const sortedSet =(values) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
+/**
+ * The category and tag menus' options: every category and tag in the
+ * Logbook, as { value, count }, counting the test cases the search, status
+ * and the other menu leave.
+ */
+export function testCaseCountsOf(state) {
+  const counted = (patch, valuesOf) => {
+    const { testCases } = listed(state, { ...state.filters, kind: "all", ...patch });
+    return sortedSet(state.testCases.flatMap(valuesOf)).map((value) => ({
+      value,
+      count: testCases.filter((t) => valuesOf(t).includes(value)).length,
+    }));
+  };
+  return {
+    categories: counted({ categories: [] }, (t) => [categoryOf(t)]),
+    tags: counted({ tags: [] }, tagsOf),
+  };
+}
+
+const nonEmpty =(groups) => groups.filter((group) => group.items.length);
 
 // Groups `items`, already in list order, `by` "severity", "category", "tag"
 // or "none".
@@ -225,6 +256,17 @@ export function createLogbookStore(api) {
     if (seq !== readSeq) return;
     store.update((state) => ({ ...state, findings: findings ?? [], testCases: testCases ?? [] }));
   }
+
+  /**
+   * Replaces the findings ("finding") or test cases ("testCase") with a
+   * list written elsewhere, such as by today's finding and test case
+   * modals, keeping the filters.
+   */
+  const setRecords = (kind, records) =>
+    store.update((state) => ({
+      ...state,
+      [kind === "finding" ? "findings" : "testCases"]: records ?? [],
+    }));
 
   // Forgets the project's records and the Logbook's filters, and ignores
   // lists still on their way, before another project opens.
@@ -316,6 +358,7 @@ export function createLogbookStore(api) {
     subscribe: store.subscribe,
     populate,
     clear,
+    setRecords,
     setQuery,
     setStatus,
     setKind,

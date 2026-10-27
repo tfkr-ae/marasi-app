@@ -9,6 +9,8 @@ import {
   groupsOf,
   nextOf,
   openRecordOf,
+  severityCountsOf,
+  testCaseCountsOf,
 } from "./createLogbookStore.js";
 
 // A finding as ListFindings returns it, complete unless overridden.
@@ -535,4 +537,69 @@ test("openNext opens the next record, or keeps the open one when none is next", 
   store.open("finding", "f2");
   assert.equal(store.openNext(), null);
   assert.deepEqual(opened(store), ["finding", "f2"]);
+});
+
+test("records written elsewhere replace that kind's list and keep the filters", async () => {
+  const { api, store } = await loaded({ findings: [finding("f1")], testCases: [testCase("t1")] });
+  store.setQuery("2");
+  store.setRecords("finding", [finding("f1"), finding("f2")]);
+  store.setRecords("testCase", null);
+  const state = get(store);
+  assert.deepEqual(filteredOf(state).findings.map((f) => f.ID), ["f2"]);
+  assert.deepEqual(state.testCases, []);
+  assert.equal(state.filters.q, "2");
+  assert.equal(api.calls.length, 2);
+});
+
+test("severity counts follow the search and status but not the severity filter", async () => {
+  const { store } = await loaded({
+    findings: [
+      finding("f1", { Severity: "High", Title: "SQL injection" }),
+      finding("f2", { Severity: "High", Title: "SQL error leak", WriteUp: "" }),
+      finding("f3", { Severity: "Low", Title: "SQL banner" }),
+      finding("f4", { Severity: "Critical", Title: "Open redirect" }),
+    ],
+  });
+  store.setQuery("sql");
+  store.setStatus("done");
+  store.setSeverities(["Low"]);
+  assert.deepEqual(severityCountsOf(get(store)), {
+    Critical: 0,
+    High: 1,
+    Medium: 0,
+    Low: 1,
+    Informational: 0,
+  });
+});
+
+test("the category and tag menus list every value, counting what the other filters leave", async () => {
+  const { store } = await loaded({
+    testCases: [
+      testCase("t1", { Category: "Auth", Tags: ["web", "api"] }),
+      testCase("t2", { Category: "Auth", Tags: ["web"], Note: "" }),
+      testCase("t3", { Category: "", Tags: ["api"] }),
+      testCase("t4", { Category: "Input", Tags: [] }),
+    ],
+  });
+  store.setStatus("done");
+  store.setTags(["api"]);
+  assert.deepEqual(testCaseCountsOf(get(store)), {
+    categories: [
+      { value: "Auth", count: 1 },
+      { value: "Input", count: 0 },
+      { value: "Uncategorized", count: 1 },
+    ],
+    tags: [
+      { value: "api", count: 2 },
+      { value: "web", count: 1 },
+    ],
+  });
+  store.setCategories(["Input"]);
+  assert.deepEqual(
+    testCaseCountsOf(get(store)).tags,
+    [
+      { value: "api", count: 0 },
+      { value: "web", count: 0 },
+    ],
+  );
 });
