@@ -3,6 +3,7 @@
 	// test-case icon) and title, then Next, Edit and Delete; below, what it
 	// needs, its linked records and its evidence.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
+	import { tick } from "svelte";
 	import { ArrowLeft, ArrowRight, BookCheck, Pencil, Trash2 } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import EvidenceViewer from "./EvidenceViewer.svelte";
@@ -15,6 +16,8 @@
 	/** "finding" or "testCase". */
 	export let kind;
 	export let record;
+	/** The key of the item it opened at, such as a gap from the export, or null. */
+	export let focus = null;
 	/** Whether Next has a record to go to. */
 	export let hasNext = false;
 	export let nextTitle = "Next (N)";
@@ -29,11 +32,15 @@
 
 	$: primary = primaryVariant($modeCurrent);
 	$: links = linkedOf($store, kind, record);
-	// A new record starts at the top.
-	let shownID = null;
-	$: if (body && record.ID !== shownID) {
-		shownID = record.ID;
-		body.scrollTo?.({ top: 0 });
+	// A new record starts at the top, or at the item it opened at.
+	let shown = null;
+	$: if (body && `${kind}:${record.ID}:${focus}` !== shown) {
+		shown = `${kind}:${record.ID}:${focus}`;
+		tick().then(() => {
+			const item = focus && body?.querySelector(`[data-item="${focus}"]`);
+			if (item) item.scrollIntoView?.({ block: "center" });
+			else body?.scrollTo?.({ top: 0 });
+		});
 	}
 	const heading = "mb-1.5 text-[10px] font-bold uppercase tracking-wider opacity-50";
 </script>
@@ -62,7 +69,7 @@
 		>
 	</header>
 	<div bind:this={body} class="min-h-0 flex-1 overflow-auto px-4 py-3 pb-24">
-		<RecordChecklist {kind} {record} testCases={$store.testCases} />
+		<RecordChecklist {kind} {record} {focus} testCases={$store.testCases} />
 		<div class="mt-5"><LinkedRecords {kind} {links} wide={width > 900} {onOpen} /></div>
 		<h2 class="{heading} mt-5">Evidence</h2>
 		<div class="h-[440px] ring-1 ring-surface-500/30">

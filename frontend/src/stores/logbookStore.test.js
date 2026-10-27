@@ -10,6 +10,7 @@ import {
   linkedOf,
   nextOf,
   openRecordOf,
+  reportOf,
   severityCountsOf,
   testCaseCountsOf,
 } from "./createLogbookStore.js";
@@ -437,6 +438,17 @@ test("opening a record shows it; closing goes back to the list", async () => {
   assert.equal(opened(store), null);
 });
 
+test("a record opened at an item keeps that item until another record opens", async () => {
+  const { store } = await loaded(mixed);
+  store.open("testCase", "t-auth", "Note");
+  assert.equal(openRecordOf(get(store)).focus, "Note");
+  store.open("finding", "f-high");
+  assert.equal(openRecordOf(get(store)).focus, null);
+  store.open("testCase", "t-auth", "Note");
+  store.open("testCase", "t-auth");
+  assert.equal(openRecordOf(get(store)).focus, null, "opening it again plainly");
+});
+
 test("an open record that leaves the Logbook is no longer open", async () => {
   const { api, store } = await loaded(mixed);
   store.open("finding", "f-low");
@@ -670,4 +682,85 @@ test("grouped by tag, Next visits a test case once, under its first tag", async 
   assert.deepEqual(next(store), ["testCase", "a"], "api: b; web: a, b; No tags: c");
   store.open("testCase", "a");
   assert.deepEqual(next(store), ["testCase", "c"], "b already visited under api");
+});
+
+test("the report review counts what the report holds, findings by severity", () => {
+  const state = {
+    findings: [
+      finding("f1", { Severity: "High", Requests: ["r1", "r2"], Artifacts: [{ ID: "a1" }] }),
+      finding("f2", { Severity: "High" }),
+      finding("f3", { Severity: "Low" }),
+    ],
+    testCases: [testCase("t1", { Requests: ["r3"] }), testCase("t2")],
+  };
+
+  const review = reportOf(state, { includeTestCases: true });
+
+  assert.deepEqual(review.severityCounts, { Critical: 0, High: 2, Medium: 0, Low: 1, Informational: 0 });
+  assert.equal(review.findings.length, 3);
+  assert.equal(review.testCases.length, 2);
+  assert.equal(review.evidence, 6);
+});
+
+test("the report review lists the contents in report order", () => {
+  // Findings by severity then score; test cases as ListTestCases gives them,
+  // the newest first.
+  const state = {
+    findings: [
+      finding("low", { Severity: "Low", CVSSScore: 3 }),
+      finding("high-7", { Severity: "High", CVSSScore: 7 }),
+      finding("high-8", { Severity: "High", CVSSScore: 8.5 }),
+    ],
+    testCases: [testCase("zeta", { Title: "Zeta" }), testCase("alpha", { Title: "Alpha" })],
+  };
+
+  const review = reportOf(state, { includeTestCases: true });
+
+  assert.deepEqual(review.findings.map((f) => f.ID), ["high-8", "high-7", "low"]);
+  assert.deepEqual(review.testCases.map((t) => t.ID), ["zeta", "alpha"]);
+});
+
+test("the report review's gaps are the missing required items, grouped by what is missing", () => {
+  const state = {
+    findings: [
+      finding("f1", { TreatmentPlan: "", TestCaseID: null }),
+      finding("f2", { TreatmentPlan: " ", CVSSVector: "", Requests: [] }),
+    ],
+    testCases: [testCase("t1", { Note: "", Category: "", Requests: [] })],
+  };
+
+  const review = reportOf(state, { includeTestCases: true });
+
+  assert.deepEqual(
+    review.gaps.map((g) => [g.kind, g.record.ID, g.key]),
+    [
+      ["finding", "f2", "CVSSVector"],
+      ["finding", "f1", "TreatmentPlan"],
+      ["finding", "f2", "TreatmentPlan"],
+      ["finding", "f2", "Requests"],
+      ["testCase", "t1", "Note"],
+    ],
+  );
+  assert.deepEqual(
+    review.gapGroups.map((g) => [g.label, g.items.length]),
+    [
+      ["No CVSS", 1],
+      ["No treatment plan", 2],
+      ["No requests", 1],
+      ["No note", 1],
+    ],
+  );
+});
+
+test("the report review without test cases drops them and their gaps", () => {
+  const state = {
+    findings: [finding("f1", { WriteUp: "", Artifacts: [{ ID: "a1" }] })],
+    testCases: [testCase("t1", { Note: "", Requests: ["r9", "r8"] })],
+  };
+
+  const review = reportOf(state, { includeTestCases: false });
+
+  assert.deepEqual(review.testCases, []);
+  assert.equal(review.evidence, 2);
+  assert.deepEqual(review.gaps.map((g) => [g.record.ID, g.key]), [["f1", "WriteUp"]]);
 });

@@ -10,6 +10,8 @@
 	/** "finding" or "testCase". */
 	export let kind;
 	export let record;
+	/** The key of the item the record opened at, marked, or null. */
+	export let focus = null;
 	/** Every test case, to name a finding's. */
 	export let testCases = [];
 
@@ -54,7 +56,10 @@
 					{@const value = valueOf(item.key)}
 					<div
 						data-item={item.key}
-						class="grid h-12 grid-cols-[150px_minmax(0,1fr)] items-center gap-3 px-3"
+						data-focused={item.key === focus || undefined}
+						class="grid h-12 grid-cols-[150px_minmax(0,1fr)] items-center gap-3 px-3 {item.key === focus
+							? 'bg-warning-500/15 ring-2 ring-inset ring-warning-500'
+							: ''}"
 					>
 						<div class="flex items-center gap-2 text-[11px] font-semibold">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />

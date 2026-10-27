@@ -14,14 +14,20 @@ const linked = (record) => (record.Requests ?? []).length > 0;
  */
 export const ITEMS = {
   finding: [
-    { key: "WriteUp", label: "Writeup", required: true, done: (r) => filled(r.WriteUp) },
-    { key: "CVSSVector", label: "CVSS score", required: true, done: (r) => filled(r.CVSSVector) },
-    { key: "TreatmentPlan", label: "Treatment plan", required: true, done: (r) => filled(r.TreatmentPlan) },
-    { key: "Requests", label: "Linked requests", required: true, done: linked },
+    { key: "WriteUp", label: "Writeup", missing: "No writeup", required: true, done: (r) => filled(r.WriteUp) },
+    { key: "CVSSVector", label: "CVSS score", missing: "No CVSS", required: true, done: (r) => filled(r.CVSSVector) },
+    {
+      key: "TreatmentPlan",
+      label: "Treatment plan",
+      missing: "No treatment plan",
+      required: true,
+      done: (r) => filled(r.TreatmentPlan),
+    },
+    { key: "Requests", label: "Linked requests", missing: "No requests", required: true, done: linked },
     { key: "TestCaseID", label: "Test case", required: false, done: (r) => !!r.TestCaseID },
   ],
   testCase: [
-    { key: "Note", label: "Note", required: true, done: (r) => filled(r.Note) },
+    { key: "Note", label: "Note", missing: "No note", required: true, done: (r) => filled(r.Note) },
     { key: "Category", label: "Category", required: false, done: (r) => filled(r.Category) },
     { key: "Requests", label: "Linked requests", required: false, done: linked },
   ],
@@ -81,8 +87,9 @@ function initialFilters() {
 
 function initialState() {
   // grouping: findings by "severity" or "none"; test cases by "category",
-  // "tag" or "none". open: the record in the workspace as { kind, id },
-  // kind "finding" or "testCase", or null while the list shows.
+  // "tag" or "none". open: the record in the workspace as { kind, id,
+  // focus }, kind "finding" or "testCase" and focus the key of the item it
+  // opened at (or null), or null while the list shows.
   return {
     findings: [],
     testCases: [],
@@ -216,11 +223,14 @@ export function groupsOf(state) {
 
 const recordsOf = (state, kind) => (kind === "finding" ? state.findings : state.testCases);
 
-/** The open record as { kind, record }, or null when the list shows. */
+/**
+ * The open record as { kind, record, focus }, focus the key of the item it
+ * opened at or null, or null when the list shows.
+ */
 export function openRecordOf(state) {
   if (!state.open) return null;
   const record = recordsOf(state, state.open.kind).find((r) => r.ID === state.open.id);
-  return record ? { kind: state.open.kind, record } : null;
+  return record ? { kind: state.open.kind, record, focus: state.open.focus ?? null } : null;
 }
 
 const sameID = (a, b) => a != null && b != null && String(a) === String(b);
@@ -269,6 +279,43 @@ export function nextOf(state) {
         !isOpen(entry) && (!skipDone || completenessOf(entry.kind, entry.record).status !== "done"),
     ) ?? null
   );
+}
+
+/**
+ * What an export of the whole Logbook holds, in report order: findings by
+ * severity then score, test cases as ListTestCases gives them (none when
+ * `includeTestCases` is false). Also the findings per severity, the linked
+ * requests and artifacts as `evidence`, and the `gaps`, each missing
+ * required item as { kind, record, key, label }, item by item, with
+ * `gapGroups` as [{ label, items }].
+ */
+export function reportOf(state, { includeTestCases = true } = {}) {
+  const findings = [...state.findings].sort(findingOrder);
+  const testCases = includeTestCases ? [...state.testCases] : [];
+  const evidence = [...findings, ...testCases].reduce(
+    (n, r) => n + (r.Requests ?? []).length + (r.Artifacts ?? []).length,
+    0,
+  );
+  const gapsIn = (kind, records) =>
+    ITEMS[kind]
+      .filter((item) => item.required)
+      .map((item) => ({
+        label: item.missing,
+        items: records
+          .filter((record) => !item.done(record))
+          .map((record) => ({ kind, record, key: item.key, label: item.missing })),
+      }));
+  const gapGroups = nonEmpty([...gapsIn("finding", findings), ...gapsIn("testCase", testCases)]);
+  return {
+    findings,
+    testCases,
+    severityCounts: Object.fromEntries(
+      SEVERITIES.map((severity) => [severity, findings.filter((f) => f.Severity === severity).length]),
+    ),
+    evidence,
+    gaps: gapGroups.flatMap((group) => group.items),
+    gapGroups,
+  };
 }
 
 // The edit session behind the finding and test case modal. Opening a record
@@ -385,8 +432,12 @@ export function createLogbookStore(api) {
       return changed ? { ...state, filters, open: null } : state;
     });
 
-  /** Opens the record in the workspace. */
-  const open = (kind, id) => store.update((state) => ({ ...state, open: { kind, id } }));
+  /**
+   * Opens the record in the workspace, at the item `focus` (an ITEMS key,
+   * such as a missing one the export review points to) when given.
+   */
+  const open = (kind, id, focus = null) =>
+    store.update((state) => ({ ...state, open: { kind, id, focus } }));
 
   /** Closes the open record, back to the list. */
   const close = () => store.update((state) => ({ ...state, open: null }));

@@ -202,15 +202,11 @@ test("the Launchpad renames on ⌘R and swaps compared entries on ⌘⇧X", () =
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/launchpad")), "launchpad.launch");
 });
 
-test("a logs or report drawer keeps its page's menu", () => {
+test("a logs drawer keeps its page's menu", () => {
   const dispatcher = mac();
   const logs = { open: true, id: "extension-logs", meta: { extensionName: "checkpoint" } };
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/checkpoint", logs)), "checkpoint.show-logs");
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/compass", logs)), "compass.show-logs");
-  assert.equal(
-    dispatcher.resolve(cmdShift("E", "KeyE"), on("/logbook", { open: true, id: "report-export" })),
-    "logbook.export-report",
-  );
 });
 
 test("global actions stay available on pages and in drawers", () => {

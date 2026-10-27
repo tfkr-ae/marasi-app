@@ -9,7 +9,7 @@
 	// workspace shows the summary, or a record in its place. Back and Esc
 	// return to the list, Next and N move through it. Edit still opens
 	// today's finding or test case modal.
-	import { getDrawerStore, getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { writable } from "svelte/store";
 	import { BookCheck, Search, ShieldAlert, SquareArrowRightIcon, ToggleLeftIcon } from "lucide-svelte";
 	import Dock from "../../lib/dock/Dock.svelte";
@@ -27,7 +27,6 @@
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 
 	const modalStore = getModalStore();
-	const drawerStore = getDrawerStore();
 	const dockState = writable(savedDock ?? { width: LEDGER_DOCK.default, collapsed: false });
 	$: savedDock = $dockState;
 
@@ -97,17 +96,9 @@
 		else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 	}
 
-	function openExportDrawer() {
+	function openExport() {
 		if ($modalStore[0] || empty) return;
-		if (!$drawerStore || Object.keys($drawerStore).length === 0 || !$drawerStore.open)
-			drawerStore.open({
-				id: "report-export",
-				position: "right",
-				width: "w-full md:w-[50%]",
-				height: "h-full",
-				rounded: "rounded-none",
-			});
-		else if ($drawerStore.id === "report-export" && $drawerStore.open) drawerStore.close();
+		modalStore.trigger({ type: "component", component: "ExportReport", toggleAction: "logbook.export-report" });
 	}
 
 	const logbookMenu = [
@@ -129,7 +120,7 @@
 		},
 		{ actionId: "logbook.create-finding", icon: ShieldAlert, handler: newFinding },
 		{ actionId: "logbook.create-test-case", icon: BookCheck, handler: newTestCase },
-		{ actionId: "logbook.export-report", icon: SquareArrowRightIcon, handler: openExportDrawer },
+		{ actionId: "logbook.export-report", icon: SquareArrowRightIcon, handler: openExport },
 	];
 	useMenuActions(logbookMenu);
 </script>
@@ -169,7 +160,7 @@
 		<LogbookToolbar
 			store={logbookStore}
 			bind:searchInput
-			onExport={openExportDrawer}
+			onExport={openExport}
 			exportDisabled={empty}
 		/>
 		<div class="min-h-0 flex-1 bg-surface-50 dark:bg-surface-900">
@@ -178,6 +169,7 @@
 					store={logbookStore}
 					kind={opened.kind}
 					record={opened.record}
+					focus={opened.focus}
 					hasNext={!!next}
 					{nextTitle}
 					onBack={logbookStore.close}
