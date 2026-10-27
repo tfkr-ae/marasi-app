@@ -8,7 +8,6 @@
 		getToastStore,
 	} from "@skeletonlabs/skeleton";
 	import {
-		Calculator,
 		Download,
 		FileIcon,
 		ImageIcon,
@@ -22,6 +21,7 @@
 	import { createRequestPicker } from "../requestPicker.js";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import CVSSCalculator from "./CVSSCalculator.svelte";
+	import { severityFromScore } from "../cvss.js";
 	import { GetArtifact, DownloadArtifact } from "../wailsjs/go/main/App";
 	import { onDestroy } from "svelte";
 	import ProgressRadial from "../extensions/components/ProgressRadial.svelte";
@@ -38,6 +38,8 @@
 	let showTestCaseSearch = false;
 	// Seeded with the saved score so opening a finding keeps a manually set severity.
 	let lastSeenScore = finding.CVSSScore;
+	// The metrics start folded once a finding is scored.
+	let cvssOpen = !finding.CVSSVector;
 
 	$: autocompleteTestCases = [...$testCaseStore]
 		.reverse()
@@ -65,23 +67,8 @@
 		if (finding.CVSSScore !== lastSeenScore) {
 			lastSeenScore = finding.CVSSScore;
 
-			if (
-				finding.CVSSScore !== null &&
-				finding.CVSSScore !== undefined &&
-				finding.CVSSVector
-			) {
-				const s = parseFloat(finding.CVSSScore);
-				if (s === 0.0)
-					finding.Severity = "Informational";
-				else if (s >= 0.1 && s <= 3.9)
-					finding.Severity = "Low";
-				else if (s >= 4.0 && s <= 6.9)
-					finding.Severity = "Medium";
-				else if (s >= 7.0 && s <= 8.9)
-					finding.Severity = "High";
-				else if (s >= 9.0)
-					finding.Severity = "Critical";
-			}
+			const severity = finding.CVSSVector ? severityFromScore(finding.CVSSScore) : null;
+			if (severity) finding.Severity = severity;
 		}
 	}
 	function handleAccordionScroll(e) {
@@ -94,18 +81,6 @@
 				});
 			}
 		}, 250);
-	}
-
-	function getScoreBadgeClass(score, vector) {
-		if (!vector) return "variant-soft";
-		const s = parseFloat(score);
-		if (isNaN(s)) return "variant-filled-error";
-
-		if (s === 0.0) return "bg-blue-500 text-white";
-		if (s <= 3.9) return "bg-green-500 text-white";
-		if (s <= 6.9) return "bg-yellow-500 text-black";
-		if (s <= 8.9) return "bg-orange-500 text-white";
-		return "bg-red-600 text-white";
 	}
 
 	const testCaseFilter = () => {
@@ -297,69 +272,14 @@
 				</select>
 			</label>
 
-			<label class="label col-span-4" for="CVSS Score">
+			<div class="label col-span-4">
 				<span>CVSS Score</span>
-				<Accordion class="card variant-soft p-2">
-					<AccordionItem>
-						<svelte:fragment slot="summary">
-							<div
-								class="flex items-center justify-between w-full"
-							>
-								<div
-									class="flex items-center gap-3 overflow-hidden pr-4"
-								>
-									<Calculator
-										size={16}
-										class="text-primary-500 flex-shrink-0"
-									/>
-									<span
-										class="font-mono text-sm truncate opacity-80"
-									>
-										{finding.CVSSVector ||
-											"Calculate CVSS (No vector present)"}
-									</span>
-								</div>
-
-								<div
-									class="flex-shrink-0 mr-2"
-								>
-									{#if !finding.CVSSVector}
-										<span
-											class="badge variant-soft font-bold"
-											>N/A</span
-										>
-									{:else if finding.CVSSScore !== null && finding.CVSSScore !== undefined && !isNaN(finding.CVSSScore)}
-										<span
-											class="badge {getScoreBadgeClass(
-												finding.CVSSScore,
-												finding.CVSSVector,
-											)} font-bold text-sm"
-										>
-											{finding.CVSSScore}
-										</span>
-									{:else}
-										<span
-											class="badge variant-filled-error font-bold"
-											>Invalid</span
-										>
-									{/if}
-								</div>
-							</div>
-						</svelte:fragment>
-
-						<svelte:fragment slot="content">
-							<CVSSCalculator
-								bind:vector={
-									finding.CVSSVector
-								}
-								bind:score={
-									finding.CVSSScore
-								}
-							/>
-						</svelte:fragment>
-					</AccordionItem>
-				</Accordion>
-			</label>
+				<CVSSCalculator
+					bind:vector={finding.CVSSVector}
+					bind:score={finding.CVSSScore}
+					bind:open={cvssOpen}
+				/>
+			</div>
 			<label class="label col-span-4" for="Test Case">
 				{#if showTestCaseSearch || finding.TestCaseID}
 					<span class="mb-1"
