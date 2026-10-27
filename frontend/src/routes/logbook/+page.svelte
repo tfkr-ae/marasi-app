@@ -24,6 +24,8 @@
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { logbookSearchInput } from "../../stores";
+	import { logbookStore } from "../../stores/logbookStore.js";
+	import { editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
 
 	const modalStore = getModalStore();
 	const drawerStore = getDrawerStore();
@@ -47,27 +49,8 @@
 		}
 	}
 
-	function openFindingModal(finding, isNew) {
-		if (!$modalStore[0]) {
-			modalStore.trigger({
-				type: "component",
-				component: "Finding",
-				toggleAction: "logbook.create-finding",
-				meta: { finding: finding, isNew: isNew },
-			});
-		}
-	}
-
-	function openTestCaseModal(testCase, isNew) {
-		if (!$modalStore[0]) {
-			modalStore.trigger({
-				type: "component",
-				component: "TestCase",
-				toggleAction: "logbook.create-test-case",
-				meta: { testCase: testCase, isNew: isNew },
-			});
-		}
-	}
+	const openFindingModal = (finding) => editRecord(modalStore, "finding", finding.ID);
+	const openTestCaseModal = (testCase) => editRecord(modalStore, "testCase", testCase.ID);
 
 	function openExportDrawer() {
 		if ($modalStore[0]) return;
@@ -198,19 +181,12 @@
 			icon: ShieldAlert,
 			handler: () => {
 				if (!$modalStore[0])
-					findingStore
-						.create([])
-						.then((finding) =>
-							openFindingModal(
-								finding,
-								true,
-							),
-						);
+					newRecord(modalStore, "finding");
 				else if (
 					$modalStore[0].component ===
-					"Finding"
+					"LogbookRecord"
 				)
-					modalStore.close();
+					logbookStore.requestClose();
 			},
 		},
 		{
@@ -218,19 +194,12 @@
 			icon: BookCheck,
 			handler: () => {
 				if (!$modalStore[0])
-					testCaseStore
-						.create([])
-						.then((testCase) =>
-							openTestCaseModal(
-								testCase,
-								true,
-							),
-						);
+					newRecord(modalStore, "testCase");
 				else if (
 					$modalStore[0].component ===
-					"TestCase"
+					"LogbookRecord"
 				)
-					modalStore.close();
+					logbookStore.requestClose();
 			},
 		},
 		{
@@ -334,25 +303,13 @@
 								if (
 									!$modalStore[0]
 								)
-									findingStore
-										.create(
-											[],
-										)
-										.then(
-											(
-												finding,
-											) =>
-												openFindingModal(
-													finding,
-													true,
-												),
-										);
+									newRecord(modalStore, "finding");
 								else if (
 									$modalStore[0]
 										.component ===
-									"Finding"
+									"LogbookRecord"
 								)
-									modalStore.close();
+									logbookStore.requestClose();
 							}}
 							class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
 						>
@@ -366,25 +323,13 @@
 								if (
 									!$modalStore[0]
 								)
-									testCaseStore
-										.create(
-											[],
-										)
-										.then(
-											(
-												testCase,
-											) =>
-												openTestCaseModal(
-													testCase,
-													true,
-												),
-										);
+									newRecord(modalStore, "testCase");
 								else if (
 									$modalStore[0]
 										.component ===
-									"TestCase"
+									"LogbookRecord"
 								)
-									modalStore.close();
+									logbookStore.requestClose();
 							}}
 							class="btn btn-sm {$modeCurrent ? 'variant-ghost-tertiary ring-0 shadow-none' : 'variant-filled-tertiary'}"
 						>
