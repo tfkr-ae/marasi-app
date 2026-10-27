@@ -22,6 +22,7 @@ export {
   linkedOf,
   nextOf,
   openRecordOf,
+  reportOf,
   severityCountsOf,
   testCaseCountsOf,
 } from "./createLogbookStore.js";

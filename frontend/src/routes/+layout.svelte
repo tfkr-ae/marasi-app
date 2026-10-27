@@ -106,6 +106,7 @@
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
 	import UpstreamProxyCAModal from "../lib/components/UpstreamProxyCAModal.svelte";
+	import ExportReview from "../lib/logbook/ExportReview.svelte";
 	import {
 		updateState,
 		refreshUpdateState,
@@ -209,6 +210,7 @@
 		Update: { ref: UpdateModal },
 		UpstreamProxy: { ref: UpstreamProxyModal },
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
+		ExportReport: { ref: ExportReview },
 	};
 	// Startup opens the scratchpad, and carries on once the first project
 	// has opened and loaded: the scratchpad, or one picked on the opening

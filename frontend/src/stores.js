@@ -65,7 +65,7 @@ export const reportMetadata = writable({
   end: new Date().toLocaleDateString("en-CA"),
   created_at: new Date().toISOString(),
   truncate_length: 0,
-  custom_properties: {},
+  custom_properties: { include_test_cases: true },
 });
 
 // ---------------------------
@@ -227,7 +227,7 @@ export async function openProject() {
     end: new Date().toLocaleDateString("en-CA"),
     created_at: new Date().toISOString(),
     truncate_length: 0,
-    custom_properties: {},
+    custom_properties: { include_test_cases: true },
   });
   compassCode.set("");
   testerInput.set("");
