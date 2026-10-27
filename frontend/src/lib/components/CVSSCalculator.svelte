@@ -1,222 +1,176 @@
 <script>
-    import { createEventDispatcher } from "svelte";
-    import { CVSS31 } from "@pandatix/js-cvss";
-    import { modeCurrent } from "@skeletonlabs/skeleton";
+	// The CVSS 3.1 calculator: a score row over the eight base metrics.
+	// The logic is in lib/cvss.js; callers bind the vector and score, and
+	// set the severity from on:change (or severityFromScore) as they need.
+	import { createEventDispatcher, onDestroy } from "svelte";
+	import { modeCurrent } from "@skeletonlabs/skeleton";
+	import { ChevronDown, ChevronRight, ClipboardPaste, Copy, X } from "lucide-svelte";
+	import { primaryVariant } from "../launchpad/format.js";
+	import { interceptModalEscape } from "../overlayIsolation.js";
+	import { CVSS_DEFAULTS, CVSS_GROUPS, parseCvss, pasteCvss, pickCvss, severityFromScore } from "../cvss.js";
 
-    const dispatch = createEventDispatcher();
+	/** The CVSS 3.1 vector, or "" when unscored. */
+	export let vector = "";
+	/** The base score the vector gives, or null. Set here; bind to read it. */
+	export let score = null;
+	/** Whether the metrics show under the score row. */
+	export let open = true;
 
-    export let vector = "";
-    export let score = null;
+	const dispatch = createEventDispatcher();
+	const SEVERITY_CLASS = {
+		Critical: "bg-red-600 text-white",
+		High: "bg-orange-500 text-white",
+		Medium: "bg-yellow-500 text-black",
+		Low: "bg-blue-500 text-white",
+		Informational: "bg-green-500 text-white",
+	};
 
-    let selections = {
-        AV: "N",
-        AC: "L",
-        PR: "N",
-        UI: "N",
-        S: "U",
-        C: "H",
-        I: "H",
-        A: "H",
-    };
+	let pasting = false;
+	let pasted = "";
+	let pasteError = "";
+	let pasteInput;
 
-    const leftMetrics = [
-        {
-            name: "Attack Vector (AV)",
-            key: "AV",
-            options: [
-                { L: "Network", v: "N" },
-                { L: "Adjacent", v: "A" },
-                { L: "Local", v: "L" },
-                { L: "Physical", v: "P" },
-            ],
-        },
-        {
-            name: "Attack Complexity (AC)",
-            key: "AC",
-            options: [
-                { L: "Low", v: "L" },
-                { L: "High", v: "H" },
-            ],
-        },
-        {
-            name: "Privileges Required (PR)",
-            key: "PR",
-            options: [
-                { L: "None", v: "N" },
-                { L: "Low", v: "L" },
-                { L: "High", v: "H" },
-            ],
-        },
-        {
-            name: "User Interaction (UI)",
-            key: "UI",
-            options: [
-                { L: "None", v: "N" },
-                { L: "Required", v: "R" },
-            ],
-        },
-    ];
+	// In a modal, Escape closes the paste box, not the modal.
+	let releaseEscape = null;
+	$: if (pasting && !releaseEscape) releaseEscape = interceptModalEscape(() => (pasting = false));
+	$: if (!pasting && releaseEscape) {
+		releaseEscape();
+		releaseEscape = null;
+	}
+	onDestroy(() => releaseEscape?.());
 
-    const rightMetrics = [
-        {
-            name: "Scope (S)",
-            key: "S",
-            options: [
-                { L: "Unchanged", v: "U" },
-                { L: "Changed", v: "C" },
-            ],
-        },
-        {
-            name: "Confidentiality (C)",
-            key: "C",
-            options: [
-                { L: "None", v: "N" },
-                { L: "Low", v: "L" },
-                { L: "High", v: "H" },
-            ],
-        },
-        {
-            name: "Integrity (I)",
-            key: "I",
-            options: [
-                { L: "None", v: "N" },
-                { L: "Low", v: "L" },
-                { L: "High", v: "H" },
-            ],
-        },
-        {
-            name: "Availability (A)",
-            key: "A",
-            options: [
-                { L: "None", v: "N" },
-                { L: "Low", v: "L" },
-                { L: "High", v: "H" },
-            ],
-        },
-    ];
+	$: primary = primaryVariant($modeCurrent);
+	$: parsed = parseCvss(vector);
+	$: score = parsed.score;
+	$: selections = parsed.selections;
+	$: scored = !!vector && score !== null;
+	$: severity = scored ? severityFromScore(score) : null;
 
-    $: {
-        if (vector && vector.includes("CVSS:3.1")) {
-            try {
-                const parsed = new CVSS31(vector);
+	function set(next) {
+		vector = next;
+		const nextScore = parseCvss(next).score;
+		dispatch("change", {
+			vector: next,
+			score: nextScore,
+			severity: next ? severityFromScore(nextScore) : null,
+		});
+	}
 
-                if (parsed && parsed._metrics) {
-                    const m = parsed._metrics;
-                    selections = {
-                        AV: m.AV || "N",
-                        AC: m.AC || "L",
-                        PR: m.PR || "N",
-                        UI: m.UI || "N",
-                        S: m.S || "U",
-                        C: m.C || "H",
-                        I: m.I || "H",
-                        A: m.A || "H",
-                    };
-                }
+	function openPaste() {
+		pasting = !pasting;
+		pasted = "";
+		pasteError = "";
+		if (pasting) setTimeout(() => pasteInput?.focus());
+	}
 
-                const calculatedScore = parsed.BaseScore();
-                score = isNaN(calculatedScore) ? null : calculatedScore;
-            } catch (err) {
-                score = null;
-            }
-        } else {
-            score = null;
-        }
-    }
+	function applyPaste() {
+		const result = pasteCvss(pasted);
+		if (result.error) {
+			pasteError = result.error;
+			pasteInput?.focus();
+			return;
+		}
+		set(result.vector);
+		pasting = false;
+		pasted = "";
+		pasteError = "";
+	}
 
-    function handleSelection(key, val) {
-        selections[key] = val;
-        vector = `CVSS:3.1/AV:${selections.AV}/AC:${selections.AC}/PR:${selections.PR}/UI:${selections.UI}/S:${selections.S}/C:${selections.C}/I:${selections.I}/A:${selections.A}`;
-        dispatch("update", { vector, score });
-    }
+	const iconButton = "btn-icon btn-icon-sm h-6 w-6 flex-none rounded-none opacity-60 hover:opacity-100 hover:bg-surface-500/15";
 </script>
 
-<div class="card overflow-hidden border border-surface-500/30 bg-white dark:bg-surface-800 text-surface-900-50-token">
-    <header
-        class="bg-surface-100 dark:bg-surface-700 px-3 py-2 flex justify-between items-center text-surface-900 dark:text-white"
-    >
-        <span
-            class="text-sm font-bold uppercase tracking-widest text-primary-600 dark:text-primary-400"
-            >Base Score Metrics</span
-        >
-        <code class="text-xs p-1 rounded font-mono {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-soft-primary'}">
-            {vector || "No vector set"}
-        </code>
-    </header>
+<div class="border border-surface-500/30 bg-white dark:bg-surface-800" data-testid="cvss-calculator">
+	<div class="flex items-center gap-1 pr-1">
+		<button
+			type="button"
+			class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+			title={open ? "Hide metrics" : "Show metrics"}
+			aria-expanded={open}
+			on:click={() => (open = !open)}
+		>
+			<span class="flex-none opacity-60">
+				{#if open}<ChevronDown size={13} />{:else}<ChevronRight size={13} />{/if}
+			</span>
+			{#if scored}
+				<span class="flex-none text-base font-bold leading-none tabular-nums">{score.toFixed(1)}</span>
+				<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_CLASS[severity] ?? 'variant-soft'}"
+					>{severity}</span
+				>
+				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-[11px] opacity-80">{vector.replace("CVSS:3.1/", "")}</code>
+			{:else if vector}
+				<span class="badge flex-none variant-filled-error rounded-sm px-1.5 py-0.5 text-[10px] font-bold">Invalid</span>
+				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-[11px] opacity-80">{vector}</code>
+			{:else}
+				<span class="min-w-0 flex-1 truncate text-xs opacity-60">Not scored</span>
+			{/if}
+		</button>
+		{#if vector}
+			<button type="button" class={iconButton} title="Copy vector" on:click={() => navigator.clipboard?.writeText(vector)}>
+				<Copy size={12} />
+			</button>
+		{/if}
+		<button type="button" class={iconButton} title="Paste vector" aria-pressed={pasting} on:click={openPaste}>
+			<ClipboardPaste size={12} />
+		</button>
+		{#if vector}
+			<button type="button" class={iconButton} title="Clear score" on:click={() => set("")}>
+				<X size={12} />
+			</button>
+		{/if}
+	</div>
 
-    <div
-        class="p-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 bg-white dark:bg-surface-50/5 w-full"
-    >
-        <div class="space-y-4 w-full">
-            {#each leftMetrics as m}
-                <div class="space-y-2">
-                    <p class="font-bold text-sm text-surface-800 dark:text-secondary-500">
-                        {m.name}
-                    </p>
-                    <div class="flex flex-wrap gap-2 w-full">
-                        {#each m.options as opt}
-                            <button
-                                type="button"
-                                class="btn btn-sm grow {selections[
-                                    m.key
-                                 ] === opt.v
-                                     ? $modeCurrent
-                                       ? 'variant-ghost-primary ring-0 shadow-none'
-                                       : 'variant-filled-primary'
-                                    : $modeCurrent
-                                      ? 'bg-surface-100 text-surface-900 hover:bg-surface-400/25 hover:!filter-none border-0 ring-0'
-                                      : 'variant-soft-surface'}"
-                                on:click={() => handleSelection(m.key, opt.v)}
-                            >
-                                {opt.L} ({opt.v})
-                            </button>
-                        {/each}
-                    </div>
-                </div>
-            {/each}
-        </div>
+	{#if pasting}
+		<form class="flex items-center gap-1 border-t border-surface-500/30 px-2 py-1.5" on:submit|preventDefault={applyPaste}>
+			<input
+				bind:this={pasteInput}
+				class="input h-7 min-w-0 flex-1 rounded-none border-0 bg-surface-100 py-0 font-mono text-[11px] ring-0 focus:ring-0 dark:bg-surface-700"
+				placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+				spellcheck="false"
+				bind:value={pasted}
+				on:input={() => (pasteError = "")}
+				on:keydown={(e) => {
+					if (e.key === "Escape") {
+						e.stopPropagation();
+						pasting = false;
+					}
+				}}
+			/>
+			<button type="submit" class="btn btn-sm {primary} rounded-none py-0.5">Apply</button>
+		</form>
+		{#if pasteError}
+			<p class="px-2 pb-1.5 text-[11px] text-error-500">{pasteError}</p>
+		{/if}
+	{/if}
 
-        <div class="space-y-4 w-full">
-            {#each rightMetrics as m}
-                <div class="space-y-2">
-                    <p class="font-bold text-sm text-surface-800 dark:text-secondary-500">
-                        {m.name}
-                    </p>
-                    <div class="flex flex-wrap gap-2 w-full">
-                        {#each m.options as opt}
-                            <button
-                                type="button"
-                                class="btn btn-sm grow {selections[
-                                    m.key
-                                 ] === opt.v
-                                     ? $modeCurrent
-                                       ? 'variant-ghost-primary ring-0 shadow-none'
-                                       : 'variant-filled-primary'
-                                    : $modeCurrent
-                                      ? 'bg-surface-100 text-surface-900 hover:bg-surface-400/25 hover:!filter-none border-0 ring-0'
-                                      : 'variant-soft-surface'}"
-                                on:click={() => handleSelection(m.key, opt.v)}
-                            >
-                                {opt.L} ({opt.v})
-                            </button>
-                        {/each}
-                    </div>
-                </div>
-            {/each}
-        </div>
-    </div>
-
-    <footer class="p-3 border-t border-surface-500/20 bg-surface-100 dark:bg-surface-800/30">
-        <label class="label">
-            <span class="text-xs opacity-60 mb-1 block uppercase font-bold"
-                >Manual Vector Override / Paste</span
-            >
-            <input
-                class="input h-8 py-1 font-mono text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
-                type="text"
-                bind:value={vector}
-                placeholder="e.g. CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
-            />
-        </label>
-    </footer>
+	{#if open}
+		<div class="grid gap-x-4 gap-y-3 border-t border-surface-500/30 p-2 md:grid-cols-2">
+			{#each CVSS_GROUPS as group}
+				<div class="space-y-1">
+					<div class="text-[10px] font-bold uppercase tracking-wider opacity-50">{group.name}</div>
+					{#each group.metrics as m}
+						<div class="flex items-center gap-2">
+							<span class="w-28 flex-none truncate text-[11px] opacity-80" title="{m.name} ({m.key})">{m.name}</span>
+							<div class="flex min-w-0 flex-1 gap-px" role="group" aria-label={m.name}>
+								{#each m.options as [value, label]}
+									{@const chosen = !!vector && selections[m.key] === value}
+									{@const preset = !vector && CVSS_DEFAULTS[m.key] === value}
+									<button
+										type="button"
+										class="min-w-0 flex-1 truncate rounded-none px-1 py-1 text-[11px] transition-colors {chosen
+											? primary
+											: preset
+												? 'bg-primary-500/10 hover:bg-primary-500/20 dark:bg-primary-500/20 dark:hover:bg-primary-500/30'
+												: 'bg-surface-100 hover:bg-surface-200 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+										title="{m.name}: {label} ({m.key}:{value})"
+										aria-pressed={chosen}
+										on:click={() => set(pickCvss(vector, m.key, value))}>{label}</button
+									>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/each}
+		</div>
+	{/if}
 </div>
