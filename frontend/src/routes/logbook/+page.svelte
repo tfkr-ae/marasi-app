@@ -7,12 +7,13 @@
 	// The Logbook page, in the Ledger's frame: the dock holds the outline
 	// and the create and status controls, the toolbar filters, and the
 	// workspace shows the summary, or a record in its place. Back and Esc
-	// return to the list, Next and N move through it. A record opens on its
-	// first missing item (or the one asked for), filled in place; moving
-	// away from one with input asks first. Edit opens the modal.
+	// return to the list, Next and N (logbook.next-record) move through it.
+	// A record opens on its first missing item (or the one asked for),
+	// filled in place; moving away from one with input asks first. Edit
+	// opens the modal.
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { writable } from "svelte/store";
-	import { BookCheck, Search, ShieldAlert, SquareArrowRightIcon, ToggleLeftIcon } from "lucide-svelte";
+	import { ArrowRight, BookCheck, Search, ShieldAlert, SquareArrowRightIcon } from "lucide-svelte";
 	import Dock from "../../lib/dock/Dock.svelte";
 	import { LEDGER_DOCK } from "../../lib/dock/dock.js";
 	import { primaryVariant } from "../../lib/launchpad/format.js";
@@ -25,7 +26,8 @@
 	import { logbookStore, nextOf, openRecordOf } from "../../stores/logbookStore";
 	import { RECORD_MODAL, editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
-	import { useMenuActions } from "../../lib/keybindings/app.js";
+	import { menuDispatcher, useMenuActions } from "../../lib/keybindings/app.js";
+	import { shortcutLabel } from "../../lib/keybindings/keys.js";
 
 	const modalStore = getModalStore();
 	const dockState = writable(savedDock ?? { width: LEDGER_DOCK.default, collapsed: false });
@@ -40,7 +42,10 @@
 
 	$: opened = openRecordOf($logbookStore);
 	$: next = nextOf($logbookStore);
-	$: nextTitle = $logbookStore.filters.status === "all" ? "Next in progress (N)" : "Next (N)";
+	// Next's tooltip names the live key, since N can be remapped.
+	$: nextKey = shortcutLabel($menuDispatcher, "logbook.next-record");
+	$: nextLabel = $logbookStore.filters.status === "all" ? "Next in progress" : "Next";
+	$: nextTitle = nextKey ? `${nextLabel} (${nextKey})` : nextLabel;
 
 	// Opens the record in the workspace, in place of the list.
 	function openRecord(kind, id) {
@@ -71,29 +76,30 @@
 		});
 	}
 
-	// N opens the next record and Esc goes back to the list, unless a modal,
-	// a field or an editor has the key. Whether a modal was open is noted
-	// before the key reaches it, since its own Esc closes it first.
+	// Esc goes back to the list, unless a modal, a field or an editor has the
+	// key. Esc is reserved for the page (gate.js), so it is handled here, not
+	// in the menu. Whether a modal was open is noted before the key reaches
+	// it, since its own Esc closes it first.
 	let modalHadKey = false;
 	const noteModal = () => (modalHadKey = !!$modalStore[0]);
 	function onWindowKeydown(event) {
 		if (!opened || modalHadKey || $modalStore[0] || event.metaKey || event.ctrlKey || event.altKey) return;
-		// The leave prompt: Esc keeps editing, and N waits.
+		if (event.key !== "Escape") return;
+		// The leave prompt: Esc keeps editing.
 		if ($logbookStore.fix?.leaving) {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				logbookStore.keepFix();
-			}
+			event.preventDefault();
+			logbookStore.keepFix();
 			return;
 		}
 		if (event.target?.closest?.("input, textarea, select, [contenteditable='true'], .cm-editor")) return;
-		if (event.key === "Escape") {
-			event.preventDefault();
-			logbookStore.close();
-		} else if (event.key === "n") {
-			event.preventDefault();
-			logbookStore.openNext();
-		}
+		event.preventDefault();
+		logbookStore.close();
+	}
+
+	// N by default (logbook.next-record); it waits while the leave prompt is up.
+	function nextRecord() {
+		if (!opened || $modalStore[0] || $logbookStore.fix?.leaving) return;
+		logbookStore.openNext();
 	}
 
 	function newFinding() {
@@ -113,13 +119,6 @@
 
 	const logbookMenu = [
 		{
-			actionId: "logbook.toggle-settings",
-			icon: ToggleLeftIcon,
-			handler: () => {
-				if (!$modalStore[0]) dock?.toggle();
-			},
-		},
-		{
 			actionId: "logbook.focus-search",
 			icon: Search,
 			handler: () => {
@@ -131,6 +130,7 @@
 		{ actionId: "logbook.create-finding", icon: ShieldAlert, handler: newFinding },
 		{ actionId: "logbook.create-test-case", icon: BookCheck, handler: newTestCase },
 		{ actionId: "logbook.export-report", icon: SquareArrowRightIcon, handler: openExport },
+		{ actionId: "logbook.next-record", icon: ArrowRight, handler: nextRecord },
 	];
 	useMenuActions(logbookMenu);
 </script>
