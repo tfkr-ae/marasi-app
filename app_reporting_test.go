@@ -48,6 +48,20 @@ func TestAppReportPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("should not read the test cases when include_test_cases is false", func(t *testing.T) {
+		app := newLogbookApp(t)
+		repo := &countingReportingRepo{ReportingRepository: app.Proxy.ReportingRepo}
+		app.Proxy.ReportingRepo = repo
+
+		if _, err := app.buildReportPayload(reportMetadata(map[string]any{"include_test_cases": false})); err != nil {
+			t.Fatalf("building payload: %v", err)
+		}
+
+		if repo.testCaseLists != 0 {
+			t.Fatalf("wanted: no ListTestCases call\ngot: %d", repo.testCaseLists)
+		}
+	})
+
 	t.Run("should drop the default template's Test Cases section when include_test_cases is false", func(t *testing.T) {
 		app := newLogbookApp(t)
 
@@ -88,6 +102,17 @@ func newLogbookApp(t *testing.T) *App {
 		t.Fatalf("saving finding: %v", err)
 	}
 	return app
+}
+
+// countingReportingRepo counts the ListTestCases calls on the repository it wraps.
+type countingReportingRepo struct {
+	domain.ReportingRepository
+	testCaseLists int
+}
+
+func (r *countingReportingRepo) ListTestCases() ([]*domain.TestCase, error) {
+	r.testCaseLists++
+	return r.ReportingRepository.ListTestCases()
 }
 
 func reportMetadata(custom map[string]any) domain.ReportMetadata {
