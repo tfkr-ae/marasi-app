@@ -61,6 +61,10 @@ export const logbookStore = createLogbookStore({
   saveArtifactToFinding: upload(SaveArtifactToFinding),
   saveArtifactToTestCase: upload(SaveArtifactToTestCase),
   deleteArtifact: (id) => DeleteArtifact(id),
+  // Through the older stores, which call DeleteFinding and DeleteTestCase
+  // and drop the record from the Dashboard and the Ledger too.
+  deleteFinding: (id) => findingStore.delete(id),
+  deleteTestCase: (id) => testCaseStore.delete(id),
 });
 
 // The Ledger and the request view still write through findingStore and

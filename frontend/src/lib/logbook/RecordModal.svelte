@@ -57,7 +57,9 @@
 		const result = await logbookStore.save();
 		if (result.ok) {
 			const Noun = result.kind === "finding" ? "Finding" : "Test case";
-			toastStore.trigger({ message: result.created ? `${Noun} created` : `${Noun} saved` });
+			// Done says more than saved, as the inline fix's toast does.
+			const message = result.done ? `${Noun} done` : result.created ? `${Noun} created` : `${Noun} saved`;
+			toastStore.trigger({ message, background: "variant-filled-success" });
 			refreshOtherLists();
 		} else if (result.reason === "title") {
 			logbookStore.keepEditing();

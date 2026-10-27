@@ -744,6 +744,8 @@ export function createLogbookStore(api) {
       link: (id, request) => api.linkRequestToFinding(id, request),
       unlink: (id, request) => api.unlinkRequestFromFinding(id, request),
       upload: (id, file) => api.saveArtifactToFinding(id, file),
+      deleteArtifact: (id) => api.deleteArtifact(id),
+      delete: (id) => api.deleteFinding(id),
     },
     testCase: {
       create: (draft) => api.createDraftTestCase(draft.Requests),
@@ -751,15 +753,44 @@ export function createLogbookStore(api) {
       link: (id, request) => api.linkRequestToTestCase(id, request),
       unlink: (id, request) => api.unlinkRequestFromTestCase(id, request),
       upload: (id, file) => api.saveArtifactToTestCase(id, file),
+      deleteArtifact: (id) => api.deleteArtifact(id),
+      delete: (id) => api.deleteTestCase(id),
     },
   };
+
+  /**
+   * Deletes the "finding" or "testCase" with `id`. On success it leaves the
+   * list, its fix is dropped and, when open, the Logbook goes back to the
+   * list: { ok: true }. A failed call changes nothing: { ok: false, error }.
+   */
+  async function deleteRecord(kind, id) {
+    try {
+      await BINDINGS[kind].delete(id);
+    } catch (error) {
+      return { ok: false, error };
+    }
+    const fixed = get(store).fix?.kind === kind && get(store).fix?.id === id;
+    if (fixed) pending = null;
+    store.update((state) => {
+      const list = kind === "finding" ? "findings" : "testCases";
+      const wasOpen = state.open?.kind === kind && state.open?.id === id;
+      return {
+        ...state,
+        [list]: state[list].filter((r) => r.ID !== id),
+        open: wasOpen ? null : state.open,
+        fix: fixed ? null : state.fix,
+      };
+    });
+    return { ok: true };
+  }
 
   /**
    * Writes the draft with the existing bindings, in order. A new record:
    * create (with its requests and test case), save the fields, upload the
    * artifacts. A record: save the fields, link and unlink each changed
    * request, upload and delete each changed artifact. Resolves to
-   * { ok: true, kind, id, created } and closes the session; { ok: false,
+   * { ok: true, kind, id, created, done } and closes the session, done true
+   * when the save made the record Done; { ok: false,
    * reason: "title" } with an empty title, making no calls; or { ok: false,
    * error } when a call fails, keeping the session with what is still
    * unsaved, so Save again carries on from there.
@@ -809,7 +840,7 @@ export function createLogbookStore(api) {
         );
       }
       for (const id of missingFrom(artifactIds(original), artifactIds(draft))) {
-        await api.deleteArtifact(id);
+        await calls.deleteArtifact(id);
         advance({ Artifacts: original.Artifacts.filter((a) => a.ID !== id) });
       }
     } catch (error) {
@@ -818,7 +849,8 @@ export function createLogbookStore(api) {
     }
     keep(kind, original);
     store.update((state) => ({ ...state, [slot]: null }));
-    return { ok: true, kind, id: original.ID, created: session.isNew };
+    const done = completenessOf(kind, original).status === "done" && completenessOf(kind, session.original).status !== "done";
+    return { ok: true, kind, id: original.ID, created: session.isNew, done };
   }
 
   // Inline fixes: one item of the open record, staged in the "fix" slot.
@@ -926,6 +958,11 @@ export function createLogbookStore(api) {
     cancelFix,
     keepFix,
     discardFix,
+    // Runs a move away from the open record, such as Edit, unless an
+    // inline fix has unsaved input; then the fix asks first. Returns
+    // whether it ran.
+    guard: guarded,
+    deleteRecord,
     // Evidence reads: a linked pair in full (GetRawDetails), an artifact
     // with its bytes (GetArtifact), and saving an artifact through the
     // native Save dialog (DownloadArtifact, false when cancelled).

@@ -11,25 +11,25 @@
 	// A record opens on its first missing item (or the one asked for),
 	// filled in place; moving away from one with input asks first. Edit
 	// opens the modal.
-	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { writable } from "svelte/store";
 	import { ArrowRight, BookCheck, Search, ShieldAlert, SquareArrowRightIcon } from "lucide-svelte";
 	import Dock from "../../lib/dock/Dock.svelte";
 	import { LEDGER_DOCK } from "../../lib/dock/dock.js";
-	import { primaryVariant } from "../../lib/launchpad/format.js";
+	import { primaryVariant, tertiaryVariant } from "../../lib/launchpad/format.js";
 	import LogbookOutline from "../../lib/logbook/LogbookOutline.svelte";
 	import LogbookRecord from "../../lib/logbook/LogbookRecord.svelte";
 	import LogbookSummary from "../../lib/logbook/LogbookSummary.svelte";
 	import LogbookToolbar from "../../lib/logbook/LogbookToolbar.svelte";
-	import { findingStore } from "../../stores/findingStore";
-	import { testCaseStore } from "../../stores/testCaseStore";
 	import { logbookStore, nextOf, openRecordOf } from "../../stores/logbookStore";
-	import { RECORD_MODAL, editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
+	import { editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
+	import { toastError } from "../../lib/toasts.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { menuDispatcher, useMenuActions } from "../../lib/keybindings/app.js";
 	import { shortcutLabel } from "../../lib/keybindings/keys.js";
 
 	const modalStore = getModalStore();
+	const toastStore = getToastStore();
 	const dockState = writable(savedDock ?? { width: LEDGER_DOCK.default, collapsed: false });
 	$: savedDock = $dockState;
 
@@ -37,7 +37,7 @@
 	let searchInput;
 
 	$: primary = primaryVariant($modeCurrent);
-	$: tertiary = $modeCurrent ? "variant-ghost-tertiary ring-0 shadow-none" : "variant-filled-tertiary";
+	$: tertiary = tertiaryVariant($modeCurrent);
 	$: empty = $logbookStore.findings.length === 0 && $logbookStore.testCases.length === 0;
 
 	$: opened = openRecordOf($logbookStore);
@@ -53,9 +53,12 @@
 		logbookStore.open(kind, id);
 	}
 
-	// Edit opens the record in the modal, over its edit session.
+	// Edit opens the record in the modal, over its edit session. An inline
+	// fix with input asks first (Keep editing or Discard).
 	function editOpened() {
-		if (opened) editRecord(modalStore, opened.kind, opened.record.ID);
+		if (!opened || $modalStore[0]) return;
+		const { kind, record } = opened;
+		logbookStore.guard(() => editRecord(modalStore, kind, record.ID));
 	}
 
 	function deleteRecord() {
@@ -67,11 +70,11 @@
 			title: finding ? "Delete finding" : "Delete test case",
 			body: `Delete "${record.Title}"?`,
 			buttonTextConfirm: "Delete",
-			response: (yes) => {
+			// The record closes only once it is gone; a failure keeps it open.
+			response: async (yes) => {
 				if (!yes) return;
-				logbookStore.cancelFix();
-				logbookStore.close();
-				(finding ? findingStore : testCaseStore).delete(record.ID);
+				const result = await logbookStore.deleteRecord(kind, record.ID);
+				if (!result.ok) toastError(toastStore, "Not deleted", result.error);
 			},
 		});
 	}
@@ -102,15 +105,9 @@
 		logbookStore.openNext();
 	}
 
-	function newFinding() {
-		if (!$modalStore[0]) newRecord(modalStore, "finding");
-		else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
-	}
-
-	function newTestCase() {
-		if (!$modalStore[0]) newRecord(modalStore, "testCase");
-		else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
-	}
+	// newRecord does nothing while a modal is open.
+	const newFinding = () => newRecord(modalStore, "finding");
+	const newTestCase = () => newRecord(modalStore, "testCase");
 
 	function openExport() {
 		if ($modalStore[0] || empty) return;

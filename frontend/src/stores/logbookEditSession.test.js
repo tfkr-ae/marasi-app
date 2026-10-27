@@ -82,6 +82,8 @@ function fakeApi({ findings = [], testCases = [], fail = null } = {}) {
       Size: f.size,
     })),
     deleteArtifact: call("deleteArtifact"),
+    deleteFinding: call("deleteFinding"),
+    deleteTestCase: call("deleteTestCase"),
   };
 }
 
@@ -223,7 +225,7 @@ test("Save on a new finding creates it with the pre-filled IDs, then saves the f
   store.addArtifacts([file("dump.txt")]);
   const result = await store.save();
 
-  assert.deepEqual(result, { ok: true, kind: "finding", id: "new-f", created: true });
+  assert.deepEqual(result, { ok: true, kind: "finding", id: "new-f", created: true, done: false });
   assert.deepEqual(api.names(), ["createDraftFinding", "saveFinding", "saveArtifactToFinding"]);
   assert.deepEqual(api.calls[0], ["createDraftFinding", ["r1", "r2"], "t1"]);
   const saved = api.calls[1][1];
@@ -264,7 +266,7 @@ test("Save on a record saves the fields, then links and unlinks, then uploads an
   store.removeArtifact("a1");
   const result = await store.save();
 
-  assert.deepEqual(result, { ok: true, kind: "finding", id: "f1", created: false });
+  assert.deepEqual(result, { ok: true, kind: "finding", id: "f1", created: false, done: false });
   assert.deepEqual(api.calls.map(([name, ...args]) => [name, ...args.slice(1).map((a) => a?.name ?? a)]), [
     ["saveFinding"],
     ["linkRequestToFinding", "r3"],
@@ -348,4 +350,50 @@ test("Save again after a failure replays only what is still unsaved", async () =
   assert.equal(result.ok, true);
   assert.deepEqual(api.names(), ["saveArtifactToFinding"], "no second create");
   assert.equal(api.calls[0][1], "new-f");
+});
+
+test("Save says when it made the record Done, and only then", async () => {
+  const { store } = await loaded({ findings: [finding("f1", { TreatmentPlan: "" }), finding("f2")] });
+  store.edit("finding", "f1");
+  store.updateDraft({ TreatmentPlan: "Patch" });
+  assert.equal((await store.save()).done, true);
+
+  store.edit("finding", "f2");
+  store.updateDraft({ Title: "Renamed" });
+  assert.equal((await store.save()).done, false, "it was Done already");
+
+  store.startNew("testCase");
+  store.updateDraft({ Title: "Login", Note: "Checked" });
+  assert.equal((await store.save()).done, true, "a new record saved complete");
+});
+
+test("Delete removes the open record and goes back to the list", async () => {
+  const { api, store } = await loaded({ findings: [finding("f1"), finding("f2")], testCases: [testCase("t1")] });
+  store.open("finding", "f1");
+  const result = await store.deleteRecord("finding", "f1");
+  assert.equal(result.ok, true);
+  assert.deepEqual(api.calls, [["deleteFinding", "f1"]]);
+  const state = get(store);
+  assert.equal(state.open, null);
+  assert.equal(state.fix, null);
+  assert.deepEqual(state.findings.map((f) => f.ID), ["f2"]);
+
+  store.open("testCase", "t1");
+  await store.deleteRecord("testCase", "t1");
+  assert.deepEqual(api.calls.at(-1), ["deleteTestCase", "t1"]);
+  assert.deepEqual(get(store).testCases, []);
+});
+
+test("a failed Delete keeps the record and keeps it open", async () => {
+  const api = fakeApi({ findings: [finding("f1", { WriteUp: "" })], fail: "deleteFinding" });
+  const store = createLogbookStore(api);
+  await store.populate();
+  store.open("finding", "f1");
+  const result = await store.deleteRecord("finding", "f1");
+  assert.equal(result.ok, false);
+  assert.match(String(result.error), /reporting_failed/);
+  const state = get(store);
+  assert.deepEqual(state.open, { kind: "finding", id: "f1", focus: null });
+  assert.equal(state.fix.item, "WriteUp");
+  assert.deepEqual(state.findings.map((f) => f.ID), ["f1"]);
 });

@@ -169,6 +169,26 @@ test("an unsaved fix asks before another record, Back, Next or a filter change; 
   }
 });
 
+test("Edit with an unsaved fix asks first; Discard drops the fix, then edits", async () => {
+  const { store } = await loaded({ findings: [finding("f1")] });
+  store.open("finding", "f1");
+  store.updateFix({ WriteUp: "typing" });
+  let edits = 0;
+  const editing = () => edits++;
+  assert.equal(store.guard(editing), false);
+  assert.equal(edits, 0);
+  assert.equal(fix(store).leaving, true);
+  store.keepFix();
+  assert.equal(fix(store).draft.WriteUp, "typing");
+  store.guard(editing);
+  store.discardFix();
+  assert.equal(edits, 1);
+  assert.equal(fix(store), null);
+  assert.equal(get(store).open.id, "f1", "the record stays open behind the modal");
+  assert.equal(store.guard(editing), true, "with no input, Edit goes at once");
+  assert.equal(edits, 2);
+});
+
 test("a fix with no input lets the tester move away at once", async () => {
   const { store } = await loaded({ findings: [finding("f1"), finding("f2")] });
   store.open("finding", "f1");

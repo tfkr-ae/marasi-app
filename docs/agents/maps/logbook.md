@@ -4,20 +4,20 @@ Which files work together on the Logbook page, how a finding or test case is rea
 
 ## Files
 
-- `frontend/src/routes/logbook/+page.svelte` wires everything together: the dock, the toolbar, the workspace (the summary, or the open record in its place), Delete's confirmation, the page-local Esc, and `logbookMenu` for `useMenuActions` and ⌘K.
-- `frontend/src/stores/createLogbookStore.js` is the one seam for the page and the modal. It holds the records, the filters and grouping, the open record, the edit session (`session`) and the inline fix (`fix`). Its selectors are pure functions of the state: `completenessOf` (from `ITEMS`, the required and optional items per kind), `filteredOf`, `groupsOf`, `nextOf`, `openRecordOf`, `linkedOf`, `reportOf`, `changesOf`, `isDirty`. It takes its API as an argument; `frontend/src/stores/logbookStore.js` maps that API to Wails bindings. Tests: `logbookStore.test.js` (list model), `logbookEditSession.test.js`, `logbookInlineFix.test.js`.
+- `frontend/src/routes/logbook/+page.svelte` wires everything together: the dock, the toolbar, the workspace (the summary, or the open record in its place), Edit (behind the leave prompt), Delete's confirmation, the page-local Esc, and `logbookMenu` for `useMenuActions` and ⌘K.
+- `frontend/src/stores/createLogbookStore.js` is the one seam for the page and the modal. It holds the records, the filters and grouping, the open record, the edit session (`session`) and the inline fix (`fix`). Its selectors are pure functions of the state: `completenessOf` (from `ITEMS`, the required and optional items per kind), `filteredOf`, `groupsOf`, `nextOf`, `openRecordOf`, `linkedOf`, `reportOf`, `changesOf`, `isDirty`. Every write goes through its per-kind `BINDINGS` table. It takes its API as an argument; `frontend/src/stores/logbookStore.js` maps that API to Wails bindings. Tests: `logbookStore.test.js` (list model), `logbookEditSession.test.js`, `logbookInlineFix.test.js` (with Delete in the edit session tests).
 - `frontend/src/lib/logbook/`:
   - the page: `LogbookToolbar` (search, kind toggles, Severity/Category/Tags menus on the Ledger's `ToolbarMenu`, Export), `LogbookOutline` (the dock's tree, create buttons, status toggle, `GroupPicker`), `LogbookSummary` (the list view);
   - the record view: `LogbookRecord` (header, Back/Next/Edit/Delete), `RecordChecklist` with `InlineFix`, `LinkedRecords`, and `EvidenceViewer` (`RequestList` + `RequestPair`, `ArtifactList` + `ArtifactPreview`). The modal reuses `EvidenceViewer`;
   - the modal: `RecordModal` (registered in `+layout.svelte` as `LogbookRecord`), `RecordForm`, `RecordEvidence`, `TagInput`, `TemplatePicker`, `TestCasePicker`, `OptionList`. `recordEditor.js` opens it: `newRecord(modalStore, kind, preset)` and `editRecord(modalStore, kind, id)`;
   - export: `ExportReview` (registered as `ExportReport`) and `ReportReview`;
-  - helpers: `severity.js`, `artifacts.js` (content type to preview, tested in `artifacts.test.js`). The CVSS picker is `lib/components/CVSSCalculator.svelte` over `lib/cvss.js`.
+  - helpers: `severityColors.js` (the severity badge and mark colours, also used by `CVSSCalculator`), `artifacts.js` (content type to preview, tested in `artifacts.test.js`). The CVSS picker is `lib/components/CVSSCalculator.svelte` over `lib/cvss.js`.
 - `frontend/src/stores.js`: `openProject` clears and fills the Logbook store; `reportMetadata` holds the export's details, with `custom_properties.include_test_cases`.
 - Go: `reporting.go` holds the bindings (`CreateDraftFinding`, `SaveFinding`, `LinkRequestToFinding`, `SaveArtifactToFinding`, the test case twins, `GetArtifact`, `DownloadArtifact`, `ExportReport`) and `buildReportPayload`. Test: `app_reporting_test.go`.
 
 ## Reading and filtering
 
-- `filteredOf` applies search, kind, status and the contextual filters. Severity narrows to findings; category and tags narrow to test cases. `setKind` drops the filters that do not apply, and a kind the tester did not pick returns to All when its filters clear (`manualKind`).
+- `filteredOf` applies search, kind, status and the contextual filters. Severity narrows to findings; category and tags narrow to test cases. `setKind` drops the filters that do not apply; All drops them all, so unpressing a kind never leaves a one-kind filter on both kinds. A kind the tester did not pick returns to All when its filters clear (`manualKind`).
 - Any filter change closes the open record (`setFilters`), so the page shows the list the filters now give.
 - `nextOf` follows `groupsOf`'s on-screen order, findings then test cases, and wraps. With the status filter on All, it skips Done records ("Next in progress").
 - Opening a record (`open(kind, id, focus)`) starts a fix on its first missing required item (`firstMissingOf`), or on `focus` when given. The fix does not take focus, so N and Esc keep working.
@@ -31,17 +31,17 @@ Every change goes through the store's `saveIn`, which runs in this order:
 
 Each call that succeeds moves `original` on, so a failed call keeps the session with only what is still unsaved, and Save again carries on. An empty title makes no calls.
 
-- **The modal.** `startNew` or `edit` copies the record to `session.draft`. Nothing is written until Save; `discard` makes no calls. `requestClose` closes a clean session and asks on a dirty one (`confirming`). The modal handles its own ⌘S and Esc, since an open Skeleton modal blocks every menu action (`gate.js`).
+- **The modal.** `startNew` or `edit` copies the record to `session.draft`. Edit with an inline fix that has input goes through `guard` first, so the leave prompt asks. Nothing is written until Save; `discard` makes no calls. `requestClose` closes a clean session and asks on a dirty one (`confirming`). The modal handles its own ⌘S and Esc, since an open Skeleton modal blocks every menu action (`gate.js`). It has no `toggleAction`, unlike Export: the create keys must not close a dirty session without asking. Save's result carries `done`, and the modal then shows the same Done toast as the inline fix.
 - **Inline fixes.** `startFix(item)` stages one item in the `fix` slot, and `saveFix` saves only that item through `saveIn("fix")`, then opens the next missing item. Moving away from a fix with input (`open`, `close`, `openNext`, a filter change) goes through `guarded` and sets `fix.leaving`; `keepFix` or `discardFix` answers it.
 - **Other callers.** The Ledger, the Armory, the request view and a test case's + Finding call `newRecord` with `requestIds` or `testCaseId`. Create a record only through it: a record written first is visible before the tester saves.
-- **Delete** calls `findingStore.delete` or `testCaseStore.delete`. Those older stores still feed the Dashboard and the Ledger. `logbookStore.js` follows them with `setRecords`, and `refreshOtherLists` rereads them after a Logbook save.
+- **Delete** awaits the store's `deleteRecord(kind, id)`. Only on success does the record leave the list and the workspace go back to it; a failure keeps it open and the page shows the error toast. `logbookStore.js` maps `deleteFinding` and `deleteTestCase` to `findingStore.delete` and `testCaseStore.delete`, since those older stores still feed the Dashboard and the Ledger. `logbookStore.js` follows them with `setRecords`, and `refreshOtherLists` rereads them after a Logbook save.
 
 ## Export
 
-`ExportReview` calls `ExportReport` with `reportMetadata`. Go reads `custom_properties.include_test_cases` (`includesTestCases`) and leaves `TestCases` empty when it is false; `ReportReview` shows `reportOf(state, { includeTestCases })`. A gap click closes the modal and calls `open(kind, id, focus)`. The report is saved through a native Save dialog, which an agent cannot drive; test the payload in `app_reporting_test.go`.
+`ExportReview` calls `ExportReport` with `reportMetadata`. Go reads `custom_properties.include_test_cases` (`includesTestCases`) and, when it is false, does not list the test cases and leaves `TestCases` empty; `ReportReview` shows `reportOf(state, { includeTestCases })`. A gap click closes the modal and calls `open(kind, id, focus)`. The report is saved through a native Save dialog, which an agent cannot drive; test the payload in `app_reporting_test.go`.
 
 ## Adding a page action
 
 1. Add a catalog row in the `logbook` block of `catalog.js`, and test its key in `menus.test.js` (see `keybindings-and-menus.md`). Esc and other reserved keys cannot be bindings, so Esc (back to the list) stays in the page's `onWindowKeydown`.
-2. Add `{actionId, icon, handler}` to `logbookMenu`. A handler checks `$modalStore[0]` and, for anything that leaves the open record, `fix.leaving`.
+2. Add `{actionId, icon, handler}` to `logbookMenu`. `gate.js` already blocks menu actions while a modal is open; a handler that is also a button's click checks `$modalStore[0]` (or calls a helper such as `newRecord` that does). For anything that leaves the open record, it checks `fix.leaving` or goes through the store's `guard`.
 3. If the action needs new state, add a store method, map its API in `logbookStore.js`, and add it to the fake API in the store tests.
