@@ -39,6 +39,3 @@ export function optionRow(option) {
     status: option.StatusCode ?? 0,
   };
 }
-
-/** Forgets the pairs read so far, before another project opens. */
-export const clearRequestDetails = () => cache.clear();

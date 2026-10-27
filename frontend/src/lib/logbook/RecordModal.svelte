@@ -17,8 +17,8 @@
 	import RecordEvidence from "./RecordEvidence.svelte";
 
 	/** Skeleton's modal props; unused. */
-	export let parent = undefined;
-	$: void parent;
+	// svelte-ignore unused-export-let
+	export let parent;
 
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
