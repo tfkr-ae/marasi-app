@@ -69,7 +69,10 @@
 					{@const value = valueOf(item.key)}
 					<div
 						data-item={item.key}
-						class="grid h-12 grid-cols-[150px_minmax(0,1fr)_auto] items-center gap-3 px-3"
+						data-focused={item.key === fixing || undefined}
+						class="grid h-12 grid-cols-[150px_minmax(0,1fr)_auto] items-center gap-3 px-3 {item.key === fixing
+							? 'bg-warning-500/10'
+							: ''}"
 					>
 						<div class="flex items-center gap-2 text-[11px] font-semibold">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />

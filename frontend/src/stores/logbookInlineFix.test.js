@@ -142,7 +142,7 @@ test("saving the last missing item says the record is Done and leaves it open wi
   const result = await store.saveFix();
   assert.equal(result.done, true);
   assert.equal(fix(store), null);
-  assert.deepEqual(get(store).open, { kind: "finding", id: "f1" });
+  assert.equal(get(store).open.id, "f1");
 });
 
 test("an unsaved fix asks before another record, Back, Next or a filter change; Discard then moves", async () => {

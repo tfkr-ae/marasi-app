@@ -243,9 +243,18 @@ func (a *App) buildReportPayload(metadata domain.ReportMetadata) (*domain.Report
 	}
 
 	payload.Findings = findings
-	payload.TestCases = testCases
+	if includesTestCases(metadata) {
+		payload.TestCases = testCases
+	}
 
 	return payload, nil
+}
+
+// includesTestCases reports whether the report takes the test cases: true
+// unless custom_properties.include_test_cases is false.
+func includesTestCases(metadata domain.ReportMetadata) bool {
+	include, ok := metadata.CustomProperties["include_test_cases"].(bool)
+	return !ok || include
 }
 
 func (a *App) saveReportBytes(defaultFilename string, reportBytes []byte) (bool, error) {
