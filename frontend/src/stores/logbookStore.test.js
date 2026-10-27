@@ -603,3 +603,34 @@ test("the category and tag menus list every value, counting what the other filte
     ],
   );
 });
+
+test("Next follows the test cases as their groups show them", async () => {
+  const { store } = await loaded({
+    testCases: [
+      testCase("a", { Title: "A", Category: "Web", Note: "" }),
+      testCase("b", { Title: "B", Category: "Auth", Note: "" }),
+      testCase("c", { Title: "C", Category: "Web", Note: "" }),
+    ],
+  });
+  store.open("testCase", "b");
+  assert.deepEqual(next(store), ["testCase", "a"], "Auth, then Web");
+  store.open("testCase", "a");
+  assert.deepEqual(next(store), ["testCase", "c"]);
+  store.open("testCase", "c");
+  assert.deepEqual(next(store), ["testCase", "b"], "wraps");
+});
+
+test("grouped by tag, Next visits a test case once, under its first tag", async () => {
+  const { store } = await loaded({
+    testCases: [
+      testCase("a", { Title: "A", Tags: ["web"], Note: "" }),
+      testCase("b", { Title: "B", Tags: ["api", "web"], Note: "" }),
+      testCase("c", { Title: "C", Tags: [], Note: "" }),
+    ],
+  });
+  store.setGrouping("testCases", "tag");
+  store.open("testCase", "b");
+  assert.deepEqual(next(store), ["testCase", "a"], "api: b; web: a, b; No tags: c");
+  store.open("testCase", "a");
+  assert.deepEqual(next(store), ["testCase", "c"], "b already visited under api");
+});
