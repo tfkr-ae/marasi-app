@@ -1,21 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
+import * as nodeModule from "node:module";
 
 // @pandatix/js-cvss imports its own files without extensions, which Vite
-// resolves and plain Node does not; add the extension for it.
-registerHooks({
-  resolve(specifier, context, next) {
-    try {
-      return next(specifier, context);
-    } catch (err) {
-      if (specifier.startsWith(".") && context.parentURL?.includes("@pandatix/js-cvss")) {
-        return next(`${specifier}.js`, context);
+// resolves and plain Node does not; add the extension for it. registerHooks
+// needs Node 22.15; CI runs Node 20, which has register.
+if (nodeModule.registerHooks) {
+  nodeModule.registerHooks({
+    resolve(specifier, context, next) {
+      try {
+        return next(specifier, context);
+      } catch (err) {
+        if (specifier.startsWith(".") && context.parentURL?.includes("@pandatix/js-cvss")) {
+          return next(`${specifier}.js`, context);
+        }
+        throw err;
       }
-      throw err;
-    }
-  },
-});
+    },
+  });
+} else {
+  nodeModule.register("./cvssResolveHook.mjs", import.meta.url);
+}
 
 const { parseCvss, pickCvss, severityFromScore, pasteCvss } = await import("./cvss.js");
 
