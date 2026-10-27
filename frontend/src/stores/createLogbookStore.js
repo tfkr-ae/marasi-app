@@ -3,6 +3,7 @@
 // call goes through the injected `api` (see logbookStore.js for the Wails
 // one), so this module loads under node --test.
 import { get, writable } from "svelte/store";
+import { severityFromScore } from "../lib/severity.js";
 
 const filled = (text) => !!text?.trim();
 const linked = (record) => (record.Requests ?? []).length > 0;
@@ -88,6 +89,9 @@ function initialState() {
     filters: initialFilters(),
     grouping: { findings: "severity", testCases: "category" },
     open: null,
+    // The modal's edit session, or null while it is closed:
+    // { kind, isNew, original, draft, confirming, saving, error }.
+    session: null,
   };
 }
 
@@ -213,6 +217,81 @@ export function nextOf(state) {
   );
 }
 
+// The edit session behind the finding and test case modal. Opening a record
+// copies it to `draft`; New starts a blank one. Fields, linked requests and
+// artifacts are all staged on the draft, and only Save writes them.
+
+// A new record's draft, before anything is entered.
+function blankOf(kind, { requestIds = [], testCaseId = null } = {}) {
+  if (kind === "finding")
+    return {
+      Title: "",
+      Severity: "Medium",
+      CVSSVector: "",
+      CVSSScore: 0,
+      TestCaseID: testCaseId,
+      WriteUp: "",
+      TreatmentPlan: "",
+      Requests: [...requestIds],
+      Artifacts: [],
+    };
+  return {
+    Title: "",
+    Description: "",
+    Category: "",
+    Tags: [],
+    Note: "",
+    Requests: [...requestIds],
+    Artifacts: [],
+  };
+}
+
+// The fields a session compares, with their labels in the change list.
+const FIELDS = {
+  finding: [
+    ["Title", "Title"],
+    ["Severity", "Severity"],
+    ["CVSSVector", "CVSS"],
+    ["TestCaseID", "Test case"],
+    ["WriteUp", "Writeup"],
+    ["TreatmentPlan", "Treatment plan"],
+  ],
+  testCase: [
+    ["Title", "Title"],
+    ["Category", "Category"],
+    ["Tags", "Tags"],
+    ["Description", "Description"],
+    ["Note", "Note"],
+  ],
+};
+
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const missingFrom = (list, other) => list.filter((x) => !other.includes(x));
+const artifactIds = (record) => (record.Artifacts ?? []).map((a) => a.ID);
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * What the session's draft changed, as short phrases for the footer and
+ * the close prompt: field labels, then "+1 request", "−2 artifacts" and so on.
+ */
+export function changesOf(session) {
+  if (!session) return [];
+  const { kind, original, draft } = session;
+  const out = FIELDS[kind].filter(([key]) => !same(original[key], draft[key])).map(([, label]) => label);
+  const counted = (word, before, after) => {
+    const added = missingFrom(after, before).length;
+    const removed = missingFrom(before, after).length;
+    if (added) out.push(`+${plural(added, word)}`);
+    if (removed) out.push(`−${plural(removed, word)}`);
+  };
+  counted("request", original.Requests ?? [], draft.Requests ?? []);
+  counted("artifact", artifactIds(original), artifactIds(draft));
+  return out;
+}
+
+/** Whether the session's draft differs from what was opened. */
+export const isDirty = (session) => changesOf(session).length > 0;
+
 export function createLogbookStore(api) {
   const store = writable(initialState());
   // Each read of the lists gets a number; an older reply is ignored.
@@ -312,8 +391,225 @@ export function createLogbookStore(api) {
   const setGrouping = (list, by) =>
     store.update((state) => ({ ...state, grouping: { ...state.grouping, [list]: by } }));
 
+  const setSession = (session) => store.update((state) => ({ ...state, session }));
+
+  function begin(kind, original) {
+    setSession({
+      kind,
+      isNew: !original.ID,
+      original,
+      draft: structuredClone(original),
+      confirming: false,
+      saving: false,
+      error: null,
+    });
+  }
+
+  /**
+   * Starts a new "finding" or "testCase" in the edit session, pre-filled
+   * with `requestIds` and, for a finding, `testCaseId`. Nothing is created
+   * until Save.
+   */
+  const startNew = (kind, preset) => begin(kind, blankOf(kind, preset));
+
+  /** Opens the "finding" or "testCase" with `id` in the edit session. */
+  function edit(kind, id) {
+    const record = recordsOf(get(store), kind).find((r) => r.ID === id);
+    if (!record) return;
+    begin(kind, {
+      ...structuredClone(record),
+      Requests: [...(record.Requests ?? [])],
+      Artifacts: [...(record.Artifacts ?? [])],
+      ...(kind === "testCase" ? { Tags: [...(record.Tags ?? [])] } : {}),
+    });
+  }
+
+  // Changes the open session's draft with `change(draft)`.
+  const updateSession = (change) =>
+    store.update((state) =>
+      state.session ? { ...state, session: { ...state.session, draft: change(state.session.draft) } } : state,
+    );
+
+  /**
+   * Changes fields on the draft. On a finding, a new score with a vector
+   * sets the severity, as the old finding modal did.
+   */
+  const updateDraft = (patch) =>
+    store.update((state) => {
+      const session = state.session;
+      if (!session) return state;
+      const draft = { ...session.draft, ...patch };
+      if (session.kind === "finding" && "CVSSScore" in patch && patch.CVSSScore !== session.draft.CVSSScore && draft.CVSSVector)
+        draft.Severity = severityFromScore(draft.CVSSScore) ?? draft.Severity;
+      return { ...state, session: { ...session, draft } };
+    });
+
+  /** Stages a link to the request with `id`. */
+  const linkRequest = (id) =>
+    updateSession((draft) => (draft.Requests.includes(id) ? draft : { ...draft, Requests: [...draft.Requests, id] }));
+
+  /** Stages unlinking the request with `id`. */
+  const unlinkRequest = (id) => updateSession((draft) => ({ ...draft, Requests: draft.Requests.filter((r) => r !== id) }));
+
+  let stagedSeq = 0;
+
+  /** Stages `files` (File objects) to upload on Save. */
+  const addArtifacts = (files) =>
+    updateSession((draft) => ({
+      ...draft,
+      Artifacts: [
+        ...draft.Artifacts,
+        ...Array.from(files).map((file) => ({
+          ID: `staged-${++stagedSeq}`,
+          Filename: file.name,
+          MimeType: file.type || "application/octet-stream",
+          Size: file.size,
+          File: file,
+        })),
+      ],
+    }));
+
+  /** Stages removing the artifact with `id`; a staged one just goes. */
+  const removeArtifact = (id) =>
+    updateSession((draft) => ({ ...draft, Artifacts: draft.Artifacts.filter((a) => a.ID !== id) }));
+
+  /** Takes back removing the record's artifact with `id`. */
+  const restoreArtifact = (id) =>
+    store.update((state) => {
+      const session = state.session;
+      const artifact = session?.original.Artifacts.find((a) => a.ID === id);
+      if (!artifact || session.draft.Artifacts.some((a) => a.ID === id)) return state;
+      return { ...state, session: { ...session, draft: { ...session.draft, Artifacts: [...session.draft.Artifacts, artifact] } } };
+    });
+
+  const patchSession = (patch) =>
+    store.update((state) => (state.session ? { ...state, session: { ...state.session, ...patch } } : state));
+
+  /** Closes the session without saving. Makes no calls. */
+  const discard = () => setSession(null);
+
+  /**
+   * X, Esc and a click outside: closes a clean session at once
+   * ("closed") and asks on a dirty one ("confirm").
+   */
+  function requestClose() {
+    const session = get(store).session;
+    if (!session) return "closed";
+    if (!isDirty(session)) {
+      discard();
+      return "closed";
+    }
+    patchSession({ confirming: true });
+    return "confirm";
+  }
+
+  /** Dismisses the close prompt, back to the draft. */
+  const keepEditing = () => patchSession({ confirming: false });
+
+  // Puts the saved record in its list, replacing the old copy.
+  const keep = (kind, record) =>
+    store.update((state) => {
+      const list = kind === "finding" ? "findings" : "testCases";
+      const others = state[list].filter((r) => r.ID !== record.ID);
+      const exists = others.length < state[list].length;
+      const next = exists ? state[list].map((r) => (r.ID === record.ID ? record : r)) : [record, ...others];
+      return { ...state, [list]: next };
+    });
+
+  const BINDINGS = {
+    finding: {
+      create: (draft) => api.createDraftFinding(draft.Requests, draft.TestCaseID ?? null),
+      save: (record) => api.saveFinding(record),
+      link: (id, request) => api.linkRequestToFinding(id, request),
+      unlink: (id, request) => api.unlinkRequestFromFinding(id, request),
+      upload: (id, file) => api.saveArtifactToFinding(id, file),
+    },
+    testCase: {
+      create: (draft) => api.createDraftTestCase(draft.Requests),
+      save: (record) => api.saveTestCase(record),
+      link: (id, request) => api.linkRequestToTestCase(id, request),
+      unlink: (id, request) => api.unlinkRequestFromTestCase(id, request),
+      upload: (id, file) => api.saveArtifactToTestCase(id, file),
+    },
+  };
+
+  /**
+   * Writes the draft with the existing bindings, in order. A new record:
+   * create (with its requests and test case), save the fields, upload the
+   * artifacts. A record: save the fields, link and unlink each changed
+   * request, upload and delete each changed artifact. Resolves to
+   * { ok: true, kind, id, created } and closes the session; { ok: false,
+   * reason: "title" } with an empty title, making no calls; or { ok: false,
+   * error } when a call fails, keeping the session with what is still
+   * unsaved, so Save again carries on from there.
+   */
+  async function save() {
+    const session = get(store).session;
+    if (!session || session.saving) return { ok: false, reason: "busy" };
+    if (!session.draft.Title?.trim()) return { ok: false, reason: "title" };
+    const { kind } = session;
+    const calls = BINDINGS[kind];
+    let { original, draft } = session;
+    // Each call that succeeds moves the original on, so the session's
+    // changes are always what is still unsaved.
+    const advance = (patch, draftPatch = {}) => {
+      original = { ...original, ...patch };
+      draft = { ...draft, ...draftPatch };
+      patchSession({ original, draft });
+    };
+    patchSession({ saving: true, error: null, confirming: false });
+    try {
+      if (!original.ID) {
+        const created = await calls.create(draft);
+        const placed = { ID: created.ID, CreatedAt: created.CreatedAt };
+        advance({ ...placed, Requests: [...draft.Requests], TestCaseID: draft.TestCaseID }, placed);
+      }
+      if (FIELDS[kind].some(([key]) => !same(original[key], draft[key]))) {
+        await calls.save({ ...draft, Requests: original.Requests, Artifacts: undefined });
+        advance(Object.fromEntries(FIELDS[kind].map(([key]) => [key, draft[key]])));
+      }
+      for (const request of missingFrom(draft.Requests, original.Requests)) {
+        await calls.link(original.ID, request);
+        advance({ Requests: [...original.Requests, request] });
+      }
+      for (const request of missingFrom(original.Requests, draft.Requests)) {
+        await calls.unlink(original.ID, request);
+        advance({ Requests: original.Requests.filter((r) => r !== request) });
+      }
+      for (const staged of draft.Artifacts.filter((a) => a.File)) {
+        const uploaded = await calls.upload(original.ID, staged.File);
+        advance(
+          { Artifacts: [...original.Artifacts, uploaded] },
+          { Artifacts: draft.Artifacts.map((a) => (a.ID === staged.ID ? uploaded : a)) },
+        );
+      }
+      for (const id of missingFrom(artifactIds(original), artifactIds(draft))) {
+        await api.deleteArtifact(id);
+        advance({ Artifacts: original.Artifacts.filter((a) => a.ID !== id) });
+      }
+    } catch (error) {
+      patchSession({ saving: false, error });
+      return { ok: false, error };
+    }
+    keep(kind, original);
+    setSession(null);
+    return { ok: true, kind, id: original.ID, created: session.isNew };
+  }
+
   return {
     subscribe: store.subscribe,
+    save,
+    discard,
+    requestClose,
+    keepEditing,
+    startNew,
+    edit,
+    updateDraft,
+    linkRequest,
+    unlinkRequest,
+    addArtifacts,
+    removeArtifact,
+    restoreArtifact,
     populate,
     clear,
     setQuery,
