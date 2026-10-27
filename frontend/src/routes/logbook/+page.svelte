@@ -7,8 +7,9 @@
 	// The Logbook page, in the Ledger's frame: the dock holds the outline
 	// and the create and status controls, the toolbar filters, and the
 	// workspace shows the summary, or a record in its place. Back and Esc
-	// return to the list, Next and N move through it. Edit still opens
-	// today's finding or test case modal.
+	// return to the list, Next and N move through it. A record opens on its
+	// first missing item, filled in place; moving away from one with input
+	// asks first. Edit opens the finding or test case modal.
 	import { getDrawerStore, getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { writable } from "svelte/store";
 	import { BookCheck, Search, ShieldAlert, SquareArrowRightIcon, ToggleLeftIcon } from "lucide-svelte";
@@ -64,6 +65,7 @@
 			buttonTextConfirm: "Delete",
 			response: (yes) => {
 				if (!yes) return;
+				logbookStore.cancelFix();
 				logbookStore.close();
 				(finding ? findingStore : testCaseStore).delete(record.ID);
 			},
@@ -77,6 +79,14 @@
 	const noteModal = () => (modalHadKey = !!$modalStore[0]);
 	function onWindowKeydown(event) {
 		if (!opened || modalHadKey || $modalStore[0] || event.metaKey || event.ctrlKey || event.altKey) return;
+		// The leave prompt: Esc keeps editing, and N waits.
+		if ($logbookStore.fix?.leaving) {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				logbookStore.keepFix();
+			}
+			return;
+		}
 		if (event.target?.closest?.("input, textarea, select, [contenteditable='true'], .cm-editor")) return;
 		if (event.key === "Escape") {
 			event.preventDefault();

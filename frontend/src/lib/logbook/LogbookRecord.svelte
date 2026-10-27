@@ -1,15 +1,21 @@
 <script>
 	// A finding or test case in the workspace: Back, its severity (or the
 	// test-case icon) and title, then Next, Edit and Delete; below, what it
-	// needs, its linked records and its evidence.
-	import { modeCurrent } from "@skeletonlabs/skeleton";
+	// needs, its linked records and its evidence. An item filled in place
+	// saves on its own; moving away from one with input asks first.
+	import { tick } from "svelte";
+	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { ArrowLeft, ArrowRight, BookCheck, Pencil, Trash2 } from "lucide-svelte";
-	import { primaryVariant } from "../launchpad/format.js";
+	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
+	import { toastError } from "../toasts.js";
+	import { refreshOtherLists } from "./recordEditor.js";
 	import EvidenceViewer from "./EvidenceViewer.svelte";
 	import LinkedRecords from "./LinkedRecords.svelte";
 	import RecordChecklist from "./RecordChecklist.svelte";
 	import { SEVERITY_BADGE } from "./severity.js";
-	import { linkedOf } from "../../stores/logbookStore";
+	import { ITEMS, linkedOf } from "../../stores/logbookStore";
+
+	const ITEM_LABEL = Object.fromEntries([...ITEMS.finding, ...ITEMS.testCase].map((i) => [i.key, i.label]));
 
 	export let store;
 	/** "finding" or "testCase". */
@@ -26,8 +32,22 @@
 
 	let width = 0;
 	let body;
+	let keepButton;
+	const toastStore = getToastStore();
 
 	$: primary = primaryVariant($modeCurrent);
+	$: neutral = neutralVariant($modeCurrent);
+	$: fix = $store.fix;
+	$: leaving = !!fix?.leaving;
+	$: if (leaving) tick().then(() => keepButton?.focus());
+
+	async function saveFix() {
+		const result = await store.saveFix();
+		if (result.ok) {
+			refreshOtherLists();
+			if (result.done) toastStore.trigger({ message: `${result.kind === "finding" ? "Finding" : "Test case"} done`, background: "variant-filled-success" });
+		} else if (result.error) toastError(toastStore, "Not saved", result.error);
+	}
 	$: links = linkedOf($store, kind, record);
 	// A new record starts at the top.
 	let shownID = null;
@@ -38,7 +58,7 @@
 	const heading = "mb-1.5 text-[10px] font-bold uppercase tracking-wider opacity-50";
 </script>
 
-<div class="logbook-record flex h-full min-h-0 flex-col" bind:clientWidth={width} data-kind={kind} data-id={record.ID}>
+<div class="logbook-record relative flex h-full min-h-0 flex-col" bind:clientWidth={width} data-kind={kind} data-id={record.ID}>
 	<header class="flex h-12 flex-none items-center gap-2 border-b border-surface-500/30 px-4">
 		<button id="logbookBack" class="btn btn-sm flex-none {primary}" title="Back to the list (Esc)" on:click={onBack}
 			><ArrowLeft size={12} class="mr-1" />Back</button
@@ -62,7 +82,7 @@
 		>
 	</header>
 	<div bind:this={body} class="min-h-0 flex-1 overflow-auto px-4 py-3 pb-24">
-		<RecordChecklist {kind} {record} testCases={$store.testCases} />
+		<RecordChecklist {kind} {record} {store} {fix} testCases={$store.testCases} on:save={saveFix} on:leave={onBack} />
 		<div class="mt-5"><LinkedRecords {kind} {links} wide={width > 900} {onOpen} /></div>
 		<h2 class="{heading} mt-5">Evidence</h2>
 		<div class="h-[440px] ring-1 ring-surface-500/30">
@@ -77,4 +97,17 @@
 			{/key}
 		</div>
 	</div>
+	{#if leaving}
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+		<div class="absolute inset-0 z-40 flex items-center justify-center bg-black/30" on:mousedown|self={() => store.keepFix()}>
+			<div class="card w-[360px] space-y-3 p-4 text-xs shadow-2xl bg-surface-50-800-token" role="alertdialog" aria-label="Unsaved changes" data-leave-prompt>
+				<h3 class="text-base font-bold">Unsaved changes</h3>
+				<p>Your changes to the {(ITEM_LABEL[fix.item] ?? "item").toLowerCase()} aren't saved.</p>
+				<div class="flex justify-end gap-2 pt-1">
+					<button bind:this={keepButton} type="button" class="btn btn-sm {neutral}" on:click={() => store.keepFix()}>Keep editing</button>
+					<button type="button" class="btn btn-sm {primary}" on:click={() => store.discardFix()}>Discard</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>

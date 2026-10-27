@@ -92,6 +92,12 @@ function initialState() {
     // The modal's edit session, or null while it is closed:
     // { kind, isNew, original, draft, confirming, saving, error }.
     session: null,
+    // The inline fix on the open record's checklist, or null: an edit
+    // session on one item, { kind, id, item, original, draft, focus, auto,
+    // seq, leaving, saving, error }. auto: it opened by itself, on arrival
+    // or after a save; leaving: a move away is waiting on Keep editing or
+    // Discard.
+    fix: null,
   };
 }
 
@@ -346,6 +352,30 @@ export function changesOf(session) {
 /** Whether the session's draft differs from what was opened. */
 export const isDirty = (session) => changesOf(session).length > 0;
 
+// The fields an inline fix on each item may change. A CVSS fix carries the
+// score and the severity the score sets; a requests fix only the links.
+const FIX_FIELDS = {
+  WriteUp: ["WriteUp"],
+  TreatmentPlan: ["TreatmentPlan"],
+  Note: ["Note"],
+  Category: ["Category"],
+  CVSSVector: ["CVSSVector", "CVSSScore", "Severity"],
+  TestCaseID: ["TestCaseID"],
+  Requests: [],
+};
+
+/** The key of the record's first missing required item, or null when it is Done. */
+export const firstMissingOf = (kind, record) =>
+  completenessOf(kind, record).items.find((item) => item.required && !item.done)?.key ?? null;
+
+// A record as a session copies it, its lists its own.
+const copyOf = (kind, record) => ({
+  ...structuredClone(record),
+  Requests: [...(record.Requests ?? [])],
+  Artifacts: [...(record.Artifacts ?? [])],
+  ...(kind === "testCase" ? { Tags: [...(record.Tags ?? [])] } : {}),
+});
+
 export function createLogbookStore(api) {
   const store = writable(initialState());
   // Each read of the lists gets a number; an older reply is ignored.
@@ -356,7 +386,7 @@ export function createLogbookStore(api) {
     const seq = ++readSeq;
     const [findings, testCases] = await Promise.all([api.listFindings(), api.listTestCases()]);
     if (seq !== readSeq) return;
-    store.update((state) => ({ ...state, findings: findings ?? [], testCases: testCases ?? [] }));
+    store.update((state) => refreshFix({ ...state, findings: findings ?? [], testCases: testCases ?? [] }));
   }
 
   /**
@@ -365,37 +395,106 @@ export function createLogbookStore(api) {
    * modals, keeping the filters.
    */
   const setRecords = (kind, records) =>
-    store.update((state) => ({
-      ...state,
-      [kind === "finding" ? "findings" : "testCases"]: records ?? [],
-    }));
+    store.update((state) =>
+      refreshFix({
+        ...state,
+        [kind === "finding" ? "findings" : "testCases"]: records ?? [],
+      }),
+    );
 
   // Forgets the project's records and the Logbook's filters, and ignores
   // lists still on their way, before another project opens.
   function clear() {
     readSeq++;
+    pending = null;
     store.set(initialState());
   }
 
+  // The move away an unsaved inline fix is holding until Discard.
+  let pending = null;
+
+  // Runs `move` at once unless an inline fix has unsaved input; then the fix
+  // asks first (leaving) and Discard runs it. Returns whether it ran.
+  function guarded(move) {
+    const fix = get(store).fix;
+    if (fix && isDirty(fix)) {
+      pending = move;
+      store.update((state) => ({ ...state, fix: { ...state.fix, leaving: true } }));
+      return false;
+    }
+    pending = null;
+    move();
+    return true;
+  }
+
+  let fixSeq = 0;
+  const fixOf = (kind, record, item, { focus = false, auto = false, seq = ++fixSeq } = {}) => {
+    const copy = copyOf(kind, record);
+    return {
+      kind,
+      id: record.ID,
+      item,
+      isNew: false,
+      original: copy,
+      draft: structuredClone(copy),
+      focus,
+      auto,
+      seq,
+      leaving: false,
+      saving: false,
+      error: null,
+    };
+  };
+
+  // The fix a record opens on: `item` when asked for, else its first
+  // missing required item, or none when it is Done.
+  function arrivalFix(state, kind, id, item) {
+    const record = recordsOf(state, kind).find((r) => r.ID === id);
+    const at = record && (item ?? firstMissingOf(kind, record));
+    return at ? fixOf(kind, record, at, { auto: true }) : null;
+  }
+
+  // After the lists change, a fix with no input follows its record: an
+  // automatic one moves on from an item that is now filled.
+  function refreshFix(state) {
+    const fix = state.fix;
+    if (!fix || fix.saving || isDirty(fix)) return state;
+    const record = recordsOf(state, fix.kind).find((r) => r.ID === fix.id);
+    if (!record || !state.open) return { ...state, fix: null };
+    const filledNow = ITEMS[fix.kind].find((i) => i.key === fix.item)?.done(record);
+    const item = fix.auto && filledNow ? firstMissingOf(fix.kind, record) : fix.item;
+    if (!item) return { ...state, fix: null };
+    return { ...state, fix: fixOf(fix.kind, record, item, { focus: false, auto: fix.auto, seq: item === fix.item ? fix.seq : ++fixSeq }) };
+  }
+
   // Any change to the filters closes the open record, back to the list.
-  const setFilters = (change) =>
-    store.update((state) => {
-      const filters = change(state.filters);
-      const changed = JSON.stringify(filters) !== JSON.stringify(state.filters);
-      return changed ? { ...state, filters, open: null } : state;
-    });
+  function setFilters(change) {
+    const before = get(store).filters;
+    const filters = change(before);
+    if (JSON.stringify(filters) === JSON.stringify(before)) return;
+    guarded(() => store.update((state) => ({ ...state, filters, open: null, fix: null })));
+  }
 
-  /** Opens the record in the workspace. */
-  const open = (kind, id) => store.update((state) => ({ ...state, open: { kind, id } }));
+  /**
+   * Opens the record in the workspace, on its first missing required item
+   * or on `item`. Asks first while an inline fix has unsaved input.
+   */
+  const open = (kind, id, item = null) =>
+    guarded(() =>
+      store.update((state) => ({ ...state, open: { kind, id }, fix: arrivalFix(state, kind, id, item) })),
+    );
 
-  /** Closes the open record, back to the list. */
-  const close = () => store.update((state) => ({ ...state, open: null }));
+  /** Closes the open record, back to the list. Asks first like open. */
+  const close = () => guarded(() => store.update((state) => ({ ...state, open: null, fix: null })));
 
-  /** Opens the record Next goes to and returns it, or null when there is none. */
+  /**
+   * Opens the record Next goes to and returns it, or null when there is
+   * none or an unsaved inline fix asks first.
+   */
   function openNext() {
     const target = nextOf(get(store));
-    if (target) open(target.kind, target.record.ID);
-    return target;
+    if (!target) return null;
+    return open(target.kind, target.record.ID) ? target : null;
   }
 
   /** Sets the search text. */
@@ -481,40 +580,46 @@ export function createLogbookStore(api) {
   function edit(kind, id) {
     const record = recordsOf(get(store), kind).find((r) => r.ID === id);
     if (!record) return;
-    begin(kind, {
-      ...structuredClone(record),
-      Requests: [...(record.Requests ?? [])],
-      Artifacts: [...(record.Artifacts ?? [])],
-      ...(kind === "testCase" ? { Tags: [...(record.Tags ?? [])] } : {}),
-    });
+    begin(kind, copyOf(kind, record));
   }
 
-  // Changes the open session's draft with `change(draft)`.
-  const updateSession = (change) =>
+  // The modal's session sits in the "session" slot and an inline fix in
+  // "fix"; both stage on a draft and save through the same path.
+
+  // Changes the draft in `slot` with `change(draft)`.
+  const updateIn = (slot, change) =>
     store.update((state) =>
-      state.session ? { ...state, session: { ...state.session, draft: change(state.session.draft) } } : state,
+      state[slot] ? { ...state, [slot]: { ...state[slot], draft: change(state[slot].draft) } } : state,
     );
+  const updateSession = (change) => updateIn("session", change);
+
+  // On a finding, a new score with a vector sets the severity, as the old
+  // finding modal did.
+  const patchDraft = (slot, patch) =>
+    store.update((state) => {
+      const session = state[slot];
+      if (!session) return state;
+      const draft = { ...session.draft, ...patch };
+      if (session.kind === "finding" && "CVSSScore" in patch && patch.CVSSScore !== session.draft.CVSSScore && draft.CVSSVector)
+        draft.Severity = severityFromScore(draft.CVSSScore) ?? draft.Severity;
+      return { ...state, [slot]: { ...session, draft } };
+    });
+
+  const linkIn = (slot, id) =>
+    updateIn(slot, (draft) => (draft.Requests.includes(id) ? draft : { ...draft, Requests: [...draft.Requests, id] }));
+  const unlinkIn = (slot, id) => updateIn(slot, (draft) => ({ ...draft, Requests: draft.Requests.filter((r) => r !== id) }));
 
   /**
    * Changes fields on the draft. On a finding, a new score with a vector
    * sets the severity, as the old finding modal did.
    */
-  const updateDraft = (patch) =>
-    store.update((state) => {
-      const session = state.session;
-      if (!session) return state;
-      const draft = { ...session.draft, ...patch };
-      if (session.kind === "finding" && "CVSSScore" in patch && patch.CVSSScore !== session.draft.CVSSScore && draft.CVSSVector)
-        draft.Severity = severityFromScore(draft.CVSSScore) ?? draft.Severity;
-      return { ...state, session: { ...session, draft } };
-    });
+  const updateDraft = (patch) => patchDraft("session", patch);
 
   /** Stages a link to the request with `id`. */
-  const linkRequest = (id) =>
-    updateSession((draft) => (draft.Requests.includes(id) ? draft : { ...draft, Requests: [...draft.Requests, id] }));
+  const linkRequest = (id) => linkIn("session", id);
 
   /** Stages unlinking the request with `id`. */
-  const unlinkRequest = (id) => updateSession((draft) => ({ ...draft, Requests: draft.Requests.filter((r) => r !== id) }));
+  const unlinkRequest = (id) => unlinkIn("session", id);
 
   let stagedSeq = 0;
 
@@ -547,8 +652,9 @@ export function createLogbookStore(api) {
       return { ...state, session: { ...session, draft: { ...session.draft, Artifacts: [...session.draft.Artifacts, artifact] } } };
     });
 
-  const patchSession = (patch) =>
-    store.update((state) => (state.session ? { ...state, session: { ...state.session, ...patch } } : state));
+  const patchIn = (slot, patch) =>
+    store.update((state) => (state[slot] ? { ...state, [slot]: { ...state[slot], ...patch } } : state));
+  const patchSession = (patch) => patchIn("session", patch);
 
   /** Closes the session without saving. Makes no calls. */
   const discard = () => setSession(null);
@@ -578,7 +684,7 @@ export function createLogbookStore(api) {
       const others = state[list].filter((r) => r.ID !== record.ID);
       const exists = others.length < state[list].length;
       const next = exists ? state[list].map((r) => (r.ID === record.ID ? record : r)) : [record, ...others];
-      return { ...state, [list]: next };
+      return refreshFix({ ...state, [list]: next });
     });
 
   const BINDINGS = {
@@ -608,8 +714,10 @@ export function createLogbookStore(api) {
    * error } when a call fails, keeping the session with what is still
    * unsaved, so Save again carries on from there.
    */
-  async function save() {
-    const session = get(store).session;
+  const save = () => saveIn("session");
+
+  async function saveIn(slot) {
+    const session = get(store)[slot];
     if (!session || session.saving) return { ok: false, reason: "busy" };
     if (!session.draft.Title?.trim()) return { ok: false, reason: "title" };
     const { kind } = session;
@@ -620,9 +728,9 @@ export function createLogbookStore(api) {
     const advance = (patch, draftPatch = {}) => {
       original = { ...original, ...patch };
       draft = { ...draft, ...draftPatch };
-      patchSession({ original, draft });
+      patchIn(slot, { original, draft });
     };
-    patchSession({ saving: true, error: null, confirming: false });
+    patchIn(slot, { saving: true, error: null, confirming: false });
     try {
       if (!original.ID) {
         const created = await calls.create(draft);
@@ -631,7 +739,9 @@ export function createLogbookStore(api) {
       }
       if (FIELDS[kind].some(([key]) => !same(original[key], draft[key]))) {
         await calls.save({ ...draft, Requests: original.Requests, Artifacts: undefined });
-        advance(Object.fromEntries(FIELDS[kind].map(([key]) => [key, draft[key]])));
+        // Every field went, the score with the vector among them.
+        const { Requests, Artifacts, ...fields } = draft;
+        advance(fields);
       }
       for (const request of missingFrom(draft.Requests, original.Requests)) {
         await calls.link(original.ID, request);
@@ -653,12 +763,95 @@ export function createLogbookStore(api) {
         advance({ Artifacts: original.Artifacts.filter((a) => a.ID !== id) });
       }
     } catch (error) {
-      patchSession({ saving: false, error });
+      patchIn(slot, { saving: false, error });
       return { ok: false, error };
     }
     keep(kind, original);
-    setSession(null);
+    store.update((state) => ({ ...state, [slot]: null }));
     return { ok: true, kind, id: original.ID, created: session.isNew };
+  }
+
+  // Inline fixes: one item of the open record, staged in the "fix" slot.
+
+  /**
+   * Opens a fix on the open record's `item` and focuses it, as Add or
+   * edit do. Asks first while a fix on another item has unsaved input.
+   */
+  function startFix(item) {
+    const state = get(store);
+    if (!state.open) return false;
+    if (state.fix?.item === item) {
+      patchIn("fix", { focus: true, auto: false, seq: ++fixSeq });
+      return true;
+    }
+    const record = recordsOf(state, state.open.kind).find((r) => r.ID === state.open.id);
+    if (!record) return false;
+    return guarded(() =>
+      store.update((s) => ({ ...s, fix: fixOf(state.open.kind, record, item, { focus: true }) })),
+    );
+  }
+
+  /** Changes the fix's fields; a CVSS score sets the severity as in the modal. */
+  const updateFix = (patch) => patchDraft("fix", patch);
+
+  /** Stages a link to the request with `id` on the fix. */
+  const linkFixRequest = (id) => linkIn("fix", id);
+
+  /** Stages unlinking the request with `id` on the fix. */
+  const unlinkFixRequest = (id) => unlinkIn("fix", id);
+
+  /** Cancel: drops the fix with no calls. */
+  function cancelFix() {
+    pending = null;
+    store.update((state) => ({ ...state, fix: null }));
+  }
+
+  /** Keep editing: the move away waiting on the fix is dropped. */
+  function keepFix() {
+    pending = null;
+    // A fresh filters object puts the search box back to the search in use.
+    store.update((state) => ({ ...state, filters: { ...state.filters }, fix: state.fix && { ...state.fix, leaving: false } }));
+  }
+
+  /** Discard: drops the fix, then makes the move away it was holding. */
+  function discardFix() {
+    const move = pending;
+    cancelFix();
+    move?.();
+  }
+
+  /**
+   * Saves the fix through Save, with only its item's changes laid over the
+   * record as it is now, so a change saved elsewhere meanwhile stays. Then
+   * the record's next missing required item opens. Resolves to Save's
+   * result plus `done`, true when the record just became Done; a failure
+   * keeps the fix and its input.
+   */
+  async function saveFix() {
+    const state = get(store);
+    const fix = state.fix;
+    if (!fix || fix.saving) return { ok: false, reason: "busy" };
+    const record = recordsOf(state, fix.kind).find((r) => r.ID === fix.id);
+    if (!record) {
+      cancelFix();
+      return { ok: false, reason: "gone" };
+    }
+    const wasDone = completenessOf(fix.kind, record).status === "done";
+    const original = copyOf(fix.kind, record);
+    const draft = { ...structuredClone(original), ...Object.fromEntries(FIX_FIELDS[fix.item].map((key) => [key, fix.draft[key]])) };
+    const added = missingFrom(fix.draft.Requests, fix.original.Requests);
+    const removed = missingFrom(fix.original.Requests, fix.draft.Requests);
+    draft.Requests = [...original.Requests.filter((r) => !removed.includes(r)), ...missingFrom(added, original.Requests)];
+    patchIn("fix", { original, draft, leaving: false });
+    pending = null;
+    const result = await saveIn("fix");
+    if (!result.ok) return result;
+    const saved = recordsOf(get(store), fix.kind).find((r) => r.ID === fix.id);
+    const done = !!saved && completenessOf(fix.kind, saved).status === "done";
+    const next = saved && firstMissingOf(fix.kind, saved);
+    const stillOpen = get(store).open?.kind === fix.kind && get(store).open?.id === fix.id;
+    if (next && stillOpen) store.update((s) => ({ ...s, fix: fixOf(fix.kind, saved, next, { focus: true, auto: true }) }));
+    return { ...result, done: done && !wasDone };
   }
 
   return {
@@ -675,6 +868,14 @@ export function createLogbookStore(api) {
     addArtifacts,
     removeArtifact,
     restoreArtifact,
+    startFix,
+    updateFix,
+    linkFixRequest,
+    unlinkFixRequest,
+    saveFix,
+    cancelFix,
+    keepFix,
+    discardFix,
     // Evidence reads: a linked pair in full (GetRawDetails), an artifact
     // with its bytes (GetArtifact), and saving an artifact through the
     // native Save dialog (DownloadArtifact, false when cancelled).

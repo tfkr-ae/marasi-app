@@ -1,8 +1,14 @@
 <script>
-	// What a record needs before the report, read-only: the required items,
-	// with "3/4" or "done" on their heading, then the optional ones, where an
-	// unset item reads "Not set" without a warning. Every row is one height.
-	import { AlertTriangle, Check, CircleDashed } from "lucide-svelte";
+	// What a record needs before the report: the required items, with "3/4"
+	// or "done" on their heading, then the optional ones, where an unset
+	// item reads "Not set" without a warning. Every row is one height. A
+	// missing item has a filled Add or Link, a filled one a quiet edit icon;
+	// either opens the item's inline fix under its row.
+	import { createEventDispatcher } from "svelte";
+	import { modeCurrent } from "@skeletonlabs/skeleton";
+	import { AlertTriangle, Check, CircleDashed, Pencil } from "lucide-svelte";
+	import { primaryVariant } from "../launchpad/format.js";
+	import InlineFix from "./InlineFix.svelte";
 	import { severityFromScore } from "../cvss.js";
 	import { SEVERITY_BADGE } from "./severity.js";
 	import { completenessOf } from "../../stores/logbookStore";
@@ -12,6 +18,15 @@
 	export let record;
 	/** Every test case, to name a finding's. */
 	export let testCases = [];
+	/** The Logbook store, for the inline fix. */
+	export let store = null;
+	/** The open inline fix, or null. */
+	export let fix = null;
+
+	const dispatch = createEventDispatcher();
+	const LINKS = new Set(["Requests", "TestCaseID"]);
+	$: primary = primaryVariant($modeCurrent);
+	$: fixing = fix && fix.kind === kind && String(fix.id) === String(record.ID) ? fix.item : null;
 
 	$: completeness = completenessOf(kind, record);
 	$: groups = [
@@ -54,7 +69,7 @@
 					{@const value = valueOf(item.key)}
 					<div
 						data-item={item.key}
-						class="grid h-12 grid-cols-[150px_minmax(0,1fr)] items-center gap-3 px-3"
+						class="grid h-12 grid-cols-[150px_minmax(0,1fr)_auto] items-center gap-3 px-3"
 					>
 						<div class="flex items-center gap-2 text-[11px] font-semibold">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />
@@ -82,7 +97,31 @@
 								<p class="line-clamp-2 whitespace-pre-line text-xs leading-snug" title={value}>{value}</p>
 							{/if}
 						</div>
+						<div class="flex w-16 justify-end">
+							{#if store && fixing !== item.key}
+								{#if item.done}
+									<button
+										type="button"
+										class="p-1 opacity-50 hover:opacity-100"
+										title="Edit {item.label.toLowerCase()}"
+										aria-label="Edit {item.label.toLowerCase()}"
+										data-fix-open={item.key}
+										on:click={() => store.startFix(item.key)}><Pencil size={12} /></button
+									>
+								{:else}
+									<button
+										type="button"
+										class="btn btn-sm px-2.5 py-0.5 text-[11px] {primary}"
+										data-fix-open={item.key}
+										on:click={() => store.startFix(item.key)}>{LINKS.has(item.key) ? "Link" : "Add"}</button
+									>
+								{/if}
+							{/if}
+						</div>
 					</div>
+					{#if fixing === item.key}
+						<InlineFix {store} {fix} {testCases} on:save={() => dispatch("save")} on:leave={() => dispatch("leave")} />
+					{/if}
 				{/each}
 			</div>
 		</div>
