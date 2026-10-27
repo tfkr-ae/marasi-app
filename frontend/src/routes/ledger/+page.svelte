@@ -90,6 +90,8 @@
 	import { highlightMigrating, highlightPalette, renameHighlight } from "../../stores/highlightsStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
+	import { logbookStore } from "../../stores/logbookStore.js";
+	import { RECORD_MODAL, newRecord } from "../../lib/logbook/recordEditor.js";
 	import {
 		ledgerStore,
 		tableRows,
@@ -743,33 +745,10 @@
 		else if ($modalStore[0].component === component) modalStore.close();
 	}
 
-	function createTestCase(ids) {
-		ledgerStore
-			.createTestCase(ids)
-			.then((testCase) =>
-				modalStore.trigger({
-					type: "component",
-					component: "TestCase",
-					toggleAction: "ledger.drawer-open.create-test-case",
-					meta: { testCase, isNew: true },
-				}),
-			)
-			.catch((error) => toastError("Failed to create a test case", error));
-	}
-
-	function createFinding(ids) {
-		ledgerStore
-			.createFinding(ids)
-			.then((finding) =>
-				modalStore.trigger({
-					type: "component",
-					component: "Finding",
-					toggleAction: "ledger.drawer-open.create-finding",
-					meta: { finding, isNew: true },
-				}),
-			)
-			.catch((error) => toastError("Failed to create a finding", error));
-	}
+	// A new test case or finding with the pairs as its requests, in the
+	// Logbook modal; nothing is created until Save.
+	const createTestCase = (ids) => newRecord(modalStore, "testCase", { requestIds: ids });
+	const createFinding = (ids) => newRecord(modalStore, "finding", { requestIds: ids });
 
 	// Focuses `element`, or blurs it when it already has focus.
 	function toggleFocus(element) {
@@ -900,7 +879,7 @@
 			icon: BookCheckIcon,
 			handler: whenOpen(() => {
 				if (!$modalStore[0]) runShortcut("ledger.drawer-open.create-test-case");
-				else if ($modalStore[0].component === "TestCase") modalStore.close();
+				else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 			}),
 		},
 		{
@@ -954,7 +933,7 @@
 			icon: ShieldAlertIcon,
 			handler: whenOpen(() => {
 				if (!$modalStore[0]) runShortcut("ledger.drawer-open.create-finding");
-				else if ($modalStore[0].component === "Finding") modalStore.close();
+				else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 			}),
 		},
 		{

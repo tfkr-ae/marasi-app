@@ -5,14 +5,13 @@
 	// session at once and ask on a dirty one (Keep editing, Discard, Save
 	// and close); Esc on that prompt keeps editing.
 	import { onDestroy, onMount, tick } from "svelte";
-	import { get } from "svelte/store";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { BookCheck, Minimize2, Save, ShieldAlert, X } from "lucide-svelte";
 	import { changesOf, logbookStore } from "../../stores/logbookStore.js";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import { toastError } from "../toasts.js";
-	import { refreshOtherLists, startFromOlderMeta } from "./recordEditor.js";
+	import { refreshOtherLists } from "./recordEditor.js";
 	import RecordForm from "./RecordForm.svelte";
 	import RecordEvidence from "./RecordEvidence.svelte";
 
@@ -99,12 +98,6 @@
 		window.addEventListener("mousedown", onBackdropPointer, true);
 		window.addEventListener("mouseup", onBackdropPointer, true);
 		window.addEventListener("keydown", onKeydown, true);
-		// Older callers open it with a toggleAction, whose key would close it
-		// without asking; only X, Esc and a click outside may close it.
-		const opened = get(modalStore)[0];
-		if (opened?.toggleAction) delete opened.toggleAction;
-		const meta = opened?.meta;
-		if (!session && meta) startFromOlderMeta(meta).catch((error) => toastError(toastStore, "Couldn't open", error));
 		if (session?.isNew) focusTitle();
 	});
 	onDestroy(() => {

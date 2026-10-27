@@ -1,9 +1,12 @@
 <script>
 	// A finding's test case, or a test case's findings, each folding open to
-	// read in place, with Open to go to it.
-	import { BookCheck, ChevronDown, ChevronRight, CornerDownRight } from "lucide-svelte";
+	// read in place, with Open to go to it. A test case also has + Finding,
+	// a new finding linked to it.
+	import { getModalStore } from "@skeletonlabs/skeleton";
+	import { BookCheck, ChevronDown, ChevronRight, CornerDownRight, Plus } from "lucide-svelte";
 	import { SEVERITY_BADGE } from "./severity.js";
-	import { completenessOf } from "../../stores/logbookStore";
+	import { completenessOf, logbookStore } from "../../stores/logbookStore";
+	import { newRecord } from "./recordEditor.js";
 
 	/** The open record's kind: "finding" or "testCase". */
 	export let kind;
@@ -31,13 +34,28 @@
 					["Note", link.record.Note],
 				];
 	const heading = "mb-1 text-[10px] font-bold uppercase tracking-wider opacity-50";
+
+	const modalStore = getModalStore();
+	// The test case these are listed under is the one open in the workspace.
+	const newFinding = () => newRecord(modalStore, "finding", { testCaseId: $logbookStore.open?.id ?? null });
 </script>
 
 <div class="logbook-linked">
-	<h2 class="{heading} flex gap-2">
-		<span>{kind === "finding" ? "Test case" : "Findings"}</span>
-		{#if kind === "testCase"}<span class="font-normal">{links.length}</span>{/if}
-	</h2>
+	<div class="flex items-start gap-2">
+		<h2 class="{heading} flex flex-1 gap-2">
+			<span>{kind === "finding" ? "Test case" : "Findings"}</span>
+			{#if kind === "testCase"}<span class="font-normal">{links.length}</span>{/if}
+		</h2>
+		{#if kind === "testCase"}
+			<button
+				type="button"
+				class="-mt-0.5 flex flex-none items-center gap-1 px-1 text-xs opacity-70 hover:opacity-100"
+				title="New finding for this test case"
+				data-new-finding
+				on:click={newFinding}><Plus size={13} />Finding</button
+			>
+		{/if}
+	</div>
 	{#each links as link (link.record.ID)}
 		{@const open = unfolded.has(link.record.ID)}
 		{@const done = completenessOf(link.kind, link.record).status === "done"}
