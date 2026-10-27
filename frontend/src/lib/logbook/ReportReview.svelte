@@ -5,7 +5,7 @@
 	// follows Include test cases and filters nothing else: ExportReport
 	// exports the whole Logbook.
 	import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-svelte";
-	import { SEVERITY_MARK } from "./severity.js";
+	import { SEVERITY_MARK } from "./severityColors.js";
 	import { SEVERITIES, reportOf } from "../../stores/logbookStore";
 
 	export let store;

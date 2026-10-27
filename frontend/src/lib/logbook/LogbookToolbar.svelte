@@ -8,7 +8,7 @@
 	import { Folder, Hash, Search, ShieldAlert, SquareArrowRight, X } from "lucide-svelte";
 	import ToolbarMenu from "../ledger/ToolbarMenu.svelte";
 	import OptionList from "./OptionList.svelte";
-	import { SEVERITY_MARK } from "./severity.js";
+	import { SEVERITY_MARK } from "./severityColors.js";
 	import { SEVERITIES, severityCountsOf, testCaseCountsOf } from "../../stores/logbookStore";
 
 	export let store;

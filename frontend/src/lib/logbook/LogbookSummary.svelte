@@ -5,7 +5,7 @@
 	// narrows to findings); the Test cases card narrows to test cases. Test
 	// cases group as the outline groups them.
 	import { AlertTriangle, BookCheck, ShieldAlert } from "lucide-svelte";
-	import { SEVERITY_BADGE, SEVERITY_MARK } from "./severity.js";
+	import { SEVERITY_BADGE, SEVERITY_MARK } from "./severityColors.js";
 	import {
 		SEVERITIES,
 		completenessOf,

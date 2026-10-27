@@ -9,7 +9,7 @@
 	import TestCasePicker from "./TestCasePicker.svelte";
 	import TemplatePicker from "./TemplatePicker.svelte";
 	import TagInput from "./TagInput.svelte";
-	import { SEVERITY_BADGE as SEVERITY_CLASS } from "./severity.js";
+	import { SEVERITY_BADGE } from "./severityColors.js";
 
 	export let session;
 	/** The long-text field that has the whole modal, or null. */
@@ -57,7 +57,7 @@
 			{#each SEVERITIES as severity}
 				<button
 					type="button"
-					class="rounded-sm px-1 py-1 text-[11px] font-semibold {draft.Severity === severity ? SEVERITY_CLASS[severity] : 'bg-surface-200-700-token opacity-70 hover:opacity-100'}"
+					class="rounded-sm px-1 py-1 text-[11px] font-semibold {draft.Severity === severity ? SEVERITY_BADGE[severity] : 'bg-surface-200-700-token opacity-70 hover:opacity-100'}"
 					aria-pressed={draft.Severity === severity}
 					on:click={() => update({ Severity: severity })}>{SHORT[severity] ?? severity}</button
 				>
@@ -97,7 +97,7 @@
 			<span class={label}>Findings <span class="font-normal opacity-70">{findings.length}</span></span>
 			{#each findings as f (f.ID)}
 				<div class="flex items-center gap-2 py-0.5 text-[11px]">
-					<span class="badge flex-none rounded-sm px-1.5 py-0 text-[10px] {SEVERITY_CLASS[f.Severity] ?? 'variant-soft'}">{f.Severity}</span>
+					<span class="badge flex-none rounded-sm px-1.5 py-0 text-[10px] {SEVERITY_BADGE[f.Severity] ?? 'variant-soft'}">{f.Severity}</span>
 					<span class="min-w-0 flex-1 truncate">{f.Title}</span>
 				</div>
 			{:else}

@@ -32,7 +32,6 @@
 	$: neutral = neutralVariant($modeCurrent);
 	$: includeTestCases = $reportMetadata.custom_properties?.include_test_cases !== false;
 	$: truncating = $reportMetadata.truncate_length > 0;
-	$: testCaseCount = $logbookStore.testCases.length;
 
 	onMount(async () => {
 		try {
@@ -179,14 +178,8 @@
 				<section>
 					<h3 class="mb-2 text-sm font-bold">Options</h3>
 					<div class="divide-y divide-surface-500/20 ring-1 ring-surface-500/30">
-						<div class="flex h-14 items-center gap-3 px-3">
-							<div class="min-w-0 flex-1">
-								<div class="font-semibold">Include test cases</div>
-								<div class="flex h-6 items-center text-[11px] opacity-70">
-									{testCaseCount}
-									{testCaseCount === 1 ? "test case" : "test cases"} in their own section
-								</div>
-							</div>
+						<div class="flex h-10 items-center gap-3 px-3">
+							<div class="min-w-0 flex-1 font-semibold">Include test cases</div>
 							<SlideToggle
 								name="exportIncludeTestCases"
 								size="sm"
@@ -196,11 +189,8 @@
 								on:change={(e) => setIncludeTestCases(e.currentTarget.checked)}
 							/>
 						</div>
-						<div class="flex h-14 items-center gap-3 px-3">
-							<div class="min-w-0 flex-1">
-								<div class="font-semibold">Mark as draft</div>
-								<div class="flex h-6 items-center text-[11px] opacity-70">The template shows a draft marker</div>
-							</div>
+						<div class="flex h-10 items-center gap-3 px-3">
+							<div class="min-w-0 flex-1 font-semibold">Mark as draft</div>
 							<SlideToggle
 								name="exportDraft"
 								size="sm"
@@ -209,25 +199,20 @@
 								bind:checked={$reportMetadata.is_draft}
 							/>
 						</div>
-						<div class="flex h-14 items-center gap-3 px-3">
-							<div class="min-w-0 flex-1">
-								<div class="font-semibold">Truncate bodies</div>
-								<div class="flex h-6 items-center gap-1.5 text-[11px] opacity-70">
-									{#if truncating}
-										<span>Request and response bodies cut at</span>
-										<input
-											id="exportTruncateLength"
-											type="number"
-											min="100"
-											step="100"
-											class="input h-6 w-20 px-1.5 py-0 text-[11px]"
-											aria-label="Truncate length in bytes"
-											bind:value={$reportMetadata.truncate_length}
-										/><span>bytes</span>
-									{:else}
-										<span>Request and response bodies in full</span>
-									{/if}
-								</div>
+						<div class="flex h-10 items-center gap-3 px-3">
+							<div class="flex min-w-0 flex-1 items-center gap-1.5">
+								<span class="font-semibold">Truncate bodies</span>
+								{#if truncating}
+									<input
+										id="exportTruncateLength"
+										type="number"
+										min="100"
+										step="100"
+										class="input ml-2 h-6 w-20 px-1.5 py-0 text-[11px]"
+										aria-label="Truncate length in bytes"
+										bind:value={$reportMetadata.truncate_length}
+									/><span class="text-[11px] opacity-70">bytes</span>
+								{/if}
 							</div>
 							<SlideToggle
 								name="exportTruncate"

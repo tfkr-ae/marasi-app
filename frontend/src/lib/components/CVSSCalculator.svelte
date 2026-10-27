@@ -7,6 +7,7 @@
 	import { ChevronDown, ChevronRight, ClipboardPaste, Copy, X } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import { interceptModalEscape } from "../overlayIsolation.js";
+	import { SEVERITY_BADGE } from "../logbook/severityColors.js";
 	import { CVSS_DEFAULTS, CVSS_GROUPS, parseCvss, pasteCvss, pickCvss, severityFromScore } from "../cvss.js";
 
 	/** The CVSS 3.1 vector, or "" when unscored. */
@@ -19,13 +20,6 @@
 	export let stacked = false;
 
 	const dispatch = createEventDispatcher();
-	const SEVERITY_CLASS = {
-		Critical: "bg-red-600 text-white",
-		High: "bg-orange-500 text-white",
-		Medium: "bg-yellow-500 text-black",
-		Low: "bg-blue-500 text-white",
-		Informational: "bg-green-500 text-white",
-	};
 
 	let pasting = false;
 	let pasted = "";
@@ -95,7 +89,7 @@
 			</span>
 			{#if scored}
 				<span class="flex-none text-base font-bold leading-none tabular-nums">{score.toFixed(1)}</span>
-				<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_CLASS[severity] ?? 'variant-soft'}"
+				<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[severity] ?? 'variant-soft'}"
 					>{severity}</span
 				>
 				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-[11px] opacity-80">{vector.replace("CVSS:3.1/", "")}</code>

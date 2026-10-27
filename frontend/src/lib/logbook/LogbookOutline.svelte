@@ -13,9 +13,9 @@
 		Plus,
 		ShieldAlert,
 	} from "lucide-svelte";
-	import { primaryVariant } from "../launchpad/format.js";
+	import { primaryVariant, tertiaryVariant } from "../launchpad/format.js";
 	import GroupPicker from "./GroupPicker.svelte";
-	import { SEVERITY_MARK } from "./severity.js";
+	import { SEVERITY_MARK } from "./severityColors.js";
 	import { anyStatusOf, completenessOf, groupsOf } from "../../stores/logbookStore";
 
 	export let store;
@@ -38,7 +38,7 @@
 
 	$: state = $store;
 	$: primary = primaryVariant($modeCurrent);
-	$: tertiary = $modeCurrent ? "variant-ghost-tertiary ring-0 shadow-none" : "variant-filled-tertiary";
+	$: tertiary = tertiaryVariant($modeCurrent);
 	$: groups = groupsOf(state);
 	$: any = anyStatusOf(state);
 	$: anyList = [
@@ -112,9 +112,7 @@
 		<div class="logbook-status flex text-[11px]" role="group" aria-label="Status">
 			{#each [["all", "All"], ["progress", "In progress"], ["done", "Done"]] as [status, label]}
 				<button
-					class="flex-1 px-2 py-1 {state.filters.status === status
-						? primary
-						: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+					class="flex-1 px-2 py-1 {state.filters.status === status ? primary : 'hover:bg-surface-500/10'}"
 					aria-pressed={state.filters.status === status}
 					on:click={() => store.setStatus(status)}>{label} <span class="opacity-70">{statusCounts[status]}</span></button
 				>

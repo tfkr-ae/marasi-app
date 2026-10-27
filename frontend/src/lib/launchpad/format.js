@@ -7,6 +7,10 @@ export const UNTITLED_LAUNCHPAD = "Untitled launchpad";
 export const primaryVariant = (lightMode) =>
   lightMode ? "variant-ghost-primary ring-0 shadow-none" : "variant-filled-primary";
 
+/** Marasi's tertiary variant, for test cases: ghost in light mode, filled in dark. */
+export const tertiaryVariant = (lightMode) =>
+  lightMode ? "variant-ghost-tertiary ring-0 shadow-none" : "variant-filled-tertiary";
+
 /** Marasi's neutral variant, as Home's Open Project: ghost in light mode, filled in dark. */
 export const neutralVariant = (lightMode) =>
   lightMode ? "variant-ghost border-0 ring-0" : "variant-filled";

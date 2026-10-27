@@ -4,7 +4,7 @@
 	// a new finding linked to it.
 	import { getModalStore } from "@skeletonlabs/skeleton";
 	import { BookCheck, ChevronDown, ChevronRight, CornerDownRight, Plus } from "lucide-svelte";
-	import { SEVERITY_BADGE } from "./severity.js";
+	import { SEVERITY_BADGE } from "./severityColors.js";
 	import { completenessOf, logbookStore } from "../../stores/logbookStore";
 	import { newRecord } from "./recordEditor.js";
 

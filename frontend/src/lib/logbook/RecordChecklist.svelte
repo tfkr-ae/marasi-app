@@ -9,8 +9,7 @@
 	import { AlertTriangle, Check, CircleDashed, Pencil } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import InlineFix from "./InlineFix.svelte";
-	import { severityFromScore } from "../cvss.js";
-	import { SEVERITY_BADGE } from "./severity.js";
+	import { SEVERITY_BADGE } from "./severityColors.js";
 	import { completenessOf } from "../../stores/logbookStore";
 
 	/** "finding" or "testCase". */
@@ -33,7 +32,6 @@
 		["Required", completeness.items.filter((item) => item.required)],
 		["Optional", completeness.items.filter((item) => !item.required)],
 	].filter(([, items]) => items.length);
-	$: cvssSeverity = severityFromScore(record.CVSSScore);
 
 	function valueOf(key) {
 		if (key === "Requests") {
@@ -87,9 +85,10 @@
 							{:else if item.key === "CVSSVector"}
 								<p class="flex items-center gap-2 text-xs">
 									<b class="tabular-nums">{Number(record.CVSSScore).toFixed(1)}</b>
-									{#if cvssSeverity}<span
-											class="badge rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[cvssSeverity]}"
-											>{cvssSeverity}</span
+									<!-- The record's own severity, as its header shows. -->
+									{#if record.Severity}<span
+											class="badge rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
+											>{record.Severity}</span
 										>{/if}
 									<code class="min-w-0 truncate bg-transparent p-0 font-mono text-[11px] opacity-70" title={record.CVSSVector}
 										>{record.CVSSVector.replace("CVSS:3.1/", "")}</code

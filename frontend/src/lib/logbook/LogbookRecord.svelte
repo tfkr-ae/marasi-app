@@ -12,7 +12,7 @@
 	import EvidenceViewer from "./EvidenceViewer.svelte";
 	import LinkedRecords from "./LinkedRecords.svelte";
 	import RecordChecklist from "./RecordChecklist.svelte";
-	import { SEVERITY_BADGE } from "./severity.js";
+	import { SEVERITY_BADGE } from "./severityColors.js";
 	import { ITEMS, linkedOf } from "../../stores/logbookStore";
 
 	const ITEM_LABEL = Object.fromEntries([...ITEMS.finding, ...ITEMS.testCase].map((i) => [i.key, i.label]));
