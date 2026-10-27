@@ -67,12 +67,11 @@
 			>
 				{#each items as item (item.key)}
 					{@const value = valueOf(item.key)}
+					<div class={item.key === fixing ? "bg-primary-500/5 shadow-[inset_3px_0_0] shadow-primary-500" : ""}>
 					<div
 						data-item={item.key}
 						data-focused={item.key === fixing || undefined}
-						class="grid h-12 grid-cols-[150px_minmax(0,1fr)_auto] items-center gap-3 px-3 {item.key === fixing
-							? 'bg-warning-500/10'
-							: ''}"
+						class="grid h-12 grid-cols-[150px_minmax(0,1fr)_auto] items-center gap-3 px-3"
 					>
 						<div class="flex items-center gap-2 text-[11px] font-semibold">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />
@@ -125,6 +124,7 @@
 					{#if fixing === item.key}
 						<InlineFix {store} {fix} {testCases} on:save={() => dispatch("save")} on:leave={() => dispatch("leave")} />
 					{/if}
+					</div>
 				{/each}
 			</div>
 		</div>
