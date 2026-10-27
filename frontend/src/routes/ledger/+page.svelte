@@ -90,8 +90,7 @@
 	import { highlightMigrating, highlightPalette, renameHighlight } from "../../stores/highlightsStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
-	import { logbookStore } from "../../stores/logbookStore.js";
-	import { RECORD_MODAL, newRecord } from "../../lib/logbook/recordEditor.js";
+	import { newRecord } from "../../lib/logbook/recordEditor.js";
 	import {
 		ledgerStore,
 		tableRows,
@@ -879,7 +878,6 @@
 			icon: BookCheckIcon,
 			handler: whenOpen(() => {
 				if (!$modalStore[0]) runShortcut("ledger.drawer-open.create-test-case");
-				else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 			}),
 		},
 		{
@@ -933,7 +931,6 @@
 			icon: ShieldAlertIcon,
 			handler: whenOpen(() => {
 				if (!$modalStore[0]) runShortcut("ledger.drawer-open.create-finding");
-				else if ($modalStore[0].component === RECORD_MODAL) logbookStore.requestClose();
 			}),
 		},
 		{
