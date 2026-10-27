@@ -16,6 +16,8 @@ import {
   UnlinkRequestFromTestCase,
 } from "../lib/wailsjs/go/main/App";
 import { createLogbookStore } from "./createLogbookStore.js";
+import { findingStore } from "./findingStore";
+import { testCaseStore } from "./testCaseStore";
 
 export {
   ITEMS,
@@ -29,6 +31,8 @@ export {
   isDirty,
   nextOf,
   openRecordOf,
+  severityCountsOf,
+  testCaseCountsOf,
 } from "./createLogbookStore.js";
 
 // A File's bytes as the bindings take a Go []byte.
@@ -50,3 +54,9 @@ export const logbookStore = createLogbookStore({
   saveArtifactToTestCase: upload(SaveArtifactToTestCase),
   deleteArtifact: (id) => DeleteArtifact(id),
 });
+
+// The Ledger and the request view still write through findingStore and
+// testCaseStore; the Logbook follows them until they open the edit
+// session instead.
+findingStore.subscribe((findings) => logbookStore.setRecords("finding", findings));
+testCaseStore.subscribe((testCases) => logbookStore.setRecords("testCase", testCases));

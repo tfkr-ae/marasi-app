@@ -19,9 +19,15 @@
 	export let id;
 	/** Keeps the menu open on a click outside, such as in a dialog the menu opened. */
 	export let stayOpen = false;
+	/** Greys the menu out in place; it can't open. */
+	export let disabled = false;
+	/** A fixed width for the menu, such as "w-44 flex-none", so a badge never moves what sits beside it. */
+	export let widthClass = "";
 
 	const dispatch = createEventDispatcher();
 	let root;
+
+	$: if (disabled) open = false;
 
 	$: primary = primaryVariant($modeCurrent);
 
@@ -50,12 +56,19 @@
 <svelte:window on:pointerdown={onWindowPointerDown} />
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="relative flex items-stretch border-l border-surface-300-600-token" bind:this={root} on:keydown={onKeydown}>
+<div
+	class="relative flex items-stretch border-l border-surface-300-600-token {widthClass}"
+	bind:this={root}
+	on:keydown={onKeydown}
+>
 	<button
 		id="{id}Button"
 		type="button"
-		class="flex items-center gap-1.5 px-3 text-sm hover:bg-surface-200-700-token {open ? 'bg-surface-200-700-token' : ''}"
+		class="flex min-w-0 flex-1 items-center gap-1.5 px-3 text-sm {disabled
+			? 'cursor-not-allowed opacity-40'
+			: 'hover:bg-surface-200-700-token'} {open ? 'bg-surface-200-700-token' : ''}"
 		{title}
+		{disabled}
 		aria-haspopup="true"
 		aria-expanded={open}
 		aria-controls="{id}Panel"

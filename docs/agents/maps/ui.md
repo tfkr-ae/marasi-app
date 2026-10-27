@@ -25,7 +25,8 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
 | Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |
 | Armory | `routes/armory/` | `lib/armory/` (`ArmoryDock`, `TemplateHeader`, `TemplateEditor`, `RunSettings`, `TrafficRegion`, `ArmoryDrawer`, `ArmoryDrawerRail`; `rowMenu.js` builds the traffic row menu from the Ledger's item builders, and `RowMenu` draws it), `lib/dock/Dock.svelte` |
-| Compass, Logbook, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
+| Logbook | `routes/logbook/` | `lib/logbook/` (`LogbookOutline`, `LogbookToolbar`, `LogbookSummary`), `lib/dock/Dock.svelte`, `stores/logbookStore.js` |
+| Compass, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
 | Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. |

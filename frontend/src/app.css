@@ -80,6 +80,12 @@ html:not(.dark) .btn-group.variant-ghost-primary > a:hover {
   filter: none !important;
 }
 
+html:not(.dark) button.variant-ghost-tertiary:not(:disabled):hover,
+html:not(.dark) a.variant-ghost-tertiary:hover {
+  background-color: rgb(var(--color-tertiary-200)) !important;
+  filter: none !important;
+}
+
 html:not(.dark) button.variant-ghost-success:not(:disabled):hover,
 html:not(.dark) a.variant-ghost-success:hover {
   background-color: rgb(var(--color-success-200)) !important;

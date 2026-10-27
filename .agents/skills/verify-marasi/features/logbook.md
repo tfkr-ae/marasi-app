@@ -9,7 +9,7 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Logbook` or press `Command+7`. `Logbook Settings` starts closed. Expand it to expose search (`#logbookSearch`), tabs, creation controls, and report export.
+Select the rail item titled `Logbook` or press `Command+7`. The dock holds `#logbookNewFinding`, `#logbookNewTestCase` and the status toggle (`.logbook-status`); the toolbar holds the search (`#logbookSearch`), `#logbookKind-findings`, `#logbookKind-testCases`, the `#logbookSeverityButton`, `#logbookCategoryButton` and `#logbookTagsButton` menus, `#logbookClearFilters` and `#logbookExport`. The workspace is `.logbook-summary`. The round trip below predates this layout: open a new finding with `#logbookNewFinding` and wait for its title in `.logbook-summary`.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `logbook` in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
