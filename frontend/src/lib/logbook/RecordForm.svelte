@@ -25,8 +25,8 @@
 			]
 		: [{ key: "Note", label: "Note", placeholder: "What you tried and what happened", rows: 12 }];
 
-	// An unscored finding opens on the metrics; a scored one folds them.
-	let cvssOpen = !session.draft.CVSSVector;
+	// The metrics start folded, new finding or not; the score row opens them.
+	let cvssOpen = false;
 
 	$: categories = [...new Set($logbookStore.testCases.map((t) => t.Category?.trim()).filter(Boolean))].sort();
 	$: findings = finding
