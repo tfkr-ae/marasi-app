@@ -68,9 +68,10 @@ html.dark body {
 
 /* Skeleton outlines anything focused in a modal, so a mouse click on a
    switch or button there draws WebKit's blue ring. Keep the ring for
-   keyboard focus only. */
+   keyboard focus only. Skeleton's selector chains five :not()s, so it
+   outranks this one; !important is what lets this win. */
 .modal :focus:not(:focus-visible) {
-  outline: none;
+  outline: none !important;
 }
 
 input[data-overlay-initial-focus]:focus,
