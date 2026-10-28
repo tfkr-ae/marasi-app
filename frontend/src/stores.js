@@ -64,7 +64,8 @@ export const reportMetadata = writable({
   ).toLocaleDateString("en-CA"),
   end: new Date().toLocaleDateString("en-CA"),
   created_at: new Date().toISOString(),
-  truncate_length: 0,
+  // Bodies are cut at 1000 bytes unless the tester turns Truncate off.
+  truncate_length: 1000,
   custom_properties: { include_test_cases: true },
 });
 
@@ -226,7 +227,7 @@ export async function openProject() {
     ).toLocaleDateString("en-CA"),
     end: new Date().toLocaleDateString("en-CA"),
     created_at: new Date().toISOString(),
-    truncate_length: 0,
+    truncate_length: 1000,
     custom_properties: { include_test_cases: true },
   });
   compassCode.set("");
