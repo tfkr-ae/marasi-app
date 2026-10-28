@@ -1,15 +1,18 @@
 <script>
 	// A linked request and its response in the Ledger drawer's CodeMirror
-	// editor, side by side or stacked, with Wrap lines. Expand opens the pair
+	// editor, side by side or stacked. Wrapping follows the app's Wrap lines
+	// and Line wrapping, as the Ledger and Launchpad editors do, and a pane
+	// says "Not wrapped" when a long line stops it. Expand opens the pair
 	// nearly full screen; Esc or a click outside closes only that, even over
 	// a modal.
 	import { onDestroy } from "svelte";
-	import { Maximize2, WrapText, X } from "lucide-svelte";
+	import { Maximize2, X } from "lucide-svelte";
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, usesSyntax } from "../ledger/drawer.js";
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
-	import { marasiConfig, prettify } from "../../stores";
+	import { lineWrap, marasiConfig, prettify } from "../../stores";
+	import { WRAP_SUSPENDED } from "../lineWrap.js";
 
 	/** The pair's ID. */
 	export let id;
@@ -17,11 +20,12 @@
 	export let read;
 	/** The request above the response instead of beside it. */
 	export let stack = false;
-	export let wrap = true;
 	/** Inside the expanded view, so no Expand of its own. */
 	export let expanded = false;
 
 	let details;
+	// Per pane, whether a shown long string stopped the lines wrapping.
+	let paused = [false, false];
 	let big = false;
 	let loadingID = null;
 
@@ -29,6 +33,7 @@
 	async function load(target) {
 		loadingID = target;
 		details = undefined;
+		paused = [false, false];
 		const row = await read(target).catch(() => null);
 		if (String(loadingID) === String(target)) details = row;
 	}
@@ -64,16 +69,10 @@
 				class="flex h-7 flex-none items-center gap-3 border-b border-surface-500/30 px-2 text-[10px] font-bold uppercase tracking-wider"
 			>
 				<span class="flex-1 opacity-60">{label}</span>
+				{#if paused[i]}
+					<span class="logbook-wrap-suspended font-normal normal-case tracking-normal opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
+				{/if}
 				{#if i === 1}
-					<button
-						type="button"
-						class="flex items-center gap-1 font-normal normal-case tracking-normal {wrap
-							? 'opacity-90'
-							: 'opacity-50'} hover:opacity-100"
-						title="Wrap lines"
-						aria-pressed={wrap}
-						on:click={() => (wrap = !wrap)}><WrapText size={11} />Wrap</button
-					>
 					{#if !expanded}<button
 							type="button"
 							class="logbook-pair-expand flex items-center gap-1 font-normal normal-case tracking-normal opacity-70 hover:opacity-100"
@@ -91,7 +90,8 @@
 					{#key id}<DrawerEditor
 							value={text}
 							lang={usesSyntax(text, $marasiConfig.SyntaxMode) ? "http" : undefined}
-							{wrap}
+							wrap={$lineWrap}
+							on:suspend={(e) => (paused[i] = e.detail)}
 						/>{/key}
 				{/if}
 			</div>
@@ -117,7 +117,7 @@
 					><X size={15} /></button
 				>
 			</header>
-			<div class="min-h-0 flex-1"><svelte:self {id} {read} bind:wrap expanded /></div>
+			<div class="min-h-0 flex-1"><svelte:self {id} {read} expanded /></div>
 		</div>
 	</div>
 {/if}

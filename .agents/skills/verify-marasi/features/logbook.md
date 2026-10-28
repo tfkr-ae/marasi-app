@@ -90,6 +90,20 @@ A fresh scratchpad has no records and no traffic. Send a few requests through th
  {"key":"escape"},{"waitNoSelector":".logbook-record"},{"waitSelector":".logbook-summary"}]}
 ```
 
+**Group by and wrapping.** A Group by menu draws above the next section's header: the driver's hit test fails the click if it doesn't. The record's panes follow the Ledger drawer's Wrap lines; a pair with a response line over 100,000 characters says `Not wrapped` on that pane only. Proven with a finding and a test case, and `/long` answering 150 KB of `word `:
+
+```json
+{"name":"group-by-and-wrap","steps":[
+ {"click":"button[title=\"Group by\"]","nth":1},{"waitSelector":"[role=menu]"},
+ {"click":"[role=menu] [role=menuitemradio]","hasText":"No grouping"},{"waitNoSelector":"[role=menu]"},
+ {"click":".logbook-summary-findings button","hasText":"<marker>"},{"waitSelector":".logbook-record"},
+ {"click":"[data-fix-open=Requests]"},{"click":"[data-fix-search]"},{"insert":"long"},
+ {"click":"[data-fix=Requests] button","hasText":"/long"},{"click":"[data-fix-save]"},
+ {"waitText":"Not wrapped","within":".logbook-pair"}]}
+```
+
+Then turn `Wrap lines` off in a Ledger drawer (`[aria-label="Wrap lines"]`) and reopen the record: neither pane has `.cm-lineWrapping` and `Not wrapped` is gone.
+
 Before the next recipe, create a test case (`#logbookNewTestCase`, title `<marker> login test`, category `Authentication`) and a second finding (`<marker> XSS in search`) with Save and close.
 
 **Toolbar staying put, filtering, N and Esc.** The hovers record each control's box in `-steps.json`: compare `x` and `width` across the three kinds. The menus and Export keep their boxes, and the one that doesn't apply is `disabled`. The search input narrows by the width of `#logbookClearFilters` once a filter is set; its left edge stays. Any filter change closes the open record.

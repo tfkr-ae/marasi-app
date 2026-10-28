@@ -5,10 +5,12 @@
 	// Bytes come from GetArtifact, saving from DownloadArtifact.
 	import { onDestroy } from "svelte";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
-	import { Download, FileIcon, Maximize2, Minimize2, WrapText } from "lucide-svelte";
+	import { Download, FileIcon, Maximize2, Minimize2 } from "lucide-svelte";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
+	import { lineWrap } from "../../stores";
+	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import { artifactBytes, artifactText, formatSize, previewOf } from "./artifacts.js";
 
 	/** ArtifactMetadata: { ID, Filename, MimeType, Size }, or null. */
@@ -19,7 +21,8 @@
 	const toastStore = getToastStore();
 
 	let actual = false;
-	let wrap = true;
+	// Whether a shown long string stopped the lines wrapping.
+	let paused = false;
 	let url = null;
 	let text = "";
 	// undefined while the bytes load, null when they could not be read.
@@ -28,6 +31,8 @@
 
 	$: primary = primaryVariant($modeCurrent);
 	$: kind = artifact ? previewOf(artifact) : null;
+	// A new artifact starts wrapped until its editor says otherwise.
+	$: artifact, (paused = false);
 	$: load(artifact, kind);
 
 	async function load(target, how) {
@@ -75,14 +80,8 @@
 				<button type="button" class={quiet} title={actual ? "Fit" : "Actual size"} on:click={() => (actual = !actual)}>
 					{#if actual}<Minimize2 size={12} />{:else}<Maximize2 size={12} />{/if}
 				</button>
-			{:else if kind === "text"}
-				<button
-					type="button"
-					class="flex-none p-0.5 {wrap ? 'opacity-100' : 'opacity-50'} hover:opacity-100"
-					title="Wrap lines"
-					aria-pressed={wrap}
-					on:click={() => (wrap = !wrap)}><WrapText size={12} /></button
-				>
+			{:else if kind === "text" && paused}
+				<span class="logbook-wrap-suspended flex-none text-[10px] opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
 			{/if}
 			<button type="button" class={quiet} title="Download" aria-label="Download" on:click={download}
 				><Download size={12} /></button
@@ -110,7 +109,7 @@
 				<iframe title={artifact.Filename} src={url} class="h-full w-full border-0 bg-white"></iframe>
 			{:else if kind === "text"}
 				<div class="h-full bg-white pt-[3px] dark:bg-[#282c34]">
-					{#key artifact.ID}<DrawerEditor value={text} {wrap} />{/key}
+					{#key artifact.ID}<DrawerEditor value={text} wrap={$lineWrap} on:suspend={(e) => (paused = e.detail)} />{/key}
 				</div>
 			{:else}
 				<div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-[11px]">
