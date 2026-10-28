@@ -6,8 +6,8 @@
 	export let options = [];
 	export let value;
 	export let onChange = (value) => {};
-
-	let open = false;
+	/** Whether the menu is open; the header raises itself above the next one. */
+	export let open = false;
 	let root;
 	$: label = options.find(([v]) => v === value)?.[1] ?? "";
 

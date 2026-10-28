@@ -93,6 +93,8 @@
 	}
 
 	const isOpenRecord = (kind, id) => state.open?.kind === kind && state.open?.id === id;
+	/** Which section's Group by menu is open, by section key. */
+	let pickerOpen = {};
 </script>
 
 <div class="logbook-outline flex h-full min-h-0 flex-col text-xs">
@@ -123,12 +125,15 @@
 		{#each sections as section (section.key)}
 			{@const open = sectionOpen(section, closed)}
 			<div
-				class="sticky top-0 z-10 flex h-8 items-center gap-2 border-b border-surface-500/20 bg-surface-100 pl-3 pr-2 text-[11px] font-semibold dark:bg-surface-800"
+				class="sticky top-0 {pickerOpen[section.key] ? 'z-20' : 'z-10'} flex h-8 items-center gap-2 border-b border-surface-500/20 bg-surface-100 pl-3 pr-2 text-[11px] font-semibold dark:bg-surface-800"
 			>
 				<svelte:component this={section.icon} size={12} class="opacity-60" />
 				<span>{section.title}</span>
 				<span class="flex-1 font-normal opacity-60">{section.count}</span>
+				<!-- Its menu sits in this sticky header, so the header rises while it
+				     is open, or the next section's header paints over the menu. -->
 				<GroupPicker
+					bind:open={pickerOpen[section.key]}
 					options={section.options}
 					value={section.by}
 					onChange={(by) => store.setGrouping(section.key, by)}
