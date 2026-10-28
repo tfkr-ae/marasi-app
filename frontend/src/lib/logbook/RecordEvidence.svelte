@@ -122,17 +122,19 @@
 
 <div class="flex h-full min-h-0 flex-col" data-record-evidence>
 	<div class="flex h-9 flex-none items-center gap-1 border-b border-surface-500/30 px-2 text-xs">
-		<!-- The tabs' size, height, offset and (clear) underline, so the three
-		     labels share a baseline. -->
-		<span class="-mb-px mr-2 flex h-full items-center border-b-2 border-transparent text-xs font-bold">Evidence</span>
+		<!-- The tabs' size, so the three labels share a baseline. -->
+		<span class="mr-2 text-xs font-bold">Evidence</span>
 		{#each [["requests", "Requests", draft.Requests.length], ["artifacts", "Artifacts", draft.Artifacts.length]] as [key, name, count]}
 			<button
 				type="button"
-				class="-mb-px h-full border-b-2 px-3 {tab === key ? 'border-primary-500 font-bold' : 'border-transparent opacity-70 hover:opacity-100'}"
+				class="relative flex h-full items-center gap-1 px-3 {tab === key ? 'font-bold' : 'opacity-70 hover:opacity-100'}"
 				data-evidence-tab={key}
 				on:click={() => (tab = key)}
 			>
 				{name} <span class="text-[10px] font-normal opacity-60">{count}</span>
+				<!-- The underline overlays the row's bottom edge and takes no
+				     room, so the label centres in the full row. -->
+				{#if tab === key}<span class="absolute -bottom-px left-0 right-0 h-0.5 bg-primary-500"></span>{/if}
 			</button>
 		{/each}
 	</div>

@@ -43,12 +43,12 @@
 				type="button"
 				role="tab"
 				aria-selected={tab === key}
-				class="-mb-px h-full border-b-2 px-3 {tab === key
-					? 'border-primary-500 font-bold'
-					: 'border-transparent opacity-70 hover:opacity-100'}"
+				class="relative flex h-full items-center gap-1 px-3 {tab === key ? 'font-bold' : 'opacity-70 hover:opacity-100'}"
 				on:click={() => (tab = key)}
 			>
 				{name} <span class="text-[10px] font-normal opacity-60">{n}</span>
+				<!-- Overlays the row's bottom edge, so the label centres in the full row. -->
+				{#if tab === key}<span class="absolute -bottom-px left-0 right-0 h-0.5 bg-primary-500"></span>{/if}
 			</button>
 		{/each}
 		<slot name="tabs" />
