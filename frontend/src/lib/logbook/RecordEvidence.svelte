@@ -122,7 +122,9 @@
 
 <div class="flex h-full min-h-0 flex-col" data-record-evidence>
 	<div class="flex h-9 flex-none items-center gap-1 border-b border-surface-500/30 px-2 text-xs">
-		<span class="mr-2 text-sm font-bold">Evidence</span>
+		<!-- The tabs' size, height, offset and (clear) underline, so the three
+		     labels share a baseline. -->
+		<span class="-mb-px mr-2 flex h-full items-center border-b-2 border-transparent text-xs font-bold">Evidence</span>
 		{#each [["requests", "Requests", draft.Requests.length], ["artifacts", "Artifacts", draft.Artifacts.length]] as [key, name, count]}
 			<button
 				type="button"
