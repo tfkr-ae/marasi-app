@@ -44,6 +44,7 @@ Right-clicking a launchpad row in `LaunchpadTree.svelte` calls the page's `openL
 - `launchpadMenuFor({ launchpad, entries, findings, testCases, pending })` gives the Finding and Test case submenus from `recordItems` over all of the launchpad's entries. For an empty launchpad, both are disabled with "No entries". `pending` says whether a launch from that launchpad is pending. A divider and Rename… (`{ type: "rename" }`) follow them.
 - `runLaunchpadAction` runs an item on the launchpad the menu was opened for. The Finding and Test case items go through `runRecordAction` with all of its entry ids, so the toasts and errors are the entry menu's.
 - Rename… opens Skeleton's `prompt` modal with the current name, and saving calls the store's `renameLaunchpad(id, name)`. That trims the name, does nothing for a blank or unchanged one, and keeps the description. The tree, the tab and the workspace header all read the name from the store. The header's inline edit still changes the name and description together through `updateLaunchpad`.
+- The menu ends with Delete launchpad, which `pending` disables with `DELETE_LAUNCHPAD_PENDING_HINT`. It calls the page's `deleteLaunchpad(id)`, which the tab and ⌘K reach through `deleteOpenLaunchpad`, so all three share the pending refusal, the confirmation and the dirty-draft warning. The store's `deleteLaunchpad` opens a neighbour only when the deleted launchpad was the open one.
 - To add an item, append it to `launchpadMenuFor` and add a branch to `runLaunchpadAction`.
 
 ## Links to the rest of the app

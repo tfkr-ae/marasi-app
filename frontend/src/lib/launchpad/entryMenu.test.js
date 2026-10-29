@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { entryMenuFor, launchpadMenuFor } from "./entryMenu.js";
+import { DELETE_LAUNCHPAD_PENDING_HINT } from "../launchPending.js";
 import { menuAction } from "../ledger/rowMenu.js";
 
 const entry = (id, extra = {}) => ({ ID: id, Method: "GET", Host: "acme.test", Path: `/${id}`, StatusCode: 200, ...extra });
@@ -252,7 +253,7 @@ function launchpadMenu(extra = {}) {
 
 test("the launchpad menu holds Finding and Test case over all of its entries", () => {
   const items = launchpadMenu();
-  assert.deepEqual(shape(items).slice(0, 2), ["finding", "testcase"]);
+  assert.deepEqual(shape(items), ["finding", "testcase", "sep", "rename", "delete"]);
   assert.equal(item(items, "f-new").label, "New finding with 5 requests");
   assert.equal(item(items, "t-new").label, "New test case with 5 requests");
   assert.deepEqual(item(items, "f-new").action, { type: "new-finding" });
@@ -282,7 +283,7 @@ test("the launchpad menu's link states count every entry, and a pending launch d
 
 test("an empty launchpad's Finding and Test case are greyed with No entries", () => {
   const items = launchpadMenu({ entries: [] });
-  assert.deepEqual(shape(items).slice(0, 2), ["finding", "testcase"]);
+  assert.deepEqual(shape(items), ["finding", "testcase", "sep", "rename", "delete"]);
   for (const id of ["finding", "testcase"]) {
     assert.equal(item(items, id).disabled, true, id);
     assert.equal(item(items, id).hint, "No entries", id);
@@ -297,4 +298,21 @@ test("Rename… follows Finding and Test case after a divider, even when empty o
     assert.equal(rename.disabled, undefined);
     assert.deepEqual(rename.action, { type: "rename" });
   }
+});
+
+test("the launchpad menu ends with Delete launchpad, marked as danger", () => {
+  const items = launchpadMenu();
+  const del = items.at(-1);
+  assert.equal(del.id, "delete");
+  assert.equal(del.label, "Delete launchpad");
+  assert.equal(del.danger, true);
+  assert.ok(!del.disabled);
+  assert.deepEqual(del.action, { type: "delete" });
+  assert.ok(!launchpadMenu({ entries: [] }).at(-1).disabled, "an empty launchpad can be deleted");
+});
+
+test("Delete launchpad is greyed with the pending hint while a launch from it is pending", () => {
+  const del = launchpadMenu({ pending: true }).at(-1);
+  assert.equal(del.disabled, true);
+  assert.equal(del.hint, DELETE_LAUNCHPAD_PENDING_HINT);
 });

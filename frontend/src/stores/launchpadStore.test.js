@@ -632,6 +632,23 @@ test("deleting the open launchpad drops its draft and opens its neighbour", asyn
   assert.equal(state.selectedEntryByLaunchpad.lp2, "c");
 });
 
+test("deleting a launchpad that isn't open leaves the open one, its draft and the Entry selection", async () => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await store.selectEntry("lp1", "a");
+  store.updateDraft("lp1", "edited");
+  await store.loadEntries("lp2");
+  await store.deleteLaunchpad("lp2");
+  assert.deepEqual(api.calls.at(-1), ["deleteLaunchpad", "lp2"]);
+  const state = get(store);
+  assert.deepEqual(state.launchpads.map((launchpad) => launchpad.ID), ["lp1"]);
+  assert.equal(state.entriesByLaunchpad.lp2, undefined);
+  assert.equal(state.selectedLaunchpadId, "lp1");
+  assert.equal(state.draftsByLaunchpad.lp1.raw, "edited");
+  assert.deepEqual(state.entrySelection, { launchpadId: "lp1", ids: ["a"], anchor: "a" });
+});
+
 test("a delete Marasi refuses for a launch still pending keeps the launchpad and learns the launch", async () => {
   const api = twoLaunchpads();
   const store = createLaunchpadStore(api);
