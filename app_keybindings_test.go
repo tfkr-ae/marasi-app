@@ -426,7 +426,7 @@ func TestAppKeybindings(t *testing.T) {
 		for name, section := range sections {
 			t.Run(name, func(t *testing.T) {
 				dir := t.TempDir()
-				original := "default_address: 127.0.0.1\ndefault_port: \"8080\"\nfirst_run: false\nledger_content_type_exclusion: [image/png]\nsyntax_mode: auto\nvim_enabled: true\nwrap_mode: auto\n" + completeHighlightsYAML + section.yaml
+				original := "default_address: 127.0.0.1\ndefault_port: \"8080\"\nfirst_run: false\nledger_content_type_exclusion: [image/png]\nsyntax_mode: auto\ntext_size: default\nvim_enabled: true\nwrap_mode: auto\n" + completeHighlightsYAML + section.yaml
 				writeAppConfig(t, dir, original)
 
 				app := loadConfigApp(t, dir)

@@ -70,6 +70,7 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { sitemapStore } from "../stores/sitemapStore";
 	import { recentTraffic } from "../stores/recentTrafficStore";
+	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import {
 		EventsOn,
 		EventsOff,
@@ -211,6 +212,9 @@
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 		ExportReport: { ref: ExportReview },
 	};
+	// Text size sizes the root element, so everything in rem follows it.
+	// readConfig sets it before startup draws any text.
+	$: applyTextSize($textSize);
 	// Startup opens the scratchpad, and carries on once the first project
 	// has opened and loaded: the scratchpad, or one picked on the opening
 	// screen when the scratchpad can't open. It resolves to that project.

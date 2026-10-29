@@ -586,3 +586,43 @@ test("no Launchpad default hides a global shortcut", () => {
     }
   }
 });
+
+test("⌘=, ⌘- and ⌘0 change the Text size on every page and in drawers", () => {
+  const dispatcher = mac();
+  const states = [
+    on("/"),
+    on("/ledger"),
+    on("/ledger", requestDrawer()),
+    on("/launchpad"),
+    on("/checkpoint"),
+    armoryDrawerOpen(),
+    on("/logbook"),
+    on("/compass"),
+    on("/workshop"),
+    on("/settings"),
+  ];
+  for (const state of states) {
+    assert.equal(dispatcher.resolve(cmd("=", "Equal"), state), "global.increase-text-size", state.route);
+    assert.equal(dispatcher.resolve(cmd("-", "Minus"), state), "global.decrease-text-size", state.route);
+    assert.equal(dispatcher.resolve(cmd("0", "Digit0"), state), "global.reset-text-size", state.route);
+  }
+  // There is no ⌘⇧= (⌘+).
+  assert.equal(dispatcher.resolve(cmdShift("+", "Equal"), on("/")), null);
+});
+
+test("no other action's default takes the Text size keys", () => {
+  const catalog = buildCatalog();
+  const textSize = ["global.increase-text-size", "global.decrease-text-size", "global.reset-text-size"];
+  for (const platform of [MACOS, WINDOWS_LINUX]) {
+    const keys = new Map(
+      textSize.map((id) => [catalog.get(id)?.defaults[platform][0], id]),
+    );
+    assert.equal(keys.size, 3, `${platform}: three distinct keys`);
+    for (const action of catalog.actions) {
+      if (textSize.includes(action.id)) continue;
+      for (const binding of action.defaults[platform]) {
+        assert.equal(keys.get(binding), undefined, `${platform} ${binding}: ${action.id} takes ${keys.get(binding)}`);
+      }
+    }
+  }
+});

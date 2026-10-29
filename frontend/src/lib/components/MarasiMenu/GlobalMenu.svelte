@@ -17,6 +17,9 @@
 	} from "@skeletonlabs/skeleton";
 	import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
 	import {
+		AArrowDown,
+		AArrowUp,
+		ALargeSmall,
 		AnchorIcon,
 		ArrowUpCircle,
 		Binoculars,
@@ -59,6 +62,12 @@
 	} from "../../globalActions.js";
 	import { menuDispatcher } from "../../keybindings/app.js";
 	import {
+		DEFAULT_TEXT_SIZE,
+		largerTextSize,
+		smallerTextSize,
+	} from "../../textSize.js";
+	import { setTextSize, textSize } from "../../../stores/textSizeStore.js";
+	import {
 		buildCatalog,
 		extensionsWithGUI,
 		extensionNavigationActionId,
@@ -75,6 +84,14 @@
 		modalStore.close();
 		document.querySelector("dialog[open]")?.close();
 		goto(url);
+	}
+
+	// Changes the Text size, or does nothing when it is already that size,
+	// as at either end of the scale. The change itself is the feedback.
+	function changeTextSize(step) {
+		const current = get(textSize);
+		const next = step(current);
+		if (next !== current) setTextSize(next);
 	}
 
 	// Opens the modal, or closes it when it is already on top.
@@ -120,6 +137,9 @@
 			setModeUserPrefers(next);
 			setModeCurrent(next);
 		},
+		"global.increase-text-size": () => changeTextSize(largerTextSize),
+		"global.decrease-text-size": () => changeTextSize(smallerTextSize),
+		"global.reset-text-size": () => changeTextSize(() => DEFAULT_TEXT_SIZE),
 		"global.check-for-updates": checkForUpdates,
 		"global.toggle-intercept": () =>
 			ToggleIntercept().then((flag) => interceptFlag.set(flag)),
@@ -151,6 +171,9 @@
 		"global.setup-listener": Binoculars,
 		"global.toggle-vim": ToggleLeft,
 		"global.toggle-light-mode": Sun,
+		"global.increase-text-size": AArrowUp,
+		"global.decrease-text-size": AArrowDown,
+		"global.reset-text-size": ALargeSmall,
 		"global.check-for-updates": ArrowUpCircle,
 		"global.toggle-intercept": ToggleLeft,
 	};
