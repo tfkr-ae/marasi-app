@@ -590,6 +590,34 @@ test("renaming a launchpad saves its name and description", async () => {
   });
 });
 
+test("renaming a launchpad from its menu keeps its description and what is open", async () => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "edited");
+  store.selectOnlyEntry("lp1", "b");
+  const before = get(store);
+  await store.renameLaunchpad("lp1", "  Login v2 ");
+  assert.deepEqual(api.calls.at(-1), ["updateLaunchpad", "lp1", "Login v2", "auth flow"]);
+  const state = get(store);
+  assert.equal(state.launchpads[0].Name, "Login v2");
+  assert.equal(state.launchpads[0].Description, "auth flow");
+  assert.equal(state.selectedLaunchpadId, "lp1");
+  assert.equal(state.draftsByLaunchpad.lp1, before.draftsByLaunchpad.lp1);
+  assert.equal(state.entrySelection, before.entrySelection);
+});
+
+test("renaming a launchpad to a blank or unchanged name does nothing", async () => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  const calls = api.calls.length;
+  const before = get(store).launchpads;
+  for (const name of ["", "   ", "Login", " Login "]) await store.renameLaunchpad("lp1", name);
+  assert.equal(api.calls.length, calls);
+  assert.equal(get(store).launchpads, before);
+});
+
 test("deleting the open launchpad drops its draft and opens its neighbour", async () => {
   const api = twoLaunchpads();
   const store = createLaunchpadStore(api);

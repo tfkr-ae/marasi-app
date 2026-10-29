@@ -698,6 +698,18 @@ export function createLaunchpadStore(api) {
     return { moved, refused: null };
   }
 
+  async function updateLaunchpad(id, { name, description = "" }) {
+    await api.updateLaunchpad(id, name, description);
+    update((state) => ({
+      ...state,
+      launchpads: state.launchpads.map((launchpad) =>
+        launchpad.ID === id
+          ? { ...launchpad, Name: name, Description: description }
+          : launchpad,
+      ),
+    }));
+  }
+
   return {
     subscribe,
     clear: () => {
@@ -834,16 +846,15 @@ export function createLaunchpadStore(api) {
       return id;
     },
 
-    updateLaunchpad: async (id, { name, description = "" }) => {
-      await api.updateLaunchpad(id, name, description);
-      update((state) => ({
-        ...state,
-        launchpads: state.launchpads.map((launchpad) =>
-          launchpad.ID === id
-            ? { ...launchpad, Name: name, Description: description }
-            : launchpad,
-        ),
-      }));
+    updateLaunchpad,
+
+    // The launchpad menu's Rename…: the name only, keeping the description.
+    // A blank or unchanged name does nothing.
+    renameLaunchpad: async (id, name) => {
+      const launchpad = current.launchpads.find((l) => l.ID === id);
+      const trimmed = name?.trim();
+      if (!launchpad || !trimmed || trimmed === launchpad.Name) return;
+      await updateLaunchpad(id, { name: trimmed, description: launchpad.Description ?? "" });
     },
 
     // Deletes without asking: confirming a dirty draft is the page's job.
