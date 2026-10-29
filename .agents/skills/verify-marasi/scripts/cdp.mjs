@@ -308,6 +308,8 @@ function keyEvent(key) {
 		",": { key: ",", code: "Comma", keyCode: 188 },
 		".": { key: ".", code: "Period", keyCode: 190 },
 		"`": { key: "`", code: "Backquote", keyCode: 192 },
+		"=": { key: "=", code: "Equal", keyCode: 187 },
+		"-": { key: "-", code: "Minus", keyCode: 189 },
 		"[": { key: "[", code: "BracketLeft", keyCode: 219 },
 		"]": { key: "]", code: "BracketRight", keyCode: 221 },
 		"\\": { key: "\\", code: "Backslash", keyCode: 220 },
