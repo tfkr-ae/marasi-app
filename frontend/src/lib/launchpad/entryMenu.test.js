@@ -252,7 +252,7 @@ function launchpadMenu(extra = {}) {
 
 test("the launchpad menu holds Finding and Test case over all of its entries", () => {
   const items = launchpadMenu();
-  assert.deepEqual(shape(items), ["finding", "testcase"]);
+  assert.deepEqual(shape(items).slice(0, 2), ["finding", "testcase"]);
   assert.equal(item(items, "f-new").label, "New finding with 5 requests");
   assert.equal(item(items, "t-new").label, "New test case with 5 requests");
   assert.deepEqual(item(items, "f-new").action, { type: "new-finding" });
@@ -282,9 +282,19 @@ test("the launchpad menu's link states count every entry, and a pending launch d
 
 test("an empty launchpad's Finding and Test case are greyed with No entries", () => {
   const items = launchpadMenu({ entries: [] });
-  assert.deepEqual(shape(items), ["finding", "testcase"]);
+  assert.deepEqual(shape(items).slice(0, 2), ["finding", "testcase"]);
   for (const id of ["finding", "testcase"]) {
     assert.equal(item(items, id).disabled, true, id);
     assert.equal(item(items, id).hint, "No entries", id);
+  }
+});
+
+test("Rename… follows Finding and Test case after a divider, even when empty or pending", () => {
+  for (const items of [launchpadMenu(), launchpadMenu({ entries: [], pending: true })]) {
+    assert.deepEqual(shape(items).slice(0, 4), ["finding", "testcase", "sep", "rename"]);
+    const rename = item(items, "rename");
+    assert.equal(rename.label, "Rename…");
+    assert.equal(rename.disabled, undefined);
+    assert.deepEqual(rename.action, { type: "rename" });
   }
 });

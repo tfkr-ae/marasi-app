@@ -15,6 +15,7 @@
 //   { type: "new-test-case" }          a new test case with the entries' pairs
 //   { type: "link-finding", id, title }      also unlink-finding,
 //   { type: "link-test-case", id, title }    unlink-test-case
+//   { type: "rename" }                 prompt for the launchpad's name (launchpad menu)
 import { unlessLaunching } from "../launchPending.js";
 import { UNTITLED_LAUNCHPAD } from "./format.js";
 import { moveRefusal } from "./entryMove.js";
@@ -196,11 +197,13 @@ export function entryMenuFor({
  * the project's `findings` and `testCases` for the Finding and Test case
  * items. `pending` says whether a launch from that launchpad is pending.
  * The page loads a collapsed launchpad's entries before opening it, so the
- * link states are never partial.
+ * link states are never partial. Rename… follows them after a divider.
  */
 export function launchpadMenuFor({ launchpad, entries = [], findings = [], testCases = [], pending = false }) {
   const records = recordItems(entries, { findings, testCases });
   return [
     ...(entries.length ? records : records.map((it) => ({ ...it, disabled: true, hint: "No entries" }))),
+    "sep",
+    { id: "rename", label: "Rename…", icon: "pen", action: { type: "rename" } },
   ];
 }

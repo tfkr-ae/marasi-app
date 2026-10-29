@@ -240,8 +240,31 @@
     // The Finding and Test case ones act on all of its entries.
     function runLaunchpadAction(action) {
         const { launchpadId } = rowLaunchpadMenu;
+        if (action.type === "rename") return renameLaunchpad(launchpadId);
         const ids = (get(launchpadStore).entriesByLaunchpad[launchpadId] || []).map((entry) => entry.ID);
         runRecordAction(action, ids);
+    }
+
+    // Asks for a new name only; the workspace header edits the description.
+    function renameLaunchpad(launchpadId) {
+        const launchpad = get(launchpadStore).launchpads.find((l) => l.ID === launchpadId);
+        if (!launchpad) return;
+        modalStore.trigger({
+            type: "prompt",
+            title: "Rename launchpad",
+            value: launchpad.Name,
+            valueAttr: { type: "text", required: true },
+            buttonTextSubmit: "Rename",
+            response: async (name) => {
+                if (typeof name !== "string") return;
+                try {
+                    await launchpadStore.renameLaunchpad(launchpadId, name);
+                } catch (err) {
+                    console.error("Launchpad rename error:", err);
+                    toastError(toastStore, "Failed to rename the launchpad", err);
+                }
+            },
+        });
     }
 
     // Runs a menu item's action on the Entry selection. Any type other than
