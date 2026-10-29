@@ -238,8 +238,10 @@
 
     // Runs a launchpad menu item's action on the launchpad it was opened for.
     // The Finding and Test case ones act on all of its entries.
+    // Delete goes through the tab's deleteLaunchpad.
     function runLaunchpadAction(action) {
         const { launchpadId } = rowLaunchpadMenu;
+        if (action.type === "delete") return deleteLaunchpad(launchpadId);
         const ids = (get(launchpadStore).entriesByLaunchpad[launchpadId] || []).map((entry) => entry.ID);
         runRecordAction(action, ids);
     }
@@ -381,14 +383,17 @@
         else launchpadStore.closeCompare();
     }
 
-    function deleteLaunchpad() {
+    // Deletes launchpad `id` after confirming, from the tab, ⌘K (both the
+    // open one) or the launchpad menu (any). Deleting one that isn't open
+    // leaves the open launchpad, its draft and the Entry selection.
+    function deleteLaunchpad(id) {
         const state = get(launchpadStore);
-        const launchpad = state.launchpads.find((l) => l.ID === state.selectedLaunchpadId);
+        const launchpad = state.launchpads.find((l) => l.ID === id);
         if (!launchpad) return;
         // Marasi refuses while a launch from it is pending (marasi docs/adr/2026-10-18-a-pending-launchs-pair-stays-in-its-launchpad.md).
         if (pendingLaunchOf(state, launchpad.ID)) return warnDeleteLaunching();
         confirm(
-            `Delete ${launchpad.Name}?`,
+            `Delete ${launchpad.Name || UNTITLED_LAUNCHPAD}?`,
             isDraftDirty(state, launchpad.ID) ? "Its unsaved draft will be discarded." : undefined,
             () =>
                 launchpadStore.deleteLaunchpad(launchpad.ID).catch((err) => {
@@ -401,6 +406,8 @@
                 }),
         );
     }
+
+    const deleteOpenLaunchpad = () => deleteLaunchpad(get(launchpadStore).selectedLaunchpadId);
 
     const warnDeleteLaunching = () => warnLaunching(toastStore, DELETE_LAUNCHPAD_PENDING_HINT);
 
@@ -572,7 +579,7 @@
         { actionId: "launchpad.previous-tab", icon: ArrowLeftIcon, handler: () => stepLaunchpad(-1) },
         { actionId: "launchpad.next-entry", icon: ArrowDownIcon, handler: () => stepEntry(1) },
         { actionId: "launchpad.previous-entry", icon: ArrowDownIcon, handler: () => stepEntry(-1) },
-        { actionId: "launchpad.delete-tab", icon: TrashIcon, handler: deleteLaunchpad },
+        { actionId: "launchpad.delete-tab", icon: TrashIcon, handler: deleteOpenLaunchpad },
         {
             actionId: "launchpad.edit-request",
             icon: PenIcon,
@@ -629,7 +636,7 @@
             onEditorFocus={() => dock?.onEditorFocus()}
             onLaunch={launch}
             onCancel={cancelLaunch}
-            onDelete={deleteLaunchpad}
+            onDelete={deleteOpenLaunchpad}
             onBrowserView={copyOpenBrowserView}
             launchDisabled={!$listener.status}
         />

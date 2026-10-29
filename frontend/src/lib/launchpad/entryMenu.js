@@ -15,7 +15,8 @@
 //   { type: "new-test-case" }          a new test case with the entries' pairs
 //   { type: "link-finding", id, title }      also unlink-finding,
 //   { type: "link-test-case", id, title }    unlink-test-case
-import { unlessLaunching } from "../launchPending.js";
+//   { type: "delete" }                 delete the launchpad (launchpad menu)
+import { unlessLaunching, DELETE_LAUNCHPAD_PENDING_HINT } from "../launchPending.js";
 import { UNTITLED_LAUNCHPAD } from "./format.js";
 import { moveRefusal } from "./entryMove.js";
 import { browserViewRefusal } from "../browserView.js";
@@ -194,13 +195,23 @@ export function entryMenuFor({
 /**
  * The menu for one `launchpad` in the tree, over all of its `entries`, with
  * the project's `findings` and `testCases` for the Finding and Test case
- * items. `pending` says whether a launch from that launchpad is pending.
- * The page loads a collapsed launchpad's entries before opening it, so the
- * link states are never partial.
+ * items. `pending` says whether a launch from that launchpad is pending,
+ * which greys Delete launchpad. The page loads a collapsed launchpad's
+ * entries before opening it, so the link states are never partial.
  */
 export function launchpadMenuFor({ launchpad, entries = [], findings = [], testCases = [], pending = false }) {
   const records = recordItems(entries, { findings, testCases });
   return [
     ...(entries.length ? records : records.map((it) => ({ ...it, disabled: true, hint: "No entries" }))),
+    "sep",
+    {
+      id: "delete",
+      label: "Delete launchpad",
+      icon: "trash",
+      danger: true,
+      // Marasi refuses while a launch from it is pending (marasi docs/adr/2026-10-18-a-pending-launchs-pair-stays-in-its-launchpad.md).
+      ...(pending ? { disabled: true, hint: DELETE_LAUNCHPAD_PENDING_HINT } : {}),
+      action: { type: "delete" },
+    },
   ];
 }
