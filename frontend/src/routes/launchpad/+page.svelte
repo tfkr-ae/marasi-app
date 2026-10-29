@@ -64,6 +64,7 @@
         warnLaunching,
     } from "../../lib/launchPending.js";
     import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
+    import { latestRequest } from "../../lib/latestRequest.js";
     import { handoffBackground, toastError } from "../../lib/toasts.js";
     import { BROWSER_VIEW_COPIED, browserViewRefusal, browserViewURL } from "../../lib/browserView.js";
 
@@ -195,13 +196,18 @@
     $: entryMenuName = $launchpadStore.launchpads.find((l) => l.ID === entryMenuData?.launchpadId)?.Name;
 
     function openEntryMenu(x, y) {
-        if (selectedEntryIds(get(launchpadStore)).length) entryMenu = { open: true, x, y };
+        if (!selectedEntryIds(get(launchpadStore)).length) return;
+        launchpadMenuRequests.start();
+        entryMenu = { open: true, x, y };
     }
 
     // The launchpad context menu (RowMenu with launchpadMenuFor items) for a
     // launchpad row. It acts on that launchpad, which need not be the open
     // one, and leaves the open launchpad, its draft and the Entry selection.
     let rowLaunchpadMenu = { open: false, x: 0, y: 0, launchpadId: null };
+    // Only the latest right-click opens its menu: a collapsed launchpad's
+    // entries can finish loading after a later right-click has opened one.
+    const launchpadMenuRequests = latestRequest();
 
     function launchpadMenuInput(state, launchpadId) {
         const launchpad = state.launchpads.find((l) => l.ID === launchpadId);
@@ -222,16 +228,17 @@
     // A collapsed launchpad's entries load first, so the link states are
     // never unknown.
     async function openLaunchpadMenu(launchpadId, x, y) {
+        const latest = launchpadMenuRequests.start();
         entryMenu = { ...entryMenu, open: false };
         if (get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) {
             try {
                 await launchpadStore.loadEntries(launchpadId);
             } catch (err) {
                 console.error("Launchpad entries error:", err);
-                toastError(toastStore, "Failed to load the entries", err);
+                if (latest()) toastError(toastStore, "Failed to load the entries", err);
                 return;
             }
-            if (get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) return;
+            if (!latest() || get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) return;
         }
         rowLaunchpadMenu = { open: true, x, y, launchpadId };
     }
