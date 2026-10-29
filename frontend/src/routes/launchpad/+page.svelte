@@ -319,33 +319,30 @@
         }
     }
 
+    // The link and unlink items' action types: which way, the record's noun
+    // for the toasts and its kind for Marasi.
+    const LINK_ACTIONS = {
+        "link-finding": { link: true, noun: "finding", kind: "finding" },
+        "unlink-finding": { link: false, noun: "finding", kind: "finding" },
+        "link-test-case": { link: true, noun: "test case", kind: "test_case" },
+        "unlink-test-case": { link: false, noun: "test case", kind: "test_case" },
+    };
+
     // The Finding and Test case items over entries `ids`, whose pairs they
     // act on. False for any other action.
     function runRecordAction(action, ids) {
-        switch (action.type) {
-            case "new-finding":
-                newRecord(modalStore, "finding", { requestIds: ids });
-                return true;
-            case "new-test-case":
-                newRecord(modalStore, "testCase", { requestIds: ids });
-                return true;
-            case "link-finding":
-            case "unlink-finding":
-            case "link-test-case":
-            case "unlink-test-case": {
-                const link = action.type.startsWith("link-");
-                const noun = action.type.endsWith("finding") ? "finding" : "test case";
-                const kind = noun === "finding" ? "finding" : "test_case";
-                changeLinks(ids, link, noun, kind, action);
-                return true;
-            }
-        }
-        return false;
+        if (action.type === "new-finding") newRecord(modalStore, "finding", { requestIds: ids });
+        else if (action.type === "new-test-case") newRecord(modalStore, "testCase", { requestIds: ids });
+        else if (LINK_ACTIONS[action.type]) changeLinks(ids, LINK_ACTIONS[action.type], action);
+        else return false;
+        return true;
     }
 
     // Links or unlinks the entries' pairs and a finding or test case, with
     // the Ledger's toasts; the store's mapping rereads that kind's list.
-    async function changeLinks(ids, link, noun, kind, { id, title }) {
+    // `how` is a LINK_ACTIONS value.
+    async function changeLinks(ids, how, { id, title }) {
+        const { link, noun, kind } = how;
         let count;
         try {
             count = link
@@ -357,7 +354,7 @@
                 message: `Failed to ${link ? "link" : "unlink"} ${requestCount(ids.length)}: ${String(err)}`,
                 background: "variant-filled-error",
                 timeout: 10000,
-                action: { label: "Retry", response: () => changeLinks(ids, link, noun, kind, { id, title }) },
+                action: { label: "Retry", response: () => changeLinks(ids, how, { id, title }) },
             });
             return;
         }
