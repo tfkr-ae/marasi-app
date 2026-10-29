@@ -53,8 +53,8 @@ export const launchpadStore = createLaunchpadStore({
     UnlinkTraffic({ ids }, { Kind: "launchpad", ID: launchpadId }),
   // As the Ledger's: target is { Kind: "finding" | "test_case", ID }, and
   // that kind's list rereads its links afterwards.
-  linkTraffic: (selection, target) => relinked(LinkTraffic(selection, target), target.Kind),
-  unlinkTraffic: (selection, target) => relinked(UnlinkTraffic(selection, target), target.Kind),
+  linkEntriesToRecord: (selection, target) => relinked(LinkTraffic(selection, target), target.Kind),
+  unlinkEntriesFromRecord: (selection, target) => relinked(UnlinkTraffic(selection, target), target.Kind),
 });
 
 // Keeps the Go side told how many launchpads have unsaved drafts, so quitting

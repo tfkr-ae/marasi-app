@@ -349,8 +349,8 @@
         let count;
         try {
             count = link
-                ? await launchpadStore.linkEntries(ids, kind, id)
-                : await launchpadStore.unlinkEntries(ids, kind, id);
+                ? await launchpadStore.linkEntriesToRecord(ids, kind, id)
+                : await launchpadStore.unlinkEntriesFromRecord(ids, kind, id);
         } catch (err) {
             console.error("Launchpad link error:", err);
             toastStore.trigger({
