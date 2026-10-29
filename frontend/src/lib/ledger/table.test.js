@@ -153,10 +153,12 @@ test("the header is a little taller than a row at every Text size", () => {
 
 // Method fits OPTIONS and its label with the sort arrow; Type fits most
 // subtypes (x-protobuf, javascript) and its tooltip shows the rest.
+// Widths are in rem, so the columns grow with the Text size: at Default
+// they are 52px 46px 70px 80px 170px 180px+ 60px 120px 62px.
 test("every row lays its cells out on the same grid; the path takes the spare width", () => {
   assert.equal(
     rowTemplate(LEDGER_COLUMNS),
-    "52px 46px 70px 80px 170px minmax(180px,1fr) 60px 120px 62px",
+    "3.25rem 2.875rem 4.375rem 5rem 10.625rem minmax(11.25rem,1fr) 3.75rem 7.5rem 3.875rem",
   );
 });
 

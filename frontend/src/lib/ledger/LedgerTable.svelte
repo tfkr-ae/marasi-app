@@ -382,7 +382,7 @@
 		align-items: center;
 		font-size: 0.6875rem;
 		white-space: nowrap;
-		min-width: 734px;
+		min-width: 45.875rem;
 	}
 	/* Each cell's box is trimmed to its capitals, so the row centres the
 	   text itself rather than a line box whose glyph position depends on
