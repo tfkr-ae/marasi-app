@@ -26,6 +26,10 @@
 	export let moveEntries;
 	// Opens the entry context menu at (x, y) for the Entry selection.
 	export let openEntryMenu = () => {};
+	// Opens the launchpad context menu for launchpad `id` at (x, y), and the
+	// launchpad it is open for, whose row is outlined.
+	export let openLaunchpadMenu = () => {};
+	export let menuLaunchpadId = null;
 	export let searchInput = null;
 
 	export let groupByStatus = savedGroupByStatus;
@@ -118,6 +122,11 @@
 		scroller?.focus({ preventScroll: true });
 		if (!isEntrySelected(state, launchpadId, entryId)) store.selectOnlyEntry(launchpadId, entryId);
 		openEntryMenu(event.clientX, event.clientY);
+	}
+	// A right-click on a launchpad row selects nothing.
+	function rightClickLaunchpad(event, launchpadId) {
+		scroller?.focus({ preventScroll: true });
+		openLaunchpadMenu(launchpadId, event.clientX, event.clientY);
 	}
 	/** Focuses the tree, where its shortcuts work. */
 	export function focus() {
@@ -418,7 +427,10 @@
 							? drag.refused
 								? 'outline outline-2 -outline-offset-2 outline-error-500'
 								: 'lp-drop-row'
-							: ''}"
+							: menuLaunchpadId === launchpad.ID
+								? 'outline outline-2 -outline-offset-2 outline-primary-500'
+								: ''}"
+						on:contextmenu|preventDefault={(event) => rightClickLaunchpad(event, launchpad.ID)}
 					>
 						<button
 							class="py-1.5 pl-1.5 opacity-60 hover:opacity-100"

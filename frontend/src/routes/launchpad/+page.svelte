@@ -38,7 +38,7 @@
     import LaunchpadTree from "../../lib/launchpad/LaunchpadTree.svelte";
     import LaunchpadWorkspace from "../../lib/launchpad/LaunchpadWorkspace.svelte";
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
-    import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
+    import { entryMenuFor, launchpadMenuFor } from "../../lib/launchpad/entryMenu.js";
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
     import { menuAction } from "../../lib/ledger/rowMenu.js";
@@ -194,6 +194,52 @@
 
     function openEntryMenu(x, y) {
         if (selectedEntryIds(get(launchpadStore)).length) entryMenu = { open: true, x, y };
+    }
+
+    // The launchpad context menu (RowMenu with launchpadMenuFor items) for a
+    // launchpad row. It acts on that launchpad, which need not be the open
+    // one, and leaves the open launchpad, its draft and the Entry selection.
+    let rowLaunchpadMenu = { open: false, x: 0, y: 0, launchpadId: null };
+
+    function launchpadMenuInput(state, launchpadId) {
+        const launchpad = state.launchpads.find((l) => l.ID === launchpadId);
+        if (!launchpad) return null;
+        return {
+            launchpad,
+            entries: state.entriesByLaunchpad[launchpadId] || [],
+            findings: $findingStore,
+            testCases: $testCaseStore,
+            pending: Boolean(pendingLaunchOf(state, launchpadId)),
+        };
+    }
+
+    $: launchpadMenuData = rowLaunchpadMenu.open
+        ? launchpadMenuInput($launchpadStore, rowLaunchpadMenu.launchpadId)
+        : null;
+
+    // A collapsed launchpad's entries load first, so the link states are
+    // never unknown.
+    async function openLaunchpadMenu(launchpadId, x, y) {
+        entryMenu = { ...entryMenu, open: false };
+        if (get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) {
+            try {
+                await launchpadStore.loadEntries(launchpadId);
+            } catch (err) {
+                console.error("Launchpad entries error:", err);
+                toastError(toastStore, "Failed to load the entries", err);
+                return;
+            }
+            if (get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) return;
+        }
+        rowLaunchpadMenu = { open: true, x, y, launchpadId };
+    }
+
+    // Runs a launchpad menu item's action on the launchpad it was opened for.
+    // The Finding and Test case ones act on all of its entries.
+    function runLaunchpadAction(action) {
+        const { launchpadId } = rowLaunchpadMenu;
+        const ids = (get(launchpadStore).entriesByLaunchpad[launchpadId] || []).map((entry) => entry.ID);
+        runRecordAction(action, ids);
     }
 
     // Runs a menu item's action on the Entry selection. Any type other than
@@ -566,6 +612,8 @@
             {pickEntry}
             {moveEntries}
             {openEntryMenu}
+            {openLaunchpadMenu}
+            menuLaunchpadId={rowLaunchpadMenu.open ? rowLaunchpadMenu.launchpadId : null}
             bind:searchInput
         />
     </LaunchpadDock>
@@ -593,5 +641,18 @@
     noun={["entry", "entries"]}
     scope={entryMenuName ? `in ${entryMenuName}` : null}
     on:action={(e) => runEntryAction(e.detail)}
+    on:close={(e) => e.detail.refocus && tree?.focus()}
+/>
+
+<RowMenu
+    bind:open={rowLaunchpadMenu.open}
+    x={rowLaunchpadMenu.x}
+    y={rowLaunchpadMenu.y}
+    pairs={launchpadMenuData?.entries ?? []}
+    items={launchpadMenuData ? launchpadMenuFor(launchpadMenuData) : []}
+    context={{ numberOf: (entry) => launchpadMenuData.entries.indexOf(entry) + 1 }}
+    noun={["entry", "entries"]}
+    scope={launchpadMenuData ? `in ${launchpadMenuData.launchpad.Name || UNTITLED_LAUNCHPAD}` : null}
+    on:action={(e) => runLaunchpadAction(e.detail)}
     on:close={(e) => e.detail.refocus && tree?.focus()}
 />

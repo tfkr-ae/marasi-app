@@ -10,6 +10,7 @@ Which files work together on the Launchpad page, how a launch travels through Go
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
   - `LaunchpadWorkspace.svelte` is the draft editor;
   - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
+  - `launchpadMenuFor` in the same file describes the launchpad menu, a launchpad row's context menu, in the same shape;
   - the other files are pure helpers.
 - Go: the launch and launchpad methods in `app.go`, `launchpad_move.go` (`MoveLaunchpadEntries` and its refusal codes), and `launchpad_search.go`.
 
@@ -35,6 +36,14 @@ The entry menu's Finding and Test case submenus sit between Copy browser view UR
 - `new-finding` and `new-test-case` open the Logbook modal through `newRecord` with the entries' ids as its requests. Nothing is saved until Save.
 - `link-finding`, `unlink-finding`, `link-test-case` and `unlink-test-case` carry `{ id, title }`. `runRecordAction` on the page calls the store's `linkEntries` or `unlinkEntries(ids, kind, recordId)`, with `kind` "finding" or "test_case", and `changeLinks` shows the Ledger's toasts.
 - The store sends an `{ ids }` selection to `linkTraffic` or `unlinkTraffic`, which `launchpadStore.js` maps to `LinkTraffic` and `UnlinkTraffic` through `relinked` (`stores/relinked.js`, shared with the Ledger). `relinked` reloads that kind's list, so the checkmarks are right the next time the menu opens.
+
+## The launchpad menu
+
+Right-clicking a launchpad row in `LaunchpadTree.svelte` calls the page's `openLaunchpadMenu`, which first loads a collapsed launchpad's entries with the store's `loadEntries`, so the link states are never unknown. The menu acts on that launchpad, not the open one, and changes neither the open launchpad, its draft nor the Entry selection. The tree outlines the row while the menu is open (`menuLaunchpadId`). A second `RowMenu` on the page draws it.
+
+- `launchpadMenuFor({ launchpad, entries, findings, testCases, pending })` gives the Finding and Test case submenus from `recordItems` over all of the launchpad's entries. For an empty launchpad, both are disabled with "No entries". `pending` says whether a launch from that launchpad is pending.
+- `runLaunchpadAction` runs an item on the launchpad the menu was opened for. The Finding and Test case items go through `runRecordAction` with all of its entry ids, so the toasts and errors are the entry menu's.
+- To add an item, append it to `launchpadMenuFor` and add a branch to `runLaunchpadAction`.
 
 ## Links to the rest of the app
 
