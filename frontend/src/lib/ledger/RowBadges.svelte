@@ -57,7 +57,7 @@
 	{#if slots.more}
 		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<span
-			class="ledger-badges-more inline-flex w-[14px] cursor-default justify-center text-[9px] text-black/60 [text-box:trim-both_cap_alphabetic] hover:text-black dark:text-surface-50/60 dark:hover:text-surface-50"
+			class="ledger-badges-more inline-flex w-[14px] cursor-default justify-center text-3xs text-black/60 [text-box:trim-both_cap_alphabetic] hover:text-black dark:text-surface-50/60 dark:hover:text-surface-50"
 			on:mouseenter={showTip}
 			on:mouseleave={() => (tip = null)}>+{slots.more}</span
 		>
@@ -66,7 +66,7 @@
 
 {#if tip}
 	<div
-		class="pointer-events-none fixed z-[80] space-y-1 border border-surface-300-600-token bg-surface-100-800-token px-2 py-1.5 font-sans text-[11px] shadow-xl"
+		class="pointer-events-none fixed z-[80] space-y-1 border border-surface-300-600-token bg-surface-100-800-token px-2 py-1.5 font-sans text-2xs shadow-xl"
 		style="left: {tip.left}px; top: {tip.top}px"
 		role="tooltip"
 	>

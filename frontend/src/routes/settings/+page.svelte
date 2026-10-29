@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		CreateWaypoint,
 		DeleteWaypoint,
@@ -36,6 +36,9 @@
 	import { onMount } from "svelte";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
+	import { setLightMode } from "../../lib/lightMode.js";
+	import { TEXT_SIZES } from "../../lib/textSize.js";
+	import { setTextSize, textSize } from "../../stores/textSizeStore.js";
 	import { goto } from "$app/navigation";
 	import {
 		channelSwitchNotice,
@@ -72,6 +75,7 @@
 	const modalStore = getModalStore();
 
 	const sections = [
+		{ id: "appearance", name: "Appearance", hint: "Text size and theme", icon: Palette },
 		{ id: "editing", name: "Keyboard & Editor", hint: "Shortcuts, Vim, syntax", icon: Keyboard },
 		{ id: "listener", name: "Listener", hint: "Default interface and port", icon: Globe },
 		{ id: "waypoints", name: "Waypoints", hint: "Host overrides", icon: Replace },
@@ -92,7 +96,7 @@
 		["release", "Release"],
 		["nightly", "Nightly"],
 	];
-	let section = "editing";
+	let section = "appearance";
 	// ?section=<id> opens a section, as the update panel's link to the
 	// Channel setting does. Choosing a section puts it in the URL, so that
 	// link switches section even after the researcher moved to another one.
@@ -473,7 +477,38 @@
 		</nav>
 
 		<section class="min-w-0 flex-1 overflow-y-auto px-6 py-4">
-			{#if section === "editing"}
+			{#if section === "appearance"}
+				<h3 class="text-sm font-bold">Appearance</h3>
+				<div class={row}>
+					<p>Text size</p>
+					<!-- Styled as the Channel picker. -->
+					<div class="{control} text-sm" role="radiogroup" aria-label="Text size">
+						{#each TEXT_SIZES as size}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={$textSize === size}
+								class="flex-1 px-3 py-1 {$textSize === size
+									? primary
+									: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+								on:click={() => setTextSize(size)}>{size.label}</button
+							>
+						{/each}
+					</div>
+				</div>
+				<div class={row}>
+					<p>Dark mode</p>
+					<div class="{control} justify-end">
+						<SlideToggle
+							name="dark-mode"
+							label="Dark mode"
+							active="bg-primary-500"
+							checked={!$modeCurrent}
+							on:change={(event) => setLightMode(!event.currentTarget.checked)}
+						/>
+					</div>
+				</div>
+			{:else if section === "editing"}
 				<h3 class="text-sm font-bold">Keyboard & Editor</h3>
 				<div class={row}>
 					<div>

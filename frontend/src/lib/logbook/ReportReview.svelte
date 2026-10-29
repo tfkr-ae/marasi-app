@@ -32,13 +32,13 @@
 			{#each SEVERITIES as severity}
 				<div class="flex-1 py-1.5 text-center ring-1 ring-surface-500/20">
 					<div class="text-sm font-bold tabular-nums">{review.severityCounts[severity]}</div>
-					<div class="flex items-center justify-center gap-1 text-[10px] opacity-70">
+					<div class="flex items-center justify-center gap-1 text-3xs opacity-70">
 						<span class="h-2 w-2 rounded-sm {SEVERITY_MARK[severity]}"></span>{severity === "Informational" ? "Info" : severity}
 					</div>
 				</div>
 			{/each}
 		</div>
-		<p id="exportTotals" class="mt-2 text-[11px] opacity-70">
+		<p id="exportTotals" class="mt-2 text-2xs opacity-70">
 			{plural(review.findings.length, "finding", "findings")} ·
 			{includeTestCases ? plural(review.testCases.length, "test case", "test cases") : "no test cases"} ·
 			{plural(review.evidence, "piece", "pieces")} of evidence
@@ -60,7 +60,7 @@
 			{:else}
 				<CheckCircle2 size={13} class="flex-none text-success-600 dark:text-success-500" />
 			{/if}
-			<span class="min-w-0 flex-1 truncate text-[11px]" title={summary}>
+			<span class="min-w-0 flex-1 truncate text-2xs" title={summary}>
 				{#if review.gaps.length}<b>Needs work {review.gaps.length}</b> · {summary}{:else}<b>Nothing missing</b>{/if}
 			</span>
 			{#if review.gaps.length}
@@ -71,13 +71,13 @@
 			<div class="mt-2 space-y-2 pl-2">
 				{#each review.gapGroups as group (group.label)}
 					<div>
-						<div class="text-[11px] font-semibold opacity-80">
+						<div class="text-2xs font-semibold opacity-80">
 							{group.label} <span class="font-normal opacity-60">{group.items.length}</span>
 						</div>
 						{#each group.items as gap (`${gap.kind}:${gap.record.ID}:${gap.key}`)}
 							<button
 								type="button"
-								class="logbook-gap block w-full truncate py-0.5 pl-3 text-left text-[11px] hover:underline"
+								class="logbook-gap block w-full truncate py-0.5 pl-3 text-left text-2xs hover:underline"
 								data-kind={gap.kind}
 								data-id={gap.record.ID}
 								data-item={gap.key}
@@ -93,8 +93,8 @@
 	<section>
 		<h3 class={heading}>Contents</h3>
 		{#each review.findings as finding, i (finding.ID)}
-			<div class="flex items-center gap-2 py-0.5 text-[11px]">
-				<span class="w-9 flex-none font-mono text-[10px] opacity-60">{number("F", i)}</span>
+			<div class="flex items-center gap-2 py-0.5 text-2xs">
+				<span class="w-9 flex-none font-mono text-3xs opacity-60">{number("F", i)}</span>
 				<span class="h-2 w-2 flex-none rounded-sm {SEVERITY_MARK[finding.Severity] ?? 'bg-surface-400'}"></span>
 				<span class="min-w-0 flex-1 truncate">{finding.Title || "Untitled"}</span>
 				{#if missing.has(`finding:${finding.ID}`)}
@@ -105,8 +105,8 @@
 		{#if review.testCases.length}
 			<div class="mt-2"></div>
 			{#each review.testCases as testCase, i (testCase.ID)}
-				<div class="flex items-center gap-2 py-0.5 text-[11px]">
-					<span class="w-9 flex-none font-mono text-[10px] opacity-60">{number("TC", i)}</span>
+				<div class="flex items-center gap-2 py-0.5 text-2xs">
+					<span class="w-9 flex-none font-mono text-3xs opacity-60">{number("TC", i)}</span>
 					<span class="min-w-0 flex-1 truncate">{testCase.Title || "Untitled"}</span>
 					{#if missing.has(`testCase:${testCase.ID}`)}
 						<AlertTriangle size={10} class="flex-none text-warning-800 dark:text-warning-500" />

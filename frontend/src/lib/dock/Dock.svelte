@@ -127,7 +127,7 @@
 		<div class="flex h-full min-h-0 flex-col" style="width: {Math.max(overlay ? width : panelWidth, limits.min)}px">
 			{#if $$slots.header}
 				<div
-					class="flex items-center justify-end gap-2 border-b border-surface-500/30 bg-surface-50 px-2 py-1 text-[10px] dark:bg-surface-900"
+					class="flex items-center justify-end gap-2 border-b border-surface-500/30 bg-surface-50 px-2 py-1 text-3xs dark:bg-surface-900"
 				>
 					<slot name="header" />
 					{#if !collapsed}

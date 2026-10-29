@@ -1,6 +1,6 @@
 <script>
 	// One of the Ledger drawer's CodeMirror editors: the app's light and dark
-	// themes and Vim setting, 11px text like the table's rows and the drawer's chrome, filling its
+	// themes and Vim setting, text-2xs size like the table's rows and the drawer's chrome, filling its
 	// pane and scrolling inside it. Long strings fold (longStrings.js); a
 	// `suspend` event says whether a shown one stopped the lines wrapping.
 	import { createEventDispatcher } from "svelte";
@@ -27,7 +27,7 @@
 	const onSuspend = (suspended) => dispatch("suspend", suspended);
 	const httpLanguage = StreamLanguage.define(http);
 	const styles = {
-		"&": { height: "100%", fontSize: "11px" },
+		"&": { height: "100%", fontSize: "0.6875rem" },
 		// Scrolling stops at the editor's edges: no bounce past them and no
 		// scroll passed on to the page.
 		".cm-scroller": { overflow: "auto", overscrollBehavior: "contain" },

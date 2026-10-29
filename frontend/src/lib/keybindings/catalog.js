@@ -66,6 +66,9 @@ export const FACTORY_ACTIONS = [
   action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l")),
   action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t")),
   action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u")),
+  action("global.increase-text-size", "Increase Text Size", "Make all text one size larger", "text, font, size, larger, bigger, zoom in", primary("=")),
+  action("global.decrease-text-size", "Decrease Text Size", "Make all text one size smaller", "text, font, size, smaller, zoom out", primary("-")),
+  action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0")),
   action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u")),
   action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i")),
   ...pageActions("ledger.drawer-closed", [

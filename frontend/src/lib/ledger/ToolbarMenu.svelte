@@ -77,7 +77,7 @@
 		{#if icon}<svelte:component this={icon} size={15} class="opacity-70" />{/if}
 		{label}
 		{#if badge !== ""}
-			<span class="badge {primary} max-w-[9rem] truncate px-1.5 py-0 text-[10px]">{badge}</span>
+			<span class="badge {primary} max-w-[9rem] truncate px-1.5 py-0 text-3xs">{badge}</span>
 		{/if}
 	</button>
 	{#if open}

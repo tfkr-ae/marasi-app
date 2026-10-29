@@ -27,15 +27,15 @@
 					: 'ring-surface-500/50'}">{#if on}<Check size={10} />{/if}</span
 			>
 			{#if option.mark}<span class="h-2.5 w-2.5 flex-none rounded-sm {option.mark}"></span>{/if}
-			<span class="min-w-0 flex-1 truncate {mono ? 'font-mono text-[11px]' : ''}">{option.label ?? option.value}</span>
-			<span class="text-[11px] tabular-nums opacity-50">{option.count}</span>
+			<span class="min-w-0 flex-1 truncate {mono ? 'font-mono text-2xs' : ''}">{option.label ?? option.value}</span>
+			<span class="text-2xs tabular-nums opacity-50">{option.count}</span>
 		</button>
 	{:else}
-		<p class="px-3 py-2 text-[11px] opacity-60">None yet</p>
+		<p class="px-3 py-2 text-2xs opacity-60">None yet</p>
 	{/each}
 	{#if selected.length}
 		<button
-			class="mt-1 w-full border-t border-surface-500/20 px-3 py-2 text-left text-[11px] opacity-70 hover:opacity-100"
+			class="mt-1 w-full border-t border-surface-500/20 px-3 py-2 text-left text-2xs opacity-70 hover:opacity-100"
 			on:click={() => onChange([])}>Clear</button
 		>
 	{/if}

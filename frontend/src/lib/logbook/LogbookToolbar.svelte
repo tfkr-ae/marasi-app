@@ -2,7 +2,8 @@
 	// The Logbook toolbar, built like the Ledger's: a borderless search of
 	// fixed width, the Findings and Test cases toggles, the Severity,
 	// Category and Tags menus (the Ledger's ToolbarMenu, each of fixed
-	// width), and Export at the far end. A filter that doesn't apply to the
+	// width, narrowing only when a large Text size leaves no room), and
+	// Export at the far end. A filter that doesn't apply to the
 	// kind on show is disabled in place, and a pressed toggle changes its
 	// background only, so nothing here moves as the filters change.
 	import { Folder, Hash, Search, ShieldAlert, SquareArrowRight, X } from "lucide-svelte";
@@ -80,7 +81,7 @@
 		icon={ShieldAlert}
 		title="Findings by severity"
 		badge={badge(filters.severities)}
-		widthClass="w-48 flex-none"
+		widthClass="w-48 min-w-0 shrink"
 		panelClass="w-56"
 		disabled={filters.kind === "testCases"}
 	>
@@ -92,7 +93,7 @@
 		icon={Folder}
 		title="Test cases by category"
 		badge={badge(filters.categories)}
-		widthClass="w-48 flex-none"
+		widthClass="w-48 min-w-0 shrink"
 		panelClass="w-60"
 		disabled={filters.kind === "findings"}
 	>
@@ -104,7 +105,7 @@
 		icon={Hash}
 		title="Test cases by tag"
 		badge={badge(filters.tags)}
-		widthClass="w-40 flex-none"
+		widthClass="w-40 min-w-0 shrink"
 		panelClass="w-52"
 		disabled={filters.kind === "findings"}
 	>

@@ -145,7 +145,7 @@
 						autofocus
 						on:keydown|stopPropagation={(e) => e.key === "Escape" && (saving = false)}
 					/>
-					<div class="truncate font-mono text-[10px] opacity-60" title={queryText}>{queryText.trim()}</div>
+					<div class="truncate font-mono text-3xs opacity-60" title={queryText}>{queryText.trim()}</div>
 					<label class="flex cursor-pointer items-center gap-2 text-xs">
 						<input id="ledgerSavedQueryKeepForAll" type="checkbox" class="checkbox" bind:checked={keepForAll} />
 						Keep for all projects
@@ -173,7 +173,7 @@
 		<div class="pb-2 text-xs">
 			{#each groups as group (group.key)}
 				<div
-					class="sticky top-0 z-10 flex items-center gap-1.5 bg-surface-100-800-token px-3 pb-1 pt-2 text-[10px] uppercase tracking-wide opacity-70"
+					class="sticky top-0 z-10 flex items-center gap-1.5 bg-surface-100-800-token px-3 pb-1 pt-2 text-3xs uppercase tracking-wide opacity-70"
 				>
 					<svelte:component this={GROUP_ICONS[group.key]} size={11} />{group.label}
 				</div>
@@ -262,7 +262,7 @@
 				<button
 					id="ledgerShowHiddenBuiltins"
 					type="button"
-					class="px-3 pt-2 text-[11px] text-primary-500 hover:underline"
+					class="px-3 pt-2 text-2xs text-primary-500 hover:underline"
 					on:click={() => (showHidden = !showHidden)}
 				>
 					{showHidden ? "Hide" : "Show"}

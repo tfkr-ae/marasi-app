@@ -42,6 +42,7 @@ type Config struct {
 	DefaultPort    string `mapstructure:"default_port"`    // Default proxy server port
 	SyntaxMode     string `mapstructure:"syntax_mode"`
 	WrapMode       string `mapstructure:"wrap_mode"` // "auto", "enabled" or "disabled": whether editors wrap a line too long to wrap quickly
+	TextSize       string `mapstructure:"text_size"` // "small", "default", "large" or "xlarge"; the frontend reads anything else as "default" (frontend/src/lib/textSize.js)
 
 	// TestCaseProfile holds the parsed test cases profile.
 	// Ignored by the main application viper instance.
@@ -86,6 +87,7 @@ var configDefaults = map[string]any{
 	"default_address": "127.0.0.1",
 	"syntax_mode":     "auto",
 	"wrap_mode":       "auto",
+	"text_size":       "default",
 	"default_port":    "8080",
 }
 

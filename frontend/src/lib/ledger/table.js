@@ -3,26 +3,29 @@
 import { upgradeFromLedgerRow, upgradePresentation } from "../websocket/presentation.js";
 import { sameID } from "./pairs.js";
 
-/** Every row's height in px; the windowed list relies on it. */
-export const ROW_HEIGHT = 22;
-
-/** The header row's height in px. */
-export const HEADER_HEIGHT = 24;
+/**
+ * The header row's height in px for rows `rowHeight` px tall (ledgerRowHeight
+ * in lib/textSize.js gives that for the Text size).
+ */
+export function headerHeight(rowHeight) {
+  return rowHeight + 2;
+}
 
 /**
- * The table's columns, left to right. `width` is a CSS grid track; `sort`
- * is the Marasi order_by field a click on the header sorts by.
+ * The table's columns, left to right. `width` is a CSS grid track, in rem so
+ * the columns grow with the Text size; `sort` is the Marasi order_by field a
+ * click on the header sorts by.
  */
 export const LEDGER_COLUMNS = Object.freeze([
-  { key: "number", label: "#", width: "52px", align: "right", sort: "number" },
-  { key: "badges", label: "", width: "46px" },
-  { key: "time", label: "Time", width: "70px", sort: "requested_at" },
-  { key: "method", label: "Method", width: "80px", sort: "method" },
-  { key: "host", label: "Host", width: "170px", sort: "host" },
-  { key: "path", label: "Path", width: "minmax(180px,1fr)", sort: "path" },
-  { key: "status", label: "Status", width: "60px", align: "right", sort: "status_code" },
-  { key: "type", label: "Type", width: "120px", sort: "content_type" },
-  { key: "size", label: "Size", width: "62px", align: "right", sort: "length" },
+  { key: "number", label: "#", width: "3.25rem", align: "right", sort: "number" },
+  { key: "badges", label: "", width: "2.875rem" },
+  { key: "time", label: "Time", width: "4.375rem", sort: "requested_at" },
+  { key: "method", label: "Method", width: "5rem", sort: "method" },
+  { key: "host", label: "Host", width: "10.625rem", sort: "host" },
+  { key: "path", label: "Path", width: "minmax(11.25rem,1fr)", sort: "path" },
+  { key: "status", label: "Status", width: "3.75rem", align: "right", sort: "status_code" },
+  { key: "type", label: "Type", width: "7.5rem", sort: "content_type" },
+  { key: "size", label: "Size", width: "3.875rem", align: "right", sort: "length" },
 ]);
 
 // Newest first by Marasi's pair number (marasi docs/adr/2026-10-16-pairs-are-numbered-in-capture-order.md): unlike
@@ -113,6 +116,25 @@ export function visibleRange({ scrollTop, height, count, rowHeight, overscan }) 
   const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const end = Math.min(count, Math.ceil((scrollTop + height) / rowHeight) + overscan);
   return { start, end: Math.max(start, end) };
+}
+
+/**
+ * The top row in view at `scrollTop`, measured from the first row: its
+ * index, and how many px the view is scrolled into it.
+ */
+export function topRow(scrollTop, rowHeight) {
+  const index = Math.floor(scrollTop / rowHeight);
+  return { index, offset: scrollTop - index * rowHeight };
+}
+
+/** How many rows start in a view `height` px tall: at least one. */
+export function rowsPerView(height, rowHeight) {
+  return Math.max(1, Math.ceil(height / rowHeight));
+}
+
+/** How far a page down or up scrolls: a view's height less one row, but at least a row. */
+export function pageDistance(height, rowHeight) {
+  return Math.max(height - rowHeight, rowHeight);
 }
 
 /**

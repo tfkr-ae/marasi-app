@@ -7,12 +7,12 @@ import { sameID } from "../ledger/pairs.js";
  * the one flexible track, so the table reflows instead of scrolling sideways.
  */
 export const TRAFFIC_COLUMNS = Object.freeze([
-  { key: "number", label: "#", width: "52px", align: "right" },
-  { key: "time", label: "Time", width: "70px" },
-  { key: "method", label: "Method", width: "80px" },
+  { key: "number", label: "#", width: "3.25rem", align: "right" },
+  { key: "time", label: "Time", width: "4.375rem" },
+  { key: "method", label: "Method", width: "5rem" },
   { key: "url", label: "Host / Path", width: "minmax(0,1fr)" },
-  { key: "status", label: "Status", width: "60px", align: "right" },
-  { key: "size", label: "Length", width: "62px", align: "right" },
+  { key: "status", label: "Status", width: "3.75rem", align: "right" },
+  { key: "size", label: "Length", width: "3.875rem", align: "right" },
 ]);
 
 export const TRAFFIC_TEMPLATE = TRAFFIC_COLUMNS.map((column) => column.width).join(" ");

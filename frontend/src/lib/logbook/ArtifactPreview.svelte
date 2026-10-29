@@ -71,9 +71,9 @@
 
 {#if artifact}
 	<div class="logbook-artifact flex h-full min-h-0 flex-col" data-preview={kind}>
-		<div class="flex h-7 flex-none items-center gap-2 border-b border-surface-500/30 px-2 text-[11px]">
+		<div class="flex h-7 flex-none items-center gap-2 border-b border-surface-500/30 px-2 text-2xs">
 			<span class="min-w-0 flex-1 truncate font-semibold" title={artifact.Filename}>{artifact.Filename}</span>
-			<span class="flex-none font-mono text-[10px] opacity-60"
+			<span class="flex-none font-mono text-3xs opacity-60"
 				>{artifact.MimeType || "unknown"} · {formatSize(artifact.Size)}</span
 			>
 			{#if kind === "image"}
@@ -81,7 +81,7 @@
 					{#if actual}<Minimize2 size={12} />{:else}<Maximize2 size={12} />{/if}
 				</button>
 			{:else if kind === "text" && paused}
-				<span class="logbook-wrap-suspended flex-none text-[10px] opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
+				<span class="logbook-wrap-suspended flex-none text-3xs opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
 			{/if}
 			<button type="button" class={quiet} title="Download" aria-label="Download" on:click={download}
 				><Download size={12} /></button
@@ -89,9 +89,9 @@
 		</div>
 		<div class="min-h-0 flex-1 {kind === 'text' ? '' : 'overflow-auto'} bg-surface-100/60 dark:bg-surface-900/60">
 			{#if loaded === undefined}
-				<p class="p-8 text-center text-[11px] opacity-50">Loading…</p>
+				<p class="p-8 text-center text-2xs opacity-50">Loading…</p>
 			{:else if loaded === null}
-				<p class="p-8 text-center text-[11px] opacity-60">Could not read the artifact</p>
+				<p class="p-8 text-center text-2xs opacity-60">Could not read the artifact</p>
 			{:else if kind === "image"}
 				<div class="flex min-h-full items-center justify-center p-2">
 					<img
@@ -112,7 +112,7 @@
 					{#key artifact.ID}<DrawerEditor value={text} wrap={$lineWrap} on:suspend={(e) => (paused = e.detail)} />{/key}
 				</div>
 			{:else}
-				<div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-[11px]">
+				<div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-2xs">
 					<FileIcon size={28} class="opacity-50" />
 					<span class="font-semibold">{artifact.Filename}</span>
 					<span class="opacity-60">{artifact.MimeType || "Unknown type"} · {formatSize(artifact.Size)}</span>
@@ -124,5 +124,5 @@
 		</div>
 	</div>
 {:else}
-	<p class="p-8 text-center text-[11px] opacity-60">No artifacts</p>
+	<p class="p-8 text-center text-2xs opacity-60">No artifacts</p>
 {/if}

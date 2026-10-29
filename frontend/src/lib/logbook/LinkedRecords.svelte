@@ -33,7 +33,7 @@
 					["Description", link.record.Description],
 					["Note", link.record.Note],
 				];
-	const heading = "mb-1 text-[10px] font-bold uppercase tracking-wider opacity-50";
+	const heading = "mb-1 text-3xs font-bold uppercase tracking-wider opacity-50";
 
 	const modalStore = getModalStore();
 	// The test case these are listed under is the one open in the workspace.
@@ -68,12 +68,12 @@
 				>
 					{#if open}<ChevronDown size={12} class="flex-none" />{:else}<ChevronRight size={12} class="flex-none" />{/if}
 					{#if link.kind === "finding"}<span
-							class="badge rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[link.record.Severity] ??
+							class="badge rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[link.record.Severity] ??
 								'variant-soft'}">{link.record.Severity || "None"}</span
 						>{:else}<BookCheck size={13} class="flex-none text-tertiary-500" />{/if}
 					<span class="min-w-0 flex-1 truncate text-xs font-semibold">{link.record.Title}</span>
 				</button>
-				<span class="flex-none text-[10px] {done ? 'text-success-700 dark:text-success-400' : 'text-warning-800 dark:text-warning-400'}"
+				<span class="flex-none text-3xs {done ? 'text-success-700 dark:text-success-400' : 'text-warning-800 dark:text-warning-400'}"
 					>{done ? "Done" : "In progress"}</span
 				>
 				<button
@@ -96,6 +96,6 @@
 			{/if}
 		</div>
 	{:else}
-		<p class="text-[11px] italic opacity-50">{kind === "finding" ? "Not linked to a test case" : "No findings"}</p>
+		<p class="text-2xs italic opacity-50">{kind === "finding" ? "Not linked to a test case" : "No findings"}</p>
 	{/each}
 </div>

@@ -50,7 +50,7 @@
 </script>
 
 <div class="flex min-h-full w-full items-center justify-center py-8">
-	<div class="w-[440px]">
+	<div class="w-[27.5rem]">
 		<header class="flex items-center gap-3">
 			<Logo size="36" mode={$modeCurrent ? "light" : "dark"} />
 			<div class="min-w-0">
@@ -61,7 +61,7 @@
 					{screen.project.name}
 				</h1>
 				{#if screen.project.path}
-					<p class="truncate font-mono text-[11px] opacity-60" title={screen.project.path}>
+					<p class="truncate font-mono text-2xs opacity-60" title={screen.project.path}>
 						{screen.project.path}
 					</p>
 				{/if}
@@ -75,7 +75,7 @@
 					aria-current={step.mark === "current" || step.mark === "failed" ? "step" : undefined}
 				>
 					<span
-						class="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center text-[10px] font-bold
+						class="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center text-3xs font-bold
 						{step.mark === 'failed'
 							? 'bg-error-500 text-white'
 							: step.mark === 'done'
@@ -109,7 +109,7 @@
 			{/each}
 		</ol>
 
-		<div class="mt-5 min-h-[64px] text-sm">
+		<div class="mt-5 min-h-16 text-sm">
 			<p>{screen.sentence}</p>
 			{#if screen.upgrade}
 				<div class="mt-3"><ProgressBar {...bar} /></div>
@@ -183,7 +183,7 @@
 		</button>
 		{#if showLog}
 			<pre
-				class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all bg-surface-100 p-2 font-mono text-[11px] leading-5 dark:bg-surface-800">{screen.log.join("\n")}</pre>
+				class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all bg-surface-100 p-2 font-mono text-2xs leading-5 dark:bg-surface-800">{screen.log.join("\n")}</pre>
 		{/if}
 	</div>
 </div>

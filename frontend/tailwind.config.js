@@ -17,7 +17,18 @@ export default {
 			'../**/*.{html,js,svelte,ts}'
 		)
 	],
-	theme: {},
+	theme: {
+		extend: {
+			// The dense end of the type scale, below text-xs. Sizes are in rem so
+			// Text size scales them (docs/adr/2026-10-29-text-size-scales-the-root-font-size.md).
+			// Font size only, with no line height, like the text-[11px] and
+			// text-[10px] classes they replace.
+			fontSize: {
+				'2xs': '0.6875rem',
+				'3xs': '0.625rem',
+			},
+		},
+	},
 	plugins: [
 		forms,
 		// 4. Append the Skeleton plugin (after other plugins)

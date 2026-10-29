@@ -98,13 +98,13 @@
 		logbookStore.open(gap.kind, gap.record.ID, gap.key);
 	}
 
-	const label = "mb-1 block text-[11px] font-semibold opacity-70";
+	const label = "mb-1 block text-2xs font-semibold opacity-70";
 	const input = "input h-8 py-1 text-xs";
 </script>
 
 {#if $modalStore[0]}
 	<div
-		class="logbook-export card flex h-[min(680px,86vh)] w-[min(1120px,94vw)] flex-col overflow-hidden rounded-none text-xs shadow-xl bg-surface-50-800-token text-surface-900-50-token"
+		class="logbook-export card flex h-[min(42.5rem,86vh)] w-[min(70rem,94vw)] flex-col overflow-hidden rounded-none text-xs shadow-xl bg-surface-50-800-token text-surface-900-50-token"
 	>
 		<header class="flex h-11 flex-none items-center gap-2 border-b border-surface-500/30 px-3">
 			<FileText size={16} class="text-primary-500" />
@@ -129,7 +129,7 @@
 						<button
 							id="exportRestoreDefault"
 							type="button"
-							class="flex flex-none items-center gap-1 text-[11px] {confirmRestore
+							class="flex flex-none items-center gap-1 text-2xs {confirmRestore
 								? 'font-semibold text-warning-800 dark:text-warning-500'
 								: 'opacity-70 hover:opacity-100'}"
 							disabled={restoring}
@@ -208,10 +208,10 @@
 										type="number"
 										min="100"
 										step="100"
-										class="input ml-2 h-6 w-20 px-1.5 py-0 text-[11px]"
+										class="input ml-2 h-6 w-20 px-1.5 py-0 text-2xs"
 										aria-label="Truncate length in bytes"
 										bind:value={$reportMetadata.truncate_length}
-									/><span class="text-[11px] opacity-70">bytes</span>
+									/><span class="text-2xs opacity-70">bytes</span>
 								{/if}
 							</div>
 							<SlideToggle
@@ -227,7 +227,7 @@
 				</section>
 			</div>
 			<div
-				class="w-[400px] flex-none overflow-auto border-l border-surface-500/30 bg-surface-100/60 px-5 py-4 dark:bg-surface-900/40"
+				class="w-[25rem] flex-none overflow-auto border-l border-surface-500/30 bg-surface-100/60 px-5 py-4 dark:bg-surface-900/40"
 			>
 				<ReportReview store={logbookStore} {includeTestCases} onGap={openGap} />
 			</div>

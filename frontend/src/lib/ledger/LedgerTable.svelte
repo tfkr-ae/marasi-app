@@ -11,12 +11,16 @@
 	// was, so nothing moves under the researcher.
 	import { afterUpdate, createEventDispatcher } from "svelte";
 	import RowBadges from "./RowBadges.svelte";
+	import { textSize } from "../../stores/textSizeStore.js";
+	import { ledgerRowHeight } from "../textSize.js";
 	import {
-		HEADER_HEIGHT,
 		LEDGER_COLUMNS,
-		ROW_HEIGHT,
 		formatSize,
+		headerHeight,
 		keepRowInPlace,
+		pageDistance,
+		rowsPerView,
+		topRow,
 		rowHighlight,
 		rowTemplate,
 		scrollToReveal,
@@ -67,16 +71,19 @@
 	let scrollTop = 0;
 	let height = 600;
 
-	$: rowsHeight = Math.max(0, height - HEADER_HEIGHT);
+	// Rows grow with the Text size; every scroll and row-position helper takes this height.
+	$: rowHeight = ledgerRowHeight($textSize);
+	$: headerPx = headerHeight(rowHeight);
+	$: rowsHeight = Math.max(0, height - headerPx);
 	$: range = visibleRange({
 		scrollTop,
 		height: rowsHeight,
 		count: rows.length,
-		rowHeight: ROW_HEIGHT,
+		rowHeight,
 		overscan: OVERSCAN,
 	});
 	$: shown = rows.slice(range.start, range.end);
-	$: ghostRows = ghost ? Math.max(1, Math.ceil(rowsHeight / ROW_HEIGHT)) : 0;
+	$: ghostRows = ghost ? rowsPerView(rowsHeight, rowHeight) : 0;
 	// Each ghost cell's bar width, as a share of its cell, varied by row so
 	// the ghost reads as rows rather than stripes.
 	const GHOST_WIDTHS = [
@@ -90,14 +97,15 @@
 	let anchor = { id: null, offset: 0 };
 	let laidOut = rows;
 	let laidOutReset = resetKey;
+	let laidOutRowHeight = ledgerRowHeight($textSize);
 	let reported = "";
 
 	// Records the top row in view and reports the rows in view when they
 	// changed.
 	function noteScroll() {
-		const top = Math.floor(scrollTop / ROW_HEIGHT);
-		anchor = { id: rows[top]?.ID ?? null, offset: scrollTop - top * ROW_HEIGHT };
-		const visible = Math.max(1, Math.ceil(rowsHeight / ROW_HEIGHT));
+		const { index: top, offset } = topRow(scrollTop, rowHeight);
+		anchor = { id: rows[top]?.ID ?? null, offset };
+		const visible = rowsPerView(rowsHeight, rowHeight);
 		const lastRow = Math.max(rows.length - 1, 0);
 		const view = {
 			first: Math.min(top, lastRow),
@@ -121,10 +129,15 @@
 			// The same results with rows added or dropped around the view.
 			laidOut = rows;
 			if (!(pinTop && viewport.scrollTop <= 0)) {
-				const next = keepRowInPlace({ anchorID: anchor.id, offset: anchor.offset, rows, rowHeight: ROW_HEIGHT });
+				const next = keepRowInPlace({ anchorID: anchor.id, offset: anchor.offset, rows, rowHeight });
 				if (next != null && next !== viewport.scrollTop) viewport.scrollTop = next;
 			}
+		} else if (rowHeight !== laidOutRowHeight) {
+			// The Text size changed: the top row in view stays on top.
+			const next = keepRowInPlace({ anchorID: anchor.id, offset: 0, rows, rowHeight });
+			if (next != null && viewport.scrollTop > 0) viewport.scrollTop = next;
 		}
+		laidOutRowHeight = rowHeight;
 		scrollTop = viewport.scrollTop;
 		noteScroll();
 	});
@@ -143,13 +156,13 @@
 		const index = rows.findIndex((row) => sameID(row.ID, id));
 		if (!viewport || index < 0) return;
 		// Measure now: the bound height lags on the first render.
-		const visible = Math.max(0, viewport.clientHeight - HEADER_HEIGHT);
-		const view = { scrollTop: viewport.scrollTop, height: visible, rowHeight: ROW_HEIGHT };
+		const visible = Math.max(0, viewport.clientHeight - headerPx);
+		const view = { scrollTop: viewport.scrollTop, height: visible, rowHeight };
 		viewport.scrollTop = center ? scrollToCenter(view, index) : scrollToReveal(view, index);
 	}
 	/** Scrolls a viewport's height down (1) or up (-1). */
 	export function page(direction) {
-		if (viewport) viewport.scrollTop += direction * Math.max(rowsHeight - ROW_HEIGHT, ROW_HEIGHT);
+		if (viewport) viewport.scrollTop += direction * pageDistance(rowsHeight, rowHeight);
 	}
 	export function focus() {
 		viewport?.focus();
@@ -246,8 +259,8 @@
 	aria-multiselectable="true"
 >
 	<div
-		class="lg-row sticky top-0 z-10 border-b border-primary-500 bg-surface-100 font-sans text-[11px] font-semibold dark:bg-surface-800"
-		style="grid-template-columns: {template}; height: {HEADER_HEIGHT}px"
+		class="lg-row sticky top-0 z-10 border-b border-primary-500 bg-surface-100 font-sans text-2xs font-semibold dark:bg-surface-800"
+		style="grid-template-columns: {template}; height: {headerPx}px"
 		role="row"
 	>
 		{#each LEDGER_COLUMNS as column (column.key)}
@@ -277,7 +290,7 @@
 			{#each { length: ghostRows } as _, i}
 				<div
 					class="lg-row border-b border-surface-300/50 dark:border-surface-700/60"
-					style="grid-template-columns: {template}; height: {ROW_HEIGHT}px"
+					style="grid-template-columns: {template}; height: {rowHeight}px"
 				>
 					{#each GHOST_WIDTHS[i % GHOST_WIDTHS.length] as width, c}
 						<span class="flex items-center {LEDGER_COLUMNS[c]?.align === 'right' ? 'justify-end' : ''}"
@@ -291,12 +304,12 @@
 			{/each}
 		</div>
 	{:else}
-		<div style="height: {rows.length * ROW_HEIGHT}px; position: relative">
-			<div style="position: absolute; left: 0; right: 0; top: {range.start * ROW_HEIGHT}px">
+		<div style="height: {rows.length * rowHeight}px; position: relative">
+			<div style="position: absolute; left: 0; right: 0; top: {range.start * rowHeight}px">
 				{#each shown as row, i (String(row.ID))}
 					{@const selected = selectedIds.has(String(row.ID))}
 					{@const focused = sameID(row.ID, focusId)}
-					{@const onDrawer = focused && drawerBelow && meetsFooter(range.start + i, scrollTop, ROW_HEIGHT, rowsHeight)}
+					{@const onDrawer = focused && drawerBelow && meetsFooter(range.start + i, scrollTop, rowHeight, rowsHeight)}
 					{@const color = rowHighlight(row, palette)}
 					<!-- svelte-ignore a11y-click-events-have-key-events a11y-interactive-supports-focus -->
 					<div
@@ -305,7 +318,7 @@
 							: 'border-surface-300/50 dark:border-surface-700/60'} {selected
 							? 'bg-primary-500/25'
 							: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
-						style="grid-template-columns: {template}; height: {ROW_HEIGHT}px;{color
+						style="grid-template-columns: {template}; height: {rowHeight}px;{color
 							? ` box-shadow: inset 3px 0 0 ${color};`
 							: ''}{color && !selected ? ` background-color: ${color}22;` : ''}"
 						data-row={String(row.ID)}
@@ -322,7 +335,7 @@
 								class="ledger-focus pointer-events-none absolute inset-x-0 -bottom-px top-0 border border-primary-500 !p-0 {meetsHeader(
 									range.start + i,
 									scrollTop,
-									ROW_HEIGHT,
+									rowHeight,
 								)
 									? 'border-t-0'
 									: ''} {onDrawer ? 'border-b-0' : ''}"
@@ -355,7 +368,7 @@
 
 {#if typeTip}
 	<div
-		class="ledger-type-tip pointer-events-none fixed z-[80] max-w-[36rem] break-all border border-surface-300-600-token bg-surface-100-800-token px-2 py-1 font-mono text-[11px] shadow-xl"
+		class="ledger-type-tip pointer-events-none fixed z-[80] max-w-[36rem] break-all border border-surface-300-600-token bg-surface-100-800-token px-2 py-1 font-mono text-2xs shadow-xl"
 		style="right: {typeTip.right}px; top: {typeTip.top}px"
 		role="tooltip"
 	>
@@ -367,9 +380,9 @@
 	.lg-row {
 		display: grid;
 		align-items: center;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		white-space: nowrap;
-		min-width: 734px;
+		min-width: 45.875rem;
 	}
 	/* Each cell's box is trimmed to its capitals, so the row centres the
 	   text itself rather than a line box whose glyph position depends on

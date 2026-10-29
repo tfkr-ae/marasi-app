@@ -25,6 +25,8 @@ import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { savedQueriesStore } from "./stores/savedQueriesStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
+import { textSizeFrom } from "./lib/textSize.js";
+import { textSize } from "./stores/textSizeStore.js";
 import {
   loadSignals,
   openingFor,
@@ -97,6 +99,8 @@ export async function readConfig() {
   const config = await GetMarasiConfig();
   marasiConfig.set(config);
   lineWrap.set(wrapStartsOn(config.WrapMode));
+  // Set before anything is drawn, so the app never shows at Default first.
+  textSize.set(textSizeFrom(config.TextSize));
   await Promise.all([readKeybindings(), readHighlights()]);
 }
 

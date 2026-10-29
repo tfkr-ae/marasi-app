@@ -115,8 +115,8 @@
 
 	const ICONS = { image: ImageIcon, video: Video, text: FileText };
 	const rowClass = (selected) =>
-		`group relative flex items-center gap-2 py-1 pl-2 pr-1 text-[11px] ${selected ? "bg-primary-500/20" : "hover:bg-surface-200-700-token"}`;
-	const newBadge = "badge flex-none rounded-sm bg-primary-500/20 px-1 py-0 font-sans text-[10px]";
+		`group relative flex items-center gap-2 py-1 pl-2 pr-1 text-2xs ${selected ? "bg-primary-500/20" : "hover:bg-surface-200-700-token"}`;
+	const newBadge = "badge flex-none rounded-sm bg-primary-500/20 px-1 py-0 font-sans text-3xs";
 	const rowButton = "flex-none p-0.5 opacity-70 hover:opacity-100";
 </script>
 
@@ -131,7 +131,7 @@
 				data-evidence-tab={key}
 				on:click={() => (tab = key)}
 			>
-				{name} <span class="text-[10px] font-normal opacity-60">{count}</span>
+				{name} <span class="text-3xs font-normal opacity-60">{count}</span>
 				<!-- The underline overlays the row's bottom edge and takes no
 				     room, so the label centres in the full row. -->
 				{#if tab === key}<span class="absolute -bottom-px left-0 right-0 h-0.5 bg-primary-500"></span>{/if}
@@ -158,14 +158,14 @@
 					<div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-container-token bg-surface-50 py-1 shadow-xl ring-1 ring-surface-500/30 dark:bg-surface-800">
 						{#each hits as option (option.value)}
 							{@const row = optionRow(option)}
-							<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] hover:bg-primary-500/15" on:mousedown|preventDefault={() => link(option)}>
+							<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-2xs hover:bg-primary-500/15" on:mousedown|preventDefault={() => link(option)}>
 								<span class="w-10 flex-none opacity-60">#{row.number}</span>
 								<span class="w-12 flex-none {METHOD_CLASS[row.method] ?? ''}">{row.method}</span>
 								<span class="min-w-0 flex-1 truncate">{row.url}</span>
 								<span class="flex-none {statusClass(row.status)}">{row.status || ""}</span>
 							</button>
 						{:else}
-							<p class="px-2 py-1 text-[11px] opacity-60">No matching traffic</p>
+							<p class="px-2 py-1 text-2xs opacity-60">No matching traffic</p>
 						{/each}
 					</div>
 				{/if}
@@ -189,7 +189,7 @@
 						{/if}
 					</div>
 				{:else}
-					<p class="px-2 py-3 text-center text-[11px] opacity-60">No requests linked</p>
+					<p class="px-2 py-3 text-center text-2xs opacity-60">No requests linked</p>
 				{/each}
 			</div>
 		</div>
@@ -197,13 +197,13 @@
 			{#if selectedRequest}
 				<RequestPair id={selectedRequest} read={readPair} />
 			{:else}
-				<p class="p-8 text-center text-[11px] opacity-60">Link a request to view it</p>
+				<p class="p-8 text-center text-2xs opacity-60">Link a request to view it</p>
 			{/if}
 		</div>
 	{:else}
 		<div class="flex max-h-[34%] min-h-0 flex-none flex-col gap-1 border-b border-surface-500/30 p-1.5">
 			<label
-				class="flex flex-none cursor-pointer items-center justify-center gap-2 rounded-token border border-dashed border-surface-500/50 px-3 py-2 text-[11px] {over ? 'bg-primary-500/15' : 'hover:bg-surface-200-700-token'}"
+				class="flex flex-none cursor-pointer items-center justify-center gap-2 rounded-token border border-dashed border-surface-500/50 px-3 py-2 text-2xs {over ? 'bg-primary-500/15' : 'hover:bg-surface-200-700-token'}"
 				on:dragover|preventDefault={() => (over = true)}
 				on:dragleave={() => (over = false)}
 				on:drop|preventDefault={(e) => {
@@ -232,7 +232,7 @@
 						<svelte:component this={ICONS[previewOf(artifact)] ?? FileIcon} size={13} class="flex-none {gone ? 'opacity-40' : 'text-primary-500'}" />
 						<span class="min-w-0 flex-1 truncate {gone ? 'line-through opacity-40' : ''}" title={artifact.Filename}>{artifact.Filename}</span>
 						{#if !originalIds.has(artifact.ID)}<span class={newBadge}>new</span>{/if}
-						<span class="flex-none text-[10px] opacity-50">{formatSize(artifact.Size)}</span>
+						<span class="flex-none text-3xs opacity-50">{formatSize(artifact.Size)}</span>
 						{#if gone}
 							<button type="button" class={rowButton} title="Undo remove" aria-label="Undo remove" on:click|stopPropagation={() => logbookStore.restoreArtifact(artifact.ID)}><Undo2 size={12} /></button>
 						{:else}
@@ -240,7 +240,7 @@
 						{/if}
 					</div>
 				{:else}
-					<p class="px-2 py-3 text-center text-[11px] opacity-60">No artifacts</p>
+					<p class="px-2 py-3 text-center text-2xs opacity-60">No artifacts</p>
 				{/each}
 			</div>
 		</div>

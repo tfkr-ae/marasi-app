@@ -50,7 +50,7 @@
 	<svelte:fragment slot="strip">
 		{#if dirtyCount}
 			<span
-				class="badge variant-filled-warning px-1.5 py-0 text-[10px]"
+				class="badge variant-filled-warning px-1.5 py-0 text-3xs"
 				title="{dirtyCount} unsaved {dirtyCount === 1 ? 'draft' : 'drafts'}">{dirtyCount}</span
 			>
 		{/if}

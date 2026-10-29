@@ -51,15 +51,21 @@ A shortcut typed in an editor runs after the editor has handled the key (see `ke
 
 ## Type scale
 
-No config holds the type scale. The theme (`tfkr-theme.js`) sets only the font, `system-ui`. The sizes are a convention of Tailwind classes, set by the Ledger redesign and since applied to the other pages:
+The type scale is Tailwind's rem sizes plus two dense sizes, `text-2xs` (0.6875rem) and `text-3xs` (0.625rem), defined in `tailwind.config.js`. The theme (`tfkr-theme.js`) sets only the font, `system-ui`. Text size (`lib/textSize.js`) scales the root font size, so every size below scales with it:
 
 | Use | Classes |
 |---|---|
 | Page and modal titles | `text-base font-bold` |
 | Section headings | `text-sm font-bold` |
 | Body text, menus, toolbars, buttons | `text-xs`, with `btn btn-sm` for buttons |
-| Dense table rows, labels, metadata, rail labels | `text-[11px]` (the Ledger table sets `font-size: 11px` in its own style) |
-| Paths, ids, log lines | `font-mono text-[11px]` |
-| Counts, badges, group labels | `text-[10px]` |
+| Dense table rows, labels, metadata, rail labels | `text-2xs` (the Ledger table sets `font-size: 0.6875rem` in its own style) |
+| Paths, ids, log lines | `font-mono text-2xs` |
+| Counts, badges, group labels | `text-3xs` |
+
+Write every text size in rem, including CodeMirror `fontSize` styles. `lib/textSizeRem.test.js` fails on a text size in px and names its file and line.
 
 `app.css` adds the denser `.btn-group-sm` and `.table-dense`. To match the scale, copy from `LedgerTable.svelte`, `DrawerRail.svelte` or `OpeningScreen.svelte` instead of measuring.
+
+## Decisions
+
+- [Text size scales the root font size, not the whole page](../../adr/2026-10-29-text-size-scales-the-root-font-size.md)

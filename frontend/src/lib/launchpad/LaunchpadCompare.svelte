@@ -143,7 +143,7 @@
 					data-side={side}
 					on:click={() => store.pickCompareSide(view.picking === side ? null : side)}
 				>
-					<span class="{chipClass} px-1.5 text-[11px] font-bold">{letter}</span>
+					<span class="{chipClass} px-1.5 text-2xs font-bold">{letter}</span>
 					<span>#{item.number}</span>
 					<span class="truncate opacity-60">{item.entry.Method} {item.entry.Path}</span>
 					<span class={statusClass(item.entry.StatusCode)}>{item.entry.StatusCode || "…"}</span>

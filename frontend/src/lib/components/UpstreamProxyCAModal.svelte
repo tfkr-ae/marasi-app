@@ -47,7 +47,7 @@
 		</header>
 		<form class="space-y-3" on:submit|preventDefault={done}>
 			<textarea
-				class="textarea h-40 bg-white py-1 font-mono text-[11px] ring-0 dark:bg-surface-700 border-0 focus:border-0 focus:ring-0"
+				class="textarea h-40 bg-white py-1 font-mono text-2xs ring-0 dark:bg-surface-700 border-0 focus:border-0 focus:ring-0"
 				placeholder="Paste a PEM, or read one from a file"
 				aria-label="CA certificate"
 				bind:value={ca}

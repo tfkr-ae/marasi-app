@@ -124,7 +124,7 @@
 		{#if hiddenWithTraffic}
 			<span
 				id="ledgerTypesHiddenCount"
-				class="badge {primary} px-1.5 py-0 text-[10px]"
+				class="badge {primary} px-1.5 py-0 text-3xs"
 				title="{$exclusion.length} content-type values hidden in total">{hiddenWithTraffic} hidden</span
 			>
 		{/if}
@@ -222,7 +222,7 @@
 							class="min-w-0 flex-1 truncate text-xs {entry.contentType === '' ? 'italic opacity-70' : 'font-mono'}"
 							>{typeLabel(entry.contentType)}</span
 						>
-						<span class="text-[10px] opacity-60">{entry.group ?? ""}</span>
+						<span class="text-3xs opacity-60">{entry.group ?? ""}</span>
 						<span class="w-12 text-right text-xs tabular-nums">{entry.count.toLocaleString()}</span>
 					</label>
 				{:else}
@@ -255,7 +255,7 @@
 							on:change={() => change(toggleType(entry.contentType, $exclusion))}
 						/>
 						<span class="min-w-0 flex-1 truncate font-mono text-xs">{entry.contentType}</span>
-						<span class="text-[10px] opacity-60">{byMajor ? entry.hiddenBy : (entry.group ?? "")}</span>
+						<span class="text-3xs opacity-60">{byMajor ? entry.hiddenBy : (entry.group ?? "")}</span>
 						<span
 							class="w-12 text-right text-xs tabular-nums"
 							title="Showing this type adds {entry.count.toLocaleString()} rows"
@@ -289,7 +289,7 @@
 									on:change={() => change($exclusion.filter((t) => t !== entry.contentType))}
 								/>
 								<span class="min-w-0 flex-1 truncate font-mono text-xs">{entry.contentType}</span>
-								<span class="text-[10px] opacity-60">{entry.group ?? "custom"}</span>
+								<span class="text-3xs opacity-60">{entry.group ?? "custom"}</span>
 							</label>
 						{/each}
 					{/if}

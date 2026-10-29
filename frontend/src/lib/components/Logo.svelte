@@ -2,17 +2,18 @@
     export let size = 24;
     export let mode = "dark";
     export let selected = false;
-    $: sizePx = `${size}px`;
+    // In rem, so the logo follows Text size; `size` is its px size at Default.
+    $: sizeRem = `${size / 16}rem`;
 </script>
 
 {#if mode === "light"}
     <svg
         xmlns="http://www.w3.org/2000/svg"
         xmlns:xlink="http://www.w3.org/1999/xlink"
-        width={sizePx}
+        style:width={sizeRem}
         zoomAndPan="magnify"
         viewBox="0 0 768 767.999994"
-        height={sizePx}
+        style:height={sizeRem}
         preserveAspectRatio="xMidYMid meet"
         version="1.0"
         ><defs
@@ -95,10 +96,10 @@
     <svg
         xmlns="http://www.w3.org/2000/svg"
         xmlns:xlink="http://www.w3.org/1999/xlink"
-        width={sizePx}
+        style:width={sizeRem}
         zoomAndPan="magnify"
         viewBox="0 0 768 767.999994"
-        height={sizePx}
+        style:height={sizeRem}
         preserveAspectRatio="xMidYMid meet"
         version="1.0"
         ><defs

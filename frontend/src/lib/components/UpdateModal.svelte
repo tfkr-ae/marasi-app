@@ -94,13 +94,13 @@
 					>
 						{#if i < panel.steps.length - 1}
 							<span
-								class="absolute left-[9px] top-5 h-full w-px {step.mark === 'done'
+								class="absolute left-[0.5625rem] top-5 h-full w-px {step.mark === 'done'
 									? 'bg-primary-500'
 									: 'bg-surface-300 dark:bg-surface-600'}"
 							></span>
 						{/if}
 						<span
-							class="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold
+							class="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-3xs font-bold
 							{step.mark === 'failed'
 								? 'bg-error-500 text-white'
 								: step.mark === 'done'

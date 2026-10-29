@@ -101,7 +101,7 @@
 	<header class="flex-none space-y-2 border-b border-surface-500/30 p-3">
 		<div class="flex items-baseline gap-2 pr-5">
 			<h2 class="text-sm font-bold">Logbook</h2>
-			<span id="logbookShown" class="text-[11px] opacity-50">{shown} of {total} shown</span>
+			<span id="logbookShown" class="text-2xs opacity-50">{shown} of {total} shown</span>
 		</div>
 		<div class="flex gap-2">
 			<button id="logbookNewFinding" class="btn btn-sm flex-1 {primary}" on:click={onNewFinding}
@@ -111,10 +111,10 @@
 				><Plus size={14} class="mr-1" />Test case</button
 			>
 		</div>
-		<div class="logbook-status flex text-[11px]" role="group" aria-label="Status">
+		<div class="logbook-status flex text-2xs" role="group" aria-label="Status">
 			{#each [["all", "All"], ["progress", "In progress"], ["done", "Done"]] as [status, label]}
 				<button
-					class="flex-1 px-2 py-1 {state.filters.status === status ? primary : 'hover:bg-surface-500/10'}"
+					class="flex-1 whitespace-nowrap px-2 py-1 {state.filters.status === status ? primary : 'hover:bg-surface-500/10'}"
 					aria-pressed={state.filters.status === status}
 					on:click={() => store.setStatus(status)}>{label} <span class="opacity-70">{statusCounts[status]}</span></button
 				>
@@ -125,7 +125,7 @@
 		{#each sections as section (section.key)}
 			{@const open = sectionOpen(section, closed)}
 			<div
-				class="sticky top-0 {pickerOpen[section.key] ? 'z-20' : 'z-10'} flex h-8 items-center gap-2 border-b border-surface-500/20 bg-surface-100 pl-3 pr-2 text-[11px] font-semibold dark:bg-surface-800"
+				class="sticky top-0 {pickerOpen[section.key] ? 'z-20' : 'z-10'} flex h-8 items-center gap-2 border-b border-surface-500/20 bg-surface-100 pl-3 pr-2 text-2xs font-semibold dark:bg-surface-800"
 			>
 				<svelte:component this={section.icon} size={12} class="opacity-60" />
 				<span>{section.title}</span>
@@ -162,9 +162,9 @@
 							/>{/if}
 						{#if section.by === "severity"}<span class="h-2.5 w-2.5 flex-none rounded-sm {SEVERITY_MARK[group.key]}"
 							></span>{/if}
-						<span class="min-w-0 flex-1 truncate {section.by === 'tag' && group.key !== '#none' ? 'font-mono text-[11px]' : ''}"
+						<span class="min-w-0 flex-1 truncate {section.by === 'tag' && group.key !== '#none' ? 'font-mono text-2xs' : ''}"
 							>{group.title}</span
-						><span class="text-[11px] opacity-60">{group.items.length}</span>
+						><span class="text-2xs opacity-60">{group.items.length}</span>
 					</button>
 				{/if}
 				{#if groupOpen}
@@ -173,7 +173,7 @@
 						<button
 							class="relative flex h-7 w-full items-center gap-2 {group.title === null
 								? 'pl-4'
-								: 'pl-9'} pr-3 text-left text-[11px] {on
+								: 'pl-9'} pr-3 text-left text-2xs {on
 								? 'bg-primary-500/20'
 								: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 							aria-current={on ? "true" : undefined}
@@ -194,7 +194,7 @@
 				{/if}
 			{/each}
 		{:else}
-			<p class="p-8 text-center text-[11px] opacity-60">{total ? "Nothing matches" : "Nothing yet"}</p>
+			<p class="p-8 text-center text-2xs opacity-60">{total ? "Nothing matches" : "Nothing yet"}</p>
 		{/each}
 	</div>
 </div>

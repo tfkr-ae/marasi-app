@@ -36,7 +36,7 @@
 				.sort((a, b) => SEVERITIES.indexOf(a.Severity) - SEVERITIES.indexOf(b.Severity));
 
 	const update = (patch) => logbookStore.updateDraft(patch);
-	const label = "mb-1 block text-[11px] font-semibold opacity-70";
+	const label = "mb-1 block text-2xs font-semibold opacity-70";
 	const field = "input h-8 rounded-token border-0 py-1 text-xs";
 	const SHORT = { Informational: "Info" };
 </script>
@@ -57,7 +57,7 @@
 			{#each SEVERITIES as severity}
 				<button
 					type="button"
-					class="rounded-sm px-1 py-1 text-[11px] font-semibold {draft.Severity === severity ? SEVERITY_BADGE[severity] : 'bg-surface-200-700-token opacity-70 hover:opacity-100'}"
+					class="rounded-sm px-1 py-1 text-2xs font-semibold {draft.Severity === severity ? SEVERITY_BADGE[severity] : 'bg-surface-200-700-token opacity-70 hover:opacity-100'}"
 					aria-pressed={draft.Severity === severity}
 					on:click={() => update({ Severity: severity })}>{SHORT[severity] ?? severity}</button
 				>
@@ -96,12 +96,12 @@
 		<section>
 			<span class={label}>Findings <span class="font-normal opacity-70">{findings.length}</span></span>
 			{#each findings as f (f.ID)}
-				<div class="flex items-center gap-2 py-0.5 text-[11px]">
-					<span class="badge flex-none rounded-sm px-1.5 py-0 text-[10px] {SEVERITY_BADGE[f.Severity] ?? 'variant-soft'}">{f.Severity}</span>
+				<div class="flex items-center gap-2 py-0.5 text-2xs">
+					<span class="badge flex-none rounded-sm px-1.5 py-0 text-3xs {SEVERITY_BADGE[f.Severity] ?? 'variant-soft'}">{f.Severity}</span>
 					<span class="min-w-0 flex-1 truncate">{f.Title}</span>
 				</div>
 			{:else}
-				<p class="text-[11px] opacity-60">None yet</p>
+				<p class="text-2xs opacity-60">None yet</p>
 			{/each}
 		</section>
 	{/if}
@@ -110,8 +110,8 @@
 {#each texts as t (t.key)}
 	<div class="flex flex-col">
 		<span class="mb-1 flex items-center">
-			<label for="logbook-{t.key}" class="flex-1 text-[11px] font-semibold opacity-70">{t.label}</label>
-			<button type="button" class="flex items-center gap-1 text-[11px] opacity-60 hover:opacity-100" data-expand={t.key} on:click={() => (expanded = t.key)}>
+			<label for="logbook-{t.key}" class="flex-1 text-2xs font-semibold opacity-70">{t.label}</label>
+			<button type="button" class="flex items-center gap-1 text-2xs opacity-60 hover:opacity-100" data-expand={t.key} on:click={() => (expanded = t.key)}>
 				<Maximize2 size={11} />Expand
 			</button>
 		</span>

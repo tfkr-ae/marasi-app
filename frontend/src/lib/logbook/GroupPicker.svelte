@@ -40,7 +40,7 @@
 	</button>
 	{#if open}
 		<div class="card absolute right-0 top-full z-40 mt-1 w-40 py-1 text-xs font-normal shadow-xl" role="menu">
-			<div class="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider opacity-50">Group by</div>
+			<div class="px-3 pb-1 pt-1 text-3xs font-bold uppercase tracking-wider opacity-50">Group by</div>
 			{#each options as [v, l]}
 				<button
 					class="flex h-8 w-full items-center gap-2 px-3 text-left hover:bg-surface-200-700-token"

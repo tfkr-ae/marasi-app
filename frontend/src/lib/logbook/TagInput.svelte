@@ -28,7 +28,7 @@
 
 <div class="flex min-h-8 flex-wrap items-center gap-1 rounded-token bg-surface-200-700-token px-1.5 py-1 focus-within:ring-1 focus-within:ring-primary-500/60" data-field="Tags">
 	{#each tags as tag (tag)}
-		<span class="flex items-center gap-1 rounded-sm bg-tertiary-500/20 px-1.5 py-0.5 text-[11px]">
+		<span class="flex items-center gap-1 rounded-sm bg-tertiary-500/20 px-1.5 py-0.5 text-2xs">
 			{tag}
 			<button type="button" class="opacity-60 hover:opacity-100" title="Remove {tag}" aria-label="Remove {tag}" on:click={() => set(tags.filter((t) => t !== tag))}><X size={10} /></button>
 		</span>

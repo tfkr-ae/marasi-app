@@ -10,6 +10,6 @@
 	};
 </script>
 
-<span class="badge flex-none px-1.5 py-0 text-[10px] {CLASS[status] ?? 'variant-soft'}">
+<span class="badge flex-none px-1.5 py-0 text-3xs {CLASS[status] ?? 'variant-soft'}">
 	{status.replace("_", " ")}
 </span>

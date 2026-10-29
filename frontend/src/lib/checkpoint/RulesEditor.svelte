@@ -35,12 +35,12 @@
 			bind:value={$checkpointCode}
 			on:ready={(event) => (editor = event.detail)}
 			class="text-xs"
-			styles={{ "&": { fontSize: "11px" } }}
+			styles={{ "&": { fontSize: "0.6875rem" } }}
 			theme={$modeCurrent ? githubLight : oneDark}
 			{extensions}
 		/>
 	</div>
-	<div class="flex items-center justify-end gap-3 border-t border-surface-500/30 px-3 py-1.5 text-[11px]">
+	<div class="flex items-center justify-end gap-3 border-t border-surface-500/30 px-3 py-1.5 text-2xs">
 		{#if changed}<span class="cp-rules-changed opacity-60">Not applied</span>{/if}
 		{#if $interceptFlag}<span class="opacity-60">Intercept all is on</span>{/if}
 		<button class="cp-update-rules btn btn-sm {primary}" on:click={onUpdate}>

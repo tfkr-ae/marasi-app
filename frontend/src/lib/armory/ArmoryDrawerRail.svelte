@@ -58,7 +58,7 @@
 	const railButton =
 		"flex h-7 w-8 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token disabled:pointer-events-none disabled:opacity-40";
 	const headerButton = "flex h-6 w-6 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token";
-	const heading = "px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide opacity-50";
+	const heading = "px-3 pb-1 pt-3 text-3xs font-semibold uppercase tracking-wide opacity-50";
 	const row =
 		"flex w-full items-center gap-2 whitespace-nowrap px-3 py-[5px] text-left hover:bg-surface-200-700-token disabled:pointer-events-none disabled:opacity-40";
 	const divider = "my-1 w-5 flex-none border-t border-surface-300-600-token";
@@ -66,7 +66,7 @@
 
 {#if expanded}
 	<aside
-		class="armory-drawer-column flex w-60 flex-none flex-col overflow-y-auto border-r border-surface-300-600-token bg-surface-50 text-[11px] dark:bg-surface-900"
+		class="armory-drawer-column flex w-60 flex-none flex-col overflow-y-auto border-r border-surface-300-600-token bg-surface-50 text-2xs dark:bg-surface-900"
 		aria-label="Request details"
 	>
 		<div class="flex h-7 flex-none flex-nowrap items-center gap-0.5 border-b border-surface-300-600-token px-2">
@@ -77,7 +77,7 @@
 				aria-expanded="true"
 				on:click={() => onExpand(false)}><svelte:component this={ExpandIcon} size={14} /></button
 			>
-			<span class="min-w-0 flex-1 truncate pl-1 font-mono text-[11px] opacity-60">#{number}</span>
+			<span class="min-w-0 flex-1 truncate pl-1 font-mono text-2xs opacity-60">#{number}</span>
 			<button
 				class={headerButton}
 				title={tip("Previous request", `${DRAWER}.previous-request`, keymap)}
