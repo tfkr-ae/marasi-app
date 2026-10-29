@@ -12,8 +12,6 @@
 		getModalStore,
 		getToastStore,
 		modeCurrent,
-		setModeCurrent,
-		setModeUserPrefers,
 	} from "@skeletonlabs/skeleton";
 	import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
 	import {
@@ -67,6 +65,7 @@
 		smallerTextSize,
 	} from "../../textSize.js";
 	import { setTextSize, textSize } from "../../../stores/textSizeStore.js";
+	import { setLightMode } from "../../lightMode.js";
 	import {
 		buildCatalog,
 		extensionsWithGUI,
@@ -132,11 +131,7 @@
 			ToggleFlag("vim_enabled").then((config) =>
 				marasiConfig.set(config),
 			),
-		"global.toggle-light-mode": () => {
-			const next = !get(modeCurrent);
-			setModeUserPrefers(next);
-			setModeCurrent(next);
-		},
+		"global.toggle-light-mode": () => setLightMode(!get(modeCurrent)),
 		"global.increase-text-size": () => changeTextSize(largerTextSize),
 		"global.decrease-text-size": () => changeTextSize(smallerTextSize),
 		"global.reset-text-size": () => changeTextSize(() => DEFAULT_TEXT_SIZE),

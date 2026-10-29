@@ -32,12 +32,11 @@
 		getToastStore,
 		SlideToggle,
 		modeCurrent,
-		setModeCurrent,
-		setModeUserPrefers,
 	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
+	import { setLightMode } from "../../lib/lightMode.js";
 	import { TEXT_SIZES } from "../../lib/textSize.js";
 	import { setTextSize, textSize } from "../../stores/textSizeStore.js";
 	import { goto } from "$app/navigation";
@@ -152,11 +151,6 @@
 
 	function openKeybindings() {
 		modalStore.trigger({ type: "component", component: "Keybindings" });
-	}
-	// The same change as ⌘U: modeCurrent is true in light mode.
-	function setLightMode(light) {
-		setModeUserPrefers(light);
-		setModeCurrent(light);
 	}
 	function setFlag(name, value) {
 		SetFlag(name, value).then((config) => {
@@ -487,13 +481,14 @@
 				<h3 class="text-sm font-bold">Appearance</h3>
 				<div class={row}>
 					<p>Text size</p>
-					<div class="{control} grid grid-cols-4 text-sm" role="radiogroup" aria-label="Text size">
+					<!-- Styled as the Channel picker. -->
+					<div class="{control} text-sm" role="radiogroup" aria-label="Text size">
 						{#each TEXT_SIZES as size}
 							<button
 								type="button"
 								role="radio"
 								aria-checked={$textSize === size}
-								class="btn btn-sm {$textSize === size
+								class="flex-1 px-3 py-1 {$textSize === size
 									? primary
 									: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
 								on:click={() => setTextSize(size)}>{size.label}</button
