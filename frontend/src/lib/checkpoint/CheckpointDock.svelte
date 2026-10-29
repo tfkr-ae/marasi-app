@@ -74,10 +74,10 @@
 	</svelte:fragment>
 
 	<div class="flex h-full min-h-0 flex-col">
-		<div class="flex items-center gap-2 border-b border-surface-500/30 px-2 py-1.5 text-xs">
+		<div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-surface-500/30 px-2 py-1.5 text-xs">
 			<div class="cp-intercept-all" title="Intercept every request and response, whatever the rules say">
 				<SlideToggle name="Intercept all" size="sm" active="bg-success-500" checked={$interceptFlag} on:change={onToggleIntercept}
-					><span class="text-xs">Intercept all</span></SlideToggle
+					><span class="whitespace-nowrap text-xs">Intercept all</span></SlideToggle
 				>
 			</div>
 			<span class="flex-1"></span>
