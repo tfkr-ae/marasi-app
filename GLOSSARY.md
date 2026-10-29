@@ -60,6 +60,10 @@ _Avoid_: filter, content type filter
 
 ### Launchpad
 
+**Launchpad**:
+A named list of launchpad entries in a project, where a researcher edits a launchpad draft and launches it. Each Launch adds its pair as a new entry.
+_Avoid_: folder, group (the tree's status groups are something else), repeater, tab
+
 **Launchpad entry**:
 An ordinary request/response pair linked to a launchpad rather than copied. A launchpad's entries are a flat list in the launchpad's entry order.
 _Avoid_: member, tab, request when referring to the linked pair, original
