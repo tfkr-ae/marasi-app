@@ -113,6 +113,15 @@
 		if (event.key === "Escape") editing = false;
 	}
 	$: launchpadId, (editing = false);
+	// Rename… in the launchpad menu can rename this launchpad while the edit
+	// is open; the name input follows, so saving doesn't restore the old name.
+	let shownName;
+	$: followName(launchpad?.Name);
+	function followName(name) {
+		if (name === shownName) return;
+		if (editing) nameInput = name;
+		shownName = name;
+	}
 </script>
 
 {#if !launchpad}
