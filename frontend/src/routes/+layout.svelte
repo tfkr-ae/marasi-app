@@ -514,12 +514,12 @@
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"
 				aspectRatio="py-2.5 px-1.5"
-				width="w-[76px]"
+				width="w-[4.75rem]"
 				spacing="space-y-0.5"
 			>
 				<!-- AppRailTiles -->
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname === "/"}
 					on:click={() => {
 						goto("/");
@@ -548,7 +548,7 @@
 					<span></span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/ledger"}
 					on:click={() => {
@@ -569,7 +569,7 @@
 					<span>Ledger</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/compass"}
 					on:click={() => {
@@ -590,7 +590,7 @@
 					<span>Compass</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/checkpoint"}
 					on:click={() => {
@@ -608,7 +608,7 @@
 							<FlagIcon size="20" />
 							{#if heldBadge.label}
 								<span
-									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-[10px] leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
 									data-testid="checkpoint-badge"
 									aria-label="{heldBadge.label} intercepted"
 								>{heldBadge.label}</span>
@@ -618,7 +618,7 @@
 					<span>Checkpoint</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/launchpad"}
 					on:click={() => {
@@ -639,7 +639,7 @@
 					<span>Launchpad</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/armory"}
 					on:click={() => {
@@ -661,7 +661,7 @@
 				</AppRailAnchor>
 
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/logbook"}
 					on:click={() => {
@@ -682,7 +682,7 @@
 					<span>Logbook</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/workshop"}
 					on:click={() => {
@@ -703,7 +703,7 @@
 					<span>Workshop</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/sveltechef"}
 					on:click={async () => {
@@ -726,7 +726,7 @@
 					<span>CyberChef</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/excalidraw"}
 					on:click={async () => {
@@ -749,7 +749,7 @@
 					<span>Excalidraw</span>
 				</AppRailAnchor>
 				<AppRailAnchor
-					regionLabel="!text-[11px] !font-semibold leading-tight"
+					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/interact"}
 					on:click={async () => {
@@ -777,7 +777,7 @@
 							?.icon}
 					{#if iconSchema}
 						<AppRailAnchor
-							regionLabel="!text-[11px] !font-semibold leading-tight"
+							regionLabel="!text-2xs !font-semibold leading-tight"
 							selected={$page.url
 								.pathname ===
 								"/extension/" +
@@ -829,7 +829,7 @@
 					     failure, tertiary and pulsing for a restart), a ring filling with its download. While an
 					     update waits, the icon opens Settings → Updates. -->
 					<AppRailAnchor
-						regionLabel="!text-[11px] !font-semibold leading-tight"
+						regionLabel="!text-2xs !font-semibold leading-tight"
 						selected={$page.url.pathname ===
 							"/settings"}
 						on:click={() => {

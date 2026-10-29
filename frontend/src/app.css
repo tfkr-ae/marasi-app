@@ -39,7 +39,7 @@ body {
   @apply px-3 py-1 text-sm;
 }
 .table.table-dense thead th {
-  @apply px-2 py-1.5 text-[11px];
+  @apply px-2 py-1.5 text-2xs;
 }
 .table.table-dense tbody td {
   @apply px-2 py-1 text-xs;

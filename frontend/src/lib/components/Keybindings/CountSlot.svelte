@@ -7,10 +7,10 @@
 
 <span class="flex w-7 shrink-0 justify-center">
 	{#if counts.conflictCount}
-		<span class="badge variant-filled-error text-[10px]" title="{counts.conflictCount} conflicting">{counts.conflictCount}</span>
+		<span class="badge variant-filled-error text-3xs" title="{counts.conflictCount} conflicting">{counts.conflictCount}</span>
 	{:else if counts.unboundCount}
-		<span class="badge variant-filled-warning text-[10px]" title="{counts.unboundCount} unbound">{counts.unboundCount}</span>
+		<span class="badge variant-filled-warning text-3xs" title="{counts.unboundCount} unbound">{counts.unboundCount}</span>
 	{:else if counts.actionCount}
-		<span class="text-[10px] opacity-50" title="{counts.actionCount} actions">{counts.actionCount}</span>
+		<span class="text-3xs opacity-50" title="{counts.actionCount} actions">{counts.actionCount}</span>
 	{/if}
 </span>

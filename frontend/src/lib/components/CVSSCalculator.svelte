@@ -89,13 +89,13 @@
 			</span>
 			{#if scored}
 				<span class="flex-none text-base font-bold leading-none tabular-nums">{score.toFixed(1)}</span>
-				<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[severity] ?? 'variant-soft'}"
+				<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[severity] ?? 'variant-soft'}"
 					>{severity}</span
 				>
-				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-[11px] opacity-80">{vector.replace("CVSS:3.1/", "")}</code>
+				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-2xs opacity-80">{vector.replace("CVSS:3.1/", "")}</code>
 			{:else if vector}
-				<span class="badge flex-none variant-filled-error rounded-sm px-1.5 py-0.5 text-[10px] font-bold">Invalid</span>
-				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-[11px] opacity-80">{vector}</code>
+				<span class="badge flex-none variant-filled-error rounded-sm px-1.5 py-0.5 text-3xs font-bold">Invalid</span>
+				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-2xs opacity-80">{vector}</code>
 			{:else}
 				<span class="min-w-0 flex-1 truncate text-xs opacity-60">Not scored</span>
 			{/if}
@@ -119,7 +119,7 @@
 		<form class="flex items-center gap-1 border-t border-surface-500/30 px-2 py-1.5" on:submit|preventDefault={applyPaste}>
 			<input
 				bind:this={pasteInput}
-				class="input h-7 min-w-0 flex-1 rounded-none border-0 bg-surface-100 py-0 font-mono text-[11px] ring-0 focus:ring-0 dark:bg-surface-700"
+				class="input h-7 min-w-0 flex-1 rounded-none border-0 bg-surface-100 py-0 font-mono text-2xs ring-0 focus:ring-0 dark:bg-surface-700"
 				placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
 				spellcheck="false"
 				bind:value={pasted}
@@ -134,7 +134,7 @@
 			<button type="submit" class="btn btn-sm {primary} rounded-none py-0.5">Apply</button>
 		</form>
 		{#if pasteError}
-			<p class="px-2 pb-1.5 text-[11px] text-error-500">{pasteError}</p>
+			<p class="px-2 pb-1.5 text-2xs text-error-500">{pasteError}</p>
 		{/if}
 	{/if}
 
@@ -142,17 +142,17 @@
 		<div class="grid gap-x-4 gap-y-3 border-t border-surface-500/30 p-2 {stacked ? '' : 'md:grid-cols-2'}">
 			{#each CVSS_GROUPS as group}
 				<div class="space-y-1">
-					<div class="text-[10px] font-bold uppercase tracking-wider opacity-50">{group.name}</div>
+					<div class="text-3xs font-bold uppercase tracking-wider opacity-50">{group.name}</div>
 					{#each group.metrics as m}
 						<div class="flex items-center gap-2">
-							<span class="w-28 flex-none truncate text-[11px] opacity-80" title="{m.name} ({m.key})">{m.name}</span>
+							<span class="w-28 flex-none truncate text-2xs opacity-80" title="{m.name} ({m.key})">{m.name}</span>
 							<div class="flex min-w-0 flex-1 gap-px" role="group" aria-label={m.name}>
 								{#each m.options as [value, label]}
 									{@const chosen = !!vector && selections[m.key] === value}
 									{@const preset = !vector && CVSS_DEFAULTS[m.key] === value}
 									<button
 										type="button"
-										class="min-w-0 flex-1 truncate rounded-none px-1 py-1 text-[11px] transition-colors {chosen
+										class="min-w-0 flex-1 truncate rounded-none px-1 py-1 text-2xs transition-colors {chosen
 											? primary
 											: preset
 												? 'bg-primary-500/10 hover:bg-primary-500/20 dark:bg-primary-500/20 dark:hover:bg-primary-500/30'

@@ -79,7 +79,7 @@
 					>
 				</div>
 				<textarea
-					class="textarea h-28 bg-white py-1 font-mono text-[11px] ring-0 dark:bg-surface-700 border-0 focus:border-0 focus:ring-0"
+					class="textarea h-28 bg-white py-1 font-mono text-2xs ring-0 dark:bg-surface-700 border-0 focus:border-0 focus:ring-0"
 					placeholder={meta.hasCA ? "Paste a PEM to replace the CA" : "Paste a PEM to trust its CA"}
 					aria-label="CA certificate"
 					disabled={removeCA}
