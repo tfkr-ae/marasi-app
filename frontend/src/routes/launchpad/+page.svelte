@@ -40,7 +40,8 @@
     import LaunchpadTree from "../../lib/launchpad/LaunchpadTree.svelte";
     import LaunchpadWorkspace from "../../lib/launchpad/LaunchpadWorkspace.svelte";
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
-    import { entryMenuFor, launchpadMenuFor } from "../../lib/launchpad/entryMenu.js";
+    import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
+    import { launchpadMenuFor } from "../../lib/launchpad/launchpadMenu.js";
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
     import { menuAction } from "../../lib/ledger/rowMenu.js";

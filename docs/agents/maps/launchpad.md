@@ -10,7 +10,7 @@ Which files work together on the Launchpad page, how a launch travels through Go
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
   - `LaunchpadWorkspace.svelte` is the draft editor;
   - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
-  - `launchpadMenuFor` in the same file describes the launchpad menu, a launchpad row's context menu, in the same shape;
+  - `launchpadMenu.js` (`launchpadMenuFor`) describes the launchpad menu, a launchpad row's context menu, in the same shape, with `recordItems` from `entryMenu.js`;
   - the other files are pure helpers.
 - Go: the launch and launchpad methods in `app.go`, `launchpad_move.go` (`MoveLaunchpadEntries` and its refusal codes), and `launchpad_search.go`.
 
@@ -45,7 +45,7 @@ Right-clicking a launchpad row in `LaunchpadTree.svelte` calls the page's `openL
 - `runLaunchpadAction` runs an item on the launchpad the menu was opened for. The Finding and Test case items go through `runRecordAction` with all of its entry ids, so the toasts and errors are the entry menu's.
 - Rename… opens Skeleton's `prompt` modal with the current name, and saving calls the store's `renameLaunchpad(id, name)`. That trims the name, does nothing for a blank or unchanged one, and keeps the description. The tree, the tab and the workspace header all read the name from the store. The header's inline edit still changes the name and description together through `updateLaunchpad`.
 - The menu ends with Delete launchpad, which `pending` disables with `DELETE_LAUNCHPAD_PENDING_HINT`. It calls the page's `deleteLaunchpad(id)`, which the tab and ⌘K reach through `deleteOpenLaunchpad`, so all three share the pending refusal, the confirmation and the dirty-draft warning. The store's `deleteLaunchpad` opens a neighbour only when the deleted launchpad was the open one.
-- To add an item, append it to `launchpadMenuFor` and add a branch to `runLaunchpadAction`.
+- To add an item, append it to `launchpadMenuFor` in `launchpadMenu.js` and add a branch to `runLaunchpadAction`.
 
 ## Links to the rest of the app
 
