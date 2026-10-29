@@ -46,7 +46,7 @@
 				class="relative flex h-full items-center gap-1 px-3 {tab === key ? 'font-bold' : 'opacity-70 hover:opacity-100'}"
 				on:click={() => (tab = key)}
 			>
-				{name} <span class="text-[10px] font-normal opacity-60">{n}</span>
+				{name} <span class="text-3xs font-normal opacity-60">{n}</span>
 				<!-- Overlays the row's bottom edge, so the label centres in the full row. -->
 				{#if tab === key}<span class="absolute -bottom-px left-0 right-0 h-0.5 bg-primary-500"></span>{/if}
 			</button>
@@ -71,7 +71,7 @@
 				{#if request != null}
 					<RequestPair id={request} {read} stack={stackPair} />
 				{:else}
-					<p class="p-8 text-center text-[11px] opacity-60">No requests</p>
+					<p class="p-8 text-center text-2xs opacity-60">No requests</p>
 				{/if}
 			{:else}
 				<ArtifactPreview {artifact} {store} />

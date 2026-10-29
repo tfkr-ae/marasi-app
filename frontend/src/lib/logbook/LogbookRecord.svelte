@@ -61,7 +61,7 @@
 			else body?.scrollTo?.({ top: 0 });
 		});
 	}
-	const heading = "mb-1.5 text-[10px] font-bold uppercase tracking-wider opacity-50";
+	const heading = "mb-1.5 text-3xs font-bold uppercase tracking-wider opacity-50";
 </script>
 
 <div class="logbook-record relative flex h-full min-h-0 flex-col" bind:clientWidth={width} data-kind={kind} data-id={record.ID}>
@@ -70,7 +70,7 @@
 			><ArrowLeft size={12} class="mr-1" />Back</button
 		>
 		{#if kind === "finding"}
-			<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
+			<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
 				>{record.Severity || "None"}</span
 			>
 		{:else}
@@ -91,7 +91,7 @@
 		<RecordChecklist {kind} {record} {store} {fix} testCases={$store.testCases} on:save={saveFix} on:leave={onBack} />
 		<div class="mt-5"><LinkedRecords {kind} {links} wide={width > 900} {onOpen} /></div>
 		<h2 class="{heading} mt-5">Evidence</h2>
-		<div class="h-[440px] ring-1 ring-surface-500/30">
+		<div class="h-[27.5rem] ring-1 ring-surface-500/30">
 			{#key `${kind}:${record.ID}`}
 				<EvidenceViewer
 					{store}
@@ -106,7 +106,7 @@
 	{#if leaving}
 		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 		<div class="absolute inset-0 z-40 flex items-center justify-center bg-black/30" on:mousedown|self={() => store.keepFix()}>
-			<div class="card w-[360px] space-y-3 p-4 text-xs shadow-2xl bg-surface-50-800-token" role="alertdialog" aria-label="Unsaved changes" data-leave-prompt>
+			<div class="card w-[22.5rem] space-y-3 p-4 text-xs shadow-2xl bg-surface-50-800-token" role="alertdialog" aria-label="Unsaved changes" data-leave-prompt>
 				<h3 class="text-base font-bold">Unsaved changes</h3>
 				<p>Your changes to the {(ITEM_LABEL[fix.item] ?? "item").toLowerCase()} aren't saved.</p>
 				<div class="flex justify-end gap-2 pt-1">

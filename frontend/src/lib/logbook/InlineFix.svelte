@@ -132,30 +132,30 @@
 				<div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-container-token bg-surface-50 py-1 shadow-xl ring-1 ring-surface-500/30 dark:bg-surface-800">
 					{#each hits as option (option.value)}
 						{@const row = labelOf(option)}
-						<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-[11px] hover:bg-primary-500/15" on:mousedown|preventDefault={() => link(option)}>
+						<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-2xs hover:bg-primary-500/15" on:mousedown|preventDefault={() => link(option)}>
 							<span class="w-10 flex-none opacity-60">#{row.number}</span>
 							<span class="w-12 flex-none {METHOD_CLASS[row.method] ?? ''}">{row.method}</span>
 							<span class="min-w-0 flex-1 truncate">{row.url}</span>
 						</button>
 					{:else}
-						<p class="px-2 py-1 text-[11px] opacity-60">No matching traffic</p>
+						<p class="px-2 py-1 text-2xs opacity-60">No matching traffic</p>
 					{/each}
 				</div>
 			{/if}
 		</div>
 		{#each draft.Requests as id (id)}
 			{@const row = labels[id] ?? {}}
-			<div class="flex items-center gap-2 font-mono text-[11px]" data-fix-request={id}>
+			<div class="flex items-center gap-2 font-mono text-2xs" data-fix-request={id}>
 				<span class="w-10 flex-none opacity-60">{row.number != null ? `#${row.number}` : ""}</span>
 				<span class="w-12 flex-none {METHOD_CLASS[row.method] ?? ''}">{row.method}</span>
 				<span class="min-w-0 flex-1 truncate">{row.url}</span>
-				{#if !fix.original.Requests.includes(id)}<span class="badge flex-none rounded-sm bg-primary-500/20 px-1 py-0 font-sans text-[10px]">new</span>{/if}
+				{#if !fix.original.Requests.includes(id)}<span class="badge flex-none rounded-sm bg-primary-500/20 px-1 py-0 font-sans text-3xs">new</span>{/if}
 				<button type="button" class="flex-none p-0.5 opacity-70 hover:opacity-100" title="Unlink" aria-label="Unlink" on:click={() => store.unlinkFixRequest(id)}><X size={12} /></button>
 			</div>
 		{/each}
 	{/if}
 	<div class="flex items-center gap-2">
-		<span class="min-w-0 flex-1 truncate text-[11px]">
+		<span class="min-w-0 flex-1 truncate text-2xs">
 			{#if fix.error}<span class="text-error-500" title={String(fix.error)}>Not saved: {String(fix.error)}</span>{/if}
 		</span>
 		<button type="button" class="btn btn-sm flex-none {neutral}" data-fix-cancel disabled={fix.saving} on:click={() => store.cancelFix()}>Cancel</button>

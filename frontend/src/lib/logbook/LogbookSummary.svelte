@@ -61,7 +61,7 @@
 						on:click={() => toggleSeverity(severity)}
 					>
 						<div class="text-base font-bold tabular-nums">{counts[severity]}</div>
-						<div class="flex items-center justify-center gap-1 text-[10px] opacity-70">
+						<div class="flex items-center justify-center gap-1 text-3xs opacity-70">
 							<span class="h-2 w-2 rounded-sm {SEVERITY_MARK[severity]}"></span>{severity}
 						</div>
 					</button>
@@ -69,7 +69,7 @@
 				{#if filters.kind === "all"}
 					<button class="logbook-test-cases-card {card(false, false)}" on:click={() => store.setKind("testCases")}>
 						<div class="text-base font-bold tabular-nums">{testCases.length}</div>
-						<div class="text-[10px] opacity-70">Test cases</div>
+						<div class="text-3xs opacity-70">Test cases</div>
 					</button>
 				{/if}
 			</div>
@@ -79,14 +79,14 @@
 				<section class="logbook-summary-findings min-w-0 ring-1 ring-surface-500/20">
 					<h2 class="flex h-9 items-center gap-2 px-3 text-sm font-bold">
 						<ShieldAlert size={14} class="text-primary-500" />Findings
-						<span class="text-[11px] font-normal opacity-60">{findings.length}</span>
+						<span class="text-2xs font-normal opacity-60">{findings.length}</span>
 					</h2>
 					{#each findings as finding (finding.ID)}
 						{@const missing = missingOf("finding", finding)}
 						<button class={row} on:click={() => onOpen("finding", finding.ID)}>
-							<span class="w-[86px] flex-none"
+							<span class="w-[5.375rem] flex-none"
 								><span
-									class="badge rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[finding.Severity] ??
+									class="badge rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[finding.Severity] ??
 										'variant-soft'}">{finding.Severity || "None"}</span
 								></span
 							>
@@ -94,10 +94,10 @@
 							{#if missing.length}<span class="logbook-missing flex-none" title="Missing {missing.join(', ')}"
 									><AlertTriangle size={12} class="text-warning-800 dark:text-warning-500" /></span
 								>{/if}
-							<span class="w-8 flex-none text-right font-mono text-[11px] tabular-nums opacity-80"
+							<span class="w-8 flex-none text-right font-mono text-2xs tabular-nums opacity-80"
 								>{finding.CVSSVector ? Number(finding.CVSSScore).toFixed(1) : ""}</span
 							>
-							<span class="w-[26%] flex-none truncate text-[11px] opacity-60"
+							<span class="w-[26%] flex-none truncate text-2xs opacity-60"
 								>{testCaseById.get(finding.TestCaseID)?.Title ?? ""}</span
 							>
 						</button>
@@ -108,12 +108,12 @@
 				<section class="logbook-summary-test-cases min-w-0 ring-1 ring-surface-500/20">
 					<h2 class="flex h-9 items-center gap-2 px-3 text-sm font-bold">
 						<BookCheck size={14} class="text-tertiary-500" />Test cases
-						<span class="text-[11px] font-normal opacity-60">{testCases.length}</span>
+						<span class="text-2xs font-normal opacity-60">{testCases.length}</span>
 					</h2>
 					{#each testCaseGroups as group (group.key)}
 						{#if group.title !== null}
 							<div
-								class="flex h-7 items-center border-t border-surface-500/15 bg-surface-100/70 px-3 text-[11px] font-semibold opacity-80 dark:bg-surface-800/50 {state.grouping.testCases === 'tag' &&
+								class="flex h-7 items-center border-t border-surface-500/15 bg-surface-100/70 px-3 text-2xs font-semibold opacity-80 dark:bg-surface-800/50 {state.grouping.testCases === 'tag' &&
 								group.key !== '#none'
 									? 'font-mono'
 									: ''}"
@@ -130,7 +130,7 @@
 								{#if missing.length}<span class="logbook-missing flex-none" title="Missing {missing.join(', ')}"
 										><AlertTriangle size={12} class="text-warning-800 dark:text-warning-500" /></span
 									>{/if}
-								<span class="w-[30%] flex-none truncate font-mono text-[11px] opacity-60"
+								<span class="w-[30%] flex-none truncate font-mono text-2xs opacity-60"
 									>{(testCase.Tags ?? []).join(" · ")}</span
 								>
 								<span class="flex w-14 flex-none justify-end gap-0.5"
@@ -146,7 +146,7 @@
 			{/if}
 		</div>
 		{#if !findings.length && !testCases.length}
-			<p class="py-16 text-center text-[11px] opacity-60">
+			<p class="py-16 text-center text-2xs opacity-60">
 				{state.findings.length + state.testCases.length ? "Nothing matches" : "No findings or test cases yet"}
 			</p>
 		{/if}

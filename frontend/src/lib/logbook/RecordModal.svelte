@@ -124,13 +124,13 @@
 		<header class="flex flex-none items-center gap-2 border-b border-surface-500/30 px-3 py-2">
 			{#if finding}<ShieldAlert size={16} class="flex-none text-primary-500" />{:else}<BookCheck size={16} class="flex-none text-tertiary-500" />{/if}
 			<h2 class="flex-none text-base font-bold">{session.isNew ? "New" : "Edit"} {noun}</h2>
-			{#if dirty}<span class="flex-none text-[10px] text-warning-800 dark:text-warning-500" title="Unsaved changes" data-unsaved-mark>● Unsaved</span>{/if}
+			{#if dirty}<span class="flex-none text-3xs text-warning-800 dark:text-warning-500" title="Unsaved changes" data-unsaved-mark>● Unsaved</span>{/if}
 			<span class="flex-1"></span>
 			<button type="button" class="flex-none p-1 opacity-60 hover:opacity-100" title="Close (Esc)" aria-label="Close" on:click={close}><X size={16} /></button>
 		</header>
 
 		<div class="flex min-h-0 flex-1" class:hidden={!!expanded}>
-			<section class="flex w-[480px] flex-none flex-col gap-4 overflow-auto border-r border-surface-500/30 p-4">
+			<section class="flex w-[30rem] flex-none flex-col gap-4 overflow-auto border-r border-surface-500/30 p-4">
 				<RecordForm {session} bind:expanded bind:titleInput />
 			</section>
 			<section class="flex min-w-0 flex-1 flex-col">
@@ -141,7 +141,7 @@
 			<div class="flex min-h-0 flex-1 flex-col gap-2 p-4" data-expanded={expanded}>
 				<div class="flex items-center">
 					<span class="flex-1 truncate text-sm font-bold">{session.draft.Title || `Untitled ${noun}`} <span class="font-normal opacity-60">· {expandedField}</span></span>
-					<button type="button" class="flex items-center gap-1 text-[11px] opacity-70 hover:opacity-100" on:click={() => (expanded = null)}><Minimize2 size={11} />Collapse</button>
+					<button type="button" class="flex items-center gap-1 text-2xs opacity-70 hover:opacity-100" on:click={() => (expanded = null)}><Minimize2 size={11} />Collapse</button>
 				</div>
 				<!-- svelte-ignore a11y-autofocus -->
 				<textarea
@@ -155,7 +155,7 @@
 		{/if}
 
 		<footer class="flex flex-none items-center gap-2 border-t border-surface-500/30 px-3 py-2">
-			<div class="min-w-0 flex-1 truncate text-[11px]" data-unsaved-list>
+			<div class="min-w-0 flex-1 truncate text-2xs" data-unsaved-list>
 				{#if session.error}
 					<span class="text-error-500" title={String(session.error)}>Not saved: {String(session.error)}</span>
 				{:else if dirty}
@@ -174,7 +174,7 @@
 		{#if session.confirming}
 			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 			<div class="absolute inset-0 z-50 flex items-center justify-center bg-black/30" on:mousedown|self={() => logbookStore.keepEditing()}>
-				<div class="card w-[400px] space-y-3 p-4 text-xs shadow-2xl bg-surface-50-800-token" role="alertdialog" aria-label="Unsaved changes" data-close-prompt>
+				<div class="card w-[25rem] space-y-3 p-4 text-xs shadow-2xl bg-surface-50-800-token" role="alertdialog" aria-label="Unsaved changes" data-close-prompt>
 					<h3 class="text-base font-bold">Unsaved changes</h3>
 					<p>
 						{#if session.isNew}
@@ -184,7 +184,7 @@
 						{/if}
 					</p>
 					<div class="flex flex-wrap gap-1">
-						{#each changes as change}<span class="badge rounded-sm px-1.5 py-0.5 text-[10px] variant-soft">{change}</span>{/each}
+						{#each changes as change}<span class="badge rounded-sm px-1.5 py-0.5 text-3xs variant-soft">{change}</span>{/each}
 					</div>
 					<div class="flex justify-end gap-2 pt-1">
 						<button bind:this={keepButton} type="button" class="btn btn-sm {neutral}" on:click={() => logbookStore.keepEditing()}>Keep editing</button>

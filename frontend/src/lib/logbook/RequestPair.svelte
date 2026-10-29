@@ -66,7 +66,7 @@
 	{#each [["Request", bodies.request], ["Response", bodies.response]] as [label, text], i (label)}
 		<div class="flex min-h-0 min-w-0 flex-col bg-surface-50 dark:bg-surface-900">
 			<div
-				class="flex h-7 flex-none items-center gap-3 border-b border-surface-500/30 px-2 text-[10px] font-bold uppercase tracking-wider"
+				class="flex h-7 flex-none items-center gap-3 border-b border-surface-500/30 px-2 text-3xs font-bold uppercase tracking-wider"
 			>
 				<span class="flex-1 opacity-60">{label}</span>
 				{#if paused[i]}
@@ -83,9 +83,9 @@
 			</div>
 			<div class="relative min-h-0 flex-1 bg-white pt-[3px] dark:bg-[#282c34]">
 				{#if details === undefined}
-					<p class="p-4 text-[11px] opacity-50">Loading…</p>
+					<p class="p-4 text-2xs opacity-50">Loading…</p>
 				{:else if details === null}
-					<p class="p-4 text-[11px] opacity-60">{i ? "" : "Request not found"}</p>
+					<p class="p-4 text-2xs opacity-60">{i ? "" : "Request not found"}</p>
 				{:else}
 					{#key id}<DrawerEditor
 							value={text}
@@ -106,7 +106,7 @@
 		on:mousedown|self|stopPropagation={() => (big = false)}
 	>
 		<div class="card flex h-[92vh] w-[96vw] flex-col overflow-hidden rounded-none text-xs shadow-2xl bg-surface-50-800-token">
-			<header class="flex h-10 flex-none items-center gap-2 border-b border-surface-500/30 px-3 font-mono text-[11px]">
+			<header class="flex h-10 flex-none items-center gap-2 border-b border-surface-500/30 px-3 font-mono text-2xs">
 				{#if request}
 					<span class="opacity-60">#{request.Number}</span>
 					<span class="font-bold {METHOD_CLASS[request.Method] ?? ''}">{request.Method}</span>

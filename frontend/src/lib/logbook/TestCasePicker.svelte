@@ -29,7 +29,7 @@
 	<div class="flex h-8 items-center gap-2 rounded-token bg-tertiary-500/15 px-2 text-xs" data-field="TestCaseID">
 		<BookCheck size={13} class="flex-none text-tertiary-600 dark:text-tertiary-400" />
 		<span class="min-w-0 flex-1 truncate font-semibold">{linked?.Title ?? "Test case"}</span>
-		{#if linked}<span class="flex-none text-[10px] opacity-60">{categoryOf(linked)}</span>{/if}
+		{#if linked}<span class="flex-none text-3xs opacity-60">{categoryOf(linked)}</span>{/if}
 		<button type="button" class="p-0.5 opacity-60 hover:opacity-100" title="Unlink the test case" aria-label="Unlink the test case" on:click={() => dispatch("change", null)}><X size={12} /></button>
 	</div>
 {:else}
@@ -51,7 +51,7 @@
 				{#each hits as testCase (testCase.ID)}
 					<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left text-xs hover:bg-primary-500/15" on:mousedown|preventDefault={() => pick(testCase)}>
 						<span class="min-w-0 flex-1 truncate">{testCase.Title}</span>
-						<span class="flex-none text-[10px] opacity-60">{categoryOf(testCase)}</span>
+						<span class="flex-none text-3xs opacity-60">{categoryOf(testCase)}</span>
 					</button>
 				{/each}
 			</div>

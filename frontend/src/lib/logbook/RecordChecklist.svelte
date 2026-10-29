@@ -46,7 +46,7 @@
 <div class="logbook-checklist space-y-4">
 	{#each groups as [group, items] (group)}
 		<div>
-			<div class="mb-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+			<div class="mb-1.5 flex items-center gap-2 text-3xs font-bold uppercase tracking-wider">
 				<span class="opacity-50">{group}</span>
 				{#if group === "Required"}
 					{#if completeness.status === "done"}
@@ -69,9 +69,9 @@
 					<div
 						data-item={item.key}
 						data-focused={item.key === fixing || undefined}
-						class="grid h-12 grid-cols-[150px_minmax(0,1fr)_auto] items-center gap-3 px-3"
+						class="grid h-12 grid-cols-[9.375rem_minmax(0,1fr)_auto] items-center gap-3 px-3"
 					>
-						<div class="flex items-center gap-2 text-[11px] font-semibold">
+						<div class="flex items-center gap-2 text-2xs font-semibold">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />
 							{:else if item.required}<AlertTriangle size={13} class="flex-none text-warning-800 dark:text-warning-500" />
 							{:else}<CircleDashed size={12} class="flex-none opacity-40" />{/if}
@@ -79,7 +79,7 @@
 						</div>
 						<div class="min-w-0">
 							{#if !item.done}
-								<p class="text-[11px] {item.required ? 'font-semibold text-warning-800 dark:text-warning-400' : 'opacity-50'}">
+								<p class="text-2xs {item.required ? 'font-semibold text-warning-800 dark:text-warning-400' : 'opacity-50'}">
 									{item.required ? "Missing" : "Not set"}
 								</p>
 							{:else if item.key === "CVSSVector"}
@@ -87,10 +87,10 @@
 									<b class="tabular-nums">{Number(record.CVSSScore).toFixed(1)}</b>
 									<!-- The record's own severity, as its header shows. -->
 									{#if record.Severity}<span
-											class="badge rounded-sm px-1.5 py-0.5 text-[10px] font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
+											class="badge rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
 											>{record.Severity}</span
 										>{/if}
-									<code class="min-w-0 truncate bg-transparent p-0 font-mono text-[11px] opacity-70" title={record.CVSSVector}
+									<code class="min-w-0 truncate bg-transparent p-0 font-mono text-2xs opacity-70" title={record.CVSSVector}
 										>{record.CVSSVector.replace("CVSS:3.1/", "")}</code
 									>
 								</p>
@@ -112,7 +112,7 @@
 								{:else}
 									<button
 										type="button"
-										class="btn btn-sm px-2.5 py-0.5 text-[11px] {primary}"
+										class="btn btn-sm px-2.5 py-0.5 text-2xs {primary}"
 										data-fix-open={item.key}
 										on:click={() => store.startFix(item.key)}>{LINKS.has(item.key) ? "Link" : "Add"}</button
 									>

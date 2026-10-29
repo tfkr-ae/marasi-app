@@ -26,7 +26,7 @@
 		{@const on = String(selected) === String(id)}
 		<button
 			type="button"
-			class="relative flex h-7 w-full items-center gap-2 pl-2 pr-1 text-left font-mono text-[11px] {on
+			class="relative flex h-7 w-full items-center gap-2 pl-2 pr-1 text-left font-mono text-2xs {on
 				? 'bg-primary-500/20'
 				: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 			aria-current={on ? "true" : undefined}
@@ -45,6 +45,6 @@
 			{/if}
 		</button>
 	{:else}
-		<p class="px-2 py-3 text-center text-[11px] opacity-60">No requests linked</p>
+		<p class="px-2 py-3 text-center text-2xs opacity-60">No requests linked</p>
 	{/each}
 </div>
