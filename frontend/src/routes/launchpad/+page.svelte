@@ -210,10 +210,8 @@
     const launchpadMenuRequests = latestRequest();
 
     function launchpadMenuInput(state, launchpadId) {
-        const launchpad = state.launchpads.find((l) => l.ID === launchpadId);
-        if (!launchpad) return null;
+        if (!state.launchpads.some((l) => l.ID === launchpadId)) return null;
         return {
-            launchpad,
             entries: state.entriesByLaunchpad[launchpadId] || [],
             findings: $findingStore,
             testCases: $testCaseStore,
@@ -224,6 +222,7 @@
     $: launchpadMenuData = rowLaunchpadMenu.open
         ? launchpadMenuInput($launchpadStore, rowLaunchpadMenu.launchpadId)
         : null;
+    $: launchpadMenuName = $launchpadStore.launchpads.find((l) => l.ID === rowLaunchpadMenu.launchpadId)?.Name;
 
     // A collapsed launchpad's entries load first, so the link states are
     // never unknown.
@@ -684,7 +683,7 @@
     items={launchpadMenuData ? launchpadMenuFor(launchpadMenuData) : []}
     context={{ numberOf: (entry) => launchpadMenuData.entries.indexOf(entry) + 1 }}
     noun={["entry", "entries"]}
-    scope={launchpadMenuData ? `in ${launchpadMenuData.launchpad.Name || UNTITLED_LAUNCHPAD}` : null}
+    scope={launchpadMenuData ? `in ${launchpadMenuName || UNTITLED_LAUNCHPAD}` : null}
     on:action={(e) => runLaunchpadAction(e.detail)}
     on:close={(e) => e.detail.refocus && tree?.focus()}
 />

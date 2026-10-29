@@ -194,14 +194,14 @@ export function entryMenuFor({
 }
 
 /**
- * The menu for one `launchpad` in the tree, over all of its `entries`, with
+ * The menu for one launchpad in the tree, over all of its `entries`, with
  * the project's `findings` and `testCases` for the Finding and Test case
  * items. `pending` says whether a launch from that launchpad is pending,
  * which greys Delete launchpad. The page loads a collapsed launchpad's
  * entries before opening it, so the link states are never partial.
  * Rename… and Delete launchpad follow them after a divider.
  */
-export function launchpadMenuFor({ launchpad, entries = [], findings = [], testCases = [], pending = false }) {
+export function launchpadMenuFor({ entries = [], findings = [], testCases = [], pending = false }) {
   const records = recordItems(entries, { findings, testCases });
   return [
     ...(entries.length ? records : records.map((it) => ({ ...it, disabled: true, hint: "No entries" }))),

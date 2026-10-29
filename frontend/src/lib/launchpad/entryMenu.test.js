@@ -243,7 +243,6 @@ test("New finding and New test case show their shortcut keys and run as shortcut
 // The launchpad menu for Login, over all of its entries (a…e by default).
 function launchpadMenu(extra = {}) {
   return launchpadMenuFor({
-    launchpad: launchpads[0],
     entries: ["a", "b", "c", "d", "e"].map((id) => entry(id)),
     findings,
     testCases,
