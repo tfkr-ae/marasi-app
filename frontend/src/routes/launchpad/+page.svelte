@@ -245,7 +245,7 @@
 
     // Runs a launchpad menu item's action on the launchpad it was opened for.
     // The Finding and Test case ones act on all of its entries.
-    // Delete goes through the tab's deleteLaunchpad.
+    // Delete goes through this page's deleteLaunchpad, as the tab's does.
     function runLaunchpadAction(action) {
         const { launchpadId } = rowLaunchpadMenu;
         if (action.type === "rename") return renameLaunchpad(launchpadId);

@@ -26,9 +26,10 @@
 	export let moveEntries;
 	// Opens the entry context menu at (x, y) for the Entry selection.
 	export let openEntryMenu = () => {};
-	// Opens the launchpad context menu for launchpad `id` at (x, y), and the
-	// launchpad it is open for, whose row is outlined.
+	// Opens the launchpad context menu at (x, y) for launchpad `id`.
 	export let openLaunchpadMenu = () => {};
+	// The launchpad the launchpad menu is open for, whose row is outlined;
+	// null while it is shut.
 	export let menuLaunchpadId = null;
 	export let searchInput = null;
 
