@@ -63,3 +63,7 @@ No config holds the type scale. The theme (`tfkr-theme.js`) sets only the font, 
 | Counts, badges, group labels | `text-[10px]` |
 
 `app.css` adds the denser `.btn-group-sm` and `.table-dense`. To match the scale, copy from `LedgerTable.svelte`, `DrawerRail.svelte` or `OpeningScreen.svelte` instead of measuring.
+
+## Decisions
+
+- [Text size scales the root font size, not the whole page](../../adr/2026-10-29-text-size-scales-the-root-font-size.md)

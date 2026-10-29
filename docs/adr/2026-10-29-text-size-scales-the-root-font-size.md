@@ -1,0 +1,5 @@
+# Text size scales the root font size, not the whole page
+
+The Text size setting (Small, Default, Large, X-Large) changes the root font size. Every text size in the app, the code editors and the Ledger row height are written in rem, or derived from it, so they all scale together. Borders, px icons and embedded tools such as Excalidraw and Chef stay as they are. Before this, about 230 sizes were in px (`text-[11px]`, `text-[10px]`, the editors' `fontSize: "11px"`), so they were moved onto named rem sizes (`text-2xs`, `text-3xs`) in the theme. A new size in px would not follow the setting.
+
+We considered CSS `zoom` on the whole app, which scales px too and needs no migration. Under `zoom`, pointer coordinates and hit-testing can drift in CodeMirror, Excalidraw and drag handles. WebKit, WebView2 and WebKitGTK each handle it differently, so Wails would behave differently on each platform. We also considered scaling the root font size without the migration, but that leaves the dense px text (Ledger rows, labels, badges) at a fixed size while the rest grows.
