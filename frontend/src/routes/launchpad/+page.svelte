@@ -285,7 +285,7 @@
         const background = handoffBackground($modeCurrent);
         if (!count) {
             const change = { type: link ? "link" : "unlink", noun, name: title };
-            toastStore.trigger({ message: unchangedText(change, ids.length), background });
+            toastStore.trigger({ message: unchangedText(change, ids.length, "request"), background });
             return;
         }
         toastStore.trigger({

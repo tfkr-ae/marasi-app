@@ -40,3 +40,14 @@ test("a ⌘A change that touched nothing says why, for one, many or an uncounted
   );
   assert.equal(unchangedText({ type: "delete" }, 0), "No matching requests to change");
 });
+
+test("a change to picked requests that touched nothing drops \"matching\"", () => {
+  assert.equal(
+    unchangedText({ type: "link", noun: "finding", name: "IDOR" }, 3, "request"),
+    'All 3 requests were already linked to finding "IDOR"',
+  );
+  assert.equal(
+    unchangedText({ type: "unlink", noun: "test case", name: "Auth" }, 1, "request"),
+    'The request wasn\'t linked to test case "Auth"',
+  );
+});

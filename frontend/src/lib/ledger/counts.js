@@ -38,17 +38,18 @@ export function matchCountText(count) {
  * Why a change to a ⌘A selection of `n` matching requests (null while
  * counted) touched none of them, for its toast. `change` is { type, name?,
  * noun? }: highlight, clear-highlight, clear-notes, add-to-launchpad,
- * remove-from-launchpad, link, unlink, or anything else.
+ * remove-from-launchpad, link, unlink, or anything else. `request` words
+ * one pair; the Launchpad, whose selection is never ⌘A, passes "request".
  */
-export function unchangedText(change, n) {
-  if (n === 0) return "No matching requests to change";
+export function unchangedText(change, n, request = "matching request") {
+  if (n === 0) return `No ${request}s to change`;
   const one = n === 1;
-  const counted = n == null ? "matching requests" : `${n.toLocaleString()} matching requests`;
+  const counted = n == null ? `${request}s` : `${n.toLocaleString()} ${request}s`;
   // "All 3 matching requests were already …" / "The matching request was already …"
-  const all = (rest) => (one ? `The matching request was already ${rest}` : `All ${counted} were already ${rest}`);
+  const all = (rest) => (one ? `The ${request} was already ${rest}` : `All ${counted} were already ${rest}`);
   // "None of the 3 matching requests had …" / "The matching request had no …"
   const none = (verb, what, single) =>
-    one ? `The matching request ${single}` : `None of the ${counted} ${verb} ${what}`;
+    one ? `The ${request} ${single}` : `None of the ${counted} ${verb} ${what}`;
   const name = `"${change.name}"`;
   switch (change.type) {
     case "highlight":
@@ -66,6 +67,6 @@ export function unchangedText(change, n) {
     case "unlink":
       return none("were", `linked to ${change.noun} ${name}`, `wasn't linked to ${change.noun} ${name}`);
     default:
-      return one ? "The matching request didn't change" : `None of the ${counted} changed`;
+      return one ? `The ${request} didn't change` : `None of the ${counted} changed`;
   }
 }
