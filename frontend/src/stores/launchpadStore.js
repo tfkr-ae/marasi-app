@@ -9,6 +9,7 @@ import {
   GetLaunchpads,
   GetRawDetails,
   Launch,
+  LinkTraffic,
   MoveLaunchpadEntries,
   PendingLaunches,
   SearchLaunchpadEntries,
@@ -18,6 +19,7 @@ import {
 } from "../lib/wailsjs/go/main/App";
 import { createLaunchpadStore } from "./createLaunchpadStore.js";
 import { reportUnsavedDraftCount } from "./draftGuards.js";
+import { relinked } from "./relinked.js";
 
 export {
   BLANK_REQUEST,
@@ -49,6 +51,10 @@ export const launchpadStore = createLaunchpadStore({
     MoveLaunchpadEntries(sourceId, targetId, ids, before),
   unlinkEntries: (launchpadId, ids) =>
     UnlinkTraffic({ ids }, { Kind: "launchpad", ID: launchpadId }),
+  // As the Ledger's: target is { Kind: "finding" | "test_case", ID }, and
+  // that kind's list rereads its links afterwards.
+  linkEntriesToRecord: (selection, target) => relinked(LinkTraffic(selection, target), target.Kind),
+  unlinkEntriesFromRecord: (selection, target) => relinked(UnlinkTraffic(selection, target), target.Kind),
 });
 
 // Keeps the Go side told how many launchpads have unsaved drafts, so quitting

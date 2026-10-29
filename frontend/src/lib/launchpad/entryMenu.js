@@ -1,19 +1,25 @@
 // The Launchpad tree's context menu for an Entry selection, as data in the
 // shape of the Ledger's row menu (ledger/rowMenu.js), so RowMenu.svelte
 // renders it and menuAction runs its shortcuts. Every item is a Move, to the
-// end of another launchpad or to a new place in this one, a removal, or
-// copying one entry's browser view URL.
-// Plain functions, so they load under node.
+// end of another launchpad or to a new place in this one, a removal,
+// copying one entry's browser view URL, or a Finding or Test case item.
+// The launchpad menu (launchpadMenu.js) shares recordItems. Plain
+// functions, so they load under node.
 //
 // Actions:
 //   { type: "move", targetId, name }   to the end of another launchpad
 //   { type: "reorder", before }        within the launchpad; before null is the end
 //   { type: "remove" }                 unlink from the launchpad
 //   { type: "browser-view", id }       copy the entry's browser view URL
+//   { type: "new-finding" }            a new finding with the entries' pairs
+//   { type: "new-test-case" }          a new test case with the entries' pairs
+//   { type: "link-finding", id, title }      also unlink-finding,
+//   { type: "link-test-case", id, title }    unlink-test-case
 import { unlessLaunching } from "../launchPending.js";
 import { UNTITLED_LAUNCHPAD } from "./format.js";
 import { moveRefusal } from "./entryMove.js";
 import { browserViewRefusal } from "../browserView.js";
+import { linkMenu } from "../ledger/rowMenu.js";
 
 const entriesLabel = (n) => (n === 1 ? "" : ` ${n.toLocaleString()}`);
 
@@ -36,6 +42,48 @@ function reorderBefore(order, picked) {
   };
 }
 
+/**
+ * The Finding and Test case items over `entries`, through the Ledger's
+ * `linkMenu`: an entry's ID is its pair's. `findings` and `testCases` each
+ * hold the pair IDs they link as Requests. A link only points a record at a
+ * pair that already exists, so pending launches disable none of them.
+ * `newActionIds` names the New items' keybindings, if any.
+ */
+export function recordItems(entries, { findings = [], testCases = [], newActionIds = {} } = {}) {
+  return [
+    {
+      id: "finding",
+      label: "Finding",
+      icon: "finding",
+      ...linkMenu({
+        key: "f",
+        noun: "finding",
+        pairs: entries,
+        targets: findings,
+        newActionId: newActionIds.finding,
+        newType: "new-finding",
+        linkType: "link-finding",
+        unlinkType: "unlink-finding",
+      }),
+    },
+    {
+      id: "testcase",
+      label: "Test case",
+      icon: "testcase",
+      ...linkMenu({
+        key: "t",
+        noun: "test case",
+        pairs: entries,
+        targets: testCases,
+        newActionId: newActionIds.testCase,
+        newType: "new-test-case",
+        linkType: "link-test-case",
+        unlinkType: "unlink-test-case",
+      }),
+    },
+  ];
+}
+
 const ORDER_ITEMS = [
   ["top", "Move to top", "Already first"],
   ["up", "Move up", "Already first"],
@@ -47,9 +95,10 @@ const ORDER_ITEMS = [
  * The menu for the Entry selection `ids` in launchpad `launchpadId`, whose
  * `entries` are in entry order. `launchpads` is the launchpad list,
  * `entriesByLaunchpad` the entry lists loaded so far, `pendingIds` the
- * entries whose launch is pending. Reordering is off while the tree is
- * `grouped` by status or `searching`; moving to another launchpad's end is
- * not.
+ * entries whose launch is pending, and `findings` and `testCases` the
+ * project's records for the Finding and Test case items. Reordering is off
+ * while the tree is `grouped` by status or `searching`; moving to another
+ * launchpad's end is not.
  */
 export function entryMenuFor({
   launchpadId,
@@ -58,6 +107,8 @@ export function entryMenuFor({
   launchpads = [],
   entriesByLaunchpad = {},
   pendingIds = [],
+  findings = [],
+  testCases = [],
   grouped = false,
   searching = false,
 }) {
@@ -118,6 +169,15 @@ export function entryMenuFor({
       ...(viewOff ? { disabled: true, hint: viewOff } : {}),
       action: { type: "browser-view", id: picked[0] },
     },
+    "sep",
+    ...recordItems(
+      entries.filter((entry) => picked.includes(entry.ID)),
+      {
+        findings,
+        testCases,
+        newActionIds: { finding: "launchpad.tree.create-finding", testCase: "launchpad.tree.create-test-case" },
+      },
+    ),
     "sep",
     {
       id: "remove",

@@ -28,6 +28,23 @@ function fakeApi() {
       lists[launchpadId] = lists[launchpadId].filter((id) => !ids.includes(id));
       return ids.length;
     },
+    // Links from pairs to findings and test cases: "kind:id" to pair ids.
+    links: { "finding:1": ["a"] },
+    linkEntriesToRecord: async (selection, target) => {
+      api.calls.push(["linkEntriesToRecord", selection, target]);
+      const key = `${target.Kind}:${target.ID}`;
+      const linked = api.links[key] ?? [];
+      const added = selection.ids.filter((id) => !linked.includes(id));
+      api.links[key] = [...linked, ...added];
+      return added.length;
+    },
+    unlinkEntriesFromRecord: async (selection, target) => {
+      api.calls.push(["unlinkEntriesFromRecord", selection, target]);
+      const key = `${target.Kind}:${target.ID}`;
+      const linked = api.links[key] ?? [];
+      api.links[key] = linked.filter((id) => !selection.ids.includes(id));
+      return linked.length - api.links[key].length;
+    },
   };
   return api;
 }
@@ -145,4 +162,34 @@ test("an entry is launching from a launchpad only when its pending launch came f
   };
   assert.deepEqual(pendingEntryIds(state, "lp1", ["a", "b", "c", "d"]), ["a"]);
   assert.deepEqual(pendingEntryIds(state, "lp2", ["a", "b"]), ["b"]);
+});
+
+test("linking entries sends their ids to Marasi with the record and returns how many it linked", async () => {
+  const api = fakeApi();
+  const store = await populated(api);
+  assert.equal(await store.linkEntriesToRecord(["a", "b", "c"], "finding", 1), 2);
+  assert.equal(await store.linkEntriesToRecord(["d"], "test_case", 7), 1);
+  assert.deepEqual(api.calls, [
+    ["linkEntriesToRecord", { ids: ["a", "b", "c"] }, { Kind: "finding", ID: 1 }],
+    ["linkEntriesToRecord", { ids: ["d"] }, { Kind: "test_case", ID: 7 }],
+  ]);
+  assert.equal(await store.linkEntriesToRecord(["a"], "finding", 1), 0);
+});
+
+test("unlinking entries sends their ids to Marasi with the record and returns how many it unlinked", async () => {
+  const api = fakeApi();
+  const store = await populated(api);
+  assert.equal(await store.unlinkEntriesFromRecord(["a", "b"], "finding", 1), 1);
+  assert.deepEqual(api.calls, [["unlinkEntriesFromRecord", { ids: ["a", "b"] }, { Kind: "finding", ID: 1 }]]);
+  // Linking and unlinking leave the launchpads and their entries alone.
+  assert.deepEqual(order(store, "lp1"), ["a", "b", "c", "d", "e"]);
+});
+
+test("a failed link goes on to the caller", async () => {
+  const api = fakeApi();
+  api.linkEntriesToRecord = async () => {
+    throw new Error("database is locked");
+  };
+  const store = await populated(api);
+  await assert.rejects(store.linkEntriesToRecord(["a"], "finding", 1), /database is locked/);
 });

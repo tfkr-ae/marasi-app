@@ -3,7 +3,7 @@
     // workspace with the Launchpad draft and response side by side. State
     // and API calls live in launchpadStore; this page wires confirmations,
     // toasts and the existing launchpad.* catalog actions.
-    import { getModalStore, getToastStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
     import {
         ArrowDownIcon,
         ArrowDownToLineIcon,
@@ -12,6 +12,7 @@
         ArrowRightIcon,
         ArrowUpIcon,
         ArrowUpToLineIcon,
+        BookCheckIcon,
         BracesIcon,
         CircleStopIcon,
         Columns2Icon,
@@ -26,6 +27,7 @@
         PlayIcon,
         PlusIcon,
         SearchIcon,
+        ShieldAlertIcon,
         TrashIcon,
     } from "lucide-svelte";
     import { onMount } from "svelte";
@@ -39,11 +41,16 @@
     import LaunchpadWorkspace from "../../lib/launchpad/LaunchpadWorkspace.svelte";
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
     import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
+    import { launchpadMenuFor } from "../../lib/launchpad/launchpadMenu.js";
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
     import { menuAction } from "../../lib/ledger/rowMenu.js";
     import { GetMetadata, GetNote } from "../../lib/wailsjs/go/main/App";
     import { listener } from "../../stores";
+    import { findingStore } from "../../stores/findingStore";
+    import { testCaseStore } from "../../stores/testCaseStore";
+    import { newRecord } from "../../lib/logbook/recordEditor.js";
+    import { linkedText, requestCount, unchangedText } from "../../lib/ledger/counts.js";
     import {
         isDraftDirty,
         launchpadStore,
@@ -58,7 +65,8 @@
         warnLaunching,
     } from "../../lib/launchPending.js";
     import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
-    import { toastError } from "../../lib/toasts.js";
+    import { latestRequest } from "../../lib/latestRequest.js";
+    import { handoffBackground, toastError } from "../../lib/toasts.js";
     import { BROWSER_VIEW_COPIED, browserViewRefusal, browserViewURL } from "../../lib/browserView.js";
 
     const modalStore = getModalStore();
@@ -177,6 +185,8 @@
             launchpads: state.launchpads,
             entriesByLaunchpad: state.entriesByLaunchpad,
             pendingIds: pendingEntryIds(state, launchpadId, ids),
+            findings: $findingStore,
+            testCases: $testCaseStore,
             grouped: groupByStatus,
             searching: state.search.trim() !== "",
         };
@@ -187,12 +197,89 @@
     $: entryMenuName = $launchpadStore.launchpads.find((l) => l.ID === entryMenuData?.launchpadId)?.Name;
 
     function openEntryMenu(x, y) {
-        if (selectedEntryIds(get(launchpadStore)).length) entryMenu = { open: true, x, y };
+        if (!selectedEntryIds(get(launchpadStore)).length) return;
+        launchpadMenuRequests.start();
+        entryMenu = { open: true, x, y };
+    }
+
+    // The launchpad context menu (RowMenu with launchpadMenuFor items) for a
+    // launchpad row. It acts on that launchpad, which need not be the open
+    // one, and leaves the open launchpad, its draft and the Entry selection.
+    let rowLaunchpadMenu = { open: false, x: 0, y: 0, launchpadId: null };
+    // Only the latest right-click opens its menu: a collapsed launchpad's
+    // entries can finish loading after a later right-click has opened one.
+    const launchpadMenuRequests = latestRequest();
+
+    function launchpadMenuInput(state, launchpadId) {
+        if (!state.launchpads.some((l) => l.ID === launchpadId)) return null;
+        return {
+            entries: state.entriesByLaunchpad[launchpadId] || [],
+            findings: $findingStore,
+            testCases: $testCaseStore,
+            pending: Boolean(pendingLaunchOf(state, launchpadId)),
+        };
+    }
+
+    $: launchpadMenuData = rowLaunchpadMenu.open
+        ? launchpadMenuInput($launchpadStore, rowLaunchpadMenu.launchpadId)
+        : null;
+    $: launchpadMenuName = $launchpadStore.launchpads.find((l) => l.ID === rowLaunchpadMenu.launchpadId)?.Name;
+
+    // A collapsed launchpad's entries load first, so the link states are
+    // never unknown.
+    async function openLaunchpadMenu(launchpadId, x, y) {
+        const latest = launchpadMenuRequests.start();
+        entryMenu = { ...entryMenu, open: false };
+        if (get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) {
+            try {
+                await launchpadStore.loadEntries(launchpadId);
+            } catch (err) {
+                console.error("Launchpad entries error:", err);
+                if (latest()) toastError(toastStore, "Failed to load the entries", err);
+                return;
+            }
+            if (!latest() || get(launchpadStore).entriesByLaunchpad[launchpadId] === undefined) return;
+        }
+        rowLaunchpadMenu = { open: true, x, y, launchpadId };
+    }
+
+    // Runs a launchpad menu item's action on the launchpad it was opened for.
+    // The Finding and Test case ones act on all of its entries.
+    // Delete goes through this page's deleteLaunchpad, as the tab's does.
+    function runLaunchpadAction(action) {
+        const { launchpadId } = rowLaunchpadMenu;
+        if (action.type === "rename") return renameLaunchpad(launchpadId);
+        if (action.type === "delete") return deleteLaunchpad(launchpadId);
+        const ids = (get(launchpadStore).entriesByLaunchpad[launchpadId] || []).map((entry) => entry.ID);
+        runRecordAction(action, ids);
+    }
+
+    // Asks for a new name only; the workspace header edits the description.
+    function renameLaunchpad(launchpadId) {
+        const launchpad = get(launchpadStore).launchpads.find((l) => l.ID === launchpadId);
+        if (!launchpad) return;
+        modalStore.trigger({
+            type: "prompt",
+            title: "Rename launchpad",
+            value: launchpad.Name,
+            valueAttr: { type: "text", required: true },
+            buttonTextSubmit: "Rename",
+            response: async (name) => {
+                if (typeof name !== "string") return;
+                try {
+                    await launchpadStore.renameLaunchpad(launchpadId, name);
+                } catch (err) {
+                    console.error("Launchpad rename error:", err);
+                    toastError(toastStore, "Failed to rename the launchpad", err);
+                }
+            },
+        });
     }
 
     // Runs a menu item's action on the Entry selection. Any type other than
-    // remove and browser-view is taken as a move or reorder (entryMenuFor),
-    // so a new type needs its own branch above that.
+    // remove, browser-view and the Finding and Test case ones is taken as a
+    // move or reorder (entryMenuFor), so a new type needs its own branch
+    // above that.
     async function runEntryAction(action) {
         const state = get(launchpadStore);
         const sourceId = state.entrySelection.launchpadId;
@@ -200,6 +287,7 @@
         if (!sourceId || !ids.length) return;
         if (action.type === "remove") return removeEntries(sourceId, ids);
         if (action.type === "browser-view") return copyBrowserView(action.id);
+        if (runRecordAction(action, ids)) return;
         const targetId = action.type === "move" ? action.targetId : sourceId;
         const before = action.type === "move" ? null : action.before;
         const { moved } = await moveEntries({ sourceId, targetId, ids, before });
@@ -231,8 +319,54 @@
         }
     }
 
-    // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓ in the tree: the menu's Order item, run as choosing it
-    // would; when the menu greys it, its reason instead.
+    // The link and unlink items' action types: which way, the record's noun
+    // for the toasts and its kind for Marasi.
+    const LINK_ACTIONS = {
+        "link-finding": { link: true, noun: "finding", kind: "finding" },
+        "unlink-finding": { link: false, noun: "finding", kind: "finding" },
+        "link-test-case": { link: true, noun: "test case", kind: "test_case" },
+        "unlink-test-case": { link: false, noun: "test case", kind: "test_case" },
+    };
+
+    // The Finding and Test case items over entries `ids`, whose pairs they
+    // act on. False for any other action.
+    function runRecordAction(action, ids) {
+        if (action.type === "new-finding") newRecord(modalStore, "finding", { requestIds: ids });
+        else if (action.type === "new-test-case") newRecord(modalStore, "testCase", { requestIds: ids });
+        else if (LINK_ACTIONS[action.type]) changeLinks(ids, LINK_ACTIONS[action.type], action);
+        else return false;
+        return true;
+    }
+
+    // Links or unlinks the entries' pairs and a finding or test case, with
+    // the Ledger's toasts; the store's mapping rereads that kind's list.
+    // `how` is a LINK_ACTIONS value.
+    async function changeLinks(ids, how, { id, title }) {
+        const { link, noun, kind } = how;
+        let count;
+        try {
+            count = link
+                ? await launchpadStore.linkEntriesToRecord(ids, kind, id)
+                : await launchpadStore.unlinkEntriesFromRecord(ids, kind, id);
+        } catch (err) {
+            console.error("Launchpad link error:", err);
+            toastStore.trigger({
+                message: `Failed to ${link ? "link" : "unlink"} ${requestCount(ids.length)}: ${String(err)}`,
+                background: "variant-filled-error",
+                timeout: 10000,
+                action: { label: "Retry", response: () => changeLinks(ids, how, { id, title }) },
+            });
+            return;
+        }
+        const background = handoffBackground($modeCurrent);
+        const change = { type: link ? "link" : "unlink", noun, name: title };
+        const message = count ? linkedText(change, count) : unchangedText(change, ids.length, "request");
+        toastStore.trigger({ message, background });
+    }
+
+    // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓, ⌘⇧F and ⌘⇧B in the tree: the menu's Order or New
+    // item, run as choosing it would; when the menu greys it, its reason
+    // instead.
     function runEntryShortcut(actionId) {
         entryMenu = { ...entryMenu, open: false };
         const input = entryMenuInput(get(launchpadStore));
@@ -269,14 +403,17 @@
         else launchpadStore.closeCompare();
     }
 
-    function deleteLaunchpad() {
+    // Deletes launchpad `id` after confirming, from the tab, ⌘K (both the
+    // open one) or the launchpad menu (any). Deleting one that isn't open
+    // leaves the open launchpad, its draft and the Entry selection.
+    function deleteLaunchpad(id) {
         const state = get(launchpadStore);
-        const launchpad = state.launchpads.find((l) => l.ID === state.selectedLaunchpadId);
+        const launchpad = state.launchpads.find((l) => l.ID === id);
         if (!launchpad) return;
         // Marasi refuses while a launch from it is pending (marasi docs/adr/2026-10-18-a-pending-launchs-pair-stays-in-its-launchpad.md).
         if (pendingLaunchOf(state, launchpad.ID)) return warnDeleteLaunching();
         confirm(
-            `Delete ${launchpad.Name}?`,
+            `Delete ${launchpad.Name || UNTITLED_LAUNCHPAD}?`,
             isDraftDirty(state, launchpad.ID) ? "Its unsaved draft will be discarded." : undefined,
             () =>
                 launchpadStore.deleteLaunchpad(launchpad.ID).catch((err) => {
@@ -289,6 +426,8 @@
                 }),
         );
     }
+
+    const deleteOpenLaunchpad = () => deleteLaunchpad(get(launchpadStore).selectedLaunchpadId);
 
     const warnDeleteLaunching = () => warnLaunching(toastStore, DELETE_LAUNCHPAD_PENDING_HINT);
 
@@ -454,11 +593,13 @@
         { actionId: "launchpad.tree.move-entries-down", icon: ArrowDownIcon, handler: () => runEntryShortcut("launchpad.tree.move-entries-down") },
         { actionId: "launchpad.tree.move-entries-top", icon: ArrowUpToLineIcon, handler: () => runEntryShortcut("launchpad.tree.move-entries-top") },
         { actionId: "launchpad.tree.move-entries-bottom", icon: ArrowDownToLineIcon, handler: () => runEntryShortcut("launchpad.tree.move-entries-bottom") },
+        { actionId: "launchpad.tree.create-finding", icon: ShieldAlertIcon, handler: () => runEntryShortcut("launchpad.tree.create-finding") },
+        { actionId: "launchpad.tree.create-test-case", icon: BookCheckIcon, handler: () => runEntryShortcut("launchpad.tree.create-test-case") },
         { actionId: "launchpad.next-tab", icon: ArrowRightIcon, handler: () => stepLaunchpad(1) },
         { actionId: "launchpad.previous-tab", icon: ArrowLeftIcon, handler: () => stepLaunchpad(-1) },
         { actionId: "launchpad.next-entry", icon: ArrowDownIcon, handler: () => stepEntry(1) },
         { actionId: "launchpad.previous-entry", icon: ArrowDownIcon, handler: () => stepEntry(-1) },
-        { actionId: "launchpad.delete-tab", icon: TrashIcon, handler: deleteLaunchpad },
+        { actionId: "launchpad.delete-tab", icon: TrashIcon, handler: deleteOpenLaunchpad },
         {
             actionId: "launchpad.edit-request",
             icon: PenIcon,
@@ -503,6 +644,8 @@
             {pickEntry}
             {moveEntries}
             {openEntryMenu}
+            {openLaunchpadMenu}
+            menuLaunchpadId={rowLaunchpadMenu.open ? rowLaunchpadMenu.launchpadId : null}
             bind:searchInput
         />
     </LaunchpadDock>
@@ -513,7 +656,7 @@
             onEditorFocus={() => dock?.onEditorFocus()}
             onLaunch={launch}
             onCancel={cancelLaunch}
-            onDelete={deleteLaunchpad}
+            onDelete={deleteOpenLaunchpad}
             onBrowserView={copyOpenBrowserView}
             launchDisabled={!$listener.status}
         />
@@ -530,5 +673,18 @@
     noun={["entry", "entries"]}
     scope={entryMenuName ? `in ${entryMenuName}` : null}
     on:action={(e) => runEntryAction(e.detail)}
+    on:close={(e) => e.detail.refocus && tree?.focus()}
+/>
+
+<RowMenu
+    bind:open={rowLaunchpadMenu.open}
+    x={rowLaunchpadMenu.x}
+    y={rowLaunchpadMenu.y}
+    pairs={launchpadMenuData?.entries ?? []}
+    items={launchpadMenuData ? launchpadMenuFor(launchpadMenuData) : []}
+    context={{ numberOf: (entry) => launchpadMenuData.entries.indexOf(entry) + 1 }}
+    noun={["entry", "entries"]}
+    scope={launchpadMenuData ? `in ${launchpadMenuName || UNTITLED_LAUNCHPAD}` : null}
+    on:action={(e) => runLaunchpadAction(e.detail)}
     on:close={(e) => e.detail.refocus && tree?.focus()}
 />

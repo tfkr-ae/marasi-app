@@ -698,6 +698,18 @@ export function createLaunchpadStore(api) {
     return { moved, refused: null };
   }
 
+  async function updateLaunchpad(id, { name, description = "" }) {
+    await api.updateLaunchpad(id, name, description);
+    update((state) => ({
+      ...state,
+      launchpads: state.launchpads.map((launchpad) =>
+        launchpad.ID === id
+          ? { ...launchpad, Name: name, Description: description }
+          : launchpad,
+      ),
+    }));
+  }
+
   return {
     subscribe,
     clear: () => {
@@ -765,6 +777,13 @@ export function createLaunchpadStore(api) {
       return { removed: count, needsConfirm: false };
     },
 
+    // Links or unlinks the entries' pairs and a finding or test case: `kind`
+    // is "finding" or "test_case", `recordId` the record's ID. The
+    // launchpads don't change. Returns how many pairs Marasi changed; the
+    // error goes on.
+    linkEntriesToRecord: (ids, kind, recordId) => api.linkEntriesToRecord({ ids }, { Kind: kind, ID: recordId }),
+    unlinkEntriesFromRecord: (ids, kind, recordId) => api.unlinkEntriesFromRecord({ ids }, { Kind: kind, ID: recordId }),
+
     // Drag and drop and the entry menu both move through this.
     moveEntries,
 
@@ -827,16 +846,15 @@ export function createLaunchpadStore(api) {
       return id;
     },
 
-    updateLaunchpad: async (id, { name, description = "" }) => {
-      await api.updateLaunchpad(id, name, description);
-      update((state) => ({
-        ...state,
-        launchpads: state.launchpads.map((launchpad) =>
-          launchpad.ID === id
-            ? { ...launchpad, Name: name, Description: description }
-            : launchpad,
-        ),
-      }));
+    updateLaunchpad,
+
+    // The launchpad menu's Rename…: the name only, keeping the description.
+    // A blank or unchanged name does nothing.
+    renameLaunchpad: async (id, name) => {
+      const launchpad = current.launchpads.find((l) => l.ID === id);
+      const trimmed = name?.trim();
+      if (!launchpad || !trimmed || trimmed === launchpad.Name) return;
+      await updateLaunchpad(id, { name: trimmed, description: launchpad.Description ?? "" });
     },
 
     // Deletes without asking: confirming a dirty draft is the page's job.

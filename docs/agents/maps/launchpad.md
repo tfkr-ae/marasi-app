@@ -9,7 +9,8 @@ Which files work together on the Launchpad page, how a launch travels through Go
 - `frontend/src/lib/launchpad/`:
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
   - `LaunchpadWorkspace.svelte` is the draft editor;
-  - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`;
+  - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
+  - `launchpadMenu.js` (`launchpadMenuFor`) describes the launchpad menu, a launchpad row's context menu, in the same shape, with `recordItems` from `entryMenu.js`;
   - the other files are pure helpers.
 - Go: the launch and launchpad methods in `app.go`, `launchpad_move.go` (`MoveLaunchpadEntries` and its refusal codes), and `launchpad_search.go`.
 
@@ -27,6 +28,24 @@ While a launch is pending, Marasi refuses to move or remove its pair, or to dele
 2. Add a branch to `runEntryAction`, which treats unknown types as a move (see its comment).
 3. Add a store method, and map its API name in `launchpadStore.js` and in `fakeApi` in the tests.
 4. For a shortcut, add a catalog row in `launchpad.tree` and a `launchpadMenu` entry that calls `runEntryShortcut` (see `keybindings-and-menus.md`).
+
+## Findings and test cases
+
+The entry menu's Finding and Test case submenus sit between Copy browser view URL and Remove. They act on the Entry selection's pairs, as the Ledger's do, and pending launches disable none of them.
+
+- `new-finding` and `new-test-case` open the Logbook modal through `newRecord` with the entries' ids as its requests. Nothing is saved until Save. Their New items carry the `launchpad.tree.create-finding` and `launchpad.tree.create-test-case` shortcuts (⌘⇧F, ⌘⇧B; ⌘⇧T is Toggle TLS), which `runEntryShortcut` runs like the Order ones. `recordItems` takes the ids as `newActionIds`, so a menu without shortcuts leaves them out.
+- `link-finding`, `unlink-finding`, `link-test-case` and `unlink-test-case` carry `{ id, title }`. `runRecordAction` on the page calls the store's `linkEntriesToRecord` or `unlinkEntriesFromRecord(ids, kind, recordId)`, with `kind` "finding" or "test_case". `LINK_ACTIONS` maps each type to its direction, noun and kind. `changeLinks` words success and an unchanged result as the Ledger does (`linkedText`, `unchangedText`), but a failure always offers Retry: a launchpad's selection is always `{ ids }`, so the Ledger's case that builds a job can't happen, and the spec wants a retry.
+- The store sends an `{ ids }` selection to its API's `linkEntriesToRecord` or `unlinkEntriesFromRecord`, which `launchpadStore.js` maps to `LinkTraffic` and `UnlinkTraffic` through `relinked` (`stores/relinked.js`, shared with the Ledger). `relinked` reloads that kind's list, so the checkmarks are right the next time the menu opens.
+
+## The launchpad menu
+
+Right-clicking a launchpad row in `LaunchpadTree.svelte` calls the page's `openLaunchpadMenu`, which first loads a collapsed launchpad's entries with the store's `loadEntries`, so the link states are never unknown. Only the latest right-click opens its menu (`latestRequest` in `frontend/src/lib/latestRequest.js`), and an entry right-click supersedes it too. The menu acts on that launchpad, not the open one, and changes neither the open launchpad, its draft nor the Entry selection. The tree outlines the row while the menu is open (`menuLaunchpadId`). A second `RowMenu` on the page draws it.
+
+- `launchpadMenuFor({ entries, findings, testCases, pending })` gives the Finding and Test case submenus from `recordItems` over all of the launchpad's entries. For an empty launchpad, both are disabled with "No entries". `pending` says whether a launch from that launchpad is pending. A divider and Rename… (`{ type: "rename" }`) follow them.
+- `runLaunchpadAction` runs an item on the launchpad the menu was opened for. The Finding and Test case items go through `runRecordAction` with all of its entry ids, so the toasts and errors are the entry menu's.
+- Rename… opens Skeleton's `prompt` modal with the current name, and saving calls the store's `renameLaunchpad(id, name)`. That trims the name, does nothing for a blank or unchanged one, and keeps the description. The tree, the tab and the workspace header all read the name from the store. The header's inline edit still changes the name and description together through `updateLaunchpad`; if it is open when the menu renames its launchpad, its name input takes the new name.
+- The menu ends with Delete launchpad, which `pending` disables with `DELETE_LAUNCHPAD_PENDING_HINT`. It calls the page's `deleteLaunchpad(id)`, which the tab and ⌘K reach through `deleteOpenLaunchpad`, so all three share the pending refusal, the confirmation and the dirty-draft warning. The store's `deleteLaunchpad` opens a neighbour only when the deleted launchpad was the open one.
+- To add an item, append it to `launchpadMenuFor` in `launchpadMenu.js` and add a branch to `runLaunchpadAction`.
 
 ## Links to the rest of the app
 

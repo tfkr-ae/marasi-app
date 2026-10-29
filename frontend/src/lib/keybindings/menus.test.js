@@ -562,6 +562,17 @@ test("⌥ arrows move the entry selection only while the Launchpad tree has focu
   }
 });
 
+test("⌘⇧F and ⌘⇧B start a finding or test case only while the Launchpad tree has focus", () => {
+  const tree = { ...on("/launchpad"), launchpadTreeFocused: true };
+  const dispatcher = mac();
+  assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), tree), "launchpad.tree.create-finding");
+  assert.equal(dispatcher.resolve(cmdShift("B", "KeyB"), tree), "launchpad.tree.create-test-case");
+  assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), on("/launchpad")), null);
+  assert.equal(dispatcher.resolve(cmdShift("B", "KeyB"), on("/launchpad")), null);
+  // ⌘⇧T stays Toggle TLS from the tree.
+  assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), tree), "launchpad.toggle-tls");
+});
+
 test("no Launchpad default hides a global shortcut", () => {
   const catalog = buildCatalog();
   for (const platform of [MACOS, WINDOWS_LINUX]) {
