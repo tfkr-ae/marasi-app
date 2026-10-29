@@ -76,7 +76,7 @@
 			</h2>
 			{#if !state.complete}
 				<span
-					class="ledger-sitemap-building flex items-center gap-1 text-[11px] text-warning-800 dark:text-warning-400"
+					class="ledger-sitemap-building flex items-center gap-1 text-2xs text-warning-800 dark:text-warning-400"
 					title="Marasi is still adding older pairs to the sitemap, so some counts are low"
 				>
 					<LoaderCircle size={11} class="animate-spin" /> Sitemap still building
@@ -110,7 +110,7 @@
 			</button>
 		</div>
 		<div
-			class="ledger-sitemap-scope flex text-[11px]"
+			class="ledger-sitemap-scope flex text-2xs"
 			role="group"
 			aria-label="Sitemap counts"
 			title={querying ? "" : "Run a query to count only matching traffic"}
@@ -131,7 +131,7 @@
 		</div>
 	</header>
 
-	<div class="lp-scroll no-select min-h-0 flex-1 overflow-y-auto pb-10 font-mono text-[11px]">
+	<div class="lp-scroll no-select min-h-0 flex-1 overflow-y-auto pb-10 font-mono text-2xs">
 		{#each rows as row}
 			{#if row.kind === "more"}
 				<div
@@ -220,12 +220,12 @@
 					</button>
 					{#if n.Errors}
 						<span
-							class="flex-none text-[10px] text-error-500 {row.stale ? staleCount : ''}"
+							class="flex-none text-3xs text-error-500 {row.stale ? staleCount : ''}"
 							title={row.stale ? STALE_TIP : "Server errors (5xx)"}>{count(n.Errors)}</span
 						>
 					{/if}
 					<span
-						class="flex-none text-right text-[10px] tabular-nums opacity-60 {row.stale ? staleCount : ''}"
+						class="flex-none text-right text-3xs tabular-nums opacity-60 {row.stale ? staleCount : ''}"
 						title={row.stale ? STALE_TIP : row.matching !== null ? "Matching the query / all pairs" : "Pairs"}
 						>{#if row.matching !== null}<b>{count(row.matching)}</b>/{/if}{count(n.Pairs)}</span
 					>

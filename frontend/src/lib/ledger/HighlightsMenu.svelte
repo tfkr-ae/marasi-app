@@ -116,7 +116,7 @@
 						on:click={() => (editing = null)}><X size={13} /></button
 					>
 				</div>
-				<label class="flex items-center gap-1.5 pl-5 text-[11px] opacity-80">
+				<label class="flex items-center gap-1.5 pl-5 text-2xs opacity-80">
 					<input type="checkbox" class="checkbox h-3 w-3" bind:checked={allProjects} /> Use in all projects
 				</label>
 			</form>
@@ -137,7 +137,7 @@
 					<span class="h-3 w-3 flex-none rounded-full" style="background: {h.color}"></span>
 					<span class="min-w-0 flex-1 truncate">{h.label}</span>
 					{#if h.scope}
-						<span class="flex-none text-[9px] uppercase opacity-50" title={SCOPE_TITLE[h.scope]}>{h.scope}</span>
+						<span class="flex-none text-3xs uppercase opacity-50" title={SCOPE_TITLE[h.scope]}>{h.scope}</span>
 					{/if}
 				</button>
 				<button

@@ -3,11 +3,13 @@
 import { upgradeFromLedgerRow, upgradePresentation } from "../websocket/presentation.js";
 import { sameID } from "./pairs.js";
 
-/** Every row's height in px; the windowed list relies on it. */
-export const ROW_HEIGHT = 22;
-
-/** The header row's height in px. */
-export const HEADER_HEIGHT = 24;
+/**
+ * The header row's height in px for rows `rowHeight` px tall (ledgerRowHeight
+ * in lib/textSize.js gives that for the Text size).
+ */
+export function headerHeight(rowHeight) {
+  return rowHeight + 2;
+}
 
 /**
  * The table's columns, left to right. `width` is a CSS grid track; `sort`
@@ -113,6 +115,25 @@ export function visibleRange({ scrollTop, height, count, rowHeight, overscan }) 
   const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const end = Math.min(count, Math.ceil((scrollTop + height) / rowHeight) + overscan);
   return { start, end: Math.max(start, end) };
+}
+
+/**
+ * The top row in view at `scrollTop`, measured from the first row: its
+ * index, and how many px the view is scrolled into it.
+ */
+export function topRow(scrollTop, rowHeight) {
+  const index = Math.floor(scrollTop / rowHeight);
+  return { index, offset: scrollTop - index * rowHeight };
+}
+
+/** How many rows start in a view `height` px tall: at least one. */
+export function rowsPerView(height, rowHeight) {
+  return Math.max(1, Math.ceil(height / rowHeight));
+}
+
+/** How far a page down or up scrolls: a view's height less one row, but at least a row. */
+export function pageDistance(height, rowHeight) {
+  return Math.max(height - rowHeight, rowHeight);
 }
 
 /**

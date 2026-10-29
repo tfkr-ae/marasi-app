@@ -341,7 +341,7 @@
 					<span class={METHOD_CLASS[pair.Method] ?? ""}>{pair.Method}</span>
 					<span class="ml-auto {statusClass(pair.StatusCode)}">{statusText(pair.StatusCode)}</span>
 				</div>
-				<div class="mt-0.5 truncate font-mono text-[11px] opacity-70" title="{pair.Host}{pair.Path}">
+				<div class="mt-0.5 truncate font-mono text-2xs opacity-70" title="{pair.Host}{pair.Path}">
 					{pair.Host}{pair.Path}
 				</div>
 			{:else}
@@ -351,7 +351,7 @@
 					{:else if !partial}<span class="opacity-60">· {plural(summary.hosts.length, "host")}</span>{/if}
 				</div>
 				{#if !partial}
-				<div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-[10px]">
+				<div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-3xs">
 					{#each summary.methods as [method, count]}
 						<span class={METHOD_CLASS[method] ?? ""}>{method} {count}</span>
 					{/each}
@@ -395,7 +395,7 @@
 				{#if item === "sep"}
 					<div class="my-1 border-t border-surface-300-600-token"></div>
 				{:else if item.heading}
-					<div class="px-3 pb-0.5 pt-1.5 text-[10px] uppercase tracking-wide opacity-50">{item.heading}</div>
+					<div class="px-3 pb-0.5 pt-1.5 text-3xs uppercase tracking-wide opacity-50">{item.heading}</div>
 				{:else if isSwatchRow(item)}
 					<!-- svelte-ignore a11y-mouse-events-have-key-events -->
 					<div
@@ -429,7 +429,7 @@
 								{#if !swatch.color}<X size={10} class="opacity-70" />{/if}
 							</button>
 						{/each}
-						<span class="ml-1 min-w-0 flex-1 truncate text-right text-[10px] opacity-70"
+						<span class="ml-1 min-w-0 flex-1 truncate text-right text-3xs opacity-70"
 							>{active === i
 								? (item.swatches[swatchActive]?.disabled
 									? `${item.swatches[swatchActive].label}: ${item.swatches[swatchActive].hint}`
@@ -467,9 +467,9 @@
 						<span class="min-w-0 flex-1 truncate">
 							{#if item.trail?.length}<span class="opacity-50">{item.trail.join(" › ")} › </span>{/if}{item.label}
 						</span>
-						{#if item.badge}<span class="badge variant-soft-primary px-1.5 py-0 text-[10px]">{item.badge}</span>{/if}
-						{#if item.disabled && item.hint}<span class="text-[10px] opacity-80">{item.hint}</span>{/if}
-						{#if key && !item.disabled}<kbd class="font-sans text-[10px] opacity-50">{key}</kbd>{/if}
+						{#if item.badge}<span class="badge variant-soft-primary px-1.5 py-0 text-3xs">{item.badge}</span>{/if}
+						{#if item.disabled && item.hint}<span class="text-3xs opacity-80">{item.hint}</span>{/if}
+						{#if key && !item.disabled}<kbd class="font-sans text-3xs opacity-50">{key}</kbd>{/if}
 						{#if Array.isArray(item.sub) && !item.disabled}<ChevronRight size={12} class="opacity-60" />{/if}
 					</button>
 				{/if}
@@ -491,7 +491,7 @@
 						{#if item === "sep"}
 							<div class="my-1 border-t border-surface-300-600-token"></div>
 						{:else if item.heading}
-							<div class="px-3 pb-0.5 pt-1.5 text-[10px] uppercase tracking-wide opacity-50">{item.heading}</div>
+							<div class="px-3 pb-0.5 pt-1.5 text-3xs uppercase tracking-wide opacity-50">{item.heading}</div>
 						{:else}
 							{@const key = shortcut(item, $menuDispatcher)}
 							{@const opensSub = Array.isArray(item.sub)}
@@ -520,11 +520,11 @@
 								</span>
 								<span class="min-w-0 flex-1 truncate">{item.label}</span>
 								{#if item.severity && SEVERITY_CLASS[item.severity]}
-									<span class="px-1 text-[9px] font-bold {SEVERITY_CLASS[item.severity]}">{item.severity}</span>
+									<span class="px-1 text-3xs font-bold {SEVERITY_CLASS[item.severity]}">{item.severity}</span>
 								{/if}
-								{#if item.disabled && item.hint}<span class="text-[10px]">{item.hint}</span>
-								{:else if item.count != null}<span class="text-[10px] opacity-50">{item.count}</span>{/if}
-								{#if key && !item.disabled}<kbd class="font-sans text-[10px] opacity-50">{key}</kbd>{/if}
+								{#if item.disabled && item.hint}<span class="text-3xs">{item.hint}</span>
+								{:else if item.count != null}<span class="text-3xs opacity-50">{item.count}</span>{/if}
+								{#if key && !item.disabled}<kbd class="font-sans text-3xs opacity-50">{key}</kbd>{/if}
 								{#if opensSub && !item.disabled}<ChevronRight size={12} class="opacity-60" />{/if}
 							</button>
 						{/if}
@@ -532,7 +532,7 @@
 				</div>
 			{/each}
 		</div>
-		<div class="flex justify-between border-t border-surface-300-600-token px-3 py-1 text-[10px] opacity-50">
+		<div class="flex justify-between border-t border-surface-300-600-token px-3 py-1 text-3xs opacity-50">
 			<span>↑↓ move · → open · ↵ run</span>
 			{#if extendHint}<span>⇧-click to extend</span>{/if}
 		</div>

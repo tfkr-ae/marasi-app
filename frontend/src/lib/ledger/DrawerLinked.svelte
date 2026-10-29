@@ -17,7 +17,7 @@
 </script>
 
 {#if rows.length}
-	<div class="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide opacity-50">Linked</div>
+	<div class="px-3 pb-1 pt-3 text-3xs font-semibold uppercase tracking-wide opacity-50">Linked</div>
 	{#each rows as { kind, target, title } (`${kind}-${target.ID}`)}
 		{#if onUnlink}
 			<div class="drawer-linked group flex flex-none items-center gap-2 py-0.5 pl-3 pr-2">

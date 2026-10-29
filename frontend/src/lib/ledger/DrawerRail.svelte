@@ -149,14 +149,14 @@
 
 	const railButton = "flex h-7 w-8 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token";
 	const headerButton = "flex h-6 w-6 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token";
-	const heading = "px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide opacity-50";
+	const heading = "px-3 pb-1 pt-3 text-3xs font-semibold uppercase tracking-wide opacity-50";
 	const row = "flex w-full items-center gap-2 whitespace-nowrap px-3 py-[5px] text-left hover:bg-surface-200-700-token";
 	const divider = "my-1 w-5 flex-none border-t border-surface-300-600-token";
 </script>
 
 {#if expanded}
 	<aside
-		class="ledger-drawer-column flex w-60 flex-none flex-col overflow-y-auto border-r border-surface-300-600-token bg-surface-50 text-[11px] dark:bg-surface-900"
+		class="ledger-drawer-column flex w-60 flex-none flex-col overflow-y-auto border-r border-surface-300-600-token bg-surface-50 text-2xs dark:bg-surface-900"
 		aria-label="Request details"
 	>
 		<div class="flex h-7 flex-none flex-nowrap items-center gap-0.5 border-b border-surface-300-600-token px-2">
@@ -167,7 +167,7 @@
 				aria-expanded="true"
 				on:click={() => dispatch("expand", false)}><svelte:component this={ExpandIcon} size={14} /></button
 			>
-			<span class="min-w-0 flex-1 truncate pl-1 font-mono text-[11px] opacity-60">#{number}</span>
+			<span class="min-w-0 flex-1 truncate pl-1 font-mono text-2xs opacity-60">#{number}</span>
 			<button
 				class={headerButton}
 				title={tip("Previous request", `${DRAWER}.previous-request`, keymap)}
@@ -230,12 +230,12 @@
 		</div>
 		{#if note}
 			<button
-				class="ledger-drawer-note-preview mx-3 line-clamp-3 flex-none whitespace-pre-line break-words text-left text-[11px] opacity-80 hover:opacity-100"
+				class="ledger-drawer-note-preview mx-3 line-clamp-3 flex-none whitespace-pre-line break-words text-left text-2xs opacity-80 hover:opacity-100"
 				title="Open the note"
 				on:click={() => dispatch("pane", "note")}>{note}</button
 			>
 		{:else}
-			<p class="mx-3 flex-none text-[11px] opacity-40">{note === null ? "…" : "No note"}</p>
+			<p class="mx-3 flex-none text-2xs opacity-40">{note === null ? "…" : "No note"}</p>
 		{/if}
 
 		<DrawerLinked {findings} {testCases} />
@@ -246,7 +246,7 @@
 				<button class={row} on:click={() => run(action.actionId)}>
 					<svelte:component this={action.icon} size={13} class="flex-none opacity-70" />
 					<span class="flex-1">{action.label}</span>
-					<kbd class="text-[10px] opacity-50">{shortcutLabel(keymap, action.actionId)}</kbd>
+					<kbd class="text-3xs opacity-50">{shortcutLabel(keymap, action.actionId)}</kbd>
 				</button>
 			{:else}
 				<div class="mx-3 my-1 flex-none border-t border-surface-300-600-token"></div>
@@ -255,7 +255,7 @@
 		<button class="{row} {pane === 'metadata' ? 'text-primary-500' : ''}" on:click={() => togglePane("metadata")}>
 			<Braces size={13} class="flex-none opacity-70" />
 			<span class="flex-1">Metadata</span>
-			<kbd class="text-[10px] opacity-50">{shortcutLabel(keymap, `${DRAWER}.view-metadata`)}</kbd>
+			<kbd class="text-3xs opacity-50">{shortcutLabel(keymap, `${DRAWER}.view-metadata`)}</kbd>
 		</button>
 
 		<div class={heading}>View</div>
@@ -273,7 +273,7 @@
 						class="ledger-drawer-wrap-suspended absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-warning-500"
 					></span>{/if}</span
 			><span class="flex-1">Wrap lines</span>
-			<kbd class="text-[10px] opacity-50">{shortcutLabel(keymap, `${DRAWER}.toggle-word-wrap`)}</kbd>
+			<kbd class="text-3xs opacity-50">{shortcutLabel(keymap, `${DRAWER}.toggle-word-wrap`)}</kbd>
 			<input type="checkbox" class="checkbox h-3 w-3" bind:checked={wrap} />
 		</label>
 	</aside>

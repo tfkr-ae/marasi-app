@@ -109,7 +109,7 @@
 	let responsePaused = false;
 	$: wrapPaused = requestPaused || (pane === null && hasResponse && responsePaused);
 
-	const message = "p-3 text-[11px] opacity-50";
+	const message = "p-3 text-2xs opacity-50";
 	// The panes start a few pixels below the drawer's red top line, on the
 	// editors' own background: WebKit snaps an editor's scrolling layer to
 	// device pixels apart from the line, so text flush against it could paint
@@ -117,7 +117,7 @@
 	const paneBox = "relative min-w-0 flex-1 pt-[3px] bg-white dark:bg-[#282c34]";
 </script>
 
-<div class="ledger-drawer flex h-full min-h-0 bg-surface-50 text-[11px] dark:bg-surface-900">
+<div class="ledger-drawer flex h-full min-h-0 bg-surface-50 text-2xs dark:bg-surface-900">
 	{#if highlight}
 		<div class="ledger-drawer-highlight w-[3px] flex-none" style="background: {highlight}" title="Highlighted"></div>
 	{/if}

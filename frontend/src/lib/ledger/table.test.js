@@ -13,6 +13,10 @@ import {
   DEFAULT_SORT,
   meetsFooter,
   meetsHeader,
+  headerHeight,
+  pageDistance,
+  rowsPerView,
+  topRow,
   positionLabel,
   scrollToCenter,
   sortAria,
@@ -79,6 +83,8 @@ test("a row meets the header when it is first, or scrolled to sit right under it
   assert.equal(meetsHeader(3, 66, 22), true);
   assert.equal(meetsHeader(3, 66.4, 22), true, "sub-pixel scrolling still counts");
   assert.equal(meetsHeader(3, 70, 22), false, "partly under the header: its top edge is hidden anyway");
+  assert.equal(meetsHeader(3, 84, 28), true, "X-Large rows");
+  assert.equal(meetsHeader(3, 66, 28), false);
 });
 
 test("a jump centres a row that is out of view, and leaves one in view alone", () => {
@@ -88,12 +94,19 @@ test("a jump centres a row that is out of view, and leaves one in view alone", (
   assert.equal(scrollToCenter({ ...view, scrollTop: 2000 }, 2), 0, "never above the first row");
   assert.equal(scrollToCenter(view, 9), 0, "row 9 just fits at the bottom");
   assert.equal(scrollToCenter(view, 10), 10 * 22 - 99, "the next row is out of view, so it is centred");
+  // X-Large: ten 28px rows fill a 280px view.
+  const xlarge = { scrollTop: 0, height: 280, rowHeight: 28 };
+  assert.equal(scrollToCenter(xlarge, 9), 0, "row 9 just fits at the bottom");
+  assert.equal(scrollToCenter(xlarge, 10), 154, "its top 280px down, less half of the 252px left around it");
+  assert.equal(scrollToCenter(xlarge, 50), 1274);
 });
 
 test("a row meets the footer when its bottom edge sits on the viewport's bottom", () => {
   assert.equal(meetsFooter(9, 0, 22, 220), true);
   assert.equal(meetsFooter(8, 0, 22, 220), false);
   assert.equal(meetsFooter(19, 220.3, 22, 220), true);
+  assert.equal(meetsFooter(9, 0, 28, 280), true, "X-Large rows");
+  assert.equal(meetsFooter(9, 0, 28, 220), false);
 });
 
 test("the status bar says which rows of the results are in view", () => {
@@ -110,6 +123,32 @@ test("when rows change around it, the top row in view keeps its place", () => {
   // A row that's gone leaves the scroll where it was.
   assert.equal(keepRowInPlace({ anchorID: "z", offset: 5, rows: rows("a"), rowHeight: 22 }), null);
   assert.equal(keepRowInPlace({ anchorID: null, offset: 0, rows: rows("a"), rowHeight: 22 }), null);
+  // The same at X-Large, with 28px rows.
+  assert.equal(keepRowInPlace({ anchorID: "c", offset: 5, rows: rows("x", "y", "a", "b", "c"), rowHeight: 28 }), 117);
+});
+
+test("the top row in view is the one the scroll position falls in, at any row height", () => {
+  assert.deepEqual(topRow(0, 22), { index: 0, offset: 0 });
+  assert.deepEqual(topRow(100, 22), { index: 4, offset: 12 });
+  // X-Large rows are 28px: the same scroll position falls in row 3.
+  assert.deepEqual(topRow(100, 28), { index: 3, offset: 16 });
+});
+
+test("a view holds as many rows as start in it, and always at least one", () => {
+  assert.equal(rowsPerView(440, 22), 20);
+  assert.equal(rowsPerView(440, 28), 16, "15 whole X-Large rows and part of another");
+  assert.equal(rowsPerView(0, 28), 1);
+});
+
+test("paging moves a view's height less one row, so a row stays in view across the page", () => {
+  assert.equal(pageDistance(440, 22), 418);
+  assert.equal(pageDistance(440, 28), 412);
+  assert.equal(pageDistance(20, 28), 28, "a view shorter than a row still moves a row");
+});
+
+test("the header is a little taller than a row at every Text size", () => {
+  assert.equal(headerHeight(22), 24, "Default, as before");
+  assert.equal(headerHeight(28), 30);
 });
 
 // Method fits OPTIONS and its label with the sort arrow; Type fits most
@@ -202,6 +241,11 @@ test("the windowed list renders only the rows in view, plus a margin either side
     start: 0,
     end: 5,
   });
+  // The same at X-Large: 28px rows in a 448px viewport scrolled to row 1,000.
+  assert.deepEqual(visibleRange({ scrollTop: 28000, height: 448, count: 10000, rowHeight: 28, overscan: 10 }), {
+    start: 990,
+    end: 1026,
+  });
 });
 
 test("scrolling the list moves just far enough to show a row", () => {
@@ -210,6 +254,11 @@ test("scrolling the list moves just far enough to show a row", () => {
   assert.equal(scrollToReveal(view, 15), 220, "already in view");
   assert.equal(scrollToReveal(view, 5), 110, "above: its top meets the viewport's");
   assert.equal(scrollToReveal(view, 40), 462, "below: its bottom meets the viewport's");
+  // X-Large: rows 10-25 of 28px are in view.
+  const xlarge = { scrollTop: 280, height: 448, rowHeight: 28 };
+  assert.equal(scrollToReveal(xlarge, 15), 280, "already in view");
+  assert.equal(scrollToReveal(xlarge, 5), 140);
+  assert.equal(scrollToReveal(xlarge, 40), 700);
 });
 
 test("a highlighted row takes its highlight's colour from the palette", () => {
