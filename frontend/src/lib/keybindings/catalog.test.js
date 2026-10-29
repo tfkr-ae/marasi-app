@@ -251,6 +251,21 @@ test("the Launchpad tree moves the entry selection up, down, to the top and to t
   }
 });
 
+test("the Launchpad tree starts a finding or test case from the entry selection", () => {
+  const catalog = buildCatalog();
+  const expected = [
+    ["launchpad.tree.create-finding", "New Finding from Entries", "meta+shift+f", "ctrl+shift+f"],
+    ["launchpad.tree.create-test-case", "New Test Case from Entries", "meta+shift+b", "ctrl+shift+b"],
+  ];
+  for (const [id, label, mac, win] of expected) {
+    const action = catalog.get(id);
+    assert.ok(action, id);
+    assert.equal(action.context, "launchpad.tree", id);
+    assert.equal(action.label, label, id);
+    assert.deepEqual(action.defaults, { [MACOS]: [mac], [WINDOWS_LINUX]: [win] }, id);
+  }
+});
+
 test("the Launchpad page offers search, create, sidebar, grouping, compare and jump actions", () => {
   const catalog = buildCatalog();
   const expected = [

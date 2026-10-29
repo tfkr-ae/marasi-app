@@ -227,6 +227,18 @@ test("an entry whose launch is pending can still be linked or used for a new rec
   }
 });
 
+test("New finding and New test case show their shortcut keys and run as shortcuts", () => {
+  const items = menu(["b", "c"]);
+  assert.equal(item(items, "f-new").actionId, "launchpad.tree.create-finding");
+  assert.equal(item(items, "t-new").actionId, "launchpad.tree.create-test-case");
+  assert.deepEqual(menuAction(items, "launchpad.tree.create-finding"), {
+    action: { type: "new-finding" },
+    disabled: false,
+    hint: undefined,
+  });
+  assert.deepEqual(menuAction(items, "launchpad.tree.create-test-case").action, { type: "new-test-case" });
+});
+
 // The launchpad menu for Login, over all of its entries (a…e by default).
 function launchpadMenu(extra = {}) {
   return launchpadMenuFor({
@@ -246,6 +258,9 @@ test("the launchpad menu holds Finding and Test case over all of its entries", (
   assert.deepEqual(item(items, "f-new").action, { type: "new-finding" });
   assert.deepEqual(item(items, "f-1").action, { type: "link-finding", id: 1, title: "Login bypass" });
   assert.equal(item(launchpadMenu({ entries: [entry("a")] }), "f-new").label, "New finding from this request");
+  // ⌘⇧F and ⌘⇧B act on the Entry selection, not the launchpad.
+  assert.equal(item(items, "f-new").actionId, undefined);
+  assert.equal(item(items, "t-new").actionId, undefined);
 });
 
 test("the launchpad menu's link states count every entry, and a pending launch disables none", () => {
