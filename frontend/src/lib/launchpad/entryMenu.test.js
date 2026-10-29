@@ -150,3 +150,79 @@ test("Copy browser view URL is for one entry with a response that is not a WebSo
   assert.equal(status(0).hint, "No response yet");
   assert.equal(status(101).hint, "Not for a WebSocket upgrade");
 });
+
+// Findings and test cases, each with the pair IDs it links as Requests.
+const findings = [
+  { ID: 1, Title: "Login bypass", Severity: "High", Requests: ["a", "b"] },
+  { ID: 2, Title: "Open redirect", Severity: "Low", Requests: ["b"] },
+  { ID: 3, Title: "", Severity: "Info", Requests: [] },
+];
+const testCases = [{ ID: 7, Title: "Auth checks", Requests: ["c"] }];
+
+// The ids of the menu's top-level items and dividers, in order.
+const shape = (items) => items.map((it) => (it === "sep" ? "sep" : it.heading ? `#${it.heading}` : it.id));
+
+test("Finding and Test case sit between Copy browser view URL and Remove", () => {
+  assert.deepEqual(shape(menu(["b"], { findings, testCases })), [
+    "move", "#Order", "top", "up", "down", "bottom", "sep",
+    "browser-view", "sep", "finding", "testcase", "sep", "remove",
+  ]);
+  assert.equal(item(menu(["b"]), "finding").label, "Finding");
+  assert.equal(item(menu(["b"]), "testcase").label, "Test case");
+});
+
+test("New is worded for one entry or several and carries its action", () => {
+  assert.equal(item(menu(["b"]), "f-new").label, "New finding from this request");
+  assert.equal(item(menu(["b", "c", "d"]), "f-new").label, "New finding with 3 requests");
+  assert.equal(item(menu(["b"]), "t-new").label, "New test case from this request");
+  assert.equal(item(menu(["b", "c"]), "t-new").label, "New test case with 2 requests");
+  assert.deepEqual(item(menu(["b"]), "f-new").action, { type: "new-finding" });
+  assert.deepEqual(item(menu(["b"]), "t-new").action, { type: "new-test-case" });
+  assert.ok(!item(menu(["b"]), "f-new").disabled);
+});
+
+test("Link to lists every finding with its severity, checked, mixed or unlinked", () => {
+  const items = menu(["a", "b"], { findings, testCases });
+  const link = item(items, "f-link");
+  assert.equal(link.label, "Link to finding");
+  assert.ok(!link.disabled);
+  assert.deepEqual(
+    link.sub.map((it) => [it.label, it.severity, it.checked, Boolean(it.disabled)]),
+    [
+      ["Login bypass", "High", true, true],
+      ["Open redirect", "Low", "mixed", false],
+      ["Untitled finding", "Info", false, false],
+    ],
+  );
+  assert.equal(item(items, "f-1").hint, "Already linked");
+  assert.deepEqual(item(items, "f-2").action, { type: "link-finding", id: 2, title: "Open redirect" });
+  assert.deepEqual(item(items, "t-7").action, { type: "link-test-case", id: 7, title: "Auth checks" });
+});
+
+test("Link to is greyed with no records yet", () => {
+  const items = menu(["a"]);
+  assert.equal(item(items, "f-link").disabled, true);
+  assert.equal(item(items, "f-link").hint, "No findings yet");
+  assert.equal(item(items, "t-link").disabled, true);
+  assert.equal(item(items, "t-link").hint, "No test cases yet");
+});
+
+test("Unlink from lists only the records a picked entry is linked to, and is gone when none is", () => {
+  const items = menu(["b"], { findings, testCases });
+  assert.deepEqual(item(items, "f-unlink").sub.map((it) => it.label), ["Login bypass", "Open redirect"]);
+  assert.deepEqual(item(items, "fu-2").action, { type: "unlink-finding", id: 2, title: "Open redirect" });
+  assert.equal(item(items, "t-unlink"), null);
+  assert.equal(item(menu(["e"], { findings, testCases }), "f-unlink"), null);
+  assert.deepEqual(item(menu(["c"], { findings, testCases }), "tu-7").action, {
+    type: "unlink-test-case",
+    id: 7,
+    title: "Auth checks",
+  });
+});
+
+test("an entry whose launch is pending can still be linked or used for a new record", () => {
+  const items = menu(["b", "e"], { findings, testCases, pendingIds: ["e"] });
+  for (const id of ["finding", "testcase", "f-new", "f-link", "f-2", "f-unlink", "fu-1", "t-new", "t-link", "t-7"]) {
+    assert.ok(!item(items, id).disabled, id);
+  }
+});

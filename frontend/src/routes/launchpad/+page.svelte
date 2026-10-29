@@ -3,7 +3,7 @@
     // workspace with the Launchpad draft and response side by side. State
     // and API calls live in launchpadStore; this page wires confirmations,
     // toasts and the existing launchpad.* catalog actions.
-    import { getModalStore, getToastStore } from "@skeletonlabs/skeleton";
+    import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
     import {
         ArrowDownIcon,
         ArrowDownToLineIcon,
@@ -44,6 +44,10 @@
     import { menuAction } from "../../lib/ledger/rowMenu.js";
     import { GetMetadata, GetNote } from "../../lib/wailsjs/go/main/App";
     import { listener } from "../../stores";
+    import { findingStore } from "../../stores/findingStore";
+    import { testCaseStore } from "../../stores/testCaseStore";
+    import { newRecord } from "../../lib/logbook/recordEditor.js";
+    import { requestCount, unchangedText } from "../../lib/ledger/counts.js";
     import {
         isDraftDirty,
         launchpadStore,
@@ -58,7 +62,7 @@
         warnLaunching,
     } from "../../lib/launchPending.js";
     import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
-    import { toastError } from "../../lib/toasts.js";
+    import { handoffBackground, toastError } from "../../lib/toasts.js";
     import { BROWSER_VIEW_COPIED, browserViewRefusal, browserViewURL } from "../../lib/browserView.js";
 
     const modalStore = getModalStore();
@@ -177,6 +181,8 @@
             launchpads: state.launchpads,
             entriesByLaunchpad: state.entriesByLaunchpad,
             pendingIds: pendingEntryIds(state, launchpadId, ids),
+            findings: $findingStore,
+            testCases: $testCaseStore,
             grouped: groupByStatus,
             searching: state.search.trim() !== "",
         };
@@ -191,8 +197,9 @@
     }
 
     // Runs a menu item's action on the Entry selection. Any type other than
-    // remove and browser-view is taken as a move or reorder (entryMenuFor),
-    // so a new type needs its own branch above that.
+    // remove, browser-view and the Finding and Test case ones is taken as a
+    // move or reorder (entryMenuFor), so a new type needs its own branch
+    // above that.
     async function runEntryAction(action) {
         const state = get(launchpadStore);
         const sourceId = state.entrySelection.launchpadId;
@@ -200,6 +207,7 @@
         if (!sourceId || !ids.length) return;
         if (action.type === "remove") return removeEntries(sourceId, ids);
         if (action.type === "browser-view") return copyBrowserView(action.id);
+        if (runRecordAction(action, ids)) return;
         const targetId = action.type === "move" ? action.targetId : sourceId;
         const before = action.type === "move" ? null : action.before;
         const { moved } = await moveEntries({ sourceId, targetId, ids, before });
@@ -229,6 +237,61 @@
             console.error("Launchpad remove error:", err);
             toastError(toastStore, "Failed to remove the entries", err);
         }
+    }
+
+    // The Finding and Test case items over entries `ids`, whose pairs they
+    // act on. False for any other action.
+    function runRecordAction(action, ids) {
+        switch (action.type) {
+            case "new-finding":
+                newRecord(modalStore, "finding", { requestIds: ids });
+                return true;
+            case "new-test-case":
+                newRecord(modalStore, "testCase", { requestIds: ids });
+                return true;
+            case "link-finding":
+            case "unlink-finding":
+            case "link-test-case":
+            case "unlink-test-case": {
+                const link = action.type.startsWith("link-");
+                const noun = action.type.endsWith("finding") ? "finding" : "test case";
+                const kind = noun === "finding" ? "finding" : "test_case";
+                changeLinks(ids, link, noun, kind, action);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Links or unlinks the entries' pairs and a finding or test case, with
+    // the Ledger's toasts; the store's mapping rereads that kind's list.
+    async function changeLinks(ids, link, noun, kind, { id, title }) {
+        const verb = link ? "Linked" : "Unlinked";
+        let count;
+        try {
+            count = link
+                ? await launchpadStore.linkEntries(ids, kind, id)
+                : await launchpadStore.unlinkEntries(ids, kind, id);
+        } catch (err) {
+            console.error("Launchpad link error:", err);
+            toastStore.trigger({
+                message: `Failed to ${link ? "link" : "unlink"} ${requestCount(ids.length)}: ${String(err)}`,
+                background: "variant-filled-error",
+                timeout: 10000,
+                action: { label: "Retry", response: () => changeLinks(ids, link, noun, kind, { id, title }) },
+            });
+            return;
+        }
+        const background = handoffBackground($modeCurrent);
+        if (!count) {
+            const change = { type: link ? "link" : "unlink", noun, name: title };
+            toastStore.trigger({ message: unchangedText(change, ids.length), background });
+            return;
+        }
+        toastStore.trigger({
+            message: `${verb} ${requestCount(count)} ${link ? "to" : "from"} ${noun} "${title}"`,
+            background,
+        });
     }
 
     // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓ in the tree: the menu's Order item, run as choosing it

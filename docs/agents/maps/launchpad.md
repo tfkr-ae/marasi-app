@@ -9,7 +9,7 @@ Which files work together on the Launchpad page, how a launch travels through Go
 - `frontend/src/lib/launchpad/`:
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
   - `LaunchpadWorkspace.svelte` is the draft editor;
-  - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`;
+  - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
   - the other files are pure helpers.
 - Go: the launch and launchpad methods in `app.go`, `launchpad_move.go` (`MoveLaunchpadEntries` and its refusal codes), and `launchpad_search.go`.
 
@@ -27,6 +27,14 @@ While a launch is pending, Marasi refuses to move or remove its pair, or to dele
 2. Add a branch to `runEntryAction`, which treats unknown types as a move (see its comment).
 3. Add a store method, and map its API name in `launchpadStore.js` and in `fakeApi` in the tests.
 4. For a shortcut, add a catalog row in `launchpad.tree` and a `launchpadMenu` entry that calls `runEntryShortcut` (see `keybindings-and-menus.md`).
+
+## Findings and test cases
+
+The entry menu's Finding and Test case submenus sit between Copy browser view URL and Remove. They act on the Entry selection's pairs, as the Ledger's do, and pending launches disable none of them.
+
+- `new-finding` and `new-test-case` open the Logbook modal through `newRecord` with the entries' ids as its requests. Nothing is saved until Save.
+- `link-finding`, `unlink-finding`, `link-test-case` and `unlink-test-case` carry `{ id, title }`. `runRecordAction` on the page calls the store's `linkEntries` or `unlinkEntries(ids, kind, recordId)`, with `kind` "finding" or "test_case", and `changeLinks` shows the Ledger's toasts.
+- The store sends an `{ ids }` selection to `linkTraffic` or `unlinkTraffic`, which `launchpadStore.js` maps to `LinkTraffic` and `UnlinkTraffic` through `relinked` (`stores/relinked.js`, shared with the Ledger). `relinked` reloads that kind's list, so the checkmarks are right the next time the menu opens.
 
 ## Links to the rest of the app
 
