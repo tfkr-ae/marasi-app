@@ -25,8 +25,7 @@ import {
   UpdateNote,
 } from "../lib/wailsjs/go/main/App";
 import { armoryStore } from "./armoryStore";
-import { findingStore } from "./findingStore";
-import { testCaseStore } from "./testCaseStore";
+import { relinked } from "./relinked.js";
 import { createLedgerStore, FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
 
 export {
@@ -48,17 +47,6 @@ export {
   selectionTarget,
   tableRows,
 } from "./createLedgerStore.js";
-
-// Waits for a bulk call, then rereads the finding or test case lists whose
-// links it changed ("all" for both).
-async function relinked(call, kind) {
-  const count = await call;
-  const stores = { finding: [findingStore], test_case: [testCaseStore], all: [findingStore, testCaseStore] };
-  for (const store of stores[kind] ?? []) {
-    store.populate().catch((err) => console.error("Rereading links failed:", err));
-  }
-  return count;
-}
 
 export const ledgerStore = createLedgerStore({
   // A page of the live view or of a query's results:

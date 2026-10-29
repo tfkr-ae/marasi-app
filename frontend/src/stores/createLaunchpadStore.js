@@ -765,6 +765,13 @@ export function createLaunchpadStore(api) {
       return { removed: count, needsConfirm: false };
     },
 
+    // Links or unlinks the entries' pairs and a finding or test case: `kind`
+    // is "finding" or "test_case", `recordId` the record's ID. The
+    // launchpads don't change. Returns how many pairs Marasi changed; the
+    // error goes on.
+    linkEntries: (ids, kind, recordId) => api.linkTraffic({ ids }, { Kind: kind, ID: recordId }),
+    unlinkEntries: (ids, kind, recordId) => api.unlinkTraffic({ ids }, { Kind: kind, ID: recordId }),
+
     // Drag and drop and the entry menu both move through this.
     moveEntries,
 
