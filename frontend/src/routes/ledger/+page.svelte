@@ -67,7 +67,7 @@
 		pairURL,
 		similarIDs,
 	} from "../../lib/ledger/rowMenu.js";
-	import { plural, requestCount, unchangedText } from "../../lib/ledger/counts.js";
+	import { linkedText, plural, requestCount, unchangedText } from "../../lib/ledger/counts.js";
 	import { LAUNCHPADS_EACH_MAX, sameID } from "../../lib/ledger/pairs.js";
 	import { select } from "../../lib/storeSelect.js";
 	import {
@@ -429,12 +429,9 @@
 				changeLinks(target, run, verb, noun, title),
 			);
 		}
-		if (!count) return unchanged(target, { type: verb === "Linked" ? "link" : "unlink", noun, name: title });
-		const preposition = verb === "Linked" ? "to" : "from";
-		toastStore.trigger({
-			message: `${verb} ${requestCount(count)} ${preposition} ${noun} "${title}"`,
-			background: handoffBackground,
-		});
+		const change = { type: verb === "Linked" ? "link" : "unlink", noun, name: title };
+		if (!count) return unchanged(target, change);
+		toastStore.trigger({ message: linkedText(change, count), background: handoffBackground });
 	}
 
 	// Appends a note to every selected pair's note, after a blank line where

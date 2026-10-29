@@ -49,7 +49,7 @@
     import { findingStore } from "../../stores/findingStore";
     import { testCaseStore } from "../../stores/testCaseStore";
     import { newRecord } from "../../lib/logbook/recordEditor.js";
-    import { requestCount, unchangedText } from "../../lib/ledger/counts.js";
+    import { linkedText, requestCount, unchangedText } from "../../lib/ledger/counts.js";
     import {
         isDraftDirty,
         launchpadStore,
@@ -346,7 +346,6 @@
     // Links or unlinks the entries' pairs and a finding or test case, with
     // the Ledger's toasts; the store's mapping rereads that kind's list.
     async function changeLinks(ids, link, noun, kind, { id, title }) {
-        const verb = link ? "Linked" : "Unlinked";
         let count;
         try {
             count = link
@@ -363,15 +362,9 @@
             return;
         }
         const background = handoffBackground($modeCurrent);
-        if (!count) {
-            const change = { type: link ? "link" : "unlink", noun, name: title };
-            toastStore.trigger({ message: unchangedText(change, ids.length, "request"), background });
-            return;
-        }
-        toastStore.trigger({
-            message: `${verb} ${requestCount(count)} ${link ? "to" : "from"} ${noun} "${title}"`,
-            background,
-        });
+        const change = { type: link ? "link" : "unlink", noun, name: title };
+        const message = count ? linkedText(change, count) : unchangedText(change, ids.length, "request");
+        toastStore.trigger({ message, background });
     }
 
     // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓, ⌘⇧F and ⌘⇧B in the tree: the menu's Order or New

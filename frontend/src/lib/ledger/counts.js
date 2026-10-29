@@ -70,3 +70,12 @@ export function unchangedText(change, n, request = "matching request") {
       return one ? `The ${request} didn't change` : `None of the ${counted} changed`;
   }
 }
+
+/**
+ * The toast for a link or unlink that changed `count` requests. `change` is
+ * { type: "link" | "unlink", noun, name }, as unchangedText takes it.
+ */
+export function linkedText(change, count) {
+  const link = change.type === "link";
+  return `${link ? "Linked" : "Unlinked"} ${requestCount(count)} ${link ? "to" : "from"} ${change.noun} "${change.name}"`;
+}

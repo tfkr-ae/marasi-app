@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatCount, matchCountText, matchNoun, plural, requestCount, unchangedText } from "./counts.js";
+import { formatCount, linkedText, matchCountText, matchNoun, plural, requestCount, unchangedText } from "./counts.js";
 
 test("a count reads as a number, 100,000+ past the cap, a dash when unknown and ! when invalid", () => {
   assert.equal(matchCountText({ count: 1234, capped: false }), "1,234");
@@ -49,5 +49,16 @@ test("a change to picked requests that touched nothing drops \"matching\"", () =
   assert.equal(
     unchangedText({ type: "unlink", noun: "test case", name: "Auth" }, 1, "request"),
     'The request wasn\'t linked to test case "Auth"',
+  );
+});
+
+test("a link or unlink says how many requests it changed and which record", () => {
+  assert.equal(
+    linkedText({ type: "link", noun: "finding", name: "IDOR" }, 3),
+    'Linked 3 requests to finding "IDOR"',
+  );
+  assert.equal(
+    linkedText({ type: "unlink", noun: "test case", name: "Auth" }, 1),
+    'Unlinked 1 request from test case "Auth"',
   );
 });
