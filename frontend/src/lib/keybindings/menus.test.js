@@ -169,7 +169,6 @@ test("each page's shared shortcuts run that page's action", () => {
   const dispatcher = mac();
   const expected = [
     ["/checkpoint", "checkpoint.toggle-settings", "checkpoint.show-logs"],
-    ["/logbook", "logbook.toggle-settings", null],
     ["/compass", "compass.toggle-settings", "compass.show-logs"],
     ["/workshop", "workshop.toggle-settings", "workshop.show-logs"],
   ];
@@ -177,6 +176,29 @@ test("each page's shared shortcuts run that page's action", () => {
     assert.equal(dispatcher.resolve(cmd("p", "KeyP"), on(route)), settings, route);
     assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on(route)), shiftL, route);
   }
+});
+
+test("the Logbook's menu moves to the next record on N and has no settings to toggle", () => {
+  const dispatcher = mac();
+  const page = on("/logbook");
+  assert.equal(dispatcher.resolve(keydown("n", "KeyN"), page), "logbook.next-record");
+  assert.equal(dispatcher.resolve(cmdShift("S", "KeyS"), page), "logbook.focus-search");
+  assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), page), "logbook.create-finding");
+  assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), page), "logbook.create-test-case");
+  assert.equal(dispatcher.resolve(cmdShift("E", "KeyE"), page), "logbook.export-report");
+  assert.equal(dispatcher.resolve(cmd("p", "KeyP"), page), null);
+  // N is typed, not run, in the search field, an inline fix or an editor.
+  assert.equal(dispatcher.resolve(keydown("n", "KeyN", {}, { tagName: "INPUT" }), page), null);
+  assert.equal(dispatcher.resolve(keydown("n", "KeyN", {}, { tagName: "TEXTAREA" }), page), null);
+  // N is the Logbook's alone.
+  assert.equal(dispatcher.resolve(keydown("n", "KeyN"), on("/ledger")), null);
+});
+
+test("the Logbook's N is bound on both platforms, and Esc stays with the page", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(catalog.get("logbook.next-record").defaults, { [MACOS]: ["n"], [WINDOWS_LINUX]: ["n"] });
+  assert.equal(catalog.get("logbook.toggle-settings"), undefined);
+  assert.equal(mac().resolve(keydown("Escape", "Escape"), on("/logbook")), null);
 });
 
 test("Checkpoint forwards picked items on ⌘⇧A, drops them on ⌘⇧X and intercepts the response on ⌘⇧S", () => {
@@ -202,15 +224,11 @@ test("the Launchpad renames on ⌘R and swaps compared entries on ⌘⇧X", () =
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/launchpad")), "launchpad.launch");
 });
 
-test("a logs or report drawer keeps its page's menu", () => {
+test("a logs drawer keeps its page's menu", () => {
   const dispatcher = mac();
   const logs = { open: true, id: "extension-logs", meta: { extensionName: "checkpoint" } };
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/checkpoint", logs)), "checkpoint.show-logs");
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/compass", logs)), "compass.show-logs");
-  assert.equal(
-    dispatcher.resolve(cmdShift("E", "KeyE"), on("/logbook", { open: true, id: "report-export" })),
-    "logbook.export-report",
-  );
 });
 
 test("global actions stay available on pages and in drawers", () => {

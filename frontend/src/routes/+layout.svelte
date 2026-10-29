@@ -77,7 +77,7 @@
 	} from "../lib/wailsjs/runtime/runtime";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
-	import TestCaseModal from "../lib/components/TestCaseModal.svelte";
+	import RecordModal from "../lib/logbook/RecordModal.svelte";
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import {
@@ -98,7 +98,6 @@
 	import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
-	import FindingModal from "../lib/components/FindingModal.svelte";
 	import { isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
@@ -106,6 +105,7 @@
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
 	import UpstreamProxyCAModal from "../lib/components/UpstreamProxyCAModal.svelte";
+	import ExportReview from "../lib/logbook/ExportReview.svelte";
 	import {
 		updateState,
 		refreshUpdateState,
@@ -198,9 +198,9 @@
 		Notes: { ref: NotesModal },
 		MenuInput: { ref: MenuModal },
 		Metadata: { ref: MetadataModal },
-		TestCase: { ref: TestCaseModal },
+		// The finding and test case modal (lib/logbook/recordEditor.js).
+		LogbookRecord: { ref: RecordModal },
 		SelectTestCase: { ref: SelectTestCaseModal },
-		Finding: { ref: FindingModal },
 		WebsocketStream: { ref: WebSocketModal },
 		SelectFinding: { ref: SelectFindingModal },
 		SelectWordlist: { ref: SelectWordlistModal },
@@ -209,6 +209,7 @@
 		Update: { ref: UpdateModal },
 		UpstreamProxy: { ref: UpstreamProxyModal },
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
+		ExportReport: { ref: ExportReview },
 	};
 	// Startup opens the scratchpad, and carries on once the first project
 	// has opened and loaded: the scratchpad, or one picked on the opening

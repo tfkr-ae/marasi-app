@@ -5,7 +5,6 @@
 	import ExtensionLogs from "./ExtensionLogs.svelte";
 	import RequestResponseView from "./RequestResponseView.svelte";
 	import ExtensionDrawerWrapper from "../extensions/components/ExtensionDrawerWrapper.svelte";
-	import Exporter from "./Exporter.svelte";
 
 	$: drawerPosition = $drawerStore?.position || "bottom";
 	$: drawerHeight = $drawerStore?.height || "h-3/5";
@@ -18,8 +17,7 @@
 	rounded={drawerRounded}
 	height={drawerHeight}
 	width={drawerWidth}
-	bgDrawer={$drawerStore.id === "request-response" ||
-	$drawerStore.id === "report-export"
+	bgDrawer={$drawerStore.id === "request-response"
 		? "bg-surface-50 dark:bg-surface-800"
 		: "bg-surface-100-800-token"}
 >
@@ -40,8 +38,5 @@
 	{/if}
 	{#if $drawerStore.id === "extension-drawer"}
 		<ExtensionDrawerWrapper />
-	{/if}
-	{#if $drawerStore.id === "report-export"}
-		<Exporter />
 	{/if}
 </Drawer>

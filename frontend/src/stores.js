@@ -12,6 +12,7 @@ import {
 } from "./lib/wailsjs/go/main/App";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
+import { logbookStore } from "./stores/logbookStore";
 import { connectionStore } from "./stores/connectionStore";
 import { armoryStore } from "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
@@ -51,7 +52,6 @@ export const extensions = writable([]);
 export const extensions_ui = writable({});
 
 // Logbook Stores
-export const logbookSearchInput = writable("");
 export const reportMetadata = writable({
   title: "Report Title",
   client: "Client Name",
@@ -64,8 +64,9 @@ export const reportMetadata = writable({
   ).toLocaleDateString("en-CA"),
   end: new Date().toLocaleDateString("en-CA"),
   created_at: new Date().toISOString(),
-  truncate_length: 0,
-  custom_properties: {},
+  // Bodies are cut at 1000 bytes unless the tester turns Truncate off.
+  truncate_length: 1000,
+  custom_properties: { include_test_cases: true },
 });
 
 // ---------------------------
@@ -214,7 +215,6 @@ function loadPart(signal) {
 export async function openProject() {
   // Each loadPart signal tells the opening screen which part loads next.
   loadPart(loadSignals.traffic);
-  logbookSearchInput.set("");
   reportMetadata.set({
     title: get(activeProject) + " Report",
     client: "Client Name",
@@ -227,8 +227,8 @@ export async function openProject() {
     ).toLocaleDateString("en-CA"),
     end: new Date().toLocaleDateString("en-CA"),
     created_at: new Date().toISOString(),
-    truncate_length: 0,
-    custom_properties: {},
+    truncate_length: 1000,
+    custom_properties: { include_test_cases: true },
   });
   compassCode.set("");
   testerInput.set("");
@@ -247,6 +247,7 @@ export async function openProject() {
   extensions_ui.set({});
   testCaseStore.clear();
   findingStore.clear();
+  logbookStore.clear();
   connectionStore.clear();
   armoryStore.clear();
   launchpadStore.clear();
@@ -285,6 +286,7 @@ export async function openProject() {
   await testCaseStore.populate();
   loadPart(loadSignals.findings);
   await findingStore.populate();
+  await logbookStore.populate();
   loadPart(loadSignals.intercept);
   await connectionStore.populateInterceptFlag();
   loadPart(loadSignals.armory);

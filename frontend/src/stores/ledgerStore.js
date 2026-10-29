@@ -93,10 +93,7 @@ export const ledgerStore = createLedgerStore({
   clearNotes: (selection) => ClearNotes(selection),
   // Deleting drops the pairs' links too.
   deleteTraffic: (selection) => relinked(DeleteTraffic(selection), "all"),
-  // Findings, test cases and Armory templates go through their stores, so
-  // the lists they hold stay current.
-  createFinding: (requestIds) => findingStore.create(requestIds),
-  createTestCase: (requestIds) => testCaseStore.create(requestIds),
+  // Armory templates go through their store, so its list stays current.
   sendToArmory: (requestId) => armoryStore.createTemplateFromRequest(requestId),
 });
 

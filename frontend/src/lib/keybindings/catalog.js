@@ -184,12 +184,16 @@ export const FACTORY_ACTIONS = [
     ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("shift+s")],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
+  // Esc, which goes back to the list, is reserved for the page (gate.js),
+  // so the page handles it itself. It has no action: one without a default
+  // key would show as unbound in the factory profile. N is unmodified, so
+  // it never runs while a field or editor has focus.
   ...pageActions("logbook", [
-    ["toggle-settings", "Toggle Logbook Settings", "Toggle Settings Accordian", "settings, toggle", primary("p")],
     ["focus-search", "Search Logbook", "Jump to search input", "search", primary("shift+s")],
     ["create-finding", "Create Finding", "Create a new draft finding", "create, new, finding", primary("shift+f")],
     ["create-test-case", "Create Test Case", "Draft a new blank test case", "create, new, test, case", primary("shift+t")],
     ["export-report", "Export Report", "Create a report from logbook", "report, template, findings", primary("shift+e")],
+    ["next-record", "Next Record", "Open the next record in the list", "next, record, finding, test, case", both("n")],
   ]),
   ...pageActions("compass", [
     ["toggle-settings", "Toggle Compass Settings", "Toggle Settings Accordian", "settings, toggle", primary("p")],

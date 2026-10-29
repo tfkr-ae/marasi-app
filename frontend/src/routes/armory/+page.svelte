@@ -51,6 +51,7 @@
 	import { runTraffic } from "../../lib/armoryRunTraffic.js";
 	import { sameID } from "../../lib/ledger/pairs.js";
 	import { linkedTo } from "../../lib/ledger/drawer.js";
+	import { newRecord } from "../../lib/logbook/recordEditor.js";
 	import { toastError, toastJump } from "../../lib/toasts.js";
 	import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
 	import { stepRequest } from "../../lib/armory/traffic.js";
@@ -643,21 +644,6 @@
 		}
 	}
 
-	// A draft finding or test case with the pair as its request, opened in
-	// its modal, as the Ledger does.
-	function createRecord(pair, kind) {
-		const finding = kind === "finding";
-		(finding ? ledgerStore.createFinding : ledgerStore.createTestCase)([pair.ID])
-			.then((record) =>
-				modalStore.trigger({
-					type: "component",
-					component: finding ? "Finding" : "TestCase",
-					meta: finding ? { finding: record, isNew: true } : { testCase: record, isNew: true },
-				}),
-			)
-			.catch((error) => toastError(toastStore, `Failed to create a ${kind}`, error));
-	}
-
 	/** Runs a row menu action (lib/armory/rowMenu.js) on `pair`. */
 	function runRowAction(action, pair) {
 		if (!action || !pair) return;
@@ -667,9 +653,9 @@
 			case "add-to-launchpad":
 				return addToLaunchpad(pair, action.id, action.name);
 			case "new-finding":
-				return createRecord(pair, "finding");
+				return newRecord(modalStore, "finding", { requestIds: [pair.ID] });
 			case "new-test-case":
-				return createRecord(pair, "test case");
+				return newRecord(modalStore, "testCase", { requestIds: [pair.ID] });
 			case "link-finding":
 			case "unlink-finding":
 			case "link-test-case":

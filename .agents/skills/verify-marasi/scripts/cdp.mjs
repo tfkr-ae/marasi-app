@@ -27,7 +27,7 @@ const routes = {
 	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Group by status" },
 	// "Templates" is the dock's header, or its strip label when collapsed.
 	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Templates" },
-	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "Logbook Settings" },
+	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "In progress" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
 	settings: { selector: '[title="Settings"]', path: "/settings", expected: "Marasi Settings" },
 };
@@ -221,8 +221,10 @@ async function clickPoint(point, button = "left", clicks = 1, modifiers = 0) {
 	}
 }
 
+// `edge` clicks near the target's top or bottom edge instead of its centre,
+// for a modal backdrop whose centre the modal covers.
 async function clickTarget(spec, options = {}) {
-	const point = await waitForTarget(spec, options);
+	const point = dropPoint(await waitForTarget(spec, options), options.edge);
 	await clickPoint(point, options.button, options.clicks, options.modifiers);
 	return point;
 }
@@ -544,7 +546,7 @@ async function runStep(step) {
 		const clicks = step.clickCount ?? 1;
 		if (![1, 2].includes(clicks)) throw new Error(`clickCount must be 1 or 2: ${JSON.stringify(step)}`);
 		const modifiers = clickModifiers(step.modifiers);
-		return { click: await clickTarget(spec, { timeoutMs, nth: step.nth, button, clicks, modifiers }) };
+		return { click: await clickTarget(spec, { timeoutMs, nth: step.nth, button, clicks, modifiers, edge: step.edge }) };
 	}
 	if (step.drag) {
 		const from = { selector: step.drag, ...scope };
@@ -556,7 +558,9 @@ async function runStep(step) {
 	if (step.hover) {
 		// A real pointer move onto the one actionable match, for controls that
 		// only show on hover. The pointer stays there until the next click.
-		const point = await waitForTarget({ selector: step.hover, ...scope }, { timeoutMs, nth: step.nth });
+		// A disabled control is hoverable too (its tooltip, or its box: the
+		// recorded point shows whether a toolbar control moved).
+		const point = await waitForTarget({ selector: step.hover, ...scope }, { timeoutMs, nth: step.nth, enabled: false });
 		await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
 		return { hover: point };
 	}
@@ -732,7 +736,12 @@ if (mode === "launch") {
 		try {
 			await waitFor(`!(${residue})`, "residue dismissed by Escape", 2000);
 		} catch {
-			if (await evaluate(paintedSelector(".drawer-backdrop"))) {
+			// The Logbook's record modal asks before dropping unsaved input,
+			// and Escape there only toggles the prompt: answer Discard.
+			if (await evaluate(paintedSelector("[data-close-prompt]"))) {
+				await clickTarget({ text: "Discard", within: "[data-close-prompt]" }, { timeoutMs: 2000 });
+				await waitFor(`!(${residue})`, "residue dismissed by Discard", 2000).catch(() => {});
+			} else if (await evaluate(paintedSelector(".drawer-backdrop"))) {
 				await clickPoint({ x: 5, y: 5 });
 				await waitFor(`!(${paintedSelector(openDrawers)})`, "drawer dismissed by a backdrop click", 2000).catch(() => {});
 			}

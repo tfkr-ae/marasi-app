@@ -12,7 +12,7 @@ How a keyboard shortcut or a ⌘K menu item reaches its handler, and where a new
 
 ## Adding an action
 
-1. Add a row in `FACTORY_ACTIONS`, in its context's `pageActions` block. Never rename an existing id, because saved profiles key their overrides by it.
+1. Add a row in `FACTORY_ACTIONS`, in its context's `pageActions` block. Never rename an existing id, because saved profiles key their overrides by it. Give every built-in action a default key: the factory profile must have no unbound action (`settings.test.js`). Unmodified Escape, Tab and Enter are reserved (`isReservedBinding`), so a page handles them itself, as the Ledger and Logbook do with Esc. A bare key, such as the Logbook's N, is allowed; it never runs while focus is in a field or editor.
 2. A new context also needs an entry in `CONTEXTS`, and a field in `shortcutState` if its eligibility needs new UI state.
 3. Add `{actionId, icon, handler}` to the page's menu array, which it passes to both `useMenuActions` and `MarasiKeys`. For `global.*`, add to the `handlers` and `icons` maps in `GlobalMenu.svelte`.
 4. If a row menu or the Ledger drawer rail shows the action, give the item the same `actionId`. See `ledger.md` and `launchpad.md`.

@@ -1831,10 +1831,6 @@ export function createLedgerStore(api) {
     findingEvidence,
     /** One Armory template per pair; `results` holds the templates made. */
     sendToArmory: (ids) => eachPair(ids, (id) => api.sendToArmory(id)),
-    /** A draft finding with these pairs as its requests. */
-    createFinding: (ids) => api.createFinding(ids),
-    /** A draft test case with these pairs as its requests. */
-    createTestCase: (ids) => api.createTestCase(ids),
   };
 
   /**

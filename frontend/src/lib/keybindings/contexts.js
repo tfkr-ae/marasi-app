@@ -40,7 +40,7 @@ const websocketModalOpen = (state) => state.modal === WEBSOCKET_MODAL;
 // A drawer that replaces its page's menu is expressed by eligibility: the
 // page context is ineligible while the drawer is open, so its actions never
 // run there, whatever the tier order. Drawers that only add a panel
-// (Checkpoint and Compass logs, the Logbook report export) leave their page
+// (Checkpoint and Compass logs) leave their page
 // context eligible.
 export const CONTEXTS = [
   {
