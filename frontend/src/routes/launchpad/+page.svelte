@@ -12,6 +12,7 @@
         ArrowRightIcon,
         ArrowUpIcon,
         ArrowUpToLineIcon,
+        BookCheckIcon,
         BracesIcon,
         CircleStopIcon,
         Columns2Icon,
@@ -26,6 +27,7 @@
         PlayIcon,
         PlusIcon,
         SearchIcon,
+        ShieldAlertIcon,
         TrashIcon,
     } from "lucide-svelte";
     import { onMount } from "svelte";
@@ -294,8 +296,9 @@
         });
     }
 
-    // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓ in the tree: the menu's Order item, run as choosing it
-    // would; when the menu greys it, its reason instead.
+    // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓, ⌘⇧F and ⌘⇧B in the tree: the menu's Order or New
+    // item, run as choosing it would; when the menu greys it, its reason
+    // instead.
     function runEntryShortcut(actionId) {
         entryMenu = { ...entryMenu, open: false };
         const input = entryMenuInput(get(launchpadStore));
@@ -517,6 +520,8 @@
         { actionId: "launchpad.tree.move-entries-down", icon: ArrowDownIcon, handler: () => runEntryShortcut("launchpad.tree.move-entries-down") },
         { actionId: "launchpad.tree.move-entries-top", icon: ArrowUpToLineIcon, handler: () => runEntryShortcut("launchpad.tree.move-entries-top") },
         { actionId: "launchpad.tree.move-entries-bottom", icon: ArrowDownToLineIcon, handler: () => runEntryShortcut("launchpad.tree.move-entries-bottom") },
+        { actionId: "launchpad.tree.create-finding", icon: ShieldAlertIcon, handler: () => runEntryShortcut("launchpad.tree.create-finding") },
+        { actionId: "launchpad.tree.create-test-case", icon: BookCheckIcon, handler: () => runEntryShortcut("launchpad.tree.create-test-case") },
         { actionId: "launchpad.next-tab", icon: ArrowRightIcon, handler: () => stepLaunchpad(1) },
         { actionId: "launchpad.previous-tab", icon: ArrowLeftIcon, handler: () => stepLaunchpad(-1) },
         { actionId: "launchpad.next-entry", icon: ArrowDownIcon, handler: () => stepEntry(1) },

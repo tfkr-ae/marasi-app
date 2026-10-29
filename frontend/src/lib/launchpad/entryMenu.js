@@ -46,8 +46,9 @@ function reorderBefore(order, picked) {
  * `linkMenu`: an entry's ID is its pair's. `findings` and `testCases` each
  * hold the pair IDs they link as Requests. A link only points a record at a
  * pair that already exists, so pending launches disable none of them.
+ * `newActionIds` names the New items' keybindings, if any.
  */
-export function recordItems(entries, { findings = [], testCases = [] } = {}) {
+export function recordItems(entries, { findings = [], testCases = [], newActionIds = {} } = {}) {
   return [
     {
       id: "finding",
@@ -58,6 +59,7 @@ export function recordItems(entries, { findings = [], testCases = [] } = {}) {
         noun: "finding",
         pairs: entries,
         targets: findings,
+        newActionId: newActionIds.finding,
         newType: "new-finding",
         linkType: "link-finding",
         unlinkType: "unlink-finding",
@@ -72,6 +74,7 @@ export function recordItems(entries, { findings = [], testCases = [] } = {}) {
         noun: "test case",
         pairs: entries,
         targets: testCases,
+        newActionId: newActionIds.testCase,
         newType: "new-test-case",
         linkType: "link-test-case",
         unlinkType: "unlink-test-case",
@@ -168,7 +171,11 @@ export function entryMenuFor({
     "sep",
     ...recordItems(
       entries.filter((entry) => picked.includes(entry.ID)),
-      { findings, testCases },
+      {
+        findings,
+        testCases,
+        newActionIds: { finding: "launchpad.tree.create-finding", testCase: "launchpad.tree.create-test-case" },
+      },
     ),
     "sep",
     {

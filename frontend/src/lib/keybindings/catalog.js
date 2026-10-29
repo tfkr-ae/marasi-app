@@ -166,6 +166,9 @@ export const FACTORY_ACTIONS = [
     ["move-entries-down", "Move Entries Down", "Move the selected entries below the entry after them", "move, down, order, reorder, entries", both("alt+arrowdown"), { yieldsToEditors: true }],
     ["move-entries-top", "Move Entries to Top", "Move the selected entries to the start of their launchpad", "move, top, first, order, reorder, entries", both("alt+shift+arrowup"), { yieldsToEditors: true }],
     ["move-entries-bottom", "Move Entries to Bottom", "Move the selected entries to the end of their launchpad", "move, bottom, last, end, order, reorder, entries", both("alt+shift+arrowdown"), { yieldsToEditors: true }],
+    // ⌘⇧T is the page's Toggle TLS, which is eligible with the tree.
+    ["create-finding", "New Finding from Entries", "Create a new finding from the selected entries' requests", "create, new, finding, entries, requests", primary("shift+f"), { yieldsToEditors: true }],
+    ["create-test-case", "New Test Case from Entries", "Create a new test case from the selected entries' requests", "create, new, test, case, entries, requests", primary("shift+b"), { yieldsToEditors: true }],
   ]),
   // Ids predate the redesigned page (a settings accordion) and stay put so
   // saved profiles keep their overrides; toggle-settings now switches the

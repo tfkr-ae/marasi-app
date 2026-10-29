@@ -226,3 +226,15 @@ test("an entry whose launch is pending can still be linked or used for a new rec
     assert.ok(!item(items, id).disabled, id);
   }
 });
+
+test("New finding and New test case show their shortcut keys and run as shortcuts", () => {
+  const items = menu(["b", "c"]);
+  assert.equal(item(items, "f-new").actionId, "launchpad.tree.create-finding");
+  assert.equal(item(items, "t-new").actionId, "launchpad.tree.create-test-case");
+  assert.deepEqual(menuAction(items, "launchpad.tree.create-finding"), {
+    action: { type: "new-finding" },
+    disabled: false,
+    hint: undefined,
+  });
+  assert.deepEqual(menuAction(items, "launchpad.tree.create-test-case").action, { type: "new-test-case" });
+});
