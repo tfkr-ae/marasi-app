@@ -3,7 +3,8 @@
 // renders it and menuAction runs its shortcuts. Every item is a Move, to the
 // end of another launchpad or to a new place in this one, a removal,
 // copying one entry's browser view URL, or a Finding or Test case item.
-// Plain functions, so they load under node.
+// The launchpad menu (launchpadMenuFor) is a launchpad row's, in the same
+// shape. Plain functions, so they load under node.
 //
 // Actions:
 //   { type: "move", targetId, name }   to the end of another launchpad
@@ -180,5 +181,19 @@ export function entryMenuFor({
       ...unlessLaunching(launching),
       action: { type: "remove" },
     },
+  ];
+}
+
+/**
+ * The menu for one `launchpad` in the tree, over all of its `entries`, with
+ * the project's `findings` and `testCases` for the Finding and Test case
+ * items. `pending` says whether a launch from that launchpad is pending.
+ * The page loads a collapsed launchpad's entries before opening it, so the
+ * link states are never partial.
+ */
+export function launchpadMenuFor({ launchpad, entries = [], findings = [], testCases = [], pending = false }) {
+  const records = recordItems(entries, { findings, testCases });
+  return [
+    ...(entries.length ? records : records.map((it) => ({ ...it, disabled: true, hint: "No entries" }))),
   ];
 }

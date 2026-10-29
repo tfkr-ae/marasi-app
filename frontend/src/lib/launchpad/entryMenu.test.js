@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { entryMenuFor } from "./entryMenu.js";
+import { entryMenuFor, launchpadMenuFor } from "./entryMenu.js";
 import { menuAction } from "../ledger/rowMenu.js";
 
 const entry = (id, extra = {}) => ({ ID: id, Method: "GET", Host: "acme.test", Path: `/${id}`, StatusCode: 200, ...extra });
@@ -224,5 +224,52 @@ test("an entry whose launch is pending can still be linked or used for a new rec
   const items = menu(["b", "e"], { findings, testCases, pendingIds: ["e"] });
   for (const id of ["finding", "testcase", "f-new", "f-link", "f-2", "f-unlink", "fu-1", "t-new", "t-link", "t-7"]) {
     assert.ok(!item(items, id).disabled, id);
+  }
+});
+
+// The launchpad menu for Login, over all of its entries (a…e by default).
+function launchpadMenu(extra = {}) {
+  return launchpadMenuFor({
+    launchpad: launchpads[0],
+    entries: ["a", "b", "c", "d", "e"].map((id) => entry(id)),
+    findings,
+    testCases,
+    ...extra,
+  });
+}
+
+test("the launchpad menu holds Finding and Test case over all of its entries", () => {
+  const items = launchpadMenu();
+  assert.deepEqual(shape(items), ["finding", "testcase"]);
+  assert.equal(item(items, "f-new").label, "New finding with 5 requests");
+  assert.equal(item(items, "t-new").label, "New test case with 5 requests");
+  assert.deepEqual(item(items, "f-new").action, { type: "new-finding" });
+  assert.deepEqual(item(items, "f-1").action, { type: "link-finding", id: 1, title: "Login bypass" });
+  assert.equal(item(launchpadMenu({ entries: [entry("a")] }), "f-new").label, "New finding from this request");
+});
+
+test("the launchpad menu's link states count every entry, and a pending launch disables none", () => {
+  const items = launchpadMenu({ pending: true });
+  // Login bypass links a and b of a…e, so it is mixed, not checked.
+  assert.deepEqual(
+    item(items, "f-link").sub.map((it) => [it.label, it.checked]),
+    [["Login bypass", "mixed"], ["Open redirect", "mixed"], ["Untitled finding", false]],
+  );
+  assert.deepEqual(item(items, "f-unlink").sub.map((it) => it.label), ["Login bypass", "Open redirect"]);
+  const all = launchpadMenu({ entries: [entry("a"), entry("b")] });
+  assert.equal(item(all, "f-1").checked, true);
+  assert.equal(item(all, "f-1").hint, "Already linked");
+  assert.equal(item(launchpadMenu({ entries: [entry("e")] }), "t-unlink"), null);
+  for (const id of ["finding", "testcase", "f-new", "f-link", "f-2", "t-new", "t-link", "t-7"]) {
+    assert.ok(!item(items, id).disabled, id);
+  }
+});
+
+test("an empty launchpad's Finding and Test case are greyed with No entries", () => {
+  const items = launchpadMenu({ entries: [] });
+  assert.deepEqual(shape(items), ["finding", "testcase"]);
+  for (const id of ["finding", "testcase"]) {
+    assert.equal(item(items, id).disabled, true, id);
+    assert.equal(item(items, id).hint, "No entries", id);
   }
 });
