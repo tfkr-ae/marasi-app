@@ -62,14 +62,14 @@
 <Dock state={dockState} limits={CHECKPOINT_DOCK} stripLabel="Intercepted" expandLabel="Show intercepted" searchLabel="Show intercepted">
 	<svelte:fragment slot="strip">
 		{#if state.items.length}
-			<span class="badge variant-filled-warning px-1.5 py-0 text-[10px]" title="{state.items.length} intercepted"
+			<span class="badge variant-filled-warning px-1.5 py-0 text-3xs" title="{state.items.length} intercepted"
 				>{state.items.length}</span
 			>
 		{/if}
 	</svelte:fragment>
 	<svelte:fragment slot="header">
 		<span class="cp-count mr-auto px-1 text-xs font-bold"
-			>Intercepted <span class="text-[10px] font-normal opacity-70">{state.items.length}</span></span
+			>Intercepted <span class="text-3xs font-normal opacity-70">{state.items.length}</span></span
 		>
 	</svelte:fragment>
 
@@ -99,9 +99,9 @@
 			</button>
 		</div>
 		{#if state.picked.length}
-			<div class="flex items-center justify-between border-b border-surface-500/30 bg-primary-500/10 px-2 py-0.5 text-[10px]">
+			<div class="flex items-center justify-between border-b border-surface-500/30 bg-primary-500/10 px-2 py-0.5 text-3xs">
 				<span>{state.picked.length} picked</span>
-				<button class="cp-clear-picks btn btn-sm {primary} px-2 py-0 text-[10px]" on:click={() => state.selectedId && store.pick(state.selectedId)}>Clear</button>
+				<button class="cp-clear-picks btn btn-sm {primary} px-2 py-0 text-3xs" on:click={() => state.selectedId && store.pick(state.selectedId)}>Clear</button>
 			</div>
 		{/if}
 		<div class="cp-tree min-h-0 flex-1 overflow-auto" role="tree" aria-label="Intercepted items">
@@ -111,14 +111,14 @@
 			{#each groups as group (group.host)}
 				{@const open = !collapsed.has(group.host)}
 				<button
-					class="cp-host sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-surface-500/20 bg-surface-100 px-2 py-1 text-left text-[11px] font-semibold dark:bg-surface-800"
+					class="cp-host sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-surface-500/20 bg-surface-100 px-2 py-1 text-left text-2xs font-semibold dark:bg-surface-800"
 					aria-expanded={open}
 					on:click={() => toggleHost(group.host)}
 				>
 					{#if open}<ChevronDown size={12} />{:else}<ChevronRight size={12} />{/if}
 					<Globe size={12} class="opacity-60" />
 					<span class="flex-1 truncate">{group.host || "Unknown host"}</span>
-					<span class="text-[10px] opacity-60">{group.items.length}</span>
+					<span class="text-3xs opacity-60">{group.items.length}</span>
 				</button>
 				{#if open}
 					<div class="relative">
@@ -135,7 +135,7 @@
 								aria-selected={selected}
 								data-item={item.ID}
 								data-picked={isPicked ? "true" : undefined}
-								class="cp-entry relative flex cursor-default select-none items-center gap-1.5 py-[3px] pl-6 pr-2 font-mono text-[11px] {selected
+								class="cp-entry relative flex cursor-default select-none items-center gap-1.5 py-[3px] pl-6 pr-2 font-mono text-2xs {selected
 									? 'bg-primary-500/20'
 									: isPicked
 										? 'bg-primary-500/15'
@@ -158,7 +158,7 @@
 								{/if}
 								{#if error}<span class="flex-none font-bold text-error-500" title={error}>!</span>{/if}
 								{#if isDirty(state, item.ID)}<span class="flex-none text-warning-500" title="Edited">●</span>{/if}
-								<span class="w-7 flex-none text-right text-[10px] tabular-nums opacity-60" title="Intercepted for"
+								<span class="w-7 flex-none text-right text-3xs tabular-nums opacity-60" title="Intercepted for"
 									>{interceptedFor(item.InterceptedAt, now)}</span
 								>
 							</div>

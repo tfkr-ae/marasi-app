@@ -58,7 +58,7 @@
 	const head =
 		"flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900";
 	const heldHead = "!bg-primary-500/10 shadow-[inset_3px_0_0_rgb(var(--color-primary-500))]";
-	const chip = "cp-chip ml-1 rounded bg-primary-500 px-1 py-px text-[10px] font-bold uppercase text-white";
+	const chip = "cp-chip ml-1 rounded bg-primary-500 px-1 py-px text-3xs font-bold uppercase text-white";
 
 	let editor;
 	/** Focuses the intercepted pane's editor. */
@@ -73,7 +73,7 @@
 	<header class="flex items-center gap-3 border-b border-surface-500/30 bg-surface-50 px-3 py-2 dark:bg-surface-900">
 		<div class="min-w-0 flex-1">
 			<h2 class="cp-title truncate font-mono text-sm font-bold">{itemTitle(summary, request?.Number)}</h2>
-			<p class="cp-meta truncate text-[11px] opacity-60">
+			<p class="cp-meta truncate text-2xs opacity-60">
 				{summary.host || "Unknown host"} · intercepted {interceptedFor(item.InterceptedAt, now) || "now"} ago · item {index + 1} of {total}
 				{#if entry.launch} · from Launchpad · {entry.launch}{/if}
 			</p>
@@ -104,7 +104,7 @@
 			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30">
 				{#if item.Type === "websocket"}
 					<div class={head}><span class="font-bold">Connection</span></div>
-					<dl class="cp-connection grid grid-cols-[6rem_1fr] gap-y-1 p-3 font-mono text-[11px]">
+					<dl class="cp-connection grid grid-cols-[6rem_1fr] gap-y-1 p-3 font-mono text-2xs">
 						<dt class="opacity-60">Host</dt>
 						<dd class="truncate">{connection?.Host ?? "…"}</dd>
 						<dt class="opacity-60">Path</dt>
@@ -125,7 +125,7 @@
 							{/if}
 						</span>
 						{#if heldLeft && dirty}
-							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-[11px]" on:click={revert}>Revert</button>
+							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
 						{/if}
 					</div>
 					<div class="cp-request min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
@@ -136,7 +136,7 @@
 								on:change={edit}
 								on:ready={(event) => (editor = event.detail)}
 								class="text-xs"
-								styles={{ "&": { fontSize: "11px" } }}
+								styles={{ "&": { fontSize: "0.6875rem" } }}
 								lang={lang(text)}
 								{theme}
 								extensions={editExtensions}
@@ -147,7 +147,7 @@
 								readonly
 								editable={false}
 								class="text-xs opacity-80"
-								styles={{ "&": { fontSize: "11px" } }}
+								styles={{ "&": { fontSize: "0.6875rem" } }}
 								lang={lang(request.Raw)}
 								{theme}
 								extensions={contextExtensions}
@@ -157,7 +157,7 @@
 						{/if}
 					</div>
 					{#if heldLeft && error}
-						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-[11px] text-error-500">{error}</div>
+						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-2xs text-error-500">{error}</div>
 					{/if}
 				{/if}
 			</section>
@@ -179,7 +179,7 @@
 							{/if}
 						</span>
 						{#if dirty}
-							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-[11px]" on:click={revert}>Revert</button>
+							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
 						{/if}
 					</div>
 					<div class="cp-response min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
@@ -189,14 +189,14 @@
 							on:change={edit}
 							on:ready={(event) => (editor = event.detail)}
 							class="text-xs"
-							styles={{ "&": { fontSize: "11px" } }}
+							styles={{ "&": { fontSize: "0.6875rem" } }}
 							lang={item.Type === "websocket" ? undefined : lang(text)}
 							{theme}
 							extensions={editExtensions}
 						/>
 					</div>
 					{#if error}
-						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-[11px] text-error-500">{error}</div>
+						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-2xs text-error-500">{error}</div>
 					{/if}
 				{/if}
 			</section>

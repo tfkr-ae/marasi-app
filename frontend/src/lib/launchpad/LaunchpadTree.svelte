@@ -462,19 +462,19 @@
 							{/if}
 						</button>
 						{#if unseen}
-							<span class="badge {primary} px-1.5 py-0 text-[10px]" title="{unseen} new {unseen === 1 ? 'entry' : 'entries'}"
+							<span class="badge {primary} px-1.5 py-0 text-3xs" title="{unseen} new {unseen === 1 ? 'entry' : 'entries'}"
 								>+{unseen}</span
 							>
 						{/if}
-						<span class="flex-none text-[10px] opacity-50" title="Entries">{summary.count || ""}</span>
+						<span class="flex-none text-3xs opacity-50" title="Entries">{summary.count || ""}</span>
 						{#if summary.lastStatus}
 							<span
-								class="w-7 flex-none text-right font-mono text-[10px] {statusClass(summary.lastStatus)}"
+								class="w-7 flex-none text-right font-mono text-3xs {statusClass(summary.lastStatus)}"
 								title="Last status">{summary.lastStatus}</span
 							>
 						{:else if summary.lastStatus === 0}
 							<!-- No response code: in flight, or how the newest launch ended. -->
-							<span class="flex w-7 flex-none justify-end text-[10px] opacity-60" title="Last status">
+							<span class="flex w-7 flex-none justify-end text-3xs opacity-60" title="Last status">
 								{#if awaiting}
 									<LoaderCircle size={11} class="animate-spin" />
 								{:else if newestLaunch?.Status === "cancelled"}
@@ -505,7 +505,7 @@
 								<div
 									data-tree-row
 									data-list={row.list}
-									class="lp-more relative flex items-center gap-2 border-y border-dashed border-surface-500/30 py-[3px] pr-3 text-[11px] {row.depth === 2
+									class="lp-more relative flex items-center gap-2 border-y border-dashed border-surface-500/30 py-[3px] pr-3 text-2xs {row.depth === 2
 										? 'pl-14'
 										: 'pl-10'}"
 								>
@@ -547,7 +547,7 @@
 								{@const launch = launchOf(state, entry.ID, entry)}
 								{@const endText = launchEndText(launch)}
 								<button
-									class="lp-entry group relative flex w-full select-none items-center gap-2 py-[3px] pr-3 text-left font-mono text-[11px] {row.depth ===
+									class="lp-entry group relative flex w-full select-none items-center gap-2 py-[3px] pr-3 text-left font-mono text-2xs {row.depth ===
 									2
 										? 'pl-14'
 										: 'pl-10'} {active
@@ -597,12 +597,12 @@
 									<span class="w-11 flex-none opacity-60">{entry.Method}</span>
 									<span class="min-w-0 flex-1 truncate">{entry.Path}</span>
 									{#if side}
-										<span class="{side === 'left' ? 'variant-filled-tertiary' : primary} flex-none px-1.5 text-[10px] font-bold"
+										<span class="{side === 'left' ? 'variant-filled-tertiary' : primary} flex-none px-1.5 text-3xs font-bold"
 											>{COMPARE_SIDES[side].label}</span
 										>
 									{/if}
 									{#if inCompare && compare.picking && !side}
-										<span class="hidden flex-none text-[10px] text-primary-500 group-hover:inline">
+										<span class="hidden flex-none text-3xs text-primary-500 group-hover:inline">
 											as {COMPARE_SIDES[compare.picking].label}
 										</span>
 									{/if}

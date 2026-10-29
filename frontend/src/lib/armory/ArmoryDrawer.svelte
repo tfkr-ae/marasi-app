@@ -66,7 +66,7 @@
 	$: bodies = drawerBodies(details, { prettify: $prettify });
 	$: syntaxMode = $marasiConfig.SyntaxMode;
 
-	const message = "p-3 text-[11px] opacity-50";
+	const message = "p-3 text-2xs opacity-50";
 	// As in the Ledger drawer, the panes start a few pixels below the red top
 	// line, on the editors' own background.
 	const paneBox = "relative min-h-0 min-w-0 flex-1 pt-[3px] bg-white dark:bg-[#282c34]";
@@ -77,7 +77,7 @@
 	$: stacked = panesWidth < STACK_BELOW;
 </script>
 
-<div class="armory-drawer flex h-full min-h-0 bg-surface-50 text-[11px] dark:bg-surface-900">
+<div class="armory-drawer flex h-full min-h-0 bg-surface-50 text-2xs dark:bg-surface-900">
 	<ArmoryDrawerRail
 		{pair}
 		{number}

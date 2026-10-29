@@ -95,7 +95,7 @@
 >
 	<svelte:fragment slot="header">
 		<span class="mr-auto px-1 text-xs font-bold"
-			>Templates <span class="text-[10px] font-normal opacity-70">{templates.length}</span></span
+			>Templates <span class="text-3xs font-normal opacity-70">{templates.length}</span></span
 		>
 		<button
 			class="opacity-70 hover:opacity-100 disabled:opacity-30"
@@ -140,7 +140,7 @@
 					aria-selected={selected}
 					aria-expanded={open}
 					aria-current={selected}
-					class="relative flex cursor-default select-none items-center gap-1.5 border-b border-surface-500/20 px-2 py-1.5 text-[11px] {selected
+					class="relative flex cursor-default select-none items-center gap-1.5 border-b border-surface-500/20 px-2 py-1.5 text-2xs {selected
 						? 'bg-primary-500/10'
 						: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 					title={template.Description || template.Name}
@@ -158,13 +158,13 @@
 					</button>
 					<FileText size={12} class="flex-none opacity-60" />
 					<span class="min-w-0 flex-1 truncate font-semibold">{template.Name}</span>
-					{#if runs}<span class="flex-none text-[10px] opacity-60">{runs.length}</span>{/if}
+					{#if runs}<span class="flex-none text-3xs opacity-60">{runs.length}</span>{/if}
 				</div>
 				{#if open}
 					<div class="relative" role="group">
 						<span class="absolute bottom-0 left-[13px] top-0 w-px bg-surface-500/30"></span>
 						{#if runs && runs.length === 0}
-							<p class="py-1 pl-7 text-[10px] opacity-50">No runs</p>
+							<p class="py-1 pl-7 text-3xs opacity-50">No runs</p>
 						{/if}
 						{#each runs ?? [] as run (run.ID)}
 							{@const current = selected && run.ID === selectedRunId}
@@ -173,7 +173,7 @@
 								role="treeitem"
 								aria-selected={current}
 								aria-current={current}
-								class="group relative flex cursor-default select-none items-center gap-2 py-[3px] pl-7 pr-2 font-mono text-[11px] {current
+								class="group relative flex cursor-default select-none items-center gap-2 py-[3px] pl-7 pr-2 font-mono text-2xs {current
 									? 'bg-primary-500/20'
 									: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 								title="{run.MaxConcurrent} workers · {new Date(run.CreatedAt).toLocaleString()}"

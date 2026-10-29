@@ -118,7 +118,7 @@
 					{@const focused = sameID(row.ID, openId)}
 					<button
 						type="button"
-						class="tr-row h-[22px] w-full border-b border-surface-300/50 text-left dark:border-surface-700/60 {focused
+						class="tr-row h-[1.375rem] w-full border-b border-surface-300/50 text-left dark:border-surface-700/60 {focused
 							? 'bg-primary-500/25'
 							: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 						style="grid-template-columns: {TRAFFIC_TEMPLATE}"
@@ -146,7 +146,7 @@
 	.tr-row {
 		display: grid;
 		align-items: center;
-		font-size: 11px;
+		font-size: 0.6875rem;
 		white-space: nowrap;
 	}
 	/* As the Ledger's cells: trimmed to their capitals so WebKit centres the

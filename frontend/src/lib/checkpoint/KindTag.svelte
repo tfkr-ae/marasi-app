@@ -10,4 +10,4 @@
 	};
 </script>
 
-<span class="inline-block w-8 flex-none rounded px-1 text-center font-mono text-[10px] font-bold {TONE[type] ?? ''}">{KIND_LABELS[type] ?? ""}</span>
+<span class="inline-block w-8 flex-none rounded px-1 text-center font-mono text-3xs font-bold {TONE[type] ?? ''}">{KIND_LABELS[type] ?? ""}</span>
