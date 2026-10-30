@@ -364,6 +364,31 @@ export function openRunPair(state) {
 }
 
 /**
+ * The list Previous and Next request step through: the whole run's (null),
+ * or grouped, the open pair's group's value; undefined when no group holds
+ * the open pair.
+ */
+function stepKey(state) {
+  if (!state.groupBy) return null;
+  for (const [value, list] of state.grouping.lists) {
+    if (list.rows.some((row) => sameID(row.ID, state.openId))) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Whether Previous (delta -1) or Next (1) request has a pair to open: one
+ * read in the open pair's list, or for Next, an unread page of it.
+ */
+export function runCanStep(state, delta) {
+  const key = stepKey(state);
+  if (key === undefined || state.openId == null) return false;
+  const list = key == null ? state.list : state.grouping.lists.get(key);
+  if (stepRequest(list.rows, state.openId, delta) !== -1) return true;
+  return delta > 0 && list.hasMore;
+}
+
+/**
  * The order a list's rows are read in. Grouped by length, a Length sort
  * orders the groups, so their rows stay in # order.
  */
@@ -896,15 +921,18 @@ export function createRunTrafficView(api) {
 
     /**
      * Opens the pair `delta` rows from the open one, reading the next page
-     * when it steps past the last row read. Returns the pair, or null at
-     * either end of the run (the open pair stays).
+     * when it steps past the last row read. Grouped, it steps through the
+     * open pair's group. Returns the pair, or null at either end of the run
+     * or group (the open pair stays).
      */
     async step(delta) {
-      let rows = runTrafficRows(current);
+      const key = stepKey(current);
+      if (key === undefined) return null;
+      let rows = listOf(current, key).rows;
       let index = stepRequest(rows, current.openId, delta);
-      if (index === -1 && delta > 0 && !current.groupBy && current.list.hasMore && openRunPair(current)) {
-        await loadMore();
-        rows = runTrafficRows(current);
+      if (index === -1 && delta > 0 && listOf(current, key).hasMore && openRunPair(current)) {
+        await loadMore(key);
+        rows = listOf(current, key).rows;
         index = stepRequest(rows, current.openId, delta);
       }
       if (index === -1) return null;

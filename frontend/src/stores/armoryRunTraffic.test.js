@@ -7,6 +7,7 @@ import { armoryMenuFor, runArmoryAction } from "../lib/armory/rowMenu.js";
 import {
   RUN_TRAFFIC_PAGE_SIZE,
   isColumnSortable,
+  runCanStep,
   createRunTrafficView,
   openRunPair,
   runTrafficNewLabel,
@@ -1056,4 +1057,76 @@ test("a group's rows stop at its count's as_of, so a whole group holds what it s
 
   assert.equal(groupOf(view, "403").count, 2);
   assert.deepEqual(groupOf(view, "403").list.rows.map((row) => row.Number), [3, 9]);
+});
+
+// Grouped, Previous and Next request step through the open pair's group.
+
+test("grouped, stepping stays in the open pair's group and stops at its ends", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  await view.expandAll();
+  // Shown: 200 [8], 500 [4], pending [6], 403 [3, 9], 404 [1, 2, 5, 7, 10].
+  view.openPair(id(3));
+
+  assert.equal((await view.step(1)).Number, 9);
+  assert.equal(await view.step(1), null);
+  assert.equal(openNumber(view), 9);
+  assert.equal((await view.step(-1)).Number, 3);
+  assert.equal(await view.step(-1), null);
+  assert.equal(openNumber(view), 3);
+});
+
+test("grouped, stepping follows the group's sort order", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  await view.sortBy("time");
+  await view.sortBy("time");
+  await view.toggleGroup("404");
+  view.openPair(id(10));
+
+  const order = [10];
+  while (await view.step(1)) order.push(openNumber(view));
+  assert.deepEqual(order, [10, 7, 5, 2, 1]);
+});
+
+test("grouped, stepping past a group's last row read reads its next page", async () => {
+  const big = many(RUN_TRAFFIC_PAGE_SIZE + 3, { status: 403 });
+  const { api, view } = await opened([...big, pair(9000, { status: 500 })]);
+  await view.groupBy("status");
+  await view.toggleGroup("403");
+  view.openPair(id(RUN_TRAFFIC_PAGE_SIZE));
+  assert.equal(runCanStep(get(view), 1), true);
+
+  assert.equal((await view.step(1)).Number, RUN_TRAFFIC_PAGE_SIZE + 1);
+  assert.equal(api.calls.at(-1).Query, "status_code = 403");
+  assert.equal(api.calls.at(-1).Cursor, String(RUN_TRAFFIC_PAGE_SIZE));
+});
+
+test("Previous and Next request are unavailable at the ends of the open pair's group", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  await view.expandAll();
+  const can = () => [runCanStep(get(view), -1), runCanStep(get(view), 1)];
+
+  view.openPair(id(3));
+  assert.deepEqual(can(), [false, true]);
+  view.openPair(id(9));
+  assert.deepEqual(can(), [true, false]);
+  // A group of one pair has nowhere to step.
+  view.openPair(id(4));
+  assert.deepEqual(can(), [false, false]);
+});
+
+test("ungrouped, Previous and Next request are unavailable only at the run's ends", async () => {
+  const { view } = await opened(many(RUN_TRAFFIC_PAGE_SIZE + 1));
+  const can = () => [runCanStep(get(view), -1), runCanStep(get(view), 1)];
+  assert.deepEqual(can(), [false, false]);
+
+  view.openPair(id(1));
+  assert.deepEqual(can(), [false, true]);
+  // The last row read, with a page still unread.
+  view.openPair(id(RUN_TRAFFIC_PAGE_SIZE));
+  assert.deepEqual(can(), [true, true]);
+  await view.step(1);
+  assert.deepEqual(can(), [true, false]);
 });
