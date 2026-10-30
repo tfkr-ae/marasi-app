@@ -1,0 +1,5 @@
+# Armory traffic groups are counted by Marasi, not by loading the run
+
+The Armory groups a run's traffic by status code or length and shows a count per group. Those counts come from a new Marasi read that counts the pairs matching a query by one field. Each group's rows are then read a page at a time with a cursor and sorted in the database, as the Ledger reads its query results. Selecting a whole group selects a query plus `AsOf`, not a list of pair ids. Today the app loads every pair a run sent into memory (`ListArmoryRunTraffic`). That works for small wordlists but not for a maelstrom run, whose size is the product of its wordlists.
+
+We considered keeping the whole run in memory and counting it there. That needs no Marasi change, and it is what the prototype does. We did not choose it because memory and load time grow with the run, and a group's Selection would carry every id in the group. Marasi already sorts by `status_code` and `length`, pages with cursors, and freezes results with `AsOf`, so the only new thing is the grouped count. It follows the shape of `CountContentTypes`, but it takes a query.
