@@ -883,6 +883,36 @@ test("⌘-click on a group header selects every pair in the group, read or not, 
   assert.deepEqual(pairsIn(api, selection), many(RUN_TRAFFIC_PAGE_SIZE + 5).map((p) => p.ID));
 });
 
+test("adding a group to a whole-group Selection keeps its as_of, so pairs sent since stay out of every group", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+  view.toggleGroupSelection("403");
+  const asOf = id(RUN_TRAFFIC_PAGE_SIZE + 7);
+
+  // A 403 and a 404 arrive, and the counts move on past the Selection's as_of.
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 8, { status: 403 });
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 9, { status: 404 });
+  view.flush();
+  await view.settled();
+
+  await view.toggleGroupSelection("404");
+
+  const target = runRowMenuTarget(get(view), id(RUN_TRAFFIC_PAGE_SIZE + 6));
+  assert.equal(target.selection.as_of, asOf);
+  assert.equal(target.count, RUN_TRAFFIC_PAGE_SIZE + 7);
+  assert.equal(runSelectionLabel(get(view)), `${RUN_TRAFFIC_PAGE_SIZE + 7} selected`);
+  assert.deepEqual(
+    pairsIn(api, target.selection).sort(),
+    [...many(RUN_TRAFFIC_PAGE_SIZE + 5), ...bigRun().slice(-2)].map((p) => p.ID).sort(),
+  );
+
+  // Dropping a group keeps the as_of too.
+  await view.toggleGroupSelection("403");
+  await view.toggleGroup("404");
+  assert.equal(runRowMenuTarget(get(view), id(1)).selection.as_of, asOf);
+  assert.equal(runSelectionLabel(get(view)), `${RUN_TRAFFIC_PAGE_SIZE + 5} selected`);
+});
+
 const headerStates = (view) =>
   runTrafficGroups(get(view)).map((g) => `${g.value}:${groupSelection(get(view), g) || "-"}`);
 

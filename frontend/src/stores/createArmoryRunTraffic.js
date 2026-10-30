@@ -887,14 +887,23 @@ export function createRunTrafficView(api) {
     /**
      * ⌘-click on a group header: adds the whole group to the Selection,
      * read or not, or drops it when the Selection holds it. The groups are
-     * a query under the latest count's as_of; a Selection of listed pairs
+     * a query under one as_of: the latest count's for a new Selection, and
+     * the Selection's own as it grows or shrinks, counted again under it,
+     * so pairs sent since join no group in it. A Selection of listed pairs
      * gives way to the group.
      */
-    toggleGroupSelection(value) {
+    async toggleGroupSelection(value) {
       const { groupBy, grouping } = current;
       if (!groupBy || !grouping.counts) return;
-      const values = grouping.counts.map((c) => c.value);
       const query = current.selection.query;
+      const asOf = query?.asOf ?? grouping.asOf;
+      let counted = grouping.counts;
+      if (asOf !== grouping.asOf) {
+        ({ counts: counted } = await countGroups(GROUP_FIELDS[groupBy], asOf));
+        // The Selection or grouping changed while counting.
+        if (current.selection.query !== query || current.groupBy !== groupBy) return;
+      }
+      const values = counted.map((c) => c.value);
       let groups;
       if (query && query.groups == null) groups = values.filter((v) => v !== value);
       else if (query && query.groupBy === groupBy && query.groups.includes(value)) {
@@ -902,14 +911,14 @@ export function createRunTrafficView(api) {
       } else if (query && query.groupBy === groupBy) groups = [...query.groups, value];
       else groups = [value];
       if (groups.length === 0) return select([], current.selection.anchor);
-      const counts = new Map(grouping.counts.map((c) => [c.value, c.count]));
+      const counts = new Map(counted.map((c) => [c.value, c.count]));
       const count = groups.reduce((sum, v) => sum + (counts.get(v) ?? 0), 0);
       update((state) => ({
         ...state,
         selection: {
           ...emptySelection(),
           anchor: state.selection.anchor,
-          query: { groupBy, groups, asOf: grouping.asOf, count },
+          query: { groupBy, groups, asOf, count },
         },
       }));
     },
