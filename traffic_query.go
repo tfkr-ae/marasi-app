@@ -132,24 +132,48 @@ func (a *App) QueryArmoryRunTraffic(runID string, req TrafficPageRequest) (Traff
 	return a.QueryTraffic(req)
 }
 
+// ArmoryRunTrafficCounts is an Armory run's pairs counted by one field.
+type ArmoryRunTrafficCounts struct {
+	// Counts holds each distinct value with its exact count, most common
+	// first. Pairs with no response yet count under "".
+	Counts []*domain.TrafficFieldCount
+	// AsOf bounds the counts: only pairs with an id at or below it count.
+	// A query Selection of the run or a group passes it as its as_of.
+	// "" when the project has no pairs.
+	AsOf string
+}
+
 // CountArmoryRunTraffic counts an Armory run's pairs, whatever their content
-// type, by field ("status_code" or "length"): each distinct value with its
-// exact count, most common first. Pairs with no response yet count under "".
-// A malformed run id or a field Marasi cannot count by is a Go error.
-func (a *App) CountArmoryRunTraffic(runID string, field string) (domain.TrafficFieldCounts, error) {
+// type, by field ("status_code" or "length") under asOf, or under the newest
+// pair when asOf is "": each distinct value with its exact count, most
+// common first, and the as_of used. A malformed run id or as_of, or a field
+// Marasi cannot count by, is a Go error.
+func (a *App) CountArmoryRunTraffic(runID string, field string, asOf string) (ArmoryRunTrafficCounts, error) {
 	query, err := armoryRunQuery(runID)
 	if err != nil {
-		return domain.TrafficFieldCounts{}, fmt.Errorf("counting run traffic: %w", err)
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
+	}
+	if asOf == "" {
+		// A one-pair read reports the newest pair as its bound.
+		page, err := a.QueryArmoryRunTraffic(runID, TrafficPageRequest{Limit: 1})
+		if err != nil {
+			return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
+		}
+		asOf = page.AsOf
+	}
+	bound, err := parseOptionalPairID("as_of", asOf)
+	if err != nil {
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
 	}
 	traffic, err := a.Proxy.GetTrafficRepo()
 	if err != nil {
-		return domain.TrafficFieldCounts{}, fmt.Errorf("counting run traffic: %w", err)
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
 	}
-	counts, err := traffic.CountTrafficByField(domain.TrafficFieldCountQuery{Text: query, Field: field})
+	counts, err := traffic.CountTrafficByField(domain.TrafficFieldCountQuery{Text: query, Field: field, AsOf: bound})
 	if err != nil {
-		return domain.TrafficFieldCounts{}, fmt.Errorf("counting run traffic: %w", err)
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
 	}
-	return counts, nil
+	return ArmoryRunTrafficCounts{Counts: counts.Counts, AsOf: asOf}, nil
 }
 
 // armoryRunQuery is the traffic query for the pairs the Armory run runID

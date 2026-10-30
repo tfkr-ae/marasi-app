@@ -123,6 +123,7 @@ export const FACTORY_ACTIONS = [
     ["next-run", "Next Run", "Select the next run for this template", "next run", primary("shift+]")],
     ["previous-run", "Previous Run", "Select the previous run for this template", "previous run", primary("shift+[")],
     ["open-first-request", "Open First Request", "Open the first request in the selected run", "open request drawer", primary("shift+o")],
+    ["select-all-traffic", "Select All Traffic", "Select every request in the selected run's traffic", "select, all, traffic, requests", primary("a"), { yieldsToEditors: true }],
     ["edit-template", "Edit Armory Template", "Jump to the request template editor", "edit template request", primary("shift+e")],
     ["create-template", "Create Armory Template", "Create a new request template", "create, new, template", primary("shift+t")],
     ["save-template", "Save Armory Template", "Save the selected request template", "save, template", primary("shift+s")],

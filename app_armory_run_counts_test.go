@@ -6,10 +6,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/tfkr-ae/marasi/domain"
 )
 
-func countLabels(counts domain.TrafficFieldCounts) []string {
+func countLabels(counts ArmoryRunTrafficCounts) []string {
 	got := make([]string, 0, len(counts.Counts))
 	for _, c := range counts.Counts {
 		got = append(got, fmt.Sprintf("%s=%d", c.Value, c.Count))
@@ -30,7 +29,7 @@ func TestCountArmoryRunTrafficCountsTheRunsPairsByStatusIncludingPendingPairs(t 
 	// The run's pairs count whatever their content type.
 	excludeContentTypes(t, app, "image/png")
 
-	counts, err := app.CountArmoryRunTraffic(run.String(), "status_code")
+	counts, err := app.CountArmoryRunTraffic(run.String(), "status_code", "")
 
 	if err != nil {
 		t.Fatalf("counting run traffic: %v", err)
@@ -49,7 +48,7 @@ func TestCountArmoryRunTrafficCountsTheRunsPairsByLength(t *testing.T) {
 	captureRunPair(t, app, run, runPair{status: 404, length: 1251})
 	captureRunPair(t, app, run, runPair{})
 
-	counts, err := app.CountArmoryRunTraffic(run.String(), "length")
+	counts, err := app.CountArmoryRunTraffic(run.String(), "length", "")
 
 	if err != nil {
 		t.Fatalf("counting run traffic: %v", err)
@@ -63,7 +62,7 @@ func TestCountArmoryRunTrafficCountsTheRunsPairsByLength(t *testing.T) {
 func TestCountArmoryRunTrafficCountsNothingForARunWithNoPairs(t *testing.T) {
 	app := newScratchpadApp(t)
 
-	counts, err := app.CountArmoryRunTraffic(uuid.New().String(), "status_code")
+	counts, err := app.CountArmoryRunTraffic(uuid.New().String(), "status_code", "")
 
 	if err != nil {
 		t.Fatalf("counting run traffic: %v", err)
@@ -73,10 +72,50 @@ func TestCountArmoryRunTrafficCountsNothingForARunWithNoPairs(t *testing.T) {
 	}
 }
 
+func TestCountArmoryRunTrafficCountsUnderTheAsOfItReports(t *testing.T) {
+	app := newScratchpadApp(t)
+	run := uuid.New()
+	captureRunPair(t, app, run, runPair{status: 404, length: 5})
+	newest := captureRunPair(t, app, run, runPair{status: 404, length: 5})
+
+	first, err := app.CountArmoryRunTraffic(run.String(), "status_code", "")
+	if err != nil {
+		t.Fatalf("counting run traffic: %v", err)
+	}
+	captureRunPair(t, app, run, runPair{status: 404, length: 5})
+	captureRunPair(t, app, run, runPair{status: 500, length: 3})
+	again, err := app.CountArmoryRunTraffic(run.String(), "status_code", first.AsOf)
+	if err != nil {
+		t.Fatalf("counting run traffic: %v", err)
+	}
+
+	if first.AsOf != newest.String() {
+		t.Fatalf("wanted the count's as_of to be the newest pair %s, got %q", newest, first.AsOf)
+	}
+	if again.AsOf != first.AsOf {
+		t.Fatalf("wanted the as_of passed back, got %q", again.AsOf)
+	}
+	// Pairs captured after the as_of are left out.
+	want := []string{"404=2"}
+	if got := countLabels(again); !slices.Equal(got, want) {
+		t.Fatalf("wanted %v, got %v", want, got)
+	}
+}
+
+func TestCountArmoryRunTrafficRefusesABadAsOf(t *testing.T) {
+	app := newScratchpadApp(t)
+
+	_, err := app.CountArmoryRunTraffic(uuid.New().String(), "status_code", "latest")
+
+	if err == nil {
+		t.Fatalf("wanted an error for a malformed as_of")
+	}
+}
+
 func TestCountArmoryRunTrafficRefusesABadRunID(t *testing.T) {
 	app := newScratchpadApp(t)
 
-	_, err := app.CountArmoryRunTraffic(`x" OR host = "*`, "status_code")
+	_, err := app.CountArmoryRunTraffic(`x" OR host = "*`, "status_code", "")
 
 	if err == nil {
 		t.Fatalf("wanted an error for a malformed run id")
@@ -86,7 +125,7 @@ func TestCountArmoryRunTrafficRefusesABadRunID(t *testing.T) {
 func TestCountArmoryRunTrafficRefusesAFieldItCannotCountBy(t *testing.T) {
 	app := newScratchpadApp(t)
 
-	_, err := app.CountArmoryRunTraffic(uuid.New().String(), "host")
+	_, err := app.CountArmoryRunTraffic(uuid.New().String(), "host", "")
 
 	if err == nil {
 		t.Fatalf("wanted an error for a field it cannot count by")

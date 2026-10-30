@@ -11,7 +11,11 @@ import {
   openRunPair,
   runTrafficNewLabel,
   runRowMenuTarget,
+  groupSelection,
+  isPairSelected,
+  runGroupMenuTarget,
   runSelectionLabel,
+  runSelectionSpec,
   runTrafficGroups,
   runTrafficRows,
   sortedColumn,
@@ -84,16 +88,17 @@ function fakeApi(pairs) {
       };
     },
   };
-  api.countRunTraffic = async (runId, field) => {
-    api.calls.push({ runId, count: field });
+  api.countRunTraffic = async (runId, field, asOf = "") => {
+    api.calls.push({ runId, count: field, asOf });
+    const bound = asOf || api.pairs.reduce((max, p) => (p.ID > max ? p.ID : max), "");
     const counts = new Map();
-    for (const p of api.pairs.filter((p) => p.Metadata.armory_run_id === runId)) {
+    for (const p of api.pairs.filter((p) => p.Metadata.armory_run_id === runId && p.ID <= bound)) {
       const value = KEYS[field](p) == null ? "" : String(KEYS[field](p));
       counts.set(value, (counts.get(value) ?? 0) + 1);
     }
     // Most common first, as Marasi orders them; the store re-sorts.
     const Counts = [...counts].map(([Value, Count]) => ({ Value, Count })).sort((a, b) => b.Count - a.Count);
-    return { Counts };
+    return { Counts, AsOf: bound };
   };
   return api;
 }
@@ -497,14 +502,14 @@ function fakeLedger() {
     sent,
     pairNumber: () => null,
     sendToNewLaunchpad: async (selection, count, { numberOf }) => {
-      sent.push({ method: "sendToNewLaunchpad", selection, count, numbers: selection.ids.map(numberOf) });
+      sent.push({ method: "sendToNewLaunchpad", selection, count, numbers: selection.ids?.map(numberOf) });
       return { launchpadId: "L9" };
     },
-    addToLaunchpad: async (selection, id) => (sent.push({ method: "addToLaunchpad", selection, id }), selection.ids.length),
-    linkToFinding: async (selection, id) => (sent.push({ method: "linkToFinding", selection, id }), selection.ids.length),
-    unlinkFromFinding: async (selection, id) => (sent.push({ method: "unlinkFromFinding", selection, id }), selection.ids.length),
-    linkToTestCase: async (selection, id) => (sent.push({ method: "linkToTestCase", selection, id }), selection.ids.length),
-    unlinkFromTestCase: async (selection, id) => (sent.push({ method: "unlinkFromTestCase", selection, id }), selection.ids.length),
+    addToLaunchpad: async (selection, id) => (sent.push({ method: "addToLaunchpad", selection, id }), selection.ids?.length ?? 0),
+    linkToFinding: async (selection, id) => (sent.push({ method: "linkToFinding", selection, id }), selection.ids?.length ?? 0),
+    unlinkFromFinding: async (selection, id) => (sent.push({ method: "unlinkFromFinding", selection, id }), selection.ids?.length ?? 0),
+    linkToTestCase: async (selection, id) => (sent.push({ method: "linkToTestCase", selection, id }), selection.ids?.length ?? 0),
+    unlinkFromTestCase: async (selection, id) => (sent.push({ method: "unlinkFromTestCase", selection, id }), selection.ids?.length ?? 0),
   };
 }
 
@@ -826,4 +831,229 @@ test("a pair in a group opens in the drawer, and right-clicking it targets it", 
   view.openPair(id(9));
   assert.equal(openNumber(view), 9);
   assert.equal(runRowMenuTarget(get(view), id(3)).pairs[0].Number, 3);
+});
+
+// A whole group or the run: a Selection in Marasi's query shape.
+
+// The pairs a fake Marasi applies `selection` to: its ids, or the pairs
+// its query matches up to its as_of.
+function pairsIn(api, selection) {
+  if (selection.ids) return selection.ids;
+  const match = /^metadata\.armory_run_id = "([^"]+)"(?: AND \((.+)\))?$/.exec(selection.query);
+  if (!match) throw new Error(`the fake can't read ${selection.query}`);
+  const [, run, narrowing] = match;
+  const any = narrowing ? narrowing.split(" OR ").map(narrowedBy) : [() => true];
+  return api.pairs
+    .filter((p) => p.Metadata.armory_run_id === run && p.ID <= selection.as_of)
+    .filter((p) => any.some((matches) => matches(p)))
+    .map((p) => p.ID);
+}
+
+// A run of PAGE + 5 404s, folded as most of the run, and two 403s.
+function bigRun() {
+  return [...many(RUN_TRAFFIC_PAGE_SIZE + 5, { status: 404 }), pair(RUN_TRAFFIC_PAGE_SIZE + 6, { status: 403 }), pair(RUN_TRAFFIC_PAGE_SIZE + 7, { status: 403 })];
+}
+
+test("⌘-click on a group header selects every pair in the group, read or not, as its query under the count's as_of", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+  assert.equal(groupOf(view, "404").folded, true);
+
+  view.toggleGroupSelection("404");
+
+  assert.equal(runSelectionLabel(get(view)), `${RUN_TRAFFIC_PAGE_SIZE + 5} selected`);
+  await view.toggleGroup("404");
+  const target = runRowMenuTarget(get(view), id(1));
+  assert.deepEqual(target.selection, {
+    query: 'metadata.armory_run_id = "run-1" AND (status_code = 404)',
+    exclusion: [],
+    as_of: id(RUN_TRAFFIC_PAGE_SIZE + 7),
+  });
+  assert.equal(target.count, RUN_TRAFFIC_PAGE_SIZE + 5);
+
+  // A 404 the run sends later is not in the Selection.
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 8, { status: 404 });
+  view.flush();
+  await view.settled();
+  const ledger = fakeLedger();
+  await runArmoryAction({ type: "new-launchpad" }, runRowMenuTarget(get(view), id(1)), { ledger });
+  const [{ selection, count }] = ledger.sent;
+  assert.equal(count, RUN_TRAFFIC_PAGE_SIZE + 5);
+  assert.deepEqual(pairsIn(api, selection), many(RUN_TRAFFIC_PAGE_SIZE + 5).map((p) => p.ID));
+});
+
+const headerStates = (view) =>
+  runTrafficGroups(get(view)).map((g) => `${g.value}:${groupSelection(get(view), g) || "-"}`);
+
+test("⌘-clicking more group headers selects them all, and ⌘-clicking a selected one drops it", async () => {
+  const { api, view } = await opened(fuzzRun());
+  await view.groupBy("status");
+
+  view.toggleGroupSelection("403");
+  view.toggleGroupSelection("500");
+
+  assert.equal(runSelectionLabel(get(view)), "3 selected");
+  assert.deepEqual(headerStates(view), ["200:-", "500:all", ":-", "403:all", "404:-"]);
+  assert.deepEqual(
+    pairsIn(api, runSelectionSpec(get(view))).sort(),
+    [id(3), id(4), id(9)],
+  );
+  assert.equal(isPairSelected(get(view), id(9)), true);
+  assert.equal(isPairSelected(get(view), id(8)), false);
+
+  view.toggleGroupSelection("403");
+
+  assert.equal(runSelectionLabel(get(view)), "1 selected");
+  assert.deepEqual(headerStates(view), ["200:-", "500:all", ":-", "403:-", "404:-"]);
+  view.toggleGroupSelection("500");
+  assert.equal(runSelectionSpec(get(view)), null);
+});
+
+test("a group header says some selected when the Selection holds some of its pairs, and all when it holds every one", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  view.clickPair(id(3), { toggle: true });
+  assert.deepEqual(headerStates(view), ["200:-", "500:-", ":-", "403:some", "404:-"]);
+  view.clickPair(id(9), { toggle: true });
+  assert.deepEqual(headerStates(view), ["200:-", "500:-", ":-", "403:all", "404:-"]);
+});
+
+test("⌘-clicking a group header while pairs are picked one by one selects the group instead", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  view.clickPair(id(8), { toggle: true });
+  view.toggleGroupSelection("403");
+  assert.deepEqual([...pairsIn({ pairs: fuzzRun() }, runSelectionSpec(get(view)))], [id(3), id(9)]);
+});
+
+test("⌘-clicking a pair while a group is selected goes on from the group's rows read", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  view.toggleGroupSelection("403");
+  view.clickPair(id(8), { toggle: true });
+  assert.deepEqual(runSelectionSpec(get(view)), { ids: [id(3), id(9), id(8)] });
+  view.clickPair(id(3), { toggle: true });
+  assert.deepEqual(runSelectionSpec(get(view)), { ids: [id(9), id(8)] });
+});
+
+test("a plain click on a pair empties a group Selection", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  view.toggleGroupSelection("403");
+  view.clickPair(id(8));
+  assert.equal(runSelectionSpec(get(view)), null);
+  assert.equal(runSelectionLabel(get(view)), "");
+  assert.equal(openNumber(view), 8);
+});
+
+test("⌘A selects every pair in the run, folded groups too, as the run's query under the count's as_of", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+
+  await view.selectAll();
+
+  const total = RUN_TRAFFIC_PAGE_SIZE + 7;
+  assert.equal(runSelectionLabel(get(view)), `${total} selected`);
+  assert.deepEqual(runSelectionSpec(get(view)), {
+    query: 'metadata.armory_run_id = "run-1"',
+    exclusion: [],
+    as_of: id(total),
+  });
+  assert.deepEqual(headerStates(view), ["403:all", "404:all"]);
+  sends(api, view, total + 1, { status: 403 });
+  view.flush();
+  await view.settled();
+  assert.equal(pairsIn(api, runRowMenuTarget(get(view), id(total)).selection).length, total);
+});
+
+test("⌘A on the plain list selects the whole run under the list's as_of, rows not read too", async () => {
+  const { api, view } = await opened(many(RUN_TRAFFIC_PAGE_SIZE + 5));
+
+  await view.selectAll();
+
+  assert.equal(runSelectionLabel(get(view)), `${RUN_TRAFFIC_PAGE_SIZE + 5} selected`);
+  const target = runRowMenuTarget(get(view), id(1));
+  assert.equal(target.count, RUN_TRAFFIC_PAGE_SIZE + 5);
+  assert.deepEqual(target.selection, {
+    query: 'metadata.armory_run_id = "run-1"',
+    exclusion: [],
+    as_of: id(RUN_TRAFFIC_PAGE_SIZE + 5),
+  });
+  // A pair sent after the read joins the rows but not the Selection.
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 6);
+  await view.loadMore();
+  view.flush();
+  assert.equal(isPairSelected(get(view), id(RUN_TRAFFIC_PAGE_SIZE + 6)), false);
+  assert.equal(pairsIn(api, target.selection).length, RUN_TRAFFIC_PAGE_SIZE + 5);
+});
+
+test("⌘-clicking a group header after ⌘A drops that group from the run", async () => {
+  const { api, view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  await view.selectAll();
+  view.toggleGroupSelection("404");
+  assert.equal(runSelectionLabel(get(view)), "5 selected");
+  assert.deepEqual(headerStates(view), ["200:all", "500:all", ":all", "403:all", "404:-"]);
+  assert.deepEqual(pairsIn(api, runSelectionSpec(get(view))).sort(), [id(3), id(4), id(6), id(8), id(9)]);
+});
+
+test("⌘A on a run with no pairs selects nothing", async () => {
+  const { view } = await opened([]);
+  await view.selectAll();
+  assert.equal(runSelectionSpec(get(view)), null);
+});
+
+const menuItem = (menu, path) => path.reduce((items, id) => items.find((it) => it?.id === id)?.sub ?? items.find((it) => it?.id === id), menu);
+
+test("right-clicking a group header targets the whole group and leaves the Selection as it was", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+  view.clickPair(id(RUN_TRAFFIC_PAGE_SIZE + 6), { toggle: true });
+
+  const target = runGroupMenuTarget(get(view), "404");
+
+  assert.deepEqual(selected(view), [id(RUN_TRAFFIC_PAGE_SIZE + 6)]);
+  assert.equal(target.count, RUN_TRAFFIC_PAGE_SIZE + 5);
+  assert.deepEqual(target.selection, {
+    query: 'metadata.armory_run_id = "run-1" AND (status_code = 404)',
+    exclusion: [],
+    as_of: id(RUN_TRAFFIC_PAGE_SIZE + 7),
+  });
+  const menu = armoryMenuFor(target);
+  assert.equal(menuItem(menu, ["launchpad", "lp-new"]).label, `New launchpad with ${RUN_TRAFFIC_PAGE_SIZE + 5} entries`);
+  // The folded group's pairs aren't read, so they can't be listed one by one.
+  assert.equal(menuItem(menu, ["testcase", "t-new"]).disabled, true);
+  assert.equal(menuItem(menu, ["finding", "f-new"]).disabled, true);
+  const ledger = fakeLedger();
+  await runArmoryAction({ type: "link-test-case", id: "T1" }, target, { ledger });
+  assert.equal(pairsIn(api, ledger.sent[0].selection).length, RUN_TRAFFIC_PAGE_SIZE + 5);
+});
+
+test("a new test case from a group header with every pair read attaches every pair in the group", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+
+  const target = runGroupMenuTarget(get(view), "403");
+
+  assert.equal(menuItem(armoryMenuFor(target), ["testcase", "t-new"]).disabled, false);
+  const opened_ = [];
+  await runArmoryAction({ type: "new-test-case" }, target, { ledger: fakeLedger(), newRecord: (kind, o) => opened_.push({ kind, ...o }) });
+  assert.deepEqual(opened_, [{ kind: "testCase", requestIds: [id(3), id(9)] }]);
+});
+
+test("a group's rows stop at its count's as_of, so a whole group holds what it shows", async () => {
+  const api = fakeApi(fuzzRun());
+  const count = api.countRunTraffic;
+  // A 403 the run sends between the count and the groups' reads.
+  api.countRunTraffic = async (...args) => {
+    const counted = await count(...args);
+    if (!api.pairs.some((p) => p.Number === 11)) api.pairs.push(pair(11, { status: 403 }));
+    return counted;
+  };
+  const view = createRunTrafficView(api);
+  await view.open(RUN);
+  await view.groupBy("status");
+
+  assert.equal(groupOf(view, "403").count, 2);
+  assert.deepEqual(groupOf(view, "403").list.rows.map((row) => row.Number), [3, 9]);
 });
