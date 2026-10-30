@@ -860,11 +860,9 @@
 								findings={linkedFindings}
 								testCases={linkedTestCases}
 								onUnlink={(kind, target, title) =>
-									changeLink(
-										openRow,
-										kind === "finding" ? "unlink-finding" : "unlink-test-case",
-										target.ID,
-										title,
+									runRowAction(
+										{ type: kind === "finding" ? "unlink-finding" : "unlink-test-case", id: target.ID, title },
+										pairTarget(openRow),
 									)}
 							/>
 						</svelte:fragment>
