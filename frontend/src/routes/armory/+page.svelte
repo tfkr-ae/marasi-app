@@ -40,11 +40,14 @@
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import {
+		isColumnSortable,
 		openRunPair,
 		runRowMenuTarget,
 		runSelectionLabel,
+		runTrafficGroups,
 		runTrafficNewLabel,
 		runTrafficRows,
+		runTrafficTotal,
 	} from "../../stores/createArmoryRunTraffic.js";
 	import { activeProject, appState } from "../../stores";
 	import { ledgerStore } from "../../stores/ledgerStore";
@@ -812,6 +815,10 @@
 					bind:open={trafficOpen}
 					requests={selectedRun ? requests : null}
 					hasMore={$runTraffic.list.hasMore}
+					groupBy={$runTraffic.groupBy}
+					groups={runTrafficGroups($runTraffic)}
+					total={runTrafficTotal($runTraffic)}
+					isSortable={(column) => isColumnSortable($runTraffic, column)}
 					sort={$runTraffic.sort}
 					newLabel={runTrafficNewLabel($runTraffic)}
 					scrollTop={$runTraffic.scrollTop}
@@ -823,8 +830,15 @@
 					onMenu={openRowMenu}
 					onSort={(column) =>
 						runTraffic.sortBy(column).catch((err) => console.error("Sorting run traffic failed:", err))}
-					onLoadMore={() =>
-						runTraffic.loadMore().catch((err) => console.error("Reading run traffic failed:", err))}
+					onLoadMore={(value) =>
+						runTraffic.loadMore(value).catch((err) => console.error("Reading run traffic failed:", err))}
+					onGroupBy={(groupBy) =>
+						runTraffic.groupBy(groupBy).catch((err) => console.error("Grouping run traffic failed:", err))}
+					onGroupClick={(group) =>
+						runTraffic.toggleGroup(group.value).catch((err) => console.error("Reading run traffic failed:", err))}
+					onExpandAll={() =>
+						runTraffic.expandAll().catch((err) => console.error("Reading run traffic failed:", err))}
+					onCollapseAll={runTraffic.collapseAll}
 					onShowNew={() =>
 						runTraffic.showNew().catch((err) => console.error("Reading run traffic failed:", err))}
 					onScroll={runTraffic.setScrollTop}

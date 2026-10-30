@@ -6,11 +6,13 @@ import { get } from "svelte/store";
 import { armoryMenuFor, runArmoryAction } from "../lib/armory/rowMenu.js";
 import {
   RUN_TRAFFIC_PAGE_SIZE,
+  isColumnSortable,
   createRunTrafficView,
   openRunPair,
   runTrafficNewLabel,
   runRowMenuTarget,
   runSelectionLabel,
+  runTrafficGroups,
   runTrafficRows,
   sortedColumn,
 } from "./createArmoryRunTraffic.js";
@@ -58,6 +60,7 @@ function fakeApi(pairs) {
       const asOf = req.AsOf || null;
       const matching = api.pairs
         .filter((p) => p.Metadata.armory_run_id === runId)
+        .filter(narrowedBy(req.Query))
         .filter((p) => !asOf || p.ID <= asOf)
         .sort((a, b) => {
           const [ka, kb] = [key(a), key(b)];
@@ -81,7 +84,29 @@ function fakeApi(pairs) {
       };
     },
   };
+  api.countRunTraffic = async (runId, field) => {
+    api.calls.push({ runId, count: field });
+    const counts = new Map();
+    for (const p of api.pairs.filter((p) => p.Metadata.armory_run_id === runId)) {
+      const value = KEYS[field](p) == null ? "" : String(KEYS[field](p));
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    // Most common first, as Marasi orders them; the store re-sorts.
+    const Counts = [...counts].map(([Value, Count]) => ({ Value, Count })).sort((a, b) => b.Count - a.Count);
+    return { Counts };
+  };
   return api;
+}
+
+// The narrowings the store sends for a group: `field = n`, or
+// `NOT field >= 0` for the pairs with no value.
+function narrowedBy(query) {
+  if (!query) return () => true;
+  const pending = /^NOT (\w+) >= 0$/.exec(query);
+  if (pending) return (p) => KEYS[pending[1]](p) == null;
+  const equals = /^(\w+) = (\d+)$/.exec(query);
+  if (equals) return (p) => KEYS[equals[1]](p) === Number(equals[2]);
+  throw new Error(`the fake can't narrow by ${query}`);
 }
 
 const numbers = (view) => runTrafficRows(get(view)).map((row) => row.Number);
@@ -548,4 +573,257 @@ test("the Selection keeps its pairs through a sort whose first page doesn't reac
   const target = runRowMenuTarget(get(view), id(1));
   assert.deepEqual(target.selection, { ids: [id(1), id(2)] });
   assert.deepEqual(target.pairs.map((p) => p.Number).sort(), [1, 2]);
+});
+
+// Grouping: one section per status code or length, each a narrowing of the
+// run read a page at a time.
+
+// 404 x5 at 1245 B, 403 x2 at 1245 B, a 500 at 88 B, a 200 at 1251 B, and a
+// pair with no response yet.
+function fuzzRun() {
+  return [
+    pair(1, { status: 404, length: 1245 }),
+    pair(2, { status: 404, length: 1245 }),
+    pair(3, { status: 403, length: 1245 }),
+    pair(4, { status: 500, length: 88 }),
+    pair(5, { status: 404, length: 1245 }),
+    pair(6, { status: 0 }),
+    pair(7, { status: 404, length: 1245 }),
+    pair(8, { status: 200, length: 1251 }),
+    pair(9, { status: 403, length: 1245 }),
+    pair(10, { status: 404, length: 1245 }),
+  ];
+}
+
+const groups = (view) => runTrafficGroups(get(view)).map((g) => `${g.value}=${g.count}`);
+
+test("grouped by status, the run's groups are listed rarest first, ties by value, pending last among them", async () => {
+  const { api, view } = await opened(fuzzRun());
+
+  await view.groupBy("status");
+
+  assert.deepEqual(groups(view), ["200=1", "500=1", "=1", "403=2", "404=5"]);
+  assert.equal(api.calls.find((c) => c.count)?.count, "status_code");
+  const byValue = Object.fromEntries(runTrafficGroups(get(view)).map((g) => [g.value, g]));
+  assert.equal(byValue["403"].narrowing, "status_code = 403");
+  assert.equal(byValue[""].narrowing, "NOT status_code >= 0");
+  assert.equal(byValue["403"].query, `metadata.armory_run_id = "${RUN}" AND (status_code = 403)`);
+  assert.equal(byValue["404"].share, 50);
+});
+
+const groupOf = (view, value) => runTrafficGroups(get(view)).find((g) => g.value === value);
+
+test("a group holding more than 40 % of the run starts folded, and the open groups read their rows", async () => {
+  const { api, view } = await opened(fuzzRun());
+  await view.groupBy("status");
+
+  assert.equal(groupOf(view, "404").folded, true);
+  assert.equal(groupOf(view, "403").folded, false);
+  // The table shows the open groups' rows, group by group.
+  assert.deepEqual(numbers(view), [8, 4, 6, 3, 9]);
+  assert.ok(!api.calls.some((c) => c.Query === "status_code = 404"));
+});
+
+test("clicking a group header folds it, and unfolding a group reads its rows", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+
+  await view.toggleGroup("403");
+  assert.deepEqual(numbers(view), [8, 4, 6]);
+  await view.toggleGroup("404");
+  assert.deepEqual(numbers(view), [8, 4, 6, 1, 2, 5, 7, 10]);
+});
+
+test("Collapse all folds every group and Expand all opens them all", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+
+  await view.collapseAll();
+  assert.deepEqual(numbers(view), []);
+  assert.ok(runTrafficGroups(get(view)).every((g) => g.folded));
+
+  await view.expandAll();
+  assert.deepEqual(numbers(view), [8, 4, 6, 3, 9, 1, 2, 5, 7, 10]);
+});
+
+test("folds reset when the grouping changes", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  await view.toggleGroup("200");
+
+  await view.groupBy("length");
+
+  // 1245 B holds 7 of 10 pairs.
+  assert.deepEqual(groups(view), ["88=1", "1251=1", "=1", "1245=7"]);
+  assert.deepEqual(
+    runTrafficGroups(get(view)).map((g) => g.folded),
+    [false, false, false, true],
+  );
+  assert.equal(groupOf(view, "1245").narrowing, "length = 1245");
+});
+
+test("None goes back to the one list in # order", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  await view.groupBy(null);
+  assert.equal(runTrafficGroups(get(view)), null);
+  assert.deepEqual(numbers(view), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+});
+
+test("a group reads more of its rows a page at a time", async () => {
+  const big = many(RUN_TRAFFIC_PAGE_SIZE + 3, { status: 403 });
+  const { api, view } = await opened([...big, pair(9000, { status: 500 })]);
+  await view.groupBy("status");
+  // 403 holds nearly all the run, so it starts folded.
+  await view.toggleGroup("403");
+  assert.equal(groupOf(view, "403").list.rows.length, RUN_TRAFFIC_PAGE_SIZE);
+
+  await view.loadMore("403");
+
+  assert.equal(groupOf(view, "403").list.rows.length, RUN_TRAFFIC_PAGE_SIZE + 3);
+  assert.equal(api.calls.at(-1).Query, "status_code = 403");
+  assert.equal(api.calls.at(-1).Cursor, String(RUN_TRAFFIC_PAGE_SIZE));
+});
+
+test("grouped by status, Status doesn't sort and Length sorts within each group", async () => {
+  const run = [
+    pair(1, { status: 404, length: 30 }),
+    pair(2, { status: 404, length: 10 }),
+    pair(3, { status: 200, length: 5 }),
+    pair(4, { status: 404, length: 20 }),
+    pair(5, { status: 200, length: 1 }),
+    pair(6, { status: 500, length: 1 }),
+  ];
+  const { view } = await opened(run);
+  await view.groupBy("status");
+  await view.expandAll();
+
+  await view.sortBy("status");
+  assert.equal(sortedColumn(get(view)), null);
+  assert.equal(isColumnSortable(get(view), "status"), false);
+
+  await view.sortBy("size");
+  assert.deepEqual(groups(view), ["500=1", "200=2", "404=3"]);
+  assert.deepEqual(numbers(view), [6, 5, 3, 2, 4, 1]);
+  await view.sortBy("size");
+  assert.deepEqual(numbers(view), [6, 3, 5, 1, 4, 2]);
+});
+
+test("grouped by length, a Length sort orders the groups by length, pending last", async () => {
+  const run = [
+    pair(1, { length: 30 }),
+    pair(2, { length: 10 }),
+    pair(3, { length: 30 }),
+    pair(4, { status: 0 }),
+    pair(5, { length: 20 }),
+  ];
+  const { api, view } = await opened(run);
+  await view.groupBy("length");
+  assert.equal(isColumnSortable(get(view), "size"), true);
+
+  await view.sortBy("size");
+  assert.deepEqual(groups(view), ["10=1", "20=1", "30=2", "=1"]);
+  // Within a length group the rows stay in # order.
+  assert.equal(api.calls.at(-1).OrderBy, "requested_at");
+
+  await view.sortBy("size");
+  assert.deepEqual(groups(view), ["30=2", "20=1", "10=1", "=1"]);
+  await view.sortBy("size");
+  assert.deepEqual(groups(view), ["10=1", "20=1", "=1", "30=2"]);
+});
+
+test("grouping by the sorted column's field puts the sort back to # order, and other sorts stay", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.sortBy("status");
+  await view.groupBy("status");
+  assert.equal(sortedColumn(get(view)), null);
+
+  await view.sortBy("size");
+  await view.groupBy("length");
+  assert.equal(sortedColumn(get(view)), null);
+
+  await view.sortBy("time");
+  await view.groupBy("status");
+  assert.equal(sortedColumn(get(view)), "time");
+});
+
+test("the grouping stays for the next run opened, with that run's folds", async () => {
+  const api = fakeApi([...fuzzRun(), pair(20, { run: "run-2", status: 403 }), pair(21, { run: "run-2", status: 200 })]);
+  const view = createRunTrafficView(api);
+  await view.open(RUN);
+  await view.groupBy("status");
+  await view.open("run-2");
+  assert.equal(get(view).groupBy, "status");
+  assert.deepEqual(groups(view), ["200=1", "403=1"]);
+  assert.ok(runTrafficGroups(get(view)).every((g) => g.folded));
+});
+
+test("a live run's counts follow its pairs while the open groups' rows stay put", async () => {
+  const { api, view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  const before = numbers(view);
+
+  sends(api, view, 11, { status: 403 });
+  sends(api, view, 12, { status: 418 });
+  view.flush();
+  await view.settled();
+
+  assert.deepEqual(numbers(view), before);
+  assert.equal(groupOf(view, "403").count, 3);
+  // A group the run adds joins the end until the view reads again.
+  assert.deepEqual(groups(view), ["200=1", "500=1", "=1", "403=3", "404=5", "418=1"]);
+  assert.equal(groupOf(view, "404").share, (5 / 12) * 100);
+  assert.equal(runTrafficNewLabel(get(view)), "2 new");
+
+  await view.showNew();
+
+  assert.deepEqual(groups(view), ["200=1", "418=1", "500=1", "=1", "403=3", "404=5"]);
+  assert.deepEqual(numbers(view), [8, 12, 4, 6, 3, 9, 11]);
+  assert.equal(runTrafficNewLabel(get(view)), "");
+});
+
+test("a pending pair's response counts it in its status group and fills its row in place", async () => {
+  const { api, view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  const pending = api.pairs.find((p) => p.Number === 6);
+  pending.StatusCode = 500;
+  pending.Length = 12;
+  view.onResponse({ ID: pending.ID, StatusCode: 500, Length: 12 });
+  view.flush();
+  await view.settled();
+
+  assert.equal(groupOf(view, "500").count, 2);
+  // The emptied pending group stays while it shows its row.
+  assert.equal(groupOf(view, "").count, 0);
+  assert.equal(runTrafficRows(get(view)).find((row) => row.Number === 6).StatusCode, 500);
+});
+
+test("a grouped view with no rows yet reads the first pairs a run sends in place", async () => {
+  const { api, view } = await opened([]);
+  await view.groupBy("status");
+  assert.deepEqual(runTrafficGroups(get(view)), []);
+
+  sends(api, view, 1, { status: 404 });
+  view.flush();
+  await view.settled();
+
+  assert.deepEqual(groups(view), ["404=1"]);
+  assert.deepEqual(numbers(view), [1]);
+});
+
+test("⇧-click selects over the rows shown in the open groups, skipping folded ones", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  // Shown: 200 [8], 500 [4], pending [6], 403 [3, 9]; 404 folded.
+  view.clickPair(id(8));
+  view.clickPair(id(3), { range: true });
+  assert.deepEqual([...get(view).selection.ids], [id(8), id(4), id(6), id(3)]);
+});
+
+test("a pair in a group opens in the drawer, and right-clicking it targets it", async () => {
+  const { view } = await opened(fuzzRun());
+  await view.groupBy("status");
+  view.openPair(id(9));
+  assert.equal(openNumber(view), 9);
+  assert.equal(runRowMenuTarget(get(view), id(3)).pairs[0].Number, 3);
 });

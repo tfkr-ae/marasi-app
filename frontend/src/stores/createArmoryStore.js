@@ -61,6 +61,7 @@ export function createArmoryStore(api) {
     GetArmoryTemplates,
     GetArmoryWordlists,
     QueryArmoryRunTraffic,
+    CountArmoryRunTraffic,
     PreviewArmoryWordlist,
     StartArmoryRun,
     UpdateArmoryTemplate,
@@ -73,6 +74,7 @@ export function createArmoryStore(api) {
   // flushes its buffered events.
   const runTraffic = createRunTrafficView({
     queryRunTraffic: (runId, req) => QueryArmoryRunTraffic(runId, req),
+    countRunTraffic: (runId, field) => CountArmoryRunTraffic(runId, field),
   });
 
   function upsertRun(run) {

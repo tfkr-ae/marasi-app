@@ -27,3 +27,17 @@ export function stepRequest(rows, openId, delta) {
   const index = current + delta;
   return current === -1 || index < 0 || index >= rows.length ? -1 : index;
 }
+
+/**
+ * A group header's value: the status code, the exact length in bytes, or
+ * "…" for the pairs with no response yet ("").
+ */
+export function groupLabel(groupBy, value) {
+  if (value === "") return "…";
+  return groupBy === "length" ? `${Number(value).toLocaleString("en-US")} B` : value;
+}
+
+/** A group's share of the run, with one decimal so the points line up. */
+export function shareText(share) {
+  return `${share.toFixed(1)}%`;
+}

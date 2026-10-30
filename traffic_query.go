@@ -117,11 +117,10 @@ func (a *App) QueryTraffic(req TrafficPageRequest) (TrafficQueryResult, error) {
 // narrows the run further ("" for all of it, or a group such as
 // `status_code = 403`); req.OrderBy "" is "requested_at", oldest first.
 func (a *App) QueryArmoryRunTraffic(runID string, req TrafficPageRequest) (TrafficQueryResult, error) {
-	id, err := uuid.Parse(runID)
+	query, err := armoryRunQuery(runID)
 	if err != nil {
-		return TrafficQueryResult{}, fmt.Errorf("querying run traffic: run id %q: %w", runID, err)
+		return TrafficQueryResult{}, fmt.Errorf("querying run traffic: %w", err)
 	}
-	query := "metadata.armory_run_id = " + strconv.Quote(id.String())
 	if req.Query != "" {
 		query += " AND (" + req.Query + ")"
 	}
@@ -131,6 +130,36 @@ func (a *App) QueryArmoryRunTraffic(runID string, req TrafficPageRequest) (Traff
 	}
 	req.IgnoreExclusion = true
 	return a.QueryTraffic(req)
+}
+
+// CountArmoryRunTraffic counts an Armory run's pairs, whatever their content
+// type, by field ("status_code" or "length"): each distinct value with its
+// exact count, most common first. Pairs with no response yet count under "".
+// A malformed run id or a field Marasi cannot count by is a Go error.
+func (a *App) CountArmoryRunTraffic(runID string, field string) (domain.TrafficFieldCounts, error) {
+	query, err := armoryRunQuery(runID)
+	if err != nil {
+		return domain.TrafficFieldCounts{}, fmt.Errorf("counting run traffic: %w", err)
+	}
+	traffic, err := a.Proxy.GetTrafficRepo()
+	if err != nil {
+		return domain.TrafficFieldCounts{}, fmt.Errorf("counting run traffic: %w", err)
+	}
+	counts, err := traffic.CountTrafficByField(domain.TrafficFieldCountQuery{Text: query, Field: field})
+	if err != nil {
+		return domain.TrafficFieldCounts{}, fmt.Errorf("counting run traffic: %w", err)
+	}
+	return counts, nil
+}
+
+// armoryRunQuery is the traffic query for the pairs the Armory run runID
+// sent. Marasi indexes it.
+func armoryRunQuery(runID string) (string, error) {
+	id, err := uuid.Parse(runID)
+	if err != nil {
+		return "", fmt.Errorf("run id %q: %w", runID, err)
+	}
+	return "metadata.armory_run_id = " + strconv.Quote(id.String()), nil
 }
 
 // parseOptionalPairID parses a pair id the frontend passed back, or returns
