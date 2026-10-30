@@ -90,7 +90,7 @@ A fresh scratchpad has no records and no traffic. Send a few requests through th
  {"key":"escape"},{"waitNoSelector":".logbook-record"},{"waitSelector":".logbook-summary"}]}
 ```
 
-**Group by and wrapping.** A Group by menu draws above the next section's header: the driver's hit test fails the click if it doesn't. The record's panes follow the Ledger drawer's Wrap lines; a pair with a response line over 100,000 characters says `Not wrapped` on that pane only. Proven with a finding and a test case, and `/long` answering 150 KB of `word `:
+**Group by and wrapping.** A Group by menu draws above the next section's header: the driver's hit test fails the click if it doesn't. The record's panes follow the Ledger drawer's Wrap lines; a pair with a response line over 100,000 characters says `Not wrapped` on that pane only. The evidence list opens on the first linked pair (`/profile` here), so pick `/long` in it. Proven with a finding and a test case, and `/long` answering 150 KB of `word `:
 
 ```json
 {"name":"group-by-and-wrap","steps":[
@@ -99,7 +99,7 @@ A fresh scratchpad has no records and no traffic. Send a few requests through th
  {"click":".logbook-summary-findings button","hasText":"<marker>"},{"waitSelector":".logbook-record"},
  {"click":"[data-fix-open=Requests]"},{"click":"[data-fix-search]"},{"insert":"long"},
  {"click":"[data-fix=Requests] button","hasText":"/long"},{"click":"[data-fix-save]"},
- {"waitText":"Not wrapped","within":".logbook-pair"}]}
+ {"click":".logbook-record button","hasText":"/long"},{"waitText":"Not wrapped","within":".logbook-pair"}]}
 ```
 
 Then turn `Wrap lines` off in a Ledger drawer (`[aria-label="Wrap lines"]`) and reopen the record: neither pane has `.cm-lineWrapping` and `Not wrapped` is gone.

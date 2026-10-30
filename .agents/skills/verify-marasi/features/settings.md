@@ -2,6 +2,7 @@
 
 ## Sub-features
 
+- Appearance section: Text size (`Small`/`Default`/`Large`/`X-Large`, saved to `text_size` in `marasi_appconfig.yaml`; the global `⌘=`/`⌘-`/`⌘0` step and reset it) and the Dark mode toggle
 - Vim, syntax mode, line wrapping (`wrap_mode`), default interface, and default port
 - Waypoint management
 - Chrome executable paths and profiles
@@ -15,7 +16,7 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Keyboard & Editor (default), Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`.
+Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `global` (Settings has no page menu) in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
@@ -24,15 +25,23 @@ Shortcuts: every menu shortcut for this feature is a catalog action in context `
 Run `scripts/drive.sh settings` for route proof. For persistence, toggle Vim and confirm `vim_enabled` changed in the isolated `marasi_appconfig.yaml`, then toggle it back and prove the original value was restored:
 
 ```json
-{"name":"vim-off","steps":[{"click":"[data-testid=\"slide-toggle\"]"},{"waitSelector":"[role=switch][aria-checked=false]"}]}
+{"name":"vim-off","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"waitText":"Vim mode","within":"section"},{"click":"section [role=switch]"},{"waitSelector":"section [role=switch][aria-checked=false]"}]}
 ```
 
-The checkbox inside is `display:none`; read state from `[role=switch]`'s `aria-checked`. The toggle has no visible caption (its row reads `Vim mode`); use `section [role=switch]` (the rail's theme switch is also a `[role=switch]`).
+The checkbox inside is `display:none`; read state from `[role=switch]`'s `aria-checked`. The toggle has no visible caption (its row reads `Vim mode`); use `section [role=switch]` with Keyboard & Editor selected (the rail's theme switch is also a `[role=switch]`, and on Appearance `section [role=switch]` is Dark mode, so clicking it without picking the section flips the theme and leaves `vim_enabled` alone).
 
-Keybindings: `{"text":"Configure Keybindings"}` opens the modal (`[data-keybindings-modal]`). The sidebar has two columns: pick a page in `nav[aria-label=Page]` (for example `{"click":"nav[aria-label=Page] button","hasText":"WebSocket"}`), then a state in `nav[aria-label=State]` (`"hasText":"Stream tab"`); selecting a page selects its first state. Row controls have labels: `button[aria-label="Add binding to Ledger"]`, `button[aria-label="Remove ⌃2 from Ledger"]` (the chip text: `⌘2` on macOS), `button[aria-label="Reset Ledger"]`. Adding or re-recording a chip opens `[data-key-capture]`; send the combination with a `key` step. Escape cancels only the capture. Save closes the modal with a `Keybindings saved` toast; a failed save shows `[data-save-error]` and keeps the draft. Prove the result with the shortcut itself and the isolated YAML, then close with Cancel and `Discard` (or Escape when nothing changed) so doctor sees no residue:
+Text size: the Appearance radiogroup `[role=radiogroup][aria-label="Text size"]` holds `[role=radio]` buttons (`aria-checked`); a click writes `text_size` (`small`, `default`, `large`, `xlarge`) and sets the root font size to 14.4, 16, 18 or 20 px (`html[style*="font-size: 18px"]`). `hasText` "Large" also matches X-Large, so pass `"nth":1`. The global `⌘=` and `⌘-` step one size and stop at the ends, and `⌘0` resets to Default; on Linux the driver's Ctrl+=/-/0 reach the page, not Chrome's zoom. Proven:
 
 ```json
-{"name":"kb-save","steps":[{"text":"Configure Keybindings"},{"waitText":"Every page"},{"click":"button[aria-label=\"Add binding to Ledger\"]"},{"waitSelector":"[data-key-capture]"},{"key":"cmd+j"},{"waitText":"Unsaved changes"},{"text":"Save"},{"waitText":"Keybindings saved"},{"key":"cmd+j"},{"waitPath":"/ledger"}]}
+{"name":"text-size","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Appearance"},{"click":"[role=radiogroup][aria-label=\"Text size\"] [role=radio]","hasText":"Large","nth":1},{"waitSelector":"html[style*=\"font-size: 18px\"]"},{"key":"cmd+="},{"waitSelector":"html[style*=\"font-size: 20px\"]"},{"key":"cmd+-"},{"key":"cmd+-"},{"key":"cmd+-"},{"waitSelector":"html[style*=\"font-size: 14.4px\"]"},{"key":"cmd+0"},{"waitSelector":"html[style*=\"font-size: 16px\"]"},{"waitSelector":"[role=radiogroup][aria-label=\"Text size\"] [aria-checked=true]","hasText":"Default"}]}
+```
+
+Px sizes quoted in other feature files (such as the Ledger's 11px CodeMirror) are at Default; they are set in rem and scale with Text size.
+
+Keybindings: in Keyboard & Editor, `{"text":"Configure Keybindings"}` opens the modal (`[data-keybindings-modal]`). The sidebar has two columns: pick a page in `nav[aria-label=Page]` (for example `{"click":"nav[aria-label=Page] button","hasText":"WebSocket"}`), then a state in `nav[aria-label=State]` (`"hasText":"Stream tab"`); selecting a page selects its first state. Row controls have labels: `button[aria-label="Add binding to Ledger"]`, `button[aria-label="Remove ⌃2 from Ledger"]` (the chip text: `⌘2` on macOS), `button[aria-label="Reset Ledger"]`. Adding or re-recording a chip opens `[data-key-capture]`; send the combination with a `key` step. Escape cancels only the capture. Save closes the modal with a `Keybindings saved` toast; a failed save shows `[data-save-error]` and keeps the draft. Prove the result with the shortcut itself and the isolated YAML, then close with Cancel and `Discard` (or Escape when nothing changed) so doctor sees no residue:
+
+```json
+{"name":"kb-save","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"text":"Configure Keybindings"},{"waitText":"Every page"},{"click":"button[aria-label=\"Add binding to Ledger\"]"},{"waitSelector":"[data-key-capture]"},{"key":"cmd+j"},{"waitText":"Unsaved changes"},{"text":"Save"},{"waitText":"Keybindings saved"},{"key":"cmd+j"},{"waitPath":"/ledger"}]}
 ```
 
 ## Gotchas
