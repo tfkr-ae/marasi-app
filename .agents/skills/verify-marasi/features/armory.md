@@ -5,7 +5,7 @@
 - The dock: request templates and their runs as a tree, with run status badges
 - The template header (name, description, Save, Delete) and the request editor with `@@x@@` payload positions
 - Run settings: attack type, concurrency, HTTPS, wordlists, and the pinned Launch / Save as draft footer
-- Persisted runs, status polling, and the run's traffic table
+- Persisted runs, status polling, and the run's traffic table: read a page at a time, sorted by #, Time, Status or Length
 - The request drawer, its details column, and the traffic row menu (Launchpad, Finding, Test case)
 - Request detail handoff from Ledger
 
@@ -15,7 +15,7 @@ Select the rail item titled `Armory` or press `Command+6`. The page is a dock an
 
 - **Dock.** The header reads `Templates n`, with `Refresh runs` and `Create template` (`+`, title `New template`). Collapsed, the strip reads `Templates` (`Show templates` restores it). Below sit `Search templates…` and the tree (`[role=tree]`): a template is a `treeitem` (`title` is its description or name) with an `Expand`/`Collapse` chevron (`aria-expanded`); its runs are `treeitem`s under a `[role=group]` (`title="<n> workers · <date>"`), showing the attack type and a status badge (`complete`, `in progress`, `draft`; `.badge`). The selected one carries `aria-current=true`. Hovering a run, or selecting it, shows `Start run` (drafts), `Cancel run` (in progress) or `Delete run`. A fresh scratchpad reads `No templates yet` in the tree and `No template selected` in the workspace; a search with no match reads `No matching templates`.
 - **Workspace.** A header with `Template name`, `Save` and `Delete template` (icon), and `Description` below. Then the request editor (`.armory-editor`) and `Run settings` side by side, stacked below 1024 px. The `Run settings` button (title `Hide run settings` / `Show run settings`, `⌘P`) folds them. The fields are `Attack type` (a select), `Concurrency`, `Use HTTPS` (`div[role=switch]:has(input[name="Armory HTTPS"])`) and `Wordlists n` with `Add wordlist` and a chip per list (`Remove <file>`). A footer pinned under them holds the validation message, `Launch` and `Save as draft`.
-- **Traffic.** At the bottom, `Traffic n items` (title `Hide traffic` / `Show traffic`) folds the table. With rows it has a page-size select, `i / n`, `Previous page` and `Next page`. The table (`[role=grid]`) has the Ledger's columns `# · Time · Method · Host / Path · Status · Length` as 22 px rows (`button[role=row]`). The host and path share one cell (`.tr-url`: `.tr-host`, `.tr-path`); when the column is narrow the host truncates first, so the path stays readable. Without a run it reads `Select a run to view traffic`; with a run but no rows yet, `No requests captured yet`.
+- **Traffic.** At the bottom, `Traffic n items` (title `Hide traffic` / `Show traffic`) folds the table; `n` counts the rows read so far, with `+` while more pages are unread. The table (`[role=grid]`) is one scrolled list that reads the next 200 rows (`QueryArmoryRunTraffic`) as it nears the end. It has the Ledger's columns `# · Time · Method · Host / Path · Status · Length` as 22 px rows (`button[role=row]`, `data-pair-id`). The `#`, `Time`, `Status` and `Length` headers are buttons (`[role=columnheader]`, title `Sort by <label>`, `aria-sort`): one click sorts ascending, the next descending, the third back to # order; the sorted header is primary-coloured with an up or down arrow. Pending pairs sort last both ways. While sorted other than `#`/`Time` ascending, pairs a live run sends don't move the rows: the bar shows `n new · Show` (title `Show them, from the top`), which reads the rows again. In # order they join the end. The run, sort, scroll position and open pair survive page visits; the sort also carries to the next run. The host and path share one cell (`.tr-url`: `.tr-host`, `.tr-path`); when the column is narrow the host truncates first, so the path stays readable. Without a run it reads `Select a run to view traffic`; with a run but no rows yet, `No requests captured yet`.
 - **Drawer.** Clicking a row opens `.armory-drawer-box` over the bottom of the workspace (62 % at first, right of the dock, never over the rail). Dragging its top edge (`.armory-drawer-resize`, title `Drag to resize the drawer`) sets its share of the workspace from 15 % to 85 %, read back from the box's inline `height`; the share survives closing and page visits, and the handle is hidden while maximised. It holds the request (`.armory-drawer-request`) and the response (`.armory-drawer-response`) side by side; when the panes are under 480 px wide (`.armory-drawer-panes[data-stacked=true]`) the request sits over the response. On its left is the icon rail (`.armory-drawer-rail`) or, after `Show the details`, the 240 px details column (`.armory-drawer-column`, `Collapse the details`): `#N`, the facts (`.armory-drawer-facts`), `LINKED` findings and test cases (hover a link for its unlink ×), and `Actions`: `Copy request`, `Copy response`, `Copy URL` and `More actions`. Both carry `Previous request`, `Next request`, `Maximise the drawer`/`Restore the workspace`, and `Close the drawer`. Esc closes it wherever focus is, unless a modal, the Marasi menu or the row menu is open: those close first, one Esc each.
 - **Row menu.** Right-clicking a row, or the drawer's `Actions` / `More actions`, opens the Ledger's `.ledger-row-menu` pared down to `Send to Launchpad` (`lp-new`, `lp-add`), `Finding` and `Test case` (`f-new`/`t-new`, `f-link`/`t-link`, `f-unlink`/`t-unlink`). Its footer has no `⇧-click to extend` hint, because the table has no multi-select. Toasts: `Sent to a new launchpad` (named `Request <n>`), `Saved finding`, `Saved test case`, `Linked to test case "<title>"`, `Unlinked from test case "<title>"`.
 
@@ -44,6 +44,21 @@ Run `scripts/drive.sh armory` for route proof (`/armory` plus `Templates`).
 ```
 
 Then query `select status, max_concurrent from armory_run`, and check that `request` rows carry `json_extract(metadata,'$.armory_run_id')`.
+
+**Sorting by Length.** Seed a run whose responses differ in length: the seed recipe with template `GET /probe?size=@@x@@ HTTP/1.1` and a wordlist of 250 shuffled numbers (`seq 1 250 | sort -R`). Watched live in # order, the run's pairs join the end, so it reads `250 items`. A sort reads from the top, 200 rows at a time:
+
+```json
+{"name":"sort-length","steps":[
+ {"click":"[role=grid] [role=columnheader]","hasText":"Length"},
+ {"waitSelector":"[role=columnheader][aria-sort=ascending]"},{"waitText":"200+ items"},
+ {"click":"[role=grid] [role=columnheader]","hasText":"Length"},
+ {"waitSelector":"[role=columnheader][aria-sort=descending]"},{"waitText":"/probe?size=250"},
+ {"wheel":"[role=grid]","deltaY":20000},{"waitText":"250 items"},
+ {"click":"[role=grid] [role=columnheader]","hasText":"Length"},
+ {"waitNoSelector":"[role=columnheader][aria-sort=descending]"}]}
+```
+
+`Next request` in the drawer then steps in the sorted order. `hasText` matches substrings, so `/probe?size=2` also matches `size=25…`; pick a row by its number and time (`"207 09:28:30"`) read from the `-after.json` text. To see arrivals wait, sort by Length and `Launch` again: the new run's first pairs read straight into the empty table, later ones wait behind `n new · Show`, and the rows plus `n` add up to the run. The proxy's own `502 Bad Gateway` pairs store length 0, so they sort as the shortest, and the Length cell is blank.
 
 **Drawer and row menu** (rows are `button[role=row]`; scope them by path). This assumes `/admin` is linked to the test case "API path probe" (`t-new` on a row, then `More actions` › `Test case` › `Link to test case` in the drawer):
 

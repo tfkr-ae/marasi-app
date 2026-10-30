@@ -20,7 +20,7 @@
 	// dock. The page holds the selection, draft and settings and keeps
 	// armoryStore in step.
 	import { onMount } from "svelte";
-	import { get, writable } from "svelte/store";
+	import { get } from "svelte/store";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import {
 		ArrowLeft,
@@ -41,20 +41,18 @@
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryStore } from "../../stores/armoryStore";
+	import { openRunPair, runTrafficNewLabel, runTrafficRows } from "../../stores/createArmoryRunTraffic.js";
 	import { activeProject, appState } from "../../stores";
-	import { recentTraffic } from "../../stores/recentTrafficStore";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { clampDrawerSplit } from "../../stores/createLedgerStore.js";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
-	import { runTraffic } from "../../lib/armoryRunTraffic.js";
 	import { sameID } from "../../lib/ledger/pairs.js";
 	import { linkedTo } from "../../lib/ledger/drawer.js";
 	import { newRecord } from "../../lib/logbook/recordEditor.js";
 	import { toastError, toastJump } from "../../lib/toasts.js";
 	import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
-	import { stepRequest } from "../../lib/armory/traffic.js";
 	import { armoryMenuFor } from "../../lib/armory/rowMenu.js";
 	import RowMenu from "../../lib/ledger/RowMenu.svelte";
 	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
@@ -110,15 +108,11 @@
 	let validationTimer;
 	let validationRequest = 0;
 	let settingsOpen = savedSettingsOpen;
-	// The drawer's pair, by ID: its row comes from `requests`, so it follows
-	// the live traffic (a response arriving).
-	let openId = null;
 	let drawerMaximised = false;
 	let drawerExpanded = savedDrawerExpanded;
 	let drawerSplit = savedDrawerSplit;
 	let workspace;
 	let templateEditor;
-	let paginatedRunId = null;
 	let handledRouteTemplateId = null;
 	let projectStateVersion = savedArmoryState.projectStateVersion;
 
@@ -129,20 +123,10 @@
 	$: savedDrawerExpanded = drawerExpanded;
 	$: savedDrawerSplit = drawerSplit;
 
-	const trafficPagination = writable({
-		pageIndex: selectedRunId
-			? savedArmoryState.trafficPageByRun[selectedRunId] || 0
-			: 0,
-		pageSize: savedArmoryState.trafficPageSize,
-	});
-
-	function setTrafficPagination(updater) {
-		trafficPagination.update((old) => {
-			const next = updater instanceof Function ? updater(old) : updater;
-			armoryStore.setTrafficPagination(selectedRunId, next);
-			return next;
-		});
-	}
+	// The selected run's traffic: its rows, read a page at a time in the
+	// sorted order, and the pair open in the drawer, which follows its row
+	// as responses arrive.
+	const runTraffic = armoryStore.runTraffic;
 
 	$: query = search.trim().toLowerCase();
 	$: filteredTemplates = $armoryStore.templates.filter(
@@ -162,28 +146,13 @@
 		? $armoryStore.runsByTemplate[selectedTemplateId] || []
 		: [];
 	$: selectedRun = runs.find((run) => run.ID === selectedRunId);
-	// The run's pairs load when it is chosen; the recent traffic adds the
-	// ones it sends after that.
-	let runTrafficId = null;
-	let loadedRunTraffic = [];
-	$: if ((selectedRun ? selectedRunId : null) !== runTrafficId) {
-		const runId = selectedRun ? selectedRunId : null;
-		runTrafficId = runId;
-		loadedRunTraffic = [];
-		if (runId != null) {
-			armoryStore
-				.getRunTraffic(runId)
-				.then((items) => {
-					if (runTrafficId === runId) loadedRunTraffic = items ?? [];
-				})
-				.catch((err) => console.error("Loading run traffic failed:", err));
-		}
-	}
-	$: requests = selectedRun
-		? runTraffic(loadedRunTraffic, $recentTraffic, selectedRunId)
-		: [];
-	$: openIndex = openId == null ? -1 : requests.findIndex((row) => sameID(row.ID, openId));
-	$: openRow = openIndex === -1 ? null : requests[openIndex];
+	// A run's rows read when it is chosen; the run already shown keeps its
+	// rows, place and open pair through page visits.
+	$: trafficRunId = selectedRun ? selectedRunId : null;
+	$: runTraffic.open(trafficRunId).catch((err) => console.error("Loading run traffic failed:", err));
+	$: requests = runTrafficRows($runTraffic);
+	$: openRow = openRunPair($runTraffic);
+	$: if (!openRow) drawerMaximised = false;
 	$: drawerOpen = openRow != null;
 	$: armoryDrawer.set({ open: drawerOpen });
 	$: if ($armoryStore.projectStateVersion !== projectStateVersion) {
@@ -199,38 +168,11 @@
 		useHTTPS = true;
 		selectedWordlists = [];
 		maxConcurrent = 10;
-		paginatedRunId = null;
 		handledRouteTemplateId = null;
 		settingsOpen = true;
 		trafficOpen = true;
 		drawerExpanded = false;
 		drawerSplit = 0.62;
-		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
-	}
-	$: if (selectedRunId !== paginatedRunId) {
-		paginatedRunId = selectedRunId;
-		trafficPagination.set({
-			pageIndex: selectedRunId
-				? $armoryStore.trafficPageByRun[selectedRunId] || 0
-				: 0,
-			pageSize: $armoryStore.trafficPageSize,
-		});
-		closeRequestDrawer();
-	}
-	$: if (
-		$trafficPagination.pageIndex >
-		Math.max(
-			0,
-			Math.ceil(requests.length / $trafficPagination.pageSize) - 1,
-		)
-	) {
-		setTrafficPagination((old) => ({
-			...old,
-			pageIndex: Math.max(
-				0,
-				Math.ceil(requests.length / old.pageSize) - 1,
-			),
-		}));
 	}
 	$: if (!selectedTemplate && $armoryStore.templates.length > 0) {
 		selectTemplate($armoryStore.templates[0]);
@@ -484,7 +426,7 @@
 	}
 
 	function openRequest(row) {
-		openId = row.ID;
+		runTraffic.openPair(row.ID);
 	}
 
 	function adjacent(
@@ -517,20 +459,14 @@
 		if (target) selectRun(target.item);
 	}
 
-	// Steps through the run's traffic, turning the table's page with it.
+	// Steps through the run's traffic in the table's order; the table
+	// scrolls the open row into view.
 	function cycleRequest(direction) {
-		const index = stepRequest(requests, openId, direction);
-		if (index === -1) return;
-		setTrafficPagination((old) => ({
-			...old,
-			pageIndex: Math.floor(index / old.pageSize),
-		}));
-		openRequest(requests[index]);
+		runTraffic.step(direction).catch((err) => console.error("Reading run traffic failed:", err));
 	}
 
 	function closeRequestDrawer() {
-		openId = null;
-		drawerMaximised = false;
+		runTraffic.closePair();
 	}
 
 	// Esc closes the drawer wherever focus is, unless a modal, the Marasi
@@ -583,7 +519,7 @@
 	function openDrawerMenu(event) {
 		if (!openRow) return;
 		const rect = event.currentTarget.getBoundingClientRect();
-		rowMenu = { open: true, x: rect.left, y: rect.bottom, pair: openRow, number: openRow.Number || openIndex + 1 };
+		rowMenu = { open: true, x: rect.left, y: rect.bottom, pair: openRow, number: openRow.Number };
 	}
 
 	$: rowMenuItems =
@@ -894,12 +830,20 @@
 				<TrafficRegion
 					bind:open={trafficOpen}
 					requests={selectedRun ? requests : null}
+					hasMore={$runTraffic.list.hasMore}
+					sort={$runTraffic.sort}
+					newLabel={runTrafficNewLabel($runTraffic)}
+					scrollTop={$runTraffic.scrollTop}
 					openId={openRow?.ID ?? null}
-					pagination={trafficPagination}
-					onPaginationChange={setTrafficPagination}
-					onPageChange={closeRequestDrawer}
 					onOpen={openRequest}
 					onMenu={openRowMenu}
+					onSort={(column) =>
+						runTraffic.sortBy(column).catch((err) => console.error("Sorting run traffic failed:", err))}
+					onLoadMore={() =>
+						runTraffic.loadMore().catch((err) => console.error("Reading run traffic failed:", err))}
+					onShowNew={() =>
+						runTraffic.showNew().catch((err) => console.error("Reading run traffic failed:", err))}
+					onScroll={runTraffic.setScrollTop}
 				/>
 			</div>
 			{#if openRow}
@@ -925,7 +869,7 @@
 					{/if}
 					<ArmoryDrawer
 						pair={openRow}
-						number={openRow.Number || openIndex + 1}
+						number={openRow.Number}
 						maximised={drawerMaximised}
 						bind:expanded={drawerExpanded}
 						onClose={closeRequestDrawer}

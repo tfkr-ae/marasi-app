@@ -112,34 +112,25 @@ func (a *App) QueryTraffic(req TrafficPageRequest) (TrafficQueryResult, error) {
 	return result, nil
 }
 
-// ListArmoryRunTraffic lists every pair an Armory run sent, oldest first,
-// whatever their content type.
-func (a *App) ListArmoryRunTraffic(runID string) ([]*domain.RequestResponseSummary, error) {
+// QueryArmoryRunTraffic reads one page of the pairs an Armory run sent,
+// whatever their content type, as QueryTraffic reads the project's. req.Query
+// narrows the run further ("" for all of it, or a group such as
+// `status_code = 403`); req.OrderBy "" is "requested_at", oldest first.
+func (a *App) QueryArmoryRunTraffic(runID string, req TrafficPageRequest) (TrafficQueryResult, error) {
 	id, err := uuid.Parse(runID)
 	if err != nil {
-		return nil, fmt.Errorf("listing run requests: run id %q: %w", runID, err)
+		return TrafficQueryResult{}, fmt.Errorf("querying run traffic: run id %q: %w", runID, err)
 	}
-	traffic, err := a.Proxy.GetTrafficRepo()
-	if err != nil {
-		return nil, fmt.Errorf("listing run requests: %w", err)
+	query := "metadata.armory_run_id = " + strconv.Quote(id.String())
+	if req.Query != "" {
+		query += " AND (" + req.Query + ")"
 	}
-	q := domain.TrafficQuery{
-		Text:    "metadata.armory_run_id = " + strconv.Quote(id.String()),
-		OrderBy: "requested_at",
-		Limit:   maxTrafficQueryPageSize,
+	req.Query = query
+	if req.OrderBy == "" {
+		req.OrderBy = "requested_at"
 	}
-	items := []*domain.RequestResponseSummary{}
-	for {
-		page, err := traffic.ListTraffic(q)
-		if err != nil {
-			return nil, fmt.Errorf("listing run requests: %w", err)
-		}
-		items = append(items, page.Items...)
-		if page.NextCursor == nil {
-			return items, nil
-		}
-		q.Cursor, q.AsOf = *page.NextCursor, page.AsOf
-	}
+	req.IgnoreExclusion = true
+	return a.QueryTraffic(req)
 }
 
 // parseOptionalPairID parses a pair id the frontend passed back, or returns

@@ -1,41 +1,82 @@
 <script>
-	// The selected run's traffic, a page at a time, in a table shaped like the
-	// Ledger's: a CSS grid with a sticky header and 11px monospace rows. The
-	// page owns the pagination (it persists per run) and whether the panel is
+	// The selected run's traffic in a table shaped like the Ledger's: a CSS
+	// grid with a sticky header and 11px monospace rows. It is one scrolled
+	// list that asks for the next page as it nears the end; the rows, sort
+	// and open pair are armoryStore's run traffic view
+	// (stores/createArmoryRunTraffic.js). The page owns whether the panel is
 	// open; the header toggles it.
+	import { afterUpdate, onMount, tick } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-svelte";
-	import { METHOD_CLASS, neutralVariant, shortTime, statusClass } from "../launchpad/format.js";
+	import { ArrowDown, ArrowUp, ChevronDown, ChevronUp } from "lucide-svelte";
+	import { METHOD_CLASS, primaryVariant, shortTime, statusClass } from "../launchpad/format.js";
 	import { formatSize, statusText } from "../ledger/table.js";
 	import { sameID } from "../ledger/pairs.js";
-	import { TRAFFIC_COLUMNS, TRAFFIC_TEMPLATE, trafficPage } from "./traffic.js";
+	import { TRAFFIC_COLUMNS, TRAFFIC_TEMPLATE } from "./traffic.js";
 
-	/** The run's pairs, oldest first; null when no run is selected. */
+	/** The rows read so far, in the table's order; null when no run is selected. */
 	export let requests = null;
-	/** A store of { pageIndex, pageSize }. */
-	export let pagination;
+	/** Whether pages past the last row are still to read. */
+	export let hasMore = false;
+	/** { column, desc }; column is null in # order. */
+	export let sort = { column: null, desc: false };
+	/** "n new" while sent pairs wait to be shown, else "". */
+	export let newLabel = "";
+	/** Where the list was scrolled, restored when the table mounts. */
+	export let scrollTop = 0;
 	/** Whether the table shows; the header toggles it. */
 	export let open = true;
 	/** The ID of the pair open in the drawer, marked in the table. */
 	export let openId = null;
-	export let onPaginationChange = (updater) => {};
-	/** The pager changed the page; the open request drawer closes. */
-	export let onPageChange = () => {};
 	export let onOpen = (row, index) => {};
 	/** A right-click on a row: the page opens the row menu. */
 	export let onMenu = (row, index, event) => {};
+	export let onSort = (column) => {};
+	export let onLoadMore = () => {};
+	export let onShowNew = () => {};
+	export let onScroll = (scrollTop) => {};
 
-	$: neutral = neutralVariant($modeCurrent);
-	$: page = trafficPage(requests ?? [], $pagination);
+	// How near the end, in pixels, the list asks for the next page.
+	const LOAD_AHEAD = 400;
+	let list;
 
-	function changePage(pageIndex) {
-		onPageChange();
-		onPaginationChange((old) => ({ ...old, pageIndex }));
+	$: primary = primaryVariant($modeCurrent);
+
+	// Asks for the next page when the end is near, or when the rows don't
+	// fill the list yet.
+	function nearEnd() {
+		if (!list || !hasMore) return;
+		if (list.scrollHeight - list.scrollTop - list.clientHeight < LOAD_AHEAD) onLoadMore();
 	}
 
-	function changePageSize(event) {
-		onPageChange();
-		onPaginationChange({ pageIndex: 0, pageSize: Number(event.currentTarget.value) });
+	function scrolled() {
+		onScroll(list.scrollTop);
+		nearEnd();
+	}
+
+	onMount(() => {
+		if (list) list.scrollTop = scrollTop;
+	});
+	afterUpdate(nearEnd);
+
+	// A new sort reads from the top, so the list goes back to it. `sort` is
+	// a new object on every store update, so it compares by value.
+	$: sortKey = `${sort.column} ${sort.desc}`;
+	$: scrollToTop(sortKey);
+	function scrollToTop() {
+		if (list) list.scrollTop = 0;
+	}
+
+	// Stepping through the drawer keeps the open row in view.
+	$: revealOpenRow(openId);
+	async function revealOpenRow(id) {
+		if (id == null) return;
+		await tick();
+		list?.querySelector(`[data-pair-id="${CSS.escape(String(id))}"]`)?.scrollIntoView({ block: "nearest" });
+	}
+
+	function sortAria(sort, column) {
+		if (sort.column !== column.key) return "none";
+		return sort.desc ? "descending" : "ascending";
 	}
 
 	// Dimmed cells use a translucent text colour, as in the Ledger.
@@ -58,47 +99,30 @@
 			{#if open}<ChevronDown size={13} />{:else}<ChevronUp size={13} />{/if}
 			<span class="font-bold">Traffic</span>
 			{#if requests}
-				<span class="whitespace-nowrap opacity-60">{requests.length.toLocaleString()} items</span>
+				<span class="whitespace-nowrap opacity-60"
+					>{requests.length.toLocaleString()}{hasMore ? "+" : ""} items</span
+				>
 			{/if}
 		</button>
-		{#if open && requests?.length}
-			<div class="flex shrink-0 items-center gap-1.5 text-xs">
-				<label class="flex items-center gap-1">
-					<span class="sr-only">Rows per page</span>
-					<select class="select h-6 w-16 py-0 text-xs" value={$pagination.pageSize} on:change={changePageSize}>
-						{#each [10, 20, 30, 40, 50, 100] as pageSize}
-							<option value={pageSize}>{pageSize}</option>
-						{/each}
-					</select>
-				</label>
-				<span class="whitespace-nowrap opacity-70">
-					{($pagination.pageIndex + 1).toLocaleString()} / {page.pageCount.toLocaleString()}
-				</span>
-				<button
-					type="button"
-					class="btn btn-sm h-6 w-6 px-0 {neutral}"
-					disabled={$pagination.pageIndex <= 0}
-					on:click={() => changePage($pagination.pageIndex - 1)}
-					title="Previous page"
-					aria-label="Previous page"
-				>
-					<ChevronLeft size={14} />
-				</button>
-				<button
-					type="button"
-					class="btn btn-sm h-6 w-6 px-0 {neutral}"
-					disabled={$pagination.pageIndex >= page.pageCount - 1}
-					on:click={() => changePage($pagination.pageIndex + 1)}
-					title="Next page"
-					aria-label="Next page"
-				>
-					<ChevronRight size={14} />
-				</button>
-			</div>
+		{#if open && newLabel}
+			<button
+				type="button"
+				class="btn btn-sm h-6 rounded-none py-0 text-xs {primary}"
+				title="Show them, from the top"
+				on:click={onShowNew}
+			>
+				{newLabel} · Show
+			</button>
 		{/if}
 	</header>
 	{#if open}
-		<div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden font-mono" role="grid" aria-rowcount={requests?.length ?? 0}>
+		<div
+			bind:this={list}
+			class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden font-mono"
+			role="grid"
+			aria-rowcount={requests?.length ?? 0}
+			on:scroll={scrolled}
+		>
 			{#if !requests}
 				<p class="p-4 text-center font-sans text-xs opacity-60">Select a run to view traffic</p>
 			{:else if requests.length === 0}
@@ -110,11 +134,28 @@
 					role="row"
 				>
 					{#each TRAFFIC_COLUMNS as column (column.key)}
-						<span class={column.align === "right" ? "text-right" : ""} role="columnheader">{column.label}</span>
+						{#if column.sortable}
+							<button
+								type="button"
+								class="tr-sort hover:text-primary-500 {column.align === 'right'
+									? 'justify-end'
+									: ''} {sort.column === column.key ? 'text-primary-500' : ''}"
+								role="columnheader"
+								aria-sort={sortAria(sort, column)}
+								title="Sort by {column.label}"
+								on:click={() => onSort(column.key)}
+							>
+								{column.label}
+								{#if sort.column === column.key}
+									{#if sort.desc}<ArrowDown size={11} />{:else}<ArrowUp size={11} />{/if}
+								{/if}
+							</button>
+						{:else}
+							<span class={column.align === "right" ? "text-right" : ""} role="columnheader">{column.label}</span>
+						{/if}
 					{/each}
 				</div>
-				{#each page.rows as row, i (String(row.ID))}
-					{@const index = page.start + i}
+				{#each requests as row, index (String(row.ID))}
 					{@const focused = sameID(row.ID, openId)}
 					<button
 						type="button"
@@ -124,6 +165,7 @@
 						style="grid-template-columns: {TRAFFIC_TEMPLATE}"
 						role="row"
 						aria-selected={focused}
+						data-pair-id={String(row.ID)}
 						on:click={() => onOpen(row, index)}
 						on:contextmenu|preventDefault={(event) => onMenu(row, index, event)}
 					>
@@ -168,6 +210,13 @@
 		overflow-x: clip;
 		text-overflow: ellipsis;
 		text-box: trim-both cap alphabetic;
+	}
+	/* A sortable header: its label and arrow side by side. */
+	.tr-row > .tr-sort {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		height: 100%;
 	}
 	.tr-host {
 		flex: 0 1000 auto;

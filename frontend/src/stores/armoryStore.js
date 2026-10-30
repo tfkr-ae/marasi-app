@@ -11,12 +11,16 @@ import {
   GetArmoryRuns,
   GetArmoryTemplates,
   GetArmoryWordlists,
-  ListArmoryRunTraffic,
   PreviewArmoryWordlist,
+  QueryArmoryRunTraffic,
   StartArmoryRun,
   UpdateArmoryTemplate,
   ValidateArmoryRun,
 } from "../lib/wailsjs/go/main/App";
+import { createRunTrafficView } from "./createArmoryRunTraffic.js";
+
+/** How often buffered request and response events reach the run's rows. */
+const RUN_TRAFFIC_FLUSH_MS = 200;
 
 function defaultRunSettings() {
   return {
@@ -39,8 +43,6 @@ function initialState(projectStateVersion = 0) {
     templateDraft: null,
     runSettingsByTemplate: {},
     selectedRunByTemplate: {},
-    trafficPageByRun: {},
-    trafficPageSize: 100,
   };
 }
 
@@ -54,6 +56,12 @@ function sortTemplates(templates) {
 function createArmoryStore() {
   let projectStateVersion = 0;
   const { subscribe, set, update } = writable(initialState());
+  // The selected run's traffic: its sorted rows, read a page at a time, and
+  // the pair open in the drawer (createArmoryRunTraffic.js).
+  const runTraffic = createRunTrafficView({
+    queryRunTraffic: (runId, req) => QueryArmoryRunTraffic(runId, req),
+  });
+  setInterval(runTraffic.flush, RUN_TRAFFIC_FLUSH_MS);
 
   function upsertRun(run) {
     update((state) => {
@@ -142,10 +150,14 @@ function createArmoryStore() {
 
   return {
     subscribe,
-    // The pairs a run sent, oldest first.
-    getRunTraffic: (runId) => ListArmoryRunTraffic(String(runId)),
+    runTraffic,
+    onRequest: (req) => runTraffic.onRequest(req),
+    onResponse: (res) => runTraffic.onResponse(res),
 
-    clear: () => set(initialState(++projectStateVersion)),
+    clear: () => {
+      runTraffic.clear();
+      set(initialState(++projectStateVersion));
+    },
     populate,
 
     setSearch: (search) => update((state) => ({ ...state, search })),
@@ -212,15 +224,6 @@ function createArmoryStore() {
         },
       })),
 
-    setTrafficPagination: (runId, { pageIndex, pageSize }) =>
-      update((state) => ({
-        ...state,
-        trafficPageSize: pageSize,
-        trafficPageByRun: runId
-          ? { ...state.trafficPageByRun, [runId]: pageIndex }
-          : state.trafficPageByRun,
-      })),
-
     createTemplate: async ({ name, description = "", rawTemplate }) => {
       const template = await CreateArmoryTemplate(
         name,
@@ -260,10 +263,6 @@ function createArmoryStore() {
         const runsByTemplate = { ...state.runsByTemplate };
         const runSettingsByTemplate = { ...state.runSettingsByTemplate };
         const selectedRunByTemplate = { ...state.selectedRunByTemplate };
-        const trafficPageByRun = { ...state.trafficPageByRun };
-        for (const run of runsByTemplate[id] || []) {
-          delete trafficPageByRun[run.ID];
-        }
         delete runsByTemplate[id];
         delete runSettingsByTemplate[id];
         delete selectedRunByTemplate[id];
@@ -273,7 +272,6 @@ function createArmoryStore() {
           runsByTemplate,
           runSettingsByTemplate,
           selectedRunByTemplate,
-          trafficPageByRun,
           selectedTemplateId:
             state.selectedTemplateId === id ? null : state.selectedTemplateId,
           templateDraft:
@@ -329,8 +327,6 @@ function createArmoryStore() {
             ([templateId, runId]) => [templateId, runId === id ? null : runId],
           ),
         );
-        const trafficPageByRun = { ...state.trafficPageByRun };
-        delete trafficPageByRun[id];
         const runsByTemplate = Object.fromEntries(
           Object.entries(state.runsByTemplate).map(([templateId, runs]) => [
             templateId,
@@ -341,7 +337,6 @@ function createArmoryStore() {
           ...state,
           runsByTemplate,
           selectedRunByTemplate,
-          trafficPageByRun,
         };
       });
     },
