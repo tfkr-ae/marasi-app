@@ -55,7 +55,7 @@
 	import { toastError, toastJump } from "../../lib/toasts.js";
 	import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
 	import { stepRequest } from "../../lib/armory/traffic.js";
-	import { armoryMenuFor } from "../../lib/armory/rowMenu.js";
+	import { armoryMenuFor, pairTarget, runArmoryAction } from "../../lib/armory/rowMenu.js";
 	import RowMenu from "../../lib/ledger/RowMenu.svelte";
 	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
 	import ArmoryDrawer from "../../lib/armory/ArmoryDrawer.svelte";
@@ -572,23 +572,29 @@
 
 	// The traffic row menu (lib/armory/rowMenu.js, drawn by the Ledger's
 	// RowMenu), opened by right-clicking a row or by the drawer's Actions.
-	// Its actions run through the Ledger's store methods, as the Ledger's
-	// row menu does, on the one pair it was opened for.
-	let rowMenu = { open: false, x: 0, y: 0, pair: null, number: null };
+	// It acts on a target (pairTarget), through the Ledger's store methods,
+	// as the Ledger's row menu does.
+	let rowMenu = { open: false, x: 0, y: 0, target: null, number: null };
 
 	function openRowMenu(row, index, event) {
-		rowMenu = { open: true, x: event.clientX, y: event.clientY, pair: row, number: row.Number || index + 1 };
+		rowMenu = { open: true, x: event.clientX, y: event.clientY, target: pairTarget(row), number: row.Number || index + 1 };
 	}
 
 	function openDrawerMenu(event) {
 		if (!openRow) return;
 		const rect = event.currentTarget.getBoundingClientRect();
-		rowMenu = { open: true, x: rect.left, y: rect.bottom, pair: openRow, number: openRow.Number || openIndex + 1 };
+		rowMenu = {
+			open: true,
+			x: rect.left,
+			y: rect.bottom,
+			target: pairTarget(openRow),
+			number: openRow.Number || openIndex + 1,
+		};
 	}
 
 	$: rowMenuItems =
-		rowMenu.open && rowMenu.pair
-			? armoryMenuFor([rowMenu.pair], {
+		rowMenu.open && rowMenu.target
+			? armoryMenuFor(rowMenu.target, {
 					launchpads: $launchpadStore.launchpads,
 					findings: $findingStore,
 					testCases: $testCaseStore,
@@ -603,64 +609,34 @@
 	const refreshLaunchpads = () =>
 		launchpadStore.populate().catch((err) => console.error("Refreshing launchpads failed:", err));
 
-	async function sendToNewLaunchpad(pair) {
-		// The Ledger knows numbers only for pairs it has loaded; Armory's row
-		// knows its own.
-		const numberOf = (id) => pair.Number || ledgerStore.pairNumber(id);
-		try {
-			const { launchpadId } = await ledgerStore.sendToNewLaunchpad({ ids: [String(pair.ID)] }, 1, { numberOf });
-			refreshLaunchpads();
-			notifyJump("Sent to a new launchpad", `/launchpad?id=${launchpadId}`);
-		} catch (error) {
-			toastError(toastStore, "Failed to create a launchpad", error);
-		}
-	}
-
-	async function addToLaunchpad(pair, launchpadId, name) {
-		try {
-			const count = await ledgerStore.addToLaunchpad({ ids: [String(pair.ID)] }, launchpadId);
-			refreshLaunchpads();
-			if (count) notifyJump(`Added to "${name || UNTITLED_LAUNCHPAD}"`, `/launchpad?id=${launchpadId}`);
-		} catch (error) {
-			toastError(toastStore, "Failed to add to the launchpad", error);
-		}
-	}
-
-	// Links or unlinks the pair and a finding or test case.
-	const LINKS = {
-		"link-finding": ["link", "Linked to", "finding", (sel, id) => ledgerStore.linkToFinding(sel, id)],
-		"unlink-finding": ["unlink", "Unlinked from", "finding", (sel, id) => ledgerStore.unlinkFromFinding(sel, id)],
-		"link-test-case": ["link", "Linked to", "test case", (sel, id) => ledgerStore.linkToTestCase(sel, id)],
-		"unlink-test-case": ["unlink", "Unlinked from", "test case", (sel, id) =>
-			ledgerStore.unlinkFromTestCase(sel, id)],
+	// What each action reports: [the failure toast, the success toast].
+	const ROW_ACTION_TOASTS = {
+		"new-launchpad": ["Failed to create a launchpad", ({ launchpadId }) =>
+			notifyJump("Sent to a new launchpad", `/launchpad?id=${launchpadId}`)],
+		"add-to-launchpad": ["Failed to add to the launchpad", ({ count, launchpadId, name }) =>
+			count && notifyJump(`Added to "${name || UNTITLED_LAUNCHPAD}"`, `/launchpad?id=${launchpadId}`)],
+		"link-finding": ["Failed to link the finding", ({ count, title }) => count && notify(`Linked to finding "${title}"`)],
+		"unlink-finding": ["Failed to unlink the finding", ({ count, title }) =>
+			count && notify(`Unlinked from finding "${title}"`)],
+		"link-test-case": ["Failed to link the test case", ({ count, title }) =>
+			count && notify(`Linked to test case "${title}"`)],
+		"unlink-test-case": ["Failed to unlink the test case", ({ count, title }) =>
+			count && notify(`Unlinked from test case "${title}"`)],
 	};
-	async function changeLink(pair, type, id, title) {
-		const [verb, done, noun, run] = LINKS[type];
-		try {
-			const count = await run({ ids: [String(pair.ID)] }, id);
-			if (count) notify(`${done} ${noun} "${title}"`);
-		} catch (error) {
-			toastError(toastStore, `Failed to ${verb} the ${noun}`, error);
-		}
-	}
 
-	/** Runs a row menu action (lib/armory/rowMenu.js) on `pair`. */
-	function runRowAction(action, pair) {
-		if (!action || !pair) return;
-		switch (action.type) {
-			case "new-launchpad":
-				return sendToNewLaunchpad(pair);
-			case "add-to-launchpad":
-				return addToLaunchpad(pair, action.id, action.name);
-			case "new-finding":
-				return newRecord(modalStore, "finding", { requestIds: [pair.ID] });
-			case "new-test-case":
-				return newRecord(modalStore, "testCase", { requestIds: [pair.ID] });
-			case "link-finding":
-			case "unlink-finding":
-			case "link-test-case":
-			case "unlink-test-case":
-				return changeLink(pair, action.type, action.id, action.title);
+	/** Runs a row menu action (lib/armory/rowMenu.js) on `target`. */
+	async function runRowAction(action, target) {
+		if (!action || !target) return;
+		const [failed, done] = ROW_ACTION_TOASTS[action.type] ?? [];
+		try {
+			const outcome = await runArmoryAction(action, target, {
+				ledger: ledgerStore,
+				newRecord: (kind, options) => newRecord(modalStore, kind, options),
+			});
+			if (action.type === "new-launchpad" || action.type === "add-to-launchpad") refreshLaunchpads();
+			done?.(outcome);
+		} catch (error) {
+			toastError(toastStore, failed ?? "Action failed", error);
 		}
 	}
 
@@ -965,9 +941,9 @@
 	bind:open={rowMenu.open}
 	x={rowMenu.x}
 	y={rowMenu.y}
-	pairs={rowMenu.pair ? [rowMenu.pair] : []}
+	pairs={rowMenu.target?.pairs ?? []}
 	items={rowMenuItems}
-	context={{ numberOf: () => rowMenu.number }}
+	context={{ numberOf: (pair) => pair.Number || rowMenu.number }}
 	extendHint={false}
-	on:action={(e) => runRowAction(e.detail, rowMenu.pair)}
+	on:action={(e) => runRowAction(e.detail, rowMenu.target)}
 />
