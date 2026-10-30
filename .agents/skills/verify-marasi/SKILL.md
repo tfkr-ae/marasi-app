@@ -104,7 +104,7 @@ The dashboard `theme` action leaves Home for Settings, sends `Command+U` twice, 
 For behavioral actions beyond navigation, use a named sequence of real UI inputs:
 
 ```bash
-.agents/skills/verify-marasi/scripts/drive.sh settings steps '{"name":"vim-toggle","steps":[{"click":"section [role=switch]"}]}'
+.agents/skills/verify-marasi/scripts/drive.sh settings steps '{"name":"vim-toggle","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"click":"section [role=switch]"}]}'
 ```
 
 `steps` requires the feature route to already be visible. Use one action per step.
