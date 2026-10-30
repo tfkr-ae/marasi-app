@@ -20,6 +20,9 @@
 	/** Whether the details column shows instead of the rail. */
 	export let expanded = false;
 	export let onClose = () => {};
+	/** Whether Previous and Next request have a pair to open. */
+	export let canPrevious = true;
+	export let canNext = true;
 	export let onStep = (delta) => {};
 	export let onMaximise = () => {};
 	/** Writes `text` to the clipboard; `what` says which copy it is. */
@@ -88,6 +91,8 @@
 		{onClose}
 		{onMaximise}
 		{onStep}
+		{canPrevious}
+		{canNext}
 		onCopy={copy}
 		{onActions}
 	>

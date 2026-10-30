@@ -31,6 +31,9 @@
 	export let onExpand = (expanded) => {};
 	export let onClose = () => {};
 	export let onMaximise = () => {};
+	/** Whether Previous and Next request have a pair to open. */
+	export let canPrevious = true;
+	export let canNext = true;
 	export let onStep = (delta) => {};
 	/** "request", "response" or "url". */
 	export let onCopy = (what) => {};
@@ -57,7 +60,7 @@
 
 	const railButton =
 		"flex h-7 w-8 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token disabled:pointer-events-none disabled:opacity-40";
-	const headerButton = "flex h-6 w-6 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token";
+	const headerButton = "flex h-6 w-6 flex-none items-center justify-center rounded-sm hover:bg-surface-200-700-token disabled:pointer-events-none disabled:opacity-40";
 	const heading = "px-3 pb-1 pt-3 text-3xs font-semibold uppercase tracking-wide opacity-50";
 	const row =
 		"flex w-full items-center gap-2 whitespace-nowrap px-3 py-[5px] text-left hover:bg-surface-200-700-token disabled:pointer-events-none disabled:opacity-40";
@@ -82,12 +85,14 @@
 				class={headerButton}
 				title={tip("Previous request", `${DRAWER}.previous-request`, keymap)}
 				aria-label="Previous request"
+				disabled={!canPrevious}
 				on:click={() => onStep(-1)}><ChevronUp size={14} /></button
 			>
 			<button
 				class={headerButton}
 				title={tip("Next request", `${DRAWER}.next-request`, keymap)}
 				aria-label="Next request"
+				disabled={!canNext}
 				on:click={() => onStep(1)}><ChevronDown size={14} /></button
 			>
 			<button
@@ -150,12 +155,14 @@
 			class={railButton}
 			title={tip("Previous request", `${DRAWER}.previous-request`, keymap)}
 			aria-label="Previous request"
+			disabled={!canPrevious}
 			on:click={() => onStep(-1)}><ChevronUp size={14} /></button
 		>
 		<button
 			class={railButton}
 			title={tip("Next request", `${DRAWER}.next-request`, keymap)}
 			aria-label="Next request"
+			disabled={!canNext}
 			on:click={() => onStep(1)}><ChevronDown size={14} /></button
 		>
 		<div class={divider}></div>

@@ -42,6 +42,7 @@
 	import {
 		isColumnSortable,
 		openRunPair,
+		runCanStep,
 		runRowMenuTarget,
 		runSelectionLabel,
 		runTrafficGroups,
@@ -462,8 +463,8 @@
 		if (target) selectRun(target.item);
 	}
 
-	// Steps through the run's traffic in the table's order; the table
-	// scrolls the open row into view.
+	// Steps through the run's traffic in the table's order, grouped within
+	// the open pair's group; the table scrolls the open row into view.
 	function cycleRequest(direction) {
 		runTraffic.step(direction).catch((err) => console.error("Reading run traffic failed:", err));
 	}
@@ -872,6 +873,8 @@
 						bind:expanded={drawerExpanded}
 						onClose={closeRequestDrawer}
 						onStep={cycleRequest}
+						canPrevious={runCanStep($runTraffic, -1)}
+						canNext={runCanStep($runTraffic, 1)}
 						onMaximise={() => (drawerMaximised = !drawerMaximised)}
 						onCopy={copyFromDrawer}
 						onActions={openDrawerMenu}
