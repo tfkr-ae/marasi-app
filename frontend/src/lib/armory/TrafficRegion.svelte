@@ -232,7 +232,7 @@
 		>
 			{#if !requests}
 				<p class="p-4 text-center font-sans text-xs opacity-60">Select a run to view traffic</p>
-			{:else if items.length === 0 && !(groups && groups.some((g) => g.folded))}
+			{:else if groups ? groups.length === 0 : !groupBy && items.length === 0}
 				<p class="p-4 text-center font-sans text-xs opacity-60">No requests captured yet</p>
 			{:else}
 				<div
