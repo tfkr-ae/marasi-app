@@ -11,11 +11,12 @@ import { addToLaunchpadItem, linkMenu, newLaunchpadItem } from "../ledger/rowMen
  * what the app already knows: { launchpads, findings, testCases }, the last
  * two each with the pair IDs they link as Requests. A query selection can
  * hold pairs not loaded, so New finding and New test case, which list each
- * pair, are disabled for it, as in the Ledger.
+ * pair, are disabled for it, as in the Ledger, unless every pair it holds
+ * is loaded.
  */
 export function armoryMenuFor({ pairs, selection, count }, { launchpads = [], findings = [], testCases = [] } = {}) {
   if (!selection || count === 0) return [];
-  const partial = !selection.ids;
+  const partial = !selection.ids && pairs.length !== count;
   const one = count === 1;
   const n = count == null ? "all" : count.toLocaleString();
   return [

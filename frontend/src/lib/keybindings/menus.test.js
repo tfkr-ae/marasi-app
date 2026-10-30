@@ -626,3 +626,14 @@ test("no other action's default takes the Text size keys", () => {
     }
   }
 });
+
+test("⌘A selects the Armory run's traffic, but not from the template editor or a field", () => {
+  const dispatcher = mac();
+  assert.equal(dispatcher.resolve(cmd("a", "KeyA"), on("/armory")), "armory.page.select-all-traffic");
+  const codeMirror = { tagName: "DIV", isContentEditable: true, closest: (s) => (s.includes(".cm-editor") ? {} : null) };
+  const field = { tagName: "INPUT", closest: () => null };
+  for (const target of [codeMirror, field]) {
+    const event = keydown("a", "KeyA", { metaKey: true }, target);
+    assert.equal(dispatcher.resolve(event, on("/armory")), null, target.tagName);
+  }
+});

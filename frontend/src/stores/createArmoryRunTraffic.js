@@ -40,10 +40,14 @@ function emptyList(narrowing = "") {
   };
 }
 
-// The Selection lists pairs by ID, as Marasi's { ids } selection. A whole
-// group or the run would be a query with its as_of instead.
+// The Selection lists pairs by ID, as Marasi's { ids } selection, or is a
+// query: whole groups or the run, up to an as_of.
 function emptySelection() {
   return {
+    // A query Selection: { groupBy, groups, asOf, count }, the values of
+    // the groups selected under groupBy (null for the whole run), the
+    // count's as_of and how many pairs it holds. `ids` is empty then.
+    query: null,
     // The selected pairs' IDs, as strings. Replaced, never mutated, so a
     // subscriber can tell a change by identity.
     ids: new Set(),
@@ -65,6 +69,8 @@ function emptyGrouping() {
     // The group values in the order the sections were read in. Groups a
     // live run adds after it join the end until the view reads again.
     order: [],
+    // The pair the counts stop at, the as_of of a group's query.
+    asOf: null,
     // The folded groups' values. Reset when the grouping changes.
     folded: new Set(),
     // value -> list, for each group opened since the last read.
@@ -224,23 +230,92 @@ function rowRange(rows, a, b) {
   return rows.slice(Math.min(i, j), Math.max(i, j) + 1).map((row) => String(row.ID));
 }
 
+// A row's value under a grouping: "" while it has no response.
+function rowValue(groupBy, row) {
+  if (!row.StatusCode) return "";
+  return String(groupBy === "status" ? row.StatusCode : row.Length);
+}
+
+// Whether a query Selection holds this row.
+function queryHolds(query, row) {
+  if (String(row.ID) > query.asOf) return false;
+  return query.groups == null || query.groups.includes(rowValue(query.groupBy, row));
+}
+
+/** True when this row is in the Selection. */
+export function isRowSelected(state, row) {
+  const { ids, query } = state.selection;
+  return query ? queryHolds(query, row) : ids.has(String(row.ID));
+}
+
 /** True when the pair with this ID is in the Selection. */
 export function isPairSelected(state, id) {
-  return id != null && state.selection.ids.has(String(id));
+  if (id == null) return false;
+  if (!state.selection.query) return state.selection.ids.has(String(id));
+  const row = findRow(state, id);
+  return row != null && isRowSelected(state, row);
 }
 
 /** "n selected" while a Selection exists, else "". */
 export function runSelectionLabel(state) {
-  const n = state.selection.ids.size;
+  const { ids, query } = state.selection;
+  const n = query ? query.count : ids.size;
   return n ? `${n.toLocaleString()} selected` : "";
 }
 
 /**
+ * The Selection as Marasi takes it (the Ledger's selectionSpec): { ids },
+ * or for whole groups or the run { query, exclusion, as_of }. The run's
+ * traffic reads whatever the content type, so nothing is excluded. null
+ * when nothing is selected.
+ */
+export function runSelectionSpec(state) {
+  const { ids, query } = state.selection;
+  if (query) {
+    const narrowing = query.groups?.map((value) => groupNarrowing(query.groupBy, value)).join(" OR ") ?? "";
+    return { query: runQuery(state.runId, narrowing), exclusion: [], as_of: query.asOf };
+  }
+  return ids.size ? { ids: [...ids] } : null;
+}
+
+/**
+ * How much of a group the Selection holds: "all", "some" or "". A group
+ * selected as a whole, or the run, is "all" though not all its rows are
+ * read.
+ */
+export function groupSelection(state, group) {
+  const { query } = state.selection;
+  if (query && (query.groups == null || query.groupBy === state.groupBy)) {
+    return query.groups == null || query.groups.includes(group.value) ? "all" : "";
+  }
+  const n = group.list.rows.filter((row) => isRowSelected(state, row)).length;
+  if (n === 0) return "";
+  return !query && n === group.count && !group.list.hasMore ? "all" : "some";
+}
+
+/**
+ * What the row menu acts on when a group header is right-clicked: the
+ * group's query under the count's as_of, with its rows read. The Selection
+ * stays as it was.
+ */
+export function runGroupMenuTarget(state, value) {
+  const group = runTrafficGroups(state)?.find((g) => g.value === value);
+  if (!group) return { pairs: [], selection: null, count: 0 };
+  const asOf = state.grouping.asOf;
+  return {
+    pairs: group.list.rows.filter((row) => String(row.ID) <= asOf),
+    selection: { query: group.query, exclusion: [], as_of: asOf },
+    count: group.count,
+  };
+}
+
+/**
  * The selected pairs: the rows shown in the table's order, then the ones a
- * sort's read hasn't reached again.
+ * sort's read hasn't reached again. A query Selection's are its rows read.
  */
 function selectedPairs(state) {
-  const { ids, rows } = state.selection;
+  const { ids, rows, query } = state.selection;
+  if (query) return readRows(state).filter((row) => queryHolds(query, row));
   if (ids.size === 0) return [];
   const shown = runTrafficRows(state).filter((row) => ids.has(String(row.ID)));
   const seen = new Set(shown.map((row) => String(row.ID)));
@@ -255,6 +330,7 @@ function selectedPairs(state) {
 export function runRowMenuTarget(state, id) {
   if (isPairSelected(state, id)) {
     const pairs = selectedPairs(state);
+    if (state.selection.query) return { pairs, selection: runSelectionSpec(state), count: state.selection.query.count };
     return { pairs, selection: { ids: pairs.map((pair) => String(pair.ID)) }, count: pairs.length };
   }
   const pair = findRow(state, id);
@@ -362,10 +438,11 @@ export function createRunTrafficView(api) {
     update((state) => ({ ...state, grouping: fn(state.grouping) }));
   }
 
-  // Reads a list's rows from the top under a new as_of. `limit` reads as
-  // many as were shown; `keepRows` shows the old ones until the read is
-  // back. A read started under an older generation is dropped.
-  async function readFirst(key = null, { limit = RUN_TRAFFIC_PAGE_SIZE, keepRows = false, gen = ++generation } = {}) {
+  // Reads a list's rows from the top under a new as_of, or `asOf` when
+  // given. `limit` reads as many as were shown; `keepRows` shows the old
+  // ones until the read is back. A read started under an older generation
+  // is dropped.
+  async function readFirst(key = null, { limit = RUN_TRAFFIC_PAGE_SIZE, keepRows = false, gen = ++generation, asOf = "" } = {}) {
     const { runId } = current;
     const list = listOf(current, key);
     updateList(key, (l) => (keepRows ? { ...l, loading: true } : { ...emptyList(l.narrowing), loading: true }));
@@ -374,6 +451,7 @@ export function createRunTrafficView(api) {
       page = await api.queryRunTraffic(String(runId), {
         Query: list.narrowing,
         OrderBy: listOrderBy(current),
+        AsOf: asOf,
         Limit: Math.min(limit, MAX_PAGE_SIZE),
       });
     } catch (err) {
@@ -425,13 +503,14 @@ export function createRunTrafficView(api) {
     });
   }
 
-  // The run's counts by the grouping's field, as [{ value, count }].
-  async function countGroups() {
-    const result = await api.countRunTraffic(String(current.runId), GROUP_FIELDS[current.groupBy]);
-    return (result?.Counts ?? []).map((c) => ({
-      value: c.Value,
-      count: c.Count,
-    }));
+  // The run's counts by `field` up to `asOf` ("" for the newest pair), as
+  // { counts: [{ value, count }], asOf }.
+  async function countGroups(field = GROUP_FIELDS[current.groupBy], asOf = "") {
+    const result = await api.countRunTraffic(String(current.runId), field, asOf);
+    return {
+      counts: (result?.Counts ?? []).map((c) => ({ value: c.Value, count: c.Count })),
+      asOf: result?.AsOf || null,
+    };
   }
 
   /**
@@ -443,9 +522,9 @@ export function createRunTrafficView(api) {
   async function readGroups({ resetFolds = false, keepRows = false } = {}) {
     const gen = ++generation;
     updateGrouping((g) => ({ ...g, loading: true, failed: false }));
-    let counts;
+    let counts, asOf;
     try {
-      counts = await countGroups();
+      ({ counts, asOf } = await countGroups());
     } catch (err) {
       if (gen === generation) updateGrouping((g) => ({ ...g, loading: false, failed: true }));
       throw err;
@@ -464,6 +543,7 @@ export function createRunTrafficView(api) {
         grouping: {
           ...emptyGrouping(),
           counts,
+          asOf,
           order: groupOrder(counts, state.groupBy, state.sort),
           folded,
           lists,
@@ -473,9 +553,11 @@ export function createRunTrafficView(api) {
     const open = counts.filter((c) => !current.grouping.folded.has(c.value));
     await Promise.all(
       open.map((c) =>
+        // Under the counts' as_of, so a group's rows add up to its count.
         readFirst(c.value, {
           gen,
           keepRows,
+          asOf: asOf ?? "",
           limit: Math.max(shown.get(c.value)?.rows.length ?? 0, RUN_TRAFFIC_PAGE_SIZE),
         }),
       ),
@@ -490,8 +572,8 @@ export function createRunTrafficView(api) {
     }
     const gen = generation;
     counting = countGroups()
-      .then((counts) => {
-        if (gen === generation) updateGrouping((g) => ({ ...g, counts }));
+      .then(({ counts, asOf }) => {
+        if (gen === generation) updateGrouping((g) => ({ ...g, counts, asOf }));
       })
       .catch((err) => console.error("Counting run traffic failed:", err))
       .finally(() => {
@@ -623,7 +705,7 @@ export function createRunTrafficView(api) {
       const rows = new Map();
       for (const row of readRows(state)) if (keys.has(String(row.ID))) rows.set(String(row.ID), row);
       for (const key of keys) if (!rows.has(key)) rows.set(key, state.selection.rows.get(key));
-      return { ...state, selection: { ids: keys, rows, anchor } };
+      return { ...state, selection: { ids: keys, rows, anchor, query: null } };
     });
   }
 
@@ -658,7 +740,8 @@ export function createRunTrafficView(api) {
       const list = current.grouping.lists.get(value);
       return !list || (!list.loaded && !list.loading);
     });
-    return Promise.all(unread.map((value) => readFirst(value, { gen: generation }))).then(() => {});
+    const asOf = current.grouping.asOf ?? "";
+    return Promise.all(unread.map((value) => readFirst(value, { gen: generation, asOf }))).then(() => {});
   }
 
   return {
@@ -752,7 +835,10 @@ export function createRunTrafficView(api) {
     clickPair(id, { toggle = false, range = false } = {}) {
       if (id == null) return;
       const key = String(id);
-      const { ids, anchor } = current.selection;
+      const { anchor, query } = current.selection;
+      // ⌘ or ⇧ on a query Selection goes on from the rows it holds read,
+      // as the Ledger's ⌘A does.
+      const ids = query ? new Set(selectedPairs(current).map((row) => String(row.ID))) : current.selection.ids;
       if (range) {
         const span = anchor == null ? [key] : rowRange(runTrafficRows(current), anchor, key);
         return select(toggle ? [...ids, ...span] : span, anchor ?? key);
@@ -766,6 +852,75 @@ export function createRunTrafficView(api) {
 
     clearSelection() {
       select([], current.selection.anchor);
+    },
+
+    /**
+     * ⌘A: selects every pair in the run, folded groups and rows not read
+     * too, as the run's query. Grouped, it stops at the counts' as_of;
+     * else at the list's, counted first.
+     */
+    async selectAll() {
+      const { runId, groupBy, grouping, list } = current;
+      if (runId == null) return;
+      let asOf = grouping.asOf;
+      let count = runTrafficTotal(current);
+      if (!groupBy) {
+        const gen = generation;
+        let counted;
+        try {
+          counted = await countGroups("status_code", list.asOf ?? "");
+        } catch (err) {
+          console.error("Counting run traffic failed:", err);
+          return;
+        }
+        if (gen !== generation) return;
+        asOf = counted.asOf;
+        count = counted.counts.reduce((sum, c) => sum + c.count, 0);
+      }
+      if (!count || !asOf) return;
+      update((state) => ({
+        ...state,
+        selection: { ...emptySelection(), anchor: state.selection.anchor, query: { groupBy, groups: null, asOf, count } },
+      }));
+    },
+
+    /**
+     * ⌘-click on a group header: adds the whole group to the Selection,
+     * read or not, or drops it when the Selection holds it. The groups are
+     * a query under one as_of: the latest count's for a new Selection, and
+     * the Selection's own as it grows or shrinks, counted again under it,
+     * so pairs sent since join no group in it. A Selection of listed pairs
+     * gives way to the group.
+     */
+    async toggleGroupSelection(value) {
+      const { groupBy, grouping } = current;
+      if (!groupBy || !grouping.counts) return;
+      const query = current.selection.query;
+      const asOf = query?.asOf ?? grouping.asOf;
+      let counted = grouping.counts;
+      if (asOf !== grouping.asOf) {
+        ({ counts: counted } = await countGroups(GROUP_FIELDS[groupBy], asOf));
+        // The Selection or grouping changed while counting.
+        if (current.selection.query !== query || current.groupBy !== groupBy) return;
+      }
+      const values = counted.map((c) => c.value);
+      let groups;
+      if (query && query.groups == null) groups = values.filter((v) => v !== value);
+      else if (query && query.groupBy === groupBy && query.groups.includes(value)) {
+        groups = query.groups.filter((v) => v !== value);
+      } else if (query && query.groupBy === groupBy) groups = [...query.groups, value];
+      else groups = [value];
+      if (groups.length === 0) return select([], current.selection.anchor);
+      const counts = new Map(counted.map((c) => [c.value, c.count]));
+      const count = groups.reduce((sum, v) => sum + (counts.get(v) ?? 0), 0);
+      update((state) => ({
+        ...state,
+        selection: {
+          ...emptySelection(),
+          anchor: state.selection.anchor,
+          query: { groupBy, groups, asOf, count },
+        },
+      }));
     },
 
     openPair,

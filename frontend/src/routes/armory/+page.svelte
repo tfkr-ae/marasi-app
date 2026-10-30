@@ -28,6 +28,7 @@
 		CircleStop,
 		Edit,
 		FilePlus2,
+		ListChecks,
 		RefreshCw,
 		Rocket,
 		Save,
@@ -40,9 +41,12 @@
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import {
+		groupSelection,
 		isColumnSortable,
+		isRowSelected,
 		openRunPair,
 		runCanStep,
+		runGroupMenuTarget,
 		runRowMenuTarget,
 		runSelectionLabel,
 		runTrafficGroups,
@@ -513,13 +517,19 @@
 	// The traffic row menu (lib/armory/rowMenu.js, drawn by the Ledger's
 	// RowMenu), opened by right-clicking a row or by the drawer's Actions.
 	// It acts on a target: the Selection when the row is in it, else the row
-	// alone (runRowMenuTarget), through the Ledger's store methods, as the
+	// alone (runRowMenuTarget), or a right-clicked group header's whole group
+	// (runGroupMenuTarget), through the Ledger's store methods, as the
 	// Ledger's row menu does.
 	let rowMenu = { open: false, x: 0, y: 0, target: null, number: null };
 
 	function openRowMenu(row, index, event) {
 		const target = runRowMenuTarget($runTraffic, row.ID);
 		rowMenu = { open: true, x: event.clientX, y: event.clientY, target, number: row.Number || index + 1 };
+	}
+
+	function openGroupMenu(group, event) {
+		const target = runGroupMenuTarget($runTraffic, group.value);
+		rowMenu = { open: true, x: event.clientX, y: event.clientY, target, number: null };
 	}
 
 	function openDrawerMenu(event) {
@@ -652,6 +662,11 @@
 			handler: () => {
 				if (requests.length > 0) openRequest(requests[0]);
 			},
+		},
+		{
+			actionId: "armory.page.select-all-traffic",
+			icon: ListChecks,
+			handler: () => runTraffic.selectAll(),
 		},
 		{
 			actionId: "armory.page.edit-template",
@@ -824,7 +839,8 @@
 					newLabel={runTrafficNewLabel($runTraffic)}
 					scrollTop={$runTraffic.scrollTop}
 					openId={openRow?.ID ?? null}
-					selectedIds={$runTraffic.selection.ids}
+					isSelected={(row) => isRowSelected($runTraffic, row)}
+					groupSelected={(group) => groupSelection($runTraffic, group)}
 					selectionLabel={runSelectionLabel($runTraffic)}
 					onClick={(row, modifiers) => runTraffic.clickPair(row.ID, modifiers)}
 					onClearSelection={runTraffic.clearSelection}
@@ -835,8 +851,11 @@
 						runTraffic.loadMore(value).catch((err) => console.error("Reading run traffic failed:", err))}
 					onGroupBy={(groupBy) =>
 						runTraffic.groupBy(groupBy).catch((err) => console.error("Grouping run traffic failed:", err))}
-					onGroupClick={(group) =>
-						runTraffic.toggleGroup(group.value).catch((err) => console.error("Reading run traffic failed:", err))}
+					onGroupClick={(group, { toggle }) =>
+						toggle
+							? runTraffic.toggleGroupSelection(group.value)
+							: runTraffic.toggleGroup(group.value).catch((err) => console.error("Reading run traffic failed:", err))}
+					onGroupMenu={openGroupMenu}
 					onExpandAll={() =>
 						runTraffic.expandAll().catch((err) => console.error("Reading run traffic failed:", err))}
 					onCollapseAll={runTraffic.collapseAll}
@@ -910,7 +929,12 @@
 	y={rowMenu.y}
 	pairs={rowMenu.target?.pairs ?? []}
 	items={rowMenuItems}
-	context={{ numberOf: (pair) => pair.Number || rowMenu.number }}
+	context={{
+		numberOf: (pair) => pair.Number || rowMenu.number,
+		// A query target holding pairs not read is named by its count alone.
+		all: !!rowMenu.target?.selection && !rowMenu.target.selection.ids && rowMenu.target.pairs.length !== rowMenu.target.count,
+		count: rowMenu.target?.count ?? null,
+	}}
 	extendHint={false}
 	on:action={(e) => runRowAction(e.detail, rowMenu.target)}
 />

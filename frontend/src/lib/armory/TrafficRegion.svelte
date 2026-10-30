@@ -45,8 +45,10 @@
 	export let open = true;
 	/** The ID of the pair open in the drawer, framed in the table. */
 	export let openId = null;
-	/** The selected pairs' IDs, as strings. */
-	export let selectedIds = new Set();
+	/** Whether a row is in the Selection. */
+	export let isSelected = (row) => false;
+	/** How much of a group the Selection holds: "all", "some" or "". */
+	export let groupSelected = (group) => "";
 	/** "n selected" while a Selection exists, else "". */
 	export let selectionLabel = "";
 	/** A click on a row: plain, ⌘/Ctrl (`toggle`) or ⇧ (`range`). */
@@ -60,6 +62,8 @@
 	export let onGroupBy = (groupBy) => {};
 	/** A click on a group header: plain or ⌘/Ctrl (`toggle`). */
 	export let onGroupClick = (group, { toggle }) => {};
+	/** A right-click on a group header: the page opens the row menu for the group. */
+	export let onGroupMenu = (group, event) => {};
 	export let onExpandAll = () => {};
 	export let onCollapseAll = () => {};
 	export let onShowNew = () => {};
@@ -265,12 +269,17 @@
 				{#each items as item, index (item.key)}
 					{#if item.kind === "group"}
 						{@const group = item.group}
+						{@const selection = groupSelected(group)}
 						<button
 							type="button"
-							class="tr-group relative flex h-6 w-full items-center gap-2 border-b border-surface-500/30 bg-surface-100/70 px-2 text-left font-sans text-2xs hover:bg-surface-200 dark:bg-surface-800/60 dark:hover:bg-surface-700"
+							class="tr-group relative flex h-6 w-full items-center gap-2 border-b border-surface-500/30 bg-surface-100/70 px-2 text-left font-sans text-2xs hover:bg-surface-200 dark:bg-surface-800/60 dark:hover:bg-surface-700 {selection ===
+							'all'
+								? 'shadow-[inset_2px_0_0] shadow-primary-500'
+								: ''}"
 							aria-expanded={!group.folded}
-							title={group.folded ? "Expand" : "Fold"}
+							title="Click to {group.folded ? 'expand' : 'fold'}, ⌘-click to select the group, right-click to act on it"
 							on:click={(event) => onGroupClick(group, { toggle: event.metaKey || event.ctrlKey })}
+							on:contextmenu|preventDefault={(event) => onGroupMenu(group, event)}
 						>
 							<!-- The tint fills to the group's share of the run, with a sliver for the smallest. -->
 							<span
@@ -291,6 +300,11 @@
 								><span class="trim block">{group.count.toLocaleString()}</span></span
 							>
 							<span class="flex-1"></span>
+							{#if selection}
+								<span class="trim relative flex-none whitespace-nowrap text-primary-500"
+									>{selection} selected</span
+								>
+							{/if}
 							<span class="trim relative w-12 flex-none whitespace-nowrap text-right tabular-nums opacity-60"
 								>{shareText(group.share)}</span
 							>
@@ -305,7 +319,7 @@
 					{:else}
 						{@const row = item.row}
 						{@const focused = sameID(row.ID, openId)}
-						{@const selected = selectedIds.has(String(row.ID))}
+						{@const selected = isSelected(row)}
 						<button
 							type="button"
 							class="tr-row relative h-[1.375rem] w-full border-b border-surface-300/50 text-left dark:border-surface-700/60 {selected
