@@ -5,8 +5,6 @@
 	let savedTrafficOpen = true;
 	// Whether the drawer shows its details column, as in the Ledger.
 	let savedDrawerExpanded = false;
-	// The drawer's share of the workspace height, set by dragging its edge.
-	let savedDrawerSplit = 0.62;
 	// The project state these belong to; a project opened since the last
 	// visit puts them back to their defaults.
 	let savedVersion = null;
@@ -40,11 +38,10 @@
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
-	import { armoryStore } from "../../stores/armoryStore";
+	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import { activeProject, appState } from "../../stores";
 	import { recentTraffic } from "../../stores/recentTrafficStore";
 	import { ledgerStore } from "../../stores/ledgerStore";
-	import { clampDrawerSplit } from "../../stores/createLedgerStore.js";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
@@ -74,7 +71,6 @@
 		savedSettingsOpen = true;
 		savedTrafficOpen = true;
 		savedDrawerExpanded = false;
-		savedDrawerSplit = 0.62;
 	}
 	const savedTemplateId = savedArmoryState.selectedTemplateId;
 	const savedTemplateDraft = savedArmoryState.templateDraft?.templateId ===
@@ -115,8 +111,11 @@
 	let openId = null;
 	let drawerMaximised = false;
 	let drawerExpanded = savedDrawerExpanded;
-	let drawerSplit = savedDrawerSplit;
 	let workspace;
+	// Measured for the drawer's height until it is dragged (drawerShareOf):
+	// the traffic section's with its top border, so the edges meet.
+	let workspaceHeight = 0;
+	let trafficHeight = 0;
 	let templateEditor;
 	let paginatedRunId = null;
 	let handledRouteTemplateId = null;
@@ -127,7 +126,7 @@
 	$: savedSettingsOpen = settingsOpen;
 	$: savedTrafficOpen = trafficOpen;
 	$: savedDrawerExpanded = drawerExpanded;
-	$: savedDrawerSplit = drawerSplit;
+	$: drawerShare = drawerShareOf($armoryStore, { trafficOpen, trafficHeight, workspaceHeight });
 
 	const trafficPagination = writable({
 		pageIndex: selectedRunId
@@ -204,7 +203,6 @@
 		settingsOpen = true;
 		trafficOpen = true;
 		drawerExpanded = false;
-		drawerSplit = 0.62;
 		trafficPagination.set({ pageIndex: 0, pageSize: 100 });
 	}
 	$: if (selectedRunId !== paginatedRunId) {
@@ -553,7 +551,7 @@
 	function startDrawerResize(event) {
 		event.preventDefault();
 		const rect = workspace.getBoundingClientRect();
-		const move = (e) => (drawerSplit = clampDrawerSplit((rect.bottom - e.clientY) / rect.height));
+		const move = (e) => armoryStore.setDrawerSplit((rect.bottom - e.clientY) / rect.height);
 		const up = () => {
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", up);
@@ -842,7 +840,7 @@
 		onDeleteRun={deleteRun}
 	/>
 
-	<div bind:this={workspace} class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+	<div bind:this={workspace} bind:clientHeight={workspaceHeight} class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
 		{#if selectedTemplate}
 			<TemplateHeader
 				bind:name
@@ -890,7 +888,10 @@
 					{/if}
 				</section>
 			</div>
-			<div class="flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}">
+			<div
+				class="flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}"
+				bind:offsetHeight={trafficHeight}
+			>
 				<TrafficRegion
 					bind:open={trafficOpen}
 					requests={selectedRun ? requests : null}
@@ -908,7 +909,7 @@
 				     Ledger, so CodeMirror's sticky gutters can't paint over it. -->
 				<div
 					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised ? 'top-0' : ''}"
-					style={drawerMaximised ? "" : `height: ${drawerSplit * 100}%`}
+					style={drawerMaximised ? "" : `height: ${drawerShare * 100}%`}
 				>
 					{#if !drawerMaximised}
 						<div
