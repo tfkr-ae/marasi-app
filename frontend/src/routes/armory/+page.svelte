@@ -5,8 +5,6 @@
 	let savedTrafficOpen = true;
 	// Whether the drawer shows its details column, as in the Ledger.
 	let savedDrawerExpanded = false;
-	// The drawer's share of the workspace height, set by dragging its edge.
-	let savedDrawerSplit = 0.62;
 	// The project state these belong to; a project opened since the last
 	// visit puts them back to their defaults.
 	let savedVersion = null;
@@ -40,11 +38,10 @@
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
-	import { armoryStore } from "../../stores/armoryStore";
+	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import { openRunPair, runTrafficNewLabel, runTrafficRows } from "../../stores/createArmoryRunTraffic.js";
 	import { activeProject, appState } from "../../stores";
 	import { ledgerStore } from "../../stores/ledgerStore";
-	import { clampDrawerSplit } from "../../stores/createLedgerStore.js";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
@@ -53,7 +50,7 @@
 	import { newRecord } from "../../lib/logbook/recordEditor.js";
 	import { toastError, toastJump } from "../../lib/toasts.js";
 	import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
-	import { armoryMenuFor } from "../../lib/armory/rowMenu.js";
+	import { armoryMenuFor, pairTarget, runArmoryAction } from "../../lib/armory/rowMenu.js";
 	import RowMenu from "../../lib/ledger/RowMenu.svelte";
 	import ArmoryDock from "../../lib/armory/ArmoryDock.svelte";
 	import ArmoryDrawer from "../../lib/armory/ArmoryDrawer.svelte";
@@ -72,7 +69,6 @@
 		savedSettingsOpen = true;
 		savedTrafficOpen = true;
 		savedDrawerExpanded = false;
-		savedDrawerSplit = 0.62;
 	}
 	const savedTemplateId = savedArmoryState.selectedTemplateId;
 	const savedTemplateDraft = savedArmoryState.templateDraft?.templateId ===
@@ -110,8 +106,11 @@
 	let settingsOpen = savedSettingsOpen;
 	let drawerMaximised = false;
 	let drawerExpanded = savedDrawerExpanded;
-	let drawerSplit = savedDrawerSplit;
 	let workspace;
+	// Measured for the drawer's height until it is dragged (drawerShareOf):
+	// the traffic section's with its top border, so the edges meet.
+	let workspaceHeight = 0;
+	let trafficHeight = 0;
 	let templateEditor;
 	let handledRouteTemplateId = null;
 	let projectStateVersion = savedArmoryState.projectStateVersion;
@@ -121,7 +120,7 @@
 	$: savedSettingsOpen = settingsOpen;
 	$: savedTrafficOpen = trafficOpen;
 	$: savedDrawerExpanded = drawerExpanded;
-	$: savedDrawerSplit = drawerSplit;
+	$: drawerShare = drawerShareOf($armoryStore, { trafficOpen, trafficHeight, workspaceHeight });
 
 	// The selected run's traffic: its rows, read a page at a time in the
 	// sorted order, and the pair open in the drawer, which follows its row
@@ -172,7 +171,6 @@
 		settingsOpen = true;
 		trafficOpen = true;
 		drawerExpanded = false;
-		drawerSplit = 0.62;
 	}
 	$: if (!selectedTemplate && $armoryStore.templates.length > 0) {
 		selectTemplate($armoryStore.templates[0]);
@@ -489,7 +487,7 @@
 	function startDrawerResize(event) {
 		event.preventDefault();
 		const rect = workspace.getBoundingClientRect();
-		const move = (e) => (drawerSplit = clampDrawerSplit((rect.bottom - e.clientY) / rect.height));
+		const move = (e) => armoryStore.setDrawerSplit((rect.bottom - e.clientY) / rect.height);
 		const up = () => {
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", up);
@@ -508,23 +506,29 @@
 
 	// The traffic row menu (lib/armory/rowMenu.js, drawn by the Ledger's
 	// RowMenu), opened by right-clicking a row or by the drawer's Actions.
-	// Its actions run through the Ledger's store methods, as the Ledger's
-	// row menu does, on the one pair it was opened for.
-	let rowMenu = { open: false, x: 0, y: 0, pair: null, number: null };
+	// It acts on a target (pairTarget), through the Ledger's store methods,
+	// as the Ledger's row menu does.
+	let rowMenu = { open: false, x: 0, y: 0, target: null, number: null };
 
 	function openRowMenu(row, index, event) {
-		rowMenu = { open: true, x: event.clientX, y: event.clientY, pair: row, number: row.Number || index + 1 };
+		rowMenu = { open: true, x: event.clientX, y: event.clientY, target: pairTarget(row), number: row.Number || index + 1 };
 	}
 
 	function openDrawerMenu(event) {
 		if (!openRow) return;
 		const rect = event.currentTarget.getBoundingClientRect();
-		rowMenu = { open: true, x: rect.left, y: rect.bottom, pair: openRow, number: openRow.Number };
+		rowMenu = {
+			open: true,
+			x: rect.left,
+			y: rect.bottom,
+			target: pairTarget(openRow),
+			number: openRow.Number,
+		};
 	}
 
 	$: rowMenuItems =
-		rowMenu.open && rowMenu.pair
-			? armoryMenuFor([rowMenu.pair], {
+		rowMenu.open && rowMenu.target
+			? armoryMenuFor(rowMenu.target, {
 					launchpads: $launchpadStore.launchpads,
 					findings: $findingStore,
 					testCases: $testCaseStore,
@@ -539,64 +543,34 @@
 	const refreshLaunchpads = () =>
 		launchpadStore.populate().catch((err) => console.error("Refreshing launchpads failed:", err));
 
-	async function sendToNewLaunchpad(pair) {
-		// The Ledger knows numbers only for pairs it has loaded; Armory's row
-		// knows its own.
-		const numberOf = (id) => pair.Number || ledgerStore.pairNumber(id);
-		try {
-			const { launchpadId } = await ledgerStore.sendToNewLaunchpad({ ids: [String(pair.ID)] }, 1, { numberOf });
-			refreshLaunchpads();
-			notifyJump("Sent to a new launchpad", `/launchpad?id=${launchpadId}`);
-		} catch (error) {
-			toastError(toastStore, "Failed to create a launchpad", error);
-		}
-	}
-
-	async function addToLaunchpad(pair, launchpadId, name) {
-		try {
-			const count = await ledgerStore.addToLaunchpad({ ids: [String(pair.ID)] }, launchpadId);
-			refreshLaunchpads();
-			if (count) notifyJump(`Added to "${name || UNTITLED_LAUNCHPAD}"`, `/launchpad?id=${launchpadId}`);
-		} catch (error) {
-			toastError(toastStore, "Failed to add to the launchpad", error);
-		}
-	}
-
-	// Links or unlinks the pair and a finding or test case.
-	const LINKS = {
-		"link-finding": ["link", "Linked to", "finding", (sel, id) => ledgerStore.linkToFinding(sel, id)],
-		"unlink-finding": ["unlink", "Unlinked from", "finding", (sel, id) => ledgerStore.unlinkFromFinding(sel, id)],
-		"link-test-case": ["link", "Linked to", "test case", (sel, id) => ledgerStore.linkToTestCase(sel, id)],
-		"unlink-test-case": ["unlink", "Unlinked from", "test case", (sel, id) =>
-			ledgerStore.unlinkFromTestCase(sel, id)],
+	// What each action reports: [the failure toast, the success toast].
+	const ROW_ACTION_TOASTS = {
+		"new-launchpad": ["Failed to create a launchpad", ({ launchpadId }) =>
+			notifyJump("Sent to a new launchpad", `/launchpad?id=${launchpadId}`)],
+		"add-to-launchpad": ["Failed to add to the launchpad", ({ count, launchpadId, name }) =>
+			count && notifyJump(`Added to "${name || UNTITLED_LAUNCHPAD}"`, `/launchpad?id=${launchpadId}`)],
+		"link-finding": ["Failed to link the finding", ({ count, title }) => count && notify(`Linked to finding "${title}"`)],
+		"unlink-finding": ["Failed to unlink the finding", ({ count, title }) =>
+			count && notify(`Unlinked from finding "${title}"`)],
+		"link-test-case": ["Failed to link the test case", ({ count, title }) =>
+			count && notify(`Linked to test case "${title}"`)],
+		"unlink-test-case": ["Failed to unlink the test case", ({ count, title }) =>
+			count && notify(`Unlinked from test case "${title}"`)],
 	};
-	async function changeLink(pair, type, id, title) {
-		const [verb, done, noun, run] = LINKS[type];
-		try {
-			const count = await run({ ids: [String(pair.ID)] }, id);
-			if (count) notify(`${done} ${noun} "${title}"`);
-		} catch (error) {
-			toastError(toastStore, `Failed to ${verb} the ${noun}`, error);
-		}
-	}
 
-	/** Runs a row menu action (lib/armory/rowMenu.js) on `pair`. */
-	function runRowAction(action, pair) {
-		if (!action || !pair) return;
-		switch (action.type) {
-			case "new-launchpad":
-				return sendToNewLaunchpad(pair);
-			case "add-to-launchpad":
-				return addToLaunchpad(pair, action.id, action.name);
-			case "new-finding":
-				return newRecord(modalStore, "finding", { requestIds: [pair.ID] });
-			case "new-test-case":
-				return newRecord(modalStore, "testCase", { requestIds: [pair.ID] });
-			case "link-finding":
-			case "unlink-finding":
-			case "link-test-case":
-			case "unlink-test-case":
-				return changeLink(pair, action.type, action.id, action.title);
+	/** Runs a row menu action (lib/armory/rowMenu.js) on `target`. */
+	async function runRowAction(action, target) {
+		if (!action || !target) return;
+		const [failed, done] = ROW_ACTION_TOASTS[action.type] ?? [];
+		try {
+			const outcome = await runArmoryAction(action, target, {
+				ledger: ledgerStore,
+				newRecord: (kind, options) => newRecord(modalStore, kind, options),
+			});
+			if (action.type === "new-launchpad" || action.type === "add-to-launchpad") refreshLaunchpads();
+			done?.(outcome);
+		} catch (error) {
+			toastError(toastStore, failed ?? "Action failed", error);
 		}
 	}
 
@@ -778,7 +752,7 @@
 		onDeleteRun={deleteRun}
 	/>
 
-	<div bind:this={workspace} class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+	<div bind:this={workspace} bind:clientHeight={workspaceHeight} class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
 		{#if selectedTemplate}
 			<TemplateHeader
 				bind:name
@@ -826,7 +800,10 @@
 					{/if}
 				</section>
 			</div>
-			<div class="flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}">
+			<div
+				class="flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}"
+				bind:offsetHeight={trafficHeight}
+			>
 				<TrafficRegion
 					bind:open={trafficOpen}
 					requests={selectedRun ? requests : null}
@@ -852,7 +829,7 @@
 				     Ledger, so CodeMirror's sticky gutters can't paint over it. -->
 				<div
 					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised ? 'top-0' : ''}"
-					style={drawerMaximised ? "" : `height: ${drawerSplit * 100}%`}
+					style={drawerMaximised ? "" : `height: ${drawerShare * 100}%`}
 				>
 					{#if !drawerMaximised}
 						<div
@@ -909,9 +886,9 @@
 	bind:open={rowMenu.open}
 	x={rowMenu.x}
 	y={rowMenu.y}
-	pairs={rowMenu.pair ? [rowMenu.pair] : []}
+	pairs={rowMenu.target?.pairs ?? []}
 	items={rowMenuItems}
-	context={{ numberOf: () => rowMenu.number }}
+	context={{ numberOf: (pair) => pair.Number || rowMenu.number }}
 	extendHint={false}
-	on:action={(e) => runRowAction(e.detail, rowMenu.pair)}
+	on:action={(e) => runRowAction(e.detail, rowMenu.target)}
 />
