@@ -18,6 +18,10 @@ _Avoid_: unfiltered view, all items
 A pair's number in its project, shown as `#` and in "Request N". Marasi assigns it at capture, in capture order, from 1. It never changes and is never reused, so deleted pairs leave gaps, and a pair keeps it under any query, sort or content-type exclusion. The live view lists pairs by pair number, newest first.
 _Avoid_: index, row number, position
 
+**Length**:
+The size of a pair's response in bytes, as Marasi records it. A pair whose response has not arrived has no length.
+_Avoid_: size, response size, content length
+
 **Query**:
 A text expression that narrows the ledger to the request/response pairs that match it, as Marasi defines it. The ledger's current query is not stored; a researcher keeps one by making it a saved query.
 _Avoid_: search, search string, filter, FTS
@@ -39,7 +43,7 @@ The project's traffic as a tree, first by origin and then by path segment, with 
 _Avoid_: site tree, target tree
 
 **Selection**:
-The pairs a researcher has picked in the ledger for a context-menu action to apply to together, as Marasi defines it: either particular pairs, or every pair in the query results up to the newest one the researcher has seen, including pairs not scrolled into view. New matches are not in it until the researcher shows them.
+The pairs a researcher has picked in the ledger, or in an Armory run's traffic, for a context-menu action to apply to together, as Marasi defines it: either particular pairs, or every pair in the query results up to the newest one the researcher has seen, including pairs not scrolled into view. New matches are not in it until the researcher shows them.
 _Avoid_: checked rows, marked rows, batch
 
 **Drawer**:

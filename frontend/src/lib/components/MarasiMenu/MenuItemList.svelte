@@ -15,6 +15,7 @@
 	import { flip } from "svelte/animate";
 	import { menuDispatcher } from "../../keybindings/app.js";
 	import { formatBinding } from "../../keybindings/keys.js";
+	import { matchesMenuSearch } from "./menuSearch.js";
 
 	// Types
 	const dispatch = createEventDispatcher();
@@ -70,23 +71,10 @@
 		listedOptions = _options;
 	}
 
+	// Every typed word must appear in the option's name, subtitle or
+	// keywords (menuSearch.js).
 	function filterOptions() {
-		// Create a local copy of options
-		let _options = [...listedOptions];
-		// Filter options
-		_options = _options.filter((option) => {
-			// Format the input search value
-			const inputFormatted = String(input).toLowerCase().trim();
-			// Format the option
-			let optionFormatted = JSON.stringify([
-				option.label,
-				option.value,
-				option.keywords,
-			]).toLowerCase();
-			// Check Match
-			if (optionFormatted.includes(inputFormatted)) return option;
-		});
-		return _options;
+		return listedOptions.filter((option) => matchesMenuSearch(option, input));
 	}
 
 	function onSelection(option) {

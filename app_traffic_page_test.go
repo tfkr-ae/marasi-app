@@ -2,10 +2,8 @@ package main
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/tfkr-ae/marasi/domain"
 )
 
 func pageTraffic(t *testing.T, app *App, req TrafficPageRequest) TrafficQueryResult {
@@ -156,38 +154,4 @@ func TestCountNotesCountsEveryRequest(t *testing.T) {
 	if !dashboard.InterceptionsComplete {
 		t.Fatalf("wanted a new project's intercepted count to be complete")
 	}
-}
-
-func captureArmoryPair(t *testing.T, app *App, runID uuid.UUID) uuid.UUID {
-	t.Helper()
-	id, err := uuid.NewV7()
-	if err != nil {
-		t.Fatalf("creating pair id: %v", err)
-	}
-	err = app.Proxy.TrafficRepo.InsertRequest(&domain.ProxyRequest{
-		ID: id, Scheme: "https", Method: "GET", Host: "api.acme.test", Path: "/",
-		Raw: []byte("GET / HTTP/1.1\r\nHost: api.acme.test\r\n\r\n"), Metadata: map[string]any{"armory_run_id": runID},
-		RequestedAt: time.Now(),
-	})
-	if err != nil {
-		t.Fatalf("inserting request: %v", err)
-	}
-	return id
-}
-
-func TestListArmoryRunTrafficListsTheRunsPairsOldestFirst(t *testing.T) {
-	app := newScratchpadApp(t)
-	run := uuid.New()
-	first := captureArmoryPair(t, app, run)
-	captureArmoryPair(t, app, uuid.New())
-	capturePair(t, app, capturedPair{host: "api.acme.test", path: "/", statusCode: 200, contentType: "image/png"})
-	second := captureArmoryPair(t, app, run)
-	excludeContentTypes(t, app, "image/png")
-
-	items, err := app.ListArmoryRunTraffic(run.String())
-
-	if err != nil {
-		t.Fatalf("listing run requests: %v", err)
-	}
-	assertIDs(t, []uuid.UUID{first, second}, itemIDs(items))
 }

@@ -112,34 +112,78 @@ func (a *App) QueryTraffic(req TrafficPageRequest) (TrafficQueryResult, error) {
 	return result, nil
 }
 
-// ListArmoryRunTraffic lists every pair an Armory run sent, oldest first,
-// whatever their content type.
-func (a *App) ListArmoryRunTraffic(runID string) ([]*domain.RequestResponseSummary, error) {
-	id, err := uuid.Parse(runID)
+// QueryArmoryRunTraffic reads one page of the pairs an Armory run sent,
+// whatever their content type, as QueryTraffic reads the project's. req.Query
+// narrows the run further ("" for all of it, or a group such as
+// `status_code = 403`); req.OrderBy "" is "requested_at", oldest first.
+func (a *App) QueryArmoryRunTraffic(runID string, req TrafficPageRequest) (TrafficQueryResult, error) {
+	query, err := armoryRunQuery(runID)
 	if err != nil {
-		return nil, fmt.Errorf("listing run requests: run id %q: %w", runID, err)
+		return TrafficQueryResult{}, fmt.Errorf("querying run traffic: %w", err)
+	}
+	if req.Query != "" {
+		query += " AND (" + req.Query + ")"
+	}
+	req.Query = query
+	if req.OrderBy == "" {
+		req.OrderBy = "requested_at"
+	}
+	req.IgnoreExclusion = true
+	return a.QueryTraffic(req)
+}
+
+// ArmoryRunTrafficCounts is an Armory run's pairs counted by one field.
+type ArmoryRunTrafficCounts struct {
+	// Counts holds each distinct value with its exact count, most common
+	// first. Pairs with no response yet count under "".
+	Counts []*domain.TrafficFieldCount
+	// AsOf bounds the counts: only pairs with an id at or below it count.
+	// A query Selection of the run or a group passes it as its as_of.
+	// "" when the project has no pairs.
+	AsOf string
+}
+
+// CountArmoryRunTraffic counts an Armory run's pairs, whatever their content
+// type, by field ("status_code" or "length") under asOf, or under the newest
+// pair when asOf is "": each distinct value with its exact count, most
+// common first, and the as_of used. A malformed run id or as_of, or a field
+// Marasi cannot count by, is a Go error.
+func (a *App) CountArmoryRunTraffic(runID string, field string, asOf string) (ArmoryRunTrafficCounts, error) {
+	query, err := armoryRunQuery(runID)
+	if err != nil {
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
+	}
+	if asOf == "" {
+		// A one-pair read reports the newest pair as its bound.
+		page, err := a.QueryArmoryRunTraffic(runID, TrafficPageRequest{Limit: 1})
+		if err != nil {
+			return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
+		}
+		asOf = page.AsOf
+	}
+	bound, err := parseOptionalPairID("as_of", asOf)
+	if err != nil {
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
 	}
 	traffic, err := a.Proxy.GetTrafficRepo()
 	if err != nil {
-		return nil, fmt.Errorf("listing run requests: %w", err)
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
 	}
-	q := domain.TrafficQuery{
-		Text:    "metadata.armory_run_id = " + strconv.Quote(id.String()),
-		OrderBy: "requested_at",
-		Limit:   maxTrafficQueryPageSize,
+	counts, err := traffic.CountTrafficByField(domain.TrafficFieldCountQuery{Text: query, Field: field, AsOf: bound})
+	if err != nil {
+		return ArmoryRunTrafficCounts{}, fmt.Errorf("counting run traffic: %w", err)
 	}
-	items := []*domain.RequestResponseSummary{}
-	for {
-		page, err := traffic.ListTraffic(q)
-		if err != nil {
-			return nil, fmt.Errorf("listing run requests: %w", err)
-		}
-		items = append(items, page.Items...)
-		if page.NextCursor == nil {
-			return items, nil
-		}
-		q.Cursor, q.AsOf = *page.NextCursor, page.AsOf
+	return ArmoryRunTrafficCounts{Counts: counts.Counts, AsOf: asOf}, nil
+}
+
+// armoryRunQuery is the traffic query for the pairs the Armory run runID
+// sent. Marasi indexes it.
+func armoryRunQuery(runID string) (string, error) {
+	id, err := uuid.Parse(runID)
+	if err != nil {
+		return "", fmt.Errorf("run id %q: %w", runID, err)
 	}
+	return "metadata.armory_run_id = " + strconv.Quote(id.String()), nil
 }
 
 // parseOptionalPairID parses a pair id the frontend passed back, or returns
