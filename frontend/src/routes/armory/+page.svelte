@@ -39,7 +39,13 @@
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
-	import { openRunPair, runTrafficNewLabel, runTrafficRows } from "../../stores/createArmoryRunTraffic.js";
+	import {
+		openRunPair,
+		runRowMenuTarget,
+		runSelectionLabel,
+		runTrafficNewLabel,
+		runTrafficRows,
+	} from "../../stores/createArmoryRunTraffic.js";
 	import { activeProject, appState } from "../../stores";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
@@ -423,10 +429,6 @@
 		});
 	}
 
-	function openRequest(row) {
-		runTraffic.openPair(row.ID);
-	}
-
 	function adjacent(
 		items,
 		currentId,
@@ -506,12 +508,14 @@
 
 	// The traffic row menu (lib/armory/rowMenu.js, drawn by the Ledger's
 	// RowMenu), opened by right-clicking a row or by the drawer's Actions.
-	// It acts on a target (pairTarget), through the Ledger's store methods,
-	// as the Ledger's row menu does.
+	// It acts on a target: the Selection when the row is in it, else the row
+	// alone (runRowMenuTarget), through the Ledger's store methods, as the
+	// Ledger's row menu does.
 	let rowMenu = { open: false, x: 0, y: 0, target: null, number: null };
 
 	function openRowMenu(row, index, event) {
-		rowMenu = { open: true, x: event.clientX, y: event.clientY, target: pairTarget(row), number: row.Number || index + 1 };
+		const target = runRowMenuTarget($runTraffic, row.ID);
+		rowMenu = { open: true, x: event.clientX, y: event.clientY, target, number: row.Number || index + 1 };
 	}
 
 	function openDrawerMenu(event) {
@@ -812,7 +816,10 @@
 					newLabel={runTrafficNewLabel($runTraffic)}
 					scrollTop={$runTraffic.scrollTop}
 					openId={openRow?.ID ?? null}
-					onOpen={openRequest}
+					selectedIds={$runTraffic.selection.ids}
+					selectionLabel={runSelectionLabel($runTraffic)}
+					onClick={(row, modifiers) => runTraffic.clickPair(row.ID, modifiers)}
+					onClearSelection={runTraffic.clearSelection}
 					onMenu={openRowMenu}
 					onSort={(column) =>
 						runTraffic.sortBy(column).catch((err) => console.error("Sorting run traffic failed:", err))}

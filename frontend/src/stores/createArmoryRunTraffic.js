@@ -1,6 +1,6 @@
 // The Armory's run traffic view: the selected run's pairs, read from Marasi
-// a page at a time in the order the researcher sorted them, and the pair
-// open in the drawer. Backend calls go through the injected `api`
+// a page at a time in the order the researcher sorted them, the pair open
+// in the drawer, and the Selection the row menu acts on. Backend calls go through the injected `api`
 // ({ queryRunTraffic(runId, TrafficPageRequest) }); armoryStore.js binds it
 // to QueryArmoryRunTraffic.
 //
@@ -11,6 +11,7 @@
 import { writable } from "svelte/store";
 import { sameID } from "../lib/ledger/pairs.js";
 import { stepRequest } from "../lib/armory/traffic.js";
+import { pairTarget } from "../lib/armory/rowMenu.js";
 
 /** How many pairs one read asks for. */
 export const RUN_TRAFFIC_PAGE_SIZE = 200;
@@ -37,6 +38,21 @@ function emptyList(narrowing = "") {
   };
 }
 
+// The Selection lists pairs by ID, as Marasi's { ids } selection. A whole
+// group or the run would be a query with its as_of instead.
+function emptySelection() {
+  return {
+    // The selected pairs' IDs, as strings. Replaced, never mutated, so a
+    // subscriber can tell a change by identity.
+    ids: new Set(),
+    // The selected pairs' last copies by ID, for the ones a sort's read
+    // from the top hasn't reached again.
+    rows: new Map(),
+    // Where ⇧-click ranges start: the last pair clicked without ⇧.
+    anchor: null,
+  };
+}
+
 function initialState(sort = { column: null, desc: false }) {
   return {
     runId: null,
@@ -48,6 +64,7 @@ function initialState(sort = { column: null, desc: false }) {
     // read from the top).
     openId: null,
     openRow: null,
+    selection: emptySelection(),
     // Where the table was scrolled, so a page visit comes back to it.
     scrollTop: 0,
   };
@@ -74,6 +91,52 @@ export function sortedColumn(state) {
 /** The rows the table shows, in its order. */
 export function runTrafficRows(state) {
   return state.list.rows;
+}
+
+// The IDs of the rows shown from `a` to `b`, both included, in the table's
+// order; just [b] when `a` is not shown.
+function rowRange(rows, a, b) {
+  const i = rows.findIndex((row) => sameID(row.ID, a));
+  const j = rows.findIndex((row) => sameID(row.ID, b));
+  if (i < 0 || j < 0) return [String(b)];
+  return rows.slice(Math.min(i, j), Math.max(i, j) + 1).map((row) => String(row.ID));
+}
+
+/** True when the pair with this ID is in the Selection. */
+export function isPairSelected(state, id) {
+  return id != null && state.selection.ids.has(String(id));
+}
+
+/** "n selected" while a Selection exists, else "". */
+export function runSelectionLabel(state) {
+  const n = state.selection.ids.size;
+  return n ? `${n.toLocaleString()} selected` : "";
+}
+
+/**
+ * The selected pairs: the rows shown in the table's order, then the ones a
+ * sort's read hasn't reached again.
+ */
+function selectedPairs(state) {
+  const { ids, rows } = state.selection;
+  if (ids.size === 0) return [];
+  const shown = runTrafficRows(state).filter((row) => ids.has(String(row.ID)));
+  const seen = new Set(shown.map((row) => String(row.ID)));
+  return [...shown, ...[...ids].filter((key) => !seen.has(key)).map((key) => rows.get(key)).filter(Boolean)];
+}
+
+/**
+ * What the row menu acts on when this row is right-clicked, in the shape
+ * of lib/armory/rowMenu.js's pairTarget: the Selection when the row is in
+ * it, else the row alone. The Selection stays as it was.
+ */
+export function runRowMenuTarget(state, id) {
+  if (isPairSelected(state, id)) {
+    const pairs = selectedPairs(state);
+    return { pairs, selection: { ids: pairs.map((pair) => String(pair.ID)) }, count: pairs.length };
+  }
+  const pair = runTrafficRows(state).find((row) => sameID(row.ID, id));
+  return pair ? pairTarget(pair) : { pairs: [], selection: null, count: 0 };
 }
 
 /** "n new" while sent pairs wait to be shown; "" when none do. */
@@ -252,6 +315,29 @@ export function createRunTrafficView(api) {
     }
   }
 
+  function select(ids, anchor) {
+    update((state) => {
+      const keys = new Set(ids);
+      const rows = new Map();
+      for (const row of runTrafficRows(state)) if (keys.has(String(row.ID))) rows.set(String(row.ID), row);
+      for (const key of keys) if (!rows.has(key)) rows.set(key, state.selection.rows.get(key));
+      return { ...state, selection: { ids: keys, rows, anchor } };
+    });
+  }
+
+  /**
+   * Opens the pair with this ID, one of the rows, in the drawer, and
+   * empties the Selection: a plain click means "look at this one". The
+   * pair becomes the anchor.
+   */
+  function openPair(id) {
+    update((state) => {
+      const row = runTrafficRows(state).find((item) => sameID(item.ID, id)) ?? null;
+      const anchor = row ? String(row.ID) : null;
+      return { ...state, openId: row ? row.ID : null, openRow: row, selection: { ...emptySelection(), anchor } };
+    });
+  }
+
   return {
     subscribe,
     /** Reads the page after the last row, if there is one. */
@@ -288,13 +374,33 @@ export function createRunTrafficView(api) {
       return readFirst({ limit: Math.max(current.list.rows.length, RUN_TRAFFIC_PAGE_SIZE), keepRows: true });
     },
 
-    /** Opens the pair with this ID, one of the rows, in the drawer. */
-    openPair(id) {
-      update((state) => {
-        const row = runTrafficRows(state).find((item) => sameID(item.ID, id)) ?? null;
-        return { ...state, openId: row ? row.ID : null, openRow: row };
-      });
+    /**
+     * A click on a row. Plain opens the pair in the drawer and empties the
+     * Selection. `toggle` (⌘/Ctrl) adds the pair to the Selection or drops
+     * it. `range` (⇧) selects the rows shown from the anchor to it,
+     * replacing the Selection, or adding to it with `toggle` too. Only
+     * ranges keep the anchor where it was; the drawer stays as it was.
+     */
+    clickPair(id, { toggle = false, range = false } = {}) {
+      if (id == null) return;
+      const key = String(id);
+      const { ids, anchor } = current.selection;
+      if (range) {
+        const span = anchor == null ? [key] : rowRange(runTrafficRows(current), anchor, key);
+        return select(toggle ? [...ids, ...span] : span, anchor ?? key);
+      }
+      if (!toggle) return openPair(id);
+      const next = new Set(ids);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      select(next, key);
     },
+
+    clearSelection() {
+      select([], current.selection.anchor);
+    },
+
+    openPair,
     closePair() {
       update((state) => ({ ...state, openId: null, openRow: null }));
     },

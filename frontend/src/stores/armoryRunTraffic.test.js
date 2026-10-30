@@ -3,11 +3,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
+import { armoryMenuFor, runArmoryAction } from "../lib/armory/rowMenu.js";
 import {
   RUN_TRAFFIC_PAGE_SIZE,
   createRunTrafficView,
   openRunPair,
   runTrafficNewLabel,
+  runRowMenuTarget,
+  runSelectionLabel,
   runTrafficRows,
   sortedColumn,
 } from "./createArmoryRunTraffic.js";
@@ -379,4 +382,170 @@ test("a pair sent to an empty sorted table that its read misses still counts as 
   view.flush();
   assert.deepEqual(numbers(view), [1]);
   assert.equal(runTrafficNewLabel(get(view)), "1 new");
+});
+
+// The Selection, as in the Ledger: ⌘-click toggles a pair, ⇧-click extends
+// from the anchor over the rows shown, a plain click opens the pair and
+// empties it.
+
+const selected = (view) => [...get(view).selection.ids];
+
+test("⌘-click adds a pair to the Selection and a second ⌘-click drops it, leaving the drawer as it was", async () => {
+  const { view } = await opened(many(4));
+  view.clickPair(id(2), { toggle: true });
+  view.clickPair(id(4), { toggle: true });
+  assert.deepEqual(selected(view), [id(2), id(4)]);
+  assert.equal(openRunPair(get(view)), null);
+
+  view.clickPair(id(2), { toggle: true });
+  assert.deepEqual(selected(view), [id(4)]);
+});
+
+test("a plain click opens the pair in the drawer and empties the Selection", async () => {
+  const { view } = await opened(many(4));
+  view.clickPair(id(1), { toggle: true });
+  view.clickPair(id(3), { toggle: true });
+  view.clickPair(id(2));
+  assert.deepEqual(selected(view), []);
+  assert.equal(openRunPair(get(view)).Number, 2);
+});
+
+test("⇧-click selects from the anchor to the pair over the rows in their sorted order", async () => {
+  const lengths = [40, 10, 30, 20, 50];
+  const { view } = await opened(lengths.map((length, i) => pair(i + 1, { length })));
+  await view.sortBy("size");
+  // By length: #2 (10), #4 (20), #3 (30), #1 (40), #5 (50).
+  view.clickPair(id(4), { toggle: true });
+  view.clickPair(id(1), { range: true });
+  assert.deepEqual(selected(view), [id(4), id(3), id(1)]);
+
+  // The anchor stays, so a second ⇧-click replaces the range.
+  view.clickPair(id(2), { range: true });
+  assert.deepEqual(selected(view), [id(2), id(4)]);
+});
+
+test("⇧-click extends from the pair a plain click opened", async () => {
+  const { view } = await opened(many(5));
+  view.clickPair(id(2));
+  view.clickPair(id(4), { range: true });
+  assert.deepEqual(selected(view), [id(2), id(3), id(4)]);
+  assert.equal(openRunPair(get(view)).Number, 2);
+});
+
+test("⌘⇧-click adds the range to the Selection", async () => {
+  const { view } = await opened(many(6));
+  view.clickPair(id(1), { toggle: true });
+  view.clickPair(id(4), { toggle: true });
+  view.clickPair(id(6), { toggle: true, range: true });
+  assert.deepEqual(selected(view), [id(1), id(4), id(5), id(6)]);
+});
+
+test("⇧-click with no anchor selects just that pair", async () => {
+  const { view } = await opened(many(3));
+  view.clickPair(id(2), { range: true });
+  assert.deepEqual(selected(view), [id(2)]);
+});
+
+test("the top bar counts the Selection, and Clear empties it", async () => {
+  const { view } = await opened(many(1200));
+  assert.equal(runSelectionLabel(get(view)), "");
+  view.clickPair(id(1), { toggle: true });
+  view.clickPair(id(RUN_TRAFFIC_PAGE_SIZE), { range: true });
+  assert.equal(runSelectionLabel(get(view)), "200 selected");
+  view.clearSelection();
+  assert.deepEqual(selected(view), []);
+  assert.equal(runSelectionLabel(get(view)), "");
+});
+
+test("another run starts with no Selection", async () => {
+  const { api, view } = await opened([...many(3), pair(4, { run: "run-2" })]);
+  view.clickPair(id(2), { toggle: true });
+  await view.open("run-2");
+  assert.deepEqual(selected(view), []);
+  assert.ok(api.calls.length >= 2);
+});
+
+// A fake Ledger store's bulk methods, recording what each is sent.
+function fakeLedger() {
+  const sent = [];
+  return {
+    sent,
+    pairNumber: () => null,
+    sendToNewLaunchpad: async (selection, count, { numberOf }) => {
+      sent.push({ method: "sendToNewLaunchpad", selection, count, numbers: selection.ids.map(numberOf) });
+      return { launchpadId: "L9" };
+    },
+    addToLaunchpad: async (selection, id) => (sent.push({ method: "addToLaunchpad", selection, id }), selection.ids.length),
+    linkToFinding: async (selection, id) => (sent.push({ method: "linkToFinding", selection, id }), selection.ids.length),
+    unlinkFromFinding: async (selection, id) => (sent.push({ method: "unlinkFromFinding", selection, id }), selection.ids.length),
+    linkToTestCase: async (selection, id) => (sent.push({ method: "linkToTestCase", selection, id }), selection.ids.length),
+    unlinkFromTestCase: async (selection, id) => (sent.push({ method: "unlinkFromTestCase", selection, id }), selection.ids.length),
+  };
+}
+
+test("right-clicking a selected pair targets the whole Selection, in the table's order", async () => {
+  const { view } = await opened(many(5));
+  view.clickPair(id(4), { toggle: true });
+  view.clickPair(id(1), { toggle: true });
+  view.clickPair(id(3), { toggle: true });
+  const target = runRowMenuTarget(get(view), id(1));
+  assert.deepEqual(target.pairs.map((p) => p.Number), [1, 3, 4]);
+  assert.deepEqual(target.selection, { ids: [id(1), id(3), id(4)] });
+  assert.equal(target.count, 3);
+  assert.equal(armoryMenuFor(target).find((it) => it.id === "launchpad").sub[0].label, "New launchpad with 3 entries");
+});
+
+test("right-clicking an unselected pair targets that pair alone and keeps the Selection", async () => {
+  const { view } = await opened(many(5));
+  view.clickPair(id(1), { toggle: true });
+  view.clickPair(id(2), { toggle: true });
+  const target = runRowMenuTarget(get(view), id(5));
+  assert.deepEqual(target.pairs.map((p) => p.Number), [5]);
+  assert.deepEqual(target.selection, { ids: [id(5)] });
+  assert.equal(target.count, 1);
+  assert.deepEqual(selected(view), [id(1), id(2)]);
+});
+
+test("each action on a Selection sends every selected pair", async () => {
+  const { view } = await opened(many(5));
+  view.clickPair(id(2), { toggle: true });
+  view.clickPair(id(4), { range: true });
+  const target = runRowMenuTarget(get(view), id(3));
+  const ledger = fakeLedger();
+  const opened_ = [];
+  const newRecord = (kind, options) => opened_.push({ kind, ...options });
+  const all = { ids: [id(2), id(3), id(4)] };
+
+  await runArmoryAction({ type: "new-launchpad" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "add-to-launchpad", id: "L1" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "link-finding", id: "F1" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "unlink-finding", id: "F1" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "link-test-case", id: "T1" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "unlink-test-case", id: "T1" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "new-finding" }, target, { ledger, newRecord });
+  await runArmoryAction({ type: "new-test-case" }, target, { ledger, newRecord });
+
+  assert.deepEqual(ledger.sent[0], { method: "sendToNewLaunchpad", selection: all, count: 3, numbers: [2, 3, 4] });
+  assert.deepEqual(
+    ledger.sent.slice(1).map(({ method, selection }) => [method, selection]),
+    ["addToLaunchpad", "linkToFinding", "unlinkFromFinding", "linkToTestCase", "unlinkFromTestCase"].map((m) => [m, all]),
+  );
+  assert.deepEqual(opened_, [
+    { kind: "finding", requestIds: all.ids },
+    { kind: "testCase", requestIds: all.ids },
+  ]);
+});
+
+test("the Selection keeps its pairs through a sort whose first page doesn't reach them", async () => {
+  // Length grows with #, so sorting by Length descending puts #1 and #2 last.
+  const { view } = await opened(many(RUN_TRAFFIC_PAGE_SIZE + 50).map((p) => ({ ...p, Length: p.Number })));
+  view.clickPair(id(1), { toggle: true });
+  view.clickPair(id(2), { toggle: true });
+  await view.sortBy("size");
+  await view.sortBy("size");
+  assert.equal(numbers(view)[0], RUN_TRAFFIC_PAGE_SIZE + 50);
+  assert.equal(runSelectionLabel(get(view)), "2 selected");
+  const target = runRowMenuTarget(get(view), id(1));
+  assert.deepEqual(target.selection, { ids: [id(1), id(2)] });
+  assert.deepEqual(target.pairs.map((p) => p.Number).sort(), [1, 2]);
 });
