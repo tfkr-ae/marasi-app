@@ -125,7 +125,7 @@ function appMenu() {
   const focused = BrowserWindow.getFocusedWindow()?.webContents.id ?? null;
   const connected = windows.list(focused).map((item) => ({
     label: item.label,
-    type: "checkbox",
+    type: "radio",
     checked: item.current,
     click: () => focusWindow(item.id),
   }));
@@ -155,7 +155,10 @@ function appMenu() {
 function windowsChanged() {
   Menu.setApplicationMenu(appMenu());
   app.setBadgeCount(windows.held());
-  for (const window of BrowserWindow.getAllWindows()) window.webContents.send("windows:changed");
+  for (const window of BrowserWindow.getAllWindows()) {
+    // A window closing, as at quit, can't be told.
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send("windows:changed");
+  }
 }
 
 // A window. A `blank` one opens on the connection screen, to connect to
