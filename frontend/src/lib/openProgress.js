@@ -1,19 +1,20 @@
 // The opening screen's state for one open of a project: the steps, the
-// sentence and the progress, built from the open's log events, the load
-// sequence's part signals and the open's outcome. No Svelte or Wails here:
-// this is the opening screen's test seam (see openProgress.test.js).
+// sentence and the progress, built from Marasi's project.* events, the load
+// sequence's part signals and the open's outcome. No Svelte or bindings
+// here: this is the opening screen's test seam (see openProgress.test.js).
 //
 // The state is a plain object; each `with…` function returns a new one, and
 // `openingScreen` turns it into what the screen renders.
 
 import { codeIDs } from "./errorCodes.js";
 
-// The open's steps in order. `running` is the label while the step runs,
-// `failed` the label once it failed, when it differs from `label`.
+// The open's steps in order. `running` is the label while the step runs;
+// a locked project fails Open as Locked.
+// Open covers the project lock too: Marasi reports nothing between them.
 const openSteps = [
-  { id: "lock", label: "Lock", running: "Locking", failed: "Locked", sentence: "Checking the project lock." },
   { id: "open", label: "Open", running: "Opening", sentence: "Opening the database." },
   { id: "upgrade", label: "Upgrade", running: "Upgrading", sentence: "Upgrading the database. Keep Marasi open." },
+  { id: "wait", label: "Wait", running: "Waiting" },
   { id: "load", label: "Load", running: "Loading" },
 ];
 const stepIndex = Object.fromEntries(openSteps.map(({ id }, i) => [id, i]));
@@ -68,56 +69,64 @@ export function openingFor({ name, path = null, current = null, scratchpad = fal
     current,
     recents: [],
     step: 0,
-    upgradeFile: null,
-    upgradesApplied: 0,
+    // The last project.upgrading: {migration, applied, total}.
+    upgrade: null,
+    // What the switch waits for, from the last project.waiting.
+    waitingFor: null,
+    // The local instance that owns a locked project, once found.
+    owner: null,
     part: 0,
     log: [],
     failure: null,
   };
 }
 
-/**
- * Feeds one log event from the open: the app's slog records from the db
- * component and from goose, which logs one record per migration statement
- * with the migration file as `source`. Other events are ignored.
- */
-export function withOpenLog(state, log) {
-  const data = log?.data;
-  // Marasi's own proxy logs (capitalised fields) and other components'
-  // records aren't part of the open.
-  if (typeof log?.level !== "string" || state.step === succeededStep || state.failure) return state;
-  const isGoose = data?.logger === "goose";
-  if (!isGoose && data?.component !== "db") return state;
+// Whether the open is over, so its events no longer change it.
+const isOver = (state) => state.step === succeededStep || Boolean(state.failure);
 
-  let step = state.step;
-  // The lock writes no log; connecting to the database means it's held.
-  if (log.message === "Connecting to SQLite...") step = Math.max(step, stepIndex.open);
-  else if (isGoose) step = Math.max(step, stepIndex.upgrade);
-  else if (log.message === "Migrations completed" || log.message === "Migrations up to date") {
-    step = Math.max(step, stepIndex.load);
-  }
-
-  // Marasi logs the upgrade's total only once it has finished, so count
-  // the upgrade files seen instead: each new source is one more applied.
-  let { upgradeFile, upgradesApplied } = state;
-  const source = isGoose ? data.source : null;
-  if (source && source !== upgradeFile) {
-    if (upgradeFile) upgradesApplied += 1;
-    upgradeFile = source;
-  }
-  // A project opened by bare name has no path until its database says.
-  const path = state.path ?? (!isGoose && typeof data.path === "string" ? data.path : null);
-  return { ...state, step, upgradeFile, upgradesApplied, path, log: [...state.log, logLine(log)] };
+/** Feeds project.opening {project}: the path the open resolved to. */
+export function withOpening(state, { project } = {}) {
+  if (isOver(state)) return state;
+  const path = state.path ?? (typeof project === "string" ? project : null);
+  return { ...state, path, log: [...state.log, `Opening ${project}`] };
 }
 
-// One log event as a Details line: its time, level, message and fields,
-// as logged.
-function logLine({ timestamp, level, message, data }) {
-  const fields = Object.entries(data ?? {}).map(([key, value]) => {
-    const text = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
-    return ` ${key}=${text}`;
-  });
-  return `${timestamp} ${level} ${message}${fields.join("")}`;
+/** Feeds project.upgrading {migration, applied, total}: one more migration applied. */
+export function withUpgrading(state, { migration, applied, total } = {}) {
+  if (isOver(state)) return state;
+  return {
+    ...state,
+    step: Math.max(state.step, stepIndex.upgrade),
+    upgrade: { migration, applied, total },
+    log: [...state.log, `Upgrade ${applied} of ${total}: ${migration}`],
+  };
+}
+
+// One thing a switch waits for, as project.waiting names it.
+function waitLabel(wait) {
+  if (wait.kind === "checkpoint") return `Held ${wait.type}: ${wait.summary}`;
+  if (wait.kind === "extension") return `Extension ${wait.name} running`;
+  const count = wait.count ?? 1;
+  return `${count} other call${count === 1 ? "" : "s"} finishing`;
+}
+
+/**
+ * Feeds project.waiting {waiting_for}: the switch waits for held Checkpoint
+ * items, running extension Lua or other work. Each event lists all of it.
+ */
+export function withWaiting(state, { waiting_for: waits = [] } = {}) {
+  if (isOver(state)) return state;
+  return {
+    ...state,
+    step: Math.max(state.step, stepIndex.wait),
+    waitingFor: waits,
+    log: [...state.log, `Waiting for: ${waits.map(waitLabel).join(", ")}`],
+  };
+}
+
+/** Records the local instance `owner` that holds a locked project. */
+export function withOwner(state, owner) {
+  return { ...state, owner: owner ?? null };
 }
 
 /**
@@ -139,6 +148,7 @@ export function withSwitched(state) {
   return {
     ...state,
     step: Math.max(state.step, stepIndex.load),
+    waitingFor: null,
     current: { name: state.name, path: state.path },
   };
 }
@@ -148,20 +158,28 @@ export function withOpened(state) {
   return { ...state, step: succeededStep };
 }
 
+// The text of a failure that carries only the HTTP status, as the POST's
+// does when project.opening_failed has the real error.
+const codeOnly = (text) => /: HTTP \d+$/.test(text);
+
 /**
- * Records that the open failed with `error`, as the app's Go side returned
- * it. A locked project (the `project_locked` code: another Marasi owns it)
- * fails the Lock step; any other error fails the step that was running.
+ * Records that the open failed with `error`: the POST's refusal or
+ * project.opening_failed's text, in either order. A locked project
+ * (`project_already_open`, "project already open: <path>") fails Open as
+ * Locked; any other error fails the step that was running. Marasi's text
+ * replaces a refusal that has only its code.
  */
 export function withFailed(state, error) {
   const text = String(error ?? "");
-  const locked = codeIDs(text, "project_locked") !== null;
-  // Marasi's lock error names the project's file: "project already open: <path>".
-  const lockedPath = locked ? (/project already open: (.+)$/.exec(text)?.[1] ?? null) : null;
+  if (state.failure && !codeOnly(state.failure.error) && codeOnly(text)) return state;
+  const lockedPath = /project already open: (.+)$/.exec(text)?.[1] ?? null;
+  const locked =
+    codeIDs(text, "project_already_open") !== null || lockedPath !== null || state.failure?.kind === "locked";
+  const failedStep = state.failure ? state.step : Math.min(state.step, stepIndex.load);
   return {
     ...state,
     path: state.path ?? lockedPath,
-    step: locked ? stepIndex.lock : Math.min(state.step, stepIndex.load),
+    step: locked ? stepIndex.open : failedStep,
     failure: { kind: locked ? "locked" : "other", error: text },
     // Details ends with the error, as returned.
     log: [...state.log, text],
@@ -169,20 +187,25 @@ export function withFailed(state, error) {
 }
 
 /**
- * Feeds the recent projects, as GetRecentProjects returns them
- * (`{ProjectName: <path>, Date: <Go time>}`), to pick from after a failure.
- * `now` (epoch ms) is when they're listed, for how long ago each opened.
+ * The instance's projects, as GET /project/list returns them
+ * (`{name, project, modified_at}`), newest first, each `{name, path,
+ * opened}` with how long before `now` (epoch ms) it was last opened.
  */
-export function withRecents(state, recents, now = Date.now()) {
-  const projects = (recents ?? []).map(({ ProjectName, Date: date }) => ({
-    name: projectName(ProjectName),
-    path: ProjectName,
-    at: goTime(date),
-    opened: openedAgo(date, now),
+export function recentProjects(items, now = Date.now()) {
+  const projects = (items ?? []).map(({ name, project, modified_at }) => ({
+    name: name ?? projectName(project),
+    path: project,
+    at: Date.parse(modified_at),
+    opened: openedAgo(modified_at, now),
   }));
-  // Most recent first; a date that doesn't parse goes last.
+  // A time that doesn't parse goes last.
   projects.sort((a, b) => (Number.isNaN(b.at) ? -Infinity : b.at) - (Number.isNaN(a.at) ? -Infinity : a.at));
-  return { ...state, recents: projects.map(({ name, path, opened }) => ({ name, path, opened })) };
+  return projects.map(({ name, path, opened }) => ({ name, path, opened }));
+}
+
+/** Feeds the instance's projects to pick from after a failure, as recentProjects. */
+export function withRecents(state, items, now = Date.now()) {
+  return { ...state, recents: recentProjects(items, now) };
 }
 
 /** A project file's name, without its directory or ".marasi". */
@@ -192,20 +215,11 @@ export const projectName = (path) =>
     .pop()
     .replace(/\.marasi$/, "");
 
-// Go's time.Time.String(), "2006-01-02 15:04:05.999999999 -0700 MST", as
-// epoch ms; WebKit's Date doesn't parse it as is. NaN when it doesn't match.
-function goTime(text) {
-  const match = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)(?:\.(\d+))? ([+-]\d\d)(\d\d)/.exec(String(text ?? ""));
-  if (!match) return NaN;
-  const [, day, time, fraction = "0", hours, minutes] = match;
-  return Date.parse(`${day}T${time}.${fraction.padEnd(3, "0").slice(0, 3)}${hours}:${minutes}`);
-}
-
-// How long before `now` a project last opened, from Go's time `text`:
+// How long before `now` a project last opened, from RFC3339 `text`:
 // "Just now", "20 minutes ago", "Yesterday", "Last week", up to four weeks,
 // then the day it opened ("2026-08-02"). Empty when the time doesn't parse.
 function openedAgo(text, now) {
-  const at = goTime(text);
+  const at = Date.parse(text);
   if (Number.isNaN(at)) return "";
   const minutes = Math.floor(Math.max(0, now - at) / 60000);
   const hours = Math.floor(minutes / 60);
@@ -219,7 +233,7 @@ function openedAgo(text, now) {
   if (weeks < 1) return ago(days, "day");
   if (weeks === 1) return "Last week";
   if (weeks < 5) return ago(weeks, "week");
-  // The day as Go wrote it, in the time zone it was written in.
+  // The day as Marasi wrote it.
   return String(text).slice(0, 10);
 }
 
@@ -232,23 +246,27 @@ const isProject = (recent, name, path) =>
 /** Everything the opening screen renders. */
 export function openingScreen(state) {
   const { failure } = state;
-  const steps = openSteps.map(({ id, label, running, failed }, i) => {
+  const steps = openSteps.map(({ id, label, running }, i) => {
     let mark = "todo";
     if (i === state.step) mark = failure ? "failed" : "current";
     else if (i < state.step) mark = "done";
     if (mark === "current") return { id, label: running, mark };
-    if (mark === "failed") return { id, label: failed ?? label, mark };
+    if (mark === "failed") return { id, label: failure.kind === "locked" ? "Locked" : label, mark };
     return { id, label, mark };
   });
   const loading = !failure && state.step === stepIndex.load;
   const part = loading ? loadParts[state.part].label : null;
+  const waits = !failure && state.step === stepIndex.wait ? (state.waitingFor ?? []) : null;
+  const held = waits?.filter((wait) => wait.kind === "checkpoint").length ?? 0;
   let sentence = "Opened.";
   if (failure?.kind === "locked") {
     const project = state.scratchpad ? "The scratchpad" : "The project";
-    sentence = `${project} is opened by another instance.`;
+    sentence = state.owner ? `${project} is open on ${state.owner}.` : `${project} is opened by another instance.`;
   }
   else if (failure) sentence = "Couldn't open the project.";
   else if (loading) sentence = `Loading ${part.toLowerCase()}.`;
+  else if (waits && held) sentence = `Waiting for ${held} held Checkpoint item${held === 1 ? "" : "s"}.`;
+  else if (waits) sentence = "Waiting for running work to finish.";
   else if (state.step < succeededStep) sentence = openSteps[state.step].sentence;
   return {
     project: { name: state.name, path: state.path },
@@ -257,10 +275,8 @@ export function openingScreen(state) {
     opened: state.step === succeededStep ? { name: state.name, path: state.path } : null,
     steps,
     sentence,
-    upgrade:
-      !failure && state.step === stepIndex.upgrade && state.upgradeFile
-        ? { file: state.upgradeFile, applied: state.upgradesApplied }
-        : null,
+    upgrade: !failure && state.step === stepIndex.upgrade ? state.upgrade : null,
+    waiting: waits && { items: waits.map(waitLabel), checkpoint: held > 0 },
     load: {
       part,
       done: state.step === succeededStep ? loadParts.length : loading ? state.part : 0,
@@ -268,8 +284,15 @@ export function openingScreen(state) {
     },
     failure,
     // Stay in names the project still open, if any; only a locked project
-    // may open on a retry, once the other Marasi lets it go.
-    actions: failure ? { stayIn: state.current?.name ?? null, tryAgain: failure.kind === "locked" } : null,
+    // may open on a retry, once the other instance lets it go, and only
+    // its owner can be connected to.
+    actions: failure
+      ? {
+          stayIn: state.current?.name ?? null,
+          tryAgain: failure.kind === "locked",
+          owner: failure.kind === "locked" ? state.owner : null,
+        }
+      : null,
     // With no project open (at startup) there's nothing to stay in, so the
     // list is the way forward.
     choicesLabel: state.current === null ? "Open a project instead" : "Open another project",
