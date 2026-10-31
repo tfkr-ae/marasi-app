@@ -9,9 +9,11 @@ v2 is an Electron app with no Go code. A fresh worktree runs `scripts/bootstrap.
 
 Frontend code calls the v1 bindings through `frontend/src/lib/bindings/App.js`. A binding that isn't ported yet rejects with a `NotPorted` error. A ported binding calls the connected instance through the Marasi client module, `marasi` in `frontend/src/lib/bindings/marasi.js`. A coded refusal rejects with an error that the `errorCodes.js` helpers read, and a route the instance doesn't have rejects with "Needs a newer Marasi".
 
-- `MARASI_CONFIG_DIR` points the app at another Marasi config directory, such as a throwaway one for a test instance. The default is the directory Marasi itself uses.
+Marasi events reach the stores through `frontend/src/lib/marasiEvents.js`, which follows the window connection's `/events`. A store that handles an event gets a row in its `handlers`, and every store that shows instance data is in its `stores`, whose `reload()` runs after the stream reopens.
+
+- `MARASI_CONFIG_DIR`, or the Electron flag `--config-dir=DIR` (with `=`), points the app at another Marasi config directory, such as a throwaway one for a test instance. The default is the directory Marasi itself uses, which holds the real `marasi_appconfig.yaml` v1 shares, so tests and verification always use a temp dir.
 - `MARASI_BIN` names the Marasi binary for the integration suites (`electron/*.integration.test.js`). Without it they use `resources/bin/marasi`, and they are skipped when neither exists.
-- At launch the app connects to the `default` instance in that config directory, and starts it when it isn't running, so use a throwaway `MARASI_CONFIG_DIR` for test runs. Start and the instance ownership rules are in `electron/local.js`.
+- At launch the app connects to the `default` instance in that config directory, and starts it when it isn't running, which is another reason to use a throwaway config directory for test runs. Start and the instance ownership rules are in `electron/local.js`.
 
 Electron runs as plain Node when `ELECTRON_RUN_AS_NODE` is set, as it is in some agent terminals. `npm run dev` clears it; unset it yourself to run a packaged app.
 

@@ -1,0 +1,343 @@
+title: "OWASP Web Security Testing Guide (WSTG)"
+description: "A comprehensive checklist for web application security testing."
+version: "1.0.0"
+test_cases:
+  - title: Conduct Search Engine Discovery Reconnaissance for Information Leakage
+    description: Identify what sensitive design and configuration information of the application, system, or organization is exposed directly (on the organization's site) or indirectly (via third-party services).
+    category: Information Gathering
+  - title: Fingerprint Web Server
+    description: Determine the version and type of a running web server to enable further discovery of any known vulnerabilities.
+    category: Information Gathering
+  - title: Review Webserver Metafiles for Information Leakage
+    description: Identify hidden or obfuscated paths and functionality through the analysis of metadata files. Extract and map other information that could lead to a better understanding of the systems at hand.
+    category: Information Gathering
+  - title: Attack Surface Identification
+    description: Enumerate all web applications within scope. Identify DNS names, domains, and virtual hosts associated with the target. Discover additional domains and subdomains using passive and active DNS techniques. Analyze digital certificates and Certificate Transparency logs for additional hostnames.
+    category: Information Gathering
+  - title: Review Web Page Content for Information Leakage
+    description: Review web page comments, metadata, and redirect bodies to find any information leakage. Gather JavaScript files and review the JS code to better understand the application and to find any information leakage. Identify if source map files or other frontend debug files exist.
+    category: Information Gathering
+  - title: Identify Application Entry Points
+    description: Identify possible entry and injection points through request and response analysis.
+    category: Information Gathering
+  - title: Map Execution Paths Through Application
+    description: Map the target application and understand the principal workflows.
+    category: Information Gathering
+  - title: Fingerprint Web Application Framework
+    description: Fingerprint the components used by the web applications.
+    category: Information Gathering
+  - title: Fingerprint Web Application
+    description: ""
+    category: Information Gathering
+  - title: Map Application Architecture
+    description: Understand the architecture of the application and the technologies in use.
+    category: Information Gathering
+  - title: Test Network Infrastructure Configuration
+    description: Review the applications' configurations set across the network and validate that they are not vulnerable. Validate that used frameworks and systems are secure and not susceptible to known vulnerabilities due to unmaintained software or default settings and credentials.
+    category: Configuration and Deployment Management Testing
+  - title: Test Application Platform Configuration
+    description: Ensure that default and known files have been removed. Validate that no debugging code or extensions are left in the production environments. Review the logging mechanisms set in place for the application.
+    category: Configuration and Deployment Management Testing
+  - title: Test File Extensions Handling for Sensitive Information
+    description: Enumerate sensitive file extensions that might contain raw data such as scripts or credentials. Validate that no system framework bypasses exist for the rules that have been set.
+    category: Configuration and Deployment Management Testing
+  - title: Review Old Backup and Unreferenced Files for Sensitive Information
+    description: Find and analyse unreferenced files that might contain sensitive information.
+    category: Configuration and Deployment Management Testing
+  - title: Enumerate Infrastructure and Application Admin Interfaces
+    description: Identify hidden administrator interfaces and functionality.
+    category: Configuration and Deployment Management Testing
+  - title: Test HTTP Methods
+    description: Enumerate supported HTTP methods. Test for access control bypass. Test HTTP method overriding techniques.
+    category: Configuration and Deployment Management Testing
+  - title: Test HTTP Strict Transport Security
+    description: Review the HSTS header and its validity.
+    category: Configuration and Deployment Management Testing
+  - title: Test RIA Cross Domain Policy
+    description: ""
+    category: Configuration and Deployment Management Testing
+  - title: Test File Permission
+    description: Review and identify any rogue file permissions.
+    category: Configuration and Deployment Management Testing
+  - title: Test for Subdomain Takeover
+    description: Enumerate all possible domains (previous and current). Identify any forgotten or misconfigured domains.
+    category: Configuration and Deployment Management Testing
+  - title: Test Cloud Storage
+    description: Assess that the access control configuration for the storage services is properly in place.
+    category: Configuration and Deployment Management Testing
+  - title: Testing for Content Security Policy
+    description: Review the Content-Security-Policy header or meta element to identify misconfigurations.
+    category: Configuration and Deployment Management Testing
+  - title: Test Path Confusion
+    description: Make sure application paths are configured correctly.
+    category: Configuration and Deployment Management Testing
+  - title: Test Other HTTP Security Header Misconfigurations
+    description: Identify improperly configured security headers. Assess the impact of misconfigured security headers. Validate the correct implementation of required security headers.
+    category: Configuration and Deployment Management Testing
+  - title: Test Role Definitions
+    description: Identify and document roles used by the application. Attempt to switch, change, or access another role. Review the granularity of the roles and the needs behind the permissions given.
+    category: Identity Management Testing
+  - title: Test User Registration Process
+    description: Verify that the identity requirements for user registration are aligned with business and security requirements. Validate the registration process.
+    category: Identity Management Testing
+  - title: Test Account Provisioning Process
+    description: Verify which accounts may provision other accounts and of what type.
+    category: Identity Management Testing
+  - title: Testing for Account Enumeration and Guessable User Account
+    description: Review processes that pertain to user identification (*e.g.* registration, login, etc.). Enumerate users where possible through response analysis.
+    category: Identity Management Testing
+  - title: Testing for Weak or Unenforced Username Policy
+    description: ""
+    category: Identity Management Testing
+  - title: Testing for Credentials Transported over an Encrypted Channel
+    description: ""
+    category: Authentication Testing
+  - title: Testing for Default Credentials
+    description: Determine whether the application has any user accounts with default passwords. Review whether new user accounts are created with weak or predictable passwords.
+    category: Authentication Testing
+  - title: Testing for Weak Lock Out Mechanism
+    description: Evaluate the account lockout mechanism's ability to mitigate brute force password guessing. Evaluate the unlock mechanism's resistance to unauthorized account unlocking.
+    category: Authentication Testing
+  - title: Testing for Bypassing Authentication Schema
+    description: Ensure that authentication is applied across all services that require it.
+    category: Authentication Testing
+  - title: Testing for Vulnerable Remember Password
+    description: Validate that the generated session is managed securely and do not put the user's credentials in danger.
+    category: Authentication Testing
+  - title: Testing for Browser Cache Weaknesses
+    description: Review if the application stores sensitive information on the client-side. Review if access can occur without authorization.
+    category: Authentication Testing
+  - title: Testing for Weak Authentication Methods
+    description: Determine the resistance of the application against brute force password guessing using available password dictionaries by evaluating the length, complexity, reuse, and aging requirements of passwords.
+    category: Authentication Testing
+  - title: Testing for Weak Security Question Answer
+    description: Determine the complexity and how straight-forward the questions are. Assess possible user answers and brute force capabilities.
+    category: Authentication Testing
+  - title: Testing for Weak Password Change or Reset Functionalities
+    description: Determine whether the password change and reset functionality allows accounts to be compromised.
+    category: Authentication Testing
+  - title: Testing for Weaker Authentication in Alternative Channel
+    description: Identify alternative authentication channels. Assess the security measures used and if any bypasses exists on the alternative channels.
+    category: Authentication Testing
+  - title: Testing Multi-Factor Authentication (MFA)
+    description: Identify the type of MFA used by the application. Determine whether the MFA implementation is robust and secure. Attempt to bypass the MFA.
+    category: Authentication Testing
+  - title: Testing Directory Traversal File Include
+    description: Identify injection points that pertain to path traversal. Assess bypassing techniques and identify the extent of path traversal.
+    category: Authorization Testing
+  - title: Testing for Bypassing Authorization Schema
+    description: Assess if unauthenticated, horizontal, or vertical access is possible.
+    category: Authorization Testing
+  - title: Testing for Privilege Escalation
+    description: Identify injection points related to privilege manipulation. Fuzz or otherwise attempt to bypass security measures.
+    category: Authorization Testing
+  - title: Testing for Insecure Direct Object References
+    description: Identify points where object references may occur. Assess the access control measures and if they're vulnerable to IDOR.
+    category: Authorization Testing
+  - title: Testing for OAuth Weaknesses
+    description: Determine if OAuth2 implementation is vulnerable or using a deprecated or custom implementation.
+    category: Authorization Testing
+  - title: Testing for Session Management Schema
+    description: Gather session tokens, for the same user and for different users where possible. Analyze and ensure that enough randomness exists to stop session forging attacks. Modify cookies that are not signed and contain information that can be manipulated.
+    category: Session Management Testing
+  - title: Testing for Cookies Attributes
+    description: Ensure that the proper security configuration is set for cookies.
+    category: Session Management Testing
+  - title: Testing for Session Fixation
+    description: Analyze the authentication mechanism and its flow. Force cookies and assess the impact.
+    category: Session Management Testing
+  - title: Testing for Exposed Session Variables
+    description: Ensure that proper encryption is implemented. Review the caching configuration. Assess the channel and methods' security.
+    category: Session Management Testing
+  - title: Testing for Cross Site Request Forgery
+    description: Determine whether it is possible to initiate requests on a user's behalf that are not initiated by the user.
+    category: Session Management Testing
+  - title: Testing for Logout Functionality
+    description: Assess the logout UI. Analyze the session timeout and if the session is properly killed after logout.
+    category: Session Management Testing
+  - title: Testing Session Timeout
+    description: Validate that a hard session timeout exists.
+    category: Session Management Testing
+  - title: Testing for Session Puzzling
+    description: Identify all session variables. Break the logical flow of session generation.
+    category: Session Management Testing
+  - title: Testing for Session Hijacking
+    description: Identify vulnerable session cookies. Hijack vulnerable cookies and assess the risk level.
+    category: Session Management Testing
+  - title: Testing JSON Web Tokens
+    description: Determine whether the JWTs expose sensitive information. Determine whether the JWTs can be tampered with or modified.
+    category: Session Management Testing
+  - title: Testing for Concurrent Sessions
+    description: Evaluate the application's session management by assessing the handling of multiple active sessions for a single user account.
+    category: Session Management Testing
+  - title: Testing for Reflected Cross Site Scripting
+    description: Identify variables that are reflected in responses. Assess the input they accept and the encoding that gets applied on return (if any).
+    category: Input Validation Testing
+  - title: Testing for Stored Cross Site Scripting
+    description: Identify stored input that is reflected on the client-side. Assess the input they accept and the encoding that gets applied on return (if any).
+    category: Input Validation Testing
+  - title: Testing for HTTP Verb Tampering
+    description: ""
+    category: Input Validation Testing
+  - title: Testing for HTTP Parameter Pollution
+    description: Identify the backend and the parsing method used. Assess injection points and try bypassing input filters using HPP.
+    category: Input Validation Testing
+  - title: Testing for SQL Injection
+    description: Identify SQL injection points. Assess the severity of the injection and the level of access that can be achieved through it.
+    category: Input Validation Testing
+  - title: Testing for LDAP Injection
+    description: Identify LDAP injection points. Assess the severity of the injection.
+    category: Input Validation Testing
+  - title: Testing for XML Injection
+    description: Identify XML injection points. Assess the types of exploits that can be attained and their severities.
+    category: Input Validation Testing
+  - title: Testing for SSI Injection
+    description: Identify SSI injection points. Assess the severity of the injection.
+    category: Input Validation Testing
+  - title: Testing for XPath Injection
+    description: Identify XPATH injection points.
+    category: Input Validation Testing
+  - title: Testing for IMAP SMTP Injection
+    description: Identify IMAP/SMTP injection points. Understand the data flow and deployment structure of the system. Assess the injection impacts.
+    category: Input Validation Testing
+  - title: Testing for Code Injection
+    description: Identify injection points where you can inject code into the application. Assess the injection severity.
+    category: Input Validation Testing
+  - title: Testing for Command Injection
+    description: Identify and assess command injection points. Bypass special characters and OS commands filter.
+    category: Input Validation Testing
+  - title: Testing for Buffer Overflow
+    description: ""
+    category: Input Validation Testing
+  - title: Testing for Format String Injection
+    description: Assess whether injecting format string conversion specifiers into user-controlled fields causes undesired behavior from the application.
+    category: Input Validation Testing
+  - title: Testing for Incubated Vulnerability
+    description: Identify injections that are stored and require a recall step to the stored injection. Understand how a recall step could occur. Set listeners or activate the recall step if possible.
+    category: Input Validation Testing
+  - title: Testing for HTTP Response Splitting
+    description: Identify user-controlled input that is reflected into HTTP response headers. Assess whether CR (\r) and LF (\n) characters can be injected into response headers. Determine the potential impact of successful HTTP Response Splitting attacks, such as cache poisoning or client-side exploitation.
+    category: Input Validation Testing
+  - title: Testing for HTTP Request Smuggling
+    description: Identify request boundary inconsistencies between frontend and backend components. Detect classic CL/TE desynchronization vulnerabilities. Evaluate protocol translation logic (HTTP/2 → HTTP/1.1). Assess H2C upgrade handling and downgrade safety. Confirm backend request queue poisoning.
+    category: Input Validation Testing
+  - title: Testing for Host Header Injection
+    description: Assess if the Host header is being parsed dynamically in the application. Bypass security controls that rely on the header.
+    category: Input Validation Testing
+  - title: Testing for Server-side Template Injection
+    description: Detect template injection vulnerability points. Identify the templating engine. Build the exploit.
+    category: Input Validation Testing
+  - title: Testing for Server-Side Request Forgery
+    description: Identify SSRF injection points. Test if the injection points are exploitable. Asses the severity of the vulnerability.
+    category: Input Validation Testing
+  - title: Testing for Mass Assignment
+    description: Identify requests that modify objects. Assess if it is possible to modify fields never intended to be modified from outside.
+    category: Input Validation Testing
+  - title: Testing for CSV Injection
+    description: Identify CSV/spreadsheet export features that include untrusted input. Verify whether attacker-controlled values are interpreted as formulas when the export is opened in common spreadsheet applications. Check whether separator/quote injection can move a dangerous prefix to the start of a cell. Validate whether mitigations remain effective in Microsoft Excel after saving and re-opening the CSV. Assess practical impact based on who opens the export and how it is used.
+    category: Input Validation Testing
+  - title: Testing for Improper Error Handling
+    description: Identify existing error output. Analyze the different output returned.
+    category: Testing for Error Handling
+  - title: Testing for Stack Traces
+    description: ""
+    category: Testing for Error Handling
+  - title: Testing for Weak Transport Layer Security
+    description: Validate the service configuration. Review the digital certificate's cryptographic strength and validity. Ensure that the TLS security is not bypassable and is properly implemented across the application.
+    category: Testing for Weak Cryptography
+  - title: Testing for Padding Oracle
+    description: Identify encrypted messages that rely on padding. Attempt to break the padding of the encrypted messages and analyze the returned error messages for further analysis.
+    category: Testing for Weak Cryptography
+  - title: Testing for Sensitive Information Sent via Unencrypted Channels
+    description: Identify sensitive information transmitted through the various channels. Assess the privacy and security of the channels used.
+    category: Testing for Weak Cryptography
+  - title: Testing for Weak Cryptographic Primitives
+    description: Provide a guideline for the identification weak encryption or hashing uses and implementations.
+    category: Testing for Weak Cryptography
+  - title: Test Business Logic Data Validation
+    description: Identify data injection points. Validate that all checks are occurring on the backend and can't be bypassed. Attempt to break the format of the expected data and analyze how the application is handling it.
+    category: Business Logic Testing
+  - title: Test Ability to Forge Requests
+    description: Review the project documentation looking for guessable, predictable, or hidden functionality of fields. Insert logically valid data in order to bypass normal business logic workflow.
+    category: Business Logic Testing
+  - title: Test Integrity Checks
+    description: Review the project documentation for components of the system that move, store, or handle data. Determine what type of data is logically acceptable by the component and what types the system should guard against. Determine who should be allowed to modify or read that data in each component. Attempt to insert, update, or delete data values used by each component that should not be allowed per the business logic workflow.
+    category: Business Logic Testing
+  - title: Test for Process Timing
+    description: Review the project documentation for system functionality that may be impacted by time. Develop and execute misuse cases.
+    category: Business Logic Testing
+  - title: Test Number of Times a Function Can Be Used Limits
+    description: Identify functions that must set limits to the times they can be called. Assess if there is a logical limit set on the functions and if it is properly validated.
+    category: Business Logic Testing
+  - title: Testing for the Circumvention of Work Flows
+    description: Review the project documentation for methods to skip or go through steps in the application process in a different order from the intended business logic flow. Develop a misuse case and try to circumvent every logic flow identified.
+    category: Business Logic Testing
+  - title: Test Defenses Against Application Misuse
+    description: Generate notes from all tests conducted against the system. Review which tests had a different functionality based on aggressive input. Understand the defenses in place and verify if they are enough to protect the system against bypassing techniques.
+    category: Business Logic Testing
+  - title: Test Upload of Unexpected File Types
+    description: Review the project documentation for file types that are rejected by the system. Verify that the unwelcomed file types are rejected and handled safely. Verify that file batch uploads are secure and do not allow any bypass against the set security measures.
+    category: Business Logic Testing
+  - title: Test Upload of Malicious Files
+    description: Identify the file upload functionality. Review the project documentation to identify what file types are considered acceptable, and what types would be considered dangerous or malicious. Determine how the uploaded files are processed. Try to upload the malicious files to the application and determine whether it is accepted and processed.
+    category: Business Logic Testing
+  - title: Test Payment Functionality
+    description: Determine whether the business logic for the e-commerce functionality is robust. Understand how the payment functionality works. Determine whether the payment functionality is secure.
+    category: Business Logic Testing
+  - title: Testing for DOM-Based Cross Site Scripting
+    description: Identify DOM sinks. Build payloads that pertain to every sink type.
+    category: Client-side Testing
+  - title: Testing for JavaScript Execution
+    description: Identify sinks and possible JavaScript injection points.
+    category: Client-side Testing
+  - title: Testing for HTML Injection
+    description: Identify HTML injection points and assess the severity of the injected content.
+    category: Client-side Testing
+  - title: Testing for Client-side URL Redirect
+    description: Identify injection points that handle URLs or paths. Assess the locations that the system could redirect to.
+    category: Client-side Testing
+  - title: Testing for CSS Injection
+    description: Identify CSS injection points. Assess the impact of the injection.
+    category: Client-side Testing
+  - title: Testing for Client-side Resource Manipulation
+    description: Identify sinks with weak input validation. Assess the impact of the resource manipulation.
+    category: Client-side Testing
+  - title: Testing Cross Origin Resource Sharing
+    description: Identify endpoints that implement CORS. Ensure that the CORS configuration is secure or harmless.
+    category: Client-side Testing
+  - title: Testing for Cross Site Flashing
+    description: Decompile and analyze the application's code. Assess sinks inputs and unsafe method usages.
+    category: Client-side Testing
+  - title: Testing for Clickjacking
+    description: Assess application vulnerability to clickjacking attacks.
+    category: Client-side Testing
+  - title: Testing WebSockets
+    description: Identify the usage of WebSockets. Assess its implementation by using the same tests on normal HTTP channels.
+    category: Client-side Testing
+  - title: Testing Web Messaging
+    description: Assess the security of the message's origin. Validate that it's using safe methods and validating its input.
+    category: Client-side Testing
+  - title: Testing Browser Storage
+    description: Determine whether the site is storing sensitive data in client-side storage. The code handling of the storage objects should be examined for possibilities of injection attacks.
+    category: Client-side Testing
+  - title: Testing for Cross Site Script Inclusion
+    description: Locate sensitive data across the system. Assess the leakage of sensitive data through various techniques.
+    category: Client-side Testing
+  - title: Testing for Reverse Tabnabbing
+    description: ""
+    category: Client-side Testing
+  - title: Testing for Client-side Template Injection
+    description: Identify the client-side framework and its version used by the application. Detect injection points where user input is reflected into the DOM. Assess if the injection allows for arbitrary JavaScript execution (XSS).
+    category: Client-side Testing
+  - title: API Reconnaissance
+    description: Find all API endpoints supported by the backend server code, documented or undocumented. Find all parameters for each endpoint. Discover interesting data related to APIs in HTML and JavaScript.
+    category: API Testing
+  - title: API Broken Object Level Authorization
+    description: Identify whether the API enforces proper object-level authorization checks, ensuring that users can only access objects they are authorized to interact with.
+    category: API Testing
+  - title: Testing for Excessive Data Exposure
+    description: Identify API responses that contain more data than required. Detect sensitive fields returned in API responses. Determine whether the API relies on client-side filtering.
+    category: API Testing
+  - title: Testing GraphQL
+    description: Assess that a secure and production-ready configuration is deployed. Validate all input fields against generic attacks. Ensure that proper access controls are applied.
+    category: API Testing

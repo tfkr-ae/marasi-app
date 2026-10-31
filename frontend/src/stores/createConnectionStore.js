@@ -177,6 +177,13 @@ export function createConnectionStore(api) {
 			}));
 		},
 
+		// Reads the WebSocket intercept flag again, after the event stream
+		// reopens. An open stream view reads its messages when it opens.
+		reload: async () => {
+			const enabled = await api.GetWSInterceptFlag();
+			update((state) => ({ ...state, wsInterceptEnabled: enabled }));
+		},
+
 		populateInterceptFlag: async () => {
 			try {
 				const enabled = await api.GetWSInterceptFlag();

@@ -127,5 +127,6 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
     store.set(initial());
   }
 
-  return { subscribe: store.subscribe, refresh, watch, rebuild, clear };
+  // reload reads the jobs again, after the event stream reopens.
+  return { subscribe: store.subscribe, refresh, reload: refresh, watch, rebuild, clear };
 }

@@ -3,16 +3,21 @@
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from "electron";
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { createAppConfig } from "./appConfig.js";
+import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
+import { marasiConfigDir } from "./configDir.js";
 import { listLocalInstances } from "./instances.js";
+import { createKeybindingFiles } from "./keybindingFiles.js";
 import { createLocalConnections } from "./local.js";
 import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
+import { nodeFS } from "./nodeFS.js";
 import { callSocket } from "./socket.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,10 +28,15 @@ const origin = `${scheme}://marasi`;
 // `npm run dev` points the window at the Vite dev server instead.
 const devServerURL = app.isPackaged ? null : process.env.MARASI_DEV_SERVER_URL;
 const appOrigin = new URL(devServerURL ?? `${origin}/`).origin;
-// Marasi's config directory, where its instances keep their sockets: the
-// one Marasi itself defaults to (os.UserConfigDir()/Marasi), unless
-// MARASI_CONFIG_DIR names another, as for a throwaway instance.
-const configDir = process.env.MARASI_CONFIG_DIR || join(app.getPath("appData"), "Marasi");
+// Marasi's config directory, where its instances keep their sockets and
+// v1 and v2 keep the app config: the one Marasi itself defaults to
+// (os.UserConfigDir()/Marasi), unless --config-dir=DIR or MARASI_CONFIG_DIR
+// names another, as for a throwaway instance (configDir.js).
+const configDir = marasiConfigDir({
+  appData: app.getPath("appData"),
+  configDirSwitch: app.commandLine.getSwitchValue("config-dir"),
+  configDirEnv: process.env.MARASI_CONFIG_DIR,
+});
 // The Marasi Start runs: the bundled one, or the researcher's choice.
 // Read once the app is ready.
 let marasi;
@@ -39,6 +49,9 @@ const connections = createLocalConnections({
   call: callSocket,
   marasiBin: () => marasi.bin(),
 });
+// The app's own update channel, as v1's GetBuildInfo reported it. Builds
+// stay "dev" until the updater ticket gives them a channel.
+const buildChannel = "dev";
 
 protocol.registerSchemesAsPrivileged([
   { scheme, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -59,6 +72,34 @@ function serveFrontend() {
     if (!path) return new Response("Not found", { status: 404 });
     return net.fetch(pathToFileURL(path).toString());
   });
+}
+
+// The app config v1 and v2 share, and the keybinding profile files, for
+// every window.
+function serveAppConfig() {
+  const appConfig = createAppConfig({
+    dir: configDir,
+    fs: nodeFS,
+    defaultTestCases: readFileSync(join(here, "resources", "default_test_cases.yml"), "utf8"),
+  });
+  const chosen = (result) => (result.canceled ? null : (result.filePath ?? result.filePaths?.[0] ?? null));
+  // The dialog is a sheet on the focused window, if there is one.
+  const show = (open, options) => {
+    const parent = BrowserWindow.getFocusedWindow();
+    return parent ? open(parent, options) : open(options);
+  };
+  const keybindingFiles = createKeybindingFiles({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: {
+      save: async (options) => chosen(await show(dialog.showSaveDialog, options)),
+      open: async (options) => chosen(await show(dialog.showOpenDialog, { ...options, properties: ["openFile"] })),
+    },
+  });
+  handleAppConfig({ handle }, { appConfig, keybindingFiles });
+  handle("app:buildInfo", () => ({ Channel: buildChannel, Version: app.getVersion() }));
+  // A config v2 can't prepare stays as it is; each read then reports why.
+  return appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
 }
 
 function createWindow() {
@@ -160,6 +201,7 @@ app.whenReady().then(async () => {
   });
   serveFrontend();
   serveConnections();
+  await serveAppConfig();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -10,6 +10,8 @@ function createFindingStore() {
 			const findings = await ListFindings();
 			set(findings || []);
 		},
+		// Reads the findings again, after the event stream reopens.
+		reload: async () => set((await ListFindings()) || []),
 		clear: () => set([]),
 		create: async (requestIds, testCaseUUID = null) => {
 			const finding = await CreateDraftFinding(requestIds, testCaseUUID);

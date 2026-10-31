@@ -1,14 +1,14 @@
 <script>
     import { DataHandler } from "@vincjo/datatables";
-    import { logItems } from "../../stores";
+    import { logStore } from "../../stores/logStore.js";
     import Sort from "./datatables/Sort.svelte";
     import { onMount } from "svelte";
     import { GetExtensions } from "../bindings/App";
     export const extensionsMap = {};
-    const handler = new DataHandler(Object.values($logItems), {
+    const handler = new DataHandler(Object.values($logStore.items), {
         rowsPerPage: 200,
     });
-    $: handler.setRows(Object.values($logItems).toReversed());
+    $: handler.setRows(Object.values($logStore.items).toReversed());
     $: rows = handler.getRows();
     onMount(() => {
         GetExtensions().then((exts) => {
@@ -28,7 +28,7 @@
                     <Sort
                         {handler}
                         orderBy={(row) => {
-                            return $logItems.indexOf(row);
+                            return $logStore.items.indexOf(row);
                         }}>ID</Sort
                     >
                 </th>
@@ -42,19 +42,19 @@
         <tbody>
             {#each $rows as row}
                 <tr>
-                    <td class="id-cell">{$logItems.indexOf(row) + 1}</td>
-                    <td class="level-cell">{row.Level}</td>
-                    <td class="message-cell">{row.Message}</td>
+                    <td class="id-cell">{$logStore.items.indexOf(row) + 1}</td>
+                    <td class="level-cell">{row.level}</td>
+                    <td class="message-cell">{row.message}</td>
                     <td class="req-resp-cell"
-                        >{row.RequestID ? row.RequestID : ""}</td
+                        >{row.request_id ? row.request_id : ""}</td
                     >
                     <td class="extension-cell"
-                        >{row.ExtensionID
-                            ? extensionsMap[row.ExtensionID]
+                        >{row.extension_id
+                            ? extensionsMap[row.extension_id]
                             : ""}</td
                     >
                     <td class="timestamp-cell"
-                        >{new Date(row.Timestamp).toLocaleString("en-GB", {
+                        >{new Date(row.timestamp).toLocaleString("en-GB", {
                             year: "numeric",
                             month: "numeric",
                             day: "numeric",

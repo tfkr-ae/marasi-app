@@ -2,9 +2,12 @@
 // hostile captured content, so it gets only what is exposed here. A
 // connection reaches the renderer without its control token.
 import { contextBridge, ipcRenderer } from "electron";
+import { appConfigCalls } from "./appConfigIPC.js";
 
 contextBridge.exposeInMainWorld("marasiApp", {
   platform: process.platform,
+  // The app's own build: { Channel, Version }.
+  buildInfo: () => ipcRenderer.invoke("app:buildInfo"),
   // The service instances running on this machine, each its /service/status.
   listInstances: () => ipcRenderer.invoke("instances:list"),
   // A connection is {instance, baseURL, loopbackTurnedOn}.
@@ -27,4 +30,8 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // Chooses a Marasi from a path in an OS dialog, or the bundled one when
   // `bundled`. Resolves to the Marasi Start runs, as marasi() does.
   chooseMarasi: (bundled = false) => ipcRenderer.invoke("marasi:choose", { bundled }),
+  // The app config calls; each resolves { value } or { error }.
+  appConfig: Object.fromEntries(
+    appConfigCalls.map((name) => [name, (...args) => ipcRenderer.invoke(`appConfig:${name}`, ...args)]),
+  ),
 });

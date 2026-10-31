@@ -1,6 +1,5 @@
 import { get, writable } from "svelte/store";
 import {
-  GetLogs,
   GetMarasiConfig,
   GetKeybindings,
   GetExtensionCode,
@@ -18,6 +17,7 @@ import { connectionStore } from "./stores/connectionStore";
 import { armoryStore } from "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
+import { logStore } from "./stores/logStore.js";
 import { interceptFlag } from "./stores/interceptFlag.js";
 import { highlightsStore, readHighlights } from "./stores/highlightsStore";
 import { ledgerStore } from "./stores/ledgerStore";
@@ -89,7 +89,6 @@ export { interceptFlag } from "./stores/interceptFlag.js";
 // Workshop
 export const workshopCode = writable("");
 
-export const logItems = writable([]);
 export const extensionElements = writable({});
 export const prettify = writable(true);
 export const lineWrap = writable(true);
@@ -288,7 +287,8 @@ export async function openProject() {
   // the background; the Ledger reloads once they are numbers.
   highlightsStore.openProject({ onMigrated: () => ledgerStore.reload() });
   loadPart(loadSignals.logs);
-  await populateLogs();
+  logStore.clear();
+  await logStore.reload().catch((err) => console.error("Reading the log failed:", err));
   loadPart(loadSignals.scope);
   await populateScope();
   loadPart(loadSignals.checkpoint);
@@ -353,12 +353,6 @@ export async function populateScope() {
     .catch((error) => {
       console.log(error);
     });
-}
-export async function populateLogs() {
-  GetLogs().then((items) => {
-    console.log(items);
-    logItems.set(items ? items : []);
-  });
 }
 export async function populateExtensions() {
   GetExtensions().then((exts) => {

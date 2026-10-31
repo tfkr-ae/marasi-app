@@ -970,6 +970,8 @@ export function createLogbookStore(api) {
     readArtifact: (id) => api.getArtifact(id),
     downloadArtifact: (id) => api.downloadArtifact(id),
     populate,
+    // Reads it all again, after the event stream reopens.
+    reload: populate,
     clear,
     setRecords,
     setQuery,

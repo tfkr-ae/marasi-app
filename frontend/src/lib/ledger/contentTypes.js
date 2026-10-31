@@ -10,6 +10,27 @@ export function normalizeContentType(value) {
   return (value ?? "").split(";")[0].trim().toLowerCase();
 }
 
+// A MIME token (RFC 2045): no spaces, controls or separators.
+const TOKEN = /^[!#$%&'*+.^_`|~0-9a-z-]+$/;
+
+/**
+ * An exclusion list normalised as Marasi's NormalizeExclusion does; throws
+ * on a value that isn't `type/subtype` or `type/*`.
+ */
+export function normalizeExclusion(values) {
+  return values.map((value) => {
+    const type = normalizeContentType(String(value));
+    const [major, minor, ...rest] = type.split("/");
+    if (rest.length || !TOKEN.test(major ?? "") || !TOKEN.test(minor ?? "")) {
+      throw new Error(`invalid content-type exclusion "${value}": want type/subtype or type/*`);
+    }
+    if (major.includes("*") || (minor.includes("*") && minor !== "*")) {
+      throw new Error(`invalid content-type exclusion "${value}": * may only stand for a whole subtype, as in image/*`);
+    }
+    return type;
+  });
+}
+
 /** "image" for "image/png" and "image/*". */
 function majorOf(contentType) {
   return contentType.split("/")[0];
