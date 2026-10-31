@@ -3,3 +3,4 @@ frontend/build
 .DS_Store
 .artifacts
 .scratch
+dist

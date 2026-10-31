@@ -1,0 +1,61 @@
+{
+	"name": "marasi-app",
+	"productName": "Marasi v2",
+	"version": "2.0.0-dev",
+	"description": "Marasi App, a client of Marasi's control API",
+	"author": "Ahmed Alsuwaidi <aalsuwaidi@tfkr.ae>",
+	"license": "MIT",
+	"private": true,
+	"type": "module",
+	"main": "electron/main.js",
+	"scripts": {
+		"dev": "node scripts/dev.mjs",
+		"build": "npm --prefix frontend run build",
+		"dist": "npm run build && electron-builder --publish never",
+		"dist:mac": "npm run build && electron-builder --mac --publish never",
+		"dist:win": "npm run build && electron-builder --win --publish never",
+		"dist:linux": "npm run build && electron-builder --linux --publish never",
+		"test": "node --test electron/ && npm --prefix frontend test"
+	},
+	"build": {
+		"appId": "ae.tfkr.marasi-app.v2",
+		"productName": "Marasi v2",
+		"directories": {
+			"buildResources": "build",
+			"output": "dist"
+		},
+		"files": [
+			"electron/**/*",
+			"!electron/**/*.test.js",
+			"frontend/build/**/*",
+			"package.json"
+		],
+		"mac": {
+			"category": "public.app-category.developer-tools",
+			"target": [
+				"dmg",
+				"zip"
+			],
+			"identity": null
+		},
+		"win": {
+			"target": [
+				"nsis"
+			]
+		},
+		"linux": {
+			"target": [
+				"AppImage",
+				"deb"
+			],
+			"category": "Development"
+		}
+	},
+	"devDependencies": {
+		"electron": "^45.2.1",
+		"electron-builder": "^26.18.0"
+	},
+	"allowScripts": {
+		"electron-winstaller": false
+	}
+}
