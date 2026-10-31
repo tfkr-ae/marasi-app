@@ -129,7 +129,7 @@ _Avoid_: Vim mode, Chrome profile
 ### Updates
 
 **Channel**:
-The stream of builds an installed app follows: release or nightly. An app starts on the channel of the build that was installed, and a researcher can switch it. A development build has no channel.
+The stream of builds an installed app follows: release or nightly, or v2-nightly for a v2 build, which follows only that one until v2 replaces v1. An app starts on the channel of the build that was installed, and a researcher can switch it. A development build has no channel.
 _Avoid_: track, ring, stable, beta
 
 **Release**:
@@ -139,6 +139,10 @@ _Avoid_: main release, stable release
 **Nightly**:
 The latest daily build of Marasi App. Only one nightly exists at a time; each one replaces the last.
 _Avoid_: beta, preview, snapshot
+
+**v2 nightly**:
+The latest build of the `v2` branch, published as the `v2-nightly` release. It installs beside v1 as its own app, and v1 never sees it.
+_Avoid_: v2 beta
 
 **Update**:
 A build on the app's channel that is newer than the running one and replaces it once the researcher installs it. It is never an older build; going back to an older release is a reinstall.

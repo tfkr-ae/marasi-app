@@ -110,20 +110,20 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetUpdateState` | binding | GUI | Main-process updater, `v2_*` config keys | 15 | [ ] |
-| `CheckForUpdate` | binding | GUI | Main-process updater | 15 | [ ] |
-| `InstallUpdate` | binding | GUI | Main-process updater | 15 | [ ] |
-| `CancelUpdateDownload` | binding | GUI | Main-process updater | 15 | [ ] |
-| `RestartToUpdate` | binding | GUI | Main-process updater | 15 | [ ] |
-| `ReinstallLatestRelease` | binding | GUI | Main-process updater | 15 | [ ] |
-| `DismissUpdate` | binding | GUI | Main-process updater | 15 | [ ] |
-| `SetUpdateChannel` | binding | GUI | Main-process updater, including `v2-nightly` | 15 | [ ] |
-| `GetUpdateSettings` | binding | GUI | Main-process updater | 15 | [ ] |
-| `SetAutomaticUpdateChecks` | binding | GUI | Main-process updater | 15 | [ ] |
-| `update-available` | event | GUI | Main-process updater IPC. Instance updates use `update.available` (ticket 16). | 15 | [ ] |
-| `update-progress` | event | GUI | Main-process updater IPC. Instance updates use `update.progress` (ticket 16). | 15 | [ ] |
-| `update-installed` | event | GUI | Main-process updater IPC. Instance updates use `update.installed` (ticket 16). | 15 | [ ] |
-| `update-failed` | event | GUI | Main-process updater IPC. Instance updates use `update.failed` (ticket 16). | 15 | [ ] |
+| `GetUpdateState` | binding | GUI | Main-process updater, `v2_*` config keys | 15 | [x] |
+| `CheckForUpdate` | binding | GUI | Main-process updater | 15 | [x] |
+| `InstallUpdate` | binding | GUI | Main-process updater | 15 | [x] |
+| `CancelUpdateDownload` | binding | GUI | Main-process updater | 15 | [x] |
+| `RestartToUpdate` | binding | GUI | Main-process updater | 15 | [x] |
+| `ReinstallLatestRelease` | binding | GUI | Main-process updater. A v2 build follows only `v2-nightly`, so it refuses until v2 replaces v1. | 15 | [x] |
+| `DismissUpdate` | binding | GUI | Main-process updater | 15 | [x] |
+| `SetUpdateChannel` | binding | GUI | Main-process updater, including `v2-nightly` | 15 | [x] |
+| `GetUpdateSettings` | binding | GUI | Main-process updater | 15 | [x] |
+| `SetAutomaticUpdateChecks` | binding | GUI | Main-process updater | 15 | [x] |
+| `update-available` | event | GUI | Main-process updater IPC. Instance updates use `update.available` (ticket 16). | 15 | [x] |
+| `update-progress` | event | GUI | Main-process updater IPC. Instance updates use `update.progress` (ticket 16). | 15 | [x] |
+| `update-installed` | event | GUI | Main-process updater IPC. Instance updates use `update.installed` (ticket 16). | 15 | [x] |
+| `update-failed` | event | GUI | Main-process updater IPC. Instance updates use `update.failed` (ticket 16). | 15 | [x] |
 | `BrowserOpenURL` | runtime | GUI | `shell.openExternal` | 15 | [ ] |
 
 ## Checkpoint
