@@ -13,7 +13,7 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `SetupScratchpad` | binding | COVERED | `marasi service start` with no `--project*` starts the default instance on Marasi's scratchpad. v1's own scratchpad is not migrated. | 05 | [ ] |
+| `SetupScratchpad` | binding | COVERED | `marasi service start` with no `--project*` starts the default instance on Marasi's scratchpad. v1's own scratchpad is not migrated. | 05 | [x] |
 | `ScratchpadPath` | binding | COVERED | `POST /project/open {"name":"scratchpad"}` | 10 | [ ] |
 | `OpenProject` | binding | COVERED | `POST /project/open {name}` or `{path}`, then `project.opening`, `project.upgrading`, `project.waiting`, `project.opened` or `project.opening_failed`. `409 project_already_open` offers to connect to the owner. | 10 | [ ] |
 | `GetRecentProjects` | binding | COVERED | `GET /project/list` with `modified_at`, sorted newest first by the GUI | 10 | [ ] |

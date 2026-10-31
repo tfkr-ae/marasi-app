@@ -34,6 +34,7 @@
 		Swords,
 		Sun,
 		ToggleLeft,
+		Unplug,
 	} from "lucide-svelte";
 	import MarasiKeys from "./MarasiKeys.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -44,6 +45,7 @@
 	} from "../../bindings/App";
 	import { updatePanelModal } from "../../updates.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
+	import { windowConnection } from "../../../stores/windowConnectionStore.js";
 	import {
 		extensions,
 		extensions_ui,
@@ -126,6 +128,7 @@
 			if (!top) openProjectPicker(toastStore, modalStore);
 			else if (top.toggleAction === "global.open-project") modalStore.close();
 		},
+		"global.disconnect": disconnect,
 		"global.setup-listener": () => toggleModal(listenerModal(toastStore)),
 		"global.toggle-vim": () =>
 			ToggleFlag("vim_enabled").then((config) =>
@@ -139,6 +142,13 @@
 		"global.toggle-intercept": () =>
 			ToggleIntercept().then((flag) => interceptFlag.set(flag)),
 	};
+
+	// A disconnected window reloads into the connection screen, as it has
+	// nothing to show without an instance.
+	async function disconnect() {
+		await windowConnection.disconnect();
+		location.reload();
+	}
 
 	// "Check for updates…": an update opens the details panel; otherwise a
 	// toast says why there is none.
@@ -163,6 +173,7 @@
 		"global.copy-certificate": Copy,
 		"global.jump-to-toast": PartyPopper,
 		"global.open-project": FolderOpen,
+		"global.disconnect": Unplug,
 		"global.setup-listener": Binoculars,
 		"global.toggle-vim": ToggleLeft,
 		"global.toggle-light-mode": Sun,

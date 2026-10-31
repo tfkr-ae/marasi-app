@@ -1,17 +1,19 @@
 ## Running and testing v2
 
-v2 is an Electron app with no Go code. A fresh worktree runs `scripts/bootstrap.sh` first, to install the root and `frontend/` packages.
+v2 is an Electron app with no Go code. A fresh worktree runs `scripts/bootstrap.sh` first, to install the root and `frontend/` packages and, when Go is installed, build the bundled Marasi.
 
 - `npm test`: the main process tests (`electron/`) and the frontend's `node --test` store tests.
 - `npm run dev`: Vite and Electron on it. Pass Electron flags after `--`, for example `npm run dev -- --remote-debugging-port=9222`.
-- `npm run dist`, `dist:mac`, `dist:win`, `dist:linux`: an unsigned package in `dist/`.
+- `npm run marasi`: builds the bundled Marasi into `resources/bin/` (not committed) from the commit pinned in `package.json`'s `marasi` key, the one place its version is set. `MARASI_SRC` names a local Marasi checkout to read the commit from instead of cloning.
+- `npm run dist`, `dist:mac`, `dist:win`, `dist:linux`: an unsigned package in `dist/`, with the bundled Marasi built for its platform.
 
 Frontend code calls the v1 bindings through `frontend/src/lib/bindings/App.js`. A binding that isn't ported yet rejects with a `NotPorted` error. A ported binding calls the connected instance through the Marasi client module, `marasi` in `frontend/src/lib/bindings/marasi.js`. A coded refusal rejects with an error that the `errorCodes.js` helpers read, and a route the instance doesn't have rejects with "Needs a newer Marasi".
 
 Marasi events reach the stores through `frontend/src/lib/marasiEvents.js`, which follows the window connection's `/events`. A store that handles an event gets a row in its `handlers`, and every store that shows instance data is in its `stores`, whose `reload()` runs after the stream reopens.
 
 - `MARASI_CONFIG_DIR`, or the Electron flag `--config-dir=DIR` (with `=`), points the app at another Marasi config directory, such as a throwaway one for a test instance. The default is the directory Marasi itself uses, which holds the real `marasi_appconfig.yaml` v1 shares, so tests and verification always use a temp dir.
-- `MARASI_BIN` names the Marasi binary for the integration suite (`electron/connect.integration.test.js`). Without it the suite uses `resources/bin/marasi`, and it is skipped when neither exists.
+- `MARASI_BIN` names the Marasi binary for the integration suites (`electron/*.integration.test.js`). Without it they use `resources/bin/marasi`, and they are skipped when neither exists.
+- At launch the app connects to the `default` instance in that config directory, and starts it when it isn't running, which is another reason to use a throwaway config directory for test runs. Start and the instance ownership rules are in `electron/local.js`.
 
 Electron runs as plain Node when `ELECTRON_RUN_AS_NODE` is set, as it is in some agent terminals. `npm run dev` clears it; unset it yourself to run a packaged app.
 
