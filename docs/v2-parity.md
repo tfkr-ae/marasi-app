@@ -57,15 +57,15 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `StartProxy` | binding | COVERED | `POST /listener/start {address, port}` | 11 | [ ] |
-| `StopProxy` | binding | COVERED | `POST /listener/stop`. v1 bound it but the frontend never called it. | 11 | [ ] |
-| `UpdateProxy` | binding | COVERED | `POST /listener/update {address, port}` | 11 | [ ] |
-| `GetInterfaces` | binding | COVERED | `GET /listener/interfaces` | 11 | [ ] |
-| `CountNotes` | binding | COVERED | `GET /dashboard` | 11 | [ ] |
-| `ListJobs` | binding | COVERED | `GET /jobs`, `job.progress`, `job.complete` | 11 | [ ] |
-| `RebuildJob` | binding | COVERED | `POST /jobs/{name}/rebuild` | 11 | [ ] |
-| `DownloadCert` | binding | COVERED | `GET /certificate` `.pem`, saved through an OS save dialog | 11 | [ ] |
-| `CopyCertToClipboard` | binding | COVERED | `GET /certificate` `.pem`, copied through the GUI clipboard | 11 | [ ] |
+| `StartProxy` | binding | COVERED | `POST /listener/start {address, port}` | 11 | [x] |
+| `StopProxy` | binding | COVERED | `POST /listener/stop`. v1 bound it but the frontend never called it. | 11 | [x] |
+| `UpdateProxy` | binding | COVERED | `POST /listener/update {address, port}` | 11 | [x] |
+| `GetInterfaces` | binding | COVERED | `GET /listener/interfaces` | 11 | [x] |
+| `CountNotes` | binding | COVERED | `GET /dashboard` | 11 | [x] |
+| `ListJobs` | binding | COVERED | `GET /jobs`, `job.progress`, `job.complete` | 11 | [x] |
+| `RebuildJob` | binding | COVERED | `POST /jobs/{name}/rebuild` | 11 | [x] |
+| `DownloadCert` | binding | COVERED | `GET /certificate` `.pem`, saved through an OS save dialog | 11 | [x] |
+| `CopyCertToClipboard` | binding | COVERED | `GET /certificate` `.pem`, copied through the GUI clipboard | 11 | [x] |
 
 ## Ledger
 

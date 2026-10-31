@@ -8,7 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const devServerURL = "http://localhost:5173";
+// MARASI_DEV_PORT moves the dev server off 5173 (frontend/vite.config.js).
+const devServerURL = `http://localhost:${Number(process.env.MARASI_DEV_PORT) || 5173}`;
 const electron = createRequire(import.meta.url)("electron");
 
 const frontend = join(root, "frontend");

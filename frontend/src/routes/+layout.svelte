@@ -2,7 +2,7 @@
 	import Logo from "../lib/components/Logo.svelte";
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
 	import ConnectionScreen from "../lib/components/ConnectionScreen.svelte";
-	import { windowConnection, windowTitle } from "../stores/windowConnectionStore.js";
+	import { windowConnection, windowList, windowTitle } from "../stores/windowConnectionStore.js";
 	import { followWindowConnection } from "../lib/marasiEvents.js";
 	import {
 		computePosition,
@@ -87,7 +87,6 @@
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import {
 		OpenFileDialog,
-		StartProxy,
 	} from "../lib/bindings/App";
 	import {
 		ChefHat,
@@ -176,6 +175,10 @@
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// The held count adds to the dock badge, and the open project names the
+	// window in the Window menu and the window switcher.
+	$: windowList.reportHeld($checkpointStore.items.length);
+	$: windowList.reportProject($appState.started ? $activeProject : null);
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -233,7 +236,8 @@
 			connection = await windowConnection.connected();
 			choosingConnection = false;
 		}
-		if (connection.loopbackTurnedOn) {
+		// Once per connection: not again after a reload.
+		if (connection.loopbackTurnedOn && !connection.resumed) {
 			toastStore.trigger({
 				message: `Turned on ${connection.status.control_listener} for ${connection.instance}`,
 			});
@@ -255,23 +259,11 @@
 			.then((connection) => openConnectedProject(connection.status))
 			.then((project) => project ?? startWithoutProject());
 	});
-	// Starts the listener on the configured address.
-	function startListener() {
-		return StartProxy($marasiConfig.DefaultAddress, $marasiConfig.DefaultPort)
-			.then(() => {
-				listener.set({
-					status: true,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			})
-			.catch((listenerError) => {
-				listener.set({
-					status: false,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			});
+	// Shows the connected instance's listener as it is: the instance was
+	// started with its listener, or another client set it up, so v1's start
+	// on the configured address doesn't apply.
+	function readListener() {
+		return listener.reload().catch((err) => console.error("Reading the listener failed:", err));
 	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
@@ -302,6 +294,7 @@
 		// The connected instance's events, live, for as long as the window is
 		// connected.
 		const stopFollowing = followWindowConnection();
+		const stopFollowingWindows = windowList.follow();
 		const stopReportingDrafts = reportUnsavedDrafts();
 		EventsOn("update-available", onUpdateAvailable);
 		EventsOn("update-progress", onUpdateProgress);
@@ -313,10 +306,9 @@
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
-			// The listener starts on the configured address, and the first-run
-			// setup shows only once it has started (or failed to), as it sets
-			// the listener up.
-			startListener().then(() => {
+			// The first-run setup shows only once the listener has been read,
+			// as it sets the listener up.
+			readListener().then(() => {
 				if (!$marasiConfig.FirstRun || $modalStore[0]) return;
 				modalStore.trigger({
 					type: "component",
@@ -511,6 +503,7 @@
 		return () => {
 			window.removeEventListener("unhandledrejection", onUnhandledRejection);
 			stopFollowing();
+			stopFollowingWindows();
 			stopReportingDrafts();
 			removeMenuShortcuts();
 			EventsOff("request");

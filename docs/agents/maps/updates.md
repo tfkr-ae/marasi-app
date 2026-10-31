@@ -46,3 +46,13 @@ Changing one of these means changing the others. `electron/updater/releaseString
 - A macOS app that Gatekeeper translocated (opened straight from Downloads) asks to be moved to Applications. v1 found the original bundle through a private Security.framework call, which plain Electron can't make.
 - The Windows build is electron-builder's portable `.exe`, which keeps v1's one-file install. An NSIS install has no single file to replace.
 - "Restart now" doesn't yet warn about unsaved Launchpad drafts or active Armory runs (`confirmLosingWork` in `main.js`). The tickets that port those add the warnings.
+
+## Instance updates (v2)
+
+A service instance updates itself through Marasi's `/update` routes, separately from the app's own updater above. `frontend/src/stores/createInstanceUpdateStore.js` holds the logic; `instanceUpdateStore.js` wires it to the Marasi client and reads the instance again whenever the window's connection changes. `InstanceVersion.svelte` draws the version, Check for updates, Install, the install's progress and Restart in the Dashboard's connection status.
+
+- **Reads.** `reload` reads `GET /service/status` (version, `restart_required`) and `GET /update`. An instance without `/update` still shows its version, with no update actions. The store is in `marasiEvents.js`'s `stores`, so it reloads when the stream reopens.
+- **Bundled Marasi.** The update actions are hidden when a local instance's `install_path` is the bundled Marasi (`runsBundled` in `electron/marasiBin.js`, links resolved), since it updates with the app. A remote instance is never treated as bundled. Restart shows for any instance whose build was replaced.
+- **Events.** `update.available`, `update.progress`, `update.installed` (which sets restart needed), `update.failed`, `service.restarting` and `service.restart_failed` go to the store's `on*` methods.
+- **Restart.** `POST /service/restart` answers once the successor runs on the same address and token, so the store reads it again and the event stream reopens on its own. `409 checkpoint_items_held` asks before a forced restart drops the held items.
+- A development build answers `409 development_build` to check and install, and reports `development: true`, which disables Check for updates.

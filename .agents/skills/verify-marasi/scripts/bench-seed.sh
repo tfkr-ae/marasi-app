@@ -8,7 +8,7 @@ set -eu
 . "$(dirname -- "$0")/common.sh"
 
 N=${1:-85000}
-PROXY_PORT=$(recorded_port)
+PROXY_PORT=$(instance_field proxy_listener | sed "s/.*://")
 python3 "$SCRIPT_DIR/bench-server.py" &
 SERVER=$!
 trap 'kill "$SERVER" 2>/dev/null || true' EXIT INT TERM

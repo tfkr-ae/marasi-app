@@ -36,7 +36,7 @@ The app loads the Ledger's code once the project is open (`preloadCode("/ledger"
 Run it:
 
 1. `scripts/launch.sh`, then `scripts/bench-seed.sh` (85,000 requests by default; about 15 minutes; it runs `bench-server.py` on 127.0.0.1:18999 for the upstream).
-2. `scripts/bench-ledger.sh`. It restarts the instance (the project is kept) so `firstVisit` loads the code as a user's first visit does, prints each figure against its budget, writes `<evidence>/bench-ledger.json`, and exits 1 when one is over.
+2. `scripts/bench-ledger.sh`, which v2 doesn't have yet: v1's called the Wails bindings directly. Port it with the Ledger (ticket 12) from `git show v2:.agents/skills/verify-marasi/scripts/bench-ledger.mjs` (and `bench-ledger.sh`): it restarted the instance (the project kept) so `firstVisit` loaded the code as a user's first visit does, printed each figure against its budget, wrote `<evidence>/bench-ledger.json`, and exited 1 when one was over.
 
 Figures come from headless Chrome against the dev server, so they compare runs on one machine, not the WebKit app. Marasi answers one call at a time: anything the Ledger asks for waits behind whatever else is in flight (on a fresh launch, the dashboard's `CountNotes`, about 1.6 s on this project), so measure with the app idle. Since Marasi v0.0.0-20261016190652-f338aa018cfb the dashboard's `CountNotes` is one `DashboardCounts` read (11 ms at 85,000 requests, from 1.6 s), so a fresh launch's first Ledger page arrives about 940 ms after start rather than 2.5 s. On a project's first open after an upgrade, Marasi's background jobs can still hold calls up for about 250 ms each for some 27 s; don't benchmark then.
 

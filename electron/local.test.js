@@ -115,11 +115,20 @@ test("startup connects a window once: after a disconnect and a reload, it has no
   assert.equal(machine.commands.length, 1);
 });
 
-test("startup takes up the window's connection after a reload", async () => {
+test("startup takes up the window's connection after a reload, marked resumed", async () => {
   const machine = fakeMachine({ default: "127.0.0.1:50037" });
   const connections = local(machine);
   const first = await connections.startup(1);
-  assert.equal(await connections.startup(1), first);
+  assert.equal(first.resumed, undefined);
+  assert.deepEqual(await connections.startup(1), { ...first, resumed: true });
+});
+
+test("a window opened for another instance starts with no connection and starts nothing", async () => {
+  const machine = fakeMachine();
+  const connections = local(machine);
+  connections.open(2);
+  assert.equal(await connections.startup(2), null);
+  assert.deepEqual(machine.commands, []);
 });
 
 test("a launch whose default can't take the proxy port starts it on a free one", async () => {
@@ -169,4 +178,19 @@ test("connecting a window to a running instance takes no ownership of it", async
   assert.equal(connection.loopbackTurnedOn, true);
   assert.equal(connections.get(1), connection);
   assert.deepEqual(await connections.quit(), []);
+});
+
+test("a remote named like an instance the app started doesn't keep that instance running at quit", async () => {
+  const machine = fakeMachine();
+  const connections = local(machine);
+  await connections.startup(1);
+  const remote = { instance: "default", origin: "http://10.1.26.31:7070", token: "t", remote: true, loopbackTurnedOn: false };
+  connections.use(2, remote);
+  assert.equal(connections.get(2), remote);
+  // The remote isn't the local default: disconnecting window 1 leaves
+  // the default running at quit, as with no other window.
+  connections.disconnect(1);
+  assert.deepEqual(await connections.quit(), []);
+  connections.disconnect(2);
+  assert.equal(connections.get(2), undefined);
 });
