@@ -5,8 +5,10 @@ How the app starts, opens the scratchpad, and switches to another project, acros
 ## Startup order
 
 1. **Go.** `main` binds `App` and sets `OnStartup: app.startup`. `NewApp` builds the Marasi proxy and calls `newApp`, which tests call directly. `newApp` wires the project lifecycle and the `configure*Handlers` events. `startup` opens no project and starts no listener.
-2. **Layout.** `StartupRoutine2` in `frontend/src/routes/+layout.svelte` runs `readConfig` (in `frontend/src/stores.js`), then `openScratchpad`, and resolves when `loadedProject` is set.
-3. **Open.** `openScratchpad` and `openProjectFile` in `frontend/src/lib/globalActions.js` both go through `openWithScreen`. It calls `SetupScratchpad` or `OpenProject` in `app.go`, then `openProject` in `stores.js`, which reads the project into the stores. `finishOpening` sets `loadedProject`.
+2. **Layout.** `StartupRoutine2` in `frontend/src/routes/+layout.svelte` runs `readConfig` (in `frontend/src/stores.js`), then `connectWindow`, then `openConnectedProject`, and resolves when `loadedProject` is set.
+   - `connectWindow` calls the window connection store's `startup` (`frontend/src/stores/createWindowConnectionStore.js`). The main process (`startup` in `electron/local.js`) connects to the `default` instance, starting it on Marasi's scratchpad when it isn't running. After a reload it keeps the window's connection; after a Disconnect (`global.disconnect`, which reloads the window) it returns none, and the layout shows `ConnectionScreen.svelte` until the researcher connects or starts an instance.
+   - Quitting stops only the instances the app started and wasn't disconnected from (`quit` in `electron/local.js`).
+3. **Open.** `openConnectedProject` and `openProjectFile` in `frontend/src/lib/globalActions.js` both go through `openWithScreen`. `openConnectedProject` opens the project the instance already has open; `openProjectFile` calls `OpenProject`. Then `openProject` in `stores.js` reads the project into the stores. `finishOpening` sets `loadedProject`.
 4. **After the first open.** `StartupRoutine2.then` starts the listener (`startListener`), installs the menu shortcuts, and subscribes to the traffic, WebSocket, launch and log events (see `marasi-service.md`).
 
 ## Opening and switching
