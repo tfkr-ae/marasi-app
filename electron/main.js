@@ -4,7 +4,7 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session, shell } from "electron";
 import { execFile } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -16,7 +16,7 @@ import { marasiConfigDir } from "./configDir.js";
 import { listLocalInstances } from "./instances.js";
 import { createKeybindingFiles } from "./keybindingFiles.js";
 import { createLocalConnections } from "./local.js";
-import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
+import { bundledMarasi, createMarasiChoice, runsBundled } from "./marasiBin.js";
 import { nodeFS } from "./nodeFS.js";
 import { createRemotes } from "./remotes.js";
 import { callSocket, streamSocket } from "./socket.js";
@@ -259,6 +259,10 @@ function serveConnections(appConfig) {
     return picked.canceled ? null : picked.filePaths[0];
   });
   handle("marasi:current", () => marasi.shown());
+  // Whether a local instance's build path is the bundled Marasi.
+  handle("marasi:runs-bundled", (event, installPath) =>
+    runsBundled(installPath, { bundled: marasi.shown().bundled, realpath }),
+  );
   // Chooses the Marasi Start runs from a path in an OS dialog, or goes back
   // to the bundled one when `bundled` is set.
   handle("marasi:choose", async (event, { bundled = false } = {}) => {

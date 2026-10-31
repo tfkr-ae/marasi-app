@@ -17,10 +17,17 @@ import { logbookStore } from "../stores/logbookStore";
 import { findingStore } from "../stores/findingStore";
 import { testCaseStore } from "../stores/testCaseStore";
 import { upstreamProxyStore } from "../stores/upstreamProxyStore";
+import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
+  "update.available": (update) => instanceUpdate.onAvailable(update),
+  "update.progress": (progress) => instanceUpdate.onProgress(progress),
+  "update.installed": (installed) => instanceUpdate.onInstalled(installed),
+  "update.failed": (failure) => instanceUpdate.onFailed(failure),
+  "service.restarting": (restart) => instanceUpdate.onRestarting(restart),
+  "service.restart_failed": (failure) => instanceUpdate.onRestartFailed(failure),
 };
 
 // Every store that shows the instance's data. Launchpad drafts live in the
@@ -39,6 +46,7 @@ const stores = [
   findingStore,
   testCaseStore,
   upstreamProxyStore,
+  instanceUpdate,
 ];
 
 /** Reloads every store, as after the event stream reopens. */

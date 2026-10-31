@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createMarasiChoice } from "./marasiBin.js";
+import { createMarasiChoice, runsBundled } from "./marasiBin.js";
 
 const file = "/user-data/marasi.json";
 const bundled = "/app/resources/bin/marasi";
@@ -43,4 +43,23 @@ test("an unreadable choice file falls back to the bundled Marasi", async () => {
   const fs = fakeFiles({ [file]: "not json" });
   const choice = await createMarasiChoice({ file, bundled, ...fs });
   assert.equal(choice.bin(), bundled);
+});
+
+// A fake realpath that resolves `links` and refuses paths in `missing`.
+const fakeRealpath =
+  (links = {}, missing = []) =>
+  async (path) => {
+    if (missing.includes(path)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    return links[path] ?? path;
+  };
+
+test("an instance whose build is the bundled Marasi runs it, through links", async () => {
+  const realpath = fakeRealpath({ [bundled]: "/real/app/resources/bin/marasi" });
+  assert.equal(await runsBundled("/real/app/resources/bin/marasi", { bundled, realpath }), true);
+  assert.equal(await runsBundled("/opt/marasi/marasi", { bundled, realpath }), false);
+});
+
+test("an instance with no build path, or no bundled Marasi, isn't running it", async () => {
+  assert.equal(await runsBundled("", { bundled, realpath: fakeRealpath() }), false);
+  assert.equal(await runsBundled(bundled, { bundled, realpath: fakeRealpath({}, [bundled]) }), false);
 });
