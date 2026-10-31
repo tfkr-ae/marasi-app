@@ -219,6 +219,10 @@ function createWindow({ blank = false } = {}) {
     windowsChanged();
   });
   window.on("focus", () => Menu.setApplicationMenu(appMenu()));
+  window.webContents.on("did-navigate", () => {
+    windows.reloaded(id);
+    windowsChanged();
+  });
   window.loadURL(home);
   windowsChanged();
   return window;

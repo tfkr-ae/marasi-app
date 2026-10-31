@@ -42,6 +42,8 @@ export function createWindowList({ connectionOf }) {
     closed: (id) => windows.delete(id),
     /** A window that disconnected has no project and holds nothing. */
     disconnected: (id) => report(id, blank()),
+    /** A reloaded window starts again with nothing held, until it reports. */
+    reloaded: (id) => report(id, { held: 0 }),
     setProject: (id, project) => report(id, { project: project || null }),
     setHeld: (id, count) => report(id, { held: Math.max(0, Number(count) || 0) }),
   };

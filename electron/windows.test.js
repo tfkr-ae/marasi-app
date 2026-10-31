@@ -55,3 +55,18 @@ test("a disconnected window forgets its project, so a new connection isn't liste
   connections.set(1, { instance: "acme" });
   assert.equal(windows.list(null)[0].label, "acme");
 });
+
+test("a reloaded window holds nothing until it reports again, but keeps its place and project", () => {
+  const { connectionOf } = fakeConnections({ 1: "default", 2: "acme" });
+  const windows = createWindowList({ connectionOf });
+  [1, 2].forEach((id) => windows.opened(id));
+  windows.setProject(1, "scratchpad");
+  windows.setHeld(1, 4);
+  windows.setHeld(2, 1);
+  windows.reloaded(1);
+  assert.equal(windows.held(), 1);
+  assert.deepEqual(
+    windows.list(null).map((w) => w.label),
+    ["default — scratchpad", "acme"],
+  );
+});
