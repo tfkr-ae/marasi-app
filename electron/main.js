@@ -1,7 +1,7 @@
 // The Electron main process. It draws the window and serves the static
 // frontend build; it has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, safeStorage, session, shell } from "electron";
 import { execFile } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
+import { createCertificateFile } from "./certificateFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
@@ -18,7 +19,9 @@ import { createKeybindingFiles } from "./keybindingFiles.js";
 import { createLocalConnections } from "./local.js";
 import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
 import { nodeFS } from "./nodeFS.js";
-import { callSocket } from "./socket.js";
+import { createRemotes } from "./remotes.js";
+import { callSocket, streamSocket } from "./socket.js";
+import { watchToken } from "./tokenWatch.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The frontend build is served on app://marasi/, so its absolute /_app/
@@ -41,14 +44,19 @@ const configDir = marasiConfigDir({
 // Read once the app is ready.
 let marasi;
 // Each window's connection, by its webContents id: {instance, origin,
-// token, loopbackTurnedOn}, and the instances the app started. The token
-// stays here; the renderer gets the rest.
+// token, loopbackTurnedOn, remote}, and the instances the app started. The
+// token stays here; the renderer gets the rest.
 const connections = createLocalConnections({
   configDir,
   run: promisify(execFile),
   call: callSocket,
   marasiBin: () => marasi.bin(),
 });
+// Each window's token watch (tokenWatch.js): {connection, watch}.
+const watches = new Map();
+// The remote, {name, url}, whose refused token took each window back to
+// the connection screen, until the screen has asked for the new one.
+const refusedRemotes = new Map();
 // The app's own update channel, as v1's GetBuildInfo reported it. Builds
 // stay "dev" until the updater ticket gives them a channel.
 const buildChannel = "dev";
@@ -74,9 +82,9 @@ function serveFrontend() {
   });
 }
 
-// The app config v1 and v2 share, and the keybinding profile files, for
-// every window.
-function serveAppConfig() {
+// The app config v1 and v2 share, the keybinding profile files, and the
+// certificate file and clipboard, for every window.
+async function serveAppConfig() {
   const appConfig = createAppConfig({
     dir: configDir,
     fs: nodeFS,
@@ -97,9 +105,19 @@ function serveAppConfig() {
     },
   });
   handleAppConfig({ handle }, { appConfig, keybindingFiles });
+  // The instance's CA certificate, which the renderer read from its
+  // instance, saved or copied on this machine.
+  const certificateFile = createCertificateFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("certificate:save", (event, pem) => certificateFile.save(pem));
+  handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
   handle("app:buildInfo", () => ({ Channel: buildChannel, Version: app.getVersion() }));
   // A config v2 can't prepare stays as it is; each read then reports why.
-  return appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
+  await appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
+  return appConfig;
 }
 
 function createWindow() {
@@ -126,7 +144,11 @@ function createWindow() {
     if (new URL(url).origin !== appOrigin) event.preventDefault();
   });
   const id = window.webContents.id;
-  window.webContents.on("destroyed", () => connections.forget(id));
+  window.webContents.on("destroyed", () => {
+    connections.forget(id);
+    unfollow(id);
+    refusedRemotes.delete(id);
+  });
   window.loadURL(home);
   return window;
 }
@@ -137,6 +159,7 @@ const shown = (connection) =>
     instance: connection.instance,
     baseURL: connection.origin,
     loopbackTurnedOn: connection.loopbackTurnedOn,
+    remote: Boolean(connection.remote),
   };
 
 // Answers `channel` with `handle(event, ...args)`, for the app's own pages
@@ -148,19 +171,94 @@ function handle(channel, handler) {
   });
 }
 
-function serveConnections() {
+function unfollow(id) {
+  watches.get(id)?.watch.stop();
+  watches.delete(id);
+}
+
+// Follows window `contents`'s connection for a rotated token, from when
+// it is set until it changes or ends. A remote that refuses its token
+// disconnects the window and reloads it into the connection screen, which
+// asks for the new one. Returns the connection as the renderer sees it.
+function follow(contents) {
+  const id = contents.id;
+  const connection = connections.get(id);
+  if (!connection) {
+    unfollow(id);
+    return null;
+  }
+  if (watches.get(id)?.connection === connection) return shown(connection);
+  unfollow(id);
+  const watch = watchToken(connection, {
+    configDir,
+    streamSocket,
+    call: callSocket,
+    fetch,
+    onRefused: () => {
+      if (connections.get(id) !== connection) return;
+      connections.disconnect(id);
+      unfollow(id);
+      refusedRemotes.set(id, { name: connection.instance, url: connection.origin });
+      if (!contents.isDestroyed()) contents.reload();
+    },
+  });
+  watches.set(id, { connection, watch });
+  refusedRemotes.delete(id);
+  return shown(connection);
+}
+
+// A remote call's answer, { value } or { error, tokenRefused, remote }, so
+// the renderer can tell a refused token from another failure.
+async function answer(work) {
+  try {
+    return { value: await work() };
+  } catch (error) {
+    return { error: error?.message ?? String(error), tokenRefused: Boolean(error?.tokenRefused), remote: error?.remote };
+  }
+}
+
+function serveConnections(appConfig) {
+  const urls = ["http://*/*", "https://*/*"];
   // The window's requests to its instance carry the control token.
-  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ["http://*/*"] }, (details, callback) =>
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, (details, callback) =>
     callback({ requestHeaders: withBearer(details, (id) => connections.get(id)) }),
   );
+  // A 401 from the window's instance: its token was rotated.
+  session.defaultSession.webRequest.onCompleted({ urls }, (details) => {
+    const followed = details.webContentsId == null ? null : watches.get(details.webContentsId);
+    if (details.statusCode === 401 && followed && new URL(details.url).origin === followed.connection.origin) {
+      followed.watch.refused();
+    }
+  });
+  const remotes = createRemotes({ appConfig, safeStorage, fetch });
   handle("instances:list", () => listLocalInstances({ configDir, readdir, call: callSocket }));
-  handle("connection:startup", async (event) => shown(await connections.startup(event.sender.id)));
-  handle("connection:connect", async (event, instance) => shown(await connections.connect(event.sender.id, instance)));
-  handle("connection:start", async (event, { instance, project }) =>
-    shown(await connections.start(event.sender.id, { instance, project: project || null })),
-  );
-  handle("connection:disconnect", (event) => connections.disconnect(event.sender.id));
+  handle("connection:startup", async (event) => {
+    await connections.startup(event.sender.id);
+    return follow(event.sender);
+  });
+  handle("connection:connect", async (event, instance) => {
+    await connections.connect(event.sender.id, instance);
+    return follow(event.sender);
+  });
+  handle("connection:start", async (event, { instance, project }) => {
+    await connections.start(event.sender.id, { instance, project: project || null });
+    return follow(event.sender);
+  });
+  handle("connection:disconnect", (event) => {
+    connections.disconnect(event.sender.id);
+    unfollow(event.sender.id);
+  });
   handle("connection:current", (event) => shown(connections.get(event.sender.id)) ?? null);
+  // Remote instances: the saved ones, and connecting by address and token.
+  const useRemote = (contents) => async (connection) => {
+    connections.use(contents.id, connection);
+    return follow(contents);
+  };
+  handle("remotes:list", () => remotes.list());
+  handle("remotes:connect", (event, form) => answer(() => remotes.connect(form).then(useRemote(event.sender))));
+  handle("remotes:connectSaved", (event, url) => answer(() => remotes.connectSaved(url).then(useRemote(event.sender))));
+  handle("remotes:forget", (_event, url) => remotes.forget(url));
+  handle("remotes:refused", (event) => refusedRemotes.get(event.sender.id) ?? null);
   // The project a Start opens, picked in an OS dialog: a path, or null.
   handle("dialog:pick-project", async (event) => {
     const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
@@ -200,8 +298,7 @@ app.whenReady().then(async () => {
     writeFile,
   });
   serveFrontend();
-  serveConnections();
-  await serveAppConfig();
+  serveConnections(await serveAppConfig());
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

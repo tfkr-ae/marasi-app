@@ -17,6 +17,11 @@ export const windowConnection = createWindowConnectionStore({
   disconnect: () => bridge.disconnect(),
   marasi: () => bridge.marasi(),
   chooseMarasi: (bundled) => bridge.chooseMarasi(bundled),
+  listRemotes: () => bridge.listRemotes(),
+  connectRemote: (form) => bridge.connectRemote(form),
+  connectSaved: (url) => bridge.connectSaved(url),
+  forgetRemote: (url) => bridge.forgetRemote(url),
+  refusedRemote: () => bridge.refusedRemote(),
   useConnection,
 });
 

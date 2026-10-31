@@ -103,6 +103,7 @@ test("the bridge lists the running instances and keeps the connection across a r
     instance: "web",
     baseURL: "/__marasi/instance",
     loopbackTurnedOn: false,
+    remote: false,
   });
 
   await post(`${dev.origin}/__marasi/disconnect`);

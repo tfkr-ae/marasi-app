@@ -30,6 +30,19 @@ export const {
   ToggleFlag,
 } = appConfig;
 
+// The background jobs Settings → Maintenance can rebuild, as in v1's jobs.go;
+// Marasi refuses the others with not_rebuildable.
+const rebuildableJobs = new Set(["traffic_index", "annotation_index", "sitemap"]);
+
+// A GET /jobs item as v1's JobState.
+const jobState = (job) => ({
+  Name: job.name,
+  Complete: job.complete,
+  Done: job.done,
+  Total: job.total,
+  Rebuildable: rebuildableJobs.has(job.name),
+});
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
@@ -46,10 +59,26 @@ export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
 export const ClearNotes = notPorted("ClearNotes");
 export const CloseWebSocket = notPorted("CloseWebSocket");
-export const CopyCertToClipboard = notPorted("CopyCertToClipboard");
+// The instance's CA certificate, on this machine's clipboard. Resolves true.
+export const CopyCertToClipboard = async () => {
+  const { pem } = await marasi.get("/certificate");
+  await bridge().copyText(pem);
+  return true;
+};
 export const CountArmoryRunTraffic = notPorted("CountArmoryRunTraffic");
 export const CountContentTypes = notPorted("CountContentTypes");
-export const CountNotes = notPorted("CountNotes");
+// The dashboard's counts, in v1's Dashboard shape. InterceptionsComplete is
+// false while Marasi's intercepted_count job still counts older pairs.
+export const CountNotes = async () => {
+  const dashboard = await marasi.get("/dashboard");
+  return {
+    Requests: dashboard.pairs,
+    Notes: dashboard.notes,
+    Launchpads: dashboard.launchpads,
+    Interceptions: dashboard.intercepted,
+    InterceptionsComplete: dashboard.intercepted_count?.complete !== false,
+  };
+};
 export const CountTraffic = notPorted("CountTraffic");
 export const CreateArmoryRun = notPorted("CreateArmoryRun");
 export const CreateArmoryTemplate = notPorted("CreateArmoryTemplate");
@@ -72,7 +101,12 @@ export const DeleteWaypoint = notPorted("DeleteWaypoint");
 export const DismissUpdate = notPorted("DismissUpdate");
 export const DoExtender = notPorted("DoExtender");
 export const DownloadArtifact = notPorted("DownloadArtifact");
-export const DownloadCert = notPorted("DownloadCert");
+// Saves the instance's CA certificate on this machine, through a save
+// dialog. Resolves false when the researcher cancels.
+export const DownloadCert = async () => {
+  const { pem } = await marasi.get("/certificate");
+  return Boolean(await bridge().saveCertificate(pem));
+};
 export const DropCheckpoint = notPorted("DropCheckpoint");
 export const DropCheckpoints = notPorted("DropCheckpoints");
 export const DropWSIntercepted = notPorted("DropWSIntercepted");
@@ -99,7 +133,9 @@ export const GetExtensionLogs = notPorted("GetExtensionLogs");
 export const GetExtensionUI = notPorted("GetExtensionUI");
 export const GetExtensions = notPorted("GetExtensions");
 export const GetInterceptFlag = notPorted("GetInterceptFlag");
-export const GetInterfaces = notPorted("GetInterfaces");
+// The instance machine's addresses the listener can bind:
+// [{address, family, interface}], IPv4 first.
+export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
 export const GetLaunchpads = notPorted("GetLaunchpads");
@@ -132,7 +168,8 @@ export const LinkRequestToTestCase = notPorted("LinkRequestToTestCase");
 export const LinkTraffic = notPorted("LinkTraffic");
 export const ListClientSettings = notPorted("ListClientSettings");
 export const ListFindings = notPorted("ListFindings");
-export const ListJobs = notPorted("ListJobs");
+// The open project's background jobs, in v1's JobState shape.
+export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
 export const ListSitemapChildren = notPorted("ListSitemapChildren");
 export const ListSitemapLevels = notPorted("ListSitemapLevels");
 export const ListTemplates = notPorted("ListTemplates");
@@ -146,7 +183,7 @@ export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
 export const QueryTraffic = notPorted("QueryTraffic");
 export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
-export const RebuildJob = notPorted("RebuildJob");
+export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
 export const ReinstallLatestRelease = notPorted("ReinstallLatestRelease");
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
@@ -170,8 +207,9 @@ export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
 export const StartArmoryRun = notPorted("StartArmoryRun");
 export const StartBrowser = notPorted("StartBrowser");
-export const StartProxy = notPorted("StartProxy");
-export const StopProxy = notPorted("StopProxy");
+// The proxy listener; each resolves Marasi's listener status.
+export const StartProxy = (address, port) => marasi.post("/listener/start", { address, port: Number(port) });
+export const StopProxy = () => marasi.post("/listener/stop");
 export const TestScopeMatch = notPorted("TestScopeMatch");
 export const ToggleIntercept = notPorted("ToggleIntercept");
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
@@ -181,7 +219,7 @@ export const UnlinkTraffic = notPorted("UnlinkTraffic");
 export const UpdateArmoryTemplate = notPorted("UpdateArmoryTemplate");
 export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
 export const UpdateNote = notPorted("UpdateNote");
-export const UpdateProxy = notPorted("UpdateProxy");
+export const UpdateProxy = (address, port) => marasi.post("/listener/update", { address, port: Number(port) });
 export const UpdateUpstreamProxy = notPorted("UpdateUpstreamProxy");
 export const UseUpstreamProxy = notPorted("UseUpstreamProxy");
 export const ValidateArmoryRun = notPorted("ValidateArmoryRun");

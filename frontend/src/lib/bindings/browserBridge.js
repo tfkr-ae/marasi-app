@@ -1,12 +1,15 @@
 // The preload bridge's stand-in in a plain browser on the dev server, the
 // shape of `window.marasiApp` (electron/preload.mjs). The dev server answers
 // for the main process (frontend/devBridge.js): it lists and connects to
-// local instances and serves the app config. Start, the OS dialogs and
-// profile files need Marasi v2.
+// local instances and serves the app config. Start, remote instances, the
+// OS dialogs and profile files need Marasi v2.
 
 const outsideElectron = async () => {
   throw new Error("Open Marasi v2 to do this");
 };
+
+// The remote calls answer { error } rather than rejecting, as over IPC.
+const remoteNeedsElectron = "Open Marasi v2 to connect to a remote instance";
 
 async function call(method, path, body) {
   const response = await fetch(`/__marasi${path}`, {
@@ -27,9 +30,16 @@ export const browserBridge = {
   start: outsideElectron,
   disconnect: () => call("POST", "/disconnect"),
   connection: () => call("GET", "/connection"),
+  listRemotes: async () => [],
+  connectRemote: async () => ({ error: remoteNeedsElectron }),
+  connectSaved: async () => ({ error: remoteNeedsElectron }),
+  forgetRemote: async () => {},
+  refusedRemote: async () => null,
   pickProject: outsideElectron,
   marasi: async () => null,
   chooseMarasi: outsideElectron,
+  saveCertificate: outsideElectron,
+  copyText: (text) => navigator.clipboard.writeText(text),
   // Each app config call resolves { value } or { error }, as over IPC.
   appConfig: new Proxy(
     {},

@@ -1,11 +1,11 @@
 <script>
 	// The connection screen: the service instances running on this machine,
-	// to connect the window to one, and Start, to run a new one. It draws the
-	// window connection store (stores/createWindowConnectionStore.js) and
-	// connects through it.
-	import { onMount } from "svelte";
+	// to connect the window to one, remote instances, by address and token
+	// or saved, and Start, to run a new one. It draws the window connection
+	// store (stores/createWindowConnectionStore.js) and connects through it.
+	import { onMount, tick } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { FolderOpen, Play, Plug, RotateCw } from "lucide-svelte";
+	import { FolderOpen, Globe, Play, Plug, RotateCw, X } from "lucide-svelte";
 	import Logo from "./Logo.svelte";
 	import { projectName } from "../openProgress.js";
 	import { instanceNameFor } from "../../stores/createWindowConnectionStore.js";
@@ -20,9 +20,47 @@
 	// The first instance is picked until the researcher picks another.
 	$: if (!healthy.some((item) => item.instance === picked)) picked = healthy[0]?.instance ?? null;
 
+	// Which section's connect the error line under it is for.
+	let errorAt = "local";
+
 	// A connect that fails lists the instances again, as one may have stopped.
 	async function connectTo(instance) {
+		errorAt = "local";
 		if (!(await connection.connect(instance))) await connection.listInstances();
+	}
+
+	// Remote: a saved remote's url, or null for the address and token typed in.
+	let remotePicked = null;
+	let address = "";
+	let token = "";
+	let remoteName = "";
+	let remember = true;
+	let tokenInput;
+	$: if (remotePicked && !state.remotes.some((item) => item.url === remotePicked)) remotePicked = null;
+	$: remoteLabel = remotePicked
+		? state.remotes.find((item) => item.url === remotePicked)?.name
+		: remoteName.trim() || address.trim();
+	$: remoteReady = remotePicked || (address.trim() && token.trim());
+
+	// A refused token fills in its remote, for the new token.
+	let prompted = null;
+	$: if (state.tokenPrompt && state.tokenPrompt !== prompted) askForToken(state.tokenPrompt);
+	async function askForToken(remote) {
+		prompted = remote;
+		errorAt = "remote";
+		remotePicked = null;
+		address = remote.url;
+		remoteName = remote.name;
+		token = "";
+		remember = true;
+		await tick();
+		tokenInput?.focus();
+	}
+
+	function connectRemote() {
+		errorAt = "remote";
+		if (remotePicked) return connection.connectSaved(remotePicked);
+		return connection.connectRemote({ url: address.trim(), token, name: remoteName.trim(), save: remember });
 	}
 
 	// Start: the project (null for the scratchpad) and the instance's name,
@@ -38,11 +76,13 @@
 	}
 
 	async function start() {
+		errorAt = "local";
 		if (!(await connection.start(name.trim(), project))) await connection.listInstances();
 	}
 
 	onMount(() => {
 		connection.listInstances();
+		connection.listRemotes();
 		connection.readMarasi();
 	});
 
@@ -103,11 +143,18 @@
 		</div>
 
 		<p class="mt-2 min-h-5 text-xs text-error-600 dark:text-error-400" role="status">
-			{state.connectError ?? state.listError ?? ""}
+			{(errorAt === "local" ? state.connectError : null) ?? state.listError ?? ""}
 		</p>
 
 		<footer class="mt-2 flex justify-end gap-2">
-			<button class={neutral} disabled={state.listing} on:click={() => connection.listInstances()}>
+			<button
+				class={neutral}
+				disabled={state.listing}
+				on:click={() => {
+					connection.listInstances();
+					connection.listRemotes();
+				}}
+			>
 				<RotateCw size={14} /><span>Refresh</span>
 			</button>
 			<button
@@ -118,6 +165,87 @@
 				<Plug size={14} /><span>{state.connecting ? `Connecting to ${state.connecting}…` : picked ? `Connect to ${picked}` : "Connect"}</span>
 			</button>
 		</footer>
+
+		<section class="mt-6 border-t border-surface-300 pt-4 dark:border-surface-600" aria-label="Remote instances">
+			<h2 class="text-sm font-bold">Remote instances</h2>
+			{#if state.remotes.length}
+				<ul class="mt-2 max-h-40 overflow-y-auto border-y border-surface-300 dark:border-surface-600" aria-label="Saved remotes">
+					{#each state.remotes as item (item.url)}
+						<li class="group flex items-center {remotePicked === item.url ? 'bg-primary-500/20' : 'hover:bg-primary-500/10'}">
+							<button
+								class="flex min-w-0 flex-1 items-baseline gap-3 px-2 py-1.5 text-left text-sm"
+								aria-pressed={remotePicked === item.url}
+								on:click={() => (remotePicked = remotePicked === item.url ? null : item.url)}
+								on:dblclick={() => {
+									remotePicked = item.url;
+									connectRemote();
+								}}
+							>
+								<span class="truncate font-medium">{item.name}</span>
+								<span class="ml-auto shrink-0 font-mono text-xs opacity-60">{item.url}</span>
+							</button>
+							<button
+								class="px-2 opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-60"
+								title="Forget {item.name}"
+								aria-label="Forget {item.name}"
+								on:click={() => connection.forgetRemote(item.url)}
+							>
+								<X size={14} />
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			<form
+				class="mt-2 grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-sm"
+				aria-label="Remote instance"
+				on:focusin={() => (remotePicked = null)}
+				on:submit|preventDefault={connectRemote}
+			>
+				<label class="opacity-60" for="remote-address">Address</label>
+				<input
+					id="remote-address"
+					class="input rounded-none px-2 py-1 font-mono text-sm"
+					placeholder="http://10.0.0.5:7070"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={address}
+				/>
+				<label class="opacity-60" for="remote-token">Token</label>
+				<input
+					id="remote-token"
+					type="password"
+					class="input rounded-none px-2 py-1 font-mono text-sm"
+					autocomplete="off"
+					bind:this={tokenInput}
+					bind:value={token}
+				/>
+				<label class="opacity-60" for="remote-name">Name</label>
+				<input
+					id="remote-name"
+					class="input rounded-none px-2 py-1 text-sm"
+					placeholder="Optional"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={remoteName}
+				/>
+				<span></span>
+				<label class="flex items-center gap-2 text-xs">
+					<input type="checkbox" class="checkbox" bind:checked={remember} />
+					<span>Remember</span>
+				</label>
+				<!-- Enter in a field connects. -->
+				<button type="submit" class="hidden" aria-hidden="true" tabindex="-1"></button>
+			</form>
+			<div class="mt-3 flex items-start gap-3">
+				<p class="min-h-5 flex-1 text-xs text-error-600 dark:text-error-400" role="status">
+					{errorAt === "remote" ? (state.connectError ?? "") : ""}
+				</p>
+				<button class={positive} disabled={!remoteReady || state.connecting} on:click={connectRemote}>
+					<Globe size={14} /><span>{remoteLabel ? `Connect to ${remoteLabel}` : "Connect"}</span>
+				</button>
+			</div>
+		</section>
 
 		<section class="mt-6 border-t border-surface-300 pt-4 dark:border-surface-600" aria-label="Start">
 			<h2 class="text-sm font-bold">Start an instance</h2>

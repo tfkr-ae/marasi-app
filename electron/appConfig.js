@@ -65,6 +65,11 @@ const testCasesName = "test_cases.yml";
 const savedQueriesKey = "saved_queries";
 const hiddenBuiltinQueriesKey = "hidden_builtin_queries";
 
+// v2's saved remote instances: {name, url, sealed_token}, where the token
+// is sealed by the OS through Electron's safeStorage (remotes.js). v1
+// doesn't read it. Not seeded: a missing key means none.
+const remoteConnectionsKey = "remote_connections";
+
 const hexColor = /^#[0-9a-f]{6}$/;
 
 function text(value) {
@@ -335,6 +340,24 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
       return serialized(async () => {
         if (!isStringList(values)) throw new Error("the default exclusion is not a list of content types");
         await file.write({ [contentTypeExclusionKey]: values });
+      });
+    },
+
+    /** The saved remote instances, as written; entries that aren't objects are skipped. */
+    async remoteConnections() {
+      const saved = (await file.values())[remoteConnectionsKey];
+      return (Array.isArray(saved) ? saved : []).filter((entry) => entry && typeof entry === "object");
+    },
+
+    /**
+     * Rewrites the saved remotes with `change(saved)`, inside the write
+     * queue, so two windows saving at once both land.
+     */
+    updateRemoteConnections(change) {
+      return serialized(async () => {
+        const next = await change(await appConfig.remoteConnections());
+        await file.write({ [remoteConnectionsKey]: next });
+        return next;
       });
     },
 

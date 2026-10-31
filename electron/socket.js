@@ -44,3 +44,53 @@ export function callSocket(socketPath, method, path, body) {
     req.end(payload ?? undefined);
   });
 }
+
+/**
+ * Follows the server-sent events at `path` on the socket at `socketPath`,
+ * calling `onEvent({name, data})` for each. Returns `{closed, close}`:
+ * `closed` resolves when the stream ends, fails or is closed.
+ */
+export function streamSocket(socketPath, path, onEvent) {
+  let req;
+  const closed = new Promise((resolve) => {
+    req = request({ socketPath, method: "GET", path, headers: { Host: "marasi", Accept: "text/event-stream" } }, (res) => {
+      let buffer = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        buffer += chunk.replace(/\r\n?/g, "\n");
+        let end;
+        while ((end = buffer.indexOf("\n\n")) !== -1) {
+          const block = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          const event = sseEvent(block);
+          if (event) onEvent(event);
+        }
+      });
+      res.on("end", resolve);
+      res.on("close", resolve);
+      res.on("error", resolve);
+    });
+    req.on("error", resolve);
+    req.on("close", resolve);
+    req.end();
+  });
+  return { closed, close: () => req.destroy() };
+}
+
+// One server-sent event block as {name, data}, or null for a comment.
+function sseEvent(block) {
+  let name = "message";
+  const data = [];
+  let any = false;
+  for (const line of block.split("\n")) {
+    if (!line || line.startsWith(":")) continue;
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    const value = colon === -1 ? "" : line.slice(colon + 1).replace(/^ /, "");
+    if (field === "event") name = value;
+    else if (field === "data") data.push(value);
+    else continue;
+    any = true;
+  }
+  return any ? { name, data: data.join("\n") } : null;
+}

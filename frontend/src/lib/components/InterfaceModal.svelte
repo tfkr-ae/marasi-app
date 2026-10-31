@@ -4,8 +4,11 @@
     import { onMount } from "svelte";
     import { listener } from "../../stores";
     import { X } from "lucide-svelte";
+    import { neutralVariant } from "../launchpad/format.js";
 
     export let parent;
+	// The instance machine's addresses, {address, family, interface}, which
+	// on a remote connection are not this machine's.
 	let interfaceList = [];
 	let selectedInterface = 0;
 	let port = $listener.port;
@@ -14,19 +17,20 @@
 	const cHeader = 'text-2xl font-bold';
 	const cForm = 'space-y-3';
     function onInput() {
-        const response = {
-            "addr": interfaceList[selectedInterface],
-            "port": port
-        }
-        if (response.addr && response.port) {
-            $modalStore[0].response({"addr": interfaceList[selectedInterface], "port": port.toString()});
+        const addr = interfaceList[selectedInterface]?.address;
+        if (addr && port) {
+            $modalStore[0].response({ addr, port: port.toString() });
             modalStore.close();
         }
     }
+    function onStop() {
+        $modalStore[0].response({ stop: true });
+        modalStore.close();
+    }
 	onMount(() => {
 		GetInterfaces().then((interfaces) => {
-			interfaces ? (interfaceList = interfaces) : (interfaceList = []);
-			selectedInterface = interfaceList.indexOf($listener.address) ? interfaceList.indexOf($listener.address) : 0;
+			interfaceList = interfaces ?? [];
+			selectedInterface = Math.max(0, interfaceList.findIndex((item) => item.address === $listener.address));
 		});
 	});
 </script>
@@ -51,7 +55,7 @@
 			<select bind:value={selectedInterface} class="select h-8 py-1 text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0">
 				{#each interfaceList as proxyInterface, index}
 					<option value={index}
-						>{proxyInterface}</option
+						>{proxyInterface.address} ({proxyInterface.interface})</option
 					>
 				{/each}
 			</select>
@@ -63,6 +67,9 @@
 			/>
             <!-- prettier-ignore -->
             <footer class="modal-footer {parent.regionFooter}">
+                {#if $listener.status}
+                    <button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" on:click={onStop}>Stop</button>
+                {/if}
                 <button class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}" on:click={onInput}>Continue</button>
             </footer>
         </form>

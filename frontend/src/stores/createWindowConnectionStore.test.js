@@ -41,6 +41,7 @@ function fakeApi({ instances = [], connect, current = null, startup = current } 
       return { instance, baseURL: "http://127.0.0.1:50037", loopbackTurnedOn: false };
     },
     current: async () => current,
+    refusedRemote: async () => null,
     useConnection: (baseURL) => ({
       get: async (path) => {
         fetched.push(`${baseURL}${path}`);
@@ -207,4 +208,90 @@ test("connected() waits for the window's connection", async () => {
   assert.equal(got.instance, "default");
   // Once connected, it resolves at once.
   assert.equal((await store.connected()).instance, "default");
+});
+
+// The bridge's remote calls, over a saved list, answering as the main
+// process does: { value }, or { error, tokenRefused, remote }.
+function remoteApi({ saved = [], tokens = {}, refused = null } = {}) {
+  const { api, fetched } = fakeApi();
+  const sent = [];
+  const answer = (url, token, name) => {
+    if (tokens[url] === undefined) return { error: `couldn't reach ${url}: ECONNREFUSED` };
+    if (tokens[url] !== token) return { error: `${name ?? url} refused the token`, tokenRefused: true, remote: { name: name ?? url, url } };
+    return { value: { instance: name ?? `default on ${new URL(url).host}`, baseURL: url, loopbackTurnedOn: false, remote: true } };
+  };
+  Object.assign(api, {
+    listRemotes: async () => saved.map(({ name, url }) => ({ name, url })),
+    connectRemote: async (form) => {
+      sent.push(form);
+      const result = answer(form.url, form.token, form.name || undefined);
+      if (result.value && form.save) {
+        saved = [...saved.filter((item) => item.url !== form.url), { name: result.value.instance, url: form.url, token: form.token }];
+      }
+      return result;
+    },
+    connectSaved: async (url) => {
+      const item = saved.find((entry) => entry.url === url);
+      return answer(url, item.token, item.name);
+    },
+    forgetRemote: async (url) => {
+      saved = saved.filter((entry) => entry.url !== url);
+    },
+    refusedRemote: async () => refused,
+  });
+  return { api, fetched, sent };
+}
+
+test("a remote connects by address and token, and is remembered", async () => {
+  const { api, fetched, sent } = remoteApi({ tokens: { "http://10.1.26.31:7070": "t1" } });
+  const store = createWindowConnectionStore(api);
+  const connection = await store.connectRemote({ url: "http://10.1.26.31:7070", token: "t1", name: "", save: true });
+  assert.equal(connection.instance, "default on 10.1.26.31:7070");
+  assert.equal(connection.remote, true);
+  assert.deepEqual(fetched, ["http://10.1.26.31:7070/service/status"]);
+  assert.deepEqual(sent, [{ url: "http://10.1.26.31:7070", token: "t1", name: "", save: true }]);
+  assert.deepEqual(get(store).remotes, [{ name: "default on 10.1.26.31:7070", url: "http://10.1.26.31:7070" }]);
+});
+
+test("a saved remote connects without its token", async () => {
+  const { api } = remoteApi({
+    saved: [{ name: "Lab box", url: "http://10.1.26.31:7070", token: "t1" }],
+    tokens: { "http://10.1.26.31:7070": "t1" },
+  });
+  const store = createWindowConnectionStore(api);
+  await store.listRemotes();
+  assert.deepEqual(get(store).remotes, [{ name: "Lab box", url: "http://10.1.26.31:7070" }]);
+  const connection = await store.connectSaved("http://10.1.26.31:7070");
+  assert.equal(connection.instance, "Lab box");
+});
+
+test("a saved remote that refuses its token asks for the new one, which replaces it", async () => {
+  const tokens = { "http://10.1.26.31:7070": "rotated" };
+  const { api, sent } = remoteApi({ saved: [{ name: "Lab box", url: "http://10.1.26.31:7070", token: "t1" }], tokens });
+  const store = createWindowConnectionStore(api);
+  assert.equal(await store.connectSaved("http://10.1.26.31:7070"), null);
+  assert.deepEqual(get(store).tokenPrompt, { name: "Lab box", url: "http://10.1.26.31:7070" });
+  assert.equal(get(store).connectError, "Lab box refused the token");
+  const connection = await store.connectRemote({ url: "http://10.1.26.31:7070", token: "rotated", name: "Lab box", save: true });
+  assert.equal(connection.instance, "Lab box");
+  assert.equal(get(store).tokenPrompt, null);
+  assert.equal(sent.at(-1).save, true);
+});
+
+test("a window whose remote refused its token comes back asking for the new one", async () => {
+  const { api } = remoteApi({ refused: { name: "Lab box", url: "http://10.1.26.31:7070" } });
+  const store = createWindowConnectionStore(api);
+  assert.equal(await store.startup(), null);
+  assert.deepEqual(get(store).tokenPrompt, { name: "Lab box", url: "http://10.1.26.31:7070" });
+  assert.equal(get(store).connectError, "Lab box changed its token: paste the new one");
+});
+
+test("a remote that can't be reached stays on the screen with the reason; forgetting removes it", async () => {
+  const { api } = remoteApi({ saved: [{ name: "Gone", url: "http://10.9.9.9:1", token: "x" }] });
+  const store = createWindowConnectionStore(api);
+  assert.equal(await store.connectRemote({ url: "http://10.9.9.9:1", token: "x", save: false }), null);
+  assert.equal(get(store).connectError, "couldn't reach http://10.9.9.9:1: ECONNREFUSED");
+  assert.equal(get(store).tokenPrompt, null);
+  await store.forgetRemote("http://10.9.9.9:1");
+  assert.deepEqual(get(store).remotes, []);
 });

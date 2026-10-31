@@ -53,7 +53,9 @@ export function createDevBridge({ configDir, call, readdir, appConfig = null }) 
   // {instance, origin, token, loopbackTurnedOn}, or null.
   let connection = null;
 
-  const shown = (c) => c && { instance: c.instance, baseURL: instancePath, loopbackTurnedOn: c.loopbackTurnedOn };
+  // As the main process shows a connection: everything but the token.
+  const shown = (c) =>
+    c && { instance: c.instance, baseURL: instancePath, loopbackTurnedOn: c.loopbackTurnedOn, remote: false };
 
   // Sends the page's request on to the connected instance with its token,
   // and streams the answer back, so /events stays open.
