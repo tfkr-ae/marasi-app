@@ -29,3 +29,13 @@ Changing one of these means changing the others:
 
 - [Updates are verified against a signing key built into the app](../../adr/2026-10-17-updates-are-signed-with-an-embedded-key.md)
 - [Switching channel never installs an older build on its own](../../adr/2026-10-17-switching-channel-never-downgrades.md)
+
+## Instance updates (v2)
+
+A service instance updates itself through Marasi's `/update` routes, separately from the app's own updater above. `frontend/src/stores/createInstanceUpdateStore.js` holds the logic; `instanceUpdateStore.js` wires it to the Marasi client and reads the instance again whenever the window's connection changes. `InstanceVersion.svelte` draws the version, Check for updates, Install, the install's progress and Restart in the Dashboard's connection status.
+
+- **Reads.** `reload` reads `GET /service/status` (version, `restart_required`) and `GET /update`. An instance without `/update` still shows its version, with no update actions. The store is in `marasiEvents.js`'s `stores`, so it reloads when the stream reopens.
+- **Bundled Marasi.** The update actions are hidden when a local instance's `install_path` is the bundled Marasi (`runsBundled` in `electron/marasiBin.js`, links resolved), since it updates with the app. A remote instance is never treated as bundled. Restart shows for any instance whose build was replaced.
+- **Events.** `update.available`, `update.progress`, `update.installed` (which sets restart needed), `update.failed`, `service.restarting` and `service.restart_failed` go to the store's `on*` methods.
+- **Restart.** `POST /service/restart` answers once the successor runs on the same address and token, so the store reads it again and the event stream reopens on its own. `409 checkpoint_items_held` asks before a forced restart drops the held items.
+- A development build answers `409 development_build` to check and install, and reports `development: true`, which disables Check for updates.
