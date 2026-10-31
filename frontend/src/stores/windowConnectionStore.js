@@ -14,12 +14,22 @@ const bridge = globalThis.window?.marasiApp ?? {
     throw new Error("Open Marasi v2 to connect to an instance");
   },
   connection: async () => null,
+  listRemotes: async () => [],
+  connectRemote: async () => ({ error: "Open Marasi v2 to connect to an instance" }),
+  connectSaved: async () => ({ error: "Open Marasi v2 to connect to an instance" }),
+  forgetRemote: async () => {},
+  refusedRemote: async () => null,
 };
 
 export const windowConnection = createWindowConnectionStore({
   listInstances: () => bridge.listInstances(),
   connect: (instance) => bridge.connect(instance),
   current: () => bridge.connection(),
+  listRemotes: () => bridge.listRemotes(),
+  connectRemote: (form) => bridge.connectRemote(form),
+  connectSaved: (url) => bridge.connectSaved(url),
+  forgetRemote: (url) => bridge.forgetRemote(url),
+  refusedRemote: () => bridge.refusedRemote(),
   useConnection,
 });
 

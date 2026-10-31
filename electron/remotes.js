@@ -7,8 +7,9 @@
 // Marasi's control listener answers plain HTTP, or HTTPS behind a proxy.
 const schemes = new Set(["http:", "https:"]);
 
-const refusedToken = (name) =>
-  Object.assign(new Error(`${name} refused the token`), { tokenRefused: true });
+// A refused token, with the remote ({name, url}) to ask the new one for.
+const refusedToken = (name, url) =>
+  Object.assign(new Error(`${name} refused the token`), { tokenRefused: true, remote: { name, url } });
 
 /** The origin of address `url`, which may leave out http://. */
 export function remoteOrigin(url) {
@@ -25,7 +26,8 @@ export function remoteOrigin(url) {
 
 /**
  * The remote instances. `appConfig` is createAppConfig's; `safeStorage` is
- * Electron's (isEncryptionAvailable, encryptString, decryptString).
+ * Electron's (isAsyncEncryptionAvailable, encryptStringAsync,
+ * decryptStringAsync, and getSelectedStorageBackend on Linux).
  */
 export function createRemotes({ appConfig, safeStorage, fetch }) {
   // Reaches `origin` with `token`; resolves to the connection a window keeps.
@@ -36,7 +38,7 @@ export function createRemotes({ appConfig, safeStorage, fetch }) {
     } catch (error) {
       throw new Error(`couldn't reach ${origin}: ${error?.cause?.code ?? error?.message ?? error}`);
     }
-    if (answer.status === 401) throw refusedToken(name ?? origin);
+    if (answer.status === 401) throw refusedToken(name || origin, origin);
     if (!answer.ok) throw new Error(`${origin} answered ${answer.status}`);
     const status = await answer.json();
     return {
@@ -46,6 +48,23 @@ export function createRemotes({ appConfig, safeStorage, fetch }) {
       remote: true,
       loopbackTurnedOn: false,
     };
+  }
+
+  // Whether the OS can seal a token. Linux without a keyring "seals" with a
+  // key kept in the app itself, which isn't safe.
+  async function canSeal() {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return false;
+    return safeStorage.getSelectedStorageBackend?.() !== "basic_text";
+  }
+
+  // Saves the remote at `origin` under `name` with `token` sealed, in place
+  // of any remote saved at the same address.
+  async function keep(name, origin, token) {
+    const sealed = (await safeStorage.encryptStringAsync(token)).toString("base64");
+    await appConfig.updateRemoteConnections((saved) => [
+      ...saved.filter((entry) => entry.url !== origin),
+      { name, url: origin, sealed_token: sealed },
+    ]);
   }
 
   const remotes = {
@@ -62,17 +81,11 @@ export function createRemotes({ appConfig, safeStorage, fetch }) {
       const origin = remoteOrigin(url);
       const trimmed = String(token ?? "").trim();
       if (!trimmed) throw new Error("Paste the instance's control token");
-      if (save && !safeStorage.isEncryptionAvailable()) {
+      if (save && !(await canSeal())) {
         throw new Error("This machine can't keep the token safely, so the remote can't be saved");
       }
       const connection = await reach(origin, trimmed, String(name ?? "").trim());
-      if (save) {
-        const sealed = safeStorage.encryptString(trimmed).toString("base64");
-        await appConfig.updateRemoteConnections((saved) => [
-          ...saved.filter((entry) => entry.url !== origin),
-          { name: connection.instance, url: origin, sealed_token: sealed },
-        ]);
-      }
+      if (save) await keep(connection.instance, origin, trimmed);
       return connection;
     },
 
@@ -81,14 +94,17 @@ export function createRemotes({ appConfig, safeStorage, fetch }) {
       const origin = remoteOrigin(url);
       const saved = (await appConfig.remoteConnections()).find((entry) => entry.url === origin);
       if (!saved) throw new Error(`There is no saved remote at ${origin}`);
-      let token;
+      let opened;
       try {
-        token = safeStorage.decryptString(Buffer.from(String(saved.sealed_token ?? ""), "base64"));
+        opened = await safeStorage.decryptStringAsync(Buffer.from(String(saved.sealed_token ?? ""), "base64"));
       } catch {
         // A token sealed on another machine or by another user.
-        throw refusedToken(saved.name);
+        throw refusedToken(saved.name, origin);
       }
-      return reach(origin, token, saved.name);
+      const connection = await reach(origin, opened.result, saved.name);
+      // The OS rotated its key: seal the token again with the new one.
+      if (opened.shouldReEncrypt) await keep(saved.name, origin, opened.result).catch(() => {});
+      return connection;
     },
 
     /** Removes the saved remote at `url`. */

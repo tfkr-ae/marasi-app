@@ -16,14 +16,21 @@ const status = (instance = "default") => ({
 });
 
 // Electron's safeStorage, with a reversible stand-in for the OS keychain.
-function fakeSafeStorage({ available = true } = {}) {
+// `backend` is Linux's password store, and `rotated` makes a decrypt ask
+// for the token to be sealed again.
+function fakeSafeStorage({ available = true, backend, rotated = false } = {}) {
   return {
-    isEncryptionAvailable: () => available,
-    encryptString: (text) => Buffer.from(`sealed:${[...text].reverse().join("")}`),
-    decryptString: (buffer) => {
+    sealed: 0,
+    isAsyncEncryptionAvailable: async () => available,
+    ...(backend ? { getSelectedStorageBackend: () => backend } : {}),
+    async encryptStringAsync(text) {
+      this.sealed++;
+      return Buffer.from(`sealed:${[...text].reverse().join("")}`);
+    },
+    decryptStringAsync: async (buffer) => {
       const text = buffer.toString();
       if (!text.startsWith("sealed:")) throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
-      return [...text.slice("sealed:".length)].reverse().join("");
+      return { result: [...text.slice("sealed:".length)].reverse().join(""), shouldReEncrypt: rotated };
     },
   };
 }
@@ -46,11 +53,12 @@ function fakeNetwork(instances) {
   return { fetch, requests };
 }
 
-function setup({ fs = memoryFS(), instances = { "http://10.1.26.31:7070": { name: "lab", token } }, available } = {}) {
+function setup({ fs = memoryFS(), instances = { "http://10.1.26.31:7070": { name: "lab", token } }, ...storage } = {}) {
   const appConfig = createAppConfig({ dir, fs, platform: "darwin" });
   const network = fakeNetwork(instances);
-  const remotes = createRemotes({ appConfig, safeStorage: fakeSafeStorage({ available }), fetch: network.fetch });
-  return { fs, remotes, network, instances };
+  const safeStorage = fakeSafeStorage(storage);
+  const remotes = createRemotes({ appConfig, safeStorage, fetch: network.fetch });
+  return { fs, remotes, network, instances, safeStorage };
 }
 
 test("connecting by address and token reaches the instance with the token", async () => {
@@ -120,4 +128,16 @@ test("without OS encryption a remote connects but isn't saved", async () => {
   );
   assert.equal(fs.files.has(path), false);
   assert.ok(await remotes.connect({ url: "http://10.1.26.31:7070", token }));
+  const linux = setup({ backend: "basic_text" });
+  await assert.rejects(linux.remotes.connect({ url: "http://10.1.26.31:7070", token, save: true }), /can't keep the token safely/);
+  assert.ok(await setup({ backend: "gnome_libsecret" }).remotes.connect({ url: "http://10.1.26.31:7070", token, save: true }));
+});
+
+test("a token sealed with a rotated OS key is sealed again", async () => {
+  const fs = memoryFS();
+  await setup({ fs }).remotes.connect({ url: "http://10.1.26.31:7070", token, name: "Lab box", save: true });
+  const restarted = setup({ fs, rotated: true });
+  assert.equal((await restarted.remotes.connectSaved("http://10.1.26.31:7070")).token, token);
+  assert.equal(restarted.safeStorage.sealed, 1);
+  assert.deepEqual(await restarted.remotes.list(), [{ name: "Lab box", url: "http://10.1.26.31:7070" }]);
 });
