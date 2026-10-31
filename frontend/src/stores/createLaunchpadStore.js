@@ -719,6 +719,8 @@ export function createLaunchpadStore(api) {
       set(initialState(++projectStateVersion));
     },
     populate,
+    // Reads it all again, after the event stream reopens.
+    reload: populate,
     jumpTo,
     loadEntries,
     ensureDetails,

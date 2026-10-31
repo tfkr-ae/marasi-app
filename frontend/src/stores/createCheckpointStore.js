@@ -363,6 +363,8 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
   return {
     subscribe: store.subscribe,
     populate,
+    // Reads it all again, after the event stream reopens.
+    reload: populate,
     clear,
     toggleIntercept,
     onIntercepted: refresh,
