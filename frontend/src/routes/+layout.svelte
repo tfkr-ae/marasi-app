@@ -223,17 +223,16 @@
 	// Whether the window has no connection to take up, so the connection
 	// screen shows until the researcher connects.
 	let choosingConnection = false;
-	// The window's connection: the one it had before a reload, or the one
-	// the researcher picks on the connection screen.
+	// The window's connection: the default instance at launch, the one it
+	// had before a reload, or, after a disconnect or a failed start, the one
+	// the researcher connects to or starts on the connection screen.
 	async function connectWindow() {
-		const resumed = await windowConnection.resume().catch((err) => {
-			console.error("Resuming the connection failed:", err);
-			return null;
-		});
-		if (resumed) return resumed;
-		choosingConnection = true;
-		const connection = await windowConnection.connected();
-		choosingConnection = false;
+		let connection = await windowConnection.startup();
+		if (!connection) {
+			choosingConnection = true;
+			connection = await windowConnection.connected();
+			choosingConnection = false;
+		}
 		if (connection.loopbackTurnedOn) {
 			toastStore.trigger({
 				message: `Turned on ${connection.status.control_listener} for ${connection.instance}`,

@@ -1,12 +1,15 @@
 <script>
 	// The connection screen: the service instances running on this machine,
-	// to connect the window to one. It draws the window connection store
-	// (stores/createWindowConnectionStore.js) and connects through it.
+	// to connect the window to one, and Start, to run a new one. It draws the
+	// window connection store (stores/createWindowConnectionStore.js) and
+	// connects through it.
 	import { onMount } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { Plug, RotateCw } from "lucide-svelte";
+	import { FolderOpen, Play, Plug, RotateCw } from "lucide-svelte";
 	import Logo from "./Logo.svelte";
 	import { projectName } from "../openProgress.js";
+	import { instanceNameFor } from "../../stores/createWindowConnectionStore.js";
+	import { pickProject } from "../../stores/windowConnectionStore.js";
 
 	/** The window connection store. */
 	export let connection;
@@ -22,8 +25,25 @@
 		if (!(await connection.connect(instance))) await connection.listInstances();
 	}
 
+	// Start: the project (null for the scratchpad) and the instance's name,
+	// which follows the project until the researcher edits it.
+	let project = null;
+	let name = "";
+	let nameEdited = false;
+	$: if (!nameEdited) name = instanceNameFor(project, state.instances.map((item) => item.instance));
+
+	async function chooseProject() {
+		const picked = await pickProject().catch(() => null);
+		if (picked) project = picked;
+	}
+
+	async function start() {
+		if (!(await connection.start(name.trim(), project))) await connection.listInstances();
+	}
+
 	onMount(() => {
 		connection.listInstances();
+		connection.readMarasi();
 	});
 
 	// The Modal's neutral and positive buttons, square.
@@ -98,5 +118,43 @@
 				<Plug size={14} /><span>{state.connecting ? `Connecting to ${state.connecting}…` : picked ? `Connect to ${picked}` : "Connect"}</span>
 			</button>
 		</footer>
+
+		<section class="mt-6 border-t border-surface-300 pt-4 dark:border-surface-600" aria-label="Start">
+			<h2 class="text-sm font-bold">Start an instance</h2>
+			<div class="mt-2 grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-sm">
+				<span class="opacity-60">Project</span>
+				<div class="flex min-w-0 items-center gap-2">
+					<span class="truncate" title={project ?? ""}>{project ? projectName(project) : "Scratchpad"}</span>
+					<button class="{neutral} ml-auto" on:click={chooseProject}>
+						<FolderOpen size={14} /><span>Choose…</span>
+					</button>
+				</div>
+				<label class="opacity-60" for="start-name">Name</label>
+				<input
+					id="start-name"
+					class="input rounded-none px-2 py-1 text-sm"
+					spellcheck="false"
+					bind:value={name}
+					on:input={() => (nameEdited = true)}
+				/>
+				<span class="opacity-60">Marasi</span>
+				<div class="flex min-w-0 items-center gap-2">
+					<span class="truncate font-mono text-xs" title={state.marasi?.path ?? state.marasi?.bundled ?? ""}>
+						{state.marasi?.path ?? "Bundled"}
+					</span>
+					{#if state.marasi?.path}
+						<button class="{neutral} ml-auto" on:click={() => connection.chooseMarasi(true)}>Use bundled</button>
+					{/if}
+					<button class="{neutral} {state.marasi?.path ? '' : 'ml-auto'}" on:click={() => connection.chooseMarasi()}>
+						Choose…
+					</button>
+				</div>
+			</div>
+			<div class="mt-3 flex justify-end">
+				<button class={positive} disabled={!name.trim() || state.connecting} on:click={start}>
+					<Play size={14} /><span>Start {name.trim()}</span>
+				</button>
+			</div>
+		</section>
 	</div>
 </div>

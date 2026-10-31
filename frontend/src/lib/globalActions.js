@@ -3,8 +3,6 @@ import { goto } from "$app/navigation";
 import { get } from "svelte/store";
 import {
 	OpenProject,
-	ScratchpadPath,
-	SetupScratchpad,
 	StartProxy,
 	UpdateProxy,
 	DownloadCert,
@@ -64,7 +62,8 @@ export function setupListener(r, toastStore) {
 const openingDelay = 300;
 // The last open asked for, which the opening screen's Try again re-runs.
 let lastOpen = null;
-// The scratchpad's file path, known once startup has asked for it.
+// Marasi's scratchpad's file path, known once the window has connected to
+// an instance with it open.
 let scratchpadPath = null;
 
 /**
@@ -94,22 +93,6 @@ export function openProjectFile(r, toastStore, modalStore) {
 }
 
 /**
- * Opens the scratchpad at startup, with the opening screen up from the
- * start, as nothing is open yet. Resolves like openProjectFile.
- */
-export async function openScratchpad() {
-	lastOpen = openScratchpad;
-	const name = "scratchpad";
-	scratchpadPath ??= await ScratchpadPath().catch(() => null);
-	return openWithScreen({
-		name,
-		path: scratchpadPath,
-		scratchpad: true,
-		open: () => SetupScratchpad().then(() => name),
-	});
-}
-
-/**
  * Opens the project the connected instance has open, at startup, with the
  * opening screen up from the start. `status` is the instance's
  * /service/status. Resolves like openProjectFile.
@@ -117,6 +100,7 @@ export async function openScratchpad() {
 export function openConnectedProject(status) {
 	lastOpen = () => openConnectedProject(status);
 	const name = projectName(status.project);
+	if (name === "scratchpad") scratchpadPath = status.project;
 	return openWithScreen({
 		name,
 		path: status.project,

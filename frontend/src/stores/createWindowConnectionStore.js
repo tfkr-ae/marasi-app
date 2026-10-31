@@ -10,10 +10,25 @@ const reason = (error) =>
   String(error?.message ?? error ?? "").replace(/^Error invoking remote method '[^']*': (?:\w*Error: )?/, "");
 
 /**
- * The window's connection store. `api` is `{listInstances, connect,
- * current, useConnection}`: the main process bridge's calls, and the client
- * module's useConnection(baseURL), which points the client at the instance
- * and returns it.
+ * The name Start suggests for an instance on `project` (a path, or null
+ * for the scratchpad): the project's file name, with `-2` and so on when an
+ * instance in `taken` has it.
+ */
+export function instanceNameFor(project, taken) {
+  const base = project ? project.split(/[\\/]/).pop().replace(/\.marasi$/i, "") : "scratchpad";
+  const names = new Set(taken);
+  if (!names.has(base)) return base;
+  let n = 2;
+  while (names.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+
+/**
+ * The window's connection store. `api` is `{listInstances, startup,
+ * connect, start, disconnect, marasi, chooseMarasi, useConnection}`: the
+ * main process bridge's calls, and the client module's
+ * useConnection(baseURL), which points the client at the instance and
+ * returns it.
  */
 export function createWindowConnectionStore(api) {
   const store = writable({
@@ -27,6 +42,8 @@ export function createWindowConnectionStore(api) {
     connectError: null,
     // {instance, baseURL, loopbackTurnedOn, status}, or null.
     connection: null,
+    // The Marasi Start runs: {path, bundled}, path null for the bundled one.
+    marasi: null,
   });
 
   async function listInstances() {
@@ -48,27 +65,57 @@ export function createWindowConnectionStore(api) {
     return connection;
   }
 
-  /** Connects the window to local `instance`. Resolves to the connection, or null. */
-  async function connect(instance) {
+  // Connects to `instance` through `open`, the bridge call that connects
+  // the window. Resolves to the connection, or null with the reason shown.
+  async function connectWith(instance, open) {
     store.update((s) => ({ ...s, connecting: instance, connectError: null }));
     try {
-      return await use(await api.connect(instance));
+      return await use(await open());
     } catch (error) {
       store.update((s) => ({ ...s, connecting: null, connectError: reason(error) }));
       return null;
     }
   }
 
-  /** Takes up the connection the window already has, as after a reload, or null. */
-  async function resume() {
-    const current = await api.current();
-    if (!current) return null;
+  /** Connects the window to local `instance`. Resolves to the connection, or null. */
+  const connect = (instance) => connectWith(instance, () => api.connect(instance));
+
+  /**
+   * Starts local `instance` on `project` (a path, or null for the
+   * scratchpad) and connects to it. Resolves to the connection, or null.
+   */
+  const start = (instance, project) => connectWith(instance, () => api.start(instance, project));
+
+  /**
+   * The window's connection at launch: the default instance, started if it
+   * isn't running, or the connection it had before a reload. Null after a
+   * disconnect, or with the reason shown when the default can't start.
+   */
+  async function startup() {
     try {
-      return await use(current);
+      const current = await api.startup();
+      return current && (await use(current));
     } catch (error) {
       store.update((s) => ({ ...s, connectError: reason(error) }));
       return null;
     }
+  }
+
+  /** Ends the window's connection, leaving its instance running. */
+  async function disconnect() {
+    await api.disconnect();
+    store.update((s) => ({ ...s, connection: null }));
+  }
+
+  async function readMarasi() {
+    const marasi = await api.marasi();
+    store.update((s) => ({ ...s, marasi }));
+  }
+
+  /** Chooses the Marasi Start runs from a path, or the bundled one when `bundled`. */
+  async function chooseMarasi(bundled = false) {
+    const marasi = await api.chooseMarasi(bundled);
+    store.update((s) => ({ ...s, marasi }));
   }
 
   /** Resolves to the window's connection once it has one. */
@@ -86,5 +133,15 @@ export function createWindowConnectionStore(api) {
     });
   }
 
-  return { subscribe: store.subscribe, listInstances, connect, resume, connected };
+  return {
+    subscribe: store.subscribe,
+    listInstances,
+    startup,
+    connect,
+    start,
+    disconnect,
+    readMarasi,
+    chooseMarasi,
+    connected,
+  };
 }
