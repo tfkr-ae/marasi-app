@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import { deduplicateBridgeHTML } from "./bridge-html.mjs";
-import { normalizeListenerStartup } from "./listener-startup.mjs";
 import { collectExpression, dropPoint, pickTarget, sameBox } from "./targets.mjs";
 
 const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, action, label, shortcut] = process.argv.slice(2);
@@ -12,13 +10,23 @@ const pollMs = 100;
 const defaultTimeoutMs = 10000;
 const codeMirrorCommitMs = 350;
 if (!mode || !Number.isInteger(port) || !appURL || !evidenceDir || !Number.isInteger(viewport.width) || !Number.isInteger(viewport.height)) {
-	throw new Error("usage: cdp.mjs <launch|doctor|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [feature] [compare <label> <shortcut>|steps <json>|theme]");
+	throw new Error("usage: cdp.mjs <launch|electron|doctor|reset|drive> <cdp-port> <app-url> <evidence-dir> <width> <height> [instance (launch) | feature [compare <label> <shortcut>|steps <json>|shots|theme]]");
 }
 
 // `expected` must be text only the destination page paints. Rail labels are
 // always visible, so a bare feature name proves nothing.
+// A route with `shortcut` is reached by that key instead of a click, and
+// `leave` steps take the page back to Home afterwards.
 const routes = {
-	dashboard: { selector: '[title="Home"]', path: "/", expected: "Project Dashboard" },
+	home: { selector: '[title="Home"]', path: "/", expected: "Project Dashboard" },
+	// Disconnect (⌘⇧⌫, `global.disconnect`) reloads the page onto the
+	// connection screen; Connect takes the window back to Home.
+	connection: {
+		shortcut: "cmd+shift+backspace",
+		path: "/",
+		expected: "Connect to Marasi",
+		leave: [{ text: "Connect to default" }, { waitText: "Project Dashboard" }],
+	},
 	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Saved queries" },
 	compass: { selector: '[title="Compass"]', path: "/compass", expected: "Compass Settings" },
 	// The rail icon's title gains " · N intercepted" while items are held.
@@ -176,7 +184,7 @@ async function snapshot() {
 			path: location.pathname,
 			title: document.title,
 			viewport: {width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio},
-			bridgeScripts: Object.fromEntries(["/wails/ipc.js", "/wails/runtime.js"].map(path => [path, Array.from(document.scripts).filter(script => script.src === location.origin + path).length])),
+			dark: document.documentElement.classList.contains("dark"),
 			text: document.body.innerText,
 			overlay: overlay && rect && rect.width > 100 && rect.height > 100 ? {
 				label: overlay.getAttribute("aria-label") || overlay.querySelector("h2")?.textContent || null,
@@ -406,12 +414,32 @@ function resultOf(state) {
 
 const onRoute = (route) => `location.pathname === ${JSON.stringify(route.path)} && document.body.innerText.includes(${JSON.stringify(route.expected)})`;
 
+// Reaches `route` with the input a user would, and returns that input.
+async function enterRoute(route) {
+	if (route.shortcut) {
+		await pressShortcut(route.shortcut);
+		await waitFor(onRoute(route), `${feature} route and text`);
+		return `input=keyboard shortcut\nshortcut=${route.shortcut}\n`;
+	}
+	const point = await clickTarget({ selector: route.selector });
+	await waitFor(onRoute(route), `${feature} route and text`);
+	return `input=left mouse click\nselector=${route.selector}\nclick=${JSON.stringify(point)}\n`;
+}
+
+// Takes the page back to Home from a route that left it, as the connection
+// screen does.
+async function leaveRoute(route, prefix) {
+	if (!route.leave) return;
+	for (const step of route.leave) await runStep(step);
+	await capture(`${prefix}-left`);
+}
+
 async function driveRoute(route) {
 	await capture(`${feature}-before`);
-	const point = await clickTarget({ selector: route.selector });
-	fs.writeFileSync(`${evidenceDir}/${feature}-action.txt`, `input=left mouse click\nselector=${route.selector}\nclick=${JSON.stringify(point)}\nexpected_path=${route.path}\nexpected_text=${route.expected}\n`);
-	await waitFor(onRoute(route), `${feature} route and text`);
+	const input = await enterRoute(route);
+	fs.writeFileSync(`${evidenceDir}/${feature}-action.txt`, `${input}expected_path=${route.path}\nexpected_text=${route.expected}\n`);
 	await capture(`${feature}-after`);
+	await leaveRoute(route, feature);
 	fs.writeFileSync(`${evidenceDir}/${feature}-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
 	fs.writeFileSync(`${evidenceDir}/${feature}-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
 	console.log(`feature=${feature}\nresult=path ${route.path}, visible text: ${route.expected}\nevidence=${evidenceDir}`);
@@ -506,7 +534,7 @@ async function driveTheme(route) {
 	if (!(await evaluate(onRoute(route)))) {
 		await clickTarget({ selector: route.selector });
 	}
-	await waitFor(onRoute(route), "dashboard route");
+	await waitFor(onRoute(route), "Home route");
 	await clickTarget({ selector: routes.settings.selector });
 	await waitFor(onRoute(routes.settings), "settings route");
 
@@ -521,6 +549,51 @@ async function driveTheme(route) {
 	await capture("theme-restored");
 	fs.writeFileSync(`${evidenceDir}/theme-result.json`, `${JSON.stringify({ initialDark, toggledDark: !initialDark, restoredDark: initialDark }, null, 2)}\n`);
 	console.log(`feature=${feature}\naction=theme\nresult=Command+U changed and restored theme after leaving dashboard\nevidence=${evidenceDir}`);
+}
+
+const isDark = `document.documentElement.classList.contains("dark")`;
+const onConnectionScreen = `document.body.innerText.includes("Connect to Marasi")`;
+
+// Switches the appearance with ⌘U, as a user would, until it is `dark`.
+async function setAppearance(dark) {
+	if ((await evaluate(isDark)) === dark) return;
+	await pressShortcut("cmd+u");
+	await waitFor(`${isDark} === ${dark}`, `${dark ? "dark" : "light"} appearance`);
+}
+
+// Screenshots of the route in light and in dark. A connected page switches
+// with ⌘U, as a user would, and is left as it started. The connection
+// screen has no shortcuts and its window reloads into it, taking the OS
+// appearance (the layout's autoModeWatcher), so it is shot under an
+// emulated OS preference instead, which lasts through the reload and ends
+// before this returns.
+async function driveShots(route) {
+	const initialDark = await evaluate(isDark);
+	const shots = {};
+	try {
+		for (const dark of [initialDark, !initialDark]) {
+			const mode = dark ? "dark" : "light";
+			if (route.leave) {
+				await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: mode }] });
+				await enterRoute(route);
+			} else {
+				if (!(await evaluate(onRoute(route)).catch(() => false))) await enterRoute(route);
+				await setAppearance(dark);
+			}
+			await waitFor(`${isDark} === ${dark}`, `${feature} in ${mode}`);
+			await waitForSettledText(`${feature} in ${mode}`);
+			const state = await capture(`${feature}-${mode}`);
+			shots[mode] = { png: `${feature}-${mode}.png`, dark: state.dark, path: state.path };
+			await leaveRoute(route, `${feature}-${mode}`);
+		}
+	} finally {
+		if (route.leave) await send("Emulation.setEmulatedMedia", { features: [] });
+		// A failure on the connection screen leaves it there; reset.sh
+		// connects again.
+		else if (!(await evaluate(onConnectionScreen))) await setAppearance(initialDark);
+	}
+	fs.writeFileSync(`${evidenceDir}/${feature}-shots.json`, `${JSON.stringify({ initialDark, ...shots }, null, 2)}\n`);
+	console.log(`feature=${feature}\naction=shots\nlight=${evidenceDir}/${feature}-light.png\ndark=${evidenceDir}/${feature}-dark.png`);
 }
 
 // A visible element matching a CSS selector, as a wait expression.
@@ -648,85 +721,46 @@ await send("Network.enable");
 // painting the hidden page, so screenshots and drives stall for minutes.
 await send("Page.bringToFront");
 
+// The window's rail: the page is connected and drawing the app.
+const railReady = `Boolean(document.querySelector('[title="Home"]')) && !(${onConnectionScreen})`;
+
 if (mode === "launch") {
+	// `feature` carries the instance name at launch.
+	const instance = feature;
 	await sizeWindow();
-	// Fulfilled documents lose Chrome's loopback classification. Keep access
-	// limited to this isolated browser's Wails origin, not all websites.
-	await send("Browser.setPermission", { permission: { name: "loopback-network" }, setting: "granted", origin: appOrigin });
-	let interceptionError;
-	let intercepted = false;
-	let listenerStartupIntercepted = false;
-	const normalizeStartup = async ({ data }) => {
-		const message = JSON.parse(data);
-		if (message.method !== "Fetch.requestPaused") return;
-		const request = message.params;
-		try {
-			// Vite also serves the layout's CSS as a JavaScript import.
-			if (new URL(request.request.url).searchParams.get("type") === "style") {
-				await send("Fetch.continueRequest", { requestId: request.requestId });
-				return;
-			}
-			const isRoot = request.resourceType === "Document";
-			if (request.responseStatusCode !== 200) throw new Error(`Startup response returned ${request.responseStatusCode}`);
-			const response = await send("Fetch.getResponseBody", { requestId: request.requestId });
-			const original = response.base64Encoded ? Buffer.from(response.body, "base64").toString("utf8") : response.body;
-			const { body, counts } = isRoot ? deduplicateBridgeHTML(original) : normalizeListenerStartup(original);
-			if (isRoot) {
-				fs.writeFileSync(`${evidenceDir}/launch-bridge.json`, `${JSON.stringify({ url: request.request.url, originalScriptCounts: counts, removedDuplicateScripts: Object.values(counts).reduce((sum, count) => sum + count - 1, 0) }, null, 2)}\n`);
-			} else {
-				fs.writeFileSync(`${evidenceDir}/launch-listener-startup.json`, `${JSON.stringify({ url: request.request.url, normalizedStartupCalls: 1 }, null, 2)}\n`);
-			}
-			const prefix = isRoot ? "launch-root" : "launch-layout";
-			const extension = isRoot ? "html" : "js";
-			fs.writeFileSync(`${evidenceDir}/${prefix}-original.${extension}`, original);
-			fs.writeFileSync(`${evidenceDir}/${prefix}-normalized.${extension}`, body);
-			await send("Fetch.fulfillRequest", {
-				requestId: request.requestId,
-				responseCode: request.responseStatusCode,
-				responseHeaders: request.responseHeaders.filter(({ name }) => !["content-length", "content-encoding", "transfer-encoding"].includes(name.toLowerCase())),
-				body: Buffer.from(body).toString("base64"),
-			});
-			if (isRoot) intercepted = true;
-			else listenerStartupIntercepted = true;
-		} catch (error) {
-			interceptionError = error;
-			await send("Fetch.failRequest", { requestId: request.requestId, errorReason: "Failed" });
-		}
-	};
-	socket.addEventListener("message", normalizeStartup);
-	await send("Fetch.enable", { patterns: [
-		{ urlPattern: new URL(appURL).href, resourceType: "Document", requestStage: "Response" },
-		{ urlPattern: `${appOrigin}/src/routes/+layout.svelte*`, resourceType: "Script", requestStage: "Response" },
-	] });
 	try {
 		await send("Page.navigate", { url: appURL });
-		// The first Vite compile of the app can take a minute or more.
-		const deadline = Date.now() + 120000;
-		while (true) {
-			if (interceptionError) throw interceptionError;
-			try {
-				if (intercepted && listenerStartupIntercepted && await evaluate(`document.body?.innerText.includes("Project Dashboard")`)) break;
-			} catch {
-				// The document is still being replaced.
-			}
-			if (Date.now() >= deadline) throw new Error("timed out waiting for normalized Home startup");
-			await sleep(pollMs);
-		}
-		await waitFor(`Array.from(document.querySelectorAll("button")).some(button => button.querySelector("span.bg-success-500"))`, "online Home listener indicator");
+		// The first Vite compile of the app can take a minute or more. The
+		// dev server's bridge has no connection yet, so the page shows the
+		// connection screen.
+		await waitFor(`document.body?.innerText.includes("Connect to Marasi")`, "the connection screen", 120000);
+		await waitForTarget({ text: `Connect to ${instance}` }, { timeoutMs: 30000 });
+		await capture("launch-connection");
+		const point = await clickTarget({ text: `Connect to ${instance}` });
+		fs.writeFileSync(`${evidenceDir}/launch-action.txt`, `input=left mouse click\ncontrol=Connect to ${instance}\nclick=${JSON.stringify(point)}\nexpected=Project Dashboard\n`);
+		await waitFor(`${railReady} && document.body.innerText.includes("Project Dashboard")`, "Home after connecting", 60000);
+		await waitForSettledText("Home after connecting");
 		await capture("launch-ready");
-		await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script", 5000);
 	} catch (error) {
 		await capture("launch-failed");
 		throw error;
 	} finally {
 		fs.writeFileSync(`${evidenceDir}/launch-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
 		fs.writeFileSync(`${evidenceDir}/launch-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
-		await send("Fetch.disable");
-		socket.removeEventListener("message", normalizeStartup);
+	}
+} else if (mode === "electron") {
+	// The app's own window, at its own size: it connects to the default
+	// instance at launch.
+	try {
+		await waitFor(`${railReady} && document.body.innerText.includes("Project Dashboard")`, "Home in the Electron window", 120000);
+		await waitForSettledText("Home in the Electron window");
+		await capture("electron-ready");
+	} catch (error) {
+		await capture("electron-failed");
+		throw error;
 	}
 } else if (mode === "doctor") {
-	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && window.go?.main?.App && window.runtime && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, Wails bridge, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
-	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5000);
+	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && ${viewportMatches} && ${railReady}`, `a connected Marasi page with its app rail and a ${viewport.width}x${viewport.height} viewport (on the connection screen, connect again or relaunch)`, 5000);
 	await waitFor(`document.visibilityState === "visible"`, "the Marasi page in front, not hidden behind another tab", 2000);
 	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {
@@ -749,6 +783,11 @@ if (mode === "launch") {
 			}
 		}
 	}
+	// A window an earlier drive left on the connection screen connects again.
+	if (await evaluate(onConnectionScreen)) {
+		await clickTarget({ text: "Connect to default" });
+		await waitFor(railReady, "Home after connecting again", 30000);
+	}
 	if (await evaluate(residue)) {
 		await capture("reset-failed");
 		throw new Error("an overlay or drawer is still open after reset; run cleanup.sh and relaunch");
@@ -760,6 +799,7 @@ if (mode === "launch") {
 	if (action === "compare") await driveCompare(route);
 	else if (action === "steps") await driveSteps(route);
 	else if (action === "theme") await driveTheme(route);
+	else if (action === "shots") await driveShots(route);
 	else if (action) throw new Error(`unknown action: ${action}`);
 	else await driveRoute(route);
 } else {

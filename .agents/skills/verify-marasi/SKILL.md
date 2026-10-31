@@ -1,178 +1,118 @@
 ---
 name: verify-marasi
-description: Verify the Marasi Wails desktop app through its browser-connected dev server; use after changing user-visible behavior, proxy startup, navigation, or persisted project data.
+description: Verify Marasi App v2 by driving its frontend in headless Chrome against a real throwaway Marasi instance, and Electron for windows, menus and the updater; use after changing user-visible behavior, connecting, or anything a page shows from the instance.
 ---
 
 # Verify Marasi
 
-Marasi is a Wails desktop app backed by a local proxy and SQLite project. The Vite page on port `5173` cannot call the Go backend directly. Wails' dev server on port `34115` proxies Vite, injects the runtime, and connects browser calls to the running Go app through `/wails/ipc`.
+Marasi App v2 is an Electron client of a Marasi service instance's control API. Verification drives the same Svelte frontend in a plain headless Chrome, through the Vite dev server. The dev server stands in for Electron's main process (`frontend/devBridge.js`): it lists and connects to the instances in `MARASI_CONFIG_DIR`, serves the app config there, and proxies the page's calls and `/events` to the connected instance with its control token. The page never holds the token, as in Electron. Only Start, OS dialogs (Choose…, Browse…, file save), keybinding profile files, windows, native menus and the updater need Electron (see [Electron](#electron)).
 
 ## Launch
 
-Run from the repository root on macOS or Linux:
+From the repository root (a fresh worktree runs `scripts/bootstrap.sh` first, which also builds the bundled Marasi):
 
 ```bash
 .agents/skills/verify-marasi/scripts/launch.sh
 ```
 
-The helper runs `wails dev -m -nosyncgomod -nocolour -devserver localhost:34115` with `GOWORK=off`, creates an isolated home directory, and writes verification-only config with `first_run: false`. It starts an isolated headless Chrome against the Wails dev server with the app's `1600x900` window size. It defaults to proxy port `18080`; set `MARASI_VERIFY_PROXY_PORT` before launch to choose another free port. It returns after browser JavaScript sees the scratchpad dashboard through the real Go bindings.
+Launch:
 
-Chrome still starts on Home. During that first navigation, the driver intercepts the root HTML response and removes duplicate Wails bridge script tags; Wails v2.10.1 injects them alongside the explicit tags in `app.html`. The real backend and runtime scripts remain unchanged, and the native GUI still runs. Chrome needs the `loopback-network` DevTools permission, granted only to the Wails origin in the isolated profile, because response interception loses the document's loopback classification.
+1. Starts instance `default` in a new config directory `/tmp/mv2.XXXXXX`, with free proxy and control ports, using `resources/bin/marasi` (`npm run marasi` builds it) or `MARASI_BIN`. It seeds `marasi_appconfig.yaml` with `first_run: false`.
+2. Starts Vite with `MARASI_CONFIG_DIR` set to that directory and `MARASI_DEV_PORT` set to the first free port from `5190` (or `MARASI_VERIFY_DEV_PORT`).
+3. Starts an isolated headless Chrome (`MARASI_VERIFY_CHROME_BIN` to override) with a free DevTools port, and sizes the page to `1600x900`.
+4. Opens the app. A fresh dev server has no connection, so the page shows the connection screen. Launch clicks `Connect to default` and is ready when Home shows `Project Dashboard`.
 
-The driver also intercepts Chrome's compiled layout module during startup. Both the native GUI and Chrome bootstrap the listener; the second `StartProxy` rejects with `listener already active`, which otherwise makes Chrome's UI offline despite a running proxy. Only that startup rejection falls back to the real `UpdateProxy` with the configured address and port. Other failures retain the application's error path, and interactive listener controls remain unchanged. Launch requires the Home listener indicator to be online. Application source files are untouched; this is verification-only response normalization, not a production fix.
-
-Each fresh verification run follows launch → checks → cleanup, so both startup normalizations are reapplied automatically at the next launch. The reload caveat applies only within an active run: `drive.sh` and `doctor.sh` reuse that instance rather than relaunching it. Use in-app navigation during checks. If Chrome is fully refreshed, Vite triggers a full-page reload, or the backend restarts, clean up and relaunch before continuing; reloads can restore duplicate bridges or offline startup behavior after interception detaches. Doctor checks for exactly one copy of each bridge script.
-
-The state directory defaults to `${TMPDIR}/verify-marasi`. Launch refuses to reuse existing state or occupied ports `5173`, `34115`, and `18080`. Chrome chooses a free DevTools port. It does not use the normal `~/Library/Application Support/Marasi` directory. Configure alternate dev and fixed CDP ports with `MARASI_VERIFY_DEV_PORT` and `MARASI_VERIFY_CDP_PORT`. Vite is fixed to `5173` in this repo, so only one verification run can use the default checkout at a time.
-
-Teardown only the instance recorded by the helper:
-
-```bash
-.agents/skills/verify-marasi/scripts/cleanup.sh
-```
-
-## Restart
-
-To prove that a saved preference survives an app restart, restart the recorded instance instead of cleaning up:
-
-```bash
-.agents/skills/verify-marasi/scripts/restart.sh
-```
-
-Restart stops the recorded Chrome and Wails processes, keeps the isolated home (including `marasi_appconfig.yaml` and the scratch project), and relaunches with `MARASI_VERIFY_KEEP_CONFIG=1`, so launch reads the existing config instead of rewriting it. It creates a new evidence directory. Inspect the YAML before and after the restart. `cleanup.sh` still removes everything at the end.
+It never touches the researcher's own Marasi config directory or instances: without `MARASI_CONFIG_DIR` the bridge refuses to reach any. State lives in `${TMPDIR}/verify-marasi` (`MARASI_VERIFY_STATE_DIR`), and launch refuses to run while that state exists. One dev server holds one connection, shared by every tab on it, so run one verification per state directory.
 
 ## Doctor
 
-Run this first whenever startup, automation, or a result looks wrong:
+Run this first whenever a launch, a drive or a result looks wrong:
 
 ```bash
 .agents/skills/verify-marasi/scripts/doctor.sh
 ```
 
-It checks the Wails and Chrome PIDs, Wails HTTP endpoint, Chrome DevTools endpoint, injected Wails bridge, `1600x900` viewport, app rail DOM, proxy-port ownership, isolated config, and project database. It also fails while a modal, command palette, or drawer from an earlier drive is still open. Skeleton's modal wrapper uses `display: contents`, so doctor measures the wrapper's card instead, and the card itself for a built-in confirm, alert or prompt (`[data-testid=modal]`); the Marasi menu is an open `<dialog>`, which doctor measures itself, so a menu filtered down to one row still counts. A `waitSelector` on `[data-testid=modal-component]` never matches for the same reason: wait for the modal's text instead. Doctor and drive attach to the Chrome page whose URL matches the Wails origin, not the first `type=page` target. Headless Chrome can also keep `chrome://settings/help` and omnibox pages around. A green doctor writes `doctor.txt` and prints the exact paths.
+It is read-only. It checks that the instance answers `running` on its socket, that the recorded Vite PID owns the dev port, that the bridge is connected to `default` and calls reach it, that Chrome's DevTools answer, and that the page is connected (app rail, no connection screen) at `1600x900` with no modal, menu or drawer left open. A green doctor writes `doctor.txt`.
 
-Launch sizes the headless window so the page itself is `1600x900`. Drives do not use a per-session viewport override: that override ends when each CDP session closes, and the page then relayouts at Chrome's smaller default (`1600x813`), which pushes the Settings rail item off screen.
-
-When doctor reports a leftover overlay or drawer, dismiss it with real input (Escape, then a backdrop click, or `Discard` on the Logbook record modal's unsaved-changes prompt) and re-run doctor:
+When doctor reports a leftover overlay, or a window left on the connection screen, run:
 
 ```bash
 .agents/skills/verify-marasi/scripts/reset.sh
 ```
 
-If reset cannot clear it, run cleanup and relaunch.
+It dismisses overlays with Escape (and a backdrop click or `Discard` when needed), connects again with `Connect to default`, then requires a green doctor. If reset fails, run cleanup and launch again.
 
 ## Drive
 
-Use the executable driver with one mapped route:
-
 ```bash
-.agents/skills/verify-marasi/scripts/drive.sh dashboard
-.agents/skills/verify-marasi/scripts/drive.sh ledger
-.agents/skills/verify-marasi/scripts/drive.sh compass
-.agents/skills/verify-marasi/scripts/drive.sh checkpoint
-.agents/skills/verify-marasi/scripts/drive.sh launchpad
-.agents/skills/verify-marasi/scripts/drive.sh armory
-.agents/skills/verify-marasi/scripts/drive.sh logbook
-.agents/skills/verify-marasi/scripts/drive.sh workshop
-.agents/skills/verify-marasi/scripts/drive.sh settings
-.agents/skills/verify-marasi/scripts/drive.sh dashboard theme
+.agents/skills/verify-marasi/scripts/drive.sh home
+.agents/skills/verify-marasi/scripts/drive.sh connection
+.agents/skills/verify-marasi/scripts/drive.sh home shots
+.agents/skills/verify-marasi/scripts/drive.sh connection shots
+.agents/skills/verify-marasi/scripts/drive.sh home theme
+.agents/skills/verify-marasi/scripts/drive.sh <feature> compare "<visible label>" "<shortcut>"
+.agents/skills/verify-marasi/scripts/drive.sh <feature> steps '<json>'
 ```
 
-The driver connects to the isolated Chrome DevTools endpoint, sends a real mouse press to an actionable control, and fails unless the expected route or overlay appears. Route proof waits for the path plus text only the destination page paints, never a rail label.
+Features: `home`, `connection`, `ledger`, `compass`, `checkpoint`, `launchpad`, `armory`, `logbook`, `workshop` and `settings`. Each drive runs doctor first, sends real mouse and keyboard input through the Chrome DevTools Protocol, and fails unless the destination paints its own text. `connection` disconnects with `⌘⇧⌫` (the page reloads onto the connection screen), captures it, and connects again with `Connect to default`, so every drive ends on Home.
 
-The driver never clicks blind and never sleeps between inputs. Before each click it polls every 100 ms (default timeout 10 s) until exactly one match is actionable:
+`shots` captures `<feature>-light.png` and `<feature>-dark.png` and records them in `<feature>-shots.json`. Prove every UI change in both. A connected page switches with `⌘U` and goes back to its starting appearance. The connection screen has no shortcuts, and its reload takes the OS appearance (the layout's `autoModeWatcher`), so it is shot under an emulated OS `prefers-color-scheme` that ends with the drive.
 
-- **Hit-testable.** `document.elementFromPoint` at the match's centre lands on the match or inside it. This excludes the hidden MarasiKeys `<dialog>` copies of the same labels, controls behind a modal or drawer, and controls off screen. A unique off-screen match is scrolled into view first.
-- **Unique.** Two actionable matches are an error that lists both. Refine the selector, scope it with `within`/`hasText`, or choose deliberately with `nth`.
-- **Enabled.** Not `disabled` or `aria-disabled`.
-- **Stable.** Same box on two consecutive polls, so a sliding drawer or fading modal is not clicked mid-transition.
+Read [`driving.md`](driving.md) before you write a `steps` recipe or a `compare`. It covers target rules, every step type, and the shortcuts Chrome keeps for itself. Read [`features/README.md`](features/README.md) before you choose proof coverage: a feature is proven through every entry point its file lists.
 
-On timeout, the error names every match and why it was rejected (for example `covered by div.drawer`, `outside viewport`, `disabled`).
-
-Exactly one fixed wait remains. After `insert` into a CodeMirror editor, the driver waits 350 ms, because `svelte-codemirror-editor` copies edits into the bound store only after a 300 ms debounce, and nothing in the page signals the commit. Without it, an immediate `⌘⇧R` runs the old code while still showing an `Updated …` toast.
-
-Most in-app actions have that painted control plus a MarasiKeys binding. Global bindings (`⌘+key`, including `⌘K` for the menu) live in the action catalog, `frontend/src/lib/keybindings/catalog.js`, with handlers in `frontend/src/lib/components/MarasiMenu/GlobalMenu.svelte`; they work on every route. Page and drawer bindings (mostly `⌘+⇧+key` on macOS) are in the same catalog, keyed to a menu context in `frontend/src/lib/keybindings/contexts.js` (for example `ledger.drawer-closed` and `ledger.drawer-open`); their handlers stay in the route's component. Opening the Ledger or Armory request drawer swaps which actions keys reach and which entries the `⌘K` menu lists. The WebSocket modal is an overlay: its shared context `websocket` plus the open tab's (`websocket.stream`, `websocket.checkpoint`, `websocket.inject`, `websocket.connection`) and the global context are live there, never the drawer beneath. Extension pages use `extension-page.<name-slug>` (Toggle Settings) with the extension's declared actions as `extension.<name-slug>.<action-slug>`. A modal closes again on the binding of the action that opened it (`toggleAction` in its trigger), unless the open modal binds that key itself, as the Inject tab does with `⌘⇧O`. Prove both paths with:
+## Restart
 
 ```bash
-.agents/skills/verify-marasi/scripts/drive.sh dashboard compare "Open Project" "cmd+o"
+.agents/skills/verify-marasi/scripts/restart.sh
 ```
 
-The compare action requires the feature route to already be visible. It clicks the actionable label, waits for the overlay or route change, and then waits until that text stops changing for 500 ms before capturing. Overlays fill in after they paint; the Project modal shows `No recent projects` until `GetRecentProjects` resolves. It restores the starting page, then sends the shortcut through `Input.dispatchKeyEvent` (primary modifier down, key, key up, primary modifier up; Meta on macOS, Control on Linux/Windows). It fails unless both paths paint the same overlay text or land on the same route. Pass or fail, it dismisses its overlay with Escape so the next drive is not blocked.
+Restart stops Chrome and Vite and starts them again on the same instance, keeping the Chrome profile, then connects through the connection screen again. Use it to prove that something survives a fresh page load. The instance, its project and the app config stay. Evidence goes to a new directory.
 
-The dashboard `theme` action leaves Home for Settings, sends `Command+U` twice, and fails unless the global appearance changes and returns to its original mode. This proves the global shortcut still reads live state after Home is destroyed.
+## Electron
 
-For behavioral actions beyond navigation, use a named sequence of real UI inputs:
+Use Electron only for what the browser lacks: windows, native menus and the updater (and Start or OS dialogs, when those are under test).
 
 ```bash
-.agents/skills/verify-marasi/scripts/drive.sh settings steps '{"name":"vim-toggle","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"click":"section [role=switch]"}]}'
+.agents/skills/verify-marasi/scripts/electron.sh start
+.agents/skills/verify-marasi/scripts/electron.sh stop
 ```
 
-`steps` requires the feature route to already be visible. Use one action per step.
+`start` runs `npm run dev` with `--remote-debugging-port` and `--config-dir` set to the recorded config directory, on its own dev port. It prints the window's `cdp` and `app_url`, waits for Home (the window connects to the recorded `default` at launch, as the app does), and captures `electron-ready.png`. Drive the window with the same driver, passing those two values:
 
-| Step | Meaning |
-| --- | --- |
-| `{"click": "<css>"}` | Click the one actionable match. Add `"hasText"` to keep matches whose text contains it (for example `{"click":"tbody tr","hasText":"/probe"}`), `"within": "<css>"` to scope, `"nth": n` (1-based) to pick among several on purpose, `"button": "right"` for a context menu, `"clickCount": 2` for a double-click, `"modifiers": ["cmd", "shift"]` to hold keys during the click (`cmd` is Meta on macOS, Ctrl elsewhere), `"edge": "top"` or `"bottom"` to click 3 px inside that edge instead of the centre (a modal backdrop, whose centre the modal covers). |
-| `{"drag": "<css>", "to": "<css>"}` | Press on the one actionable match (`hasText`/`within` scope it), move onto the `to` match (`toHasText` scopes it; `within` applies to both) with the button held, and release there. For a sweep across Ledger rows: `{"drag":".ledger-row","hasText":"/a","to":".ledger-row","toHasText":"/c"}`. `"toEdge": "top"` or `"bottom"` releases 3 px inside that edge of the `to` match instead of its centre, for drops that read which half of a row the pointer is on. `"hold": true` keeps the button down, so the next steps (and their captures) see the drag in progress; end it with a `release` step, or send `escape` first to cancel it. A recipe that stops while holding sends Escape and then releases. |
-| `{"release": true}` | Releases a held drag where it stopped. |
-| `{"wheel": "<css>", "deltaY": n}` | One real wheel turn of `n` px over the one actionable match (same rules and scoping as `click`), for scrolling a container, for example when sticky rows cover the control to click. The driver does not wait for the hidden page to acknowledge it, so wait for the scrolled state next. |
-| `{"text": "<label>"}` | Click the one actionable button, link, switch, tab, label, or summary whose normalized text, `aria-label`, or `title` equals the label. Wrappers around a matching control collapse to the control. `within` and `nth` apply. |
-| `{"hover": "<css>"}` | Move the pointer onto the one actionable match (same rules and `hasText`/`within`/`nth` as `click`, except that a disabled match counts), for controls shown only on hover, such as a saved query's Rename, Move and Delete buttons. The pointer stays there until the next click. `-steps.json` records the match's box, so hovers prove a control kept its place. |
-| `{"key": "cmd+shift+r"}` | Shortcut, same syntax as compare. Also `escape`, `enter`, `tab`, `backspace`, `[`, `]`, `\` (escaped as `\\` in JSON), `up`, `down`, with `alt` as well (`alt+shift+up`). A bare character without `cmd`, `ctrl`, or `alt` (for example `{"key":"l"}`) types itself, so a focused `<select>` jumps to the first option that starts with it. Letters sent within about a second join into one search (`m` then `w` matches nothing), so leave about a second of other steps between them. |
-| `{"insert": "<text>"}` | Waits for a focused input or editor, inserts, then waits until the text is in that field. |
-| `{"waitText": "…"}`, `{"waitNoText": "…"}` | Visible `innerText` contains or lacks the text. Add `within` to read only matching roots, so text the editor already holds cannot satisfy the wait. |
-| `{"waitEnabledText": "<label>"}` | The labelled control is actionable and enabled. |
-| `{"waitSelector": "<css>"}`, `{"waitNoSelector": "<css>"}` | A visible match appears or none is left. |
-| `{"waitPath": "/route"}` | The route changed, for example after a toast's jump action. |
+```bash
+node .agents/skills/verify-marasi/scripts/cdp.mjs drive <cdp-port> <app_url> "$(cat "$TMPDIR/verify-marasi/evidence-dir")" 1600 900 home steps '<json>'
+```
 
-Any step accepts `"timeoutMs"` (1–60000, default 10000). There is no sleep step: wait for the state the next action depends on. Input goes through CDP mouse and keyboard events, never store or backend calls.
-
-To replace text, click the editor or input, send `cmd+a`, then `insert`. This works in CodeMirror with Vim enabled, because `Input.insertText` bypasses Vim's keymap. The route's input-focus filter drops shortcuts while an `INPUT`, `SELECT`, or `TEXTAREA` has focus, so click a non-input control (a CodeMirror editor is fine) before a shortcut.
-
-Wait for specific resulting content: the unique marker you inserted, a count, or a toast. An existing label or text still in the editor is not a result. Inspect screenshots and persisted side effects even when the sequence passes. A sequence is an input driver, not an automatic proof of the feature's full behavior. End each sequence with its modal or drawer closed. Doctor runs before every drive and refuses residue. After a failure, run `reset.sh`, or clean up and relaunch.
-
-The shipped CDP helper uses Node's built-in `WebSocket` (scripts export `NODE_OPTIONS=--experimental-websocket` for Node 20), so it adds no npm package. Chrome defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, then `google-chrome` or `chromium` on PATH; override `MARASI_VERIFY_CHROME_BIN` when needed. On Linux, launch passes `-tags webkit2_41` when `webkit2gtk-4.1` is present (override with `MARASI_VERIFY_WAILS_TAGS`), seeds config under the isolated `~/.config/Marasi`, and maps recipe `cmd`/`⌘` shortcuts to Ctrl so they match Windows/Linux factory bindings. Chrome keeps some Ctrl shortcuts for itself and the page never sees them: `Ctrl+T` (`⌘T`, `global.toggle-vim`) opens a new tab and `Ctrl+Shift+N` (`⌘⇧N`, Launchpad `View Notes` and the Ledger drawer's `View Note`) a new window, each left behind as a `chrome://newtab/` page target. Browser extensions can own keys the same way. Chrome's managed policy may force-install extensions into the isolated profile (the box installs 1Password, whose `_execute_action` is `Ctrl+Shift+X`), so `⌘⇧X` never reaches the page on Linux: Checkpoint `Drop Picked Items`, Launchpad's swap A and B, `Unlink Finding`, and the WebSocket modal's `Close Connection`. List the keys extensions ask for with `jq -c '.commands' "$TMPDIR"/verify-marasi/chrome/Default/Extensions/*/*/manifest.json`, then prove one with a drive: Chrome does not grant every request (the same extension's `Ctrl+Shift+L` still reaches the page). On Linux, drive those actions from the Marasi menu: `{"key":"cmd+k"},{"waitSelector":"#commandmenu"},{"click":"#commandmenu"},{"key":"cmd+a"},{"insert":"vim"},{"click":"dialog[open] li","hasText":"Toggle Vim Mode"}`. The menu keeps its search text between openings, and a reopened menu can focus the last item instead of the search box, so click `#commandmenu` and clear it with `cmd+a` first. Click the item; Enter does not run it. Such an extension can also open its own tab in front of Marasi; every driver session brings the Marasi page to the front, because Chrome stops painting a hidden page and each screenshot then stalls for about a minute.
-
-Launch and doctor first check that `lsof`, `curl` and `node` are on PATH (launch also needs `go`, `wails`, and on Linux `pkg-config`) and stop with `Required tool <name> is not on PATH`. `wails` is usually in `$(go env GOPATH)/bin`, which a non-login shell may not have on PATH. Without `lsof` every port check would read as free.
+`doctor.sh`, `drive.sh` and `shots` act on the Chrome page only. Native menus and OS dialogs are outside the page, so DevTools can't see them; prove those with their effect in the page or in the files. `stop` quits Electron, which stops its dev server; the instance keeps running.
 
 ## Evidence
 
-Each launch creates `.artifacts/verify-marasi/<UTC timestamp>/`. Keep these files as the proof:
+Each launch creates `.artifacts/verify-marasi/<UTC timestamp>/` (git ignores `.artifacts`). Keep it as the proof:
 
-- `launch.txt` records the build, PID, isolated home, and selected port.
-- `app.log` records backend startup and proxy messages.
-- `launch-ready.json` and `launch-ready.png` capture the first ready dashboard.
-- `launch-bridge.json`, `launch-root-original.html`, and `launch-root-normalized.html` record the startup-only bridge deduplication. `launch-listener-startup.json` and `launch-layout-{original,normalized}.js` record the listener-startup fallback; `launch-console.json` records whether it ran, and `launch-network.json` records browser startup, including IPC connections.
-- `<feature>-before.json` and `<feature>-before.png` capture the state before navigation.
-- `<feature>-action.txt` records the exact user input.
-- `<feature>-after.json` and `<feature>-after.png` capture the resulting DOM and screen.
-- `<label>-click-*` and `<label>-shortcut-*` capture a painted-control compare; `<label>-compare.json` is the pass/fail record.
-- `theme-before.*`, `theme-toggled.*`, `theme-restored.*`, and `theme-result.json` prove the global appearance shortcut works after leaving Home.
-- `<feature>-<recipe>-action.json`, `-before.*`, `-step-<n>.*`, `-after.*`, `-console.json`, and `-network.json` record a UI-step sequence, including the resulting state on an action failure. `-steps.json` records each step's click point, duration, and failure reason. Use a distinct recipe name for each attempt so earlier evidence is not overwritten.
-- `<feature>-console.json` and `<feature>-network.json` record browser events during the action.
-- `doctor.txt` proves the process, listener, config, and SQLite project existed.
+- `launch.txt`: the Marasi binary, config directory, proxy and control listeners, dev server, PIDs and DevTools port. `instance-status.json` is the instance's `service status`.
+- `launch-connection.*`, `launch-action.txt` and `launch-ready.*`: the connection screen, the Connect click, and Home. `launch-console.json` and `launch-network.json` record the page's console and requests: every Marasi call goes to `/__marasi/…` on the dev server, none carries an `Authorization` header, and none goes to the instance directly.
+- `vite.log`, `chrome.log`, `marasi-start.log`, and `electron.log` with `electron-ready.*`.
+- `<feature>-before.*`, `-action.txt` and `-after.*` for a route drive; `connection-left.*` after reconnecting.
+- `<feature>-light.*`, `<feature>-dark.*` and `<feature>-shots.json` for shots.
+- `theme-*` and `theme-result.json`; `<label>-click-*`, `<label>-shortcut-*` and `<label>-compare.json`; `<feature>-<recipe>-action.json`, `-step-<n>.*`, `-steps.json`, `-after.*`, `-console.json` and `-network.json` for steps. Use a distinct recipe name for each attempt.
+- `doctor.txt`.
 
-Exercise the real user path rather than calling Wails methods, editing stores, or using a test-only endpoint. Capture both the action and resulting state. For proxy traffic, report export, project edits, or settings changes, also inspect the isolated files or SQLite rows and add that output to the same evidence directory. Use mocks only at an existing production boundary. If a safe path claims to be a dry run, inspect files, network connections, and project rows to establish what it skipped.
+Proof standards:
 
-Browser screenshots do not need macOS Screen Recording permission. The driver fixes the viewport at `1600x900`, matching the Wails window configured in `main.go`, and records the dimensions in each JSON capture. Inspect `app.log` for Go and Wails output. Use Chrome DevTools against the recorded CDP endpoint when an interactive console or network inspector is useful. The repo ignores `.artifacts`, so proof files do not appear in `git status`.
-
-With Wails v2.10.1, browser-connected startup currently writes `runtime:ready -> Unknown message from front end: runtime:ready` to `app.log`. Headless Chrome on macOS may also log `CVDisplayLinkCreateWithCGDisplay failed`. Treat these known messages as tool noise only when doctor passes and the expected DOM, screenshot, and side effect all agree. Record and investigate other errors.
+- Exercise the real user path: clicks and keys on the page, never store, binding or `/__marasi` calls made by hand.
+- Capture the action and the resulting state.
+- Check side effects at their source: the instance through the CLI (`resources/bin/marasi --config-dir <config_dir> --json …`, for example `traffic`, `launchpad`, `service status`), and the app config in `<config_dir>/marasi_appconfig.yaml`. Add that output to the evidence directory.
+- Send proxy traffic through the `proxy_listener` in `launch.txt`.
+- A `Not ported yet` toast is a binding no ticket has ported (`docs/v2-parity.md`), not a verification fault. Record any other console error and look into it.
 
 ## Cleanup
-
-Run:
 
 ```bash
 .agents/skills/verify-marasi/scripts/cleanup.sh
 ```
 
-Cleanup sends `TERM` only to the recorded Chrome and Wails PIDs, waits for Wails, and uses `KILL` only if that same Wails PID does not exit. It removes the scratch home and state files. It leaves `.artifacts/verify-marasi/` untouched. Run cleanup after failed attempts too.
-
-Run one verification instance at a time. This repo fixes Vite to port `5173`, so separate state directories or checkouts do not make parallel runs safe without a source change.
+Cleanup stops only what launch and `electron.sh` started: the recorded Electron, Chrome and Vite PIDs (TERM, then KILL after 10 s), and the instance in the recorded `/tmp/mv2.*` directory (`service stop`). It then removes that directory and the state directory. It keeps `.artifacts/verify-marasi/`. Run it after failed attempts too.
 
 ## Helpers
 
-All scripts under `scripts/` are executable and derive the repository root from their own path. Their supported invocations are shown above. `launch.sh`, `doctor.sh`, `reset.sh`, and `drive.sh` call `cdp.mjs`, which resolves targets through `targets.mjs` (`node --test scripts/*.test.mjs` covers the selection rules); call the shell helpers rather than reverse-engineering the CDP protocol. Shortcut compares go through `drive.sh <feature> compare`, not a one-off CDP script.
-
-`bench-seed.sh` and `bench-ledger.sh` benchmark the Ledger against its performance budget; see "Performance budget" in `features/ledger.md`.
-
-Read `features/README.md` before choosing proof coverage. A check of one easy route does not cover the other mapped entry points.
+Every script under `scripts/` is executable, derives the repository root from its own path, and is invoked as shown above. `common.sh` holds the shared state and process helpers. `cdp.mjs` is the driver (modes `launch`, `electron`, `doctor`, `reset`, `drive`), and `targets.mjs` selects its targets (`node --test .agents/skills/verify-marasi/scripts/*.test.mjs`). `bench-seed.sh [N]` fills the project with N requests through the proxy, using `bench-server.py` as the upstream. The v1 Ledger benchmark called Wails bindings; the Ledger's port brings it back (see `features/ledger.md`).
