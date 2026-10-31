@@ -34,3 +34,18 @@ export async function createMarasiChoice({ file, bundled, readFile, writeFile })
     },
   };
 }
+
+/**
+ * Whether `installPath`, the build a local instance reports in GET
+ * /update (links resolved), is the bundled Marasi at `bundled`. The
+ * bundled Marasi updates with the app, so its instances hide the instance
+ * update actions. `realpath` is fs.realpath unless a test fakes it.
+ */
+export async function runsBundled(installPath, { bundled, realpath }) {
+  if (!installPath) return false;
+  try {
+    return (await realpath(installPath)) === (await realpath(bundled));
+  } catch {
+    return false;
+  }
+}

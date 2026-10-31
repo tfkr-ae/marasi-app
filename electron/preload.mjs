@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld("marasiApp", {
   pickProject: () => ipcRenderer.invoke("dialog:pick-project"),
   // The Marasi Start runs: {path, bundled}, path null for the bundled one.
   marasi: () => ipcRenderer.invoke("marasi:current"),
+  // Whether a local instance's build path (GET /update's install_path) is
+  // the bundled Marasi.
+  runsBundled: (installPath) => ipcRenderer.invoke("marasi:runs-bundled", installPath),
   // Chooses a Marasi from a path in an OS dialog, or the bundled one when
   // `bundled`. Resolves to the Marasi Start runs, as marasi() does.
   chooseMarasi: (bundled = false) => ipcRenderer.invoke("marasi:choose", { bundled }),

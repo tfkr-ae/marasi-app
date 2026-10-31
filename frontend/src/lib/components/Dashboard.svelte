@@ -1,6 +1,7 @@
 <script>
 	import { activeProject } from "../../stores";
 	import { windowConnection } from "../../stores/windowConnectionStore.js";
+	import InstanceVersion from "./InstanceVersion.svelte";
 	import { GetScopeRules } from "../bindings/App";
 	import { dashboardStore } from "../../stores/dashboardStore.js";
 	import {
@@ -92,6 +93,7 @@
 			On <span class="font-semibold">{connection.instance}</span>
 			at <span class="font-mono">{connection.status.control_listener}</span>
 			{#if connection.loopbackTurnedOn}· loopback address turned on{/if}
+			<InstanceVersion />
 		</p>
 	{:else}
 		<div class="mb-4" />

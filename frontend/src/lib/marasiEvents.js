@@ -19,6 +19,7 @@ import { testCaseStore } from "../stores/testCaseStore";
 import { upstreamProxyStore } from "../stores/upstreamProxyStore";
 import { listenerStore } from "../stores/listenerStore.js";
 import { dashboardStore } from "../stores/dashboardStore.js";
+import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 
 // Each Marasi event's handler, by event name.
 const handlers = {
@@ -31,6 +32,12 @@ const handlers = {
     jobsStore.onJobComplete(job);
     dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
   },
+  "update.available": (update) => instanceUpdate.onAvailable(update),
+  "update.progress": (progress) => instanceUpdate.onProgress(progress),
+  "update.installed": (installed) => instanceUpdate.onInstalled(installed),
+  "update.failed": (failure) => instanceUpdate.onFailed(failure),
+  "service.restarting": (restart) => instanceUpdate.onRestarting(restart),
+  "service.restart_failed": (failure) => instanceUpdate.onRestartFailed(failure),
 };
 
 // Every store that shows the instance's data. Launchpad drafts live in the
@@ -51,6 +58,7 @@ const stores = [
   findingStore,
   testCaseStore,
   upstreamProxyStore,
+  instanceUpdate,
 ];
 
 /** Reloads every store, as after the event stream reopens. */
