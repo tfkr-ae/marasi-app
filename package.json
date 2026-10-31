@@ -8,13 +8,20 @@
 	"private": true,
 	"type": "module",
 	"main": "electron/main.js",
+	"marasi": {
+		"repository": "https://github.com/tfkr-ae/marasi",
+		"ref": "integration/v2-backlog",
+		"commit": "3a55b064aae047b8d378de4b49a40ac50e65e8c9",
+		"version": "v2-backlog-3a55b06 (dev)"
+	},
 	"scripts": {
 		"dev": "node scripts/dev.mjs",
+		"marasi": "sh scripts/build-marasi.sh",
 		"build": "npm --prefix frontend run build",
-		"dist": "npm run build && electron-builder --publish never",
-		"dist:mac": "npm run build && electron-builder --mac --publish never",
-		"dist:win": "npm run build && electron-builder --win --publish never",
-		"dist:linux": "npm run build && electron-builder --linux --publish never",
+		"dist": "npm run marasi && npm run build && electron-builder --publish never",
+		"dist:mac": "GOOS=darwin npm run marasi && npm run build && electron-builder --mac --publish never",
+		"dist:win": "GOOS=windows npm run marasi && npm run build && electron-builder --win --publish never",
+		"dist:linux": "GOOS=linux npm run marasi && npm run build && electron-builder --linux --publish never",
 		"test": "node --test electron/ && npm --prefix frontend test"
 	},
 	"build": {
@@ -29,6 +36,12 @@
 			"!electron/**/*.test.js",
 			"frontend/build/**/*",
 			"package.json"
+		],
+		"extraResources": [
+			{
+				"from": "resources/bin",
+				"to": "bin"
+			}
 		],
 		"mac": {
 			"category": "public.app-category.developer-tools",

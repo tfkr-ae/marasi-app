@@ -12,7 +12,8 @@ const refused = Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNR
 // A fake machine: `running` maps each running instance to its control
 // listener (null for none). `run` is the process runner: it fakes Marasi's
 // `service start`, recording each command line, and `call` the socket.
-function fakeMachine(running = {}) {
+// With `portBusy`, a start on Marasi's default proxy port fails.
+function fakeMachine(running = {}, { portBusy = false } = {}) {
   const instances = new Map(Object.entries(running));
   const commands = [];
   const stopped = [];
@@ -23,6 +24,10 @@ function fakeMachine(running = {}) {
     assert.deepEqual(args.slice(0, 2), ["--config-dir", configDir]);
     if (instances.has(instance)) {
       const error = `instance ${instance} is already running`;
+      throw Object.assign(new Error("Command failed: exit status 1"), { stdout: JSON.stringify({ error }) + "\n" });
+    }
+    if (portBusy && !args.includes("--port")) {
+      const error = "binding proxy listener on address 127.0.0.1 port 8080: bind: address already in use";
       throw Object.assign(new Error("Command failed: exit status 1"), { stdout: JSON.stringify({ error }) + "\n" });
     }
     const control = `127.0.0.1:${nextPort++}`;
@@ -117,13 +122,22 @@ test("startup takes up the window's connection after a reload", async () => {
   assert.equal(await connections.startup(1), first);
 });
 
+test("a launch whose default can't take the proxy port starts it on a free one", async () => {
+  const machine = fakeMachine({}, { portBusy: true });
+  const connections = local(machine);
+  const connection = await connections.startup(1);
+  assert.equal(connection.instance, "default");
+  assert.deepEqual(machine.commands.at(-1).slice(-4), ["--control-address", "127.0.0.1:0", "--port", "0"]);
+  assert.deepEqual(await connections.quit(), ["default"]);
+});
+
 test("Start with a name starts a second instance on the project and connects the window to it", async () => {
   const machine = fakeMachine({ default: "127.0.0.1:50037" });
   const connections = local(machine);
   await connections.startup(1);
   const connection = await connections.start(2, { instance: "acme", project: "/work/acme.marasi" });
   assert.deepEqual(machine.commands, [
-    [bundled, "--config-dir", configDir, "--instance", "acme", "--json", "service", "start", "--control-address", "127.0.0.1:0", "--project", "/work/acme.marasi"],
+    [bundled, "--config-dir", configDir, "--instance", "acme", "--json", "service", "start", "--control-address", "127.0.0.1:0", "--port", "0", "--project", "/work/acme.marasi"],
   ]);
   assert.equal(connection.instance, "acme");
   assert.equal(connection.origin, "http://127.0.0.1:50100");

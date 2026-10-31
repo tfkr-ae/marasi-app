@@ -34,11 +34,12 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
   const launched = new Set();
 
   // Starts local `instance` on `project` (the scratchpad when null) with a
-  // loopback network address, and connects to it at the address the start
+  // loopback network address and the proxy listener `listener` asks for
+  // (extra start arguments), and connects to it at the address the start
   // command printed.
-  async function startInstance(instance, project) {
+  async function startInstance(instance, project, listener = []) {
     const args = ["--config-dir", configDir, "--instance", instance, "--json", "service", "start"];
-    args.push("--control-address", "127.0.0.1:0");
+    args.push("--control-address", "127.0.0.1:0", ...listener);
     if (project) args.push("--project", project);
     let stdout;
     try {
@@ -50,6 +51,20 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
     started.add(instance);
     const token = await readToken({ configDir, instance, call });
     return { instance, origin: `http://${output.control_listener}`, token, loopbackTurnedOn: false };
+  }
+
+  // Starts the default instance on Marasi's default proxy listener. When
+  // that fails, as when another program holds the port, it starts on a
+  // free port. (v1 opened with its listener off, but Marasi's start can't
+  // start without one yet: see the ticket 05 gap.)
+  async function startDefault() {
+    try {
+      return await startInstance(defaultInstance, null);
+    } catch (err) {
+      return startInstance(defaultInstance, null, ["--port", "0"]).catch(() => {
+        throw err;
+      });
+    }
   }
 
   /**
@@ -67,7 +82,7 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
       connection = await connectLocal({ configDir, instance: defaultInstance, call });
     } catch (err) {
       if (!err.stopped) throw err;
-      connection = await startInstance(defaultInstance, null);
+      connection = await startDefault();
     }
     connections.set(id, connection);
     return connection;
@@ -90,10 +105,12 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
 
   /**
    * Starts local `instance` on `project` (an absolute .marasi path, or
-   * null for the scratchpad) and connects window `id` to it.
+   * null for the scratchpad) and connects window `id` to it. Its proxy
+   * listener takes a free port, as the default instance usually holds
+   * Marasi's default one.
    */
   async function start(id, { instance, project }) {
-    const connection = await startInstance(instance, project);
+    const connection = await startInstance(instance, project, ["--port", "0"]);
     connections.set(id, connection);
     return connection;
   }
