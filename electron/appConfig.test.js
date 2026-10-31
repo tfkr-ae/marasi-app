@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { parse } from "yaml";
 import { createAppConfig } from "./appConfig.js";
 import { memoryFS } from "./testing/memoryFS.js";
+import { nodeFS } from "./nodeFS.js";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const dir = "/config/Marasi";
 const path = `${dir}/marasi_appconfig.yaml`;
@@ -179,4 +183,75 @@ test("keybindings that break the section's rules are refused and the file is unc
   await assert.rejects(config.saveKeybindings(twice), /invalid keybindings: profile id "mine" is used twice/);
   await assert.rejects(config.saveKeybindings({ ...mine, activeProfile: "nope" }), /active profile "nope"/);
   assert.equal(fs.files.get(path), savedSection);
+});
+
+test("highlights read v1's 8 entries, with defaults for a bad or missing one", async () => {
+  const { config } = setup("highlights:\n  - color: '#AABBCC'\n    label: ' Auth '\n  - color: red\n    label: Kept\n");
+  const highlights = await config.highlights();
+  assert.equal(highlights.length, 8);
+  assert.deepEqual(highlights[0], { color: "#aabbcc", label: "Auth" });
+  assert.deepEqual(highlights[1], { color: "#f97316", label: "Kept" });
+  assert.deepEqual(highlights[7], { color: "#ec4899", label: "" });
+});
+
+test("saving highlights writes them as v1 does and refuses a bad colour", async () => {
+  const { fs, config, saved } = setup("highlights: []\n");
+  const next = (await config.highlights()).map((h, i) => (i === 2 ? { color: "#123456", label: "IDOR" } : h));
+  assert.deepEqual((await config.saveHighlights(next))[2], { color: "#123456", label: "IDOR" });
+  assert.deepEqual(saved().highlights[2], { color: "#123456", label: "IDOR" });
+  assert.deepEqual(saved().highlights[0], { color: "#ef4444" });
+  const before = fs.files.get(path);
+  await assert.rejects(config.saveHighlights(next.slice(1)), /wanted 8 highlights, got 7/);
+  await assert.rejects(config.saveHighlights(next.map((h, i) => (i ? h : { color: "blue" }))), /highlight 1: "blue"/);
+  assert.equal(fs.files.get(path), before);
+  assert.deepEqual((await config.resetHighlights())[2], { color: "#eab308", label: "" });
+});
+
+test("app saved queries and hidden built-ins round trip in v1's keys", async () => {
+  const { config, saved } = setup(
+    "saved_queries:\n  - {id: b, name: B, query: 'status = 500', order: 2}\n  - {id: a, name: ' A ', query: x, order: 1}\n  - {id: a, name: Dup, query: y, order: 3}\n  - {id: '', name: Bad, query: z, order: 4}\n",
+  );
+  assert.deepEqual(await config.appSavedQueries(), {
+    queries: [
+      { id: "a", name: "A", query: "x", order: 1 },
+      { id: "b", name: "B", query: "status = 500", order: 2 },
+    ],
+    hidden_builtins: [],
+  });
+  const list = await config.saveAppSavedQueries([{ id: "c", name: "C", query: "q", order: 0 }]);
+  assert.deepEqual(list, [{ id: "c", name: "C", query: "q", order: 0 }]);
+  assert.deepEqual(saved().saved_queries, list);
+  await assert.rejects(config.saveAppSavedQueries([{ id: "c", name: "C", query: "" }]), /has no query/);
+  await assert.rejects(
+    config.saveAppSavedQueries([{ id: "c", name: "C", query: "q" }, { id: "c", name: "D", query: "q" }]),
+    /id c is used twice/,
+  );
+  assert.deepEqual(await config.setHiddenBuiltinQueries([" x ", "x", "", "y"]), ["x", "y"]);
+  assert.deepEqual(saved().hidden_builtin_queries, ["x", "y"]);
+});
+
+test("the default content-type exclusion is read and replaced as a list", async () => {
+  const { config, saved } = setup();
+  await config.load();
+  assert.ok((await config.defaultContentTypeExclusion()).includes("font/woff2"));
+  await config.setDefaultContentTypeExclusion(["image/*"]);
+  assert.deepEqual(saved().ledger_content_type_exclusion, ["image/*"]);
+  assert.deepEqual(await config.defaultContentTypeExclusion(), ["image/*"]);
+  await config.setDefaultContentTypeExclusion([]);
+  assert.deepEqual(saved().ledger_content_type_exclusion, []);
+  await assert.rejects(config.setDefaultContentTypeExclusion(["image/*", 3]), /list of content types/);
+});
+
+test("on a real disk, a write replaces the file whole and leaves no temp file", async (t) => {
+  const real = await mkdtemp(join(tmpdir(), "mv2-config-"));
+  t.after(() => rm(real, { recursive: true, force: true }));
+  await writeFile(join(real, "marasi_appconfig.yaml"), "text_size: small\nv1_only: kept\n");
+  const config = createAppConfig({ dir: real, fs: nodeFS, defaultTestCases });
+  await config.load();
+  await config.setFlag("text_size", "xlarge");
+  const values = parse(await readFile(join(real, "marasi_appconfig.yaml"), "utf8"));
+  assert.equal(values.text_size, "xlarge");
+  assert.equal(values.v1_only, "kept");
+  assert.deepEqual((await readdir(real)).sort(), ["marasi_appconfig.yaml", "test_cases.yml"]);
+  assert.equal((await stat(join(real, "marasi_appconfig.yaml"))).mode & 0o777, 0o600);
 });

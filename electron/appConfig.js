@@ -60,6 +60,79 @@ const defaultHighlightColors = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06
 
 const testCasesName = "test_cases.yml";
 
+// App-wide saved queries and the ids of the hidden built-in ones
+// (saved_queries.go). Neither key is seeded: a missing key means none.
+const savedQueriesKey = "saved_queries";
+const hiddenBuiltinQueriesKey = "hidden_builtin_queries";
+
+const hexColor = /^#[0-9a-f]{6}$/;
+
+function text(value) {
+  return value == null ? "" : String(value);
+}
+
+function isStringList(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+// A highlight with its colour lowercased and its label trimmed, and whether
+// the colour is a #rrggbb.
+function normalizeHighlight(highlight) {
+  const normalized = { color: text(highlight?.color).trim().toLowerCase(), label: text(highlight?.label).trim() };
+  return [normalized, hexColor.test(normalized.color)];
+}
+
+// The saved highlights; a missing or bad entry is that number's default, so
+// one bad colour doesn't discard the others (highlights.go parseHighlights).
+function readHighlights(saved) {
+  const list = Array.isArray(saved) ? saved : [];
+  return defaultHighlightColors.map((color, i) => {
+    const [highlight, ok] = normalizeHighlight(list[i]);
+    return ok ? highlight : { color, label: i < list.length ? highlight.label : "" };
+  });
+}
+
+// The file's shape: an empty label is left out, as v1's omitempty does.
+function highlightsSection(highlights) {
+  return highlights.map(({ color, label }) => (label ? { color, label } : { color }));
+}
+
+// A saved query with its fields trimmed, or the reason it can't be used.
+function normalizeSavedQuery(query) {
+  const normalized = {
+    id: text(query?.id).trim(),
+    name: text(query?.name).trim(),
+    query: text(query?.query).trim(),
+    order: Number.isInteger(query?.order) ? query.order : 0,
+  };
+  if (!normalized.id) return [normalized, `saved query "${normalized.name}" has no id`];
+  if (!normalized.name) return [normalized, `saved query ${normalized.id} has no name`];
+  if (!normalized.query) return [normalized, `saved query "${normalized.name}" has no query`];
+  return [normalized, ""];
+}
+
+function byOrder(queries) {
+  return [...queries].sort((a, b) => a.order - b.order);
+}
+
+// The saved list, skipping unusable and duplicate entries.
+function readSavedQueries(saved) {
+  const seen = new Set();
+  const out = [];
+  for (const query of Array.isArray(saved) ? saved : []) {
+    const [normalized, problem] = normalizeSavedQuery(query);
+    if (problem || seen.has(normalized.id)) continue;
+    seen.add(normalized.id);
+    out.push(normalized);
+  }
+  return byOrder(out);
+}
+
+// Trimmed ids without blanks or duplicates.
+function normalizeHiddenBuiltins(ids) {
+  return [...new Set((Array.isArray(ids) ? ids : []).map((id) => text(id).trim()).filter(Boolean))];
+}
+
 function isBooleanFlag(name) {
   return typeof flagDefaults[name] === "boolean";
 }
@@ -105,7 +178,6 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    const text = (value) => (value == null ? "" : String(value));
     return {
       Title: text(profile.title),
       Description: text(profile.description),
@@ -135,7 +207,7 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
     };
   }
 
-  return {
+  const appConfig = {
     marasiConfig,
 
     /**
@@ -188,6 +260,84 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
       });
     },
 
+    /** The 8 highlight colours and app labels, in number order. */
+    async highlights() {
+      return readHighlights((await file.values())[highlightsKey]);
+    },
+
+    /** Writes all 8 highlights; returns them as saved. */
+    saveHighlights(highlights) {
+      return serialized(async () => {
+        if (!Array.isArray(highlights) || highlights.length !== defaultHighlightColors.length) {
+          throw new Error(`wanted ${defaultHighlightColors.length} highlights, got ${highlights?.length ?? 0}`);
+        }
+        const next = highlights.map((highlight, i) => {
+          const [normalized, ok] = normalizeHighlight(highlight);
+          if (!ok) throw new Error(`highlight ${i + 1}: "${text(highlight?.color)}" is not a #rrggbb colour`);
+          return normalized;
+        });
+        await file.write({ [highlightsKey]: highlightsSection(next) });
+        return next;
+      });
+    },
+
+    /** Restores v1's colours and clears the app labels. */
+    resetHighlights() {
+      return appConfig.saveHighlights(defaultHighlightColors.map((color) => ({ color, label: "" })));
+    },
+
+    /** The app-wide saved queries, in order, and the hidden built-in ids. */
+    async appSavedQueries() {
+      const values = await file.values();
+      return {
+        queries: readSavedQueries(values[savedQueriesKey]),
+        hidden_builtins: normalizeHiddenBuiltins(values[hiddenBuiltinQueriesKey]),
+      };
+    },
+
+    /** Replaces the app-wide saved queries; returns them in order. */
+    saveAppSavedQueries(queries) {
+      return serialized(async () => {
+        const seen = new Set();
+        const next = (Array.isArray(queries) ? queries : []).map((query) => {
+          const [normalized, problem] = normalizeSavedQuery(query);
+          if (problem) throw new Error(problem);
+          if (seen.has(normalized.id)) throw new Error(`saved query id ${normalized.id} is used twice`);
+          seen.add(normalized.id);
+          return normalized;
+        });
+        const sorted = byOrder(next);
+        await file.write({ [savedQueriesKey]: sorted });
+        return sorted;
+      });
+    },
+
+    /** Replaces the hidden built-in saved query ids; returns them. */
+    setHiddenBuiltinQueries(ids) {
+      return serialized(async () => {
+        const next = normalizeHiddenBuiltins(ids);
+        await file.write({ [hiddenBuiltinQueriesKey]: next });
+        return next;
+      });
+    },
+
+    /** The content-type exclusion projects without their own list follow. */
+    async defaultContentTypeExclusion() {
+      const saved = (await file.values())[contentTypeExclusionKey];
+      return isStringList(saved) ? saved : [...seededContentTypeExclusion];
+    },
+
+    /**
+     * Replaces the default exclusion. The renderer normalizes the values
+     * first (lowercase, no parameters), as it does for a project's own list.
+     */
+    setDefaultContentTypeExclusion(values) {
+      return serialized(async () => {
+        if (!isStringList(values)) throw new Error("the default exclusion is not a list of content types");
+        await file.write({ [contentTypeExclusionKey]: values });
+      });
+    },
+
     /** Flips the switch preference `name`; returns the preferences. */
     toggleFlag(name) {
       return serialized(async () => {
@@ -206,4 +356,5 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
       });
     },
   };
+  return appConfig;
 }

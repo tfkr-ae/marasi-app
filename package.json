@@ -27,6 +27,7 @@
 		"files": [
 			"electron/**/*",
 			"!electron/**/*.test.js",
+			"!electron/testing/**",
 			"frontend/build/**/*",
 			"package.json"
 		],
