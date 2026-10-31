@@ -90,3 +90,81 @@ test("on a remote connection the Chrome bindings aren't ported, so the instance'
   }
   assert.deepEqual(sent, []);
 });
+
+const corp = { name: "corp", scheme: "http", host: "10.0.0.1", port: 3128, has_credentials: false, has_ca: false };
+const proxies = { items: [corp], selected: "corp", configured: true };
+
+test("GetUpstreamProxies reads the machine's list and the project's selection", async () => {
+  answers["GET /upstream-proxy"] = proxies;
+  assert.deepEqual(await App.GetUpstreamProxies(), proxies);
+});
+
+test("AddUpstreamProxy sends the CA only when there is one", async () => {
+  answers["POST /upstream-proxy"] = proxies;
+  assert.deepEqual(await App.AddUpstreamProxy("corp", "http://10.0.0.1:3128", ""), proxies);
+  await App.AddUpstreamProxy("tls", "https://10.0.0.2:3128", "PEM");
+  assert.deepEqual(
+    sent.map((s) => s.body),
+    [
+      { name: "corp", url: "http://10.0.0.1:3128" },
+      { name: "tls", url: "https://10.0.0.2:3128", ca: "PEM" },
+    ],
+  );
+});
+
+test("UpdateUpstreamProxy sends what changes, and null to remove the CA", async () => {
+  answers["POST /upstream-proxy/corp"] = proxies;
+  await App.UpdateUpstreamProxy("corp", "http://10.0.0.9:3128", "", false);
+  await App.UpdateUpstreamProxy("corp", "", "PEM", false);
+  await App.UpdateUpstreamProxy("corp", "", "PEM", true);
+  assert.deepEqual(
+    sent.map((s) => s.body),
+    [{ url: "http://10.0.0.9:3128" }, { ca: "PEM" }, { ca: null }],
+  );
+});
+
+test("UpdateUpstreamProxy with nothing to change sends nothing", async () => {
+  await assert.rejects(App.UpdateUpstreamProxy("corp", "", "", false), /nothing to change/);
+  assert.deepEqual(sent, []);
+});
+
+test("RemoveUpstreamProxy and CheckUpstreamProxy name the entry", async () => {
+  answers["DELETE /upstream-proxy/my%20proxy"] = { items: [], selected: "my proxy", configured: false };
+  answers["POST /upstream-proxy/corp/check"] = { name: "corp", outcome: "ok", message: "connected" };
+  assert.equal((await App.RemoveUpstreamProxy("my proxy")).configured, false);
+  assert.equal((await App.CheckUpstreamProxy("corp", "example.com:443")).outcome, "ok");
+  assert.deepEqual(sent[1], { method: "POST", path: "/upstream-proxy/corp/check", body: { target: "example.com:443" } });
+});
+
+test("UseUpstreamProxy selects for the project and answers the whole list, as v1", async () => {
+  answers["PUT /upstream-proxy-selection"] = { selected: "corp", configured: true };
+  answers["GET /upstream-proxy"] = proxies;
+  assert.deepEqual(await App.UseUpstreamProxy("corp"), proxies);
+  assert.deepEqual(sent[0], { method: "PUT", path: "/upstream-proxy-selection", body: { name: "corp" } });
+});
+
+test("ReadUpstreamProxyCAFile reads the file this machine's main process picks", async () => {
+  globalThis.window = { marasiApp: { readCAFile: async () => "PEM" } };
+  assert.equal(await App.ReadUpstreamProxyCAFile(), "PEM");
+});
+
+test("the waypoint bindings keep v1's {hostname: override} map", async () => {
+  answers["GET /waypoint"] = { items: [{ hostname: "a.test", override: "127.0.0.1:8000" }] };
+  assert.deepEqual(await App.GetWaypoints(), { "a.test": "127.0.0.1:8000" });
+  await App.CreateWaypoint("b.test", "10.0.0.1:443");
+  await App.DeleteWaypoint("a.test");
+  assert.deepEqual(sent.slice(1), [
+    { method: "POST", path: "/waypoint", body: { hostname: "b.test", override: "10.0.0.1:443" } },
+    { method: "DELETE", path: "/waypoint", body: { hostname: "a.test" } },
+  ]);
+});
+
+test("CreateWaypoint on a host that has one updates it, as v1's create or update", async () => {
+  answers["POST /waypoint"] = [409, { error: "waypoint_already_exists", message: "waypoint already exists" }];
+  await App.CreateWaypoint("a.test", "127.0.0.1:9000");
+  assert.deepEqual(sent[1], {
+    method: "POST",
+    path: "/waypoint/update",
+    body: { hostname: "a.test", override: "127.0.0.1:9000" },
+  });
+});

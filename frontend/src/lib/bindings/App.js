@@ -93,15 +93,62 @@ export const StartBrowser = instanceChrome("StartBrowser", async (profile) => {
   await marasi.post("/chrome/start", profile ? { profile } : {});
 });
 
+// This machine's upstream proxies and the open project's selection:
+// {items, selected, configured}, items redacted to {name, scheme, host,
+// port, has_credentials, has_ca}.
+const upstreamProxyPath = (name) => `/upstream-proxy/${encodeURIComponent(name)}`;
+export const GetUpstreamProxies = () => marasi.get("/upstream-proxy");
+// Adds an entry; `ca` is a PEM bundle, "" for none.
+export const AddUpstreamProxy = (name, url, ca) => marasi.post("/upstream-proxy", ca ? { name, url, ca } : { name, url });
+// Changes the named entry. An empty url or ca leaves it as it is, and
+// removeCA drops the CA.
+export const UpdateUpstreamProxy = async (name, url, ca, removeCA) => {
+  const update = {};
+  if (url) update.url = url;
+  if (removeCA) update.ca = null;
+  else if (ca) update.ca = ca;
+  if (!Object.keys(update).length) throw new Error("upstream proxy update: nothing to change");
+  return marasi.post(upstreamProxyPath(name), update);
+};
+// Removes the named entry. A project that selected it keeps the selection,
+// and its traffic fails closed.
+export const RemoveUpstreamProxy = (name) => marasi.delete(upstreamProxyPath(name));
+// Selects the open project's upstream proxy, "" for direct, and answers
+// the whole list, as v1 did.
+export const UseUpstreamProxy = async (name) => {
+  await marasi.put("/upstream-proxy-selection", { name });
+  return GetUpstreamProxies();
+};
+// One test connection to `target` through the named entry, selected or not.
+export const CheckUpstreamProxy = (name, target) => marasi.post(`${upstreamProxyPath(name)}/check`, { target });
+// A CA file picked on this machine, its text unparsed; "" when cancelled.
+// Marasi checks it when the entry is added or updated.
+export const ReadUpstreamProxyCAFile = () => bridge().readCAFile();
+
+// The open project's waypoints, as v1's {hostname: override} map.
+export const GetWaypoints = async () =>
+  Object.fromEntries(((await marasi.get("/waypoint")).items ?? []).map((item) => [item.hostname, item.override]));
+// Sets `host`'s override: adds a waypoint, or updates the one it has, as
+// v1's create or update did.
+export const CreateWaypoint = async (hostname, override) => {
+  try {
+    await marasi.post("/waypoint", { hostname, override });
+  } catch (error) {
+    if (error?.code !== "waypoint_already_exists") throw error;
+    await marasi.post("/waypoint/update", { hostname, override });
+  }
+};
+export const DeleteWaypoint = async (hostname) => {
+  await marasi.delete("/waypoint", { hostname });
+};
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
-export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
 export const AppendNote = notPorted("AppendNote");
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
 export const CancelLaunch = notPorted("CancelLaunch");
 export const CheckHTTPParse = notPorted("CheckHTTPParse");
-export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
 export const ClearNotes = notPorted("ClearNotes");
 export const CloseWebSocket = notPorted("CloseWebSocket");
@@ -132,7 +179,6 @@ export const CreateArmoryTemplateFromRequest = notPorted("CreateArmoryTemplateFr
 export const CreateDraftFinding = notPorted("CreateDraftFinding");
 export const CreateDraftTestCase = notPorted("CreateDraftTestCase");
 export const CreateLaunchpadEntry = notPorted("CreateLaunchpadEntry");
-export const CreateWaypoint = notPorted("CreateWaypoint");
 export const DeleteArmoryRun = notPorted("DeleteArmoryRun");
 export const DeleteArmoryTemplate = notPorted("DeleteArmoryTemplate");
 export const DeleteArtifact = notPorted("DeleteArtifact");
@@ -141,7 +187,6 @@ export const DeleteFinding = notPorted("DeleteFinding");
 export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
 export const DeleteTraffic = notPorted("DeleteTraffic");
-export const DeleteWaypoint = notPorted("DeleteWaypoint");
 export const DoExtender = notPorted("DoExtender");
 export const DownloadArtifact = notPorted("DownloadArtifact");
 // Saves the instance's CA certificate on this machine, through a save
@@ -192,12 +237,10 @@ export const GetRawDetails = notPorted("GetRawDetails");
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
 export const GetResponse = notPorted("GetResponse");
 export const GetScopeRules = notPorted("GetScopeRules");
-export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
 // This machine's user, the report assessor default.
 export const GetUserName = () => bridge().userName();
 export const GetWSInterceptFlag = notPorted("GetWSInterceptFlag");
 export const GetWSIntercepted = notPorted("GetWSIntercepted");
-export const GetWaypoints = notPorted("GetWaypoints");
 export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
 export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
 export const HasOwnContentTypeExclusion = notPorted("HasOwnContentTypeExclusion");
@@ -232,9 +275,7 @@ export const PendingLaunches = notPorted("PendingLaunches");
 export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
 export const QueryTraffic = notPorted("QueryTraffic");
-export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
-export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
 export const RunExtension = notPorted("RunExtension");
@@ -267,6 +308,4 @@ export const UpdateArmoryTemplate = notPorted("UpdateArmoryTemplate");
 export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
 export const UpdateNote = notPorted("UpdateNote");
 export const UpdateProxy = (address, port) => marasi.post("/listener/update", { address, port: Number(port) });
-export const UpdateUpstreamProxy = notPorted("UpdateUpstreamProxy");
-export const UseUpstreamProxy = notPorted("UseUpstreamProxy");
 export const ValidateArmoryRun = notPorted("ValidateArmoryRun");
