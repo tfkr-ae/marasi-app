@@ -25,3 +25,12 @@ test("other errors are not mistaken for not ported", () => {
   assert.equal(isNotPorted(new Error("not ported")), false);
   assert.equal(isNotPorted(undefined), false);
 });
+
+test("GetBuildInfo reports the app's own channel and version from the main process", async () => {
+  globalThis.window = { marasiApp: { buildInfo: async () => ({ Channel: "dev", Version: "2.0.0-dev" }) } };
+  try {
+    assert.deepEqual(await App.GetBuildInfo(), { Channel: "dev", Version: "2.0.0-dev" });
+  } finally {
+    delete globalThis.window;
+  }
+});

@@ -25,6 +25,9 @@ export const {
   ToggleFlag,
 } = appConfig;
 
+/** The app's own build, { Channel, Version }, from the main process. */
+export const GetBuildInfo = () => globalThis.window.marasiApp.buildInfo();
+
 export const AddChromePath = notPorted("AddChromePath");
 export const AddChromeProfile = notPorted("AddChromeProfile");
 export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
@@ -79,7 +82,6 @@ export const GetArmoryRuns = notPorted("GetArmoryRuns");
 export const GetArmoryTemplates = notPorted("GetArmoryTemplates");
 export const GetArmoryWordlists = notPorted("GetArmoryWordlists");
 export const GetArtifact = notPorted("GetArtifact");
-export const GetBuildInfo = notPorted("GetBuildInfo");
 export const GetCheckpoint = notPorted("GetCheckpoint");
 export const GetCheckpointItems = notPorted("GetCheckpointItems");
 export const GetChromePaths = notPorted("GetChromePaths");

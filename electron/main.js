@@ -37,6 +37,9 @@ const configDir = marasiConfigDir({
 // token, loopbackTurnedOn}. The token stays here; the renderer gets the
 // rest.
 const connections = new Map();
+// The app's own update channel, as v1's GetBuildInfo reported it. Builds
+// stay "dev" until the updater ticket gives them a channel.
+const buildChannel = "dev";
 
 protocol.registerSchemesAsPrivileged([
   { scheme, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -82,6 +85,7 @@ function serveAppConfig() {
     },
   });
   handleAppConfig({ handle }, { appConfig, keybindingFiles });
+  handle("app:buildInfo", () => ({ Channel: buildChannel, Version: app.getVersion() }));
   // A config v2 can't prepare stays as it is; each read then reports why.
   return appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
 }

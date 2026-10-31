@@ -6,6 +6,8 @@ import { appConfigCalls } from "./appConfigIPC.js";
 
 contextBridge.exposeInMainWorld("marasiApp", {
   platform: process.platform,
+  // The app's own build: { Channel, Version }.
+  buildInfo: () => ipcRenderer.invoke("app:buildInfo"),
   // The service instances running on this machine, each its /service/status.
   listInstances: () => ipcRenderer.invoke("instances:list"),
   // Connects this window to local `instance`: {instance, baseURL, loopbackTurnedOn}.
