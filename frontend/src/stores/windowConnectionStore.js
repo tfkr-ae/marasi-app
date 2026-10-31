@@ -4,17 +4,28 @@ import { get } from "svelte/store";
 import { createWindowConnectionStore } from "./createWindowConnectionStore.js";
 import { useConnection } from "../lib/bindings/marasi.js";
 
-// Outside Electron (a plain browser on the dev server) there is no bridge,
-// and so no local instance to connect to.
+// Outside Electron (a plain browser on the dev server) the dev server's
+// bridge (frontend/devBridge.js) lists and connects to local instances;
+// Start and the OS dialogs need Marasi v2.
 const outsideElectron = async () => {
-  throw new Error("Open Marasi v2 to connect to an instance");
+  throw new Error("Open Marasi v2 to do this");
 };
+async function devBridge(method, path, body) {
+  const response = await fetch(`/__marasi${path}`, {
+    method,
+    headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const answer = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(answer?.message ?? `The dev server answered HTTP ${response.status}`);
+  return answer;
+}
 const bridge = globalThis.window?.marasiApp ?? {
-  listInstances: outsideElectron,
-  startup: async () => null,
-  connect: outsideElectron,
+  listInstances: () => devBridge("GET", "/instances"),
+  startup: () => devBridge("GET", "/connection"),
+  connect: (instance) => devBridge("POST", "/connect", { instance }),
   start: outsideElectron,
-  disconnect: async () => {},
+  disconnect: () => devBridge("POST", "/disconnect"),
   marasi: async () => null,
   chooseMarasi: outsideElectron,
   pickProject: outsideElectron,
