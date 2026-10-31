@@ -10,8 +10,11 @@ const STOPPED = new Set(["ECONNREFUSED", "ENOENT"]);
 /** The instances directory in Marasi config directory `configDir`. */
 export const instancesDir = (configDir) => join(configDir, "instances");
 
-// Marasi's instance name rules (marasi cmd/marasi/root.go resolveInstancePath).
-function socketPath(configDir, instance) {
+/**
+ * The socket of `instance` in Marasi config directory `configDir`, by
+ * Marasi's instance name rules (marasi cmd/marasi/root.go resolveInstancePath).
+ */
+export function socketPath(configDir, instance) {
   if (
     typeof instance !== "string" ||
     !instance ||
@@ -95,6 +98,12 @@ export async function connectLocal({ configDir, instance, call }) {
     });
     listener = started.control_listener;
   }
-  const { token } = await callInstance(call, configDir, instance, "GET", "/service/control-listener/token");
+  const token = await readToken({ configDir, instance, call });
   return { instance, origin: originOf(listener), token, loopbackTurnedOn };
+}
+
+/** Local `instance`'s control token, read through its socket. */
+export async function readToken({ configDir, instance, call }) {
+  const { token } = await callInstance(call, configDir, instance, "GET", "/service/control-listener/token");
+  return token;
 }
