@@ -1,6 +1,8 @@
 <script>
 	import Logo from "../lib/components/Logo.svelte";
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
+	import ConnectionScreen from "../lib/components/ConnectionScreen.svelte";
+	import { windowConnection, windowTitle } from "../stores/windowConnectionStore.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -56,7 +58,7 @@
 	} from "../stores.js";
 	import {
 		openProjectFile,
-		openScratchpad,
+		openConnectedProject,
 		retryOpen,
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
@@ -218,9 +220,31 @@
 	// Text size sizes the root element, so everything in rem follows it.
 	// readConfig sets it before startup draws any text.
 	$: applyTextSize($textSize);
-	// Startup opens the scratchpad, and carries on once the first project
-	// has opened and loaded: the scratchpad, or one picked on the opening
-	// screen when the scratchpad can't open. It resolves to that project.
+	// Whether the window has no connection to take up, so the connection
+	// screen shows until the researcher connects.
+	let choosingConnection = false;
+	// The window's connection: the one it had before a reload, or the one
+	// the researcher picks on the connection screen.
+	async function connectWindow() {
+		const resumed = await windowConnection.resume().catch((err) => {
+			console.error("Resuming the connection failed:", err);
+			return null;
+		});
+		if (resumed) return resumed;
+		choosingConnection = true;
+		const connection = await windowConnection.connected();
+		choosingConnection = false;
+		if (connection.loopbackTurnedOn) {
+			toastStore.trigger({
+				message: `Turned on ${connection.status.control_listener} for ${connection.instance}`,
+			});
+		}
+		return connection;
+	}
+	// Startup connects the window to an instance and opens the project it
+	// has open, and carries on once the first project has opened and
+	// loaded: that one, or one picked on the opening screen when it can't
+	// open. It resolves to that project.
 	let stopWaitingForProject = () => {};
 	const StartupRoutine2 = new Promise((resolve) => {
 		stopWaitingForProject = loadedProject.subscribe(
@@ -228,7 +252,8 @@
 		);
 		readConfig()
 			.catch((err) => console.error("Reading the app config failed:", err))
-			.then(openScratchpad)
+			.then(connectWindow)
+			.then((connection) => openConnectedProject(connection.status))
 			.then((project) => project ?? startWithoutProject());
 	});
 	// Starts the listener on the configured address.
@@ -302,7 +327,7 @@
 			});
 			// The project that opened, which may not be the scratchpad, names
 			// the window and the app's project, as a switch does.
-			WindowSetTitle(project.name);
+			WindowSetTitle(windowTitle(project.name));
 			activeProject.set(project.name);
 			appState.update((s) => ({ ...s, started: true, isReady: true }));
 			removeMenuShortcuts = installMenuShortcuts(shortcutState);
@@ -963,6 +988,12 @@
 </div>
 {#if $appState.started}
 	<AppDrawer />
+{/if}
+<!-- A window with no connection shows the instances it can connect to. -->
+{#if choosingConnection}
+	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
+		<ConnectionScreen connection={windowConnection} />
+	</div>
 {/if}
 <!-- The opening screen covers the app rather than replacing it, so the open
      project's pages stay mounted, exactly as they were, if the open fails. -->

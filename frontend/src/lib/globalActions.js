@@ -13,6 +13,7 @@ import {
 } from "./bindings/App";
 import { EventsOnce, WindowSetTitle } from "./bindings/runtime";
 import { projectName } from "./openProgress.js";
+import { windowTitle } from "../stores/windowConnectionStore.js";
 import { checkpointHeldModal, heldCheckpointIDs } from "./checkpointHeld.js";
 import {
 	activeProject,
@@ -108,6 +109,22 @@ export async function openScratchpad() {
 	});
 }
 
+/**
+ * Opens the project the connected instance has open, at startup, with the
+ * opening screen up from the start. `status` is the instance's
+ * /service/status. Resolves like openProjectFile.
+ */
+export function openConnectedProject(status) {
+	lastOpen = () => openConnectedProject(status);
+	const name = projectName(status.project);
+	return openWithScreen({
+		name,
+		path: status.project,
+		scratchpad: name === "scratchpad",
+		open: async () => name,
+	});
+}
+
 // Runs `open` (Go's open, resolving to the project's name) and loads the
 // project, with the opening screen for `name` at `path`. A toastStore
 // announces the open, and a modalStore shows a refusal over held Checkpoint
@@ -140,7 +157,7 @@ async function openWithScreen({ name: target, path = null, scratchpad = false, o
 		}
 		switchOpening();
 		activeProject.set(name);
-		WindowSetTitle(name);
+		WindowSetTitle(windowTitle(name));
 		goto("/");
 		try {
 			await openProject();

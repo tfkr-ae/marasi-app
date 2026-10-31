@@ -106,3 +106,27 @@ export function createMarasiClient({ baseURL, fetch = globalThis.fetch.bind(glob
     delete: (path, body) => request("DELETE", path, body),
   };
 }
+
+// The window's connection's client, once it has one.
+let connected = null;
+
+/** Points the window's client at the instance at `baseURL`, and returns it. */
+export function useConnection(baseURL) {
+  connected = createMarasiClient({ baseURL });
+  return connected;
+}
+
+// The window's client, which a call before a connection can't use.
+function client() {
+  if (!connected) throw new Error("Not connected to Marasi");
+  return connected;
+}
+
+/** The window's connected instance's control API, as createMarasiClient's methods. */
+export const marasi = {
+  request: (method, path, body) => client().request(method, path, body),
+  get: (path) => client().get(path),
+  post: (path, body) => client().post(path, body),
+  put: (path, body) => client().put(path, body),
+  delete: (path, body) => client().delete(path, body),
+};

@@ -1,5 +1,6 @@
 <script>
 	import { activeProject } from "../../stores";
+	import { windowConnection } from "../../stores/windowConnectionStore.js";
 	import { CountNotes, GetScopeRules } from "../bindings/App";
 	import {
 		Edit2Icon,
@@ -102,9 +103,20 @@
 </script>
 
 <div class="no-select p-4">
-	<h2 class="text-base font-bold mb-4">
+	<h2 class="text-base font-bold">
 		{$activeProject} Project Dashboard
 	</h2>
+	<!-- The instance the project is open on, where every action goes. -->
+	{#if $windowConnection.connection}
+		{@const connection = $windowConnection.connection}
+		<p class="mb-4 text-xs opacity-60" data-testid="connection-status">
+			On <span class="font-semibold">{connection.instance}</span>
+			at <span class="font-mono">{connection.status.control_listener}</span>
+			{#if connection.loopbackTurnedOn}· loopback address turned on{/if}
+		</p>
+	{:else}
+		<div class="mb-4" />
+	{/if}
 
 	<!-- Main metrics cards -->
 	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
