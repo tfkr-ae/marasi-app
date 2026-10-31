@@ -3,7 +3,8 @@
 // of v1's update_verify.go, which used aead.dev/minisign: the release
 // workflows sign checksums.txt with the minisign CLI, and this verifies the
 // result with node:crypto's Ed25519.
-import { createHash, createPublicKey, verify } from "node:crypto";
+import { createPublicKey, verify } from "node:crypto";
+import { blake2b512 } from "./blake2b.js";
 import { failed } from "./failure.js";
 
 // The DER prefix of an Ed25519 SubjectPublicKeyInfo; the 32 key bytes follow.
@@ -37,7 +38,7 @@ function minisignVerify(key, message, signature) {
   const algorithm = sig.subarray(0, 2).toString();
   if (!sig.subarray(2, 10).equals(key.id)) return false;
   let signed;
-  if (algorithm === "ED") signed = createHash("blake2b512").update(message).digest();
+  if (algorithm === "ED") signed = blake2b512(message);
   else if (algorithm === "Ed") signed = message;
   else return false;
   const ed = sig.subarray(10);

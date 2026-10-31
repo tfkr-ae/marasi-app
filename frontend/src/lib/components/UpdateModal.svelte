@@ -23,6 +23,7 @@
 	} from "../../stores/updateStore";
 	import {
 		cancellable,
+		channelLabel,
 		channelSettingPath,
 		downloadedAmount,
 		isNightlyChannel,
@@ -135,9 +136,9 @@
 				<dd>
 					<button
 						type="button"
-						class="anchor capitalize"
+						class="anchor"
 						title="Channel setting"
-						on:click={openChannelSetting}>{update.Channel}</button
+						on:click={openChannelSetting}>{channelLabel(update.Channel)}</button
 					>
 				</dd>
 			</dl>

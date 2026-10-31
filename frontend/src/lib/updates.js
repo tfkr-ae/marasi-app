@@ -36,8 +36,11 @@ const channelLabels = { release: "Release", nightly: "Nightly", "v2-nightly": "v
  * v2-nightly until v2 replaces v1.
  */
 export function channelChoices(settings) {
-  return (settings?.Channels ?? []).map((channel) => [channel, channelLabels[channel] ?? channel]);
+  return (settings?.Channels ?? []).map((channel) => [channel, channelLabel(channel)]);
 }
+
+/** The name a channel is shown by, such as "v2 Nightly". */
+export const channelLabel = (channel) => channelLabels[channel] ?? channel;
 
 /** Whether `channel` is a nightly channel, whose notes list its commits. */
 export const isNightlyChannel = (channel) => channel === "nightly" || channel === "v2-nightly";

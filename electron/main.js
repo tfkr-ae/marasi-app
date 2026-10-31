@@ -60,7 +60,7 @@ const connections = createLocalConnections({
 // The running build ({Channel, Version}) and the signing key it verifies
 // updates with, which the build workflow sets in package.json's
 // marasiBuild; a checkout or local package is a "dev" build (buildInfo.js).
-const { build, signingKey } = readBuildInfo(JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")));
+const { build, signingKey, releaseSource } = readBuildInfo(JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")));
 // The app's own updates. Set up once the app is ready.
 let updater;
 
@@ -161,6 +161,7 @@ async function serveUpdates(appConfig) {
     signingKey,
     config: { get: (key) => appConfig.v2Value(key), set: (key, value) => appConfig.setV2Value(key, value) },
     fetch: updateNetwork(),
+    releaseSource,
     fs: fsPromises,
     tmpdir: tmpdir(),
     installer,

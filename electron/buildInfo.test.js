@@ -4,9 +4,10 @@ import { createSigner } from "./testing/minisignSigner.js";
 import { readBuildInfo } from "./buildInfo.js";
 
 test("a checkout or local package is a development build with no channel or key", () => {
-  const { build, signingKey } = readBuildInfo({ version: "2.0.0-dev" });
+  const { build, signingKey, releaseSource } = readBuildInfo({ version: "2.0.0-dev" });
   assert.deepEqual(build, { Channel: "dev", Version: "2.0.0-dev" });
   assert.equal(signingKey, null);
+  assert.equal(releaseSource, undefined);
 });
 
 test("a nightly carries the channel, version and signing key the workflow set", () => {

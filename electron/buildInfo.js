@@ -6,9 +6,14 @@
 // build: no channel, no key, so it never checks or installs.
 import { parsePublicKey } from "./updater/verify.js";
 
-/** {build: {Channel, Version}, signingKey} from the packaged package.json. */
+/**
+ * {build: {Channel, Version}, signingKey, releaseSource} from the packaged
+ * package.json. releaseSource is the GitHub releases API to update from,
+ * undefined for the default; only a test build sets it, to try updates
+ * against a local fake GitHub.
+ */
 export function readBuildInfo(pkg, log = console) {
-  const { channel, version, signingPublicKey } = pkg.marasiBuild ?? {};
+  const { channel, version, signingPublicKey, releaseSource } = pkg.marasiBuild ?? {};
   const build = channel && version ? { Channel: channel, Version: version } : { Channel: "dev", Version: pkg.version };
   let signingKey = null;
   try {
@@ -16,5 +21,5 @@ export function readBuildInfo(pkg, log = console) {
   } catch (error) {
     log.warn(`the Marasi signing key built into this app is malformed, so it cannot install updates: ${error.message}`);
   }
-  return { build, signingKey };
+  return { build, signingKey, releaseSource: releaseSource || undefined };
 }

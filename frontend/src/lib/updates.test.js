@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   canReinstallRelease,
   channelChoices,
+  channelLabel,
   channelSettingPath,
   isNightlyChannel,
   channelSwitchNotice,
@@ -528,6 +529,11 @@ test("Settings offers the channels the build may follow, and a v2 build has no r
   assert.equal(canReinstallRelease(v1), true);
   assert.deepEqual(channelChoices({ Channel: "", Channels: [] }), []);
   assert.equal(canReinstallRelease({ Channel: "", Channels: [] }), false);
+});
+
+test("channels are shown by name", () => {
+  assert.equal(channelLabel("v2-nightly"), "v2 Nightly");
+  assert.equal(channelLabel("release"), "Release");
 });
 
 test("both nightly channels list their commits", () => {
