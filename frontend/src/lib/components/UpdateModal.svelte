@@ -25,6 +25,7 @@
 		cancellable,
 		channelSettingPath,
 		downloadedAmount,
+		isNightlyChannel,
 		nightlyNotes,
 		progressPercent,
 		showsUpdateIndicator,
@@ -69,7 +70,7 @@
 	$: running = $updateState.Running;
 	$: progress = $updateState.Progress;
 	// A nightly's notes list its commits; a release's are shown as published.
-	$: nightly = update?.Channel === "nightly";
+	$: nightly = isNightlyChannel(update?.Channel);
 	$: notes = nightly ? nightlyNotes(update?.Notes) : (update?.Notes ?? "");
 	$: panel = updatePanelSteps($updateState);
 	$: failure = updatePanelFailure($updateState);

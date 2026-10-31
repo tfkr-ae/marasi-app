@@ -4,6 +4,7 @@
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
 import { marasi } from "./marasi.js";
+import { createUpdateBindings } from "./updates.js";
 
 // The app config and keybinding profile files, owned by the main process.
 const appConfig = createAppConfigBindings(() => globalThis.window?.marasiApp?.appConfig);
@@ -26,6 +27,20 @@ export const {
   ToggleFlag,
 } = appConfig;
 
+// The app's own updates, owned by the main process's updater.
+export const {
+  CancelUpdateDownload,
+  CheckForUpdate,
+  DismissUpdate,
+  GetUpdateSettings,
+  GetUpdateState,
+  InstallUpdate,
+  ReinstallLatestRelease,
+  RestartToUpdate,
+  SetAutomaticUpdateChecks,
+  SetUpdateChannel,
+} = createUpdateBindings(() => globalThis.window?.marasiApp?.updates);
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => globalThis.window.marasiApp.buildInfo();
 
@@ -35,8 +50,6 @@ export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
 export const AppendNote = notPorted("AppendNote");
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
 export const CancelLaunch = notPorted("CancelLaunch");
-export const CancelUpdateDownload = notPorted("CancelUpdateDownload");
-export const CheckForUpdate = notPorted("CheckForUpdate");
 export const CheckHTTPParse = notPorted("CheckHTTPParse");
 export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
@@ -65,7 +78,6 @@ export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
 export const DeleteTraffic = notPorted("DeleteTraffic");
 export const DeleteWaypoint = notPorted("DeleteWaypoint");
-export const DismissUpdate = notPorted("DismissUpdate");
 export const DoExtender = notPorted("DoExtender");
 export const DownloadArtifact = notPorted("DownloadArtifact");
 export const DownloadCert = notPorted("DownloadCert");
@@ -109,8 +121,6 @@ export const GetRawDetails = notPorted("GetRawDetails");
 export const GetRecentProjects = notPorted("GetRecentProjects");
 export const GetResponse = notPorted("GetResponse");
 export const GetScopeRules = notPorted("GetScopeRules");
-export const GetUpdateSettings = notPorted("GetUpdateSettings");
-export const GetUpdateState = notPorted("GetUpdateState");
 export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
 export const GetUserName = notPorted("GetUserName");
 export const GetWSInterceptFlag = notPorted("GetWSInterceptFlag");
@@ -120,7 +130,6 @@ export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
 export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
 export const HasOwnContentTypeExclusion = notPorted("HasOwnContentTypeExclusion");
 export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
-export const InstallUpdate = notPorted("InstallUpdate");
 export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
@@ -143,10 +152,8 @@ export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
 export const QueryTraffic = notPorted("QueryTraffic");
 export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = notPorted("RebuildJob");
-export const ReinstallLatestRelease = notPorted("ReinstallLatestRelease");
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
-export const RestartToUpdate = notPorted("RestartToUpdate");
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
 export const RunExtension = notPorted("RunExtension");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
@@ -155,13 +162,11 @@ export const SaveFinding = notPorted("SaveFinding");
 export const SaveTestCase = notPorted("SaveTestCase");
 export const ScratchpadPath = notPorted("ScratchpadPath");
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
-export const SetAutomaticUpdateChecks = notPorted("SetAutomaticUpdateChecks");
 export const SetClientSetting = notPorted("SetClientSetting");
 export const SetContentTypeExclusion = notPorted("SetContentTypeExclusion");
 export const SetHighlight = notPorted("SetHighlight");
 export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
-export const SetUpdateChannel = notPorted("SetUpdateChannel");
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
 export const StartArmoryRun = notPorted("StartArmoryRun");

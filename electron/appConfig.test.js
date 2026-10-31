@@ -255,3 +255,20 @@ test("on a real disk, a write replaces the file whole and leaves no temp file", 
   assert.deepEqual((await readdir(real)).sort(), ["marasi_appconfig.yaml", "test_cases.yml"]);
   assert.equal((await stat(join(real, "marasi_appconfig.yaml"))).mode & 0o777, 0o600);
 });
+
+test("v2's own keys read and write one at a time, beside v1's keys, which they can't touch", async () => {
+  const { config, saved } = setup("update_channel: nightly\nupdate_checks: false\n");
+  assert.equal(await config.v2Value("v2_update_channel"), undefined);
+  await config.setV2Value("v2_update_channel", "v2-nightly");
+  await config.setV2Value("v2_update_checks", false);
+  assert.equal(await config.v2Value("v2_update_channel"), "v2-nightly");
+  assert.deepEqual(saved(), {
+    update_channel: "nightly",
+    update_checks: false,
+    v2_update_channel: "v2-nightly",
+    v2_update_checks: false,
+  });
+  await assert.rejects(config.setV2Value("update_channel", "release"), /not a v2 key/);
+  await assert.rejects(config.v2Value("update_channel"), /not a v2 key/);
+  assert.equal(saved().update_channel, "nightly");
+});

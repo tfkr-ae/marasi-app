@@ -2,9 +2,12 @@
 // frontend build; it has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from "electron";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import * as fsPromises from "node:fs/promises";
+import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { lookup } from "node:dns/promises";
+import { networkInterfaces, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -12,6 +15,7 @@ import { createAppConfig } from "./appConfig.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
+import { readBuildInfo } from "./buildInfo.js";
 import { marasiConfigDir } from "./configDir.js";
 import { listLocalInstances } from "./instances.js";
 import { createKeybindingFiles } from "./keybindingFiles.js";
@@ -19,6 +23,10 @@ import { createLocalConnections } from "./local.js";
 import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
 import { nodeFS } from "./nodeFS.js";
 import { callSocket } from "./socket.js";
+import { handleUpdates, updateEventChannel } from "./updateIPC.js";
+import { defaultInstaller, locateInstall } from "./updater/installers.js";
+import { createUpdateFetch, envProxyConfig } from "./updater/updateNet.js";
+import { createUpdater } from "./updater/updater.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The frontend build is served on app://marasi/, so its absolute /_app/
@@ -49,9 +57,12 @@ const connections = createLocalConnections({
   call: callSocket,
   marasiBin: () => marasi.bin(),
 });
-// The app's own update channel, as v1's GetBuildInfo reported it. Builds
-// stay "dev" until the updater ticket gives them a channel.
-const buildChannel = "dev";
+// The running build ({Channel, Version}) and the signing key it verifies
+// updates with, which the build workflow sets in package.json's
+// marasiBuild; a checkout or local package is a "dev" build (buildInfo.js).
+const { build, signingKey } = readBuildInfo(JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")));
+// The app's own updates. Set up once the app is ready.
+let updater;
 
 protocol.registerSchemesAsPrivileged([
   { scheme, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -97,9 +108,80 @@ function serveAppConfig() {
     },
   });
   handleAppConfig({ handle }, { appConfig, keybindingFiles });
-  handle("app:buildInfo", () => ({ Channel: buildChannel, Version: app.getVersion() }));
+  handle("app:buildInfo", () => build);
   // A config v2 can't prepare stays as it is; each read then reports why.
-  return appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
+  return [appConfig, appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error))];
+}
+
+// Starts `path` so that it outlives the app, as an installed update's
+// relaunch needs.
+function spawnDetached(path) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(path, [], { detached: true, stdio: "ignore" });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+// The network update requests take: their own sessions, one on the system
+// proxy (or the proxy environment variables when set) and one direct for
+// when that proxy is a local Marasi listener (updater/updateNet.js).
+function updateNetwork() {
+  const system = session.fromPartition("marasi-updates");
+  const direct = session.fromPartition("marasi-updates-direct");
+  const fromEnv = envProxyConfig(process.env);
+  system.setProxy(fromEnv ? { mode: "fixed_servers", ...fromEnv } : { mode: "system" });
+  direct.setProxy({ mode: "direct" });
+  return createUpdateFetch({
+    resolveProxy: (url) => system.resolveProxy(url),
+    systemFetch: (url, init) => system.fetch(url, init),
+    directFetch: (url, init) => direct.fetch(url, init),
+    marasiListeners: async () =>
+      (await listLocalInstances({ configDir, readdir, call: callSocket }))
+        .map((status) => status.proxy_listener)
+        .filter(Boolean),
+    lookup: async (host) => (await lookup(host, { all: true })).map((entry) => entry.address),
+    localAddresses: () => Object.values(networkInterfaces()).flatMap((list) => (list ?? []).map((entry) => entry.address)),
+  });
+}
+
+// The updater, with its settings in the app config's v2_* keys.
+async function serveUpdates(appConfig) {
+  const run = promisify(execFile);
+  const installer = defaultInstaller({ platform: process.platform, fs: fsPromises, run, spawnDetached });
+  const installLocation =
+    app.isPackaged && installer
+      ? await locateInstall({ platform: process.platform, execPath: process.execPath, env: process.env, realpath })
+      : "";
+  updater = createUpdater({
+    build,
+    signingKey,
+    config: { get: (key) => appConfig.v2Value(key), set: (key, value) => appConfig.setV2Value(key, value) },
+    fetch: updateNetwork(),
+    fs: fsPromises,
+    tmpdir: tmpdir(),
+    installer,
+    installLocation,
+    emit: (name, payload) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send(updateEventChannel, name, payload);
+    },
+    confirm: async (title, message) => {
+      const parent = BrowserWindow.getFocusedWindow();
+      const options = { type: "warning", message: title, detail: message, buttons: [title, "Cancel"], defaultId: 0, cancelId: 1 };
+      const { response } = await (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options));
+      return response === 0;
+    },
+    // v1 warned here about unsaved Launchpad drafts and active Armory runs.
+    // Drafts live in the windows and runs in the instances; the tickets that
+    // port them add their warnings.
+    confirmLosingWork: async () => true,
+    quit: () => app.quit(),
+  });
+  handleUpdates({ handle }, updater);
+  updater.removeUpdateLeftovers();
 }
 
 function createWindow() {
@@ -201,8 +283,11 @@ app.whenReady().then(async () => {
   });
   serveFrontend();
   serveConnections();
-  await serveAppConfig();
+  const [appConfig, loaded] = serveAppConfig();
+  await serveUpdates(appConfig);
+  await loaded;
   createWindow();
+  updater.startUpdateChecks();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -210,12 +295,15 @@ app.whenReady().then(async () => {
 
 // As in v1, closing the window quits the app.
 app.on("window-all-closed", () => app.quit());
-// Quitting stops the instances the app started and wasn't disconnected
-// from, then quits for real.
+// Quitting stops the update checks and the instances the app started and
+// wasn't disconnected from, relaunches an installed update when quitting
+// for "Restart now", then quits for real.
 let stopping = false;
 app.on("before-quit", (event) => {
   if (stopping) return;
   stopping = true;
   event.preventDefault();
-  connections.quit().finally(() => app.quit());
+  Promise.allSettled([updater?.stopUpdateChecks(), connections.quit()])
+    .then(() => updater?.relaunchIfRestarting())
+    .finally(() => app.quit());
 });

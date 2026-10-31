@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canReinstallRelease,
+  channelChoices,
   channelSettingPath,
+  isNightlyChannel,
   channelSwitchNotice,
   cancellable,
   checkResultNotice,
@@ -511,4 +514,24 @@ test("a nightly published before its notes listed commits has no notes to show",
   assert.equal(nightlyNotes("Ref: main\nCommit: def5678\nMarasi: 11b1004\n"), "");
   assert.equal(nightlyNotes(""), "");
   assert.equal(nightlyNotes(undefined), "");
+});
+
+test("Settings offers the channels the build may follow, and a v2 build has no release to reinstall", () => {
+  const v2 = { Channel: "v2-nightly", Channels: ["v2-nightly"], AutomaticChecks: true };
+  assert.deepEqual(channelChoices(v2), [["v2-nightly", "v2 Nightly"]]);
+  assert.equal(canReinstallRelease(v2), false);
+  const v1 = { Channel: "nightly", Channels: ["release", "nightly"], AutomaticChecks: true };
+  assert.deepEqual(channelChoices(v1), [
+    ["release", "Release"],
+    ["nightly", "Nightly"],
+  ]);
+  assert.equal(canReinstallRelease(v1), true);
+  assert.deepEqual(channelChoices({ Channel: "", Channels: [] }), []);
+  assert.equal(canReinstallRelease({ Channel: "", Channels: [] }), false);
+});
+
+test("both nightly channels list their commits", () => {
+  assert.equal(isNightlyChannel("v2-nightly"), true);
+  assert.equal(isNightlyChannel("nightly"), true);
+  assert.equal(isNightlyChannel("release"), false);
 });
