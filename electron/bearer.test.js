@@ -39,3 +39,13 @@ test("a token the page set itself is replaced", () => {
   const headers = withBearer(request("http://127.0.0.1:50037/x", 1, { authorization: "Bearer stolen" }), connectionOf);
   assert.deepEqual(headers, { Authorization: `Bearer ${token}` });
 });
+
+test("with two windows on two instances, each request carries only its own window's token", () => {
+  const tokens = { 1: "a".repeat(64), 2: "b".repeat(64) };
+  const origins = { 1: "http://127.0.0.1:50037", 2: "http://127.0.0.1:50100" };
+  const both = (id) => (tokens[id] ? { origin: origins[id], token: tokens[id] } : null);
+  assert.equal(withBearer(request(`${origins[1]}/service/status`, 1), both).Authorization, `Bearer ${tokens[1]}`);
+  assert.equal(withBearer(request(`${origins[2]}/service/status`, 2), both).Authorization, `Bearer ${tokens[2]}`);
+  assert.equal(withBearer(request(`${origins[2]}/service/status`, 1), both).Authorization, undefined);
+  assert.equal(withBearer(request(`${origins[1]}/service/status`, 2), both).Authorization, undefined);
+});

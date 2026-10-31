@@ -115,11 +115,20 @@ test("startup connects a window once: after a disconnect and a reload, it has no
   assert.equal(machine.commands.length, 1);
 });
 
-test("startup takes up the window's connection after a reload", async () => {
+test("startup takes up the window's connection after a reload, marked resumed", async () => {
   const machine = fakeMachine({ default: "127.0.0.1:50037" });
   const connections = local(machine);
   const first = await connections.startup(1);
-  assert.equal(await connections.startup(1), first);
+  assert.equal(first.resumed, undefined);
+  assert.deepEqual(await connections.startup(1), { ...first, resumed: true });
+});
+
+test("a window opened for another instance starts with no connection and starts nothing", async () => {
+  const machine = fakeMachine();
+  const connections = local(machine);
+  connections.open(2);
+  assert.equal(await connections.startup(2), null);
+  assert.deepEqual(machine.commands, []);
 });
 
 test("a launch whose default can't take the proxy port starts it on a free one", async () => {
