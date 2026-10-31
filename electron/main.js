@@ -1,14 +1,18 @@
 // The Electron main process. It draws the window and serves the static
 // frontend build; it has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
-import { app, BrowserWindow, ipcMain, net, protocol, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from "electron";
+import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
-import { connectLocal, listLocalInstances } from "./instances.js";
+import { listLocalInstances } from "./instances.js";
+import { createLocalConnections } from "./local.js";
+import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
 import { callSocket } from "./socket.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,10 +27,18 @@ const appOrigin = new URL(devServerURL ?? `${origin}/`).origin;
 // one Marasi itself defaults to (os.UserConfigDir()/Marasi), unless
 // MARASI_CONFIG_DIR names another, as for a throwaway instance.
 const configDir = process.env.MARASI_CONFIG_DIR || join(app.getPath("appData"), "Marasi");
+// The Marasi Start runs: the bundled one, or the researcher's choice.
+// Read once the app is ready.
+let marasi;
 // Each window's connection, by its webContents id: {instance, origin,
-// token, loopbackTurnedOn}. The token stays here; the renderer gets the
-// rest.
-const connections = new Map();
+// token, loopbackTurnedOn}, and the instances the app started. The token
+// stays here; the renderer gets the rest.
+const connections = createLocalConnections({
+  configDir,
+  run: promisify(execFile),
+  call: callSocket,
+  marasiBin: () => marasi.bin(),
+});
 
 protocol.registerSchemesAsPrivileged([
   { scheme, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -73,7 +85,7 @@ function createWindow() {
     if (new URL(url).origin !== appOrigin) event.preventDefault();
   });
   const id = window.webContents.id;
-  window.webContents.on("destroyed", () => connections.delete(id));
+  window.webContents.on("destroyed", () => connections.forget(id));
   window.loadURL(home);
   return window;
 }
@@ -101,15 +113,51 @@ function serveConnections() {
     callback({ requestHeaders: withBearer(details, (id) => connections.get(id)) }),
   );
   handle("instances:list", () => listLocalInstances({ configDir, readdir, call: callSocket }));
-  handle("connection:connect", async (event, instance) => {
-    const connection = await connectLocal({ configDir, instance, call: callSocket });
-    connections.set(event.sender.id, connection);
-    return shown(connection);
-  });
+  handle("connection:startup", async (event) => shown(await connections.startup(event.sender.id)));
+  handle("connection:connect", async (event, instance) => shown(await connections.connect(event.sender.id, instance)));
+  handle("connection:start", async (event, { instance, project }) =>
+    shown(await connections.start(event.sender.id, { instance, project: project || null })),
+  );
+  handle("connection:disconnect", (event) => connections.disconnect(event.sender.id));
   handle("connection:current", (event) => shown(connections.get(event.sender.id)) ?? null);
+  // The project a Start opens, picked in an OS dialog: a path, or null.
+  handle("dialog:pick-project", async (event) => {
+    const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: "Project to start",
+      filters: [{ name: "Marasi project", extensions: ["marasi"] }],
+      properties: ["openFile", "createDirectory", "promptToCreate"],
+    });
+    return picked.canceled ? null : picked.filePaths[0];
+  });
+  handle("marasi:current", () => marasi.shown());
+  // Chooses the Marasi Start runs from a path in an OS dialog, or goes back
+  // to the bundled one when `bundled` is set.
+  handle("marasi:choose", async (event, { bundled = false } = {}) => {
+    if (bundled) {
+      await marasi.choose(null);
+      return marasi.shown();
+    }
+    const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: "Marasi to start",
+      properties: ["openFile"],
+    });
+    if (!picked.canceled) await marasi.choose(picked.filePaths[0]);
+    return marasi.shown();
+  });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  marasi = await createMarasiChoice({
+    file: join(app.getPath("userData"), "marasi.json"),
+    bundled: bundledMarasi({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      platform: process.platform,
+    }),
+    readFile,
+    writeFile,
+  });
   serveFrontend();
   serveConnections();
   createWindow();
@@ -120,3 +168,12 @@ app.whenReady().then(() => {
 
 // As in v1, closing the window quits the app.
 app.on("window-all-closed", () => app.quit());
+// Quitting stops the instances the app started and wasn't disconnected
+// from, then quits for real.
+let stopping = false;
+app.on("before-quit", (event) => {
+  if (stopping) return;
+  stopping = true;
+  event.preventDefault();
+  connections.quit().finally(() => app.quit());
+});
