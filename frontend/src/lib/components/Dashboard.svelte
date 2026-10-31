@@ -2,7 +2,8 @@
 	import { activeProject } from "../../stores";
 	import { windowConnection } from "../../stores/windowConnectionStore.js";
 	import InstanceVersion from "./InstanceVersion.svelte";
-	import { CountNotes, GetScopeRules } from "../bindings/App";
+	import { GetScopeRules } from "../bindings/App";
+	import { dashboardStore } from "../../stores/dashboardStore.js";
 	import {
 		Edit2Icon,
 		SendIcon,
@@ -19,16 +20,18 @@
 	} from "lucide-svelte";
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
-	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
 
-	// Dashboard statistics
-	let totalRequests = 0;
-	let notes = 0;
-	let launchpads = 0;
-	let intercepted = 0;
-	// False while Marasi's intercepted_count job is still counting older
-	// pairs after an upgrade: the figure is a floor until it finishes.
-	let interceptedComplete = true;
+	// Dashboard statistics. interceptedComplete is false while Marasi's
+	// intercepted_count job is still counting older pairs after an upgrade:
+	// the figure is a floor until it finishes, and the store reads it again
+	// on that job's job.complete.
+	$: counts = $dashboardStore.counts;
+	$: totalRequests = counts?.Requests ?? 0;
+	$: notes = counts?.Notes ?? 0;
+	$: launchpads = counts?.Launchpads ?? 0;
+	$: intercepted = counts?.Interceptions ?? 0;
+	$: interceptedComplete = counts?.InterceptionsComplete ?? true;
+	$: countsLoading = $dashboardStore.loading;
 
 	// Scope statistics
 	let defaultAllow = true;
@@ -54,39 +57,15 @@
 	// Figures use the reader's locale ("100,000"), as the Ledger's counts do.
 	// While a figure is read its card shows a ghost bar instead; a newer
 	// refresh (a project switch) wins over a slower older one.
-	let countsLoading = true;
 	let scopeLoading = true;
 	let refreshes = 0;
 	const ghost =
 		"dashboard-ghost inline-block h-7 w-16 animate-pulse rounded-sm bg-surface-300 align-middle dark:bg-surface-600";
 
-	// Once the job finishes, read the exact count.
-	$: interceptedCounting = groupBuilding($jobsStore, "intercepted");
-	let wasCounting = false;
-	$: {
-		if (wasCounting && !interceptedCounting && !interceptedComplete) refreshDashboard();
-		wasCounting = interceptedCounting;
-	}
-
 	// Refresh dashboard data
 	function refreshDashboard() {
 		const run = ++refreshes;
-		countsLoading = true;
-		scopeLoading = true;
-		CountNotes()
-			.then((dashboard) => {
-				if (run !== refreshes) return;
-				totalRequests = dashboard.Requests;
-				notes = dashboard.Notes;
-				launchpads = dashboard.Launchpads;
-				intercepted = dashboard.Interceptions || 0;
-				interceptedComplete = dashboard.InterceptionsComplete;
-				if (!interceptedComplete) jobsStore.watch("intercepted");
-			})
-			.catch((err) => console.error("Counting the dashboard failed:", err))
-			.finally(() => {
-				if (run === refreshes) countsLoading = false;
-			});
+		dashboardStore.reload().catch((err) => console.error("Counting the dashboard failed:", err));
 
 		GetScopeRules()
 			.then((scopeData) => {

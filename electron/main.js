@@ -1,7 +1,7 @@
 // The Electron main process. It draws the window and serves the static
 // frontend build; it has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, safeStorage, session, shell } from "electron";
 import { execFile } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
+import { createCertificateFile } from "./certificateFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
@@ -81,8 +82,8 @@ function serveFrontend() {
   });
 }
 
-// The app config v1 and v2 share, and the keybinding profile files, for
-// every window.
+// The app config v1 and v2 share, the keybinding profile files, and the
+// certificate file and clipboard, for every window.
 async function serveAppConfig() {
   const appConfig = createAppConfig({
     dir: configDir,
@@ -104,6 +105,15 @@ async function serveAppConfig() {
     },
   });
   handleAppConfig({ handle }, { appConfig, keybindingFiles });
+  // The instance's CA certificate, which the renderer read from its
+  // instance, saved or copied on this machine.
+  const certificateFile = createCertificateFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("certificate:save", (event, pem) => certificateFile.save(pem));
+  handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
   handle("app:buildInfo", () => ({ Channel: buildChannel, Version: app.getVersion() }));
   // A config v2 can't prepare stays as it is; each read then reports why.
   await appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));

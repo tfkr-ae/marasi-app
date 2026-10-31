@@ -1,18 +1,16 @@
 // The open project's Marasi background jobs (search index, sitemap, moving
 // prettified copies, the dashboard's intercepted count), for Settings → Maintenance and the Ledger's notices.
-// Marasi emits no in-process job events, so the store polls ListJobs while a
-// job is incomplete and stops once every job is done. Backend calls go
-// through the injected `api`, so tests run against a fake:
+// The store reads ListJobs, then follows Marasi's job.progress and
+// job.complete events; the event stream's reload reads the jobs again for
+// the events it missed. Backend calls go through the injected `api`, so
+// tests run against a fake:
 //
 //   listJobs() -> [{ Name, Complete, Done, Total, Rebuildable }]
 //   rebuildJob(name)
 //
 // A view that read incomplete results calls watch(group); once the group's
 // jobs are complete, onFinished(group) tells it to read again.
-import { writable } from "svelte/store";
-
-/** How often ListJobs is read while a job runs. */
-export const POLL_MS = 2000;
+import { get, writable } from "svelte/store";
 
 /** The jobs behind each notice and Rebuild button. */
 export const JOB_GROUPS = {
@@ -49,61 +47,74 @@ export function groupBuilding(state, group) {
   return state.jobs.some((job) => names.includes(job.Name) && !job.Complete);
 }
 
-const realTimer = {
-  schedule: (fn, ms) => setTimeout(fn, ms),
-  cancel: (handle) => clearTimeout(handle),
-};
-
-export function createJobsStore(api, { timer = realTimer, onFinished = () => {} } = {}) {
+export function createJobsStore(api, { onFinished = () => {} } = {}) {
   const initial = () => ({ jobs: [], loaded: false, error: "", rebuilding: null });
   const store = writable(initial());
-  let state = initial();
-  store.subscribe((value) => (state = value));
 
-  let pending = null;
   let generation = 0;
   // Groups a view saw incomplete and waits on.
   const watched = new Set();
 
-  function schedule() {
-    if (pending) timer.cancel(pending);
-    pending = timer.schedule(() => {
-      pending = null;
-      return refresh();
-    }, POLL_MS);
+  // Tells each view whose group is now complete.
+  function finishWatched() {
+    for (const group of [...watched]) {
+      if (!groupBuilding(get(store), group)) {
+        watched.delete(group);
+        onFinished(group);
+      }
+    }
   }
 
-  /** Reads the jobs; polls again while one runs or a read failed. */
+  // The job changes each read in flight has missed: an event that arrives
+  // while a read is answered may be newer than the answer.
+  const reads = new Set();
+
+  // `jobs` with `change` applied to the named job.
+  const changed = (jobs, { name, change }) =>
+    jobs.map((job) => (job.Name === name ? { ...job, ...change } : job));
+
+  /** Reads the jobs. */
   async function refresh() {
     const asked = generation;
+    const arrived = [];
+    reads.add(arrived);
     let jobs;
     try {
       jobs = (await api.listJobs()) ?? [];
     } catch (error) {
       if (asked !== generation) return;
       store.update((s) => ({ ...s, error: String(error?.message ?? error) }));
-      schedule();
       return;
+    } finally {
+      reads.delete(arrived);
     }
     if (asked !== generation) return;
-    store.update((s) => ({ ...s, jobs, loaded: true, error: "" }));
-    for (const group of [...watched]) {
-      if (!groupBuilding(state, group)) {
-        watched.delete(group);
-        onFinished(group);
-      }
-    }
-    if (jobs.some((job) => !job.Complete)) schedule();
-    else if (pending) {
-      timer.cancel(pending);
-      pending = null;
-    }
+    store.update((s) => ({ ...s, jobs: arrived.reduce(changed, jobs), loaded: true, error: "" }));
+    finishWatched();
+  }
+
+  // Applies `change` to the named job, if the store has read it.
+  function updateJob(name, change) {
+    for (const arrived of reads) arrived.push({ name, change });
+    store.update((s) => ({ ...s, jobs: changed(s.jobs, { name, change }) }));
+  }
+
+  /** A job.progress event: {name, project, done, total}. */
+  function onJobProgress({ name, done, total }) {
+    updateJob(name, { Complete: false, Done: done, Total: total });
+  }
+
+  /** A job.complete event: {name, project}. */
+  function onJobComplete({ name }) {
+    updateJob(name, { Complete: true });
+    finishWatched();
   }
 
   /** A view read incomplete results for `group`; tell it when they finish. */
   function watch(group) {
+    if (watched.has(group)) return;
     watched.add(group);
-    if (!pending) schedule();
+    refresh();
   }
 
   /** Rebuilds a group's jobs ("index" or "sitemap") and follows them. */
@@ -122,11 +133,19 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
   function clear() {
     generation += 1;
     watched.clear();
-    if (pending) timer.cancel(pending);
-    pending = null;
+    reads.clear();
     store.set(initial());
   }
 
   // reload reads the jobs again, after the event stream reopens.
-  return { subscribe: store.subscribe, refresh, reload: refresh, watch, rebuild, clear };
+  return {
+    subscribe: store.subscribe,
+    refresh,
+    reload: refresh,
+    onJobProgress,
+    onJobComplete,
+    watch,
+    rebuild,
+    clear,
+  };
 }

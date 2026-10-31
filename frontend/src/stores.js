@@ -115,11 +115,8 @@ export async function readKeybindings() {
   }
 }
 
-export let listener = writable({
-  status: false,
-  address: "127.0.0.1",
-  port: "8080",
-});
+// The connected instance's proxy listener, {status, address, port}.
+export { listenerStore as listener } from "./stores/listenerStore.js";
 export let activeProject = writable("Marasi");
 /**
  * The open in progress, as lib/openProgress.js's state, or null. The root

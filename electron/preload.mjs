@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // Chooses a Marasi from a path in an OS dialog, or the bundled one when
   // `bundled`. Resolves to the Marasi Start runs, as marasi() does.
   chooseMarasi: (bundled = false) => ipcRenderer.invoke("marasi:choose", { bundled }),
+  // Saves the instance's CA certificate `pem` through a save dialog; resolves
+  // the path, or "" if cancelled.
+  saveCertificate: (pem) => ipcRenderer.invoke("certificate:save", pem),
+  // Puts `text` on this machine's clipboard.
+  copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
   // The app config calls; each resolves { value } or { error }.
   appConfig: Object.fromEntries(
     appConfigCalls.map((name) => [name, (...args) => ipcRenderer.invoke(`appConfig:${name}`, ...args)]),
