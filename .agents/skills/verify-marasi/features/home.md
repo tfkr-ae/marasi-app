@@ -52,7 +52,7 @@ After `Forward`, `⌘O` opens `Switch Projects` again.
 
 ## Gotchas
 
-- The listener button reads the app config's `DefaultAddress:DefaultPort` (`127.0.0.1:8080` in a seeded config) until the listener's port (ticket 11) reads the instance's. The instance's real proxy listener is `proxy_listener` in `launch.txt`.
+- The listener button shows the instance's proxy listener, `proxy_listener` in `launch.txt` (a free port, not `8080`), with a green dot while it runs.
 - Home can render after a listener bind failure. UI readiness alone does not prove proxy readiness.
 - The proxy itself answers the host `marasi`: `curl -x 127.0.0.1:<proxy port> http://marasi/cert` returns the CA certificate (`application/x-x509-ca-cert`), the URL the first-run setup shows. Download Certificate opens a native save dialog. Start Chrome opens an external process. Record and clean up anything those actions create.
 - The Marasi menu (MarasiKeys) keeps a closed `<dialog>` of the same labels. The driver's hit-test skips those copies; never target a label by `textContent`.
