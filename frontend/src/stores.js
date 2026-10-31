@@ -208,14 +208,16 @@ export function failOpening(error) {
     .catch((err) => console.error("Listing recent projects failed:", err));
 }
 /**
- * Starts the app with no project when the startup open failed because it
- * isn't ported to v2 yet, so the frame and pages still draw, with empty
- * data. Any other failure keeps the opening screen up.
+ * Starts the app on the connected instance's project when loading it
+ * failed because a call isn't ported to v2 yet, so the frame and pages
+ * still draw, with empty data. Any other failure keeps the opening screen
+ * up.
  */
 export function startWithoutProject() {
-  if (get(opening)?.failure?.error !== notPortedText) return;
+  const state = get(opening);
+  if (state?.failure?.error !== notPortedText) return;
   clearOpening();
-  loadedProject.set({ name: "Marasi", path: null });
+  loadedProject.set({ name: state.name, path: state.path });
 }
 /** Closes the opening screen, as after a cancelled open or Stay in. */
 export function clearOpening() {
