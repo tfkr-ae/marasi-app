@@ -6,7 +6,7 @@
 - Application log table
 - Listener status and listener reconfiguration
 - Open Project, Download Certificate, and Start Chrome actions
-- Switching projects: the `Switch Projects` picker, the opening screen (steps, a locked project), and the refusal while Checkpoint holds items
+- Switching projects: the `Switch Projects` picker, the opening screen (steps, a failure, a locked project and its owner), a switch made by the CLI, and a switch that waits for held Checkpoint items
 - Global light/dark appearance toggle
 - The instance the window is on: `On <instance> at <control listener>` under the title
 
@@ -26,29 +26,23 @@ Run `scripts/drive.sh home theme` to leave Home for Settings, toggle light/dark 
 
 ### Switching projects
 
-The recipes below are v1's; project open and switch are ticket 10's port, so prove them again on v2 when it lands (Marasi's `POST /project/open` replaces `OpenProject` in `app.go`, read with `git show main:app.go`).
+Proven on v2 (ticket 10). A switch is the instance's: `POST /project/open` from the page, or `marasi project open` from the CLI, and the page follows both through the `project.*` events. Check the result at the instance: `resources/bin/marasi --config-dir <config_dir> --json service status` (`project`).
 
-`⌘O` or `Open Project` opens `Switch Projects`: a `Search or enter new project name...` field (`input[type=search]`) over the recent projects. Enter opens the highlighted project, or with no match the typed name, which `OpenProject` (`app.go`) resolves to `<config dir>/<name>.marasi`. A slow or failed open covers the app with the opening screen (the project's name and path, steps Lock, Open, Upgrade, Load, one sentence, and a collapsed `Details` with the raw open log); a quick open shows none, so the screen is reached by failing. A project another Marasi holds is refused (`project_locked`): the screen reads `The project is opened by another instance.` (`The scratchpad …` at startup), lists `Open another project` (`Open a project instead` at startup) with `Browse…`, and offers `Stay in <open project>`, `Try again` and `Open <picked>`. Marasi locks a project with `flock` on `<project>.marasi.lock`, so hold that lock from a shell to stand in for the other instance. Proven, with `flock -n <config dir>/locked-probe.marasi.lock sleep 600 &` running:
-
-```json
-{"name":"open-locked","steps":[
- {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"input[type=search]"},{"insert":"locked-probe"},{"key":"enter"},
- {"waitText":"The project is opened by another instance."},{"waitText":"Open another project"},{"waitText":"Stay in scratchpad"},
- {"text":"Details"},{"waitText":"project_locked"},{"text":"Try again"},{"waitText":"The project is opened by another instance."},
- {"text":"Stay in scratchpad"},{"waitNoText":"The project is opened by another instance."},{"waitText":"Project Dashboard"}]}
-```
-
-The scratchpad stays open (doctor still reports `scratchpad.marasi`). Afterwards kill both the `flock` process and its `sleep` child (the child inherits the lock, so killing `flock` alone keeps the project locked); the empty `locked-probe.marasi.lock` stays in the isolated config until cleanup.
-
-While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has intercepted items` (`Forward or drop them to switch projects.`) instead of the picker, with `Open Checkpoint` (goes to `/checkpoint`) and `Cancel`; `⌘O` closes it again. An item held after the picker opened makes `OpenProject` refuse with `checkpoint_held` (`app.go`), and the same modal shows. Hold one with the Checkpoint `narrow-rule` recipe and a background request (see `checkpoint.md`), then, from Home:
+`⌘O` or `Open Project` opens `Switch Projects`: a `Search or enter new project name...` field (`input[type=search]`) over the instance's projects, newest first, each with when it was last opened (`1 minute ago`). Enter opens the highlighted project, or with no match the typed text: a bare name opens `<config_dir>/projects/<name>.marasi`, and a path opens that file on the instance machine (its directory must exist). A quick switch shows no opening screen and ends on `<name> Project Dashboard` with an `Opened <name> project` toast:
 
 ```json
-{"name":"held-switch-open-checkpoint","steps":[
- {"key":"cmd+o"},{"waitText":"Checkpoint has intercepted items"},{"waitText":"Forward or drop them to switch projects."},{"waitNoText":"Switch Projects"},
- {"text":"Open Checkpoint"},{"waitText":"item 1 of 1"},{"waitNoText":"Checkpoint has intercepted items"}]}
+{"name":"open-by-name","steps":[{"key":"cmd+o"},{"waitText":"Switch Projects"},{"waitText":"ago"},{"click":"input[type=search]"},{"insert":"bravo"},{"key":"enter"},{"waitText":"bravo Project Dashboard","timeoutMs":20000},{"waitText":"Opened bravo project"}]}
 ```
 
-After `Forward`, `⌘O` opens `Switch Projects` again.
+Insert `/tmp/mv2.XXXX/engagements/charlie.marasi` (after `mkdir` of its directory) for the path.
+
+**A switch made by the CLI.** Run `(sleep 3; resources/bin/marasi --config-dir <config_dir> --json project open --name delta) &` and drive `{"waitText":"delta Project Dashboard","timeoutMs":20000}`. The page re-reads the dashboard, jobs and log. A CLI switch to a file that isn't a database (`head -c 4096 /dev/urandom > <config_dir>/engagements/broken.marasi`, then `project open --path …`) shows the opening screen at once: `Couldn't open the project.`, Open marked failed, `Stay in <open project>`, and `Details` ending in Marasi's error (`file is not a database (26)`).
+
+**A switch held by Checkpoint.** Marasi waits for held items instead of refusing. `resources/bin/marasi … checkpoint intercept on`, then `curl -s -m 120 -x <proxy_listener> http://held-probe.test/login &` holds one (`checkpoint list`). A switch from the page then shows the steps Open, Upgrade, Waiting, Load, `Waiting for 1 held Checkpoint item.`, `Held request: GET http://held-probe.test/login HTTP/1.1` and `Go to Checkpoint`, which goes to `/checkpoint` and hides the screen. `checkpoint drop <id>` or `forward <id>` lets it finish, with the `Opened …` toast. `Details` lists each `Upgrade N of 27: <migration>` of a new project; the upgrade itself is too quick to catch on screen. Turn interception off afterwards.
+
+**A locked project.** Start a second instance on it: `resources/bin/marasi --config-dir <config_dir> --instance acme-cli --json service start --control-address 127.0.0.1:0 --port 0 --project <config_dir>/projects/foxtrot.marasi`. Opening `foxtrot` from the page shows `Locked`, `The project is open on acme-cli.`, `Stay in <open project>`, `Try again`, `Connect to acme-cli` and `Open <project>`, with `project already open: <path>` in `Details`. `Connect to acme-cli` needs Electron: it opens a second window titled `foxtrot — acme-cli` (`/json/list` on the DevTools port), and the first stays on its project. Stop `acme-cli` before cleanup, which stops only `default`.
+
+**Remotely.** In Electron, disconnect the window (`⌘⇧⌫`) and connect by `#remote-address` (`http://<acme-cli control listener>`), `#remote-token` (`marasi … --instance acme-cli service control token`) and `#remote-name`; drive that with the `connection` feature, since the page reloads onto the connection screen. The picker then has no `Browse Files...` and reads `Enter a name, or a path on <name>'s machine.`; opening by name and by path work as above.
 
 ## Gotchas
 

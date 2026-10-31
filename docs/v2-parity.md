@@ -14,11 +14,11 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
 | `SetupScratchpad` | binding | COVERED | `marasi service start` with no `--project*` starts the default instance on Marasi's scratchpad. v1's own scratchpad is not migrated. | 05 | [x] |
-| `ScratchpadPath` | binding | COVERED | `POST /project/open {"name":"scratchpad"}` | 10 | [ ] |
-| `OpenProject` | binding | COVERED | `POST /project/open {name}` or `{path}`, then `project.opening`, `project.upgrading`, `project.waiting`, `project.opened` or `project.opening_failed`. `409 project_already_open` offers to connect to the owner. | 10 | [ ] |
-| `GetRecentProjects` | binding | COVERED | `GET /project/list` with `modified_at`, sorted newest first by the GUI | 10 | [ ] |
-| `OpenFileDialog` | binding | GUI | OS open dialog on a local connection. On a remote one the path on the instance machine is typed. | 10 | [ ] |
-| `project-opening` | event | COVERED | `project.opening` | 10 | [ ] |
+| `ScratchpadPath` | binding | COVERED | `POST /project/open {"name":"scratchpad"}` | 10 | [x] |
+| `OpenProject` | binding | COVERED | `POST /project/open {name}` or `{path}`, then `project.opening`, `project.upgrading`, `project.waiting`, `project.opened` or `project.opening_failed`. `409 project_already_open` offers to connect to the owner. | 10 | [x] |
+| `GetRecentProjects` | binding | COVERED | `GET /project/list` with `modified_at`, sorted newest first by the GUI | 10 | [x] |
+| `OpenFileDialog` | binding | GUI | OS open dialog on a local connection. On a remote one the path on the instance machine is typed. | 10 | [x] |
+| `project-opening` | event | COVERED | `project.opening` | 10 | [x] |
 | `WindowSetTitle` | runtime | GUI | `BrowserWindow` title naming the instance and project | 03 | [x] |
 
 ## App config, settings and keybindings
