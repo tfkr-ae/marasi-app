@@ -1,7 +1,29 @@
 // The v1 Wails bindings, by name. Each is a not ported stub until its ticket
-// ports it to the Marasi client module.
+// ports it to the Marasi client module or the main process.
 
+import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
+
+// The app config and keybinding profile files, owned by the main process.
+const appConfig = createAppConfigBindings(() => globalThis.window?.marasiApp?.appConfig);
+export const {
+  ExportKeybindingProfile,
+  GetAppSavedQueries,
+  GetDefaultContentTypeExclusion,
+  GetHighlights,
+  GetKeybindings,
+  GetMarasiConfig,
+  ImportKeybindingProfile,
+  MigrateOldHighlights,
+  ResetHighlights,
+  SaveAppSavedQueries,
+  SaveHighlights,
+  SaveKeybindings,
+  SetDefaultContentTypeExclusion,
+  SetFlag,
+  SetHiddenBuiltinQueries,
+  ToggleFlag,
+} = appConfig;
 
 export const AddChromePath = notPorted("AddChromePath");
 export const AddChromeProfile = notPorted("AddChromeProfile");
@@ -46,13 +68,11 @@ export const DownloadCert = notPorted("DownloadCert");
 export const DropCheckpoint = notPorted("DropCheckpoint");
 export const DropCheckpoints = notPorted("DropCheckpoints");
 export const DropWSIntercepted = notPorted("DropWSIntercepted");
-export const ExportKeybindingProfile = notPorted("ExportKeybindingProfile");
 export const ExportReport = notPorted("ExportReport");
 export const ForwardCheckpoint = notPorted("ForwardCheckpoint");
 export const ForwardCheckpoints = notPorted("ForwardCheckpoints");
 export const ForwardWSIntercepted = notPorted("ForwardWSIntercepted");
 export const GetActiveArmoryRunIDs = notPorted("GetActiveArmoryRunIDs");
-export const GetAppSavedQueries = notPorted("GetAppSavedQueries");
 export const GetArmoryRun = notPorted("GetArmoryRun");
 export const GetArmoryRunRequests = notPorted("GetArmoryRunRequests");
 export const GetArmoryRuns = notPorted("GetArmoryRuns");
@@ -66,21 +86,17 @@ export const GetChromePaths = notPorted("GetChromePaths");
 export const GetChromeProfiles = notPorted("GetChromeProfiles");
 export const GetClientSetting = notPorted("GetClientSetting");
 export const GetContentTypeExclusion = notPorted("GetContentTypeExclusion");
-export const GetDefaultContentTypeExclusion = notPorted("GetDefaultContentTypeExclusion");
 export const GetExtensionCode = notPorted("GetExtensionCode");
 export const GetExtensionFlag = notPorted("GetExtensionFlag");
 export const GetExtensionLogs = notPorted("GetExtensionLogs");
 export const GetExtensionUI = notPorted("GetExtensionUI");
 export const GetExtensions = notPorted("GetExtensions");
-export const GetHighlights = notPorted("GetHighlights");
 export const GetInterceptFlag = notPorted("GetInterceptFlag");
 export const GetInterfaces = notPorted("GetInterfaces");
-export const GetKeybindings = notPorted("GetKeybindings");
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
 export const GetLaunchpads = notPorted("GetLaunchpads");
 export const GetLogs = notPorted("GetLogs");
-export const GetMarasiConfig = notPorted("GetMarasiConfig");
 export const GetMetadata = notPorted("GetMetadata");
 export const GetNote = notPorted("GetNote");
 export const GetRawDetails = notPorted("GetRawDetails");
@@ -97,7 +113,6 @@ export const GetWaypoints = notPorted("GetWaypoints");
 export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
 export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
 export const HasOwnContentTypeExclusion = notPorted("HasOwnContentTypeExclusion");
-export const ImportKeybindingProfile = notPorted("ImportKeybindingProfile");
 export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
 export const InstallUpdate = notPorted("InstallUpdate");
 export const Launch = notPorted("Launch");
@@ -113,7 +128,6 @@ export const ListSitemapLevels = notPorted("ListSitemapLevels");
 export const ListTemplates = notPorted("ListTemplates");
 export const ListTestCases = notPorted("ListTestCases");
 export const LoadExtensions = notPorted("LoadExtensions");
-export const MigrateOldHighlights = notPorted("MigrateOldHighlights");
 export const MoveLaunchpadEntries = notPorted("MoveLaunchpadEntries");
 export const OpenFileDialog = notPorted("OpenFileDialog");
 export const OpenProject = notPorted("OpenProject");
@@ -126,25 +140,18 @@ export const RebuildJob = notPorted("RebuildJob");
 export const ReinstallLatestRelease = notPorted("ReinstallLatestRelease");
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
-export const ResetHighlights = notPorted("ResetHighlights");
 export const RestartToUpdate = notPorted("RestartToUpdate");
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
 export const RunExtension = notPorted("RunExtension");
-export const SaveAppSavedQueries = notPorted("SaveAppSavedQueries");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
 export const SaveArtifactToTestCase = notPorted("SaveArtifactToTestCase");
 export const SaveFinding = notPorted("SaveFinding");
-export const SaveHighlights = notPorted("SaveHighlights");
-export const SaveKeybindings = notPorted("SaveKeybindings");
 export const SaveTestCase = notPorted("SaveTestCase");
 export const ScratchpadPath = notPorted("ScratchpadPath");
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
 export const SetAutomaticUpdateChecks = notPorted("SetAutomaticUpdateChecks");
 export const SetClientSetting = notPorted("SetClientSetting");
 export const SetContentTypeExclusion = notPorted("SetContentTypeExclusion");
-export const SetDefaultContentTypeExclusion = notPorted("SetDefaultContentTypeExclusion");
-export const SetFlag = notPorted("SetFlag");
-export const SetHiddenBuiltinQueries = notPorted("SetHiddenBuiltinQueries");
 export const SetHighlight = notPorted("SetHighlight");
 export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
@@ -156,7 +163,6 @@ export const StartBrowser = notPorted("StartBrowser");
 export const StartProxy = notPorted("StartProxy");
 export const StopProxy = notPorted("StopProxy");
 export const TestScopeMatch = notPorted("TestScopeMatch");
-export const ToggleFlag = notPorted("ToggleFlag");
 export const ToggleIntercept = notPorted("ToggleIntercept");
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
