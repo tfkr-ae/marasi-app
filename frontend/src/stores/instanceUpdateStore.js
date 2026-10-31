@@ -5,9 +5,9 @@ import { get } from "svelte/store";
 import { createInstanceUpdateStore } from "./createInstanceUpdateStore.js";
 import { windowConnection } from "./windowConnectionStore.js";
 import { marasi } from "../lib/bindings/marasi.js";
+import { browserBridge } from "../lib/bindings/browserBridge.js";
 
-// Outside Electron there is no bundled Marasi.
-const bridge = globalThis.window?.marasiApp ?? { runsBundled: async () => false };
+const bridge = globalThis.window?.marasiApp ?? browserBridge;
 
 export const instanceUpdate = createInstanceUpdateStore({
   get: (path) => marasi.get(path),

@@ -4,6 +4,7 @@
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
 import { marasi } from "./marasi.js";
+import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
 
 // The main process bridge, or in a plain browser the dev server's.
@@ -30,6 +31,20 @@ export const {
   ToggleFlag,
 } = appConfig;
 
+// The app's own updates, owned by the main process's updater.
+export const {
+  CancelUpdateDownload,
+  CheckForUpdate,
+  DismissUpdate,
+  GetUpdateSettings,
+  GetUpdateState,
+  InstallUpdate,
+  ReinstallLatestRelease,
+  RestartToUpdate,
+  SetAutomaticUpdateChecks,
+  SetUpdateChannel,
+} = createUpdateBindings(() => bridge()?.updates);
+
 // The background jobs Settings → Maintenance can rebuild, as in v1's jobs.go;
 // Marasi refuses the others with not_rebuildable.
 const rebuildableJobs = new Set(["traffic_index", "annotation_index", "sitemap"]);
@@ -52,8 +67,6 @@ export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
 export const AppendNote = notPorted("AppendNote");
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
 export const CancelLaunch = notPorted("CancelLaunch");
-export const CancelUpdateDownload = notPorted("CancelUpdateDownload");
-export const CheckForUpdate = notPorted("CheckForUpdate");
 export const CheckHTTPParse = notPorted("CheckHTTPParse");
 export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
@@ -98,7 +111,6 @@ export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
 export const DeleteTraffic = notPorted("DeleteTraffic");
 export const DeleteWaypoint = notPorted("DeleteWaypoint");
-export const DismissUpdate = notPorted("DismissUpdate");
 export const DoExtender = notPorted("DoExtender");
 export const DownloadArtifact = notPorted("DownloadArtifact");
 // Saves the instance's CA certificate on this machine, through a save
@@ -151,8 +163,6 @@ export const GetRawDetails = notPorted("GetRawDetails");
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
 export const GetResponse = notPorted("GetResponse");
 export const GetScopeRules = notPorted("GetScopeRules");
-export const GetUpdateSettings = notPorted("GetUpdateSettings");
-export const GetUpdateState = notPorted("GetUpdateState");
 export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
 // This machine's user, the report assessor default.
 export const GetUserName = () => bridge().userName();
@@ -163,7 +173,6 @@ export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
 export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
 export const HasOwnContentTypeExclusion = notPorted("HasOwnContentTypeExclusion");
 export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
-export const InstallUpdate = notPorted("InstallUpdate");
 export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
@@ -196,10 +205,8 @@ export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
 export const QueryTraffic = notPorted("QueryTraffic");
 export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
-export const ReinstallLatestRelease = notPorted("ReinstallLatestRelease");
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
-export const RestartToUpdate = notPorted("RestartToUpdate");
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
 export const RunExtension = notPorted("RunExtension");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
@@ -210,13 +217,11 @@ export const SaveTestCase = notPorted("SaveTestCase");
 export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
-export const SetAutomaticUpdateChecks = notPorted("SetAutomaticUpdateChecks");
 export const SetClientSetting = notPorted("SetClientSetting");
 export const SetContentTypeExclusion = notPorted("SetContentTypeExclusion");
 export const SetHighlight = notPorted("SetHighlight");
 export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
-export const SetUpdateChannel = notPorted("SetUpdateChannel");
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
 export const StartArmoryRun = notPorted("StartArmoryRun");

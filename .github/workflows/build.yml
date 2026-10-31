@@ -1,5 +1,10 @@
 name: Build
 
+# Builds v2's Electron app for macOS, Windows and Linux, each with the
+# bundled Marasi that package.json's "marasi" pin names. The build's channel,
+# version and the public signing key go into package.json's marasiBuild,
+# which the app reads as its build identity (electron/buildInfo.js).
+
 on:
   workflow_call:
     inputs:
@@ -8,21 +13,13 @@ on:
         required: true
         type: string
       channel:
-        description: Build channel embedded in the app (nightly or release)
+        description: Build channel embedded in the app (v2-nightly)
         required: true
         type: string
       version:
-        description: Version string embedded in the app, in the marasi CLI format
+        description: Version string embedded in the app, "DD.MM.YYYY (v2-nightly <commit>)"
         required: true
         type: string
-      marasi_ref:
-        description: marasi commit to build against instead of the go.mod version (nightlies only)
-        required: false
-        type: string
-        default: ''
-
-env:
-  NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
   test:
@@ -31,25 +28,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - if: inputs.marasi_ref != ''
-        env:
-          MARASI_REF: ${{ inputs.marasi_ref }}
-        run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
-      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-3-dev libwebkit2gtk-4.1-dev
-      # main.go embeds frontend/build, which only exists after a frontend build.
-      - run: mkdir -p frontend/build && touch frontend/build/.keep
-      - run: go test -v -race -tags webkit2_41 ./...
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - run: npm ci
-        working-directory: frontend
+          node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      # Installs both package trees and builds the bundled Marasi, so the
+      # integration suites run against it.
+      - run: sh scripts/bootstrap.sh
       - run: npm test
-        working-directory: frontend
 
   build:
     needs: test
@@ -58,18 +47,14 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            platform: linux/amd64
-            output: marasi-app
-            asset: marasi-app
-            tags: webkit2_41
+            dist: dist:linux
+            assets: marasi-v2-linux.AppImage marasi-v2-linux.deb
           - os: windows-latest
-            platform: windows/amd64
-            output: marasi-app.exe
-            asset: marasi-app.exe
+            dist: dist:win
+            assets: marasi-v2-windows.exe
           - os: macos-latest
-            platform: darwin/universal
-            output: marasi-app
-            asset: marasi-app.app.zip
+            dist: dist:mac
+            assets: marasi-v2-mac.zip marasi-v2-mac.dmg
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -78,78 +63,58 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - if: inputs.marasi_ref != ''
-        env:
-          MARASI_REF: ${{ inputs.marasi_ref }}
-        run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - if: runner.os == 'Linux'
-        run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-3-dev libwebkit2gtk-4.1-dev
-      - name: Install Wails
-        run: go install "github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)"
-      - name: Build
+          node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - run: npm ci && npm --prefix frontend ci
+      - name: Build identity
         env:
-          PLATFORM: ${{ matrix.platform }}
-          OUTPUT: ${{ matrix.output }}
-          TAGS: ${{ matrix.tags }}
           CHANNEL: ${{ inputs.channel }}
           VERSION: ${{ inputs.version }}
-          # The public half of the Marasi signing key (docs/adr/2026-10-17-updates-are-signed-with-an-embedded-key.md), the base64
-          # line of minisign.pub. The app verifies updates against it.
+          # The public half of the Marasi signing key (docs/adr/2026-10-17-updates-are-signed-with-an-embedded-key.md),
+          # the base64 line of minisign.pub. The app verifies updates against it.
           SIGNING_PUBLIC_KEY: ${{ vars.MARASI_SIGNING_PUBLIC_KEY }}
         run: |
           if [ -z "$SIGNING_PUBLIC_KEY" ]; then
             echo "::error::repository variable MARASI_SIGNING_PUBLIC_KEY is not set"
             exit 1
           fi
-          args=(-platform "$PLATFORM" -webview2 download -o "$OUTPUT"
-            -ldflags "-X main.buildChannel=$CHANNEL -X 'main.version=$VERSION' -X main.signingPublicKey=$SIGNING_PUBLIC_KEY")
-          if [ -n "$TAGS" ]; then
-            args+=(-tags "$TAGS")
-          fi
-          wails build "${args[@]}"
-      - if: runner.os == 'macOS'
-        uses: Apple-Actions/import-codesign-certs@v7
-        with:
-          p12-file-base64: ${{ secrets.MACOS_DEVELOPER_CERT }}
-          p12-password: ${{ secrets.MACOS_DEVELOPER_CERT_PASSWORD }}
-          keychain-password: ${{ secrets.MACOS_DEVELOPER_CERT_PASSWORD }}
-      - name: Sign and notarize
+          npm pkg set "marasiBuild.channel=$CHANNEL" "marasiBuild.version=$VERSION" \
+            "marasiBuild.signingPublicKey=$SIGNING_PUBLIC_KEY"
+      - name: Build
+        if: runner.os != 'macOS'
+        env:
+          DIST: ${{ matrix.dist }}
+        run: npm run "$DIST"
+      # electron-builder signs the app with the Developer ID certificate v1
+      # signs with, notarizes and staples it, then makes the zip and dmg.
+      - name: Build, sign and notarize
         if: runner.os == 'macOS'
         env:
+          CSC_LINK: ${{ secrets.MACOS_DEVELOPER_CERT }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_DEVELOPER_CERT_PASSWORD }}
           MACOS_DEVELOPER_CERT_ID: ${{ secrets.MACOS_DEVELOPER_CERT_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          app=build/bin/marasi-app.app
-          zip_path=build/bin/marasi-app.app.zip
-          codesign --force --options runtime --timestamp --deep --sign "$MACOS_DEVELOPER_CERT_ID" "$app"
-          codesign --verify --deep --strict --verbose "$app"
           team_id="${MACOS_DEVELOPER_CERT_ID##*(}"
-          team_id="${team_id%)}"
-          ditto -c -k --keepParent "$app" "$zip_path"
-          keychain="$HOME/Library/Keychains/signing_temp.keychain-db"
-          xcrun notarytool store-credentials marasi-notary \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$team_id" \
-            --keychain "$keychain"
-          xcrun notarytool submit "$zip_path" \
-            --keychain-profile marasi-notary \
-            --keychain "$keychain" \
-            --wait
-          xcrun stapler staple "$app"
-          rm -f "$zip_path"
-          ditto -c -k --keepParent "$app" "$zip_path"
-      - if: runner.os == 'Linux'
-        run: chmod +x build/bin/marasi-app
+          export APPLE_TEAM_ID="${team_id%)}"
+          identity="${MACOS_DEVELOPER_CERT_ID#Developer ID Application: }"
+          npm run dist:mac -- -c.mac.identity="$identity" -c.mac.notarize=true
+          app="dist/mac-universal/Marasi v2.app"
+          codesign --verify --deep --strict --verbose "$app"
+          xcrun stapler validate "$app"
+      - name: Collect
+        env:
+          ASSETS: ${{ matrix.assets }}
+        run: |
+          mkdir -p out
+          for asset in $ASSETS; do mv "dist/$asset" out/; done
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: build/bin/${{ matrix.asset }}
+          name: ${{ matrix.os }}
+          path: out/*

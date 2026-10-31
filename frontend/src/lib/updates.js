@@ -28,6 +28,26 @@ export function checkResultNotice(check) {
   }
 }
 
+const channelLabels = { release: "Release", nightly: "Nightly", "v2-nightly": "v2 Nightly" };
+
+/**
+ * The channels Settings → Updates offers, as [value, label]: the ones this
+ * build may follow (UpdateSettings.Channels). A v2 build follows only
+ * v2-nightly until v2 replaces v1.
+ */
+export function channelChoices(settings) {
+  return (settings?.Channels ?? []).map((channel) => [channel, channelLabel(channel)]);
+}
+
+/** The name a channel is shown by, such as "v2 Nightly". */
+export const channelLabel = (channel) => channelLabels[channel] ?? channel;
+
+/** Whether `channel` is a nightly channel, whose notes list its commits. */
+export const isNightlyChannel = (channel) => channel === "nightly" || channel === "v2-nightly";
+
+/** Whether this build can go back to the latest release on purpose. */
+export const canReinstallRelease = (settings) => Boolean(settings?.Channel && settings.Channels?.includes("release"));
+
 /** Where the details panel's link to the Channel setting goes. */
 export const channelSettingPath = "/settings?section=updates";
 

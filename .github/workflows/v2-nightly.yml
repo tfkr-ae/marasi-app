@@ -1,0 +1,162 @@
+name: v2 Nightly
+
+# Builds the v2 branch and publishes it as the v2-nightly release, the feed
+# v2 builds update from. It never touches v1's feeds: v1's nightly is the
+# release tagged "nightly" and v1's releases are the latest non-prerelease,
+# while this one is tagged "v2-nightly", is a prerelease that is never the
+# latest, carries only marasi-v2-* assets, and is titled
+# "DD.MM.YYYY (v2-nightly <commit>)", which v1 doesn't read as a nightly.
+#
+# GitHub runs scheduled workflows only from the default branch, so this one
+# runs on each push to v2 and by hand.
+
+on:
+  push:
+    branches: [v2]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag, or branch to build (defaults to the branch selected above)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v2-nightly
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+      previous: ${{ steps.check.outputs.previous }}
+      version: ${{ steps.check.outputs.version }}
+      marasi: ${{ steps.check.outputs.marasi }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+      - id: check
+        run: |
+          sha=$(git rev-parse HEAD)
+          {
+            echo "sha=$sha"
+            # The commit the published v2 nightly was built from, before the
+            # tag moves; the new one's notes list the commits since it.
+            echo "previous=$(git rev-parse --verify --quiet 'refs/tags/v2-nightly^{commit}' || true)"
+            echo "version=$(date -u '+%d.%m.%Y') (v2-nightly ${sha:0:7})"
+            # The bundled Marasi's commit, which package.json pins.
+            echo "marasi=$(node -p "require('./package.json').marasi.commit")"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      channel: v2-nightly
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          # Publish lists the commit subjects since the previous v2 nightly.
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum marasi-v2-linux.AppImage marasi-v2-linux.deb marasi-v2-windows.exe \
+            marasi-v2-mac.zip marasi-v2-mac.dmg > checksums.txt
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Sign checksums
+        working-directory: dist
+        env:
+          SIGNING_KEY: ${{ secrets.MARASI_SIGNING_KEY }}
+          SIGNING_PUBLIC_KEY: ${{ vars.MARASI_SIGNING_PUBLIC_KEY }}
+          CHANNEL: v2-nightly
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::repository secret MARASI_SIGNING_KEY is not set"
+            exit 1
+          fi
+          if [ -z "$SIGNING_PUBLIC_KEY" ]; then
+            echo "::error::repository variable MARASI_SIGNING_PUBLIC_KEY is not set"
+            exit 1
+          fi
+          go install aead.dev/minisign/cmd/minisign@v0.3.0
+          key_file="$RUNNER_TEMP/minisign.key"
+          trap 'rm -f "$key_file"' EXIT
+          (umask 077 && printf '%s\n' "$SIGNING_KEY" > "$key_file")
+          "$(go env GOPATH)/bin/minisign" -S -s "$key_file" -m checksums.txt \
+            -t "marasi-app $CHANNEL $VERSION"
+          # Fails the job if the secret and the key built into the app differ.
+          "$(go env GOPATH)/bin/minisign" -V -H -P "$SIGNING_PUBLIC_KEY" -m checksums.txt
+      - name: Move v2-nightly tag
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          git tag -f v2-nightly "$SHA"
+          git push origin refs/tags/v2-nightly --force
+      - name: Publish v2 nightly
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref || github.ref_name }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          MARASI: ${{ needs.prepare.outputs.marasi }}
+          PREVIOUS: ${{ needs.prepare.outputs.previous }}
+          # The app reads the v2 nightly's date from its title (its version
+          # string) and its commit from the Commit line of its notes; it
+          # shows the commit subjects above that line as the notes.
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$SHA" ] && git merge-base --is-ancestor "$PREVIOUS" "$SHA" 2>/dev/null; then
+            range="$PREVIOUS..$SHA"
+            limit=100
+            total=$(git rev-list --no-merges --count "$range")
+          else
+            range="$SHA"
+            limit=20
+            total=0
+          fi
+          subjects=$(git log --no-merges --format='- %s' -n "$limit" "$range")
+          if [ "$total" -gt "$limit" ]; then
+            subjects=$(printf '%s\n- …and %d more' "$subjects" "$((total - limit))")
+          fi
+          if [ -n "$subjects" ]; then
+            notes=$(printf '%s\n\nRef: %s\nCommit: %s\nMarasi: %s\n' "$subjects" "$REF" "$SHA" "$MARASI")
+          else
+            notes=$(printf 'Ref: %s\nCommit: %s\nMarasi: %s\n' "$REF" "$SHA" "$MARASI")
+          fi
+          if gh release view v2-nightly >/dev/null 2>&1; then
+            gh release delete v2-nightly --yes
+          fi
+          gh release create v2-nightly \
+            --verify-tag \
+            --title "$VERSION" \
+            --prerelease \
+            --latest=false \
+            --notes "$notes" \
+            dist/marasi-v2-linux.AppImage \
+            dist/marasi-v2-linux.deb \
+            dist/marasi-v2-windows.exe \
+            dist/marasi-v2-mac.zip \
+            dist/marasi-v2-mac.dmg \
+            dist/checksums.txt \
+            dist/checksums.txt.minisig

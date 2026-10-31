@@ -41,7 +41,10 @@
 	import { setTextSize, textSize } from "../../stores/textSizeStore.js";
 	import { goto } from "$app/navigation";
 	import {
+		canReinstallRelease,
+		channelChoices,
 		channelSwitchNotice,
+		isNightlyChannel,
 		showsUpdateIndicator,
 		updatePanelModal,
 		updateStatusLine,
@@ -91,10 +94,6 @@
 		["disabled", "Disabled"],
 		["auto", "Auto"],
 		["enabled", "Enabled"],
-	];
-	const channels = [
-		["release", "Release"],
-		["nightly", "Nightly"],
 	];
 	let section = "appearance";
 	// ?section=<id> opens a section, as the update panel's link to the
@@ -443,7 +442,7 @@
 		{#if buildInfo}
 			<span
 				class="font-mono text-sm"
-				class:text-primary-500={buildInfo.Channel === "nightly"}
+				class:text-primary-500={isNightlyChannel(buildInfo.Channel)}
 				class:text-success-500={buildInfo.Channel === "release"}
 				class:opacity-60={buildInfo.Channel === "dev"}
 			>
@@ -1129,7 +1128,7 @@
 						<p>Channel</p>
 						<!-- Styled as the Ledger sitemap's All / Matching toggle. -->
 						<div class="{control} text-sm" role="radiogroup" aria-label="Channel">
-							{#each channels as [value, label]}
+							{#each channelChoices(updateSettings) as [value, label]}
 								<button
 									type="button"
 									role="radio"
@@ -1175,7 +1174,7 @@
 						/>
 					</div>
 				</div>
-				{#if updateSettings?.Channel}
+				{#if canReinstallRelease(updateSettings)}
 					<div class={row}>
 						<p>Latest release</p>
 						<div class="{control} justify-end">

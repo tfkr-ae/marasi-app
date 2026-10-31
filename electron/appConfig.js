@@ -138,6 +138,11 @@ function normalizeHiddenBuiltins(ids) {
   return [...new Set((Array.isArray(ids) ? ids : []).map((id) => text(id).trim()).filter(Boolean))];
 }
 
+// Refuses a key that isn't one of v2's own.
+function v2Key(key) {
+  if (typeof key !== "string" || !/^v2_[a-z0-9_]+$/.test(key)) throw new Error(`${key} is not a v2 key`);
+}
+
 function isBooleanFlag(name) {
   return typeof flagDefaults[name] === "boolean";
 }
@@ -340,6 +345,24 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
       return serialized(async () => {
         if (!isStringList(values)) throw new Error("the default exclusion is not a list of content types");
         await file.write({ [contentTypeExclusionKey]: values });
+      });
+    },
+
+    /**
+     * A v2_* key, v2's own state until v2 replaces v1, such as its update
+     * settings. v1's keys are out of reach, so v1 and v2 can't steer each
+     * other.
+     */
+    async v2Value(key) {
+      v2Key(key);
+      return (await file.values())[key];
+    },
+
+    /** Writes the v2_* key `key`. */
+    setV2Value(key, value) {
+      return serialized(async () => {
+        v2Key(key);
+        await file.write({ [key]: value });
       });
     },
 

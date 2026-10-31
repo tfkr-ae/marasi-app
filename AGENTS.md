@@ -7,6 +7,7 @@ v2 is an Electron app with no Go code. A fresh worktree runs `scripts/bootstrap.
 - `MARASI_CONFIG_DIR=DIR npm --prefix frontend run dev`: the frontend in a plain browser, with the dev server answering for the main process (`frontend/devBridge.js`) on the instances and app config in DIR. The `verify-marasi` skill drives it.
 - `npm run marasi`: builds the bundled Marasi into `resources/bin/` (not committed) from the commit pinned in `package.json`'s `marasi` key, the one place its version is set. `MARASI_SRC` names a local Marasi checkout to read the commit from instead of cloning.
 - `npm run dist`, `dist:mac`, `dist:win`, `dist:linux`: an unsigned package in `dist/`, with the bundled Marasi built for its platform.
+  Each is a development build, which never checks for updates. CI sets the build's channel, version and signing key in `package.json`'s `marasiBuild` (see `docs/agents/maps/updates.md`), and a test build can add `marasiBuild.releaseSource` to update from a fake GitHub.
 
 Frontend code calls the v1 bindings through `frontend/src/lib/bindings/App.js`. A binding that isn't ported yet rejects with a `NotPorted` error. A ported binding calls the connected instance through the Marasi client module, `marasi` in `frontend/src/lib/bindings/marasi.js`. A coded refusal rejects with an error that the `errorCodes.js` helpers read, and a route the instance doesn't have rejects with "Needs a newer Marasi".
 

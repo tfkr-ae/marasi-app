@@ -23,8 +23,10 @@
 	} from "../../stores/updateStore";
 	import {
 		cancellable,
+		channelLabel,
 		channelSettingPath,
 		downloadedAmount,
+		isNightlyChannel,
 		nightlyNotes,
 		progressPercent,
 		showsUpdateIndicator,
@@ -69,7 +71,7 @@
 	$: running = $updateState.Running;
 	$: progress = $updateState.Progress;
 	// A nightly's notes list its commits; a release's are shown as published.
-	$: nightly = update?.Channel === "nightly";
+	$: nightly = isNightlyChannel(update?.Channel);
 	$: notes = nightly ? nightlyNotes(update?.Notes) : (update?.Notes ?? "");
 	$: panel = updatePanelSteps($updateState);
 	$: failure = updatePanelFailure($updateState);
@@ -134,9 +136,9 @@
 				<dd>
 					<button
 						type="button"
-						class="anchor capitalize"
+						class="anchor"
 						title="Channel setting"
-						on:click={openChannelSetting}>{update.Channel}</button
+						on:click={openChannelSetting}>{channelLabel(update.Channel)}</button
 					>
 				</dd>
 			</dl>

@@ -3,6 +3,7 @@
 // connection reaches the renderer without its control token.
 import { contextBridge, ipcRenderer } from "electron";
 import { appConfigCalls } from "./appConfigIPC.js";
+import { updateCalls, updateEventChannel } from "./updateIPC.js";
 
 contextBridge.exposeInMainWorld("marasiApp", {
   platform: process.platform,
@@ -68,6 +69,15 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // Chooses a Marasi from a path in an OS dialog, or the bundled one when
   // `bundled`. Resolves to the Marasi Start runs, as marasi() does.
   chooseMarasi: (bundled = false) => ipcRenderer.invoke("marasi:choose", { bundled }),
+  // The app's own updater calls; each resolves { value } or { error }.
+  updates: Object.fromEntries(updateCalls.map((name) => [name, (...args) => ipcRenderer.invoke(`update:${name}`, ...args)])),
+  // Calls `callback(name, payload)` for each updater event (update-available,
+  // update-progress, update-installed, update-failed); returns its removal.
+  onUpdateEvent(callback) {
+    const listener = (_event, name, payload) => callback(name, payload);
+    ipcRenderer.on(updateEventChannel, listener);
+    return () => ipcRenderer.removeListener(updateEventChannel, listener);
+  },
   // Saves the instance's CA certificate `pem` through a save dialog; resolves
   // the path, or "" if cancelled.
   saveCertificate: (pem) => ipcRenderer.invoke("certificate:save", pem),

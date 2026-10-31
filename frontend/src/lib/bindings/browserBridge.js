@@ -38,6 +38,8 @@ export const browserBridge = {
   pickProject: outsideElectron,
   userName: async () => "Assessor",
   marasi: async () => null,
+  // Outside Electron there is no bundled Marasi.
+  runsBundled: async () => false,
   chooseMarasi: outsideElectron,
   saveCertificate: outsideElectron,
   copyText: (text) => navigator.clipboard.writeText(text),

@@ -19,7 +19,7 @@
 		"marasi": "sh scripts/build-marasi.sh",
 		"build": "npm --prefix frontend run build",
 		"dist": "npm run marasi && npm run build && electron-builder --publish never",
-		"dist:mac": "GOOS=darwin npm run marasi && npm run build && electron-builder --mac --publish never",
+		"dist:mac": "GOOS=darwin GOARCH=universal npm run marasi && npm run build && electron-builder --mac --publish never",
 		"dist:win": "GOOS=windows npm run marasi && npm run build && electron-builder --win --publish never",
 		"dist:linux": "GOOS=linux npm run marasi && npm run build && electron-builder --linux --publish never",
 		"test": "node --test electron/ && npm --prefix frontend test"
@@ -47,22 +47,62 @@
 		"mac": {
 			"category": "public.app-category.developer-tools",
 			"target": [
-				"dmg",
-				"zip"
+				{
+					"target": "zip",
+					"arch": [
+						"universal"
+					]
+				},
+				{
+					"target": "dmg",
+					"arch": [
+						"universal"
+					]
+				}
 			],
+			"artifactName": "marasi-v2-mac.${ext}",
+			"x64ArchFiles": "Contents/Resources/bin/marasi",
+			"hardenedRuntime": true,
 			"identity": null
 		},
 		"win": {
 			"target": [
-				"nsis"
+				{
+					"target": "portable",
+					"arch": [
+						"x64"
+					]
+				}
 			]
 		},
 		"linux": {
 			"target": [
-				"AppImage",
-				"deb"
+				{
+					"target": "AppImage",
+					"arch": [
+						"x64"
+					]
+				},
+				{
+					"target": "deb",
+					"arch": [
+						"x64"
+					]
+				}
 			],
 			"category": "Development"
+		},
+		"dmg": {
+			"artifactName": "marasi-v2-mac.${ext}"
+		},
+		"portable": {
+			"artifactName": "marasi-v2-windows.${ext}"
+		},
+		"appImage": {
+			"artifactName": "marasi-v2-linux.${ext}"
+		},
+		"deb": {
+			"artifactName": "marasi-v2-linux.${ext}"
 		}
 	},
 	"devDependencies": {
