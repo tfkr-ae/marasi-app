@@ -10,7 +10,7 @@ Frontend code calls the v1 bindings through `frontend/src/lib/bindings/App.js`. 
 
 Marasi events reach the stores through `frontend/src/lib/marasiEvents.js`, which follows the window connection's `/events`. A store that handles an event gets a row in its `handlers`, and every store that shows instance data is in its `stores`, whose `reload()` runs after the stream reopens.
 
-- `MARASI_CONFIG_DIR` points the app at another Marasi config directory, such as a throwaway one for a test instance. The default is the directory Marasi itself uses.
+- `MARASI_CONFIG_DIR`, or the Electron flag `--config-dir=DIR` (with `=`), points the app at another Marasi config directory, such as a throwaway one for a test instance. The default is the directory Marasi itself uses, which holds the real `marasi_appconfig.yaml` v1 shares, so tests and verification always use a temp dir.
 - `MARASI_BIN` names the Marasi binary for the integration suite (`electron/connect.integration.test.js`). Without it the suite uses `resources/bin/marasi`, and it is skipped when neither exists.
 
 Electron runs as plain Node when `ELECTRON_RUN_AS_NODE` is set, as it is in some agent terminals. `npm run dev` clears it; unset it yourself to run a packaged app.

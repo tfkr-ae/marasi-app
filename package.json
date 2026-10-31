@@ -27,6 +27,7 @@
 		"files": [
 			"electron/**/*",
 			"!electron/**/*.test.js",
+			"!electron/testing/**",
 			"frontend/build/**/*",
 			"package.json"
 		],
@@ -57,5 +58,8 @@
 	},
 	"allowScripts": {
 		"electron-winstaller": false
+	},
+	"dependencies": {
+		"yaml": "^2.9.1"
 	}
 }

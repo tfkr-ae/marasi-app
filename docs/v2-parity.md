@@ -25,23 +25,23 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetMarasiConfig` | binding | GUI | Main process reads `marasi_appconfig.yaml` | 07 | [ ] |
-| `SetFlag` | binding | GUI | Main process writes one app config key | 07 | [ ] |
-| `ToggleFlag` | binding | GUI | Main process writes one app config key | 07 | [ ] |
-| `GetKeybindings` | binding | GUI | App config | 07 | [ ] |
-| `SaveKeybindings` | binding | GUI | App config | 07 | [ ] |
-| `ExportKeybindingProfile` | binding | GUI | OS save dialog | 07 | [ ] |
-| `ImportKeybindingProfile` | binding | GUI | OS open dialog | 07 | [ ] |
-| `GetBuildInfo` | binding | GUI | The app's own version. The instance's version comes from `GET /service/status` (ticket 16). | 07 | [ ] |
-| `GetHighlights` | binding | GUI | App-wide highlight colours in the app config | 07 | [ ] |
-| `SaveHighlights` | binding | GUI | App config | 07 | [ ] |
-| `ResetHighlights` | binding | GUI | App config | 07 | [ ] |
-| `MigrateOldHighlights` | binding | DROPPED | Legacy migration: it moved v1's old highlight settings once. v2 starts from what v1 has already migrated. | 07 | [ ] |
-| `GetAppSavedQueries` | binding | GUI | App config | 07 | [ ] |
-| `SaveAppSavedQueries` | binding | GUI | App config | 07 | [ ] |
-| `SetHiddenBuiltinQueries` | binding | GUI | App config | 07 | [ ] |
-| `GetDefaultContentTypeExclusion` | binding | GUI | App config key `ledger_content_type_exclusion` | 07 | [ ] |
-| `SetDefaultContentTypeExclusion` | binding | GUI | App config key `ledger_content_type_exclusion` | 07 | [ ] |
+| `GetMarasiConfig` | binding | GUI | Main process reads `marasi_appconfig.yaml` | 07 | [x] |
+| `SetFlag` | binding | GUI | Main process writes one app config key | 07 | [x] |
+| `ToggleFlag` | binding | GUI | Main process writes one app config key | 07 | [x] |
+| `GetKeybindings` | binding | GUI | App config | 07 | [x] |
+| `SaveKeybindings` | binding | GUI | App config | 07 | [x] |
+| `ExportKeybindingProfile` | binding | GUI | OS save dialog | 07 | [x] |
+| `ImportKeybindingProfile` | binding | GUI | OS open dialog | 07 | [x] |
+| `GetBuildInfo` | binding | GUI | The app's own version. The instance's version comes from `GET /service/status` (ticket 16). | 07 | [x] |
+| `GetHighlights` | binding | GUI | App-wide highlight colours in the app config | 07 | [x] |
+| `SaveHighlights` | binding | GUI | App config | 07 | [x] |
+| `ResetHighlights` | binding | GUI | App config | 07 | [x] |
+| `MigrateOldHighlights` | binding | DROPPED | Legacy migration: it moved v1's old highlight settings once. v2 starts from what v1 has already migrated. | 07 | [x] |
+| `GetAppSavedQueries` | binding | GUI | App config | 07 | [x] |
+| `SaveAppSavedQueries` | binding | GUI | App config | 07 | [x] |
+| `SetHiddenBuiltinQueries` | binding | GUI | App config | 07 | [x] |
+| `GetDefaultContentTypeExclusion` | binding | GUI | App config key `ledger_content_type_exclusion` | 07 | [x] |
+| `SetDefaultContentTypeExclusion` | binding | GUI | App config key `ledger_content_type_exclusion` | 07 | [x] |
 
 ## Connection, event stream and logs
 
