@@ -64,6 +64,8 @@ export const FACTORY_ACTIONS = [
   action("global.jump-to-toast", "Jump to Toast", "Jump to the active toast", "toast", primary(".")),
   action("global.open-project", "Open Project", "Open a project", "open project", primary("o")),
   action("global.disconnect", "Disconnect", "Disconnect this window and leave its instance running", "disconnect, connection, instance, close", primary("shift+backspace")),
+  action("global.new-window", "New Window", "Open a window to connect to or start another instance", "window, new, connect, start, instance", primary("n")),
+  action("global.switch-window", "Switch Window", "Switch to another connected window", "window, switch, instance, project, connection", primary("b")),
   action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l")),
   action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t")),
   action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u")),

@@ -129,6 +129,15 @@ test("at launch the window takes up the connection the main process made, as aft
   assert.deepEqual(fetched, ["http://127.0.0.1:4000/service/status"]);
 });
 
+test("a connection taken up after a reload is marked resumed, so its loopback toast isn't shown again", async () => {
+  const { api } = fakeApi({
+    startup: { instance: "acme", baseURL: "http://127.0.0.1:4000", loopbackTurnedOn: true, resumed: true },
+  });
+  const connection = await createWindowConnectionStore(api).startup();
+  assert.equal(connection.loopbackTurnedOn, true);
+  assert.equal(connection.resumed, true);
+});
+
 test("a window with no connection to take up gets none", async () => {
   const { api } = fakeApi();
   const store = createWindowConnectionStore(api);

@@ -42,7 +42,8 @@ export function createWindowConnectionStore(api) {
     // Why the last listing failed, and why the last connect did.
     listError: null,
     connectError: null,
-    // {instance, baseURL, loopbackTurnedOn, remote, status}, or null.
+    // {instance, baseURL, loopbackTurnedOn, remote, resumed, status}, or
+    // null; `resumed` after a reload.
     connection: null,
     // The saved remote instances: [{name, url}].
     remotes: [],
@@ -65,9 +66,9 @@ export function createWindowConnectionStore(api) {
   }
 
   // Reads the instance's status through the client module, and connects.
-  async function use({ instance, baseURL, loopbackTurnedOn, remote = false }) {
+  async function use({ instance, baseURL, loopbackTurnedOn, remote = false, resumed = false }) {
     const status = await api.useConnection(baseURL).get("/service/status");
-    const connection = { instance, baseURL, loopbackTurnedOn, remote, status };
+    const connection = { instance, baseURL, loopbackTurnedOn, remote, resumed, status };
     store.update((s) => ({ ...s, connecting: null, connectError: null, tokenPrompt: null, connection }));
     return connection;
   }

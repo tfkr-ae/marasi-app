@@ -71,11 +71,11 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
   /**
    * Connects window `id` at launch: to the default instance, starting it
    * on the scratchpad when it isn't running. A window that has a
-   * connection keeps it, as after a reload, and one that already launched
-   * gets null.
+   * connection keeps it, as after a reload, marked `resumed`, and one that
+   * already launched or was opened for another instance gets null.
    */
   async function startup(id) {
-    if (connections.has(id)) return connections.get(id);
+    if (connections.has(id)) return { ...connections.get(id), resumed: true };
     if (launched.has(id)) return null;
     launched.add(id);
     let connection;
@@ -88,6 +88,12 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
     connections.set(id, connection);
     return connection;
   }
+
+  /**
+   * A window opened to connect to or start another instance: its startup
+   * leaves it unconnected, on the connection screen.
+   */
+  const open = (id) => launched.add(id);
 
   /** Stops the instances the app started; resolves to their names. */
   async function quit() {
@@ -136,5 +142,5 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
   // for it still stops at quit, as closing a window isn't a disconnect.
   const forget = (id) => connections.delete(id);
 
-  return { startup, connect, start, use, disconnect, forget, quit, get: (id) => connections.get(id) };
+  return { startup, open, connect, start, use, disconnect, forget, quit, get: (id) => connections.get(id) };
 }

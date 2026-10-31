@@ -2,7 +2,7 @@
 	import Logo from "../lib/components/Logo.svelte";
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
 	import ConnectionScreen from "../lib/components/ConnectionScreen.svelte";
-	import { windowConnection, windowTitle } from "../stores/windowConnectionStore.js";
+	import { windowConnection, windowList, windowTitle } from "../stores/windowConnectionStore.js";
 	import { followWindowConnection } from "../lib/marasiEvents.js";
 	import {
 		computePosition,
@@ -175,6 +175,10 @@
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// The held count adds to the dock badge, and the open project names the
+	// window in the Window menu and the window switcher.
+	$: windowList.reportHeld($checkpointStore.items.length);
+	$: windowList.reportProject($appState.started ? $activeProject : null);
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -232,7 +236,8 @@
 			connection = await windowConnection.connected();
 			choosingConnection = false;
 		}
-		if (connection.loopbackTurnedOn) {
+		// Once per connection: not again after a reload.
+		if (connection.loopbackTurnedOn && !connection.resumed) {
 			toastStore.trigger({
 				message: `Turned on ${connection.status.control_listener} for ${connection.instance}`,
 			});
@@ -289,6 +294,7 @@
 		// The connected instance's events, live, for as long as the window is
 		// connected.
 		const stopFollowing = followWindowConnection();
+		const stopFollowingWindows = windowList.follow();
 		const stopReportingDrafts = reportUnsavedDrafts();
 		EventsOn("update-available", onUpdateAvailable);
 		EventsOn("update-progress", onUpdateProgress);
@@ -497,6 +503,7 @@
 		return () => {
 			window.removeEventListener("unhandledrejection", onUnhandledRejection);
 			stopFollowing();
+			stopFollowingWindows();
 			stopReportingDrafts();
 			removeMenuShortcuts();
 			EventsOff("request");

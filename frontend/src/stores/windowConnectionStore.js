@@ -2,6 +2,7 @@
 // Marasi client module (createWindowConnectionStore.js has the logic).
 import { get } from "svelte/store";
 import { createWindowConnectionStore } from "./createWindowConnectionStore.js";
+import { createWindowListStore } from "./createWindowListStore.js";
 import { useConnection } from "../lib/bindings/marasi.js";
 import { browserBridge } from "../lib/bindings/browserBridge.js";
 
@@ -23,6 +24,16 @@ export const windowConnection = createWindowConnectionStore({
   forgetRemote: (url) => bridge.forgetRemote(url),
   refusedRemote: () => bridge.refusedRemote(),
   useConnection,
+});
+
+/** The app's connected windows, one connection each (createWindowListStore.js). */
+export const windowList = createWindowListStore({
+  windows: () => bridge.windows(),
+  focusWindow: (id) => bridge.focusWindow(id),
+  newWindow: () => bridge.newWindow(),
+  onWindowsChanged: (listener) => bridge.onWindowsChanged(listener),
+  reportProject: (project) => bridge.reportProject(project),
+  reportHeld: (count) => bridge.reportHeld(count),
 });
 
 /** A project picked in an OS dialog, for Start: its path, or null. */

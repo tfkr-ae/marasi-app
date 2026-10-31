@@ -40,6 +40,13 @@ export const browserBridge = {
   chooseMarasi: outsideElectron,
   saveCertificate: outsideElectron,
   copyText: (text) => navigator.clipboard.writeText(text),
+  // A plain browser tab is the only window, so there is no other to list.
+  newWindow: outsideElectron,
+  windows: async () => [],
+  focusWindow: async () => {},
+  onWindowsChanged: () => () => {},
+  reportProject: async () => {},
+  reportHeld: async () => {},
   // Each app config call resolves { value } or { error }, as over IPC.
   appConfig: new Proxy(
     {},
