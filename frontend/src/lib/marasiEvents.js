@@ -1,0 +1,55 @@
+// The window's Marasi events: which store's on* method each event goes to,
+// and the stores that reload when the event stream reopens. Each ticket
+// that ports a store adds its events here.
+import { createEventStream } from "./eventStream.js";
+import { followConnection, reloadStores } from "./followConnection.js";
+import { windowConnection } from "../stores/windowConnectionStore.js";
+import { logStore } from "../stores/logStore.js";
+import { ledgerStore } from "../stores/ledgerStore";
+import { sitemapStore } from "../stores/sitemapStore";
+import { recentTraffic } from "../stores/recentTrafficStore";
+import { jobsStore } from "../stores/jobsStore";
+import { checkpointStore } from "../stores/checkpointStore";
+import { connectionStore } from "../stores/connectionStore";
+import { launchpadStore } from "../stores/launchpadStore";
+import { armoryStore } from "../stores/armoryStore";
+import { logbookStore } from "../stores/logbookStore";
+import { findingStore } from "../stores/findingStore";
+import { testCaseStore } from "../stores/testCaseStore";
+import { upstreamProxyStore } from "../stores/upstreamProxyStore";
+
+// Each Marasi event's handler, by event name.
+const handlers = {
+  "log.added": (log) => logStore.onLogAdded(log),
+};
+
+// Every store that shows the instance's data. Launchpad drafts live in the
+// window, so the Launchpad's reload keeps them.
+const stores = [
+  logStore,
+  ledgerStore,
+  sitemapStore,
+  recentTraffic,
+  jobsStore,
+  checkpointStore,
+  connectionStore,
+  launchpadStore,
+  armoryStore,
+  logbookStore,
+  findingStore,
+  testCaseStore,
+  upstreamProxyStore,
+];
+
+/** Reloads every store, as after the event stream reopens. */
+export const reloadAll = () => reloadStores(stores);
+
+/**
+ * Follows the window's connected instance's event stream, and reloads every
+ * store each time it reopens. Returns a stop.
+ */
+export function followWindowConnection() {
+  return followConnection(windowConnection, (url) =>
+    createEventStream({ url, handlers, onReconnect: reloadAll }),
+  );
+}

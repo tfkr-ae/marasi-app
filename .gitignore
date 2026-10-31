@@ -4,3 +4,4 @@ frontend/build
 .artifacts
 .scratch
 dist
+resources/bin

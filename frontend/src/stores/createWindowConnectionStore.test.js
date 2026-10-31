@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createWindowConnectionStore } from "./createWindowConnectionStore.js";
+import { createWindowConnectionStore, instanceNameFor } from "./createWindowConnectionStore.js";
 
 const status = (instance, extra = {}) => ({
   status: "running",
@@ -15,10 +15,25 @@ const status = (instance, extra = {}) => ({
 
 // A fake main-process bridge and client module. `fetched` records the
 // routes the client fetched, by base URL.
-function fakeApi({ instances = [], connect, current = null } = {}) {
+function fakeApi({ instances = [], connect, current = null, startup = current } = {}) {
   const fetched = [];
   const connected = [];
+  const started = [];
+  const calls = [];
+  let marasi = { path: null, bundled: "/app/resources/bin/marasi" };
   const api = {
+    startup: async () => (typeof startup === "function" ? startup() : startup),
+    start: async (instance, project) => {
+      started.push([instance, project]);
+      connected.push(instance);
+      return { instance, baseURL: "http://127.0.0.1:50100", loopbackTurnedOn: false };
+    },
+    disconnect: async () => calls.push("disconnect"),
+    marasi: async () => marasi,
+    chooseMarasi: async (bundled) => {
+      marasi = { ...marasi, path: bundled ? null : "/opt/marasi-dev/marasi" };
+      return marasi;
+    },
     listInstances: async () => instances,
     connect: async (instance) => {
       connected.push(instance);
@@ -26,6 +41,7 @@ function fakeApi({ instances = [], connect, current = null } = {}) {
       return { instance, baseURL: "http://127.0.0.1:50037", loopbackTurnedOn: false };
     },
     current: async () => current,
+    refusedRemote: async () => null,
     useConnection: (baseURL) => ({
       get: async (path) => {
         fetched.push(`${baseURL}${path}`);
@@ -33,7 +49,7 @@ function fakeApi({ instances = [], connect, current = null } = {}) {
       },
     }),
   };
-  return { api, fetched, connected };
+  return { api, fetched, connected, started, calls };
 }
 
 test("the screen lists the running instances, healthy ones first by name", async () => {
@@ -102,22 +118,82 @@ test("a failed connect stays on the screen with a short reason", async () => {
   assert.equal(get(store).connectError, "gone isn't running");
 });
 
-test("a window that reloads keeps the connection it had", async () => {
+test("at launch the window takes up the connection the main process made, as after a reload", async () => {
   const { api, fetched, connected } = fakeApi({
-    current: { instance: "acme", baseURL: "http://127.0.0.1:4000", loopbackTurnedOn: false },
+    startup: { instance: "default", baseURL: "http://127.0.0.1:4000", loopbackTurnedOn: false },
   });
   const store = createWindowConnectionStore(api);
-  const connection = await store.resume();
-  assert.equal(connection.instance, "acme");
+  const connection = await store.startup();
+  assert.equal(connection.instance, "default");
   assert.deepEqual(connected, []);
   assert.deepEqual(fetched, ["http://127.0.0.1:4000/service/status"]);
 });
 
-test("a window with no connection resumes none", async () => {
+test("a window with no connection to take up gets none", async () => {
   const { api } = fakeApi();
   const store = createWindowConnectionStore(api);
-  assert.equal(await store.resume(), null);
+  assert.equal(await store.startup(), null);
   assert.equal(get(store).connection, null);
+});
+
+test("a startup that couldn't start the default instance says why", async () => {
+  const { api } = fakeApi({
+    startup: () => {
+      throw new Error("Error invoking remote method 'connection:startup': Error: listen tcp 127.0.0.1:8080: address already in use");
+    },
+  });
+  const store = createWindowConnectionStore(api);
+  assert.equal(await store.startup(), null);
+  assert.equal(get(store).connectError, "listen tcp 127.0.0.1:8080: address already in use");
+});
+
+test("Start starts the named instance on the project and connects", async () => {
+  const { api, started, fetched } = fakeApi();
+  const store = createWindowConnectionStore(api);
+  const connection = await store.start("acme", "/work/acme.marasi");
+  assert.deepEqual(started, [["acme", "/work/acme.marasi"]]);
+  assert.deepEqual(fetched, ["http://127.0.0.1:50100/service/status"]);
+  assert.equal(connection.instance, "acme");
+  assert.equal(get(store).connecting, null);
+});
+
+test("a refused Start stays on the screen with Marasi's reason", async () => {
+  const { api } = fakeApi();
+  api.start = async () => {
+    throw new Error("Error invoking remote method 'connection:start': Error: instance acme is already running");
+  };
+  const store = createWindowConnectionStore(api);
+  assert.equal(await store.start("acme", null), null);
+  assert.equal(get(store).connection, null);
+  assert.equal(get(store).connectError, "instance acme is already running");
+});
+
+test("disconnecting ends the window's connection", async () => {
+  const { api, calls } = fakeApi();
+  const store = createWindowConnectionStore(api);
+  await store.connect("default");
+  await store.disconnect();
+  assert.deepEqual(calls, ["disconnect"]);
+  assert.equal(get(store).connection, null);
+});
+
+test("Start names an instance after its project's file, with a suffix when taken", () => {
+  assert.equal(instanceNameFor("/work/acme.marasi", []), "acme");
+  assert.equal(instanceNameFor("C:\\work\\Acme Corp.marasi", []), "Acme Corp");
+  assert.equal(instanceNameFor("/work/acme.marasi", ["acme", "acme-2", "default"]), "acme-3");
+  assert.equal(instanceNameFor(null, []), "scratchpad");
+  assert.equal(instanceNameFor(null, ["scratchpad"]), "scratchpad-2");
+});
+
+test("the Marasi Start runs is the bundled one until a path is chosen", async () => {
+  const { api } = fakeApi();
+  const store = createWindowConnectionStore(api);
+  await store.readMarasi();
+  assert.deepEqual(get(store).marasi, { path: null, bundled: "/app/resources/bin/marasi" });
+  await store.chooseMarasi();
+  assert.equal(get(store).marasi.path, "/opt/marasi-dev/marasi");
+  await store.chooseMarasi(true);
+  assert.equal(get(store).marasi.path, null);
 });
 
 test("connected() waits for the window's connection", async () => {
@@ -205,7 +281,7 @@ test("a saved remote that refuses its token asks for the new one, which replaces
 test("a window whose remote refused its token comes back asking for the new one", async () => {
   const { api } = remoteApi({ refused: { name: "Lab box", url: "http://10.1.26.31:7070" } });
   const store = createWindowConnectionStore(api);
-  assert.equal(await store.resume(), null);
+  assert.equal(await store.startup(), null);
   assert.deepEqual(get(store).tokenPrompt, { name: "Lab box", url: "http://10.1.26.31:7070" });
   assert.equal(get(store).connectError, "Lab box changed its token: paste the new one");
 });

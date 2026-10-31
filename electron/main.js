@@ -2,17 +2,21 @@
 // frontend build; it has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session, shell } from "electron";
+import { execFile } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
 import { marasiConfigDir } from "./configDir.js";
-import { connectLocal, listLocalInstances } from "./instances.js";
+import { listLocalInstances } from "./instances.js";
 import { createKeybindingFiles } from "./keybindingFiles.js";
+import { createLocalConnections } from "./local.js";
+import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
 import { nodeFS } from "./nodeFS.js";
 import { createRemotes } from "./remotes.js";
 import { callSocket, streamSocket } from "./socket.js";
@@ -35,11 +39,20 @@ const configDir = marasiConfigDir({
   configDirSwitch: app.commandLine.getSwitchValue("config-dir"),
   configDirEnv: process.env.MARASI_CONFIG_DIR,
 });
+// The Marasi Start runs: the bundled one, or the researcher's choice.
+// Read once the app is ready.
+let marasi;
 // Each window's connection, by its webContents id: {instance, origin,
-// token, loopbackTurnedOn, remote, watch}. The token stays here; the
-// renderer gets the rest. `watch` follows it for a rotated token
-// (tokenWatch.js).
-const connections = new Map();
+// token, loopbackTurnedOn, remote}, and the instances the app started. The
+// token stays here; the renderer gets the rest.
+const connections = createLocalConnections({
+  configDir,
+  run: promisify(execFile),
+  call: callSocket,
+  marasiBin: () => marasi.bin(),
+});
+// Each window's token watch (tokenWatch.js): {connection, watch}.
+const watches = new Map();
 // The remote, {name, url}, whose refused token took each window back to
 // the connection screen, until the screen has asked for the new one.
 const refusedRemotes = new Map();
@@ -122,8 +135,8 @@ function createWindow() {
   });
   const id = window.webContents.id;
   window.webContents.on("destroyed", () => {
-    connections.get(id)?.watch.stop();
-    connections.delete(id);
+    connections.forget(id);
+    unfollow(id);
     refusedRemotes.delete(id);
   });
   window.loadURL(home);
@@ -148,25 +161,39 @@ function handle(channel, handler) {
   });
 }
 
-// Makes `connection` the window's, following it for a rotated token. A
-// remote that refuses its token takes the window back to the connection
-// screen, which asks for the new one.
-function adopt(contents, connection) {
-  connections.get(contents.id)?.watch.stop();
-  connection.watch = watchToken(connection, {
+function unfollow(id) {
+  watches.get(id)?.watch.stop();
+  watches.delete(id);
+}
+
+// Follows window `contents`'s connection for a rotated token, from when
+// it is set until it changes or ends. A remote that refuses its token
+// disconnects the window and reloads it into the connection screen, which
+// asks for the new one. Returns the connection as the renderer sees it.
+function follow(contents) {
+  const id = contents.id;
+  const connection = connections.get(id);
+  if (!connection) {
+    unfollow(id);
+    return null;
+  }
+  if (watches.get(id)?.connection === connection) return shown(connection);
+  unfollow(id);
+  const watch = watchToken(connection, {
     configDir,
     streamSocket,
     call: callSocket,
     fetch,
     onRefused: () => {
-      if (connections.get(contents.id) !== connection) return;
-      connections.delete(contents.id);
-      refusedRemotes.set(contents.id, { name: connection.instance, url: connection.origin });
+      if (connections.get(id) !== connection) return;
+      connections.disconnect(id);
+      unfollow(id);
+      refusedRemotes.set(id, { name: connection.instance, url: connection.origin });
       if (!contents.isDestroyed()) contents.reload();
     },
   });
-  connections.set(contents.id, connection);
-  refusedRemotes.delete(contents.id);
+  watches.set(id, { connection, watch });
+  refusedRemotes.delete(id);
   return shown(connection);
 }
 
@@ -188,27 +215,78 @@ function serveConnections(appConfig) {
   );
   // A 401 from the window's instance: its token was rotated.
   session.defaultSession.webRequest.onCompleted({ urls }, (details) => {
-    const connection = details.webContentsId == null ? null : connections.get(details.webContentsId);
-    if (details.statusCode === 401 && connection && new URL(details.url).origin === connection.origin) {
-      connection.watch.refused();
+    const followed = details.webContentsId == null ? null : watches.get(details.webContentsId);
+    if (details.statusCode === 401 && followed && new URL(details.url).origin === followed.connection.origin) {
+      followed.watch.refused();
     }
   });
   const remotes = createRemotes({ appConfig, safeStorage, fetch });
   handle("instances:list", () => listLocalInstances({ configDir, readdir, call: callSocket }));
-  handle("connection:connect", async (event, instance) =>
-    adopt(event.sender, await connectLocal({ configDir, instance, call: callSocket })),
-  );
+  handle("connection:startup", async (event) => {
+    await connections.startup(event.sender.id);
+    return follow(event.sender);
+  });
+  handle("connection:connect", async (event, instance) => {
+    await connections.connect(event.sender.id, instance);
+    return follow(event.sender);
+  });
+  handle("connection:start", async (event, { instance, project }) => {
+    await connections.start(event.sender.id, { instance, project: project || null });
+    return follow(event.sender);
+  });
+  handle("connection:disconnect", (event) => {
+    connections.disconnect(event.sender.id);
+    unfollow(event.sender.id);
+  });
   handle("connection:current", (event) => shown(connections.get(event.sender.id)) ?? null);
+  // Remote instances: the saved ones, and connecting by address and token.
+  const useRemote = (contents) => async (connection) => {
+    connections.use(contents.id, connection);
+    return follow(contents);
+  };
   handle("remotes:list", () => remotes.list());
-  handle("remotes:connect", (event, form) => answer(async () => adopt(event.sender, await remotes.connect(form))));
-  handle("remotes:connectSaved", (event, url) =>
-    answer(async () => adopt(event.sender, await remotes.connectSaved(url))),
-  );
+  handle("remotes:connect", (event, form) => answer(() => remotes.connect(form).then(useRemote(event.sender))));
+  handle("remotes:connectSaved", (event, url) => answer(() => remotes.connectSaved(url).then(useRemote(event.sender))));
   handle("remotes:forget", (_event, url) => remotes.forget(url));
   handle("remotes:refused", (event) => refusedRemotes.get(event.sender.id) ?? null);
+  // The project a Start opens, picked in an OS dialog: a path, or null.
+  handle("dialog:pick-project", async (event) => {
+    const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: "Project to start",
+      filters: [{ name: "Marasi project", extensions: ["marasi"] }],
+      properties: ["openFile", "createDirectory", "promptToCreate"],
+    });
+    return picked.canceled ? null : picked.filePaths[0];
+  });
+  handle("marasi:current", () => marasi.shown());
+  // Chooses the Marasi Start runs from a path in an OS dialog, or goes back
+  // to the bundled one when `bundled` is set.
+  handle("marasi:choose", async (event, { bundled = false } = {}) => {
+    if (bundled) {
+      await marasi.choose(null);
+      return marasi.shown();
+    }
+    const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: "Marasi to start",
+      properties: ["openFile"],
+    });
+    if (!picked.canceled) await marasi.choose(picked.filePaths[0]);
+    return marasi.shown();
+  });
 }
 
 app.whenReady().then(async () => {
+  marasi = await createMarasiChoice({
+    file: join(app.getPath("userData"), "marasi.json"),
+    bundled: bundledMarasi({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      platform: process.platform,
+    }),
+    readFile,
+    writeFile,
+  });
   serveFrontend();
   serveConnections(await serveAppConfig());
   createWindow();
@@ -219,3 +297,12 @@ app.whenReady().then(async () => {
 
 // As in v1, closing the window quits the app.
 app.on("window-all-closed", () => app.quit());
+// Quitting stops the instances the app started and wasn't disconnected
+// from, then quits for real.
+let stopping = false;
+app.on("before-quit", (event) => {
+  if (stopping) return;
+  stopping = true;
+  event.preventDefault();
+  connections.quit().finally(() => app.quit());
+});

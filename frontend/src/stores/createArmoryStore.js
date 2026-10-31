@@ -173,6 +173,8 @@ export function createArmoryStore(api) {
       set(initialState(++projectStateVersion));
     },
     populate,
+    // Reads it all again, after the event stream reopens.
+    reload: populate,
 
     setSearch: (search) => update((state) => ({ ...state, search })),
 

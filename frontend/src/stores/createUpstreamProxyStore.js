@@ -54,6 +54,8 @@ export function createUpstreamProxyStore(api) {
   return {
     subscribe: store.subscribe,
     load: async () => apply(await api.list()),
+    // Reads the list again, after the event stream reopens.
+    reload: async () => apply(await api.list()),
     add: async (name, url, ca = "") => apply(await api.add(name, url, ca)),
     // An entry's old check no longer says anything about it.
     update: async (name, url, ca, removeCA) =>

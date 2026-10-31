@@ -102,8 +102,13 @@ export async function connectLocal({ configDir, instance, call }) {
   return { instance, origin: originOf(listener), token, loopbackTurnedOn };
 }
 
-/** Local `instance`'s control token, read through its socket. */
+/** Reads local `instance`'s control token through its socket. */
 export async function readToken({ configDir, instance, call }) {
   const { token } = await callInstance(call, configDir, instance, "GET", "/service/control-listener/token");
   return token;
+}
+
+/** Asks local `instance` to stop, through its socket. */
+export async function stopLocal({ configDir, instance, call }) {
+  await callInstance(call, configDir, instance, "POST", "/service/stop");
 }

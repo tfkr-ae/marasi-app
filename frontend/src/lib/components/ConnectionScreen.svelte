@@ -1,75 +1,89 @@
 <script>
-	// The connection screen: the service instances running on this machine
-	// and the saved remote ones, to connect the window to one, or a remote
-	// by its address and token. It draws the window connection store
-	// (stores/createWindowConnectionStore.js) and connects through it.
+	// The connection screen: the service instances running on this machine,
+	// to connect the window to one, remote instances, by address and token
+	// or saved, and Start, to run a new one. It draws the window connection
+	// store (stores/createWindowConnectionStore.js) and connects through it.
 	import { onMount, tick } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { Plug, RotateCw, X } from "lucide-svelte";
+	import { FolderOpen, Globe, Play, Plug, RotateCw, X } from "lucide-svelte";
 	import Logo from "./Logo.svelte";
 	import { projectName } from "../openProgress.js";
+	import { instanceNameFor } from "../../stores/createWindowConnectionStore.js";
+	import { pickProject } from "../../stores/windowConnectionStore.js";
 
 	/** The window connection store. */
 	export let connection;
 
 	$: state = $connection;
 	$: healthy = state.instances.filter((item) => item.healthy);
-	// What Connect connects to: {kind: "local", id: instance}, {kind:
-	// "saved", id: url}, or {kind: "new"} for the remote form.
 	let picked = null;
 	// The first instance is picked until the researcher picks another.
-	$: if (!pickable(picked, healthy, state.remotes)) picked = healthy[0] ? { kind: "local", id: healthy[0].instance } : null;
+	$: if (!healthy.some((item) => item.instance === picked)) picked = healthy[0]?.instance ?? null;
 
-	function pickable(pick, healthy, remotes) {
-		if (pick?.kind === "new") return true;
-		if (pick?.kind === "saved") return remotes.some((item) => item.url === pick.id);
-		return pick?.kind === "local" && healthy.some((item) => item.instance === pick.id);
+	// Which section's connect the error line under it is for.
+	let errorAt = "local";
+
+	// A connect that fails lists the instances again, as one may have stopped.
+	async function connectTo(instance) {
+		errorAt = "local";
+		if (!(await connection.connect(instance))) await connection.listInstances();
 	}
-	const isPicked = (pick, kind, id) => pick?.kind === kind && pick.id === id;
 
-	// The remote form.
+	// Remote: a saved remote's url, or null for the address and token typed in.
+	let remotePicked = null;
 	let address = "";
 	let token = "";
-	let name = "";
+	let remoteName = "";
 	let remember = true;
 	let tokenInput;
+	$: if (remotePicked && !state.remotes.some((item) => item.url === remotePicked)) remotePicked = null;
+	$: remoteLabel = remotePicked
+		? state.remotes.find((item) => item.url === remotePicked)?.name
+		: remoteName.trim() || address.trim();
+	$: remoteReady = remotePicked || (address.trim() && token.trim());
 
 	// A refused token fills in its remote, for the new token.
 	let prompted = null;
 	$: if (state.tokenPrompt && state.tokenPrompt !== prompted) askForToken(state.tokenPrompt);
 	async function askForToken(remote) {
 		prompted = remote;
+		errorAt = "remote";
+		remotePicked = null;
 		address = remote.url;
-		name = remote.name;
+		remoteName = remote.name;
 		token = "";
 		remember = true;
-		picked = { kind: "new" };
 		await tick();
 		tokenInput?.focus();
 	}
 
-	$: label = picked?.kind === "local" ? picked.id
-		: picked?.kind === "saved" ? state.remotes.find((item) => item.url === picked.id)?.name
-		: name.trim() || address.trim();
-
-	// A connect that fails lists the instances again, as one may have stopped.
-	async function connectTo(pick) {
-		if (pick?.kind === "local") {
-			if (!(await connection.connect(pick.id))) await connection.listInstances();
-		} else if (pick?.kind === "saved") {
-			await connection.connectSaved(pick.id);
-		} else if (pick?.kind === "new") {
-			await connection.connectRemote({ url: address.trim(), token, name: name.trim(), save: remember });
-		}
+	function connectRemote() {
+		errorAt = "remote";
+		if (remotePicked) return connection.connectSaved(remotePicked);
+		return connection.connectRemote({ url: address.trim(), token, name: remoteName.trim(), save: remember });
 	}
 
-	async function forget(url) {
-		await connection.forgetRemote(url);
+	// Start: the project (null for the scratchpad) and the instance's name,
+	// which follows the project until the researcher edits it.
+	let project = null;
+	let name = "";
+	let nameEdited = false;
+	$: if (!nameEdited) name = instanceNameFor(project, state.instances.map((item) => item.instance));
+
+	async function chooseProject() {
+		const picked = await pickProject().catch(() => null);
+		if (picked) project = picked;
+	}
+
+	async function start() {
+		errorAt = "local";
+		if (!(await connection.start(name.trim(), project))) await connection.listInstances();
 	}
 
 	onMount(() => {
 		connection.listInstances();
 		connection.listRemotes();
+		connection.readMarasi();
 	});
 
 	// The Modal's neutral and positive buttons, square.
@@ -97,18 +111,15 @@
 					{#each state.instances as item (item.instance)}
 						<li>
 							<button
-								class="flex w-full items-baseline gap-3 px-2 py-1.5 text-left text-sm enabled:hover:bg-primary-500/10 disabled:opacity-50 {isPicked(
-									picked,
-									'local',
-									item.instance,
-								)
+								class="flex w-full items-baseline gap-3 px-2 py-1.5 text-left text-sm enabled:hover:bg-primary-500/10 disabled:opacity-50 {picked ===
+								item.instance
 									? '!bg-primary-500/20'
 									: ''}"
 								disabled={!item.healthy}
-								aria-pressed={isPicked(picked, "local", item.instance)}
+								aria-pressed={picked === item.instance}
 								title={item.project ?? ""}
-								on:click={() => (picked = { kind: "local", id: item.instance })}
-								on:dblclick={() => item.healthy && connectTo({ kind: "local", id: item.instance })}
+								on:click={() => (picked = item.instance)}
+								on:dblclick={() => item.healthy && connectTo(item.instance)}
 							>
 								<span class="font-medium">{item.instance}</span>
 								{#if item.healthy}
@@ -131,80 +142,8 @@
 			{/if}
 		</div>
 
-		<h2 class="mt-5 text-xs font-bold opacity-60">Remote instances</h2>
-		<div class="mt-1 border-y border-surface-300 dark:border-surface-600">
-			{#if state.remotes.length}
-				<ul class="max-h-40 overflow-y-auto" aria-label="Saved remotes">
-					{#each state.remotes as item (item.url)}
-						<li class="group flex items-center {isPicked(picked, 'saved', item.url) ? 'bg-primary-500/20' : 'hover:bg-primary-500/10'}">
-							<button
-								class="flex min-w-0 flex-1 items-baseline gap-3 px-2 py-1.5 text-left text-sm"
-								aria-pressed={isPicked(picked, "saved", item.url)}
-								on:click={() => (picked = { kind: "saved", id: item.url })}
-								on:dblclick={() => connectTo({ kind: "saved", id: item.url })}
-							>
-								<span class="truncate font-medium">{item.name}</span>
-								<span class="ml-auto shrink-0 font-mono text-xs opacity-60">{item.url}</span>
-							</button>
-							<button
-								class="px-2 opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-60"
-								title="Forget {item.name}"
-								aria-label="Forget {item.name}"
-								on:click={() => forget(item.url)}
-							>
-								<X size={14} />
-							</button>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			<form
-				class="grid grid-cols-[5rem_1fr] items-center gap-x-2 gap-y-1 px-2 py-2 text-sm {picked?.kind === 'new'
-					? 'bg-primary-500/10'
-					: ''}"
-				aria-label="Remote instance"
-				on:focusin={() => (picked = { kind: "new" })}
-				on:submit|preventDefault={() => connectTo({ kind: "new" })}
-			>
-				<label for="remote-address" class="text-xs opacity-60">Address</label>
-				<input
-					id="remote-address"
-					class="input h-7 rounded-none border-0 bg-surface-100 py-0 font-mono text-xs ring-0 focus:ring-0 dark:bg-surface-700"
-					placeholder="http://10.0.0.5:7070"
-					autocomplete="off"
-					spellcheck="false"
-					bind:value={address}
-				/>
-				<label for="remote-token" class="text-xs opacity-60">Token</label>
-				<input
-					id="remote-token"
-					type="password"
-					class="input h-7 rounded-none border-0 bg-surface-100 py-0 font-mono text-xs ring-0 focus:ring-0 dark:bg-surface-700"
-					placeholder="Control token"
-					autocomplete="off"
-					bind:this={tokenInput}
-					bind:value={token}
-				/>
-				<label for="remote-name" class="text-xs opacity-60">Name</label>
-				<input
-					id="remote-name"
-					class="input h-7 rounded-none border-0 bg-surface-100 py-0 text-xs ring-0 focus:ring-0 dark:bg-surface-700"
-					placeholder="Optional"
-					autocomplete="off"
-					bind:value={name}
-				/>
-				<span></span>
-				<label class="flex items-center gap-2 text-xs">
-					<input type="checkbox" class="checkbox" bind:checked={remember} />
-					<span>Remember</span>
-				</label>
-				<!-- Enter in a field connects. -->
-				<button type="submit" class="hidden" aria-hidden="true" tabindex="-1"></button>
-			</form>
-		</div>
-
 		<p class="mt-2 min-h-5 text-xs text-error-600 dark:text-error-400" role="status">
-			{state.connectError ?? state.listError ?? ""}
+			{(errorAt === "local" ? state.connectError : null) ?? state.listError ?? ""}
 		</p>
 
 		<footer class="mt-2 flex justify-end gap-2">
@@ -220,11 +159,130 @@
 			</button>
 			<button
 				class={positive}
-				disabled={!picked || state.connecting || (picked.kind === "new" && (!address.trim() || !token.trim()))}
+				disabled={!picked || state.connecting}
 				on:click={() => connectTo(picked)}
 			>
-				<Plug size={14} /><span>{state.connecting ? `Connecting to ${state.connecting}…` : label ? `Connect to ${label}` : "Connect"}</span>
+				<Plug size={14} /><span>{state.connecting ? `Connecting to ${state.connecting}…` : picked ? `Connect to ${picked}` : "Connect"}</span>
 			</button>
 		</footer>
+
+		<section class="mt-6 border-t border-surface-300 pt-4 dark:border-surface-600" aria-label="Remote instances">
+			<h2 class="text-sm font-bold">Remote instances</h2>
+			{#if state.remotes.length}
+				<ul class="mt-2 max-h-40 overflow-y-auto border-y border-surface-300 dark:border-surface-600" aria-label="Saved remotes">
+					{#each state.remotes as item (item.url)}
+						<li class="group flex items-center {remotePicked === item.url ? 'bg-primary-500/20' : 'hover:bg-primary-500/10'}">
+							<button
+								class="flex min-w-0 flex-1 items-baseline gap-3 px-2 py-1.5 text-left text-sm"
+								aria-pressed={remotePicked === item.url}
+								on:click={() => (remotePicked = remotePicked === item.url ? null : item.url)}
+								on:dblclick={() => {
+									remotePicked = item.url;
+									connectRemote();
+								}}
+							>
+								<span class="truncate font-medium">{item.name}</span>
+								<span class="ml-auto shrink-0 font-mono text-xs opacity-60">{item.url}</span>
+							</button>
+							<button
+								class="px-2 opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-60"
+								title="Forget {item.name}"
+								aria-label="Forget {item.name}"
+								on:click={() => connection.forgetRemote(item.url)}
+							>
+								<X size={14} />
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			<form
+				class="mt-2 grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-sm"
+				aria-label="Remote instance"
+				on:focusin={() => (remotePicked = null)}
+				on:submit|preventDefault={connectRemote}
+			>
+				<label class="opacity-60" for="remote-address">Address</label>
+				<input
+					id="remote-address"
+					class="input rounded-none px-2 py-1 font-mono text-sm"
+					placeholder="http://10.0.0.5:7070"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={address}
+				/>
+				<label class="opacity-60" for="remote-token">Token</label>
+				<input
+					id="remote-token"
+					type="password"
+					class="input rounded-none px-2 py-1 font-mono text-sm"
+					autocomplete="off"
+					bind:this={tokenInput}
+					bind:value={token}
+				/>
+				<label class="opacity-60" for="remote-name">Name</label>
+				<input
+					id="remote-name"
+					class="input rounded-none px-2 py-1 text-sm"
+					placeholder="Optional"
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={remoteName}
+				/>
+				<span></span>
+				<label class="flex items-center gap-2 text-xs">
+					<input type="checkbox" class="checkbox" bind:checked={remember} />
+					<span>Remember</span>
+				</label>
+				<!-- Enter in a field connects. -->
+				<button type="submit" class="hidden" aria-hidden="true" tabindex="-1"></button>
+			</form>
+			<div class="mt-3 flex items-start gap-3">
+				<p class="min-h-5 flex-1 text-xs text-error-600 dark:text-error-400" role="status">
+					{errorAt === "remote" ? (state.connectError ?? "") : ""}
+				</p>
+				<button class={positive} disabled={!remoteReady || state.connecting} on:click={connectRemote}>
+					<Globe size={14} /><span>{remoteLabel ? `Connect to ${remoteLabel}` : "Connect"}</span>
+				</button>
+			</div>
+		</section>
+
+		<section class="mt-6 border-t border-surface-300 pt-4 dark:border-surface-600" aria-label="Start">
+			<h2 class="text-sm font-bold">Start an instance</h2>
+			<div class="mt-2 grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-sm">
+				<span class="opacity-60">Project</span>
+				<div class="flex min-w-0 items-center gap-2">
+					<span class="truncate" title={project ?? ""}>{project ? projectName(project) : "Scratchpad"}</span>
+					<button class="{neutral} ml-auto" on:click={chooseProject}>
+						<FolderOpen size={14} /><span>Choose…</span>
+					</button>
+				</div>
+				<label class="opacity-60" for="start-name">Name</label>
+				<input
+					id="start-name"
+					class="input rounded-none px-2 py-1 text-sm"
+					spellcheck="false"
+					bind:value={name}
+					on:input={() => (nameEdited = true)}
+				/>
+				<span class="opacity-60">Marasi</span>
+				<div class="flex min-w-0 items-center gap-2">
+					<span class="truncate font-mono text-xs" title={state.marasi?.path ?? state.marasi?.bundled ?? ""}>
+						{state.marasi?.path ?? "Bundled"}
+					</span>
+					{#if state.marasi?.path}
+						<button class="{neutral} ml-auto" on:click={() => connection.chooseMarasi(true)}>Use bundled</button>
+					{/if}
+					<button class="{neutral} {state.marasi?.path ? '' : 'ml-auto'}" on:click={() => connection.chooseMarasi()}>
+						Choose…
+					</button>
+				</div>
+			</div>
+			<div class="mt-3 flex justify-end">
+				<button class={positive} disabled={!name.trim() || state.connecting} on:click={start}>
+					<Play size={14} /><span>Start {name.trim()}</span>
+				</button>
+			</div>
+		</section>
 	</div>
 </div>

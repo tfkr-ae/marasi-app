@@ -33,6 +33,10 @@ export function createRecentTrafficStore(api, limit = RECENT_TRAFFIC_LIMIT) {
         console.error("Loading recent traffic failed:", err);
       }
     },
+    /** Reads the newest pairs again, after the event stream reopens. */
+    reload() {
+      return this.populate();
+    },
     clear() {
       version++;
       requests = [];

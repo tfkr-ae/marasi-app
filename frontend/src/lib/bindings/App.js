@@ -3,6 +3,7 @@
 
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
+import { marasi } from "./marasi.js";
 
 // The app config and keybinding profile files, owned by the main process.
 const appConfig = createAppConfigBindings(() => globalThis.window?.marasiApp?.appConfig);
@@ -98,7 +99,10 @@ export const GetInterfaces = notPorted("GetInterfaces");
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
 export const GetLaunchpads = notPorted("GetLaunchpads");
-export const GetLogs = notPorted("GetLogs");
+// One page of the log, newest first: {items, next_cursor}. `cursor` is the
+// last page's next_cursor.
+export const GetLogs = (cursor) =>
+  marasi.get(`/logs?limit=500${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
 export const GetMetadata = notPorted("GetMetadata");
 export const GetNote = notPorted("GetNote");
 export const GetRawDetails = notPorted("GetRawDetails");
