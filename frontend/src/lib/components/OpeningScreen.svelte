@@ -177,7 +177,7 @@
 		</div>
 
 		{#if screen.actions}
-			<footer class="mt-4 flex justify-end gap-2">
+			<footer class="mt-4 flex flex-wrap justify-end gap-2">
 				{#if screen.actions.stayIn}
 					<button class={neutral} on:click={() => dispatch("stay")}>
 						Stay in {screen.actions.stayIn}
