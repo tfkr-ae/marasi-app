@@ -65,9 +65,19 @@ export function createJobsStore(api, { onFinished = () => {} } = {}) {
     }
   }
 
+  // The job changes each read in flight has missed: an event that arrives
+  // while a read is answered may be newer than the answer.
+  const reads = new Set();
+
+  // `jobs` with `change` applied to the named job.
+  const changed = (jobs, { name, change }) =>
+    jobs.map((job) => (job.Name === name ? { ...job, ...change } : job));
+
   /** Reads the jobs. */
   async function refresh() {
     const asked = generation;
+    const arrived = [];
+    reads.add(arrived);
     let jobs;
     try {
       jobs = (await api.listJobs()) ?? [];
@@ -75,15 +85,18 @@ export function createJobsStore(api, { onFinished = () => {} } = {}) {
       if (asked !== generation) return;
       store.update((s) => ({ ...s, error: String(error?.message ?? error) }));
       return;
+    } finally {
+      reads.delete(arrived);
     }
     if (asked !== generation) return;
-    store.update((s) => ({ ...s, jobs, loaded: true, error: "" }));
+    store.update((s) => ({ ...s, jobs: arrived.reduce(changed, jobs), loaded: true, error: "" }));
     finishWatched();
   }
 
   // Applies `change` to the named job, if the store has read it.
   function updateJob(name, change) {
-    store.update((s) => ({ ...s, jobs: s.jobs.map((job) => (job.Name === name ? { ...job, ...change } : job)) }));
+    for (const arrived of reads) arrived.push({ name, change });
+    store.update((s) => ({ ...s, jobs: changed(s.jobs, { name, change }) }));
   }
 
   /** A job.progress event: {name, project, done, total}. */
@@ -120,6 +133,7 @@ export function createJobsStore(api, { onFinished = () => {} } = {}) {
   function clear() {
     generation += 1;
     watched.clear();
+    reads.clear();
     store.set(initial());
   }
 

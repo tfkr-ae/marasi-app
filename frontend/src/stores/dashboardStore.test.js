@@ -56,6 +56,20 @@ test("other jobs, or a count already complete, don't read again", async () => {
   assert.equal(done.reads, 1);
 });
 
+test("a count job that completes while the counts are read is read again", async () => {
+  const releases = [];
+  const store = createDashboardStore({ countNotes: () => new Promise((resolve) => releases.push(resolve)) });
+  const first = store.reload();
+  const event = store.onJobComplete({ name: "intercepted_count" });
+  releases[0](counts(3, false));
+  await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(releases.length, 2);
+  releases[1](counts(9));
+  await event;
+  assert.deepEqual(get(store).counts, counts(9));
+});
+
 test("a newer read wins over a slower older one", async () => {
   const releases = [];
   const store = createDashboardStore({ countNotes: () => new Promise((resolve) => releases.push(resolve)) });

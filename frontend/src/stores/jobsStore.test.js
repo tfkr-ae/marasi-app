@@ -152,6 +152,25 @@ test("clear forgets the project's jobs and the views waiting on them", async () 
   assert.deepEqual(get(store).jobs, []);
 });
 
+test("job events that arrive while the jobs are read still show", async () => {
+  let release;
+  const finished = [];
+  const store = createJobsStore(
+    { listJobs: () => new Promise((resolve) => (release = resolve)), rebuildJob: async () => {} },
+    { onFinished: (group) => finished.push(group) },
+  );
+  store.watch("index");
+  // Marasi read the jobs before they finished, and the events came first.
+  store.onJobProgress({ name: "traffic_index", done: 5, total: 5 });
+  store.onJobComplete({ name: "traffic_index" });
+  store.onJobComplete({ name: "annotation_index" });
+  release([job("traffic_index", false, 1, 5), job("annotation_index", false)]);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(groupBuilding(get(store), "index"), false);
+  assert.deepEqual(finished, ["index"]);
+});
+
 test("a read for an earlier project is dropped", async () => {
   let release;
   const api = {

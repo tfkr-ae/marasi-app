@@ -12,23 +12,32 @@ export function createDashboardStore(api) {
   const store = writable({ loading: true, counts: null });
   // Each read's number, so an older one's answer is dropped.
   let reads = 0;
+  // The read in flight, whose answer may predate a job.complete.
+  let reading = null;
 
   /** Reads the counts again; a newer read wins over a slower older one. */
-  async function reload() {
-    const read = ++reads;
+  function reload() {
+    reading = read();
+    return reading;
+  }
+
+  async function read() {
+    const asked = ++reads;
     store.update((state) => ({ ...state, loading: true }));
     try {
       const counts = await api.countNotes();
-      if (read === reads) store.set({ loading: false, counts });
+      if (asked === reads) store.set({ loading: false, counts });
     } catch (error) {
-      if (read === reads) store.update((state) => ({ ...state, loading: false }));
+      if (asked === reads) store.update((state) => ({ ...state, loading: false }));
       throw error;
     }
   }
 
   /** A job.complete event: {name, project}. */
   async function onJobComplete({ name }) {
-    if (name !== "intercepted_count" || get(store).counts?.InterceptionsComplete !== false) return;
+    if (name !== "intercepted_count") return;
+    await reading?.catch(() => {});
+    if (get(store).counts?.InterceptionsComplete !== false) return;
     await reload();
   }
 
