@@ -2,8 +2,8 @@
 // ports it to the Marasi client module or the main process.
 
 import { createAppConfigBindings } from "./appConfig.js";
-import { notPorted } from "./notPorted.js";
-import { marasi } from "./marasi.js";
+import { NotPorted, notPorted } from "./notPorted.js";
+import { isRemoteConnection, marasi } from "./marasi.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
 
@@ -58,11 +58,44 @@ const jobState = (job) => ({
   Rebuildable: rebuildableJobs.has(job.name),
 });
 
+// The instance's Chrome, on a local connection: its paths and profiles are
+// the machine's, and Start Chrome opens a window on it through the
+// instance's proxy listener. A remote connection's Chrome is this
+// machine's, which isn't ported yet, so the instance's never starts there.
+const instanceChrome =
+  (binding, call) =>
+  (...args) =>
+    isRemoteConnection() ? Promise.reject(new NotPorted(binding)) : call(...args);
+// A GET /chrome/path list as v1's [{OS, Path}], and a profile list as names.
+const chromePaths = (answer) => (answer?.items ?? []).map((item) => ({ OS: item.os, Path: item.path }));
+const chromeProfiles = (answer) => (answer?.items ?? []).map((item) => item.name);
+const chromeProfilePath = (name) => `/chrome/profile/${encodeURIComponent(name)}`;
+
+export const GetChromePaths = instanceChrome("GetChromePaths", async () => chromePaths(await marasi.get("/chrome/path")));
+export const AddChromePath = instanceChrome("AddChromePath", async (path, os) =>
+  chromePaths(await marasi.post("/chrome/path", { os, path })),
+);
+export const DeleteChromePath = instanceChrome("DeleteChromePath", async (path, os) =>
+  chromePaths(await marasi.delete("/chrome/path", { os, path })),
+);
+export const GetChromeProfiles = instanceChrome("GetChromeProfiles", async () =>
+  chromeProfiles(await marasi.get("/chrome/profile")),
+);
+export const AddChromeProfile = instanceChrome("AddChromeProfile", async (name) =>
+  chromeProfiles(await marasi.post("/chrome/profile", { name })),
+);
+export const DeleteChromeProfile = instanceChrome("DeleteChromeProfile", async (name) =>
+  chromeProfiles(await marasi.delete(chromeProfilePath(name))),
+);
+// Opens a Chrome window on `profile`, or the default profile for "". The
+// app opens it for the researcher, so it asks for no CDP endpoint, as v1.
+export const StartBrowser = instanceChrome("StartBrowser", async (profile) => {
+  await marasi.post("/chrome/start", profile ? { profile } : {});
+});
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
-export const AddChromePath = notPorted("AddChromePath");
-export const AddChromeProfile = notPorted("AddChromeProfile");
 export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
 export const AppendNote = notPorted("AppendNote");
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
@@ -103,8 +136,6 @@ export const CreateWaypoint = notPorted("CreateWaypoint");
 export const DeleteArmoryRun = notPorted("DeleteArmoryRun");
 export const DeleteArmoryTemplate = notPorted("DeleteArmoryTemplate");
 export const DeleteArtifact = notPorted("DeleteArtifact");
-export const DeleteChromePath = notPorted("DeleteChromePath");
-export const DeleteChromeProfile = notPorted("DeleteChromeProfile");
 export const DeleteClientSetting = notPorted("DeleteClientSetting");
 export const DeleteFinding = notPorted("DeleteFinding");
 export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
@@ -135,8 +166,6 @@ export const GetArmoryWordlists = notPorted("GetArmoryWordlists");
 export const GetArtifact = notPorted("GetArtifact");
 export const GetCheckpoint = notPorted("GetCheckpoint");
 export const GetCheckpointItems = notPorted("GetCheckpointItems");
-export const GetChromePaths = notPorted("GetChromePaths");
-export const GetChromeProfiles = notPorted("GetChromeProfiles");
 export const GetClientSetting = notPorted("GetClientSetting");
 export const GetContentTypeExclusion = notPorted("GetContentTypeExclusion");
 export const GetExtensionCode = notPorted("GetExtensionCode");
@@ -225,7 +254,6 @@ export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
 export const StartArmoryRun = notPorted("StartArmoryRun");
-export const StartBrowser = notPorted("StartBrowser");
 // The proxy listener; each resolves Marasi's listener status.
 export const StartProxy = (address, port) => marasi.post("/listener/start", { address, port: Number(port) });
 export const StopProxy = () => marasi.post("/listener/stop");
