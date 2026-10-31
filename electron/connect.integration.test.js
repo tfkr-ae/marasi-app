@@ -16,6 +16,8 @@ import { callSocket } from "./socket.js";
 import { withBearer } from "./bearer.js";
 import { createMarasiClient, isNeedsNewerMarasi } from "../frontend/src/lib/bindings/marasi.js";
 import { codeIDs } from "../frontend/src/lib/errorCodes.js";
+import { createEventStream } from "../frontend/src/lib/eventStream.js";
+import { createLogStore } from "../frontend/src/stores/createLogStore.js";
 
 const run = promisify(execFile);
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -108,4 +110,125 @@ test("an unknown route reads Needs a newer Marasi", { skip }, async () => {
   );
   assert.ok(isNeedsNewerMarasi(error));
   assert.equal(String(error), "Needs a newer Marasi");
+});
+
+// An EventSource on fetch, as Node has none: it sends the header the
+// session adds, as a window's stream gets it. drop() cuts every open
+// stream, as a network blip does.
+function windowEventSource(connection) {
+  const open = new Set();
+  class WindowEventSource {
+    constructor(url) {
+      this.listeners = {};
+      this.abort = new AbortController();
+      open.add(this);
+      this.read(url).catch(() => this.fire("error", {}));
+    }
+    addEventListener(name, listener) {
+      (this.listeners[name] ??= []).push(listener);
+    }
+    fire(name, event) {
+      if (this.closed && name !== "error") return;
+      for (const listener of this.listeners[name] ?? []) listener(event);
+    }
+    close() {
+      this.closed = true;
+      open.delete(this);
+      this.abort.abort();
+    }
+    async read(url) {
+      const response = await windowFetch(connection)(url, { signal: this.abort.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      this.fire("open", {});
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for await (const chunk of response.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let end;
+        while ((end = buffer.indexOf("\n\n")) >= 0) {
+          const frame = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          const name = frame.match(/^event: (.*)$/m)?.[1];
+          const data = frame.match(/^data: (.*)$/m)?.[1];
+          if (name && data !== undefined) this.fire(name, { data });
+        }
+      }
+      throw new Error("stream ended");
+    }
+  }
+  return {
+    WindowEventSource,
+    drop: () => {
+      for (const source of open) source.abort.abort();
+    },
+  };
+}
+
+// A Svelte store's current value.
+function get(store) {
+  let value;
+  store.subscribe((current) => (value = current))();
+  return value;
+}
+
+// Waits up to `ms` for `check()` to hold.
+async function until(check, ms = 10000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) assert.fail("timed out");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+// Restarts the proxy listener, which Marasi logs as "Marasi Service
+// Started on <address>". Resolves to that line's address.
+async function restartListener(client) {
+  await client.post("/listener/stop");
+  const status = await client.post("/listener/start", { address: "127.0.0.1", port: 0 });
+  return status.proxy_listener;
+}
+
+test("the log follows the event stream, and reloads after the stream reopens", { skip }, async () => {
+  const client = createMarasiClient({ baseURL: connection.origin, fetch: windowFetch(connection) });
+  const log = createLogStore({
+    getLogs: (cursor) => client.get(`/logs?limit=500${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
+  });
+  await log.reload();
+  const { WindowEventSource, drop } = windowEventSource(connection);
+  let opens = 0;
+  let reloads = 0;
+  const stream = createEventStream({
+    url: `${connection.origin}/events`,
+    handlers: { "log.added": (line) => log.onLogAdded(line) },
+    onReconnect: () => {
+      reloads++;
+      return log.reload();
+    },
+    EventSource: class extends WindowEventSource {
+      constructor(url) {
+        super(url);
+        this.addEventListener("open", () => opens++);
+      }
+    },
+  });
+  const shows = (address) => get(log).items.some((line) => line.message === `Marasi Service Started on ${address}`);
+  try {
+    await until(() => opens === 1);
+    // A round trip: the line arrives as log.added.
+    const live = await restartListener(client);
+    await until(() => shows(live));
+
+    // While the stream is down the line has no event to arrive on, so it
+    // shows only once the reopened stream reloads the log.
+    drop();
+    const missed = await restartListener(client);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(shows(missed), false);
+    await until(() => reloads === 1 && shows(missed));
+    assert.ok(shows(live));
+    const ids = get(log).items.map((line) => line.id);
+    assert.equal(new Set(ids).size, ids.length);
+  } finally {
+    stream.stop();
+  }
 });
