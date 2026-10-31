@@ -85,7 +85,7 @@ Taking launchpad entries out of one launchpad and putting them into another at a
 _Avoid_: copy, transfer, relink
 
 **Launchpad draft**:
-The working request of a launchpad, held only in memory, seeded from one launchpad entry and sent by Launch. It is dirty when it differs from the request of the entry it was seeded from, and it is lost when the project closes. When that entry moves to another launchpad, the draft moves with it. Marasi asks for confirmation only before something discards a dirty draft, such as seeding over it, removing its entry, deleting its launchpad, or switching the project or quitting. A clean draft is replaced without asking, and Cancel changes nothing. Switching the project or quitting asks once for all dirty drafts.
+The working request of a launchpad, held only in its window's memory, seeded from one launchpad entry and sent by Launch. It is dirty when it differs from the request of the entry it was seeded from, and it is lost when its window closes. A dirty draft outlives a project switch made by another client and returns when its project is open again. When that entry moves to another launchpad, the draft moves with it. Marasi asks for confirmation only before something discards a dirty draft, such as seeding over it, removing its entry, deleting its launchpad, or switching the project or quitting. A clean draft is replaced without asking, and Cancel changes nothing. Switching the project or quitting asks once for all dirty drafts.
 _Avoid_: edit, buffer, saved request
 
 ### Checkpoint
@@ -151,8 +151,34 @@ The project the app opens at startup, kept in the app's config directory. A rese
 _Avoid_: default project, temporary project
 
 **Locked project**:
-A project the app can't open because another Marasi, an app or a service instance, holds its project ownership as Marasi defines it. It stays locked until that Marasi closes it. Opening a locked project leaves the open project as it was; a locked scratchpad at startup leaves no project open.
+A project the connected service instance can't open because another service instance holds its project ownership, as Marasi defines it. Opening it leaves the open project as it was and offers to connect to the instance that owns it.
 _Avoid_: project lock (Marasi's file lock behind ownership), in use, busy (Marasi's project busy is work blocking a switch)
+
+### Connections
+
+**Connection**:
+A window's link to one service instance, through the instance's network address and control token, as Marasi defines them. Each window has at most one connection, and the researcher switches between connections by switching windows; a window without one shows the instances it can connect to or start.
+_Avoid_: attachment, session, link
+
+**Connect**:
+Making a connection to a service instance that is already running, on this machine or another.
+_Avoid_: attach
+
+**Disconnect**:
+Ending the connection and leaving its service instance running.
+_Avoid_: detach
+
+**Start**:
+Running a new service instance on this machine and connecting to it. Quitting the app stops the instance it started, unless the researcher disconnected from it first; the app never stops an instance it did not start.
+_Avoid_: spawn, launch (a Launch is a launchpad action)
+
+**Default instance**:
+The service instance named `default` on this machine, which the app connects to at startup, starting it on the scratchpad if it is not running. A default instance started outside the app is never stopped by it.
+_Avoid_: main instance, local instance (any instance on this machine)
+
+**Bundled Marasi**:
+The Marasi build shipped inside the app, which Start runs unless the researcher chose a Marasi of their own. It changes only when the app updates.
+_Avoid_: embedded Marasi, built-in service
 
 **Database upgrade**:
 The one-time step that brings an older project's database up to the running build, which Marasi runs as it opens the project. The app shows it as the Upgrade step while opening.
