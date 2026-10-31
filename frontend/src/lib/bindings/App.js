@@ -2,6 +2,7 @@
 // ports it to the Marasi client module.
 
 import { notPorted } from "./notPorted.js";
+import { marasi } from "./marasi.js";
 
 export const AddChromePath = notPorted("AddChromePath");
 export const AddChromeProfile = notPorted("AddChromeProfile");
@@ -79,7 +80,10 @@ export const GetKeybindings = notPorted("GetKeybindings");
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
 export const GetLaunchpads = notPorted("GetLaunchpads");
-export const GetLogs = notPorted("GetLogs");
+// One page of the log, newest first: {items, next_cursor}. `cursor` is the
+// last page's next_cursor.
+export const GetLogs = (cursor) =>
+  marasi.get(`/logs?limit=500${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
 export const GetMarasiConfig = notPorted("GetMarasiConfig");
 export const GetMetadata = notPorted("GetMetadata");
 export const GetNote = notPorted("GetNote");
