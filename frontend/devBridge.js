@@ -1,12 +1,14 @@
 // The dev server's stand-in for Electron's main process, so the frontend
 // runs in a plain browser against a real local instance (verification
 // only; the app itself never loads it). It lists and connects to the
-// instances in a Marasi config directory, as the main process does, and
-// proxies the page's calls to the connected one, adding the control token
-// on the way, so the page never holds it, as in Electron
+// instances in a Marasi config directory, as the main process does, serves
+// the app config in it, and proxies the page's calls to the connected one,
+// adding the control token on the way, so the page never holds it, as in
+// Electron
 // (docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
 // One dev server has one connection, shared by every tab on it.
 import { request } from "node:http";
+import { appConfigCalls } from "../electron/appConfigIPC.js";
 import { connectLocal, listLocalInstances } from "../electron/instances.js";
 
 /** Where the bridge answers on the dev server. */
@@ -41,11 +43,13 @@ function sendJSON(res, status, value) {
 const noConfigDir = "Start the dev server with MARASI_CONFIG_DIR=DIR to reach the instances in DIR";
 
 /**
- * The bridge for Marasi config directory `configDir` (none when null). `call` and `readdir`
- * are the socket call and directory read that electron/instances.js takes.
- * `handle(req, res, next)` is Connect middleware, as Vite's server takes.
+ * The bridge for Marasi config directory `configDir` (none when null).
+ * `call` and `readdir` are the socket call and directory read that
+ * electron/instances.js takes, and `appConfig` is electron/appConfig.js's
+ * app config in that directory. `handle(req, res, next)` is Connect
+ * middleware, as Vite's server takes.
  */
-export function createDevBridge({ configDir, call, readdir }) {
+export function createDevBridge({ configDir, call, readdir, appConfig = null }) {
   // {instance, origin, token, loopbackTurnedOn}, or null.
   let connection = null;
 
@@ -72,6 +76,21 @@ export function createDevBridge({ configDir, call, readdir }) {
     req.pipe(upstream);
   }
 
+  // An app config call, answered as electron/appConfigIPC.js answers it:
+  // {value} or {error}. Profile files go through OS dialogs, which only the
+  // app has.
+  async function appConfigCall(req, name) {
+    if (name === "exportProfile" || name === "importProfile") {
+      return { error: "Open Marasi v2 to import or export a profile" };
+    }
+    const args = (await readJSON(req)) ?? [];
+    try {
+      return { value: await appConfig[name](...args) };
+    } catch (error) {
+      return { error: error?.message ?? String(error) };
+    }
+  }
+
   const routes = {
     "GET /instances": () => listLocalInstances({ configDir, readdir, call }),
     "GET /connection": () => shown(connection),
@@ -92,7 +111,10 @@ export function createDevBridge({ configDir, call, readdir }) {
       if (!connection) return sendJSON(res, 503, { message: "Not connected to Marasi" });
       return proxy(req, res, url.pathname.slice(instancePath.length) + url.search);
     }
-    const route = url.pathname.startsWith(`${bridgePath}/`) && routes[`${req.method} ${url.pathname.slice(bridgePath.length)}`];
+    const appConfigName = req.method === "POST" && url.pathname.match(/^\/__marasi\/app-config\/(\w+)$/)?.[1];
+    const route = appConfigName
+      ? appConfigCalls.includes(appConfigName) && ((r) => appConfigCall(r, appConfigName))
+      : url.pathname.startsWith(`${bridgePath}/`) && routes[`${req.method} ${url.pathname.slice(bridgePath.length)}`];
     if (!route) return next();
     try {
       if (!configDir) throw new Error(noConfigDir);

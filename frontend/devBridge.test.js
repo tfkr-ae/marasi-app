@@ -202,3 +202,28 @@ test("without a config directory the bridge reaches no instance and says how to 
   assert.deepEqual(await connected.json(), why);
   assert.deepEqual(sockets.calls, []);
 });
+
+test("app config calls answer as the main process's do, and profile files stay with the app", async (t) => {
+  const sockets = fakeSockets({});
+  const calls = [];
+  const appConfig = {
+    keybindings: async () => ({ config: { active: "Default" } }),
+    setFlag: async (name, value) => {
+      calls.push([name, value]);
+      if (name === "nope") throw new Error("unknown flag nope");
+    },
+  };
+  const dev = await devServer(createDevBridge({ configDir: "/cfg", call: sockets.call, readdir: sockets.readdir, appConfig }));
+  t.after(dev.close);
+
+  const read = await post(`${dev.origin}/__marasi/app-config/keybindings`, []);
+  const set = await post(`${dev.origin}/__marasi/app-config/setFlag`, ["vim_enabled", true]);
+  const refused = await post(`${dev.origin}/__marasi/app-config/setFlag`, ["nope", 1]);
+  const file = await post(`${dev.origin}/__marasi/app-config/importProfile`, []);
+
+  assert.deepEqual(await read.json(), { value: { config: { active: "Default" } } });
+  assert.deepEqual(await set.json(), {});
+  assert.deepEqual(await refused.json(), { error: "unknown flag nope" });
+  assert.deepEqual(await file.json(), { error: "Open Marasi v2 to import or export a profile" });
+  assert.deepEqual(calls, [["vim_enabled", true], ["nope", 1]]);
+});

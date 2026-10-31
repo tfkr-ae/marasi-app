@@ -4,9 +4,13 @@
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
 import { marasi } from "./marasi.js";
+import { browserBridge } from "./browserBridge.js";
+
+// The main process bridge, or in a plain browser the dev server's.
+const bridge = () => (globalThis.window ? (globalThis.window.marasiApp ?? browserBridge) : undefined);
 
 // The app config and keybinding profile files, owned by the main process.
-const appConfig = createAppConfigBindings(() => globalThis.window?.marasiApp?.appConfig);
+const appConfig = createAppConfigBindings(() => bridge()?.appConfig);
 export const {
   ExportKeybindingProfile,
   GetAppSavedQueries,
@@ -27,7 +31,7 @@ export const {
 } = appConfig;
 
 /** The app's own build, { Channel, Version }, from the main process. */
-export const GetBuildInfo = () => globalThis.window.marasiApp.buildInfo();
+export const GetBuildInfo = () => bridge().buildInfo();
 
 export const AddChromePath = notPorted("AddChromePath");
 export const AddChromeProfile = notPorted("AddChromeProfile");
