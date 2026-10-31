@@ -12,7 +12,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { connectLocal, listLocalInstances } from "./instances.js";
-import { callSocket } from "./socket.js";
+import { callSocket, streamSocket } from "./socket.js";
+import { createRemotes } from "./remotes.js";
+import { watchToken } from "./tokenWatch.js";
 import { withBearer } from "./bearer.js";
 import { createMarasiClient, isNeedsNewerMarasi } from "../frontend/src/lib/bindings/marasi.js";
 import { codeIDs } from "../frontend/src/lib/errorCodes.js";
@@ -231,4 +233,30 @@ test("the log follows the event stream, and reloads after the stream reopens", {
   } finally {
     stream.stop();
   }
+});
+
+test("connecting by address and token reaches the instance as a remote does", { skip }, async () => {
+  const remotes = createRemotes({ appConfig: null, safeStorage: null, fetch });
+  const remote = await remotes.connect({ url: connection.origin, token: connection.token, name: "lab" });
+  assert.equal(remote.instance, "lab");
+  await assert.rejects(remotes.connect({ url: connection.origin, token: "0".repeat(64) }), (err) => err.tokenRefused);
+});
+
+test("a rotated token is read again for a local window and asked for by a remote one", { skip }, async () => {
+  const local = { ...connection };
+  const remote = { ...connection, instance: "lab", remote: true };
+  const localWatch = watchToken(local, { configDir, streamSocket, call: callSocket });
+  let refused;
+  const asked = new Promise((resolve) => (refused = resolve));
+  watchToken(remote, { fetch, onRefused: refused });
+  // Both streams are open before the rotation.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const rotated = await callSocket(join(configDir, "instances", `${instance}.sock`), "POST", "/service/control-listener/token/rotate");
+  assert.equal(rotated.status, 200);
+  await asked;
+  for (let i = 0; i < 50 && local.token === connection.token; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+  localWatch.stop();
+  assert.equal(local.token, rotated.body.token);
+  const client = createMarasiClient({ baseURL: local.origin, fetch: windowFetch(local) });
+  assert.equal((await client.get("/service/status")).instance, instance);
 });

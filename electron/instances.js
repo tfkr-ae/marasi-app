@@ -10,8 +10,11 @@ const STOPPED = new Set(["ECONNREFUSED", "ENOENT"]);
 /** The instances directory in Marasi config directory `configDir`. */
 export const instancesDir = (configDir) => join(configDir, "instances");
 
-// Marasi's instance name rules (marasi cmd/marasi/root.go resolveInstancePath).
-function socketPath(configDir, instance) {
+/**
+ * The socket of `instance` in Marasi config directory `configDir`, by
+ * Marasi's instance name rules (marasi cmd/marasi/root.go resolveInstancePath).
+ */
+export function socketPath(configDir, instance) {
   if (
     typeof instance !== "string" ||
     !instance ||

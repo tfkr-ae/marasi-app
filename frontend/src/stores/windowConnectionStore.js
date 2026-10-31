@@ -25,6 +25,11 @@ const bridge = globalThis.window?.marasiApp ?? {
   onWindowsChanged: () => () => {},
   reportProject: async () => {},
   reportHeld: async () => {},
+  listRemotes: async () => [],
+  connectRemote: async () => ({ error: "Open Marasi v2 to connect to an instance" }),
+  connectSaved: async () => ({ error: "Open Marasi v2 to connect to an instance" }),
+  forgetRemote: async () => {},
+  refusedRemote: async () => null,
 };
 
 export const windowConnection = createWindowConnectionStore({
@@ -35,6 +40,11 @@ export const windowConnection = createWindowConnectionStore({
   disconnect: () => bridge.disconnect(),
   marasi: () => bridge.marasi(),
   chooseMarasi: (bundled) => bridge.chooseMarasi(bundled),
+  listRemotes: () => bridge.listRemotes(),
+  connectRemote: (form) => bridge.connectRemote(form),
+  connectSaved: (url) => bridge.connectSaved(url),
+  forgetRemote: (url) => bridge.forgetRemote(url),
+  refusedRemote: () => bridge.refusedRemote(),
   useConnection,
 });
 

@@ -3,8 +3,6 @@ import { goto } from "$app/navigation";
 import { get } from "svelte/store";
 import {
 	OpenProject,
-	StartProxy,
-	UpdateProxy,
 	DownloadCert,
 	CopyCertToClipboard,
 	GetCheckpointItems,
@@ -27,34 +25,36 @@ import {
 	switchOpening,
 } from "../stores.js";
 
+// Listens on the modal's address and port, starting the listener or moving
+// it; the listener store follows what Marasi answers.
 export function setupListener(r, toastStore) {
-	const active = get(listener).status;
-	const apply = active ? UpdateProxy : StartProxy;
-	apply(r.addr, r.port)
+	listener
+		.setup(r.addr, r.port)
 		.then(() => {
-			listener.set({
-				status: true,
-				address: r.addr,
-				port: r.port,
-			});
 			toastStore.trigger({
 				message: "Listening on " + r.addr + ":" + r.port,
 				background: "variant-filled-success",
 			});
 		})
 		.catch(() => {
-			if (!active) {
-				listener.set({
-					status: false,
-					address: r.addr,
-					port: r.port,
-				});
-			}
 			toastStore.trigger({
 				message: "Failed to setup listener on " + r.addr + ":" + r.port,
 				background: "variant-filled-error",
 			});
 		});
+}
+
+// Stops the listener, from the Setup Listener modal.
+export function stopListener(toastStore) {
+	listener
+		.stop()
+		.then(() => toastStore.trigger({ message: "Listener stopped" }))
+		.catch((err) =>
+			toastStore.trigger({
+				message: "Failed to stop listener: " + err,
+				background: "variant-filled-error",
+			}),
+		);
 }
 
 // The opening screen waits this long once an open is underway before it
@@ -208,7 +208,8 @@ export function listenerModal(toastStore) {
 		toggleAction: "global.setup-listener",
 		title: "Setup Listener",
 		response: (r) => {
-			if (r) setupListener(r, toastStore);
+			if (r?.stop) stopListener(toastStore);
+			else if (r) setupListener(r, toastStore);
 		},
 	};
 }

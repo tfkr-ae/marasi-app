@@ -17,16 +17,28 @@ import { logbookStore } from "../stores/logbookStore";
 import { findingStore } from "../stores/findingStore";
 import { testCaseStore } from "../stores/testCaseStore";
 import { upstreamProxyStore } from "../stores/upstreamProxyStore";
+import { listenerStore } from "../stores/listenerStore.js";
+import { dashboardStore } from "../stores/dashboardStore.js";
 
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
+  "listener.started": (status) => listenerStore.onListener(status),
+  "listener.updated": (status) => listenerStore.onListener(status),
+  "listener.stopped": (status) => listenerStore.onListener(status),
+  "job.progress": (job) => jobsStore.onJobProgress(job),
+  "job.complete": (job) => {
+    jobsStore.onJobComplete(job);
+    dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
+  },
 };
 
 // Every store that shows the instance's data. Launchpad drafts live in the
 // window, so the Launchpad's reload keeps them.
 const stores = [
   logStore,
+  listenerStore,
+  dashboardStore,
   ledgerStore,
   sitemapStore,
   recentTraffic,

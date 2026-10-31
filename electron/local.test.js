@@ -179,3 +179,18 @@ test("connecting a window to a running instance takes no ownership of it", async
   assert.equal(connections.get(1), connection);
   assert.deepEqual(await connections.quit(), []);
 });
+
+test("a remote named like an instance the app started doesn't keep that instance running at quit", async () => {
+  const machine = fakeMachine();
+  const connections = local(machine);
+  await connections.startup(1);
+  const remote = { instance: "default", origin: "http://10.1.26.31:7070", token: "t", remote: true, loopbackTurnedOn: false };
+  connections.use(2, remote);
+  assert.equal(connections.get(2), remote);
+  // The remote isn't the local default: disconnecting window 1 leaves
+  // the default running at quit, as with no other window.
+  connections.disconnect(1);
+  assert.deepEqual(await connections.quit(), []);
+  connections.disconnect(2);
+  assert.equal(connections.get(2), undefined);
+});

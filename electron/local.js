@@ -24,7 +24,8 @@ function startRefusal(err) {
  * chose, or the bundled one. Windows are keyed by their webContents id.
  */
 export function createLocalConnections({ configDir, run, call, marasiBin }) {
-  // Each window's {instance, origin, token, loopbackTurnedOn}.
+  // Each window's {instance, origin, token, loopbackTurnedOn}, plus
+  // `remote` for a remote one.
   const connections = new Map();
   // The instances the app started and hasn't been disconnected from:
   // quitting stops these, and only these.
@@ -129,14 +130,17 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
     const connection = connections.get(id);
     if (!connection) return;
     connections.delete(id);
-    if (![...connections.values()].some((other) => other.instance === connection.instance)) {
+    if (![...connections.values()].some((other) => !other.remote && other.instance === connection.instance)) {
       started.delete(connection.instance);
     }
   }
+
+  /** Makes `connection`, a remote one (remotes.js), window `id`'s. */
+  const use = (id, connection) => connections.set(id, connection);
 
   // A closed window: its connection goes, but an instance the app started
   // for it still stops at quit, as closing a window isn't a disconnect.
   const forget = (id) => connections.delete(id);
 
-  return { startup, open, connect, start, disconnect, forget, quit, get: (id) => connections.get(id) };
+  return { startup, open, connect, start, use, disconnect, forget, quit, get: (id) => connections.get(id) };
 }
