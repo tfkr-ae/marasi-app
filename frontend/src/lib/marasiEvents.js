@@ -20,6 +20,7 @@ import { upstreamProxyStore } from "../stores/upstreamProxyStore";
 import { listenerStore } from "../stores/listenerStore.js";
 import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
+import { projectSwitch } from "../stores/projectSwitchStore.js";
 
 // Each Marasi event's handler, by event name.
 const handlers = {
@@ -38,6 +39,14 @@ const handlers = {
   "update.failed": (failure) => instanceUpdate.onFailed(failure),
   "service.restarting": (restart) => instanceUpdate.onRestarting(restart),
   "service.restart_failed": (failure) => instanceUpdate.onRestartFailed(failure),
+  // A switch of the instance's project, by any client; the window reloads
+  // every store's project on project.opened.
+  "project.opening": (event) => projectSwitch.onOpening(event),
+  "project.upgrading": (event) => projectSwitch.onUpgrading(event),
+  "project.waiting": (event) => projectSwitch.onWaiting(event),
+  "project.opened": (event) =>
+    projectSwitch.onOpened(event).catch((err) => console.error("Loading the opened project failed:", err)),
+  "project.opening_failed": (event) => projectSwitch.onOpeningFailed(event),
 };
 
 // Every store that shows the instance's data. Launchpad drafts live in the

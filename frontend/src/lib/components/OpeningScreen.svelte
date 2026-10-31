@@ -2,11 +2,13 @@
 	// The opening screen: what opening a project is doing, step by step, and
 	// the way forward when it can't. It renders only what lib/openProgress.js
 	// returns for the open; the layout shows it over the app and handles the
-	// choices: `stay`, `retry`, `open` (detail: the picked project's path)
-	// and `browse`.
+	// choices: `stay`, `retry`, `open` (detail: the picked project's path),
+	// `browse`, `owner` (connect to the instance that owns a locked project)
+	// and `checkpoint` (resolve the held items a switch waits for).
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
 	import {
+		AppWindow,
 		Check,
 		ChevronDown,
 		ChevronRight,
@@ -14,12 +16,15 @@
 		FolderOpen,
 		Lock,
 		RotateCw,
+		ShieldAlert,
 	} from "lucide-svelte";
 	import Logo from "./Logo.svelte";
 	import { openingScreen } from "../openProgress.js";
 
 	/** The open in progress (openProgress.js state). */
 	export let state;
+	/** Whether projects can be picked in this machine's file dialog. */
+	export let canBrowse = true;
 
 	const dispatch = createEventDispatcher();
 	$: screen = openingScreen(state);
@@ -112,10 +117,25 @@
 		<div class="mt-5 min-h-16 text-sm">
 			<p>{screen.sentence}</p>
 			{#if screen.upgrade}
-				<div class="mt-3"><ProgressBar {...bar} /></div>
+				<div class="mt-3">
+					<ProgressBar {...bar} value={screen.upgrade.applied} max={screen.upgrade.total} />
+				</div>
 				<p class="mt-1 font-mono text-xs opacity-60">
-					{screen.upgrade.file} · {screen.upgrade.applied} applied
+					{screen.upgrade.migration} · {screen.upgrade.applied} of {screen.upgrade.total}
 				</p>
+			{:else if screen.waiting}
+				<ul class="mt-3 max-h-40 space-y-1 overflow-y-auto font-mono text-xs opacity-80" aria-label="Waiting for">
+					{#each screen.waiting.items as item}
+						<li class="truncate" title={item}>{item}</li>
+					{/each}
+				</ul>
+				{#if screen.waiting.checkpoint}
+					<footer class="mt-4 flex justify-end">
+						<button class={positive} on:click={() => dispatch("checkpoint")}>
+							<ShieldAlert size={14} /><span>Go to Checkpoint</span>
+						</button>
+					</footer>
+				{/if}
 			{:else if screen.load.part}
 				<div class="mt-3">
 					<ProgressBar {...bar} value={screen.load.done} max={screen.load.total} />
@@ -142,12 +162,14 @@
 							</li>
 						{/each}
 					</ul>
-					<button
-						class="flex w-full items-center gap-2 border-t border-surface-200 px-2 py-1.5 text-left text-sm opacity-80 hover:bg-primary-500/10 dark:border-surface-700"
-						on:click={() => dispatch("browse")}
-					>
-						<FolderOpen size={14} /> Browse…
-					</button>
+					{#if canBrowse}
+						<button
+							class="flex w-full items-center gap-2 border-t border-surface-200 px-2 py-1.5 text-left text-sm opacity-80 hover:bg-primary-500/10 dark:border-surface-700"
+							on:click={() => dispatch("browse")}
+						>
+							<FolderOpen size={14} /> Browse…
+						</button>
+					{/if}
 				</div>
 			{:else if screen.load.done < screen.load.total}
 				<div class="mt-3"><ProgressBar {...bar} /></div>
@@ -164,6 +186,11 @@
 				{#if screen.actions.tryAgain}
 					<button class={neutral} on:click={() => dispatch("retry")}>
 						<RotateCw size={14} /><span>Try again</span>
+					</button>
+				{/if}
+				{#if screen.actions.owner}
+					<button class={neutral} on:click={() => dispatch("owner")}>
+						<AppWindow size={14} /><span>Connect to {screen.actions.owner}</span>
 					</button>
 				{/if}
 				<!-- With no recent project left to pick, Open stays, disabled. -->

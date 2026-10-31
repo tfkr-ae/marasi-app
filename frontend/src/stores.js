@@ -7,9 +7,7 @@ import {
   GetExtensions,
   LoadExtensions,
   GetUserName,
-  GetRecentProjects,
 } from "./lib/bindings/App";
-import { notPortedText } from "./lib/bindings/notPorted.js";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
@@ -25,20 +23,11 @@ import { sitemapStore } from "./stores/sitemapStore";
 import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { savedQueriesStore } from "./stores/savedQueriesStore";
+import { upstreamProxyStore } from "./stores/upstreamProxyStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";
-import {
-  loadSignals,
-  openingFor,
-  openingScreen,
-  withFailed,
-  withLoadPart,
-  withOpened,
-  withOpenLog,
-  withRecents,
-  withSwitched,
-} from "./lib/openProgress.js";
+import { loadSignals } from "./lib/openProgress.js";
 
 // Startup. `started` turns true once the first project has loaded, and the
 // app's pages stay mounted from then on; `isReady` is false while a project
@@ -119,113 +108,17 @@ export async function readKeybindings() {
 export { listenerStore as listener } from "./stores/listenerStore.js";
 export let activeProject = writable("Marasi");
 /**
- * The open in progress, as lib/openProgress.js's state, or null. The root
- * layout shows it as the opening screen over the app while `openingShown`.
- */
-export const opening = writable(null);
-/** Whether the opening screen is up: slow opens, failures and startup. */
-export const openingShown = writable(false);
-/**
- * The project the app's Go side has open, `{name, path}` (path null when
- * unknown), so a failed open can offer to stay in it and leave it out of
- * the list.
- */
-const currentProject = writable(null);
-/**
  * Bumped after each project loads, so the app's pages mount afresh on the
  * new project's stores.
  */
 export const pagesKey = writable(0);
-/**
- * The project last opened and loaded, `{name, path}`, or null until the
- * first one has: startup carries on once it's set.
- */
-export const loadedProject = writable(null);
-/**
- * Starts the opening screen's state for opening `name` at `path` (null when
- * only a bare name is known), and returns it. `scratchpad` marks the
- * scratchpad. Before the first project has loaded (startup), nothing is
- * open to stay in. An opening screen that's up stays up for the new open.
- */
-export function startOpening({ name, path = null, scratchpad = false }) {
-  const current = get(appState).started ? get(currentProject) : null;
-  const state = openingFor({ name, path, current, scratchpad });
-  opening.set(state);
-  return state;
-}
-/** Shows the opening screen for the open in progress. */
-export function showOpening() {
-  openingShown.set(true);
-}
-/** Feeds a backend log event to the open in progress, if any. */
-export function feedOpeningLog(log) {
-  opening.update((state) => state && withOpenLog(state, log));
-}
-/** Records that the target is open and the previous project released. */
-export function switchOpening() {
-  opening.update((state) => state && withSwitched(state));
-  currentProject.set(get(opening)?.current ?? null);
-}
-/**
- * Records that the open in progress succeeded, and closes the screen.
- * Returns the project that opened, `{name, path}`.
- */
-export function finishOpening() {
-  const state = get(opening);
-  const opened = state && openingScreen(withOpened(state)).opened;
-  clearOpening();
-  if (!opened) return null;
-  currentProject.set(opened);
-  loadedProject.set(opened);
-  return opened;
-}
-/**
- * Stays in the project still open after a failed open, and closes the
- * screen. When the target opened but didn't load, that's the target.
- */
-export function stayInCurrentProject() {
-  const state = get(opening);
-  clearOpening();
-  if (state?.current) loadedProject.set(state.current);
-}
-/**
- * Records that the open in progress failed with `error`, and shows the
- * opening screen with the recent projects to open instead, however fast
- * the open failed.
- */
-export function failOpening(error) {
-  const current = get(opening);
-  if (!current) return;
-  const failed = withFailed(current, error);
-  opening.set(failed);
-  showOpening();
-  GetRecentProjects()
-    .then((recents) => opening.update((state) => (state === failed ? withRecents(state, recents) : state)))
-    .catch((err) => console.error("Listing recent projects failed:", err));
-}
-/**
- * Starts the app on the connected instance's project when loading it
- * failed because a call isn't ported to v2 yet, so the frame and pages
- * still draw, with empty data. Any other failure keeps the opening screen
- * up.
- */
-export function startWithoutProject() {
-  const state = get(opening);
-  if (state?.failure?.error !== notPortedText) return;
-  clearOpening();
-  loadedProject.set({ name: state.name, path: state.path });
-}
-/** Closes the opening screen, as after a cancelled open or Stay in. */
-export function clearOpening() {
-  opening.set(null);
-  openingShown.set(false);
-}
-// Signals that the load sequence starts loading `signal`.
-function loadPart(signal) {
-  opening.update((state) => state && withLoadPart(state, signal));
-}
 
-export async function openProject() {
+/**
+ * Reads the project the instance has open into the stores, after startup
+ * or a switch. `loadPart(signal)` is told as each part starts loading
+ * (loadSignals in lib/openProgress.js), for the opening screen.
+ */
+export async function openProject(loadPart = () => {}) {
   // Each loadPart signal tells the opening screen which part loads next.
   loadPart(loadSignals.traffic);
   reportMetadata.set({
@@ -234,7 +127,7 @@ export async function openProject() {
     type: "Assessment Type",
     is_draft: true,
     scope: "Assessment Scope",
-    assessor: await GetUserName(),
+    assessor: await GetUserName().catch(() => "Assessor"),
     start: new Date(
       new Date().setDate(new Date().getDate() - 14),
     ).toLocaleDateString("en-CA"),
@@ -307,6 +200,10 @@ export async function openProject() {
   await armoryStore.populate();
   loadPart(loadSignals.launchpads);
   await launchpadStore.populate();
+  // The project's upstream proxy selection. The listener and the
+  // instance's version belong to the instance, and Home reads the
+  // dashboard as it mounts.
+  await upstreamProxyStore.reload().catch((err) => console.error("Reading upstream proxies failed:", err));
 }
 
 export async function populateWaypoints() {

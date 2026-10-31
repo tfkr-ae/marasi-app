@@ -131,6 +131,18 @@ test("a window opened for another instance starts with no connection and starts 
   assert.deepEqual(machine.commands, []);
 });
 
+test("a window opened on a running instance connects to it at startup, takes no ownership, and keeps it after a reload", async () => {
+  const machine = fakeMachine({ default: "127.0.0.1:50037", "acme-cli": "127.0.0.1:50041" });
+  const connections = local(machine);
+  connections.open(2, "acme-cli");
+  const connection = await connections.startup(2);
+  assert.equal(connection.instance, "acme-cli");
+  assert.equal(connection.origin, "http://127.0.0.1:50041");
+  assert.deepEqual(machine.commands, []);
+  assert.equal((await connections.startup(2)).resumed, true);
+  assert.deepEqual(await connections.quit(), []);
+});
+
 test("a launch whose default can't take the proxy port starts it on a free one", async () => {
   const machine = fakeMachine({}, { portBusy: true });
   const connections = local(machine);

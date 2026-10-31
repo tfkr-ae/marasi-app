@@ -4,6 +4,13 @@
     import { GetRecentProjects } from "../bindings/App";
     import { OpenFileDialog } from "../bindings/App";
     import { X } from "lucide-svelte";
+    import { recentProjects } from "../openProgress.js";
+    import { windowConnection } from "../../stores/windowConnectionStore.js";
+
+    // A remote instance's projects are on its machine, so a project there
+    // is opened by a typed path rather than through this machine's dialog.
+    $: remote = Boolean($windowConnection.connection?.remote);
+    $: instance = $windowConnection.connection?.instance ?? "the instance";
 
     export let parent;
     let recent = [];
@@ -112,28 +119,16 @@
     }
     
     onMount(() => {
-        GetRecentProjects().then((recents) => {
-            const placeholder = []
-            recents.forEach((project) => {
-                console.log(project)
-                // Get just the filename for display
-                const fileName = project.ProjectName.split("/").pop()?.split("\\").pop() || project.ProjectName;
-                const entry = {
-                    // The label is now the name for display in the UI
-                    label: fileName.replace('.marasi', ''),
-                    // Store full path in value
-                    value: project.ProjectName,
-                    // Store the path separately for display
-                    path: project.ProjectName,
-                    // Store the date for sorting
-                    date: new Date(project.Date)
-                }
-                placeholder.push(entry);
-            });
-            
-            // Sort projects by date, most recent first
-            placeholder.sort((a, b) => b.date - a.date);
-            
+        GetRecentProjects().then((items) => {
+            // The instance's projects, newest first; each opens by its path
+            // on the instance machine.
+            const placeholder = recentProjects(items).map((project) => ({
+                label: project.name,
+                value: project.path,
+                path: project.path,
+                opened: project.opened,
+            }));
+
             recent = placeholder;
             filteredList = placeholder;
             if (filteredList.length > 0) {
@@ -192,7 +187,10 @@
                                     selectProject(i);
                                     openSelected();
                                 }}>
-                                <div class="project-name">{project.label}</div>
+                                <div class="project-name">
+                                    <span>{project.label}</span>
+                                    <span class="project-opened">{project.opened}</span>
+                                </div>
                                 <div class="project-path">{project.path}</div>
                             </li>
                         {/each}
@@ -216,6 +214,7 @@
             </div>
             
             <!-- ALTERNATIVE ACTION (BROWSE FILES) -->
+            {#if !remote}
              <hr>
             <div class="w-full mt-2">
                 <button 
@@ -226,10 +225,13 @@
                     Browse Files...
                 </button>
             </div>
+            {/if}
             
             <!-- Simple information about project creation behavior -->
             <div class="text-xs opacity-70 mt-2">
-                {#if !input.includes('/') && !input.includes('\\')}
+                {#if remote}
+                    Enter a name, or a path on {instance}'s machine.
+                {:else if !input.includes('/') && !input.includes('\\')}
                     New projects with just a name will be created in the default directory.
                 {/if}
             </div>
@@ -260,8 +262,18 @@
     }
     
     .project-name {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
         font-weight: 500;
         margin-bottom: 0.25rem;
+    }
+
+    .project-opened {
+        margin-left: auto;
+        font-size: 0.75rem;
+        font-weight: 400;
+        opacity: 0.6;
     }
     
     .project-path {

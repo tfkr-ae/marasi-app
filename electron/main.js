@@ -182,11 +182,12 @@ function windowsChanged() {
 }
 
 // A window. A `blank` one opens on the connection screen, to connect to
-// or start another instance, rather than on the default instance, a
-// little below and right of the focused window.
-function createWindow({ blank = false } = {}) {
+// or start another instance, and one for `instance` connects to that
+// running local instance, rather than on the default instance, a little
+// below and right of the focused window.
+function createWindow({ blank = false, instance = null } = {}) {
   const parent = BrowserWindow.getFocusedWindow();
-  const offset = parent && blank ? { x: parent.getBounds().x + 28, y: parent.getBounds().y + 28 } : {};
+  const offset = parent && (blank || instance) ? { x: parent.getBounds().x + 28, y: parent.getBounds().y + 28 } : {};
   const window = new BrowserWindow({
     title: "Marasi",
     width: 1600,
@@ -211,7 +212,7 @@ function createWindow({ blank = false } = {}) {
     if (new URL(url).origin !== appOrigin) event.preventDefault();
   });
   const id = window.webContents.id;
-  if (blank) connections.open(id);
+  if (blank || instance) connections.open(id, instance);
   windows.opened(id);
   window.webContents.on("destroyed", () => {
     connections.forget(id);
@@ -356,6 +357,10 @@ function serveConnections(appConfig) {
   // One connection per window: another instance opens in a new window.
   handle("window:new", () => {
     createWindow({ blank: true });
+  });
+  // The running local instance that owns a locked project, in a new window.
+  handle("window:open-instance", (event, instance) => {
+    createWindow({ instance: String(instance) });
   });
   handle("windows:list", (event) => windows.list(event.sender.id));
   handle("window:focus", (event, id) => focusWindow(id));

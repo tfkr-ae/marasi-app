@@ -1,29 +1,8 @@
 // Operations shared by the global menu actions and the dashboard buttons.
-import { goto } from "$app/navigation";
 import { get } from "svelte/store";
-import {
-	OpenProject,
-	DownloadCert,
-	CopyCertToClipboard,
-	GetCheckpointItems,
-} from "./bindings/App";
-import { EventsOnce, WindowSetTitle } from "./bindings/runtime";
-import { projectName } from "./openProgress.js";
-import { windowTitle } from "../stores/windowConnectionStore.js";
-import { checkpointHeldModal, heldCheckpointIDs } from "./checkpointHeld.js";
-import {
-	activeProject,
-	appState,
-	clearOpening,
-	failOpening,
-	finishOpening,
-	listener,
-	openProject,
-	pagesKey,
-	showOpening,
-	startOpening,
-	switchOpening,
-} from "../stores.js";
+import { DownloadCert, CopyCertToClipboard } from "./bindings/App";
+import { listener } from "../stores.js";
+import { projectSwitch } from "../stores/projectSwitchStore.js";
 
 // Listens on the modal's address and port, starting the listener or moving
 // it; the listener store follows what Marasi answers.
@@ -57,146 +36,53 @@ export function stopListener(toastStore) {
 		);
 }
 
-// The opening screen waits this long once an open is underway before it
-// shows, so quick switches stay instant.
-const openingDelay = 300;
-// The last open asked for, which the opening screen's Try again re-runs.
-let lastOpen = null;
-// Marasi's scratchpad's file path, known once the window has connected to
-// an instance with it open.
-let scratchpadPath = null;
-
 /**
- * Opens the project `r` (a full path, or a bare name for a project in the
- * config dir) and loads it. The opening screen shows the whole open, Go's
- * open and the load, if it takes longer than openingDelay once Go is past
- * the unsaved-work prompt, and always when it fails. The open project and
- * the app's pages stay as they were unless the target's database opens.
- * The layout feeds the screen the open's log events (see
- * lib/openProgress.js). A switch refused over held Checkpoint items opens
- * a modal on modalStore instead. Resolves to the project that opened,
- * `{name, path}`, or null.
+ * Opens project `r` on the connected instance: a bare name in its projects
+ * directory, or a path on the instance machine. The instance waits for
+ * held Checkpoint items first. The opening screen shows a slow switch and
+ * any failure (stores/createProjectSwitchStore.js), and the window's pages
+ * stay as they were unless the project opens. Resolves to the project that
+ * opened, `{name, path}`, or null.
  */
-export function openProjectFile(r, toastStore, modalStore) {
-	lastOpen = () => openProjectFile(r, toastStore, modalStore);
-	const isPath = /[\\/]/.test(String(r));
-	return openWithScreen({
-		name: projectName(r),
-		// A bare name (a new project) has no path until its database opens.
-		path: isPath ? String(r) : null,
-		// The scratchpad picked from the list is still the scratchpad.
-		scratchpad: isPath && String(r) === scratchpadPath,
-		open: () => OpenProject(r),
-		toastStore,
-		modalStore,
-	});
+export async function openProjectFile(r, toastStore) {
+	const opened = await projectSwitch.open(r);
+	if (opened) {
+		toastStore?.trigger({
+			message: "Opened " + opened.name + " project",
+			background: "variant-filled-success",
+		});
+	}
+	return opened;
 }
 
 /**
- * Opens the project the connected instance has open, at startup, with the
+ * Loads the project the connected instance has open, at startup, with the
  * opening screen up from the start. `status` is the instance's
  * /service/status. Resolves like openProjectFile.
  */
 export function openConnectedProject(status) {
-	lastOpen = () => openConnectedProject(status);
-	const name = projectName(status.project);
-	if (name === "scratchpad") scratchpadPath = status.project;
-	return openWithScreen({
-		name,
-		path: status.project,
-		scratchpad: name === "scratchpad",
-		open: async () => name,
-	});
+	return projectSwitch.openConnected(status);
 }
 
-// Runs `open` (Go's open, resolving to the project's name) and loads the
-// project, with the opening screen for `name` at `path`. A toastStore
-// announces the open, and a modalStore shows a refusal over held Checkpoint
-// items.
-async function openWithScreen({ name: target, path = null, scratchpad = false, open, toastStore = null, modalStore = null }) {
-	const { current } = startOpening({ name: target, path, scratchpad });
-	appState.update((s) => ({ ...s, isReady: false }));
-	// With nothing open there's nothing else to show, so the screen is up at
-	// once. Otherwise the delay starts once Go is past the unsaved-work
-	// prompt, so a switch cancelled there never shows the screen.
-	let showTimer;
-	let stopWaiting = () => {};
-	if (current === null) showOpening();
-	else stopWaiting = EventsOnce("project-opening", () => (showTimer = setTimeout(showOpening, openingDelay)));
-	try {
-		let name;
-		try {
-			name = await open();
-		} catch (repoError) {
-			const held = heldCheckpointIDs(repoError);
-			// Cancelled at the unsaved-work prompt: nothing to show.
-			if (String(repoError).includes("project switch cancelled")) clearOpening();
-			// Held after the picker opened: refused before it began, so the
-			// open project stays on screen.
-			else if (held && modalStore) {
-				clearOpening();
-				modalStore.trigger(heldModal());
-			} else failOpening(repoError);
-			return null;
-		}
-		switchOpening();
-		activeProject.set(name);
-		WindowSetTitle(windowTitle(name));
-		goto("/");
-		try {
-			await openProject();
-		} catch (loadError) {
-			failOpening(loadError);
-			return null;
-		} finally {
-			// The pages mount afresh on the new project's stores.
-			pagesKey.update((key) => key + 1);
-		}
-		const opened = finishOpening();
-		toastStore?.trigger({
-			message: "Opened " + name + " project",
-			background: "variant-filled-success",
-		});
-		return opened;
-	} finally {
-		stopWaiting();
-		clearTimeout(showTimer);
-		appState.update((s) => ({ ...s, isReady: true }));
-	}
-}
-
-/**
- * Re-runs the last open, for the opening screen's Try again: at startup,
- * the scratchpad until a project is picked.
- */
+/** Re-runs the last open, for the opening screen's Try again. */
 export function retryOpen() {
-	lastOpen?.();
+	projectSwitch.retry();
 }
 
-// The refusal over held Checkpoint items, which ⌘O closes again.
-const heldModal = () => ({
-	...checkpointHeldModal(() => goto("/checkpoint")),
-	toggleAction: "global.open-project",
-});
-
-/**
- * Opens the project picker, or, while Checkpoint holds items, the refusal
- * the switch would end in.
- */
-export async function openProjectPicker(toastStore, modalStore) {
-	const held = await GetCheckpointItems().catch(() => []);
+/** Opens the project picker. */
+export function openProjectPicker(toastStore, modalStore) {
 	if (get(modalStore)[0]) return;
-	modalStore.trigger(held?.length ? heldModal() : projectModal(toastStore, modalStore));
+	modalStore.trigger(projectModal(toastStore));
 }
 
-export function projectModal(toastStore, modalStore) {
+export function projectModal(toastStore) {
 	return {
 		type: "component",
 		component: "Project",
 		toggleAction: "global.open-project",
 		title: "Switch Projects",
 		response: (r) => {
-			if (r) openProjectFile(r, toastStore, modalStore);
+			if (r) openProjectFile(r, toastStore);
 		},
 	};
 }

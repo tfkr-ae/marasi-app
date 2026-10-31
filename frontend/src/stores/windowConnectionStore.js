@@ -36,6 +36,12 @@ export const windowList = createWindowListStore({
   reportHeld: (count) => bridge.reportHeld(count),
 });
 
+/** This machine's running instances, each its /service/status. */
+export const localInstances = () => bridge.listInstances();
+
+/** Opens a new window connected to running local `instance`. */
+export const openInstanceWindow = (instance) => bridge.openInstanceWindow(instance);
+
 /** A project picked in an OS dialog, for Start: its path, or null. */
 export const pickProject = () => bridge.pickProject();
 

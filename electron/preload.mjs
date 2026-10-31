@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // A new window on the connection screen, to connect to or start another
   // instance: each window has one connection.
   newWindow: () => ipcRenderer.invoke("window:new"),
+  // A new window connected to running local `instance`.
+  openInstanceWindow: (instance) => ipcRenderer.invoke("window:open-instance", instance),
   // The connected windows: [{id, instance, project, label, current}],
   // `current` marking this one.
   windows: () => ipcRenderer.invoke("windows:list"),

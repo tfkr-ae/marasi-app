@@ -48,14 +48,9 @@
 		extensions,
 		extensions_ui,
 		appState,
-		opening,
-		openingShown,
 		pagesKey,
-		feedOpeningLog,
-		loadedProject,
-		stayInCurrentProject,
-		startWithoutProject,
 	} from "../stores.js";
+	import { projectSwitch } from "../stores/projectSwitchStore.js";
 	import {
 		openProjectFile,
 		openConnectedProject,
@@ -250,14 +245,14 @@
 	// open. It resolves to that project.
 	let stopWaitingForProject = () => {};
 	const StartupRoutine2 = new Promise((resolve) => {
-		stopWaitingForProject = loadedProject.subscribe(
-			(project) => project && resolve(project),
+		stopWaitingForProject = projectSwitch.subscribe(
+			({ loaded }) => loaded && resolve(loaded),
 		);
 		readConfig()
 			.catch((err) => console.error("Reading the app config failed:", err))
 			.then(connectWindow)
 			.then((connection) => openConnectedProject(connection.status))
-			.then((project) => project ?? startWithoutProject());
+			.then((project) => project ?? projectSwitch.startWithoutProject());
 	});
 	// Shows the connected instance's listener as it is: the instance was
 	// started with its listener, or another client set it up, so v1's start
@@ -301,8 +296,6 @@
 		EventsOn("update-installed", onUpdateInstalled);
 		EventsOn("update-failed", onUpdateFailed);
 		refreshUpdateState();
-		// The open in progress takes its steps from the backend's log events.
-		EventsOn("log", feedOpeningLog);
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
@@ -518,7 +511,6 @@
 			EventsOff("checkpoint-abandoned");
 			EventsOff("checkpoint-settled");
 			stopAbandonToasts?.();
-			EventsOff("log");
 			EventsOff("update-available");
 			EventsOff("update-progress");
 			EventsOff("update-installed");
@@ -956,7 +948,7 @@
 					/>
 				{/if}
 			</div>
-		{:else if !$opening}
+		{:else if !$projectSwitch.opening}
 			<div
 				class="flex items-center w-full h-full justify-center"
 			>
@@ -984,17 +976,22 @@
 {/if}
 <!-- The opening screen covers the app rather than replacing it, so the open
      project's pages stay mounted, exactly as they were, if the open fails. -->
-{#if $opening && $openingShown}
+{#if $projectSwitch.opening && $projectSwitch.shown}
 	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
+		<!-- A remote instance's projects are on its machine, so there is no
+		     file dialog: the project picker takes a typed path. -->
 		<OpeningScreen
-			state={$opening}
-			on:stay={stayInCurrentProject}
+			state={$projectSwitch.opening}
+			canBrowse={!$windowConnection.connection?.remote}
+			on:stay={projectSwitch.stay}
 			on:retry={retryOpen}
-			on:open={(event) => openProjectFile(event.detail, toastStore, modalStore)}
+			on:owner={projectSwitch.connectOwner}
+			on:checkpoint={projectSwitch.showCheckpoint}
+			on:open={(event) => openProjectFile(event.detail, toastStore)}
 			on:browse={() =>
 				OpenFileDialog()
 					.then((path) => {
-						if (path) openProjectFile(path, toastStore, modalStore);
+						if (path) openProjectFile(path, toastStore);
 					})
 					.catch((err) =>
 						console.error("Opening the file dialog failed:", err),

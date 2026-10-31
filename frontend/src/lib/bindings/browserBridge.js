@@ -43,6 +43,7 @@ export const browserBridge = {
   copyText: (text) => navigator.clipboard.writeText(text),
   // A plain browser tab is the only window, so there is no other to list.
   newWindow: outsideElectron,
+  openInstanceWindow: outsideElectron,
   windows: async () => [],
   focusWindow: async () => {},
   onWindowsChanged: () => () => {},

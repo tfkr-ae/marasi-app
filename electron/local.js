@@ -33,6 +33,8 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
   // The windows startup has run for: a window connects to the default
   // instance once, so after a disconnect and a reload it stays unconnected.
   const launched = new Set();
+  // The running instance each window opened for one connects to at startup.
+  const wanted = new Map();
 
   // Starts local `instance` on `project` (the scratchpad when null) with a
   // loopback network address and the proxy listener `listener` asks for
@@ -71,11 +73,17 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
   /**
    * Connects window `id` at launch: to the default instance, starting it
    * on the scratchpad when it isn't running. A window that has a
-   * connection keeps it, as after a reload, marked `resumed`, and one that
-   * already launched or was opened for another instance gets null.
+   * connection keeps it, as after a reload, marked `resumed`. One opened
+   * for a running instance connects to it; one that already launched or
+   * was opened for the connection screen gets null.
    */
   async function startup(id) {
     if (connections.has(id)) return { ...connections.get(id), resumed: true };
+    if (wanted.has(id)) {
+      const instance = wanted.get(id);
+      wanted.delete(id);
+      return connect(id, instance);
+    }
     if (launched.has(id)) return null;
     launched.add(id);
     let connection;
@@ -91,9 +99,13 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
 
   /**
    * A window opened to connect to or start another instance: its startup
-   * leaves it unconnected, on the connection screen.
+   * leaves it unconnected, on the connection screen, or connects it to
+   * running local `instance` when one is named.
    */
-  const open = (id) => launched.add(id);
+  function open(id, instance = null) {
+    launched.add(id);
+    if (instance) wanted.set(id, instance);
+  }
 
   /** Stops the instances the app started; resolves to their names. */
   async function quit() {
@@ -140,7 +152,10 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
 
   // A closed window: its connection goes, but an instance the app started
   // for it still stops at quit, as closing a window isn't a disconnect.
-  const forget = (id) => connections.delete(id);
+  const forget = (id) => {
+    connections.delete(id);
+    wanted.delete(id);
+  };
 
   return { startup, open, connect, start, use, disconnect, forget, quit, get: (id) => connections.get(id) };
 }
