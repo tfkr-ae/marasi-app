@@ -37,3 +37,42 @@ export function pairSummary(item) {
     Route: route(item.upstream_proxy),
   };
 }
+
+/** A GET /traffic/{id} answer as v1's RequestResponseRow. */
+export function pairRow(pair) {
+  const request = pair.request ?? {};
+  const response = pair.response ?? {};
+  const metadata = pair.metadata ?? {};
+  const prettified = { Request: pair.prettified?.request ?? "", Response: pair.prettified?.response ?? "" };
+  return {
+    Request: {
+      ID: pair.id,
+      Number: pair.number,
+      Scheme: request.scheme,
+      Method: request.method,
+      Host: request.host,
+      Path: request.path,
+      Raw: rawText(request.raw),
+      Metadata: metadata,
+      Prettified: prettified.Request,
+      RequestedAt: request.requested_at,
+    },
+    Response: {
+      ID: pair.id,
+      Status: response.status,
+      StatusCode: response.status_code,
+      ContentType: response.content_type,
+      Length: response.length,
+      Raw: rawText(response.raw),
+      Metadata: metadata,
+      Prettified: prettified.Response,
+      RespondedAt: response.responded_at ?? zeroTime,
+      Route: route(pair.upstream_proxy),
+    },
+    Metadata: metadata,
+    Note: pair.note ?? "",
+    Highlight: pair.highlight ?? null,
+    Prettified: prettified,
+    Route: route(pair.upstream_proxy),
+  };
+}

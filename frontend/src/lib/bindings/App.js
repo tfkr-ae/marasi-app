@@ -4,7 +4,7 @@
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
 import { marasi, MarasiError } from "./marasi.js";
-import { pairSummary } from "./traffic.js";
+import { pairRow, pairSummary } from "./traffic.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
@@ -74,6 +74,9 @@ async function unlessNotFound(call) {
     throw error;
   }
 }
+
+// A pair in full, as Marasi answers GET /traffic/{id}.
+const readPair = (id) => marasi.get(`/traffic/${encodeURIComponent(id)}`);
 
 // The project's own exclusion setting, or null when it follows the app default.
 const ownExclusion = () => unlessNotFound(marasi.get(exclusionSetting));
@@ -225,9 +228,14 @@ export const GetLaunchpads = notPorted("GetLaunchpads");
 // last page's next_cursor.
 export const GetLogs = (cursor) =>
   marasi.get(`/logs?limit=500${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-export const GetMetadata = notPorted("GetMetadata");
-export const GetNote = notPorted("GetNote");
-export const GetRawDetails = notPorted("GetRawDetails");
+export const GetMetadata = (id) => marasi.get(`/traffic/${encodeURIComponent(id)}/metadata`);
+// A pair's note, "" when it has none.
+export const GetNote = async (id) => (await readPair(id)).note ?? "";
+// A pair in full as v1's RequestResponseRow, or null when it is gone.
+export const GetRawDetails = async (id) => {
+  const pair = await unlessNotFound(readPair(id));
+  return pair && pairRow(pair);
+};
 // The instance's projects, by name: [{name, project, modified_at}], where
 // `project` is the path on the instance machine.
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
@@ -343,7 +351,12 @@ export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
 export const UnlinkTraffic = notPorted("UnlinkTraffic");
 export const UpdateArmoryTemplate = notPorted("UpdateArmoryTemplate");
 export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
-export const UpdateNote = notPorted("UpdateNote");
+// Saves a pair's note; an empty one deletes it, as v1 saved "".
+export const UpdateNote = async (id, note) => {
+  const path = `/notes/${encodeURIComponent(id)}`;
+  if (note) await marasi.put(path, { note });
+  else await unlessNotFound(marasi.delete(path));
+};
 export const UpdateProxy = (address, port) => marasi.post("/listener/update", { address, port: Number(port) });
 export const UpdateUpstreamProxy = notPorted("UpdateUpstreamProxy");
 export const UseUpstreamProxy = notPorted("UseUpstreamProxy");

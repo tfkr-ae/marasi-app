@@ -197,3 +197,90 @@ test("SetContentTypeExclusion refuses a value that isn't a content type, and sto
   await assert.rejects(App.SetContentTypeExclusion(["*/png"]), /invalid content-type exclusion/);
   assert.equal(sent.length, 0);
 });
+
+const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
+
+test("GetRawDetails reads the full pair as v1's RequestResponseRow, raw bytes as text", async () => {
+  answers["GET /traffic/a4"] = {
+    id: "a4",
+    number: 4,
+    note: "check this",
+    metadata: { has_note: 1 },
+    highlight: null,
+    request: {
+      scheme: "http",
+      method: "GET",
+      host: "example.com",
+      path: "/é",
+      raw: b64("GET /é HTTP/1.1\r\n\r\n"),
+      requested_at: "2026-11-01T01:05:13.666613+04:00",
+    },
+    response: {
+      status: "200 OK",
+      status_code: 200,
+      content_type: "application/json",
+      length: "2",
+      raw: b64('HTTP/1.1 200 OK\r\n\r\n{}'),
+      responded_at: "2026-11-01T01:05:13.666842+04:00",
+    },
+    prettified: { request: null, response: 'HTTP/1.1 200 OK\r\n\r\n{\n}' },
+    upstream_proxy: { name: "corp", address: "http://10.0.0.1:3128" },
+  };
+  const row = await App.GetRawDetails("a4");
+  assert.equal(sent.at(-1).path, "/traffic/a4");
+  assert.deepEqual(row, {
+    Request: {
+      ID: "a4",
+      Number: 4,
+      Scheme: "http",
+      Method: "GET",
+      Host: "example.com",
+      Path: "/é",
+      Raw: "GET /é HTTP/1.1\r\n\r\n",
+      Metadata: { has_note: 1 },
+      Prettified: "",
+      RequestedAt: "2026-11-01T01:05:13.666613+04:00",
+    },
+    Response: {
+      ID: "a4",
+      Status: "200 OK",
+      StatusCode: 200,
+      ContentType: "application/json",
+      Length: "2",
+      Raw: "HTTP/1.1 200 OK\r\n\r\n{}",
+      Metadata: { has_note: 1 },
+      Prettified: "HTTP/1.1 200 OK\r\n\r\n{\n}",
+      RespondedAt: "2026-11-01T01:05:13.666842+04:00",
+      Route: { Name: "corp", Address: "http://10.0.0.1:3128" },
+    },
+    Metadata: { has_note: 1 },
+    Note: "check this",
+    Highlight: null,
+    Prettified: { Request: "", Response: "HTTP/1.1 200 OK\r\n\r\n{\n}" },
+    Route: { Name: "corp", Address: "http://10.0.0.1:3128" },
+  });
+});
+
+test("GetRawDetails answers null for a pair that is gone, as v1 did", async () => {
+  assert.equal(await App.GetRawDetails("gone"), null);
+});
+
+test("GetNote and GetMetadata read the pair's note and metadata", async () => {
+  answers["GET /traffic/a4"] = { id: "a4", note: "", metadata: {}, request: {}, response: {}, prettified: {} };
+  answers["GET /traffic/a4/metadata"] = { has_note: 1, upgrade: "websocket" };
+  assert.equal(await App.GetNote("a4"), "", "a pair without a note reads empty");
+  assert.deepEqual(await App.GetMetadata("a4"), { has_note: 1, upgrade: "websocket" });
+});
+
+test("UpdateNote saves a note, and an empty one deletes it", async () => {
+  answers["PUT /notes/a4"] = { id: "a4", note: "x" };
+  await App.UpdateNote("a4", "x");
+  assert.deepEqual(sent.at(-1), { method: "PUT", path: "/notes/a4", search: "", body: { note: "x" } });
+
+  answers["DELETE /notes/a4"] = { id: "a4" };
+  await App.UpdateNote("a4", "");
+  assert.deepEqual(sent.at(-1), { method: "DELETE", path: "/notes/a4", search: "", body: undefined });
+
+  delete answers["DELETE /notes/a4"];
+  await App.UpdateNote("a4", ""); // no note to delete: nothing to do
+});
