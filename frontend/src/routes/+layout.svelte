@@ -87,7 +87,6 @@
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import {
 		OpenFileDialog,
-		StartProxy,
 	} from "../lib/bindings/App";
 	import {
 		ChefHat,
@@ -256,23 +255,11 @@
 			.then((connection) => openConnectedProject(connection.status))
 			.then((project) => project ?? startWithoutProject());
 	});
-	// Starts the listener on the configured address.
-	function startListener() {
-		return StartProxy($marasiConfig.DefaultAddress, $marasiConfig.DefaultPort)
-			.then(() => {
-				listener.set({
-					status: true,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			})
-			.catch((listenerError) => {
-				listener.set({
-					status: false,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			});
+	// Shows the connected instance's listener as it is: the instance was
+	// started with its listener, or another client set it up, so v1's start
+	// on the configured address doesn't apply.
+	function readListener() {
+		return listener.reload().catch((err) => console.error("Reading the listener failed:", err));
 	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
@@ -314,10 +301,9 @@
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
-			// The listener starts on the configured address, and the first-run
-			// setup shows only once it has started (or failed to), as it sets
-			// the listener up.
-			startListener().then(() => {
+			// The first-run setup shows only once the listener has been read,
+			// as it sets the listener up.
+			readListener().then(() => {
 				if (!$marasiConfig.FirstRun || $modalStore[0]) return;
 				modalStore.trigger({
 					type: "component",
