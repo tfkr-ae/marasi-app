@@ -11,7 +11,7 @@
 
 {#if isVisible}
     <div class="iframe-container">
-        <iframe id="interact" class="cyberchef-iframe" src={url} title="InteractSH">
+        <iframe id="interact" class="cyberchef-iframe" src={url} allow="clipboard-read; clipboard-write" title="InteractSH">
             <!-- Fallback content for browsers that do not support iframes -->
             <p>Your browser does not support iframes.</p>
         </iframe>
