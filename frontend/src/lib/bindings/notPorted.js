@@ -3,6 +3,9 @@
 // NotPorted error, so a page shows a short toast or an empty state instead
 // of breaking.
 
+/** A not ported error's text, as String(error) shows it. */
+export const notPortedText = "not ported";
+
 /** The error a binding that isn't ported yet rejects with. */
 export class NotPorted extends Error {
   constructor(binding) {
@@ -13,7 +16,7 @@ export class NotPorted extends Error {
 
   // The app's error helpers show String(error), as Wails rejected with text.
   toString() {
-    return "not ported";
+    return notPortedText;
   }
 }
 

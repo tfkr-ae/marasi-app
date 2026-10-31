@@ -52,6 +52,7 @@
 		feedOpeningLog,
 		loadedProject,
 		stayInCurrentProject,
+		startWithoutProject,
 	} from "../stores.js";
 	import {
 		openProjectFile,
@@ -101,6 +102,7 @@
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
 	import { isolateOverlays } from "../lib/overlayIsolation.js";
+	import { toastNotPorted } from "../lib/bindings/notPortedToast.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
@@ -224,7 +226,10 @@
 		stopWaitingForProject = loadedProject.subscribe(
 			(project) => project && resolve(project),
 		);
-		readConfig().then(openScratchpad);
+		readConfig()
+			.catch((err) => console.error("Reading the app config failed:", err))
+			.then(openScratchpad)
+			.then((project) => project ?? startWithoutProject());
 	});
 	// Starts the listener on the configured address.
 	function startListener() {
@@ -264,7 +269,12 @@
 		return menuDispatcher.isModalToggle(event, actionId, shortcutState());
 	}
 	let removeMenuShortcuts = () => {};
+	// A not ported call nobody handled shows a short toast.
+	function onUnhandledRejection(event) {
+		if (toastNotPorted(toastStore, event.reason)) event.preventDefault();
+	}
 	onMount(() => {
+		window.addEventListener("unhandledrejection", onUnhandledRejection);
 		const stopReportingDrafts = reportUnsavedDrafts();
 		EventsOn("update-available", onUpdateAvailable);
 		EventsOn("update-progress", onUpdateProgress);
@@ -481,6 +491,7 @@
 			);
 		});
 		return () => {
+			window.removeEventListener("unhandledrejection", onUnhandledRejection);
 			stopReportingDrafts();
 			removeMenuShortcuts();
 			EventsOff("request");

@@ -10,6 +10,7 @@ import {
   GetUserName,
   GetRecentProjects,
 } from "./lib/bindings/App";
+import { notPortedText } from "./lib/bindings/notPorted.js";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
@@ -205,6 +206,16 @@ export function failOpening(error) {
   GetRecentProjects()
     .then((recents) => opening.update((state) => (state === failed ? withRecents(state, recents) : state)))
     .catch((err) => console.error("Listing recent projects failed:", err));
+}
+/**
+ * Starts the app with no project when the startup open failed because it
+ * isn't ported to v2 yet, so the frame and pages still draw, with empty
+ * data. Any other failure keeps the opening screen up.
+ */
+export function startWithoutProject() {
+  if (get(opening)?.failure?.error !== notPortedText) return;
+  clearOpening();
+  loadedProject.set({ name: "Marasi", path: null });
 }
 /** Closes the opening screen, as after a cancelled open or Stay in. */
 export function clearOpening() {
