@@ -36,6 +36,7 @@ export const browserBridge = {
   forgetRemote: async () => {},
   refusedRemote: async () => null,
   pickProject: outsideElectron,
+  userName: async () => "Assessor",
   marasi: async () => null,
   chooseMarasi: outsideElectron,
   saveCertificate: outsideElectron,

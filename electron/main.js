@@ -5,6 +5,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, sa
 import { execFile } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -118,6 +119,7 @@ async function serveAppConfig() {
   handle("certificate:save", (event, pem) => certificateFile.save(pem));
   handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
   handle("app:buildInfo", () => ({ Channel: buildChannel, Version: app.getVersion() }));
+  handle("app:userName", () => userInfo().username);
   // A config v2 can't prepare stays as it is; each read then reports why.
   await appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
   return appConfig;
@@ -341,10 +343,11 @@ function serveConnections(appConfig) {
   handle("remotes:connectSaved", (event, url) => answer(() => remotes.connectSaved(url).then(useRemote(event.sender))));
   handle("remotes:forget", (_event, url) => remotes.forget(url));
   handle("remotes:refused", (event) => refusedRemotes.get(event.sender.id) ?? null);
-  // The project a Start opens, picked in an OS dialog: a path, or null.
-  handle("dialog:pick-project", async (event) => {
+  // The project a Start or an open opens, picked in an OS dialog: a path,
+  // or null.
+  handle("dialog:pick-project", async (event, title) => {
     const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
-      title: "Project to start",
+      title: typeof title === "string" && title ? title : "Project to start",
       filters: [{ name: "Marasi project", extensions: ["marasi"] }],
       properties: ["openFile", "createDirectory", "promptToCreate"],
     });

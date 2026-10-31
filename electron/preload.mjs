@@ -54,8 +54,10 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // The remote whose refused token brought this window back to the
   // connection screen, {name, url}, or null.
   refusedRemote: () => ipcRenderer.invoke("remotes:refused"),
-  // A project picked in an OS dialog: its path, or null.
-  pickProject: () => ipcRenderer.invoke("dialog:pick-project"),
+  // A project picked in an OS dialog titled `title`: its path, or null.
+  pickProject: (title) => ipcRenderer.invoke("dialog:pick-project", title),
+  // This machine's user name.
+  userName: () => ipcRenderer.invoke("app:userName"),
   // The Marasi Start runs: {path, bundled}, path null for the bundled one.
   marasi: () => ipcRenderer.invoke("marasi:current"),
   // Whether a local instance's build path (GET /update's install_path) is

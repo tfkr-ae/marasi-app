@@ -146,13 +146,16 @@ export const GetLogs = (cursor) =>
 export const GetMetadata = notPorted("GetMetadata");
 export const GetNote = notPorted("GetNote");
 export const GetRawDetails = notPorted("GetRawDetails");
-export const GetRecentProjects = notPorted("GetRecentProjects");
+// The instance's projects, by name: [{name, project, modified_at}], where
+// `project` is the path on the instance machine.
+export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
 export const GetResponse = notPorted("GetResponse");
 export const GetScopeRules = notPorted("GetScopeRules");
 export const GetUpdateSettings = notPorted("GetUpdateSettings");
 export const GetUpdateState = notPorted("GetUpdateState");
 export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
-export const GetUserName = notPorted("GetUserName");
+// This machine's user, the report assessor default.
+export const GetUserName = () => bridge().userName();
 export const GetWSInterceptFlag = notPorted("GetWSInterceptFlag");
 export const GetWSIntercepted = notPorted("GetWSIntercepted");
 export const GetWaypoints = notPorted("GetWaypoints");
@@ -176,8 +179,17 @@ export const ListTemplates = notPorted("ListTemplates");
 export const ListTestCases = notPorted("ListTestCases");
 export const LoadExtensions = notPorted("LoadExtensions");
 export const MoveLaunchpadEntries = notPorted("MoveLaunchpadEntries");
-export const OpenFileDialog = notPorted("OpenFileDialog");
-export const OpenProject = notPorted("OpenProject");
+// A project file picked in this machine's open dialog, for a local
+// connection: its path, or null.
+export const OpenFileDialog = () => bridge().pickProject("Open project");
+// Opens `project` on the instance: a bare name in its projects directory, or
+// a path on the instance machine. Resolves to the path it opened once the
+// switch is done; Marasi waits for held Checkpoint items first.
+export const OpenProject = async (project) => {
+  const target = String(project);
+  const body = /[\\/]/.test(target) ? { path: target } : { name: target };
+  return (await marasi.post("/project/open", body)).project;
+};
 export const PendingLaunches = notPorted("PendingLaunches");
 export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
@@ -194,7 +206,9 @@ export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
 export const SaveArtifactToTestCase = notPorted("SaveArtifactToTestCase");
 export const SaveFinding = notPorted("SaveFinding");
 export const SaveTestCase = notPorted("SaveTestCase");
-export const ScratchpadPath = notPorted("ScratchpadPath");
+// The instance's scratchpad's path, or null when it has none yet.
+export const ScratchpadPath = async () =>
+  (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
 export const SetAutomaticUpdateChecks = notPorted("SetAutomaticUpdateChecks");
 export const SetClientSetting = notPorted("SetClientSetting");
