@@ -15,8 +15,8 @@ test("the list has the connected windows, by instance and project, in the order 
   windows.setProject(1, "scratchpad");
   windows.setProject(3, "acme-web");
   assert.deepEqual(windows.list(3), [
-    { id: 1, instance: "default", project: "scratchpad", label: "default — scratchpad", focused: false },
-    { id: 3, instance: "acme", project: "acme-web", label: "acme — acme-web", focused: true },
+    { id: 1, instance: "default", project: "scratchpad", label: "default — scratchpad", current: false },
+    { id: 3, instance: "acme", project: "acme-web", label: "acme — acme-web", current: true },
   ]);
 });
 
@@ -24,7 +24,7 @@ test("a window whose project hasn't opened yet is listed by its instance", () =>
   const { connectionOf } = fakeConnections({ 4: "acme" });
   const windows = createWindowList({ connectionOf });
   windows.opened(4);
-  assert.deepEqual(windows.list(null), [{ id: 4, instance: "acme", project: null, label: "acme", focused: false }]);
+  assert.deepEqual(windows.list(null), [{ id: 4, instance: "acme", project: null, label: "acme", current: false }]);
 });
 
 test("the dock badge counts the held items of every window, and a closed or disconnected window's go", () => {

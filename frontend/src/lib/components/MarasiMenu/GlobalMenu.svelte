@@ -19,12 +19,14 @@
 		AArrowUp,
 		ALargeSmall,
 		AnchorIcon,
+		AppWindow,
 		ArrowUpCircle,
 		Binoculars,
 		BookIcon,
 		BookOpenCheckIcon,
 		CompassIcon,
 		Copy,
+		CopyPlus,
 		Download,
 		FlagIcon,
 		FolderOpen,
@@ -37,6 +39,7 @@
 		Unplug,
 	} from "lucide-svelte";
 	import MarasiKeys from "./MarasiKeys.svelte";
+	import WindowSwitcher from "./WindowSwitcher.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
 	import {
 		StartBrowser,
@@ -45,7 +48,7 @@
 	} from "../../bindings/App";
 	import { updatePanelModal } from "../../updates.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
-	import { windowConnection } from "../../../stores/windowConnectionStore.js";
+	import { windowConnection, windowList } from "../../../stores/windowConnectionStore.js";
 	import {
 		extensions,
 		extensions_ui,
@@ -129,6 +132,10 @@
 			else if (top.toggleAction === "global.open-project") modalStore.close();
 		},
 		"global.disconnect": disconnect,
+		// Another instance opens in a new window: each window has one
+		// connection.
+		"global.new-window": () => windowList.newWindow(),
+		"global.switch-window": () => windowSwitcher?.toggle(),
 		"global.setup-listener": () => toggleModal(listenerModal(toastStore)),
 		"global.toggle-vim": () =>
 			ToggleFlag("vim_enabled").then((config) =>
@@ -142,6 +149,8 @@
 		"global.toggle-intercept": () =>
 			ToggleIntercept().then((flag) => interceptFlag.set(flag)),
 	};
+
+	let windowSwitcher;
 
 	// A disconnected window reloads into the connection screen, as it has
 	// nothing to show without an instance.
@@ -174,6 +183,8 @@
 		"global.jump-to-toast": PartyPopper,
 		"global.open-project": FolderOpen,
 		"global.disconnect": Unplug,
+		"global.new-window": CopyPlus,
+		"global.switch-window": AppWindow,
 		"global.setup-listener": Binoculars,
 		"global.toggle-vim": ToggleLeft,
 		"global.toggle-light-mode": Sun,
@@ -292,3 +303,4 @@
 </script>
 
 <MarasiKeys paletteTier="global" {menuOptions} />
+<WindowSwitcher bind:this={windowSwitcher} />

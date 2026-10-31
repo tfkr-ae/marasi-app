@@ -1,7 +1,7 @@
 // The Electron main process. It draws the window and serves the static
 // frontend build; it has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell, webContents } from "electron";
 import { execFile } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -19,6 +19,7 @@ import { createLocalConnections } from "./local.js";
 import { bundledMarasi, createMarasiChoice } from "./marasiBin.js";
 import { nodeFS } from "./nodeFS.js";
 import { callSocket } from "./socket.js";
+import { createWindowList } from "./windows.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The frontend build is served on app://marasi/, so its absolute /_app/
@@ -49,6 +50,8 @@ const connections = createLocalConnections({
   call: callSocket,
   marasiBin: () => marasi.bin(),
 });
+// The windows, for the Window menu, the ⌘K window list and the dock badge.
+const windows = createWindowList({ connectionOf: (id) => connections.get(id) });
 // The app's own update channel, as v1's GetBuildInfo reported it. Builds
 // stay "dev" until the updater ticket gives them a channel.
 const buildChannel = "dev";
@@ -102,11 +105,70 @@ function serveAppConfig() {
   return appConfig.load().catch((error) => console.error(`preparing ${configDir}:`, error));
 }
 
-function createWindow() {
+// The window with webContents id `id`, or null once it has closed.
+function windowOf(id) {
+  const contents = webContents.fromId(id);
+  return contents ? BrowserWindow.fromWebContents(contents) : null;
+}
+
+function focusWindow(id) {
+  const window = windowOf(id);
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
+}
+
+// The application menu, its Window menu listing the connected windows
+// with the focused one checked.
+function appMenu() {
+  const mac = process.platform === "darwin";
+  const focused = BrowserWindow.getFocusedWindow()?.webContents.id ?? null;
+  const connected = windows.list(focused).map((item) => ({
+    label: item.label,
+    type: "checkbox",
+    checked: item.current,
+    click: () => focusWindow(item.id),
+  }));
+  return Menu.buildFromTemplate([
+    ...(mac ? [{ role: "appMenu" }] : []),
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        ...(mac ? [{ role: "zoom" }] : []),
+        { type: "separator" },
+        { label: "New Window", click: () => createWindow({ blank: true }) },
+        ...(connected.length ? [{ type: "separator" }, ...connected] : []),
+        { type: "separator" },
+        mac ? { role: "front" } : { role: "close" },
+      ],
+    },
+  ]);
+}
+
+// After a window opens, closes, connects, disconnects, opens a project or
+// changes its held count: the Window menu, the dock badge and each
+// renderer's window list follow.
+function windowsChanged() {
+  Menu.setApplicationMenu(appMenu());
+  app.setBadgeCount(windows.held());
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send("windows:changed");
+}
+
+// A window. A `blank` one opens on the connection screen, to connect to
+// or start another instance, rather than on the default instance, a
+// little below and right of the focused window.
+function createWindow({ blank = false } = {}) {
+  const parent = BrowserWindow.getFocusedWindow();
+  const offset = parent && blank ? { x: parent.getBounds().x + 28, y: parent.getBounds().y + 28 } : {};
   const window = new BrowserWindow({
     title: "Marasi",
     width: 1600,
     height: 900,
+    ...offset,
     backgroundColor: "#1b2636",
     webPreferences: {
       preload: join(here, "preload.mjs"),
@@ -126,8 +188,16 @@ function createWindow() {
     if (new URL(url).origin !== appOrigin) event.preventDefault();
   });
   const id = window.webContents.id;
-  window.webContents.on("destroyed", () => connections.forget(id));
+  if (blank) connections.open(id);
+  windows.opened(id);
+  window.webContents.on("destroyed", () => {
+    connections.forget(id);
+    windows.closed(id);
+    windowsChanged();
+  });
+  window.on("focus", () => Menu.setApplicationMenu(appMenu()));
   window.loadURL(home);
+  windowsChanged();
   return window;
 }
 
@@ -137,7 +207,18 @@ const shown = (connection) =>
     instance: connection.instance,
     baseURL: connection.origin,
     loopbackTurnedOn: connection.loopbackTurnedOn,
+    resumed: connection.resumed ?? false,
   };
+
+// Runs `connecting`, a call that may change window `id`'s connection, and
+// tells the windows when it has.
+async function connecting(id, connect) {
+  try {
+    return shown(await connect());
+  } finally {
+    windowsChanged();
+  }
+}
 
 // Answers `channel` with `handle(event, ...args)`, for the app's own pages
 // only: a captured page that ended up in a frame gets nothing.
@@ -154,12 +235,18 @@ function serveConnections() {
     callback({ requestHeaders: withBearer(details, (id) => connections.get(id)) }),
   );
   handle("instances:list", () => listLocalInstances({ configDir, readdir, call: callSocket }));
-  handle("connection:startup", async (event) => shown(await connections.startup(event.sender.id)));
-  handle("connection:connect", async (event, instance) => shown(await connections.connect(event.sender.id, instance)));
-  handle("connection:start", async (event, { instance, project }) =>
-    shown(await connections.start(event.sender.id, { instance, project: project || null })),
+  handle("connection:startup", (event) => connecting(event.sender.id, () => connections.startup(event.sender.id)));
+  handle("connection:connect", (event, instance) =>
+    connecting(event.sender.id, () => connections.connect(event.sender.id, instance)),
   );
-  handle("connection:disconnect", (event) => connections.disconnect(event.sender.id));
+  handle("connection:start", (event, { instance, project }) =>
+    connecting(event.sender.id, () => connections.start(event.sender.id, { instance, project: project || null })),
+  );
+  handle("connection:disconnect", (event) => {
+    connections.disconnect(event.sender.id);
+    windows.disconnected(event.sender.id);
+    windowsChanged();
+  });
   handle("connection:current", (event) => shown(connections.get(event.sender.id)) ?? null);
   // The project a Start opens, picked in an OS dialog: a path, or null.
   handle("dialog:pick-project", async (event) => {
@@ -169,6 +256,20 @@ function serveConnections() {
       properties: ["openFile", "createDirectory", "promptToCreate"],
     });
     return picked.canceled ? null : picked.filePaths[0];
+  });
+  // One connection per window: another instance opens in a new window.
+  handle("window:new", () => {
+    createWindow({ blank: true });
+  });
+  handle("windows:list", (event) => windows.list(event.sender.id));
+  handle("window:focus", (event, id) => focusWindow(id));
+  handle("window:project", (event, project) => {
+    windows.setProject(event.sender.id, project);
+    windowsChanged();
+  });
+  handle("window:held", (event, count) => {
+    windows.setHeld(event.sender.id, count);
+    windowsChanged();
   });
   handle("marasi:current", () => marasi.shown());
   // Chooses the Marasi Start runs from a path in an OS dialog, or goes back
@@ -208,7 +309,7 @@ app.whenReady().then(async () => {
   });
 });
 
-// As in v1, closing the window quits the app.
+// As in v1, closing the last window quits the app.
 app.on("window-all-closed", () => app.quit());
 // Quitting stops the instances the app started and wasn't disconnected
 // from, then quits for real.

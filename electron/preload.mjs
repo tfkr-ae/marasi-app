@@ -23,6 +23,24 @@ contextBridge.exposeInMainWorld("marasiApp", {
   disconnect: () => ipcRenderer.invoke("connection:disconnect"),
   // This window's connection, or null.
   connection: () => ipcRenderer.invoke("connection:current"),
+  // A new window on the connection screen, to connect to or start another
+  // instance: each window has one connection.
+  newWindow: () => ipcRenderer.invoke("window:new"),
+  // The connected windows: [{id, instance, project, label, current}],
+  // `current` marking this one.
+  windows: () => ipcRenderer.invoke("windows:list"),
+  // Brings window `id` to the front.
+  focusWindow: (id) => ipcRenderer.invoke("window:focus", id),
+  // Calls `listener` whenever the windows change; returns the call that stops.
+  onWindowsChanged: (listener) => {
+    const changed = () => listener();
+    ipcRenderer.on("windows:changed", changed);
+    return () => ipcRenderer.off("windows:changed", changed);
+  },
+  // This window's open project's name, for the window list.
+  reportProject: (project) => ipcRenderer.invoke("window:project", project),
+  // This window's Checkpoint held count, for the dock badge.
+  reportHeld: (count) => ipcRenderer.invoke("window:held", count),
   // A project picked in an OS dialog: its path, or null.
   pickProject: () => ipcRenderer.invoke("dialog:pick-project"),
   // The Marasi Start runs: {path, bundled}, path null for the bundled one.

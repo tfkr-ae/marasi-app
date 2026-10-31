@@ -14,17 +14,17 @@ export function createWindowList({ connectionOf }) {
   const blank = () => ({ project: null, held: 0 });
 
   /**
-   * The connected windows: {id, instance, project, label, focused}, the
+   * The connected windows: {id, instance, project, label, current}, the
    * label naming the instance and the project once one is open, and
-   * `focused` marking window `focusedId`.
+   * `current` marking window `currentId`.
    */
-  function list(focusedId) {
+  function list(currentId) {
     return [...windows].flatMap(([id, { project }]) => {
       const connection = connectionOf(id);
       if (!connection) return [];
       const { instance } = connection;
       const label = project ? `${instance} — ${project}` : instance;
-      return [{ id, instance, project, label, focused: id === focusedId }];
+      return [{ id, instance, project, label, current: id === currentId }];
     });
   }
 
