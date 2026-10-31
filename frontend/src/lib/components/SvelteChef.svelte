@@ -17,7 +17,7 @@
 
 {#if isVisible}
     <div class="iframe-container">
-        <iframe id="sveltechef" class="cyberchef-iframe" src={url} title="CyberChef">
+        <iframe id="sveltechef" class="cyberchef-iframe" src={url} allow="clipboard-read; clipboard-write" title="CyberChef">
             <!-- Fallback content for browsers that do not support iframes -->
             <p>Your browser does not support iframes.</p>
         </iframe>
