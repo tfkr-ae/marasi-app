@@ -5,6 +5,7 @@ import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
 import { marasi, MarasiError } from "./marasi.js";
 import { pairSummary } from "./traffic.js";
+import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
 
@@ -64,15 +65,18 @@ const jobState = (job) => ({
 // (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
 const exclusionSetting = "/client-settings/marasi-app/ledger.exclusion";
 
-// The project's own exclusion setting, or null when it follows the app default.
-async function ownExclusion() {
+// `call`'s answer, or null when Marasi answered not_found.
+async function unlessNotFound(call) {
   try {
-    return await marasi.get(exclusionSetting);
+    return await call;
   } catch (error) {
     if (error instanceof MarasiError && error.code === "not_found") return null;
     throw error;
   }
 }
+
+// The project's own exclusion setting, or null when it follows the app default.
+const ownExclusion = () => unlessNotFound(marasi.get(exclusionSetting));
 
 // A traffic read's query string: `params` with empty values dropped, and
 // the exclusion as repeated `exclude`s.
@@ -118,7 +122,15 @@ export const CopyCertToClipboard = async () => {
   return true;
 };
 export const CountArmoryRunTraffic = notPorted("CountArmoryRunTraffic");
-export const CountContentTypes = notPorted("CountContentTypes");
+// The project's pairs per content type: v1's { Counts: [{ ContentType,
+// Count }], Complete: { sitemap } }.
+export const CountContentTypes = async () => {
+  const counts = await marasi.get("/traffic/content-types");
+  return {
+    Counts: (counts.items ?? []).map((item) => ({ ContentType: item.content_type, Count: item.count })),
+    Complete: { sitemap: counts.sitemap?.complete ?? true },
+  };
+};
 // The dashboard's counts, in v1's Dashboard shape. InterceptionsComplete is
 // false while Marasi's intercepted_count job still counts older pairs.
 export const CountNotes = async () => {
@@ -131,7 +143,23 @@ export const CountNotes = async () => {
     InterceptionsComplete: dashboard.intercepted_count?.complete !== false,
   };
 };
-export const CountTraffic = notPorted("CountTraffic");
+// How many pairs `query` matches, minus the project's exclusion unless
+// `options.IgnoreExclusion`; `after` "" counts every match, else only pairs
+// captured after it, and `options.AsOf` only pairs up to it. v1's { Count,
+// Capped, IndexComplete, QueryError }.
+export const CountTraffic = (query, after, options = {}) =>
+  readTraffic(async () => {
+    const exclusion = options.IgnoreExclusion ? [] : await GetContentTypeExclusion();
+    const counted = await marasi.get(
+      "/traffic/count" + trafficQuery({ q: query, after, as_of: options.AsOf }, exclusion),
+    );
+    return {
+      Count: counted.count,
+      Capped: counted.capped,
+      IndexComplete: counted.index?.complete ?? true,
+      QueryError: null,
+    };
+  });
 export const CreateArmoryRun = notPorted("CreateArmoryRun");
 export const CreateArmoryTemplate = notPorted("CreateArmoryTemplate");
 export const CreateArmoryTemplateFromRequest = notPorted("CreateArmoryTemplateFromRequest");
@@ -213,7 +241,9 @@ export const GetWSIntercepted = notPorted("GetWSIntercepted");
 export const GetWaypoints = notPorted("GetWaypoints");
 export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
 export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
-export const HasOwnContentTypeExclusion = notPorted("HasOwnContentTypeExclusion");
+// Whether the open project keeps its own exclusion; false when it follows
+// the app default.
+export const HasOwnContentTypeExclusion = async () => (await ownExclusion()) !== null;
 export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
 export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
@@ -277,7 +307,8 @@ export const QueryTraffic = (request) =>
 export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
-export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
+// Drops the open project's own exclusion, so it follows the app default again.
+export const ResetContentTypeExclusion = () => unlessNotFound(marasi.delete(exclusionSetting));
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
 export const RunExtension = notPorted("RunExtension");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
@@ -289,7 +320,11 @@ export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
 export const SetClientSetting = notPorted("SetClientSetting");
-export const SetContentTypeExclusion = notPorted("SetContentTypeExclusion");
+// Gives the open project its own exclusion, normalised as Marasi does,
+// which it keeps instead of following the app default.
+export const SetContentTypeExclusion = async (values) => {
+  await marasi.put(exclusionSetting, { value: normalizeExclusion(values) });
+};
 export const SetHighlight = notPorted("SetHighlight");
 export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");

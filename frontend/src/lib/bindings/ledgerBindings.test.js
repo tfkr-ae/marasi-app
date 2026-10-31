@@ -112,3 +112,88 @@ test("QueryTraffic reads a page under the project's exclusion, in display order 
   assert.equal(page.IndexComplete, false);
   assert.equal(page.QueryError, null);
 });
+
+test("an invalid query answers as v1's QueryError rather than rejecting", async () => {
+  answers["GET /traffic"] = () => json({ error: "invalid_query", message: "unexpected end of query", position: 8 }, 400);
+  answers["GET /traffic/count"] = answers["GET /traffic"];
+  const expected = { QueryError: { Message: "unexpected end of query", Position: 8 } };
+  assert.deepEqual(await App.QueryTraffic({ Query: "method =" }), expected);
+  assert.deepEqual(await App.CountTraffic("method =", ""), expected);
+});
+
+test("IgnoreExclusion reads every content type", async () => {
+  answers["GET /traffic"] = { items: [], next_cursor: null, prev_cursor: null, as_of: null, index: { complete: true } };
+  const page = await App.QueryTraffic({ Query: "", IgnoreExclusion: true });
+  assert.deepEqual(new URLSearchParams(sent.at(-1).search).getAll("exclude"), []);
+  assert.equal(page.AsOf, "", "no pairs, no as_of");
+});
+
+test("CountTraffic counts new matches after a pair, bounded by as_of, under the exclusion", async () => {
+  answers["GET /traffic/count"] = { count: 100000, capped: true, index: { complete: true } };
+  const counted = await App.CountTraffic("method = GET", "a7", { AsOf: "a9" });
+  const query = new URLSearchParams(sent.at(-1).search);
+  assert.equal(query.get("q"), "method = GET");
+  assert.equal(query.get("after"), "a7");
+  assert.equal(query.get("as_of"), "a9");
+  assert.deepEqual(query.getAll("exclude"), ["image/*"]);
+  assert.deepEqual(counted, { Count: 100000, Capped: true, IndexComplete: true, QueryError: null });
+
+  await App.CountTraffic("", "", { IgnoreExclusion: true });
+  assert.equal(sent.at(-1).search, "", "every pair, whatever its content type");
+});
+
+test("CountContentTypes counts the project's pairs per content type", async () => {
+  answers["GET /traffic/content-types"] = {
+    items: [
+      { content_type: "text/html", count: 3 },
+      { content_type: "", count: 1 },
+    ],
+    sitemap: { complete: false },
+  };
+  assert.deepEqual(await App.CountContentTypes(), {
+    Counts: [
+      { ContentType: "text/html", Count: 3 },
+      { ContentType: "", Count: 1 },
+    ],
+    Complete: { sitemap: false },
+  });
+});
+
+test("the exclusion follows the app default until the project keeps its own", async () => {
+  assert.equal(await App.HasOwnContentTypeExclusion(), false);
+  assert.deepEqual(await App.GetContentTypeExclusion(), ["image/*"]);
+
+  let stored = null;
+  answers["PUT /client-settings/marasi-app/ledger.exclusion"] = (request) => {
+    stored = request.body.value;
+    return json({ client: "marasi-app", key: "ledger.exclusion", value: stored });
+  };
+  await App.SetContentTypeExclusion(["Text/CSS; charset=utf-8", "font/*"]);
+  assert.deepEqual(stored, ["text/css", "font/*"], "normalised as Marasi does");
+
+  answers["GET /client-settings/marasi-app/ledger.exclusion"] = () => json({ value: stored });
+  assert.equal(await App.HasOwnContentTypeExclusion(), true);
+  assert.deepEqual(await App.GetContentTypeExclusion(), ["text/css", "font/*"]);
+  appDefault = ["video/*"];
+  assert.deepEqual(await App.GetContentTypeExclusion(), ["text/css", "font/*"], "the app default no longer applies");
+
+  answers["DELETE /client-settings/marasi-app/ledger.exclusion"] = () => {
+    delete answers["GET /client-settings/marasi-app/ledger.exclusion"];
+    delete answers["DELETE /client-settings/marasi-app/ledger.exclusion"];
+    return json({ client: "marasi-app", key: "ledger.exclusion" });
+  };
+  await App.ResetContentTypeExclusion();
+  assert.equal(await App.HasOwnContentTypeExclusion(), false);
+  assert.deepEqual(await App.GetContentTypeExclusion(), ["video/*"]);
+  await App.ResetContentTypeExclusion(); // Marasi's not_found: nothing to drop
+});
+
+test("an empty own exclusion hides nothing, rather than following the default", async () => {
+  answers["GET /client-settings/marasi-app/ledger.exclusion"] = { value: [] };
+  assert.deepEqual(await App.GetContentTypeExclusion(), []);
+});
+
+test("SetContentTypeExclusion refuses a value that isn't a content type, and stores nothing", async () => {
+  await assert.rejects(App.SetContentTypeExclusion(["*/png"]), /invalid content-type exclusion/);
+  assert.equal(sent.length, 0);
+});
