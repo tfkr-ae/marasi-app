@@ -3,6 +3,7 @@
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
 	import ConnectionScreen from "../lib/components/ConnectionScreen.svelte";
 	import { windowConnection, windowTitle } from "../stores/windowConnectionStore.js";
+	import { followWindowConnection } from "../lib/marasiEvents.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -40,7 +41,6 @@
 	let currentTile = 0;
 	import { page } from "$app/stores";
 	import {
-		logItems,
 		activeProject,
 		listener,
 		readConfig,
@@ -300,6 +300,9 @@
 	}
 	onMount(() => {
 		window.addEventListener("unhandledrejection", onUnhandledRejection);
+		// The connected instance's events, live, for as long as the window is
+		// connected.
+		const stopFollowing = followWindowConnection();
 		const stopReportingDrafts = reportUnsavedDrafts();
 		EventsOn("update-available", onUpdateAvailable);
 		EventsOn("update-progress", onUpdateProgress);
@@ -337,9 +340,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			function handleNewLog(newLog) {
-				$logItems = [...$logItems, newLog];
-			}
 			function readCheckpointItems() {
 				checkpointStore
 					.onIntercepted()
@@ -408,12 +408,6 @@
 			EventsOn("ws-state", ({ RequestID, State }) =>
 				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
 			);
-			EventsOn("log", (newLog) => {
-				if (typeof newLog?.Level !== "string") {
-					return;
-				}
-				handleNewLog(newLog);
-			});
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
 			EventsOn("checkpoint-abandoned", (item) =>
@@ -517,6 +511,7 @@
 		});
 		return () => {
 			window.removeEventListener("unhandledrejection", onUnhandledRejection);
+			stopFollowing();
 			stopReportingDrafts();
 			removeMenuShortcuts();
 			EventsOff("request");
