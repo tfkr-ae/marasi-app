@@ -1,5 +1,6 @@
-// Marasi's background jobs: polling ListJobs while one runs, telling the
-// Ledger and sitemap when the jobs they wait on finish, and rebuilding.
+// Marasi's background jobs: reading ListJobs, following job.progress and
+// job.complete, telling the Ledger and sitemap when the jobs they wait on
+// finish, and rebuilding.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
@@ -20,8 +21,8 @@ const allComplete = () => [
 ];
 
 // A fake api whose ListJobs answers come from `answers` in turn (the last
-// repeats), and a manual timer: run() fires the pending poll.
-function setup(answers, { onFinished = () => {} } = {}) {
+// repeats).
+function setup(answers) {
   const calls = [];
   let n = 0;
   const api = {
@@ -35,101 +36,75 @@ function setup(answers, { onFinished = () => {} } = {}) {
       calls.push(["rebuildJob", name]);
     },
   };
-  let pending = null;
-  const timer = {
-    schedule: (fn, ms) => {
-      pending = { fn, ms };
-      return pending;
-    },
-    cancel: (handle) => {
-      if (pending === handle) pending = null;
-    },
-    get pending() {
-      return pending;
-    },
-    async run() {
-      const p = pending;
-      pending = null;
-      await p.fn();
-    },
-  };
   const finished = [];
-  const store = createJobsStore(api, {
-    timer,
-    onFinished: (group) => {
-      finished.push(group);
-      onFinished(group);
-    },
-  });
-  return { store, api, calls, timer, finished };
+  const store = createJobsStore(api, { onFinished: (group) => finished.push(group) });
+  return { store, calls, finished };
 }
 
-test("refresh lists the jobs and stops polling once all are complete", async () => {
-  const { store, timer } = setup([allComplete()]);
+const reads = (calls) => calls.filter((c) => c === "listJobs").length;
 
+test("refresh lists the jobs", async () => {
+  const { store } = setup([allComplete()]);
   await store.refresh();
-
   assert.deepEqual(
     get(store).jobs.map((j) => j.Name),
     ["traffic_index", "annotation_index", "sitemap", "prettified_move"],
   );
-  assert.equal(timer.pending, null);
 });
 
-test("polls gently while a job is incomplete, until it finishes", async () => {
-  const running = [job("traffic_index", false, 10, 40), ...allComplete().slice(1)];
-  const { store, timer, calls } = setup([running, running, allComplete()]);
-
+test("job.progress shows a running job's progress", async () => {
+  const { store } = setup([allComplete()]);
   await store.refresh();
-  assert.ok(timer.pending, "wanted another poll");
-  assert.ok(timer.pending.ms >= 1000, "wanted a gentle interval");
-  assert.equal(groupBuilding(get(store), "index"), true);
-
-  await timer.run();
-  await timer.run();
-
-  assert.equal(calls.filter((c) => c === "listJobs").length, 3);
-  assert.equal(groupBuilding(get(store), "index"), false);
-  assert.equal(timer.pending, null);
+  store.onJobProgress({ name: "sitemap", project: "/p.marasi", done: 1234, total: 5000 });
+  assert.equal(groupBuilding(get(store), "sitemap"), true);
+  assert.equal(jobStatus(get(store).jobs.find((j) => j.Name === "sitemap")), "Building · 1,234 of 5,000");
 });
 
-test("tells the view that saw a group incomplete when its jobs finish", async () => {
+test("job.complete shows the job complete and tells the view that waits on it", async () => {
   const sitemapRunning = [...allComplete().slice(0, 2), job("sitemap", false), allComplete()[3]];
-  const { store, timer, finished } = setup([sitemapRunning, allComplete()]);
-
+  const { store, finished } = setup([sitemapRunning]);
   store.watch("sitemap");
-  await timer.run();
+  await store.refresh();
   assert.deepEqual(finished, []);
-  await timer.run();
 
+  store.onJobComplete({ name: "sitemap", project: "/p.marasi" });
+
+  assert.equal(groupBuilding(get(store), "sitemap"), false);
   assert.deepEqual(finished, ["sitemap"]);
-  assert.equal(timer.pending, null);
 });
 
-test("a watched group that is already complete finishes on the next read", async () => {
-  const { store, timer, finished } = setup([allComplete()]);
-
+test("a group of jobs finishes when its last job does", async () => {
+  const rebuilt = [job("traffic_index", false), job("annotation_index", false)];
+  const { store, finished } = setup([rebuilt]);
   store.watch("index");
-  store.watch("index");
-  await timer.run();
+  await store.refresh();
 
+  store.onJobComplete({ name: "traffic_index" });
+  assert.deepEqual(finished, []);
+  store.onJobComplete({ name: "annotation_index" });
   assert.deepEqual(finished, ["index"]);
-  assert.equal(timer.pending, null);
+});
+
+test("a watched group that is already complete finishes once the jobs are read", async () => {
+  const { store, calls, finished } = setup([allComplete()]);
+  store.watch("index");
+  store.watch("index");
+  await store.refresh();
+  assert.deepEqual(finished, ["index"]);
+  // Watching again while it waits reads the jobs only once.
+  assert.equal(reads(calls), 2);
 });
 
 test("does not tell a view about a group it did not watch", async () => {
-  const running = [job("traffic_index", false), ...allComplete().slice(1)];
-  const { store, timer, finished } = setup([running, allComplete()]);
-
+  const { store, finished } = setup([[job("traffic_index", false), ...allComplete().slice(1)]]);
   await store.refresh();
-  await timer.run();
-
+  store.onJobComplete({ name: "traffic_index" });
   assert.deepEqual(finished, []);
 });
 
-test("rebuilding the search index rebuilds both index jobs and polls their progress", async () => {
+test("rebuilding the search index rebuilds both index jobs and follows their progress", async () => {
   const rebuilt = [job("traffic_index", false), job("annotation_index", false), ...allComplete().slice(2)];
-  const { store, calls, timer, finished } = setup([rebuilt, allComplete()]);
+  const { store, calls, finished } = setup([rebuilt]);
 
   await store.rebuild("index");
 
@@ -141,47 +116,40 @@ test("rebuilding the search index rebuilds both index jobs and polls their progr
     ],
   );
   assert.equal(groupBuilding(get(store), "index"), true);
-  await timer.run();
+  store.onJobComplete({ name: "traffic_index" });
+  store.onJobComplete({ name: "annotation_index" });
   // The Ledger reloads when a rebuild finishes, so its counts are current.
   assert.deepEqual(finished, ["index"]);
 });
 
 test("rebuilding the sitemap rebuilds only the sitemap job", async () => {
   const { store, calls } = setup([allComplete()]);
-
   await store.rebuild("sitemap");
-
   assert.deepEqual(
     calls.filter((c) => Array.isArray(c)),
     [["rebuildJob", "sitemap"]],
   );
 });
 
-test("a failed read keeps the last jobs, shows the error and retries", async () => {
-  const running = [job("sitemap", false)];
-  const { store, timer } = setup([running, new Error("db locked"), allComplete()]);
-
+test("a failed read keeps the last jobs and shows the error until a read works", async () => {
+  const { store } = setup([[job("sitemap", false)], new Error("db locked"), allComplete()]);
   await store.refresh();
-  await timer.run();
-
+  await store.refresh();
   assert.match(get(store).error, /db locked/);
   assert.equal(get(store).jobs.length, 1);
-  assert.ok(timer.pending, "wanted a retry");
-  await timer.run();
+  await store.reload();
   assert.equal(get(store).error, "");
 });
 
-test("clear stops polling and forgets the project's jobs", async () => {
-  const running = [job("sitemap", false)];
-  const { store, timer, finished } = setup([running]);
-
+test("clear forgets the project's jobs and the views waiting on them", async () => {
+  const { store, finished } = setup([[job("sitemap", false)]]);
   store.watch("sitemap");
   await store.refresh();
   store.clear();
-
-  assert.equal(timer.pending, null);
-  assert.deepEqual(get(store).jobs, []);
+  store.onJobComplete({ name: "sitemap" });
   assert.deepEqual(finished, []);
+  // A job the store hasn't read yet waits for the next read.
+  assert.deepEqual(get(store).jobs, []);
 });
 
 test("a read for an earlier project is dropped", async () => {
@@ -190,13 +158,11 @@ test("a read for an earlier project is dropped", async () => {
     listJobs: () => new Promise((resolve) => (release = resolve)),
     rebuildJob: async () => {},
   };
-  const store = createJobsStore(api, { timer: { schedule: () => ({}), cancel: () => {} } });
-
+  const store = createJobsStore(api);
   const read = store.refresh();
   store.clear();
   release([job("sitemap", false)]);
   await read;
-
   assert.deepEqual(get(store).jobs, []);
 });
 
