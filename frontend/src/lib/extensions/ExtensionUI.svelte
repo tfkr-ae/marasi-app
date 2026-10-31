@@ -2,7 +2,7 @@
     import { onDestroy } from "svelte";
     import { extensions_ui } from "../../stores.js";
     import SchemaRenderer from "./Renderer.svelte";
-    import { EventsEmit } from "../wailsjs/runtime/runtime.js";
+    import { EventsEmit } from "../bindings/runtime.js";
 
     export let enableSync = false;
     export let extensionData;

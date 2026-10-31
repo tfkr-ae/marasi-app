@@ -8,7 +8,7 @@ import {
   ReinstallLatestRelease,
   RestartToUpdate,
   SetUpdateChannel,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/App";
 import { toastError } from "../lib/toasts.js";
 import {
   checkResultNotice,

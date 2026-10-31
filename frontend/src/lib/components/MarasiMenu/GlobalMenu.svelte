@@ -41,7 +41,7 @@
 		StartBrowser,
 		ToggleFlag,
 		ToggleIntercept,
-	} from "../../wailsjs/go/main/App";
+	} from "../../bindings/App";
 	import { updatePanelModal } from "../../updates.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {

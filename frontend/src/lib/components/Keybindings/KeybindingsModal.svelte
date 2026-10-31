@@ -6,7 +6,7 @@
 	import { onDestroy, onMount, tick } from "svelte";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Keyboard, X } from "lucide-svelte";
-	import { SaveKeybindings } from "../../wailsjs/go/main/App";
+	import { SaveKeybindings } from "../../bindings/App";
 	import { keybindingState } from "../../../stores.js";
 	import { keybindingCapture, menuDispatcher } from "../../keybindings/app.js";
 	import { reservedBindingProblem } from "../../keybindings/gate.js";

@@ -76,7 +76,7 @@
 		EventsOn,
 		EventsOff,
 		WindowSetTitle,
-	} from "../lib/wailsjs/runtime/runtime";
+	} from "../lib/bindings/runtime";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
@@ -85,7 +85,7 @@
 	import {
 		OpenFileDialog,
 		StartProxy,
-	} from "../lib/wailsjs/go/main/App";
+	} from "../lib/bindings/App";
 	import {
 		ChefHat,
 		Brush,

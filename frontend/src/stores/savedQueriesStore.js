@@ -9,7 +9,7 @@ import {
   SaveAppSavedQueries,
   SetClientSetting,
   SetHiddenBuiltinQueries,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/App";
 import { createSavedQueriesStore, visibleSavedQueries } from "./createSavedQueriesStore.js";
 
 export {

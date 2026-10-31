@@ -9,7 +9,7 @@ import {
 	GetWSInterceptFlag,
 	GetWSIntercepted,
 	ToggleWSIntercept,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/App";
 import { createConnectionStore } from "./createConnectionStore.js";
 
 // Draft payload for the Inject tab (set via "Copy to Inject").

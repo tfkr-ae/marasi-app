@@ -19,7 +19,7 @@
 		GetBuildInfo,
 		GetUpdateSettings,
 		SetAutomaticUpdateChecks,
-	} from "../../lib/wailsjs/go/main/App";
+	} from "../../lib/bindings/App";
 	import {
 		keybindingState,
 		lineWrap,

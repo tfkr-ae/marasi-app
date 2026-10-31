@@ -1,6 +1,6 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
-    import { GetInterfaces } from "../wailsjs/go/main/App";
+    import { GetInterfaces } from "../bindings/App";
     import { onMount } from "svelte";
     import { listener } from "../../stores";
     import { X } from "lucide-svelte";

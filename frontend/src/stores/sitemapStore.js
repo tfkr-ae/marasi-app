@@ -1,7 +1,7 @@
 // The app's sitemap store, bound to the Wails backend and following the
 // Ledger store. The logic lives in createSitemapStore.js, which tests load
 // with a fake API.
-import { ListSitemapChildren, ListSitemapLevels } from "../lib/wailsjs/go/main/App";
+import { ListSitemapChildren, ListSitemapLevels } from "../lib/bindings/App";
 import { createSitemapStore } from "./createSitemapStore.js";
 import { FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
 import { ledgerStore } from "./ledgerStore";

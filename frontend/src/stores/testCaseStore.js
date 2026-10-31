@@ -3,8 +3,8 @@ import {
 	CreateDraftTestCase,
 	SaveArtifactToTestCase,
 	DeleteArtifact
-} from '$lib/wailsjs/go/main/App';
-import { DeleteTestCase, LinkRequestToTestCase, ListTestCases, SaveTestCase, UnlinkRequestFromTestCase } from '../lib/wailsjs/go/main/App';
+} from '$lib/bindings/App';
+import { DeleteTestCase, LinkRequestToTestCase, ListTestCases, SaveTestCase, UnlinkRequestFromTestCase } from '../lib/bindings/App';
 import { findingStore } from './findingStore';
 
 function createTestCaseStore() {

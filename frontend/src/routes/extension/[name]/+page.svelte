@@ -12,7 +12,7 @@
         extensionMenuActionId,
         extensionPageActionId,
     } from "../../../lib/keybindings/catalog.js";
-    import { EventsEmit } from "../../../lib/wailsjs/runtime/runtime.js";
+    import { EventsEmit } from "../../../lib/bindings/runtime.js";
     let accOpened = false;
 
     $: extensionName = $page.params.name;

@@ -9,8 +9,6 @@ import { fileURLToPath } from "node:url";
 // text-3xs or another rem size instead.
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
-// Generated Wails bindings.
-const SKIP = new Set(["wailsjs"]);
 const EXTENSIONS = [".svelte", ".js", ".css"];
 const PX_FONT_SIZE = [
   /text-\[\d*\.?\d+px\]/,
@@ -21,7 +19,7 @@ const PX_FONT_SIZE = [
 function sourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return SKIP.has(entry.name) ? [] : sourceFiles(path);
+    if (entry.isDirectory()) return sourceFiles(path);
     return EXTENSIONS.some((ext) => entry.name.endsWith(ext)) && !entry.name.endsWith(".test.js")
       ? [path]
       : [];

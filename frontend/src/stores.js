@@ -9,7 +9,7 @@ import {
   LoadExtensions,
   GetUserName,
   GetRecentProjects,
-} from "./lib/wailsjs/go/main/App";
+} from "./lib/bindings/App";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";

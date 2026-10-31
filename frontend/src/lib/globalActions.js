@@ -10,8 +10,8 @@ import {
 	DownloadCert,
 	CopyCertToClipboard,
 	GetCheckpointItems,
-} from "./wailsjs/go/main/App";
-import { EventsOnce, WindowSetTitle } from "./wailsjs/runtime/runtime";
+} from "./bindings/App";
+import { EventsOnce, WindowSetTitle } from "./bindings/runtime";
 import { projectName } from "./openProgress.js";
 import { checkpointHeldModal, heldCheckpointIDs } from "./checkpointHeld.js";
 import {

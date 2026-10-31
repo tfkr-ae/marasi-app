@@ -1,6 +1,6 @@
 <script>
 	import { activeProject } from "../../stores";
-	import { CountNotes, GetScopeRules } from "../wailsjs/go/main/App";
+	import { CountNotes, GetScopeRules } from "../bindings/App";
 	import {
 		Edit2Icon,
 		SendIcon,

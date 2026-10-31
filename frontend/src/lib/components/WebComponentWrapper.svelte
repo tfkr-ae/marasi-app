@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
-  import { GetExtensionUI } from "../wailsjs/go/main/App";
-  import { EventsOn } from "../wailsjs/runtime/runtime";
+  import { GetExtensionUI } from "../bindings/App";
+  import { EventsOn } from "../bindings/runtime";
   import { extensionElements } from "../../stores";
   import { recentTraffic } from "../../stores/recentTrafficStore";
 

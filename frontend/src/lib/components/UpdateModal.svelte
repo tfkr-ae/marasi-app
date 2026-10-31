@@ -13,7 +13,7 @@
 	import { getModalStore, getToastStore, modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
 	import { AlertTriangle, Check, Download, ExternalLink, RotateCw, X } from "lucide-svelte";
 	import { goto } from "$app/navigation";
-	import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
+	import { BrowserOpenURL } from "../bindings/runtime";
 	import {
 		cancelUpdateDownload,
 		dismissUpdate,

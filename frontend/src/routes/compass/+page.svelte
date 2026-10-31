@@ -12,7 +12,7 @@
         modeCurrent,
     } from "@skeletonlabs/skeleton";
     import CodeMirror from "svelte-codemirror-editor";
-    import { RunExtension } from "../../lib/wailsjs/go/main/App";
+    import { RunExtension } from "../../lib/bindings/App";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import { useMenuActions } from "../../lib/keybindings/app.js";
     import {

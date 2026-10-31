@@ -1,6 +1,6 @@
 <script>
     import { Stepper, Step, getModalStore} from '@skeletonlabs/skeleton';
-    import { ToggleFlag } from '../wailsjs/go/main/App';
+    import { ToggleFlag } from '../bindings/App';
     import { marasiConfig } from '../../stores';
     import { CERT_URL } from '../browserView.js';
     const modalStore = getModalStore();

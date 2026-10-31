@@ -4,7 +4,7 @@
 		GetMetadata,
 		GetNote,
 		GetRawDetails,
-	} from "../wailsjs/go/main/App";
+	} from "../bindings/App";
 	import {
 		BookCheck,
 		Braces,

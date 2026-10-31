@@ -1,7 +1,7 @@
 <script>
     import { getContext } from "svelte";
     import * as Icons from "lucide-svelte";
-    import { EventsEmit } from "../../../lib/wailsjs/runtime/runtime";
+    import { EventsEmit } from "../../../lib/bindings/runtime";
     import { extensions_ui } from "../../../stores";
     import { resolveBind } from "./utils";
 

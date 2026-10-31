@@ -1,7 +1,7 @@
 <script>
     import { onMount } from "svelte";
-    import { GetExtensionLogs } from "../wailsjs/go/main/App";
-    import { EventsOff, EventsOn } from "../wailsjs/runtime/runtime";
+    import { GetExtensionLogs } from "../bindings/App";
+    import { EventsOff, EventsOn } from "../bindings/runtime";
 
     export let extensionName = "";
     let logs = [];

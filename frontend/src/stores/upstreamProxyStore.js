@@ -8,7 +8,7 @@ import {
   RemoveUpstreamProxy,
   UpdateUpstreamProxy,
   UseUpstreamProxy,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/App";
 import { createUpstreamProxyStore } from "./createUpstreamProxyStore.js";
 
 export {
