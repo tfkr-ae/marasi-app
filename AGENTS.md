@@ -1,6 +1,14 @@
-## Go commands
+## Running and testing v2
 
-Run Go commands as `GOWORK=off go …`. Agent worktrees can sit inside a checkout whose parent `go.work` excludes this module, and `go` then fails with "main module … does not contain package". A fresh worktree runs `scripts/bootstrap.sh` first, to create `frontend/build`, `frontend/node_modules` and the Wails bindings.
+v2 is an Electron app with no Go code. A fresh worktree runs `scripts/bootstrap.sh` first, to install the root and `frontend/` packages.
+
+- `npm test`: the main process tests (`electron/`) and the frontend's `node --test` store tests.
+- `npm run dev`: Vite and Electron on it. Pass Electron flags after `--`, for example `npm run dev -- --remote-debugging-port=9222`.
+- `npm run dist`, `dist:mac`, `dist:win`, `dist:linux`: an unsigned package in `dist/`.
+
+Frontend code calls the v1 bindings through `frontend/src/lib/bindings/App.js`. A binding that isn't ported yet rejects with a `NotPorted` error.
+
+Electron runs as plain Node when `ELECTRON_RUN_AS_NODE` is set, as it is in some agent terminals. `npm run dev` clears it; unset it yourself to run a packaged app.
 
 ## Code maps
 
