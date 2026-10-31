@@ -37,6 +37,8 @@ export const browserBridge = {
   refusedRemote: async () => null,
   pickProject: outsideElectron,
   marasi: async () => null,
+  // Outside Electron there is no bundled Marasi.
+  runsBundled: async () => false,
   chooseMarasi: outsideElectron,
   saveCertificate: outsideElectron,
   copyText: (text) => navigator.clipboard.writeText(text),
