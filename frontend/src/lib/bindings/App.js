@@ -3,7 +3,8 @@
 
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
-import { marasi } from "./marasi.js";
+import { marasi, MarasiError } from "./marasi.js";
+import { pairSummary } from "./traffic.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
 
@@ -57,6 +58,44 @@ const jobState = (job) => ({
   Total: job.total,
   Rebuildable: rebuildableJobs.has(job.name),
 });
+
+// The Ledger's content-type exclusion: the project's own list, a marasi-app
+// client setting, or else the app default
+// (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
+const exclusionSetting = "/client-settings/marasi-app/ledger.exclusion";
+
+// The project's own exclusion setting, or null when it follows the app default.
+async function ownExclusion() {
+  try {
+    return await marasi.get(exclusionSetting);
+  } catch (error) {
+    if (error instanceof MarasiError && error.code === "not_found") return null;
+    throw error;
+  }
+}
+
+// A traffic read's query string: `params` with empty values dropped, and
+// the exclusion as repeated `exclude`s.
+function trafficQuery(params, exclusion = []) {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(name, String(value));
+  }
+  for (const type of exclusion) query.append("exclude", type);
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
+// Runs a traffic read; Marasi's invalid_query refusal answers as v1's
+// QueryError data, { QueryError: { Message, Position } }.
+async function readTraffic(read) {
+  try {
+    return await read();
+  } catch (error) {
+    if (!(error instanceof MarasiError) || error.code !== "invalid_query") throw error;
+    return { QueryError: { Message: error.body.message ?? "invalid query", Position: error.body.position ?? 0 } };
+  }
+}
 
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
@@ -138,7 +177,10 @@ export const GetCheckpointItems = notPorted("GetCheckpointItems");
 export const GetChromePaths = notPorted("GetChromePaths");
 export const GetChromeProfiles = notPorted("GetChromeProfiles");
 export const GetClientSetting = notPorted("GetClientSetting");
-export const GetContentTypeExclusion = notPorted("GetContentTypeExclusion");
+// The open project's exclusion: its own list when it has one, else the app
+// default.
+export const GetContentTypeExclusion = async () =>
+  (await ownExclusion())?.value ?? (await appConfig.GetDefaultContentTypeExclusion());
 export const GetExtensionCode = notPorted("GetExtensionCode");
 export const GetExtensionFlag = notPorted("GetExtensionFlag");
 export const GetExtensionLogs = notPorted("GetExtensionLogs");
@@ -202,7 +244,36 @@ export const OpenProject = async (project) => {
 export const PendingLaunches = notPorted("PendingLaunches");
 export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
-export const QueryTraffic = notPorted("QueryTraffic");
+// One page of the traffic that matches `request.Query`, in display order,
+// minus the project's exclusion unless `request.IgnoreExclusion`:
+// v1's { Items, NextCursor, PrevCursor, AsOf, IndexComplete, QueryError }.
+export const QueryTraffic = (request) =>
+  readTraffic(async () => {
+    const exclusion = request.IgnoreExclusion ? [] : await GetContentTypeExclusion();
+    const page = await marasi.get(
+      "/traffic" +
+        trafficQuery(
+          {
+            q: request.Query,
+            order_by: request.OrderBy,
+            cursor: request.Cursor,
+            direction: request.Direction,
+            as_of: request.AsOf,
+            limit: request.Limit,
+          },
+          exclusion,
+        ),
+    );
+    return {
+      // Marasi lists a page in reverse display order.
+      Items: (page.items ?? []).map(pairSummary).reverse(),
+      NextCursor: page.next_cursor ?? null,
+      PrevCursor: page.prev_cursor ?? null,
+      AsOf: page.as_of ?? "",
+      IndexComplete: page.index?.complete ?? true,
+      QueryError: null,
+    };
+  });
 export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");

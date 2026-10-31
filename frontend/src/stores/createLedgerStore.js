@@ -62,7 +62,7 @@ export const PAGE_SIZE = 200;
 export const MAX_WINDOW_ROWS = PAGE_SIZE * 5;
 
 /** Marasi's largest page; a refresh in place reads at most this many. */
-const MAX_PAGE_ROWS = 1000;
+const MAX_PAGE_ROWS = 500;
 
 /** How close to the window's edge the rows in view get before the next page loads. */
 export const EDGE_ROWS = 60;
