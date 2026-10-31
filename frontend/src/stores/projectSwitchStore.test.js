@@ -87,13 +87,24 @@ test("startup loads the instance's open project with the opening screen up from 
   assert.deepEqual(get(store), { opening: null, shown: false, loaded: { name: "acme", path: acmePath } });
 });
 
-test("startup on a load that isn't ported yet still starts the app on the instance's project", async () => {
+test("a load that stops on a call not ported yet still finishes, so the pages draw with what they have", async () => {
   const fake = fakeApi({ loadError: new NotPorted("GetExtensions") });
   const store = createProjectSwitchStore(fake.api);
-  assert.equal(await store.openConnected({ project: acmePath }), null);
-  assert.equal(screen(store).failure.kind, "other");
+  assert.deepEqual(await store.openConnected({ project: acmePath }), { name: "acme", path: acmePath });
 
-  store.startWithoutProject();
+  const switching = store.open("build");
+  fake.opens[0].resolve(`${projects}/build.marasi`);
+  assert.deepEqual(await switching, { name: "build", path: `${projects}/build.marasi` });
+  assert.deepEqual(get(store), { opening: null, shown: false, loaded: { name: "build", path: `${projects}/build.marasi` } });
+});
+
+test("a load that fails otherwise shows the failure, and Stay in stays in the project that opened", async () => {
+  const fake = fakeApi({ loadError: new Error("reading the log: boom") });
+  const store = createProjectSwitchStore(fake.api);
+  assert.equal(await store.openConnected({ project: acmePath }), null);
+  assert.equal(screen(store).failure.error, "Error: reading the log: boom");
+
+  store.stay();
   assert.deepEqual(get(store), { opening: null, shown: false, loaded: { name: "acme", path: acmePath } });
 });
 

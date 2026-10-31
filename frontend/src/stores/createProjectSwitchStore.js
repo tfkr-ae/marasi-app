@@ -5,7 +5,7 @@
 // the window reloads the project once it has opened. lib/openProgress.js
 // has what the screen shows.
 import { get, writable } from "svelte/store";
-import { notPortedText } from "../lib/bindings/notPorted.js";
+import { isNotPorted } from "../lib/bindings/notPorted.js";
 import {
   openingFor,
   projectName,
@@ -97,8 +97,13 @@ export function createProjectSwitchStore(api) {
         if (asked === attempt) setOpening(withLoadPart(opening(), signal));
       });
     } catch (error) {
-      if (asked === attempt) fail(error);
-      return null;
+      // A call that isn't ported to v2 yet leaves its page empty, but the
+      // project is open, so the window carries on in it.
+      if (isNotPorted(error)) console.warn("Loading the project stopped at a call not ported yet:", error);
+      else {
+        if (asked === attempt) fail(error);
+        return null;
+      }
     }
     if (asked !== attempt) return null;
     const opened = openingScreen(withOpened(opening())).opened;
@@ -211,18 +216,6 @@ export function createProjectSwitchStore(api) {
     store.set({ opening: null, shown: false, loaded: current });
   }
 
-  /**
-   * Starts the app on the instance's project when loading it failed
-   * because a call isn't ported to v2 yet, so the frame and pages still
-   * draw. Any other failure keeps the screen up.
-   */
-  function startWithoutProject() {
-    const state = opening();
-    if (state?.failure?.error !== notPortedText) return;
-    current = { name: state.name, path: state.path };
-    stay();
-  }
-
   /** Opens the instance that owns a locked project in a new window. */
   async function connectOwner() {
     const owner = opening()?.owner;
@@ -244,7 +237,6 @@ export function createProjectSwitchStore(api) {
     openConnected,
     retry: () => lastOpen?.(),
     stay,
-    startWithoutProject,
     connectOwner,
     showCheckpoint,
     onOpening,

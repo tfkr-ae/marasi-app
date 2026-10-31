@@ -251,8 +251,7 @@
 		readConfig()
 			.catch((err) => console.error("Reading the app config failed:", err))
 			.then(connectWindow)
-			.then((connection) => openConnectedProject(connection.status))
-			.then((project) => project ?? projectSwitch.startWithoutProject());
+			.then((connection) => openConnectedProject(connection.status));
 	});
 	// Shows the connected instance's listener as it is: the instance was
 	// started with its listener, or another client set it up, so v1's start
