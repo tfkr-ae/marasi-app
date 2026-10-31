@@ -7,7 +7,9 @@
 #               only (git archive). Without it, the pin's repository is
 #               cloned into a temporary directory.
 #   GOOS/GOARCH build for another platform, as `npm run dist:win` does.
-#               A Windows build is resources/bin/marasi.exe.
+#               A Windows build is resources/bin/marasi.exe. GOOS=darwin
+#               GOARCH=universal builds both Mac architectures into one
+#               binary (lipo), for the universal app `npm run dist:mac` makes.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -33,5 +35,12 @@ name=marasi
 [ "${GOOS:-$(go env GOOS)}" = windows ] && name=marasi.exe
 rm -rf "$root/resources/bin"
 mkdir -p "$root/resources/bin"
-(cd "$work/tree" && CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags "-X 'main.version=$version'" -o "$root/resources/bin/$name" ./cmd/marasi)
+build() { (cd "$work/tree" && CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags "-X 'main.version=$version'" -o "$1" ./cmd/marasi); }
+if [ "${GOARCH:-}" = universal ]; then
+	GOARCH=amd64 build "$work/marasi-amd64"
+	GOARCH=arm64 build "$work/marasi-arm64"
+	lipo -create -output "$root/resources/bin/$name" "$work/marasi-amd64" "$work/marasi-arm64"
+else
+	build "$root/resources/bin/$name"
+fi
 echo "Built Marasi $version ($commit) at resources/bin/$name"
