@@ -19,7 +19,7 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `GetRecentProjects` | binding | COVERED | `GET /project/list` with `modified_at`, sorted newest first by the GUI | 10 | [ ] |
 | `OpenFileDialog` | binding | GUI | OS open dialog on a local connection. On a remote one the path on the instance machine is typed. | 10 | [ ] |
 | `project-opening` | event | COVERED | `project.opening` | 10 | [ ] |
-| `WindowSetTitle` | runtime | GUI | `BrowserWindow` title naming the instance and project | 03 | [ ] |
+| `WindowSetTitle` | runtime | GUI | `BrowserWindow` title naming the instance and project | 03 | [x] |
 
 ## App config, settings and keybindings
 
