@@ -263,23 +263,23 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. A remote connection keeps its own in the app config (ticket 27). | 26 | [ ] |
-| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: app config (ticket 27). | 26 | [ ] |
-| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: local Chrome with `GET /certificate` `.spki_hash` (ticket 27). | 26 | [ ] |
-| `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [ ] |
-| `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}` | 26 | [ ] |
-| `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA) | 26 | [ ] |
-| `RemoveUpstreamProxy` | binding | COVERED | `DELETE /upstream-proxy/{name}` | 26 | [ ] |
-| `UseUpstreamProxy` | binding | COVERED | `PUT /upstream-proxy-selection {name}` | 26 | [ ] |
-| `CheckUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name}/check {target}` | 26 | [ ] |
-| `ReadUpstreamProxyCAFile` | binding | GUI | OS open dialog reads the PEM on this machine and sends it as `ca` | 26 | [ ] |
-| `GetWaypoints` | binding | COVERED | `GET /waypoint`, `waypoint.*` | 26 | [ ] |
-| `CreateWaypoint` | binding | COVERED | `POST /waypoint {hostname, override}` | 26 | [ ] |
-| `DeleteWaypoint` | binding | COVERED | `DELETE /waypoint {hostname}` | 26 | [ ] |
+| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: disabled on Home, toast from ⌘K; local Chrome with `GET /certificate` `.spki_hash` in ticket 27. | 26 | [x] |
+| `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [x] |
+| `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA), then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `RemoveUpstreamProxy` | binding | COVERED | `DELETE /upstream-proxy/{name}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `UseUpstreamProxy` | binding | COVERED | `PUT /upstream-proxy-selection {name}` | 26 | [x] |
+| `CheckUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name}/check {target}` | 26 | [x] |
+| `ReadUpstreamProxyCAFile` | binding | GUI | OS open dialog reads the PEM on this machine and sends it as `ca` | 26 | [x] |
+| `GetWaypoints` | binding | COVERED | `GET /waypoint`, `waypoint.*` | 26 | [x] |
+| `CreateWaypoint` | binding | COVERED | `POST /waypoint {hostname, override}` | 26 | [x] |
+| `DeleteWaypoint` | binding | COVERED | `DELETE /waypoint {hostname}` | 26 | [x] |
 
 ## Former gaps
 
