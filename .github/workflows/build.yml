@@ -69,10 +69,10 @@ jobs:
         env:
           MARASI_REF: ${{ inputs.marasi_ref }}
         run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
-      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
       # main.go embeds frontend/build, which only exists after a frontend build.
       - run: mkdir -p frontend/build && touch frontend/build/.keep
-      - run: go test -v -race -tags webkit2_41 ./...
+      - run: go test -v -race ./...
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -87,18 +87,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # task is the wails3 Taskfile task that builds the platform into
+          # bin/; asset is the release asset's name in bin/, which each
+          # defaultInstaller downloads. A tags entry passes extra build tags.
           - os: ubuntu-24.04
-            platform: linux/amd64
-            output: marasi-app
+            task: linux:build
             asset: marasi-app
-            tags: webkit2_41
           - os: windows-latest
-            platform: windows/amd64
-            output: marasi-app.exe
+            task: windows:build
             asset: marasi-app.exe
           - os: macos-latest
-            platform: darwin/universal
-            output: marasi-app
+            task: darwin:package:universal
             asset: marasi-app.app.zip
     runs-on: ${{ matrix.os }}
     defaults:
@@ -120,13 +119,15 @@ jobs:
         with:
           node-version: 20
       - if: runner.os == 'Linux'
-        run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-3-dev libwebkit2gtk-4.1-dev
+        run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
       - name: Install Wails
-        run: go install "github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)"
+        run: go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
+      # main.go embeds frontend/build, which binding generation needs before
+      # the frontend build fills it.
+      - run: mkdir -p frontend/build && touch frontend/build/.keep
       - name: Build
         env:
-          PLATFORM: ${{ matrix.platform }}
-          OUTPUT: ${{ matrix.output }}
+          TASK: ${{ matrix.task }}
           TAGS: ${{ matrix.tags }}
           CHANNEL: ${{ inputs.channel }}
           VERSION: ${{ inputs.version }}
@@ -145,12 +146,13 @@ jobs:
               VERSION="$VERSION (nightly $(git rev-parse --short=7 HEAD))"
             fi
           fi
-          args=(-platform "$PLATFORM" -webview2 download -o "$OUTPUT"
-            -ldflags "-X main.buildChannel=$CHANNEL -X 'main.version=$VERSION' -X main.signingPublicKey=$SIGNING_PUBLIC_KEY")
+          # The platform Taskfiles read CHANNEL, VERSION and
+          # SIGNING_PUBLIC_KEY from the environment into -X ldflags.
+          args=("$TASK")
           if [ -n "$TAGS" ]; then
-            args+=(-tags "$TAGS")
+            args+=("EXTRA_TAGS=$TAGS")
           fi
-          wails build "${args[@]}"
+          wails3 task "${args[@]}"
       - if: runner.os == 'macOS'
         uses: Apple-Actions/import-codesign-certs@v7
         with:
@@ -164,8 +166,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          app=build/bin/marasi-app.app
-          zip_path=build/bin/marasi-app.app.zip
+          app=bin/marasi-app.app
+          zip_path=bin/marasi-app.app.zip
           codesign --force --options runtime --timestamp --deep --sign "$MACOS_DEVELOPER_CERT_ID" "$app"
           codesign --verify --deep --strict --verbose "$app"
           team_id="${MACOS_DEVELOPER_CERT_ID##*(}"
@@ -185,8 +187,8 @@ jobs:
           rm -f "$zip_path"
           ditto -c -k --keepParent "$app" "$zip_path"
       - if: runner.os == 'Linux'
-        run: chmod +x build/bin/marasi-app
+        run: chmod +x bin/marasi-app
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
-          path: build/bin/${{ matrix.asset }}
+          path: bin/${{ matrix.asset }}

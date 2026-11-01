@@ -40,6 +40,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # The release notes open with the system requirements.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/release-requirements.txt
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -86,6 +91,7 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" \
               --verify-tag \
+              --notes-file .github/release-requirements.txt \
               --generate-notes \
               --latest \
               "${assets[@]}"

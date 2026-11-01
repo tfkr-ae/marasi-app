@@ -20,9 +20,9 @@ The updater uses its own HTTP client (`updateHTTPClient`), which honours the sys
 Changing one of these means changing the others:
 
 - **Event names:** the constants in `update.go` and `update_install.go`, and the `on` names in `+layout.svelte`.
-- **Asset names:** each `defaultInstaller`, the `asset` matrix in `.github/workflows/build.yml`, and the checksum and upload lists in `release.yml` and `nightly.yml`.
+- **Asset names:** each `defaultInstaller`, the `asset` matrix in `.github/workflows/build.yml`, and the checksum and upload lists in `release.yml` and `nightly.yml`. The builds take their file names from `APP_NAME` in `Taskfile.yml` (`bin/marasi-app`, `bin/marasi-app.exe`, `bin/marasi-app.app`), and `build.yml` signs and zips `bin/marasi-app.app` into `marasi-app.app.zip`.
 - **Version formats:** `parseReleaseVersion` and the `release.yml` tag pattern, and `parseNightlyVersion` and `nightlyCommit` and the nightly release title and notes in `nightly.yml`.
-- **Build identity:** the `build_info.go` variables that `build.yml` sets with `-ldflags`, including the public signing key. A development build has no channel, so it cannot check or install.
+- **Build identity:** the `build_info.go` variables, including the public signing key. `build.yml` sets `CHANNEL`, `VERSION` and `SIGNING_PUBLIC_KEY` in the environment, and `LDFLAGS_X` in `build/darwin`, `build/windows` and `build/linux/Taskfile.yml` turns them into `-X` flags. A development build has no channel, so it cannot check or install.
 - **Failure kinds and steps:** `UpdateFailureKind` and `InstallStep` in Go, and `failureTitles` and the step ids in `updates.js`.
 
 ## Test builds
