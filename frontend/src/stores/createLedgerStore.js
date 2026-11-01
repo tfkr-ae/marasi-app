@@ -412,6 +412,15 @@ function withoutBodies(pair) {
   return row;
 }
 
+// The results with `n` counted pairs moved to the exclusion's hidden count.
+function withHidden(r, n) {
+  return {
+    ...r,
+    count: r.count && { ...r.count, count: r.count.capped ? r.count.count : Math.max(0, r.count.count - n) },
+    hidden: r.hidden == null ? r.hidden : r.hidden + n,
+  };
+}
+
 // Applies `fn` to every row of `chunks`; returns `chunks` itself when `fn`
 // replaced none.
 function mapChunks(chunks, fn) {
@@ -1026,14 +1035,18 @@ export function createLedgerStore(api) {
     updateResults((r) => {
       let chunks = r.chunks;
       if (responses.size > 0) {
+        let dropped = 0;
         chunks = mapChunks(chunks, (item) => {
           const res = responses.get(item.ID);
           if (!res) return item;
           const next = withoutBodies({ ...item, ...res });
           // The live view drops a pair once its response shows the
-          // exclusion hides it.
-          return live && hiddenBy(next.ContentType, exclusion) ? null : next;
+          // exclusion hides it, and Marasi counts it as hidden from then.
+          if (!live || !hiddenBy(next.ContentType, exclusion)) return next;
+          dropped++;
+          return null;
         });
+        if (dropped > 0) r = withHidden(r, dropped);
       }
       if (!showAtTop || requests.length === 0) return { ...r, chunks };
       // A pair joins once, however many times its request event came.

@@ -841,6 +841,25 @@ test("a new pair whose response arrives under a hidden major type leaves the liv
   assert.deepEqual(ids(get(store)), [idOf(1)]);
 });
 
+test("the live count drops a pair its response hides, as Marasi counts it", async () => {
+  const api = fakeApi({ traffic: [pair(1)], exclusion: ["image/*"] });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await store.settled();
+  api.capture(pair(2, { StatusCode: 0, ContentType: "", Length: "" }));
+  store.onRequest(pair(2, { StatusCode: 0, ContentType: "", Length: "" }));
+  store.flush();
+  assert.equal(countLabel(get(store)), "2 in the live view");
+  assert.equal(hiddenByTypeCount(get(store)), 0);
+
+  api.db.find((p) => p.ID === idOf(2)).ContentType = "image/png";
+  store.onResponse({ ID: idOf(2), StatusCode: 200, ContentType: "image/png", Length: "5" });
+  store.flush();
+  const marasi = await api.countTraffic("", "");
+  assert.equal(countLabel(get(store)), `${marasi.Count} in the live view`);
+  assert.equal(hiddenByTypeCount(get(store)), 1);
+});
+
 test("hiding a type updates the table and the hidden count", async () => {
   const store = createLedgerStore(
     fakeApi({
