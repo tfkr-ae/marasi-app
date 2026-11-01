@@ -25,6 +25,16 @@ Changing one of these means changing the others:
 - **Build identity:** the `build_info.go` variables that `build.yml` sets with `-ldflags`, including the public signing key. A development build has no channel, so it cannot check or install.
 - **Failure kinds and steps:** `UpdateFailureKind` and `InstallStep` in Go, and `failureTitles` and the step ids in `updates.js`.
 
+## Test builds
+
+To build a branch or commit without publishing, run the build workflow by hand:
+
+```sh
+gh workflow run build.yml --ref <branch> -f channel=nightly
+```
+
+`--ref` picks the branch whose `build.yml` runs and, without `-f ref=<commit>`, the commit it builds. `-f version=…` and `-f marasi_ref=…` are optional. The run builds every platform, then signs, notarizes and staples the macOS bundle, as a nightly does. It has only read access, so it creates no release, tag or nightly. The assets are the run's workflow artifacts, which no updater reads: `gh run download <run-id>`. The checksums are not signed, because that happens in the publishing jobs.
+
 ## Decisions
 
 - [Updates are verified against a signing key built into the app](../../adr/2026-10-17-updates-are-signed-with-an-embedded-key.md)
