@@ -6,6 +6,7 @@ import { followConnection, reloadStores } from "./followConnection.js";
 import { handshakeEndedEvent, requestEvent, responseEvent } from "./bindings/traffic.js";
 import { launchpadOf } from "./bindings/launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./bindings/armory.js";
+import { webSocketConnection, webSocketMessage, webSocketProgress } from "./bindings/websocket.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
 import { ledgerStore } from "../stores/ledgerStore";
@@ -29,10 +30,21 @@ import { projectSwitch } from "../stores/projectSwitchStore.js";
 import { extensionsStore } from "../stores/extensionsStore.js";
 import { scopeStore } from "../stores/scopeStore.js";
 
-const checkpointResolved = (event) =>
+const checkpointResolved = (event) => {
   Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
     console.error("Reading Checkpoint items failed:", err),
   );
+  connectionStore.onResolved(event).catch((err) => console.error("Reading held WebSocket messages failed:", err));
+};
+
+// A connection that opened or closed, for the WebSocket modal and its
+// upgrade's Ledger row.
+const webSocketChanged = (event) => {
+  const connection = webSocketConnection(event);
+  connectionStore.upsertConnection(connection);
+  ledgerStore.patchWebSocketMetadata(connection);
+  return connection;
+};
 
 // Logs a failed reread after a launchpad event.
 const followLaunchpads = (reading) =>
@@ -98,12 +110,24 @@ const handlers = {
     dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
   },
   // Checkpoint, HTTP and WebSocket items alike, by any client. An item
-  // whose client left arrives as checkpoint.dropped, reason abandoned.
-  "checkpoint.held": () =>
-    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err)),
+  // whose client left, or whose WebSocket connection closed, arrives as
+  // checkpoint.dropped, reason abandoned. The WebSocket modal queues held
+  // messages by connection.
+  "checkpoint.held": (item) => {
+    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err));
+    connectionStore.onHeld(item);
+  },
   "checkpoint.forwarded": (event) => checkpointResolved(event),
   "checkpoint.dropped": (event) => checkpointResolved(event),
-  "checkpoint.updated": (flags) => checkpointStore.onUpdated(flags),
+  "checkpoint.updated": (flags) => {
+    checkpointStore.onUpdated(flags);
+    connectionStore.onUpdated(flags);
+  },
+  // WebSocket connections and their messages, in v1's shapes.
+  "websocket.opened": (event) => webSocketChanged(event),
+  "websocket.closed": (event) => connectionStore.clearInterceptions(webSocketChanged(event).RequestID),
+  "websocket.message": (event) => connectionStore.upsertMessage(webSocketMessage(event)),
+  "websocket.progress": (event) => connectionStore.upsertProgress(webSocketProgress(event)),
   "update.available": (update) => instanceUpdate.onAvailable(update),
   "update.progress": (progress) => instanceUpdate.onProgress(progress),
   "update.installed": (installed) => instanceUpdate.onInstalled(installed),
