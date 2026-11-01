@@ -109,11 +109,20 @@ export function createMarasiClient({ baseURL, fetch = globalThis.fetch.bind(glob
   // A route's body as bytes, such as an artifact's content.
   const readBytes = async (path) => new Uint8Array(await (await accepted("GET", path)).arrayBuffer());
 
+  // Posts `body` as JSON and reads the answer as bytes, such as a rendered report.
+  const postBytes = async (path, body) =>
+    new Uint8Array(
+      await (
+        await accepted("POST", path, { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      ).arrayBuffer(),
+    );
+
   return {
     baseURL: base,
     request,
     sendBytes,
     readBytes,
+    postBytes,
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body),
     put: (path, body) => request("PUT", path, body),
@@ -155,4 +164,5 @@ export const marasi = {
   delete: (path, body) => client().delete(path, body),
   sendBytes: (method, path, bytes, contentType) => client().sendBytes(method, path, bytes, contentType),
   readBytes: (path) => client().readBytes(path),
+  postBytes: (path, body) => client().postBytes(path, body),
 };

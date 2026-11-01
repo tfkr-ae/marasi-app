@@ -214,6 +214,8 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `ExportReport` | binding | COVERED | `POST /report {template, …, created_at, custom_properties}`, saved through an OS save dialog | 22 | [ ] |
 | `RestoreDefaultReportTemplate` | binding | COVERED | `POST /report/template/restore` | 22 | [ ] |
 | `GetUserName` | binding | GUI | `os.userInfo()`, the report assessor default | 22 | [ ] |
+| `UploadReportTemplate` | binding | COVERED | v2 only: a template file from this machine, its bytes to `POST /report/template?name=`; `report.template.added` | 22 | [ ] |
+| `DeleteReportTemplate` | binding | COVERED | v2 only: `DELETE /report/template/{name}`; `report.template.removed` | 22 | [ ] |
 
 ## Armory
 
