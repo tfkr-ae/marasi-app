@@ -816,7 +816,8 @@ export function createLogbookStore(api) {
       if (!original.ID) {
         const created = await calls.create(draft);
         const placed = { ID: created.ID, CreatedAt: created.CreatedAt };
-        advance({ ...placed, Requests: [...draft.Requests], TestCaseID: draft.TestCaseID }, placed);
+        // The create links what it can; the links below add any pair it left out.
+        advance({ ...placed, Requests: [...(created.Requests ?? draft.Requests)], TestCaseID: draft.TestCaseID }, placed);
       }
       if (FIELDS[kind].some(([key]) => !same(original[key], draft[key]))) {
         await calls.save({ ...draft, Requests: original.Requests, Artifacts: undefined });
