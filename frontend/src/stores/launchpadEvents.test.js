@@ -202,3 +202,32 @@ test("after a delete refused for another client's launch, that launch ending fre
   await store.onLaunchFinished(launchRecord("l9", "lp1", "completed"));
   assert.equal(pendingLaunchOf(get(store), "lp1"), null);
 });
+
+test("a launchpad another client deletes under a dirty draft says the draft is gone", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await store.selectLaunchpad("lp2");
+  store.updateDraft("lp1", "GET /edited HTTP/1.1\nHost: x\n\n");
+  const notices = [];
+  store.onNotice((notice) => notices.push(notice));
+  await store.onLaunchpadDeleted("lp2");
+  await store.onLaunchpadDeleted("lp1");
+  assert.deepEqual(notices, ["Another client deleted Login. Its unsaved draft is gone."]);
+});
+
+test("a launchpad deleted here says nothing when its event arrives, even before Marasi answers", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "GET /edited HTTP/1.1\nHost: x\n\n");
+  const notices = [];
+  store.onNotice((notice) => notices.push(notice));
+  const remove = api.deleteLaunchpad;
+  api.deleteLaunchpad = async (id) => {
+    await remove(id);
+    await store.onLaunchpadDeleted(id);
+  };
+  await store.deleteLaunchpad("lp1");
+  assert.deepEqual(notices, []);
+});

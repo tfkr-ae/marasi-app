@@ -26,8 +26,9 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // A fake api: the POST answers through `opens`, the opening screen's delay
 // through `timers`, and each load is recorded.
-function fakeApi({ remote = false, instances = [], loadError = null } = {}) {
-  const calls = { opened: [], loads: [], windows: [], checkpoint: 0, busy: [] };
+function fakeApi({ remote = false, instances = [], loadError = null, leave = true } = {}) {
+  // `leave` is true with no work to lose, or the researcher's answer.
+  const calls = { opened: [], loads: [], windows: [], checkpoint: 0, busy: [], asked: 0, owns: [] };
   const opens = [];
   const timers = [];
   const api = {
@@ -43,8 +44,15 @@ function fakeApi({ remote = false, instances = [], loadError = null } = {}) {
     ],
     localInstances: async () => instances,
     isRemote: () => remote,
-    load: async (project, loadPart) => {
+    // Nothing to lose answers at once; otherwise the researcher is asked.
+    confirmLeaving: () => {
+      if (leave === true) return true;
+      calls.asked++;
+      return Promise.resolve(leave);
+    },
+    load: async (project, loadPart, { own }) => {
       calls.loads.push(project);
+      calls.owns.push(own);
       loadPart("traffic");
       if (loadError) throw loadError;
     },
@@ -69,6 +77,7 @@ async function started(options) {
   const store = createProjectSwitchStore(fake.api);
   await store.openConnected({ project: `${projects}/scratchpad.marasi` });
   fake.calls.loads.length = 0;
+  fake.calls.owns.length = 0;
   fake.calls.busy.length = 0;
   return { ...fake, store };
 }
@@ -274,4 +283,31 @@ test("Try again re-runs the last open", async () => {
   assert.deepEqual(calls.opened, ["acme", "acme"]);
   opens[1].resolve(acmePath);
   assert.deepEqual(await again, { name: "acme", path: acmePath });
+});
+
+test("a switch the window starts asks once about losing work, and Cancel stays put without opening", async () => {
+  const { store, calls } = await started({ leave: false });
+  assert.equal(await store.open("acme"), null);
+  assert.equal(calls.asked, 1);
+  assert.deepEqual(calls.opened, []);
+  assert.deepEqual(calls.busy, []);
+  assert.equal(get(store).opening, null);
+});
+
+test("a switch the window starts, once agreed, loads as its own, so its drafts go", async () => {
+  const { store, calls, opens } = await started({ leave: "agreed" });
+  const opening = store.open("acme");
+  await settle();
+  assert.equal(calls.asked, 1);
+  opens[0].resolve(acmePath);
+  await opening;
+  assert.deepEqual(calls.owns, [true]);
+});
+
+test("a switch another client makes loads as not the window's own, without asking, so its drafts are kept", async () => {
+  const { store, calls } = await started({ leave: false });
+  store.onOpening({ project: acmePath });
+  await store.onOpened({ project: acmePath });
+  assert.equal(calls.asked, 0);
+  assert.deepEqual(calls.owns, [false]);
 });

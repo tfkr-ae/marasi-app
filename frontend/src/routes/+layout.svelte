@@ -58,7 +58,8 @@
 		retryOpen,
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { askBeforeLosingDrafts, launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { draftsLostText } from "../lib/launchpad/format.js";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -289,6 +290,23 @@
 		const stopFollowing = followWindowConnection();
 		const stopFollowingWindows = windowList.follow();
 		const stopReportingDrafts = reportUnsavedDrafts();
+		// A switch or disconnect this window starts asks once for all dirty
+		// drafts; drafts another client keeps or loses show a notice.
+		askBeforeLosingDrafts(
+			(action, count) =>
+				new Promise((resolve) =>
+					modalStore.trigger({
+						type: "confirm",
+						title: `${action}?`,
+						body: draftsLostText(count),
+						buttonTextConfirm: action,
+						response: (ok) => resolve(Boolean(ok)),
+					}),
+				),
+		);
+		const stopDraftNotices = launchpadStore.onNotice((message) =>
+			toastStore.trigger({ message, background: "variant-filled-warning", timeout: 6000 }),
+		);
 		EventsOn("update-available", onUpdateAvailable);
 		EventsOn("update-progress", onUpdateProgress);
 		EventsOn("update-installed", onUpdateInstalled);
@@ -383,6 +401,7 @@
 			stopFollowing();
 			stopFollowingWindows();
 			stopReportingDrafts();
+			stopDraftNotices();
 			removeMenuShortcuts();
 			EventsOff("request");
 			EventsOff("response");

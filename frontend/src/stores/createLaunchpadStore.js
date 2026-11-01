@@ -7,6 +7,10 @@ import { entrySearchQuery } from "../lib/launchpad/entrySearch.js";
 import * as selecting from "../lib/launchpad/entrySelection.js";
 import { leavesOrder, marasiMoveRefusal } from "../lib/launchpad/entryMove.js";
 import { launchingIds, pendingLaunchIDs } from "../lib/launchPending.js";
+import { UNTITLED_LAUNCHPAD } from "../lib/launchpad/format.js";
+import { projectName } from "../lib/openProgress.js";
+
+const drafts = (count) => (count === 1 ? "1 unsaved draft" : `${count} unsaved drafts`);
 
 // Entry search through Marasi: `matches` holds entry ids by launchpad id,
 // `status` is idle, loading, done or error.
@@ -26,9 +30,16 @@ const PER_LAUNCHPAD_KEYS = [
   "unseenByLaunchpad",
 ];
 
-function initialState(projectStateVersion = 0) {
+function initialState(projectStateVersion = 0, project = null, keptDrafts = {}) {
   return {
     projectStateVersion,
+    // The open project's path, which keys the drafts kept for later.
+    project,
+    // The dirty drafts of projects another client switched away from, by
+    // project path, then launchpad id: { draft, seed, entryId }, with seed
+    // the details of the entry the draft was seeded from. They come back
+    // when their project opens again.
+    keptDrafts,
     launchpads: [],
     ...Object.fromEntries(PER_LAUNCHPAD_KEYS.map((key) => [key, {}])),
     // Launches by launch id, which is also their entry's UUID (Marasi
@@ -80,6 +91,37 @@ export function dirtyLaunchpadIds(state) {
   return Object.keys(state.draftsByLaunchpad).filter((id) =>
     isDraftDirty(state, id),
   );
+}
+
+/** How many dirty drafts quitting would lose: the open project's and the kept ones. */
+export function unsavedDraftCount(state) {
+  const kept = Object.values(state.keptDrafts).reduce((sum, drafts) => sum + Object.keys(drafts).length, 0);
+  return dirtyLaunchpadIds(state).length + kept;
+}
+
+// The open project's dirty drafts, as keptDrafts holds them.
+function dirtyDrafts(state) {
+  return Object.fromEntries(
+    dirtyLaunchpadIds(state).map((id) => {
+      const draft = state.draftsByLaunchpad[id];
+      return [id, { draft, seed: state.detailsById[draft.seededFrom] ?? null, entryId: state.selectedEntryByLaunchpad[id] }];
+    }),
+  );
+}
+
+// Puts the project's kept drafts back on the launchpads that still exist.
+function restoreKept(state, ids) {
+  const kept = Object.entries(state.keptDrafts[state.project] ?? {}).filter(([id]) => ids.has(id));
+  if (!state.keptDrafts[state.project]) return state;
+  const next = { ...state, keptDrafts: without(state.keptDrafts, state.project) };
+  for (const [id, { draft, seed, entryId }] of kept) {
+    next.draftsByLaunchpad = { ...next.draftsByLaunchpad, [id]: draft };
+    if (entryId) next.selectedEntryByLaunchpad = { ...next.selectedEntryByLaunchpad, [id]: entryId };
+    if (seed && !next.detailsById[draft.seededFrom]) {
+      next.detailsById = { ...next.detailsById, [draft.seededFrom]: seed };
+    }
+  }
+  return next;
 }
 
 /** True when the entry is in the Entry selection. */
@@ -330,8 +372,15 @@ export function createLaunchpadStore(api) {
   // Launches from this store whose entry has not arrived yet, by launch id:
   // { launchpadId, raw }. Their entry is selected when it arrives.
   const awaitingEntry = new Map();
+  // Launchpads this store is deleting, whose launchpad.deleted is its own.
+  const deleting = new Set();
   let current = initialState();
   const { subscribe, set: setStore } = writable(current);
+
+  // Short notices about drafts another client's change kept or lost, for
+  // the window's toasts.
+  const noticeListeners = new Set();
+  const notice = (text) => noticeListeners.forEach((listener) => listener(text));
 
   function set(next) {
     current = next;
@@ -602,17 +651,20 @@ export function createLaunchpadStore(api) {
       const newest = Object.fromEntries(
         state.launchpads.map((launchpad) => [launchpad.ID, launchpad.NewestEntryID]),
       );
-      return {
-        ...state,
-        launchpads: launchpads.map((launchpad) =>
-          newest[launchpad.ID] ? { ...launchpad, NewestEntryID: newest[launchpad.ID] } : launchpad,
-        ),
-        ...mapPerLaunchpad(state, keep),
-        compare: ids.has(state.compare?.launchpadId) ? state.compare : null,
-        entrySelection: ids.has(state.entrySelection.launchpadId)
-          ? state.entrySelection
-          : selecting.NO_ENTRY_SELECTION,
-      };
+      return restoreKept(
+        {
+          ...state,
+          launchpads: launchpads.map((launchpad) =>
+            newest[launchpad.ID] ? { ...launchpad, NewestEntryID: newest[launchpad.ID] } : launchpad,
+          ),
+          ...mapPerLaunchpad(state, keep),
+          compare: ids.has(state.compare?.launchpadId) ? state.compare : null,
+          entrySelection: ids.has(state.entrySelection.launchpadId)
+            ? state.entrySelection
+            : selecting.NO_ENTRY_SELECTION,
+        },
+        ids,
+      );
     });
     const exists = (id) => launchpads.some((launchpad) => launchpad.ID === id);
     const selected = [prefer, current.selectedLaunchpadId].find(exists) ?? launchpads[0]?.ID ?? null;
@@ -704,6 +756,9 @@ export function createLaunchpadStore(api) {
   async function forgetLaunchpad(id) {
     const index = current.launchpads.findIndex((launchpad) => launchpad.ID === id);
     if (index < 0) return;
+    if (!deleting.has(id) && isDraftDirty(current, id)) {
+      notice(`Another client deleted ${current.launchpads[index].Name || UNTITLED_LAUNCHPAD}. Its unsaved draft is gone.`);
+    }
     update((state) => ({
       ...state,
       launchpads: state.launchpads.filter((launchpad) => launchpad.ID !== id),
@@ -775,13 +830,34 @@ export function createLaunchpadStore(api) {
     }));
   }
 
+  function reset(project = null, keptDrafts = {}) {
+    awaitingEntry.clear();
+    clearTimeout(searchTimer);
+    searchSeq += 1;
+    set(initialState(++projectStateVersion, project, keptDrafts));
+  }
+
   return {
     subscribe,
-    clear: () => {
-      awaitingEntry.clear();
-      clearTimeout(searchTimer);
-      searchSeq += 1;
-      set(initialState(++projectStateVersion));
+    // Forgets everything, kept drafts too.
+    clear: () => reset(),
+    // Empties the store for `project` (its path), which populate then
+    // reads. The dirty drafts of the project it leaves are kept for when
+    // that project opens again, unless `keepDrafts` is false: the
+    // researcher started the switch and agreed to lose them. Returns how
+    // many it kept.
+    openProject: (project, { keepDrafts = true } = {}) => {
+      const leaving = current.project !== project && keepDrafts ? dirtyDrafts(current) : {};
+      const count = Object.keys(leaving).length;
+      const left = current.project;
+      reset(project, count ? { ...current.keptDrafts, [left]: leaving } : current.keptDrafts);
+      if (count) notice(`Project switched by another client. ${drafts(count)} kept for ${projectName(left)}.`);
+      return count;
+    },
+    // Calls `listener(text)` with each notice; returns its removal.
+    onNotice: (listener) => {
+      noticeListeners.add(listener);
+      return () => noticeListeners.delete(listener);
     },
     populate,
     // Reads it all again, after the event stream reopens.
@@ -926,13 +1002,16 @@ export function createLaunchpadStore(api) {
     // Marasi refuses while a launch from it is pending (marasi docs/adr/2026-10-18-a-pending-launchs-pair-stays-in-its-launchpad.md);
     // the store then learns that launch, so Delete shows it launching.
     deleteLaunchpad: async (id) => {
+      deleting.add(id);
       try {
         await api.deleteLaunchpad(id);
+        await forgetLaunchpad(id);
       } catch (err) {
         if (pendingLaunchIDs(err)) await loadPendingLaunches();
         throw err;
+      } finally {
+        deleting.delete(id);
       }
-      await forgetLaunchpad(id);
     },
 
     // Marasi's launchpad events, from any client; each applies once

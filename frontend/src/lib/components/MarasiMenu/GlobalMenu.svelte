@@ -49,6 +49,7 @@
 	import { updatePanelModal } from "../../updates.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import { windowConnection, windowList } from "../../../stores/windowConnectionStore.js";
+	import { confirmLosingDrafts } from "../../../stores/launchpadStore";
 	import {
 		extensions,
 		extensions_ui,
@@ -153,8 +154,9 @@
 	let windowSwitcher;
 
 	// A disconnected window reloads into the connection screen, as it has
-	// nothing to show without an instance.
+	// nothing to show without an instance, so its dirty drafts go: it asks.
 	async function disconnect() {
+		if (!(await confirmLosingDrafts("Disconnect"))) return;
 		await windowConnection.disconnect();
 		location.reload();
 	}

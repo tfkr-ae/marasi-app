@@ -17,8 +17,9 @@ import {
   UnlinkTraffic,
   UpdateLaunchpadEntry,
 } from "../lib/bindings/App";
-import { createLaunchpadStore } from "./createLaunchpadStore.js";
+import { createLaunchpadStore, dirtyLaunchpadIds } from "./createLaunchpadStore.js";
 import { reportUnsavedDraftCount } from "./draftGuards.js";
+import { get } from "svelte/store";
 import { relinked } from "./relinked.js";
 
 export {
@@ -57,8 +58,28 @@ export const launchpadStore = createLaunchpadStore({
   unlinkEntriesFromRecord: (selection, target) => relinked(UnlinkTraffic(selection, target), target.Kind),
 });
 
-// Keeps the Go side told how many launchpads have unsaved drafts, so quitting
-// or switching the project can ask first. Returns the unsubscribe function.
+// How the window asks before something discards dirty drafts: the layout
+// sets its modal here.
+let askLosingDrafts = async () => true;
+
+/** Sets how to ask: `ask(action, count)` resolves true to go ahead. */
+export function askBeforeLosingDrafts(ask) {
+  askLosingDrafts = ask;
+}
+
+/**
+ * Before `action` ("Switch project") discards the open project's dirty
+ * drafts: true at once when there are none, else the researcher's answer,
+ * asked once for all of them.
+ */
+export function confirmLosingDrafts(action) {
+  const count = dirtyLaunchpadIds(get(launchpadStore)).length;
+  return count === 0 ? true : askLosingDrafts(action, count);
+}
+
+// Keeps the main process told how many unsaved drafts the window holds, so
+// quitting or closing the window can ask first. Returns the unsubscribe
+// function.
 export function reportUnsavedDrafts() {
   return reportUnsavedDraftCount(launchpadStore, (count) =>
     SetUnsavedDraftCount(count).catch((err) =>
