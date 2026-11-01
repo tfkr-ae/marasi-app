@@ -30,6 +30,7 @@ import { projectSwitch } from "../stores/projectSwitchStore.js";
 import { extensionsStore } from "../stores/extensionsStore.js";
 import { scopeStore } from "../stores/scopeStore.js";
 import { reportTemplateStore } from "../stores/reportTemplateStore.js";
+import { highlightsStore } from "../stores/highlightsStore.js";
 
 const checkpointResolved = (event) => {
   Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
@@ -224,6 +225,7 @@ const stores = [
   listenerStore,
   dashboardStore,
   ledgerStore,
+  highlightsStore,
   sitemapStore,
   recentTraffic,
   jobsStore,
