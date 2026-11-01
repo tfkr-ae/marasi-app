@@ -58,12 +58,15 @@ export function moveRefusal({ sourceId, ids, target, targetName, targetIds, pend
   return null;
 }
 
-// Codes the Go side puts in a refused move's error (launchpad_move.go): the
-// app's view of the launchpads was stale.
+// Codes in a refused move's error: the app's view of the launchpads was
+// stale.
 const STALE = [
   ["already_linked", ({ targetName }) => `An entry is already in ${targetName}`],
   ["not_linked", ({ sourceName }) => `An entry is no longer in ${sourceName}`],
   ["invalid_placement", () => "The launchpad changed"],
+  // Marasi answers not_found for an entry no longer in the source as well
+  // as for a launchpad that is gone.
+  ["not_found", () => "The launchpad changed"],
 ];
 
 /**
