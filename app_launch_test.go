@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -135,7 +136,7 @@ func TestAppLaunch(t *testing.T) {
 		}
 		launchEvent(t, events, "launch-started")
 
-		app.ServiceShutdown()
+		app.close(context.Background())
 		finished := launchEvent(t, events, "launch-finished")
 		if finished.ID != id || finished.Status != domain.LaunchFailed || finished.Reason != domain.LaunchReasonInterrupted {
 			t.Fatalf("wanted launch %s failed interrupted\ngot: %+v", id, finished)

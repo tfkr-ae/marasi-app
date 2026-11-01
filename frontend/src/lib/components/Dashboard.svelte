@@ -1,6 +1,6 @@
 <script>
 	import { activeProject } from "../../stores";
-	import { CountNotes, GetScopeRules } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { CountNotes, GetScopeRules } from "../wailsjs/go/main/App";
 	import {
 		Edit2Icon,
 		SendIcon,

@@ -2,7 +2,7 @@
     import { onDestroy } from "svelte";
     import { extensions_ui } from "../../stores.js";
     import SchemaRenderer from "./Renderer.svelte";
-    import { emit } from "../runtime.js";
+    import { EventsEmit } from "../wailsjs/runtime/runtime.js";
 
     export let enableSync = false;
     export let extensionData;
@@ -15,7 +15,7 @@
                 $extensions_ui[extensionData.Name]?.state || {};
 
             if (Object.keys(currentState).length > 0) {
-                emit("extension_sync_state", {
+                EventsEmit("extension_sync_state", {
                     extensionID: extensionData.ID,
                     args: [currentState],
                 });

@@ -3,9 +3,13 @@
 set -eu
 . "$(dirname -- "$0")/common.sh"
 
-# Ports default to free ones from the OS, so parallel sessions never share one.
-PORT=${MARASI_VERIFY_PROXY_PORT:-}
-SERVER_PORT=${MARASI_VERIFY_SERVER_PORT:-}
+require_tools lsof curl node go wails
+case $(uname -s) in
+	Linux) require_tools pkg-config ;;
+esac
+
+PORT=${MARASI_VERIFY_PROXY_PORT:-18080}
+DEV_PORT=${MARASI_VERIFY_DEV_PORT:-34115}
 CDP_PORT=${MARASI_VERIFY_CDP_PORT:-0}
 CHROME_BIN=${MARASI_VERIFY_CHROME_BIN:-}
 if [ -z "$CHROME_BIN" ]; then
@@ -23,24 +27,27 @@ fi
 if [ -f "$PID_FILE" ]; then
 	OLD_PID=$(cat "$PID_FILE")
 	if kill -0 "$OLD_PID" 2>/dev/null; then
-		printf 'Verification instance PID %s is already running in %s. Use doctor.sh or cleanup.sh, or set MARASI_VERIFY_STATE_DIR for a second session.\n' "$OLD_PID" "$STATE_DIR" >&2
+		printf 'Verification instance PID %s is already running. Use doctor.sh or cleanup.sh.\n' "$OLD_PID" >&2
 		exit 1
 	fi
 	printf 'Stale verification state exists at %s. Run cleanup.sh before launching.\n' "$STATE_DIR" >&2
 	exit 1
 fi
 
-# A kept config already names the port Marasi listens on.
-if [ -z "$PORT" ] && [ "${MARASI_VERIFY_KEEP_CONFIG:-0}" = 1 ] && [ -f "$APP_CONFIG_DIR/marasi_appconfig.yaml" ]; then
-	PORT=$(sed -n 's/^default_port: *"\{0,1\}\([0-9]*\)"\{0,1\}$/\1/p' "$APP_CONFIG_DIR/marasi_appconfig.yaml")
-fi
-preflight "Proxy=$PORT" "Server=$SERVER_PORT" "Chrome DevTools=$CDP_PORT"
-[ -n "$PORT" ] || PORT=$(free_port)
-[ -n "$SERVER_PORT" ] || SERVER_PORT=$(free_port)
-[ "$PORT" != "$SERVER_PORT" ] || {
-	printf 'Proxy and server ports are both %s.\n' "$PORT" >&2
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+	printf 'Proxy port %s is already in use. Set MARASI_VERIFY_PROXY_PORT to a free port.\n' "$PORT" >&2
 	exit 1
-}
+fi
+for RESERVED_PORT in 5173 "$DEV_PORT"; do
+	if lsof -nP -iTCP:"$RESERVED_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+		printf 'Verification port %s is already in use. Stop that process or choose another configurable port.\n' "$RESERVED_PORT" >&2
+		exit 1
+	fi
+done
+if [ "$CDP_PORT" -ne 0 ] && lsof -nP -iTCP:"$CDP_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+	printf 'Chrome DevTools port %s is already in use. Set MARASI_VERIFY_CDP_PORT to 0 for automatic allocation.\n' "$CDP_PORT" >&2
+	exit 1
+fi
 [ -x "$CHROME_BIN" ] || {
 	printf 'Chrome executable not found at %s. Set MARASI_VERIFY_CHROME_BIN.\n' "$CHROME_BIN" >&2
 	exit 1
@@ -49,16 +56,10 @@ preflight "Proxy=$PORT" "Server=$SERVER_PORT" "Chrome DevTools=$CDP_PORT"
 mkdir -p "$STATE_DIR" "$APP_CONFIG_DIR" "$EVIDENCE_ROOT"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 EVIDENCE_DIR=$EVIDENCE_ROOT/$STAMP
-# Two sessions can launch in the same second; each needs its own directory.
-SUFFIX=1
-while ! mkdir "$EVIDENCE_DIR" 2>/dev/null; do
-	SUFFIX=$((SUFFIX + 1))
-	EVIDENCE_DIR=$EVIDENCE_ROOT/$STAMP-$SUFFIX
-done
+mkdir "$EVIDENCE_DIR"
 printf '%s\n' "$EVIDENCE_DIR" > "$EVIDENCE_FILE"
 printf '%s\n' "$PORT" > "$PORT_FILE"
-printf '%s\n' "$SERVER_PORT" > "$SERVER_PORT_FILE"
-cp "$BUILD_BIN" "$APP_BIN"
+printf '%s\n' "$DEV_PORT" > "$DEV_PORT_FILE"
 
 # restart.sh relaunches with MARASI_VERIFY_KEEP_CONFIG=1 so saved preferences survive.
 if [ "${MARASI_VERIFY_KEEP_CONFIG:-0}" = 1 ] && [ -f "$APP_CONFIG_DIR/marasi_appconfig.yaml" ]; then
@@ -73,43 +74,55 @@ vim_enabled: true
 EOF
 fi
 
-APP_URL=http://$SERVER_HOST:$SERVER_PORT
+cd "$REPO_ROOT"
 {
-	printf 'command=%s\n' "$APP_BIN"
-	printf 'build=%s\n' "$BUILD_BIN"
-	printf 'build_modified=%s\n' "$(date -u -r "$BUILD_BIN" +%Y-%m-%dT%H:%M:%SZ)"
+	printf 'command=wails dev -m -nosyncgomod -nocolour -devserver localhost:%s\n' "$DEV_PORT"
 	printf 'started_at=%s\n' "$STAMP"
 	printf 'state_dir=%s\n' "$STATE_DIR"
 	printf 'isolated_home=%s\n' "$HOME_DIR"
 	printf 'proxy_port=%s\n' "$PORT"
-	printf 'app_url=%s\n' "$APP_URL"
+	printf 'dev_server=http://localhost:%s\n' "$DEV_PORT"
 	printf 'requested_cdp_port=%s\n' "$CDP_PORT"
 	printf 'viewport=%sx%s\n' "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
 } > "$EVIDENCE_DIR/launch.txt"
 
-# The app's working directory is the isolated home, so nothing it writes
-# lands in the checkout.
-(cd "$HOME_DIR" && HOME="$HOME_DIR" WAILS_SERVER_HOST="$SERVER_HOST" WAILS_SERVER_PORT="$SERVER_PORT" exec "$APP_BIN") > "$EVIDENCE_DIR/app.log" 2>&1 &
+GOCACHE_VALUE=$(go env GOCACHE)
+GOMODCACHE_VALUE=$(go env GOMODCACHE)
+# Debian/Ubuntu ship webkit2gtk-4.1; Wails needs the webkit2_41 build tag there.
+WAILS_TAGS=${MARASI_VERIFY_WAILS_TAGS:-}
+case $(uname -s) in
+	Linux)
+		if [ -z "$WAILS_TAGS" ] && pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
+			WAILS_TAGS=webkit2_41
+		fi
+		;;
+esac
+WAILS_DEV_ARGS="-m -nosyncgomod -nocolour -devserver localhost:$DEV_PORT"
+if [ -n "$WAILS_TAGS" ]; then
+	WAILS_DEV_ARGS="$WAILS_DEV_ARGS -tags $WAILS_TAGS"
+fi
+HOME="$HOME_DIR" GOCACHE="$GOCACHE_VALUE" GOMODCACHE="$GOMODCACHE_VALUE" GOWORK=off wails dev $WAILS_DEV_ARGS > "$EVIDENCE_DIR/app.log" 2>&1 &
 PID=$!
 printf '%s\n' "$PID" > "$PID_FILE"
 printf 'pid=%s\n' "$PID" >> "$EVIDENCE_DIR/launch.txt"
 
 ATTEMPTS=0
-while [ "$ATTEMPTS" -lt 30 ]; do
+while [ "$ATTEMPTS" -lt 120 ]; do
 	if ! kill -0 "$PID" 2>/dev/null; then
 		printf 'Marasi exited during startup. See %s/app.log\n' "$EVIDENCE_DIR" >&2
 		exit 1
 	fi
-	if curl --fail --silent --output /dev/null "$APP_URL/health"; then
+	if curl --fail --silent --output /dev/null "http://localhost:$DEV_PORT"; then
 		break
 	fi
 	ATTEMPTS=$((ATTEMPTS + 1))
 	sleep 1
 done
-[ "$ATTEMPTS" -lt 30 ] || {
-	printf 'Marasi server did not answer %s/health within 30 seconds. See %s/app.log\n' "$APP_URL" "$EVIDENCE_DIR" >&2
+
+if [ "$ATTEMPTS" -ge 120 ]; then
+	printf 'Wails dev server did not become ready within 120 seconds. See %s\n' "$EVIDENCE_DIR" >&2
 	exit 1
-}
+fi
 
 "$CHROME_BIN" --headless=new --disable-gpu --no-first-run --no-default-browser-check --window-size="$VIEWPORT_WIDTH,$VIEWPORT_HEIGHT" --remote-debugging-port="$CDP_PORT" --user-data-dir="$STATE_DIR/chrome" about:blank > "$EVIDENCE_DIR/chrome.log" 2>&1 &
 CHROME_PID=$!
@@ -133,12 +146,13 @@ done
 	exit 1
 }
 
-node "$SCRIPT_DIR/cdp.mjs" launch "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
+node "$SCRIPT_DIR/cdp.mjs" launch "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
 LISTENER_PID=$(lsof -nP -t -iTCP:"$PORT" -sTCP:LISTEN | head -n 1)
-[ "$LISTENER_PID" = "$PID" ] || {
-	printf 'Proxy port %s is not owned by Marasi PID %s (owner: %s).\n' "$PORT" "$PID" "${LISTENER_PID:-none}" >&2
+[ -n "$LISTENER_PID" ] && is_descendant_of "$LISTENER_PID" "$PID" || {
+	printf 'Proxy port %s is not owned by a child of Wails PID %s.\n' "$PORT" "$PID" >&2
 	exit 1
 }
 printf 'cdp_port=%s\n' "$CDP_PORT" >> "$EVIDENCE_DIR/launch.txt"
+printf 'listener_pid=%s\n' "$LISTENER_PID" >> "$EVIDENCE_DIR/launch.txt"
 printf 'ready=true\n' >> "$EVIDENCE_DIR/launch.txt"
-printf 'Marasi server PID %s is ready at %s with proxy 127.0.0.1:%s\nState: %s\nEvidence: %s\n' "$PID" "$APP_URL" "$PORT" "$STATE_DIR" "$EVIDENCE_DIR"
+printf 'Marasi dev PID %s is ready at http://localhost:%s with proxy 127.0.0.1:%s\nEvidence: %s\n' "$PID" "$DEV_PORT" "$PORT" "$EVIDENCE_DIR"

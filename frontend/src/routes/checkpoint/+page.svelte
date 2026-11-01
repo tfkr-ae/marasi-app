@@ -7,7 +7,7 @@
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
-	import { RunExtension } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { RunExtension } from "../../lib/wailsjs/go/main/App";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { checkpointItemContext as itemContext, checkpointStore } from "../../stores/checkpointStore";

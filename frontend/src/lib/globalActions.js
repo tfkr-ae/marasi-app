@@ -10,8 +10,8 @@ import {
 	DownloadCert,
 	CopyCertToClipboard,
 	GetCheckpointItems,
-} from "./bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { once, setWindowTitle } from "./runtime.js";
+} from "./wailsjs/go/main/App";
+import { EventsOnce, WindowSetTitle } from "./wailsjs/runtime/runtime";
 import { projectName } from "./openProgress.js";
 import { checkpointHeldModal, heldCheckpointIDs } from "./checkpointHeld.js";
 import {
@@ -121,7 +121,7 @@ async function openWithScreen({ name: target, path = null, scratchpad = false, o
 	let showTimer;
 	let stopWaiting = () => {};
 	if (current === null) showOpening();
-	else stopWaiting = once("project-opening", () => (showTimer = setTimeout(showOpening, openingDelay)));
+	else stopWaiting = EventsOnce("project-opening", () => (showTimer = setTimeout(showOpening, openingDelay)));
 	try {
 		let name;
 		try {
@@ -140,7 +140,7 @@ async function openWithScreen({ name: target, path = null, scratchpad = false, o
 		}
 		switchOpening();
 		activeProject.set(name);
-		setWindowTitle(name);
+		WindowSetTitle(name);
 		goto("/");
 		try {
 			await openProject();

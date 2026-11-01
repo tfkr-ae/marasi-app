@@ -1,14 +1,14 @@
 <script>
     import { onMount } from "svelte";
-    import { GetExtensionLogs } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-    import { off, on } from "../runtime.js";
+    import { GetExtensionLogs } from "../wailsjs/go/main/App";
+    import { EventsOff, EventsOn } from "../wailsjs/runtime/runtime";
 
     export let extensionName = "";
     let logs = [];
     onMount(() => {
         GetExtensionLogs(extensionName).then((extensionLogs) => {
             logs = extensionLogs;
-            on(extensionName + "-log", (log) => {
+            EventsOn(extensionName + "-log", (log) => {
                 console.log("new log ", log);
                 if (logs?.length > 0) {
                     logs = [...logs, log];
@@ -20,7 +20,7 @@
             console.log(err);
         })
         return () => {
-            off(extensionName + "-log");
+            EventsOff(extensionName + "-log");
         }
     })
 </script>

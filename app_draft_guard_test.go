@@ -1,18 +1,20 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // fakeDialog answers every message dialog with answer and records what was asked.
 type fakeDialog struct {
 	answer string
-	asked  []messageDialogOptions
+	asked  []runtime.MessageDialogOptions
 }
 
-func (d *fakeDialog) show(options messageDialogOptions) (string, error) {
+func (d *fakeDialog) show(options runtime.MessageDialogOptions) (string, error) {
 	d.asked = append(d.asked, options)
 	return d.answer, nil
 }
@@ -27,7 +29,7 @@ func TestQuitWithoutUnsavedDraftsDoesNotAsk(t *testing.T) {
 	app := newScratchpadApp(t)
 	dialog := withDialog(app, "Cancel")
 
-	if prevent := app.beforeClose(); prevent {
+	if prevent := app.beforeClose(context.Background()); prevent {
 		t.Fatal("wanted close to go ahead")
 	}
 	if len(dialog.asked) != 0 {
@@ -40,7 +42,7 @@ func TestQuitWithUnsavedDraftsAsksOnceWithTheCount(t *testing.T) {
 	app.SetUnsavedDraftCount(3)
 	dialog := withDialog(app, "Cancel")
 
-	if prevent := app.beforeClose(); !prevent {
+	if prevent := app.beforeClose(context.Background()); !prevent {
 		t.Fatal("wanted cancelling the dialog to keep Marasi open")
 	}
 	if len(dialog.asked) != 1 {
@@ -56,7 +58,7 @@ func TestQuitWithOneUnsavedDraftUsesTheSingular(t *testing.T) {
 	app.SetUnsavedDraftCount(1)
 	dialog := withDialog(app, "Cancel")
 
-	app.beforeClose()
+	app.beforeClose(context.Background())
 	if !strings.Contains(dialog.asked[0].Message, "1 launchpad has an unsaved draft") {
 		t.Fatalf("wanted the singular message, got %q", dialog.asked[0].Message)
 	}
@@ -67,7 +69,7 @@ func TestQuitConfirmedOverUnsavedDraftsCloses(t *testing.T) {
 	app.SetUnsavedDraftCount(2)
 	withDialog(app, "Close Marasi")
 
-	if prevent := app.beforeClose(); prevent {
+	if prevent := app.beforeClose(context.Background()); prevent {
 		t.Fatal("wanted confirming the dialog to close Marasi")
 	}
 }
@@ -101,7 +103,7 @@ func TestSwitchProjectConfirmedOverUnsavedDraftsDiscardsThem(t *testing.T) {
 
 	// The drafts went with the old project, so quitting no longer asks.
 	dialog := withDialog(app, "Cancel")
-	if prevent := app.beforeClose(); prevent {
+	if prevent := app.beforeClose(context.Background()); prevent {
 		t.Fatal("wanted close to go ahead")
 	}
 	if len(dialog.asked) != 0 {

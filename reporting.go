@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/report"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func (a *App) CreateDraftFinding(requests []uuid.UUID, tcUUID *uuid.UUID) (*domain.Finding, error) {
@@ -165,7 +166,7 @@ func (a *App) DownloadArtifact(artifactUUID uuid.UUID) (bool, error) {
 	home, _ := os.UserHomeDir()
 	safeFilename := filepath.Base(art.Filename)
 
-	path, err := a.saveFileDialog(saveDialogOptions{
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
 		DefaultFilename:  safeFilename,
 		Title:            "Save Artifact",
@@ -258,7 +259,7 @@ func includesTestCases(metadata domain.ReportMetadata) bool {
 
 func (a *App) saveReportBytes(defaultFilename string, reportBytes []byte) (bool, error) {
 	home, _ := os.UserHomeDir()
-	path, err := a.saveFileDialog(saveDialogOptions{
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
 		DefaultFilename:  defaultFilename,
 		Title:            "Save Report",

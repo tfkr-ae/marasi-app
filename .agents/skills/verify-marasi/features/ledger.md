@@ -38,11 +38,11 @@ Run it:
 1. `scripts/launch.sh`, then `scripts/bench-seed.sh` (85,000 requests by default; about 15 minutes; it runs `bench-server.py` on 127.0.0.1:18999 for the upstream).
 2. `scripts/bench-ledger.sh`. It restarts the instance (the project is kept) so `firstVisit` loads the code as a user's first visit does, prints each figure against its budget, writes `<evidence>/bench-ledger.json`, and exits 1 when one is over.
 
-Figures come from headless Chrome against the server build, so they compare runs on one machine, not the WebKit app. Marasi answers one call at a time: anything the Ledger asks for waits behind whatever else is in flight (on a fresh launch, the dashboard's `CountNotes`, about 1.6 s on this project), so measure with the app idle. Since Marasi v0.0.0-20261016190652-f338aa018cfb the dashboard's `CountNotes` is one `DashboardCounts` read (11 ms at 85,000 requests, from 1.6 s), so a fresh launch's first Ledger page arrives about 940 ms after start rather than 2.5 s. On a project's first open after an upgrade, Marasi's background jobs can still hold calls up for about 250 ms each for some 27 s; don't benchmark then.
+Figures come from headless Chrome against the dev server, so they compare runs on one machine, not the WebKit app. Marasi answers one call at a time: anything the Ledger asks for waits behind whatever else is in flight (on a fresh launch, the dashboard's `CountNotes`, about 1.6 s on this project), so measure with the app idle. Since Marasi v0.0.0-20261016190652-f338aa018cfb the dashboard's `CountNotes` is one `DashboardCounts` read (11 ms at 85,000 requests, from 1.6 s), so a fresh launch's first Ledger page arrives about 940 ms after start rather than 2.5 s. On a project's first open after an upgrade, Marasi's background jobs can still hold calls up for about 250 ms each for some 27 s; don't benchmark then.
 
 ## Driving it with Chrome CDP
 
-Run `scripts/drive.sh ledger` for route proof; it waits for the toolbar's `Saved queries`, which paints whether the dock is open or collapsed. For capture, send a `text/html` request with a unique path through the isolated proxy (`curl -x http://127.0.0.1:<proxy port> …` to a local disposable server), then wait for that path in the table:
+Run `scripts/drive.sh ledger` for route proof; it waits for the toolbar's `Saved queries`, which paints whether the dock is open or collapsed. For capture, send a `text/html` request with a unique path through the isolated proxy (`curl -x http://127.0.0.1:18080 …` to a local disposable server), then wait for that path in the table:
 
 ```bash
 scripts/drive.sh ledger steps '{"name":"capture","steps":[{"waitText":"/ledger-second"}]}'
@@ -83,7 +83,7 @@ The note (rail `Note`, column `Add`/`Edit` or the preview, `⌘⇧N`, or the row
 
 A WebSocket message is the whole message, however many frames it arrived in. UI text says "message"; action ids keep `frame` (`websocket.stream.next-frame`, `websocket.checkpoint.forward-frame`, `websocket.inject.inject-frame`).
 
-Drive a WebSocket through the proxy with a raw-socket client: send an absolute-form upgrade (`GET http://127.0.0.1:<port>/<path> HTTP/1.1` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13`) to `127.0.0.1:<proxy port>`, then read and write masked frames. Use a disposable local server you control, so each state below is a deliberate server behaviour. Offer `Sec-WebSocket-Extensions: permessage-deflate` to get a deflate connection; add another offer (for example `x-webkit-deflate-frame`) to see it stripped.
+Drive a WebSocket through the proxy with a raw-socket client: send an absolute-form upgrade (`GET http://127.0.0.1:<port>/<path> HTTP/1.1` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13`) to `127.0.0.1:18080`, then read and write masked frames. Use a disposable local server you control, so each state below is a deliberate server behaviour. Offer `Sec-WebSocket-Extensions: permessage-deflate` to get a deflate connection; add another offer (for example `x-webkit-deflate-frame`) to see it stripped.
 
 **Upgrade states.** The badges column shows a WebSocket icon (its label is the badge's `title` and `aria-label`; past three badges, hover the `+N` slot `.ledger-badges-more` for the full list) whose state comes from `frontend/src/lib/websocket/presentation.js`:
 

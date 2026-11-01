@@ -4,24 +4,60 @@
         <key>CFBundlePackageType</key>
         <string>APPL</string>
         <key>CFBundleName</key>
-        <string>marasi-app</string>
+        <string>{{.Info.ProductName}}</string>
         <key>CFBundleExecutable</key>
-        <string>marasi-app</string>
+        <string>{{.OutputFilename}}</string>
         <key>CFBundleIdentifier</key>
-        <string>com.wails.marasi-app</string>
+        <string>com.wails.{{.Name}}</string>
         <key>CFBundleVersion</key>
-        <string>1.0.0</string>
+        <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleGetInfoString</key>
-        <string>Built using Wails (https://wails.io)</string>
+        <string>{{.Info.Comments}}</string>
         <key>CFBundleShortVersionString</key>
-        <string>1.0.0</string>
+        <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleIconFile</key>
         <string>iconfile</string>
         <key>LSMinimumSystemVersion</key>
-        <string>12.0.0</string>
+        <string>10.13.0</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
-        <string>Copyright.........</string>
+        <string>{{.Info.Copyright}}</string>
+        {{if .Info.FileAssociations}}
+        <key>CFBundleDocumentTypes</key>
+        <array>
+          {{range .Info.FileAssociations}}
+          <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+              <string>{{.Ext}}</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>{{.Name}}</string>
+            <key>CFBundleTypeRole</key>
+            <string>{{.Role}}</string>
+            <key>CFBundleTypeIconFile</key>
+            <string>{{.IconName}}</string>
+          </dict>
+          {{end}}
+        </array>
+        {{end}}
+        {{if .Info.Protocols}}
+        <key>CFBundleURLTypes</key>
+        <array>
+          {{range .Info.Protocols}}
+            <dict>
+                <key>CFBundleURLName</key>
+                <string>com.wails.{{.Scheme}}</string>
+                <key>CFBundleURLSchemes</key>
+                <array>
+                    <string>{{.Scheme}}</string>
+                </array>
+                <key>CFBundleTypeRole</key>
+                <string>{{.Role}}</string>
+            </dict>
+          {{end}}
+        </array>
+        {{end}}
     </dict>
 </plist>

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { deduplicateBridgeHTML } from "./bridge-html.mjs";
+import { normalizeListenerStartup } from "./listener-startup.mjs";
 import { collectExpression, dropPoint, pickTarget, sameBox } from "./targets.mjs";
 
 const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, action, label, shortcut] = process.argv.slice(2);
@@ -53,12 +55,6 @@ const overlayPainted = `Boolean((() => {
 	const box = card?.getBoundingClientRect();
 	return Boolean(box && box.width > 100 && box.height > 100);
 })())`;
-
-// The page loaded with the Wails runtime: the bundled @wailsio/runtime set up
-// window._wails, and it loaded /wails/custom.js, which only the server build
-// serves and which opens the events WebSocket. A page from anything else (a
-// desktop build's assets, Vite, a static copy) has no route to Go.
-const runtimeLoaded = `Boolean(window._wails?.dispatchWailsEvent && window._wails?.clientId && document.querySelector('script[src="/wails/custom.js"]'))`;
 
 const viewportMatches = `innerWidth === ${viewport.width} && innerHeight === ${viewport.height} && devicePixelRatio === 1`;
 
@@ -180,7 +176,7 @@ async function snapshot() {
 			path: location.pathname,
 			title: document.title,
 			viewport: {width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio},
-			runtimeLoaded: ${runtimeLoaded},
+			bridgeScripts: Object.fromEntries(["/wails/ipc.js", "/wails/runtime.js"].map(path => [path, Array.from(document.scripts).filter(script => script.src === location.origin + path).length])),
 			text: document.body.innerText,
 			overlay: overlay && rect && rect.width > 100 && rect.height > 100 ? {
 				label: overlay.getAttribute("aria-label") || overlay.querySelector("h2")?.textContent || null,
@@ -654,46 +650,83 @@ await send("Page.bringToFront");
 
 if (mode === "launch") {
 	await sizeWindow();
-	// The events WebSocket that custom.js opens, by CDP request id.
-	const eventSockets = new Map();
-	const watchSockets = ({ data }) => {
+	// Fulfilled documents lose Chrome's loopback classification. Keep access
+	// limited to this isolated browser's Wails origin, not all websites.
+	await send("Browser.setPermission", { permission: { name: "loopback-network" }, setting: "granted", origin: appOrigin });
+	let interceptionError;
+	let intercepted = false;
+	let listenerStartupIntercepted = false;
+	const normalizeStartup = async ({ data }) => {
 		const message = JSON.parse(data);
-		if (message.method === "Network.webSocketCreated" && new URL(message.params.url).pathname === "/wails/events") {
-			eventSockets.set(message.params.requestId, { url: message.params.url, status: null });
-		} else if (message.method === "Network.webSocketHandshakeResponseReceived" && eventSockets.has(message.params.requestId)) {
-			eventSockets.get(message.params.requestId).status = message.params.response.status;
+		if (message.method !== "Fetch.requestPaused") return;
+		const request = message.params;
+		try {
+			// Vite also serves the layout's CSS as a JavaScript import.
+			if (new URL(request.request.url).searchParams.get("type") === "style") {
+				await send("Fetch.continueRequest", { requestId: request.requestId });
+				return;
+			}
+			const isRoot = request.resourceType === "Document";
+			if (request.responseStatusCode !== 200) throw new Error(`Startup response returned ${request.responseStatusCode}`);
+			const response = await send("Fetch.getResponseBody", { requestId: request.requestId });
+			const original = response.base64Encoded ? Buffer.from(response.body, "base64").toString("utf8") : response.body;
+			const { body, counts } = isRoot ? deduplicateBridgeHTML(original) : normalizeListenerStartup(original);
+			if (isRoot) {
+				fs.writeFileSync(`${evidenceDir}/launch-bridge.json`, `${JSON.stringify({ url: request.request.url, originalScriptCounts: counts, removedDuplicateScripts: Object.values(counts).reduce((sum, count) => sum + count - 1, 0) }, null, 2)}\n`);
+			} else {
+				fs.writeFileSync(`${evidenceDir}/launch-listener-startup.json`, `${JSON.stringify({ url: request.request.url, normalizedStartupCalls: 1 }, null, 2)}\n`);
+			}
+			const prefix = isRoot ? "launch-root" : "launch-layout";
+			const extension = isRoot ? "html" : "js";
+			fs.writeFileSync(`${evidenceDir}/${prefix}-original.${extension}`, original);
+			fs.writeFileSync(`${evidenceDir}/${prefix}-normalized.${extension}`, body);
+			await send("Fetch.fulfillRequest", {
+				requestId: request.requestId,
+				responseCode: request.responseStatusCode,
+				responseHeaders: request.responseHeaders.filter(({ name }) => !["content-length", "content-encoding", "transfer-encoding"].includes(name.toLowerCase())),
+				body: Buffer.from(body).toString("base64"),
+			});
+			if (isRoot) intercepted = true;
+			else listenerStartupIntercepted = true;
+		} catch (error) {
+			interceptionError = error;
+			await send("Fetch.failRequest", { requestId: request.requestId, errorReason: "Failed" });
 		}
 	};
-	socket.addEventListener("message", watchSockets);
+	socket.addEventListener("message", normalizeStartup);
+	await send("Fetch.enable", { patterns: [
+		{ urlPattern: new URL(appURL).href, resourceType: "Document", requestStage: "Response" },
+		{ urlPattern: `${appOrigin}/src/routes/+layout.svelte*`, resourceType: "Script", requestStage: "Response" },
+	] });
 	try {
 		await send("Page.navigate", { url: appURL });
-		await waitFor(`document.body?.innerText.includes("Project Dashboard")`, "the scratchpad dashboard", 60000);
-		await waitFor(runtimeLoaded, "the Wails runtime and /wails/custom.js in the page", 10000);
-		const connected = () => Array.from(eventSockets.values()).some((entry) => entry.status === 101);
-		const deadline = Date.now() + 10000;
-		while (!connected()) {
-			if (Date.now() >= deadline) throw new Error(`timed out waiting for the /wails/events WebSocket handshake: ${JSON.stringify(Array.from(eventSockets.values()))}`);
+		// The first Vite compile of the app can take a minute or more.
+		const deadline = Date.now() + 120000;
+		while (true) {
+			if (interceptionError) throw interceptionError;
+			try {
+				if (intercepted && listenerStartupIntercepted && await evaluate(`document.body?.innerText.includes("Project Dashboard")`)) break;
+			} catch {
+				// The document is still being replaced.
+			}
+			if (Date.now() >= deadline) throw new Error("timed out waiting for normalized Home startup");
 			await sleep(pollMs);
 		}
-		fs.writeFileSync(`${evidenceDir}/launch-events-socket.json`, `${JSON.stringify(Array.from(eventSockets.values()), null, 2)}\n`);
 		await waitFor(`Array.from(document.querySelectorAll("button")).some(button => button.querySelector("span.bg-success-500"))`, "online Home listener indicator");
 		await capture("launch-ready");
-		fs.writeFileSync(`${evidenceDir}/launch-page.json`, `${JSON.stringify({ timeOrigin: await evaluate("performance.timeOrigin") }, null, 2)}\n`);
+		await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script", 5000);
 	} catch (error) {
 		await capture("launch-failed");
 		throw error;
 	} finally {
 		fs.writeFileSync(`${evidenceDir}/launch-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
 		fs.writeFileSync(`${evidenceDir}/launch-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
-		socket.removeEventListener("message", watchSockets);
+		await send("Fetch.disable");
+		socket.removeEventListener("message", normalizeStartup);
 	}
 } else if (mode === "doctor") {
-	await waitFor(runtimeLoaded, `the Wails runtime in the page at ${appOrigin} (the page loaded without it; run cleanup.sh and relaunch)`, 5000);
-	// A reloaded page starts the listener again, which Marasi refuses while
-	// it runs, so the page shows it offline.
-	const { timeOrigin } = JSON.parse(fs.readFileSync(`${evidenceDir}/launch-page.json`, "utf8"));
-	await waitFor(`performance.timeOrigin === ${timeOrigin}`, "the page launch loaded (it was reloaded since, so its listener state is stale; run cleanup.sh and relaunch)", 1000);
-	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
+	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && window.go?.main?.App && window.runtime && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, Wails bridge, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
+	await waitFor(`["/wails/ipc.js", "/wails/runtime.js"].every(path => Array.from(document.scripts).filter(script => script.src === location.origin + path).length === 1)`, "one copy of each Wails bridge script (relaunch after a full reload)", 5000);
 	await waitFor(`document.visibilityState === "visible"`, "the Marasi page in front, not hidden behind another tab", 2000);
 	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {

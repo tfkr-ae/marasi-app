@@ -9,7 +9,7 @@ import {
   LoadExtensions,
   GetUserName,
   GetRecentProjects,
-} from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "./lib/wailsjs/go/main/App";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";

@@ -9,7 +9,7 @@ import {
 	GetWSInterceptFlag,
 	GetWSIntercepted,
 	ToggleWSIntercept,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "../lib/wailsjs/go/main/App";
 import { createConnectionStore } from "./createConnectionStore.js";
 
 // Draft payload for the Inject tab (set via "Copy to Inject").

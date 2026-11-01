@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestQuitWithDraftsAndArmoryRunsAsksOnceAboutBoth(t *testing.T) {
 	app, armory := appWithDraftsAndArmoryRuns(2)
 	dialog := withDialog(app, "Cancel")
 
-	if prevent := app.beforeClose(); !prevent {
+	if prevent := app.beforeClose(context.Background()); !prevent {
 		t.Fatal("wanted cancelling the dialog to keep Marasi open")
 	}
 	if len(dialog.asked) != 1 {
@@ -54,7 +55,7 @@ func TestQuitConfirmedOverDraftsAndArmoryRunsCancelsRunsAfterOneDialog(t *testin
 	app, armory := appWithDraftsAndArmoryRuns(1)
 	dialog := withDialog(app, "Close Marasi")
 
-	if prevent := app.beforeClose(); prevent {
+	if prevent := app.beforeClose(context.Background()); prevent {
 		t.Fatal("wanted confirming the dialog to close Marasi")
 	}
 	if len(dialog.asked) != 1 {

@@ -3,7 +3,7 @@
     import { logItems } from "../../stores";
     import Sort from "./datatables/Sort.svelte";
     import { onMount } from "svelte";
-    import { GetExtensions } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { GetExtensions } from "../wailsjs/go/main/App";
     export const extensionsMap = {};
     const handler = new DataHandler(Object.values($logItems), {
         rowsPerPage: 200,

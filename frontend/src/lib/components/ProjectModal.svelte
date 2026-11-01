@@ -1,8 +1,8 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
-    import { GetRecentProjects } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-    import { OpenFileDialog } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { GetRecentProjects } from "../wailsjs/go/main/App";
+    import { OpenFileDialog } from "../wailsjs/go/main/App";
     import { X } from "lucide-svelte";
 
     export let parent;

@@ -86,17 +86,6 @@ const helpers = `
 		waitFor: (test) => new Promise((ok) => { const tick = () => (test() ? ok(performance.now()) : requestAnimationFrame(tick)); tick(); }),
 	};`;
 
-// Calls an App binding the way the generated bindings do: a POST to the
-// server build's /wails/runtime, by method name.
-const callApp = `((name, ...args) => fetch("/wails/runtime", {
-	method: "POST",
-	headers: { "Content-Type": "application/json", "x-wails-client-id": window._wails.clientId },
-	body: JSON.stringify({ object: 0, method: 0, args: { "call-id": crypto.randomUUID(), methodName: "main.App." + name, args } }),
-}).then(async (response) => {
-	if (!response.ok) throw new Error(await response.text());
-	return response.json();
-}))`;
-
 async function toHome() {
 	await evaluate(`${helpers} __bench.go("Home")`);
 	await until(`document.body.innerText.includes("Project Dashboard") && !document.querySelector(".ledger-toolbar")`);
@@ -121,7 +110,7 @@ const visit = `new Promise(async (resolve) => {
 const results = { first: null, startup: [], warm: [], sort: [], firstPage: [], count: [] };
 
 // The first visit since launch, once Home has been idle for a moment.
-await until(`Boolean(window._wails?.clientId && document.body?.innerText.includes("Project Dashboard"))`, 120000);
+await until(`Boolean(window.go?.main?.App && document.body?.innerText.includes("Project Dashboard"))`, 120000);
 await sleep(4000);
 results.first = await evaluate(visit);
 
@@ -129,7 +118,7 @@ results.first = await evaluate(visit);
 for (let i = 0; i < 3; i++) {
 	await toHome();
 	await send("Page.reload", {});
-	await until(`Boolean(window._wails?.clientId && document.body?.innerText.includes("Project Dashboard") && document.querySelector('[title="Ledger"]'))`, 120000);
+	await until(`Boolean(window.go?.main?.App && document.body?.innerText.includes("Project Dashboard") && document.querySelector('[title="Ledger"]'))`, 120000);
 	// Timed from here by polling: the page is still settling, and one long
 	// call into it can go unanswered.
 	const start = Date.now();
@@ -167,19 +156,19 @@ for (let i = 0; i < 6; i++) {
 // The two Marasi calls the Ledger waits on most, alone.
 for (let i = 0; i < 5; i++) {
 	const timing = await evaluate(`(async () => {
-		const call = ${callApp};
+		const app = window.go.main.App;
 		let start = performance.now();
-		await call("QueryTraffic", { Query: "", OrderBy: "number desc", Cursor: "", Direction: "forward", AsOf: "", Limit: 200 });
+		await app.QueryTraffic({ Query: "", OrderBy: "number desc", Cursor: "", Direction: "forward", AsOf: "", Limit: 200 });
 		const firstPage = performance.now() - start;
 		start = performance.now();
-		await call("CountTraffic", "", "", {});
+		await app.CountTraffic("", "", {});
 		return { firstPage, count: performance.now() - start };
 	})()`);
 	results.firstPage.push(timing.firstPage);
 	results.count.push(timing.count);
 }
 
-const pairs = await evaluate(`${callApp}("CountTraffic", "", "", { IgnoreExclusion: true }).then((r) => r.Count)`);
+const pairs = await evaluate(`window.go.main.App.CountTraffic("", "", { IgnoreExclusion: true }).then((r) => r.Count)`);
 const summary = {
 	pairs,
 	warmShell: median(results.warm.map((r) => r.shell)),

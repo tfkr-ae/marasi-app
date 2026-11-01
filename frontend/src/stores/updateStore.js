@@ -8,7 +8,7 @@ import {
   ReinstallLatestRelease,
   RestartToUpdate,
   SetUpdateChannel,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "../lib/wailsjs/go/main/App";
 import { toastError } from "../lib/toasts.js";
 import {
   checkResultNotice,

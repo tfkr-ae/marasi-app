@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"sync/atomic"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type Log struct {
@@ -13,16 +15,14 @@ type Log struct {
 	Timestamp string         `json:"timestamp"`
 	Data      map[string]any `json:"data"`
 }
-
-// LogHandler sends each record to the frontend as a log event.
 type LogHandler struct {
-	emit  emitFunc
-	attrs []slog.Attr
-	group string
+	context context.Context
+	attrs   []slog.Attr
+	group   string
 }
 
-func NewLogHandler(emit emitFunc) *slog.Logger {
-	return slog.New(&LogHandler{emit: emit})
+func NewLogHandler(ctx context.Context) *slog.Logger {
+	return slog.New(&LogHandler{context: ctx})
 }
 
 func (h *LogHandler) Enabled(_ context.Context, _ slog.Level) bool {
@@ -41,7 +41,7 @@ func (h *LogHandler) Handle(_ context.Context, r slog.Record) error {
 		return true
 	})
 
-	h.emit("log", Log{
+	runtime.EventsEmit(h.context, "log", Log{
 		Message:   r.Message,
 		Level:     r.Level.String(),
 		Timestamp: r.Time.Format("15:04:05"),

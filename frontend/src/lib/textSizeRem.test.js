@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 // Generated Wails bindings.
-const SKIP = new Set(["bindings"]);
+const SKIP = new Set(["wailsjs"]);
 const EXTENSIONS = [".svelte", ".js", ".css"];
 const PX_FONT_SIZE = [
   /text-\[\d*\.?\d+px\]/,

@@ -203,7 +203,7 @@ func TestAppCheckpoint(t *testing.T) {
 		_, webSocketDone := startAppWebSocketHold(t, app)
 		waitForAppCheckpoint(t, app, 2)
 
-		app.ServiceShutdown()
+		app.close(context.Background())
 
 		if err := receiveAppHoldResult(t, requestDone); !errors.Is(err, marasi.ErrDropped) {
 			t.Fatalf("wanted: %v\ngot: %v", marasi.ErrDropped, err)

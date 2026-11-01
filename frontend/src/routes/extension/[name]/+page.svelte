@@ -12,7 +12,7 @@
         extensionMenuActionId,
         extensionPageActionId,
     } from "../../../lib/keybindings/catalog.js";
-    import { emit } from "../../../lib/runtime.js";
+    import { EventsEmit } from "../../../lib/wailsjs/runtime/runtime.js";
     let accOpened = false;
 
     $: extensionName = $page.params.name;
@@ -23,7 +23,7 @@
     $: panelSchema = $extensions_ui[extensionName]?.panel;
 
     function callExtension(action) {
-        emit("extension_call_function", {
+        EventsEmit("extension_call_function", {
             extensionID: extensionData.ID,
             function: action,
             state: $extensions_ui[extensionData.Name],

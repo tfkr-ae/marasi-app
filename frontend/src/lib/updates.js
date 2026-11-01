@@ -53,10 +53,10 @@ export function channelSwitchNotice(change, running) {
 }
 
 /**
- * A nightly's notes as the details panel shows them: the commit subjects
- * and system requirements the nightly workflow lists, without its Ref line,
- * the Commit line Marasi reads the nightly's commit from, or the Marasi line
- * naming the marasi commit it was built against. A nightly published before the
+ * A nightly's notes as the details panel shows them: only the commit
+ * subjects the nightly workflow lists, without its Ref line, the Commit
+ * line Marasi reads the nightly's commit from, or the Marasi line naming the
+ * marasi commit it was built against. A nightly published before the
  * workflow listed subjects has only those lines, so it has
  * nothing to show ("") and the panel shows the compare link alone.
  */

@@ -19,7 +19,7 @@ Shortcuts: every menu shortcut for this feature is a catalog action in context `
 
 Run `scripts/drive.sh dashboard`. It clicks the actionable `[title="Home"]` through Chrome DevTools and requires `Project Dashboard` in the resulting DOM. For listener startup, pair this with `scripts/doctor.sh`; the doctor proves that the configured listener port and scratchpad SQLite file exist.
 
-Drive the listener button by its painted `127.0.0.1:<port>` text only when reconfiguration is under test. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal shows `No recent projects` until the list loads. `Browse Files...`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
+Drive the listener button by its painted `127.0.0.1:<port>` text only when reconfiguration is under test. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal shows `No recent projects` until the list loads. `Browse Files...` and certificate download use native dialogs that browser mode cannot display.
 
 Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/dark mode with `Command+U`, and toggle it back. This proves the global shortcut reads the live theme after navigating away from the dashboard.
 
@@ -49,9 +49,9 @@ After `Forward`, `⌘O` opens `Switch Projects` again.
 
 ## Gotchas
 
-- The normal app uses proxy port `8080`; each verification launch picks its own free proxy port (`<proxy port>`, in `$MARASI_VERIFY_STATE_DIR/proxy-port`).
+- The normal app uses port `8080`; the verification launch defaults to isolated port `18080`.
 - A dashboard can render after a listener bind failure. UI readiness alone does not prove proxy readiness.
-- The proxy itself answers the host `marasi`: `curl -x 127.0.0.1:<proxy port> http://marasi/cert` returns the CA certificate (`application/x-x509-ca-cert`), the URL the first-run setup shows. Download Certificate needs a native save dialog ([native.md](native.md)). Start Chrome opens an external process. Record and clean up anything those actions create.
+- The proxy itself answers the host `marasi`: `curl -x 127.0.0.1:<proxy port> http://marasi/cert` returns the CA certificate (`application/x-x509-ca-cert`), the URL the first-run setup shows. Download Certificate opens a native save dialog. Start Chrome opens an external process. Record and clean up anything those actions create.
 - The Marasi menu (MarasiKeys) keeps a closed `<dialog>` of the same labels. The driver's hit-test skips those copies; never target a label by `textContent`.
 - `Project Dashboard` paints before the cards, log table, and listener status finish loading. Notes, Launchpads, Intercepted, and scope counts refresh only when Home mounts or the active project changes. Wait for the specific value.
 - Shortcuts are gated by `frontend/src/lib/keybindings/gate.js`: unmodified keys never fire from inputs or editors; modified ones are dropped from form fields except on `/ledger`, `/logbook`, `/launchpad` and `/settings` (and the menu's own search field). An open modal (other than the WebSocket overlay) blocks all menu shortcuts, including global ones; the binding that opened the modal can still close it via `isModalToggle`. The WebSocket modal keeps its own contexts plus global.

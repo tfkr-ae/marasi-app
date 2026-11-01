@@ -31,11 +31,11 @@ fi
 "$SCRIPT_DIR/doctor.sh" >/dev/null
 EVIDENCE_DIR=$(evidence_dir)
 CDP_PORT=$(cat "$CDP_PORT_FILE")
-APP_URL=$(app_url)
+DEV_PORT=$(recorded_dev_port)
 if [ "$ACTION" = "compare" ] || [ "$ACTION" = "steps" ]; then
-	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE" "$ACTION" "$LABEL" "$SHORTCUT"
+	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE" "$ACTION" "$LABEL" "$SHORTCUT"
 elif [ -n "$ACTION" ]; then
-	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE" "$ACTION"
+	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE" "$ACTION"
 else
-	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE"
+	node "$SCRIPT_DIR/cdp.mjs" drive "$CDP_PORT" "http://localhost:$DEV_PORT" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" "$FEATURE"
 fi

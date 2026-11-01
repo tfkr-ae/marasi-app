@@ -32,7 +32,7 @@
 	import WebSocketInject from "./WebSocketInject.svelte";
 	import WebSocketMessagesTable from "./WebSocketMessagesTable.svelte";
 	import { connectionStore } from "../../stores/connectionStore";
-	import { CloseWebSocket } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { CloseWebSocket } from "../wailsjs/go/main/App";
 	import { upgradeFromRequest, upgradePresentation } from "../websocket/presentation.js";
 	import { progressChip } from "../websocket/progress.js";
 

@@ -54,7 +54,7 @@ Rules run without Lua's `string` library: `string.sub`, `path:find` and the like
  {"text":"Items"},{"waitText":"Nothing intercepted"}]}
 ```
 
-Serve an upstream that logs each request it receives, such as `python3 -I -m http.server 18765 --bind 127.0.0.1` run from an empty directory. Start each sender in the background and record its timing, one at a time, in this order: `curl -s -o /dev/null -w 'status=%{http_code} at=%{time_total}s\n' -x http://127.0.0.1:<proxy port> http://127.0.0.1:18765/cp-a &`, then `/cp-b`, then `/cp-c`. A sender must finish only after its forward. A dropped request never reaches the upstream, and its sender gets status `200`.
+Serve an upstream that logs each request it receives, such as `python3 -I -m http.server 18765 --bind 127.0.0.1` run from an empty directory. Start each sender in the background and record its timing, one at a time, in this order: `curl -s -o /dev/null -w 'status=%{http_code} at=%{time_total}s\n' -x http://127.0.0.1:18080 http://127.0.0.1:18765/cp-a &`, then `/cp-b`, then `/cp-c`. A sender must finish only after its forward. A dropped request never reaches the upstream, and its sender gets status `200`.
 
 With `/cp-a`, `/cp-b` and `/cp-c` held, the shortcuts:
 
@@ -131,7 +131,7 @@ Prove each path on one connection: turn `Intercept On`, send a message, then for
 
 #### The page and the modal stay in step
 
-A forward or drop on either side emits `checkpoint-settled`, so the other side drops the message too. A real connection needs no npm package: from a scratch directory outside the repo, run a Node upstream that answers the upgrade with `101` and logs each text frame it receives, and a Node client that opens a raw TCP socket to `127.0.0.1:<proxy port>`, sends `GET http://127.0.0.1:<port>/socket HTTP/1.1` with the upgrade headers, and writes a masked text frame for each line appended to a control file. Run both in the background and stop them yourself before `cleanup.sh`.
+A forward or drop on either side emits `checkpoint-settled`, so the other side drops the message too. A real connection needs no npm package: from a scratch directory outside the repo, run a Node upstream that answers the upgrade with `101` and logs each text frame it receives, and a Node client that opens a raw TCP socket to `127.0.0.1:18080`, sends `GET http://127.0.0.1:<port>/socket HTTP/1.1` with the upgrade headers, and writes a masked text frame for each line appended to a control file. Run both in the background and stop them yourself before `cleanup.sh`.
 
 The upgrade's `101` row has no content type and reads as `application/octet-stream`, which the default Types filter hides (`1 hidden`). Show it before opening the row: `{"click":"#ledgerTypesButton"}`, `{"click":".ledger-types-row[data-type=\"application/octet-stream\"] input"}`, then `{"click":".ledger-status"}`.
 

@@ -8,7 +8,7 @@ import {
   RemoveUpstreamProxy,
   UpdateUpstreamProxy,
   UseUpstreamProxy,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "../lib/wailsjs/go/main/App";
 import { createUpstreamProxyStore } from "./createUpstreamProxyStore.js";
 
 export {

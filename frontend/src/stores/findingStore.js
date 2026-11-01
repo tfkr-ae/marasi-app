@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { CreateDraftFinding, DeleteArtifact, DeleteFinding, LinkRequestToFinding, ListFindings, SaveArtifactToFinding, SaveFinding, UnlinkRequestFromFinding } from '../lib/bindings/github.com/tfkr-ae/marasi-app/app.js';
+import { CreateDraftFinding, DeleteArtifact, DeleteFinding, LinkRequestToFinding, ListFindings, SaveArtifactToFinding, SaveFinding, UnlinkRequestFromFinding } from '../lib/wailsjs/go/main/App';
 
 function createFindingStore() {
 	const { subscribe, set, update } = writable([]);

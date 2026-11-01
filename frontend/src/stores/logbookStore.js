@@ -17,7 +17,7 @@ import {
   SaveTestCase,
   UnlinkRequestFromFinding,
   UnlinkRequestFromTestCase,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "../lib/wailsjs/go/main/App";
 import { createLogbookStore } from "./createLogbookStore.js";
 import { findingStore } from "./findingStore";
 import { testCaseStore } from "./testCaseStore";

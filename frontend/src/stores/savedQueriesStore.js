@@ -9,7 +9,7 @@ import {
   SaveAppSavedQueries,
   SetClientSetting,
   SetHiddenBuiltinQueries,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "../lib/wailsjs/go/main/App";
 import { createSavedQueriesStore, visibleSavedQueries } from "./createSavedQueriesStore.js";
 
 export {

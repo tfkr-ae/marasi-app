@@ -4,7 +4,7 @@
 		GetMetadata,
 		GetNote,
 		GetRawDetails,
-	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	} from "../wailsjs/go/main/App";
 	import {
 		BookCheck,
 		Braces,

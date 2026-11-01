@@ -1,7 +1,7 @@
 <script>
     import { getContext } from "svelte";
     import * as Icons from "lucide-svelte";
-    import { emit } from "../../runtime.js";
+    import { EventsEmit } from "../../../lib/wailsjs/runtime/runtime";
     import { extensions_ui } from "../../../stores";
     import { resolveBind } from "./utils";
 
@@ -23,7 +23,7 @@
 
     function handleClick() {
         if (on_click) {
-            emit("extension_call_function", {
+            EventsEmit("extension_call_function", {
                 extensionID: extensionData.ID,
                 function: on_click,
                 state: $extensions_ui[extensionData.Name],

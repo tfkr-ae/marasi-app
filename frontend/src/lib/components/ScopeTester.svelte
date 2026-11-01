@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { modeCurrent } from "@skeletonlabs/skeleton";
     import { testerInput } from "../../stores";
-    import { TestScopeMatch } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { TestScopeMatch } from "../wailsjs/go/main/App";
 
     // Result data
     let lastResult = null;

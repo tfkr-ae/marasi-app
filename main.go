@@ -2,10 +2,11 @@ package main
 
 import (
 	"embed"
-	"log/slog"
 
-	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/logger"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
 //go:embed all:frontend/build
@@ -15,34 +16,25 @@ func main() {
 	// Create an instance of the app structure
 	app := NewApp()
 
-	wails := application.New(application.Options{
-		Name: "Marasi",
-		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
+	// Create application with options
+	err := wails.Run(&options.App{
+		Title:  "Marasi",
+		Width:  1600,
+		Height: 900,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
 		},
-		Services: []application.Service{
-			application.NewService(app),
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		OnStartup:        app.startup,
+		OnBeforeClose:    app.beforeClose,
+		OnShutdown:       app.close,
+		Bind: []interface{}{
+			app,
 		},
-		ShouldQuit:   app.shouldQuit,
-		ErrorHandler: handleWailsError,
-		LogLevel:     slog.LevelError,
+		LogLevel:           logger.ERROR,
+		LogLevelProduction: logger.ERROR,
 	})
-	app.wails = wails
-	if menu := applicationMenu(); menu != nil {
-		wails.Menu.SetApplicationMenu(menu)
-	}
-
-	window := wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Marasi",
-		Width:            1600,
-		Height:           900,
-		BackgroundColour: application.NewRGB(27, 38, 54),
-	})
-	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		app.windowClosing(event.Cancel)
-	})
-
-	if err := wails.Run(); err != nil {
+	if err != nil {
 		println("Error:", err.Error())
 	}
 }

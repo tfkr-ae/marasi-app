@@ -72,7 +72,11 @@
 	import { sitemapStore } from "../stores/sitemapStore";
 	import { recentTraffic } from "../stores/recentTrafficStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
-	import { off, on, setWindowTitle } from "../lib/runtime.js";
+	import {
+		EventsOn,
+		EventsOff,
+		WindowSetTitle,
+	} from "../lib/wailsjs/runtime/runtime";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
@@ -81,7 +85,7 @@
 	import {
 		OpenFileDialog,
 		StartProxy,
-	} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	} from "../lib/wailsjs/go/main/App";
 	import {
 		ChefHat,
 		Brush,
@@ -262,13 +266,13 @@
 	let removeMenuShortcuts = () => {};
 	onMount(() => {
 		const stopReportingDrafts = reportUnsavedDrafts();
-		on("update-available", onUpdateAvailable);
-		on("update-progress", onUpdateProgress);
-		on("update-installed", onUpdateInstalled);
-		on("update-failed", onUpdateFailed);
+		EventsOn("update-available", onUpdateAvailable);
+		EventsOn("update-progress", onUpdateProgress);
+		EventsOn("update-installed", onUpdateInstalled);
+		EventsOn("update-failed", onUpdateFailed);
 		refreshUpdateState();
 		// The open in progress takes its steps from the backend's log events.
-		on("log", feedOpeningLog);
+		EventsOn("log", feedOpeningLog);
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
@@ -288,7 +292,7 @@
 			});
 			// The project that opened, which may not be the scratchpad, names
 			// the window and the app's project, as a switch does.
-			setWindowTitle(project.name);
+			WindowSetTitle(project.name);
 			activeProject.set(project.name);
 			appState.update((s) => ({ ...s, started: true, isReady: true }));
 			removeMenuShortcuts = installMenuShortcuts(shortcutState);
@@ -311,20 +315,20 @@
 						),
 					);
 			}
-			on("request", (newRequest) => {
+			EventsOn("request", (newRequest) => {
 				ledgerStore.onRequest(newRequest);
 				sitemapStore.onRequest(newRequest);
 				recentTraffic.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
 				armoryStore.onRequest(newRequest);
 			});
-			on("launch-started", (launch) =>
+			EventsOn("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
 			);
-			on("launch-finished", (launch) =>
+			EventsOn("launch-finished", (launch) =>
 				launchpadStore.onLaunchFinished(launch),
 			);
-			on("response", (newResponse) => {
+			EventsOn("response", (newResponse) => {
 				ledgerStore.onResponse(newResponse);
 				sitemapStore.onResponse(newResponse);
 				recentTraffic.onResponse(newResponse);
@@ -343,33 +347,33 @@
 					});
 				}
 			});
-			on("ws-message", (msg) =>
+			EventsOn("ws-message", (msg) =>
 				connectionStore.upsertMessage(msg),
 			);
-			on("ws-intercepted", (msg) => {
+			EventsOn("ws-intercepted", (msg) => {
 				connectionStore.upsertInterception(msg);
 				readCheckpointItems();
 			});
-			on("ws-open", (conn) => {
+			EventsOn("ws-open", (conn) => {
 				connectionStore.upsertConnection(conn);
 				ledgerStore.patchWebSocketMetadata(conn);
 			});
-			on("ws-close", (conn) => {
+			EventsOn("ws-close", (conn) => {
 				connectionStore.upsertConnection(conn);
 				connectionStore.clearInterceptions(
 					conn.RequestID,
 				);
 				ledgerStore.patchWebSocketMetadata(conn);
 			});
-			on("ws-progress", (progress) =>
+			EventsOn("ws-progress", (progress) =>
 				connectionStore.upsertProgress(progress),
 			);
 			// An upgrade whose handshake failed or was dropped opens no
 			// connection, so only its Ledger row changes.
-			on("ws-state", ({ RequestID, State }) =>
+			EventsOn("ws-state", ({ RequestID, State }) =>
 				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
 			);
-			on("log", (newLog) => {
+			EventsOn("log", (newLog) => {
 				if (typeof newLog?.Level !== "string") {
 					return;
 				}
@@ -377,7 +381,7 @@
 			});
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
-			on("checkpoint-abandoned", (item) =>
+			EventsOn("checkpoint-abandoned", (item) =>
 				checkpointStore.onAbandoned(item),
 			);
 			stopAbandonToasts = checkpointStore.onAbandon(
@@ -398,7 +402,7 @@
 			);
 			// A held item was forwarded or dropped, on the Checkpoint page
 			// or in the WebSocket modal; both drop it.
-			on("checkpoint-settled", (item) => {
+			EventsOn("checkpoint-settled", (item) => {
 				readCheckpointItems();
 				connectionStore
 					.onSettled(item)
@@ -410,8 +414,8 @@
 					);
 			});
 			// The Checkpoint rail badge shows the count; no toast.
-			on("intercepted", () => readCheckpointItems());
-			on(
+			EventsOn("intercepted", () => readCheckpointItems());
+			EventsOn(
 				"extension_gui_render",
 				({ extensionName, target, schema }) => {
 					if (target === "toast") {
@@ -459,7 +463,7 @@
 				},
 			);
 
-			on(
+			EventsOn(
 				"extension_state_update",
 				({ extensionName, key, value }) => {
 					extensions_ui.update((store) => {
@@ -479,25 +483,25 @@
 		return () => {
 			stopReportingDrafts();
 			removeMenuShortcuts();
-			off("request");
-			off("response");
-			off("ws-message");
-			off("ws-intercepted");
-			off("ws-open");
-			off("ws-close");
-			off("ws-progress");
-			off("ws-state");
-			off("intercepted");
-			off("checkpoint-abandoned");
-			off("checkpoint-settled");
+			EventsOff("request");
+			EventsOff("response");
+			EventsOff("ws-message");
+			EventsOff("ws-intercepted");
+			EventsOff("ws-open");
+			EventsOff("ws-close");
+			EventsOff("ws-progress");
+			EventsOff("ws-state");
+			EventsOff("intercepted");
+			EventsOff("checkpoint-abandoned");
+			EventsOff("checkpoint-settled");
 			stopAbandonToasts?.();
-			off("log");
-			off("update-available");
-			off("update-progress");
-			off("update-installed");
-			off("update-failed");
-			off("extension_gui_render");
-			off("extension_state_update");
+			EventsOff("log");
+			EventsOff("update-available");
+			EventsOff("update-progress");
+			EventsOff("update-installed");
+			EventsOff("update-failed");
+			EventsOff("extension_gui_render");
+			EventsOff("extension_state_update");
 		};
 	});
 </script>

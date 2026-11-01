@@ -10,7 +10,7 @@ import {
   ResetHighlights,
   SaveHighlights,
   SetClientSetting,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+} from "../lib/wailsjs/go/main/App";
 import { createHighlightsStore } from "./createHighlightsStore.js";
 
 export const highlightsStore = createHighlightsStore({
