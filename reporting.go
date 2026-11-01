@@ -166,7 +166,7 @@ func (a *App) DownloadArtifact(artifactUUID uuid.UUID) (bool, error) {
 	home, _ := os.UserHomeDir()
 	safeFilename := filepath.Base(art.Filename)
 
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	path, err := a.saveFileDialog(runtime.SaveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
 		DefaultFilename:  safeFilename,
 		Title:            "Save Artifact",
@@ -259,7 +259,7 @@ func includesTestCases(metadata domain.ReportMetadata) bool {
 
 func (a *App) saveReportBytes(defaultFilename string, reportBytes []byte) (bool, error) {
 	home, _ := os.UserHomeDir()
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	path, err := a.saveFileDialog(runtime.SaveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
 		DefaultFilename:  defaultFilename,
 		Title:            "Save Report",
