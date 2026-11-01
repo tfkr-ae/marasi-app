@@ -18,16 +18,26 @@ A binding returns Go structs as JSON. A struct without json tags reaches JS with
 
 To add a call: write the `App` method in its topic's file and test it with a project open (`newProjectApp`). Then regenerate the bindings, call the method from the topic's `stores/xStore.js`, and keep the logic in `stores/createXStore.js`, which takes its API as an argument so `node --test` can run it.
 
+## Desktop seams
+
+`App` reaches the desktop runtime only through replaceable functions, which `useDesktopRuntime` in `desktop.go` points at Wails. Nothing else imports the runtime's functions, so tests replace these, and a Wails upgrade changes only that file.
+
+- `emitEvent` sends an event, and `onEvent` listens for one from the frontend and hands over its payload.
+- `messageDialog` shows a message dialog and returns the pressed button's label. `nativeMessageDialog` (`dialog.go`) adapts confirmations for Windows and Linux.
+- `openFileDialog` and `saveFileDialog` return the chosen path, or `""` when the user cancelled. Callers treat `""` as a cancel and do nothing.
+- `setClipboardText` puts text on the clipboard.
+- `quitApp` quits through the normal shutdown: `beforeClose`, then `close`. `beforeClose` asks about unsaved work once per quit: after a confirmed quit or "Restart now", it lets Marasi close without asking again. `close` calls `relaunchIfRestarting` last.
+
 ## Errors the frontend acts on
 
 The frontend can only match error text, so an error it must act on carries a code: `<what>: <code>: <cause>`, or `<what>: <code> (<id>, <id>): <cause>` when it names items. Go builds them with `codedError`, `launchpadError` and `openProjectError`. `codeIDs` in `frontend/src/lib/errorCodes.js` reads them back, and helpers such as `launchPending.js` build on it. To handle a new Marasi refusal, add a code constant with a doc comment, wrap the error with `codedError`, then add a frontend helper that calls `codeIDs`.
 
 ## Events
 
-- **Go to frontend.** Send with `a.emitEvent`, which tests replace (`recordedEvents`). The handlers `startup` sets call `runtime.EventsEmit` directly, so tests do not see them. Register Marasi handlers in a `configure*Handlers` function called from `newApp`, not in `startup`: each Marasi `With*Handler` option fails when its handler is already set.
+- **Go to frontend.** Every event goes through `a.emitEvent`, which tests replace (`recordedEvents`), including Marasi's request, response and log events (`configureTrafficHandlers`) and the `log` events of the logger `startup` attaches (`LogHandler`). Register Marasi handlers in a `configure*Handlers` function called from `newApp`, not in `startup`: each Marasi `With*Handler` option fails when its handler is already set.
 - **Frontend subscriptions** are in `onMount` in `frontend/src/routes/+layout.svelte`, which forwards each event to a store's `on*` method. Add the matching `EventsOff` to its cleanup. `EventsOff` removes every listener for that name.
 - **Two shapes on `log`.** Marasi's stored logs (`domain.Log`) have capitalised fields. The app's own records (`LogHandler`, and the project lifecycle's log through `newRelayLogger`) have lowercase ones. The Home log table (`LogTable.svelte`) reads `Level`, and `withOpenLog` reads `level`.
-- **Frontend to Go.** Extension UIs send `extension_call_function` and `extension_sync_state`. `LoadExtensions` listens for them.
+- **Frontend to Go.** Extension UIs send `extension_call_function` and `extension_sync_state`. `LoadExtensions` listens for them through `a.onEvent`, and `decodeExtensionFunctionCall` and `decodeExtensionSync` read their payloads.
 
 ## Settings
 

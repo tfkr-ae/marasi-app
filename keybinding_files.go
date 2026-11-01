@@ -44,7 +44,7 @@ func (a *App) ExportKeybindingProfile(defaultName string, contents string) (stri
 	if path == "" {
 		home, _ := os.UserHomeDir()
 		var err error
-		path, err = runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		path, err = a.saveFileDialog(runtime.SaveDialogOptions{
 			DefaultDirectory: filepath.Join(home, "Downloads"),
 			DefaultFilename:  filepath.Base(defaultName),
 			Title:            "Export Keybinding Profile",
@@ -66,7 +66,7 @@ func (a *App) ImportKeybindingProfile() (KeybindingProfileFile, error) {
 	path := os.Getenv(keybindingProfileFileEnv)
 	if path == "" {
 		var err error
-		path, err = runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		path, err = a.openFileDialog(runtime.OpenDialogOptions{
 			Title:   "Import Keybinding Profile",
 			Filters: keybindingProfileFilters,
 		})

@@ -120,7 +120,7 @@ func (a *App) ReadUpstreamProxyCAFile() (string, error) {
 	path := os.Getenv(upstreamProxyCAFileEnv)
 	if path == "" {
 		var err error
-		path, err = runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		path, err = a.openFileDialog(runtime.OpenDialogOptions{
 			Title:   "Choose a CA Certificate",
 			Filters: upstreamProxyCAFilters,
 		})
