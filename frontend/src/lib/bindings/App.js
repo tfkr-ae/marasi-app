@@ -248,7 +248,16 @@ export const GetInterceptFlag = notPorted("GetInterceptFlag");
 export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
-export const GetLaunchpads = notPorted("GetLaunchpads");
+// The project's launchpads as v1's Launchpad: { ID, Name, Description,
+// EntryCount, LastStatusCode }.
+export const GetLaunchpads = async () =>
+  ((await marasi.get("/launchpad")).items ?? []).map((launchpad) => ({
+    ID: launchpad.id,
+    Name: launchpad.name,
+    Description: launchpad.description,
+    EntryCount: launchpad.entry_count,
+    LastStatusCode: launchpad.last_status_code ?? null,
+  }));
 // One page of the log, newest first: {items, next_cursor}. `cursor` is the
 // last page's next_cursor.
 export const GetLogs = (cursor) =>

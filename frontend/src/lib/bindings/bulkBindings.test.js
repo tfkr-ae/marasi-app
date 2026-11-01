@@ -136,3 +136,16 @@ test("the project's client settings are marasi-app's, in v1's ClientSetting shap
 test("an unset client setting reads as null, as in v1", async () => {
   assert.equal(await App.GetClientSetting("ledger.highlight.5"), null);
 });
+
+test("GetLaunchpads lists the project's launchpads in v1's Launchpad shape, for the link menu", async () => {
+  answers["GET /launchpad"] = {
+    items: [
+      { id: "lp1", name: "Login", description: "", entry_count: 2, last_status_code: 302 },
+      { id: "lp2", name: "", description: "scratch", entry_count: 0, last_status_code: null },
+    ],
+  };
+  assert.deepEqual(await App.GetLaunchpads(), [
+    { ID: "lp1", Name: "Login", Description: "", EntryCount: 2, LastStatusCode: 302 },
+    { ID: "lp2", Name: "", Description: "scratch", EntryCount: 0, LastStatusCode: null },
+  ]);
+});
