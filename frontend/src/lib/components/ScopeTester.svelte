@@ -127,7 +127,7 @@
               <p><b>In Scope:</b> {lastResult.inScope ? 'Yes' : 'No'}</p>
               
               {#if lastResult.matchedRule}
-                <p><b>Matched Rule:</b> {formatRegexPattern(lastResult.matchedRule)}</p>
+                <p><b>Matched Rule:</b> {formatRegexPattern(lastResult.matchedRule)} ({lastResult.ruleType})</p>
                 <p><b>Matched as:</b> {lastResult.matchedAs}</p>
               {/if}
             {/if}

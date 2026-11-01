@@ -24,6 +24,7 @@ import { recentTraffic } from "./stores/recentTrafficStore";
 import { savedQueriesStore } from "./stores/savedQueriesStore";
 import { upstreamProxyStore } from "./stores/upstreamProxyStore";
 import { extensionsStore } from "./stores/extensionsStore.js";
+import { scopeStore } from "./stores/scopeStore.js";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";
@@ -151,6 +152,7 @@ export async function openProject(loadPart = () => {}) {
   // Project saved queries belong to the project just opened.
   savedQueriesStore.loadProject();
   extensionsStore.clear();
+  scopeStore.clear();
   testCaseStore.clear();
   findingStore.clear();
   logbookStore.clear();
@@ -240,6 +242,7 @@ export async function populateCheckpoint() {
     .catch((err) => console.error("Failed to read Checkpoint items:", err));
 }
 export async function populateScope() {
+  scopeStore.reload().catch((err) => console.error("Reading the scope rules failed:", err));
   GetExtensionCode("compass")
     .then((code) => {
       compassCode.set(code);

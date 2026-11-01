@@ -22,6 +22,7 @@ import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 import { extensionsStore } from "../stores/extensionsStore.js";
+import { scopeStore } from "../stores/scopeStore.js";
 
 // Each Marasi event's handler, by event name.
 const handlers = {
@@ -49,7 +50,11 @@ const handlers = {
     projectSwitch.onOpened(event).catch((err) => console.error("Loading the opened project failed:", err)),
   "project.opening_failed": (event) => projectSwitch.onOpeningFailed(event),
   "extension.enabled": (extension) => extensionsStore.onExtension(extension),
-  "extension.updated": (extension) => extensionsStore.onExtension(extension),
+  "extension.updated": (extension) => {
+    extensionsStore.onExtension(extension);
+    // Compass's code holds the scope rules.
+    scopeStore.onExtension(extension).catch((err) => console.error("Reading the scope rules failed:", err));
+  },
   "extension.settings.updated": (event) =>
     extensionsStore.onSettingsUpdated(event).catch((err) => console.error("Reading extension settings failed:", err)),
   "extension.gui.rendered": (event) => extensionsStore.onRendered(event),
@@ -77,6 +82,7 @@ const stores = [
   upstreamProxyStore,
   instanceUpdate,
   extensionsStore,
+  scopeStore,
 ];
 
 /** Reloads every store, as after the event stream reopens. */
