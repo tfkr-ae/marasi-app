@@ -95,6 +95,23 @@
 					</button>
 
 					<div class="relative w-fit">
+						<!-- Before the buttons: the popup action finds its target when the
+						     dropdown button mounts, which is at once when the profiles are
+						     already loaded. -->
+						<div
+							class="card z-10 w-full bg-surface-100-800-token shadow-xl"
+							data-popup="chromeProfilesPopup"
+						>
+							{#each $chromeStore.profiles as profile}
+								<button
+									type="button"
+									class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
+									on:click={() => startChrome(profile)}
+								>
+									{profile}
+								</button>
+							{/each}
+						</div>
 						<div
 							class="flex w-full overflow-hidden rounded-container-token"
 						>
@@ -132,22 +149,6 @@
 							{/if}
 						</div>
 
-						{#if $chromeStore.profiles.length >= 0}
-							<div
-								class="card z-10 w-full bg-surface-100-800-token shadow-xl"
-								data-popup="chromeProfilesPopup"
-							>
-								{#each $chromeStore.profiles as profile}
-									<button
-										type="button"
-										class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
-										on:click={() => startChrome(profile)}
-									>
-										{profile}
-									</button>
-								{/each}
-							</div>
-						{/if}
 					</div>
 				</div>
 			</div>
