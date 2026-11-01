@@ -366,11 +366,6 @@
 			EventsOn("ws-progress", (progress) =>
 				connectionStore.upsertProgress(progress),
 			);
-			// An upgrade whose handshake failed or was dropped opens no
-			// connection, so only its Ledger row changes.
-			EventsOn("ws-state", ({ RequestID, State }) =>
-				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
-			);
 			// Marasi dropped a held item because its client left
 			// (checkpoint.dropped, reason abandoned; see marasiEvents.js).
 			// The toast shows on any page.
@@ -406,7 +401,6 @@
 			EventsOff("ws-open");
 			EventsOff("ws-close");
 			EventsOff("ws-progress");
-			EventsOff("ws-state");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
 			EventsOff("update-progress");

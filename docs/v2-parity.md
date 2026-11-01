@@ -93,18 +93,18 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `AppendNote` | binding | COVERED | `POST /traffic/bulk/note {selection, append}` | 14 | [ ] |
-| `ClearNotes` | binding | COVERED | `POST /traffic/bulk/note {selection, clear:true}` | 14 | [ ] |
-| `SetHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight}` | 14 | [ ] |
-| `ClearHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight:null}` | 14 | [ ] |
-| `DeleteTraffic` | binding | COVERED | `POST /traffic/bulk/delete {selection}` | 14 | [ ] |
-| `LinkTraffic` | binding | COVERED | `POST /traffic/bulk/link {selection, launchpad_id, finding_id or test_case_id}` | 14 | [ ] |
-| `UnlinkTraffic` | binding | COVERED | `POST /traffic/bulk/unlink {selection, launchpad_id, finding_id or test_case_id}` | 14 | [ ] |
-| `GetClientSetting` | binding | COVERED | `GET /client-settings/marasi-app/{key}` (404 = unset) | 14 | [ ] |
-| `SetClientSetting` | binding | COVERED | `PUT /client-settings/marasi-app/{key} {value}` | 14 | [ ] |
-| `DeleteClientSetting` | binding | COVERED | `DELETE /client-settings/marasi-app/{key}` | 14 | [ ] |
-| `ListClientSettings` | binding | COVERED | `GET /client-settings/marasi-app?prefix=` | 14 | [ ] |
-| `ws-state` | event | COVERED | `websocket.handshake_ended {request_id, state}` | 14 | [ ] |
+| `AppendNote` | binding | COVERED | `POST /traffic/bulk/note {selection, append}` | 14 | [x] |
+| `ClearNotes` | binding | COVERED | `POST /traffic/bulk/note {selection, clear:true}` | 14 | [x] |
+| `SetHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight}` | 14 | [x] |
+| `ClearHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight:null}` | 14 | [x] |
+| `DeleteTraffic` | binding | COVERED | `POST /traffic/bulk/delete {selection}` | 14 | [x] |
+| `LinkTraffic` | binding | COVERED | `POST /traffic/bulk/link {selection, launchpad_id, finding_id or test_case_id}` | 14 | [x] |
+| `UnlinkTraffic` | binding | COVERED | `POST /traffic/bulk/unlink {selection, launchpad_id, finding_id or test_case_id}` | 14 | [x] |
+| `GetClientSetting` | binding | COVERED | `GET /client-settings/marasi-app/{key}` (404 = unset) | 14 | [x] |
+| `SetClientSetting` | binding | COVERED | `PUT /client-settings/marasi-app/{key} {value}` | 14 | [x] |
+| `DeleteClientSetting` | binding | COVERED | `DELETE /client-settings/marasi-app/{key}` | 14 | [x] |
+| `ListClientSettings` | binding | COVERED | `GET /client-settings/marasi-app?prefix=` | 14 | [x] |
+| `ws-state` | event | COVERED | `websocket.handshake_ended {request_id, state}` | 14 | [x] |
 
 ## Updates
 

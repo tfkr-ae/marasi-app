@@ -106,6 +106,12 @@ export function responseEvent(event) {
   };
 }
 
+/**
+ * A websocket.handshake_ended event as v1's ws-state event: an upgrade that
+ * failed or was dropped, whose state Marasi has already stored.
+ */
+export const handshakeEndedEvent = (event) => ({ RequestID: event.request_id, State: event.state });
+
 /** A sitemap levels read's child as v1's SitemapNodeCount. */
 export function sitemapNodeCount(child) {
   return {

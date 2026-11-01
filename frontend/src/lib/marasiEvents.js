@@ -3,7 +3,7 @@
 // that ports a store adds its events here.
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
-import { requestEvent, responseEvent } from "./bindings/traffic.js";
+import { handshakeEndedEvent, requestEvent, responseEvent } from "./bindings/traffic.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./bindings/armory.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
@@ -51,6 +51,9 @@ const handlers = {
     recentTraffic.onResponse(response);
     armoryStore.onResponse(response);
   },
+  // An upgrade whose handshake failed or was dropped opens no connection,
+  // so only its Ledger row changes.
+  "websocket.handshake_ended": (event) => ledgerStore.patchWebSocketMetadata(handshakeEndedEvent(event)),
   // The Armory's templates and runs, changed by any client, and each run's
   // progress; the deleted events carry the id alone.
   "armory.template.created": (template) => armoryStore.onTemplate(armoryTemplate(template)),

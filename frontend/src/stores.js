@@ -191,17 +191,20 @@ export async function openProject(loadPart = () => {}) {
   await populateWaypoints();
   loadPart(loadSignals.extensionList);
   await populateExtensions();
+  // A part that fails to read is logged, and the parts after it still load.
   loadPart(loadSignals.testCases);
-  await testCaseStore.populate();
+  await testCaseStore.populate().catch((err) => console.error("Reading test cases failed:", err));
   loadPart(loadSignals.findings);
-  await findingStore.populate();
-  await logbookStore.populate();
+  await findingStore.populate().catch((err) => console.error("Reading findings failed:", err));
+  await logbookStore.populate().catch((err) => console.error("Reading the Logbook failed:", err));
   loadPart(loadSignals.intercept);
-  await connectionStore.populateInterceptFlag();
+  await connectionStore
+    .populateInterceptFlag()
+    .catch((err) => console.error("Reading the WebSocket intercept flag failed:", err));
   loadPart(loadSignals.armory);
-  await armoryStore.populate();
+  await armoryStore.populate().catch((err) => console.error("Reading Armory templates failed:", err));
   loadPart(loadSignals.launchpads);
-  await launchpadStore.populate();
+  await launchpadStore.populate().catch((err) => console.error("Reading launchpads failed:", err));
   // The project's upstream proxy selection. The listener and the
   // instance's version belong to the instance, and Home reads the
   // dashboard as it mounts.

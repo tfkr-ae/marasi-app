@@ -172,6 +172,11 @@ export const DeleteWaypoint = async (hostname) => {
 // (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
 const exclusionSetting = "/client-settings/marasi-app/ledger.exclusion";
 
+// The app's per-project settings: client settings under the client
+// marasi-app (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
+const clientSettings = "/client-settings/marasi-app";
+const clientSetting = (key) => `${clientSettings}/${encodeURIComponent(key)}`;
+
 // `call`'s answer, or null when Marasi answered not_found.
 async function unlessNotFound(call) {
   try {
@@ -213,6 +218,18 @@ async function readTraffic(read) {
     return { QueryError: { Message: error.body.message ?? "invalid query", Position: error.body.position ?? 0 } };
   }
 }
+
+// A bulk change on a Ledger selection, Marasi's { ids } or { query,
+// exclusion, as_of } (marasi docs/adr/2026-10-14-query-selections-stop-at-as-of.md):
+// POST /traffic/bulk/{change} with the selection and `fields`. Resolves how
+// many pairs changed, as v1 did. Refusals such as selection_incomplete and
+// launch_pending read through the code helpers.
+const bulk = async (change, selection, fields = {}) =>
+  (await marasi.post(`/traffic/bulk/${change}`, { selection, ...fields })).count;
+
+// v1's link target, { Kind: "launchpad" | "finding" | "test_case", ID },
+// as the bulk link body's id field.
+const linkTarget = (target) => ({ [`${target.Kind}_id`]: target.ID });
 
 // A Checkpoint item as v1's domain.CheckpointItem, with its InterceptedAt.
 // Raw and Payload stay base64, as Wails sent a Go []byte.
@@ -262,7 +279,9 @@ async function settleCheckpoints(ids, settle) {
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
-export const AppendNote = notPorted("AppendNote");
+// Adds `text` to every note in `selection`, after a blank line when the pair
+// already has one.
+export const AppendNote = (selection, text) => bulk("note", selection, { append: text });
 export const CancelArmoryRun = async (id) => {
   await marasi.post(`/armory/run/${encodeURIComponent(id)}/cancel`);
 };
@@ -270,8 +289,9 @@ export const CancelLaunch = notPorted("CancelLaunch");
 // Why an edited held request or response doesn't parse, in Go's words, or
 // "". v1 checked it in Go; Marasi only refuses an unparsable forward.
 export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
-export const ClearHighlight = notPorted("ClearHighlight");
-export const ClearNotes = notPorted("ClearNotes");
+// Clears the highlight of every pair in `selection`.
+export const ClearHighlight = (selection) => bulk("highlight", selection, { highlight: null });
+export const ClearNotes = (selection) => bulk("note", selection, { clear: true });
 export const CloseWebSocket = notPorted("CloseWebSocket");
 // The instance's CA certificate, on this machine's clipboard. Resolves true.
 export const CopyCertToClipboard = async () => {
@@ -352,11 +372,14 @@ export const DeleteArmoryTemplate = async (id) => {
   await marasi.delete(`/armory/template/${encodeURIComponent(id)}`);
 };
 export const DeleteArtifact = notPorted("DeleteArtifact");
-export const DeleteClientSetting = notPorted("DeleteClientSetting");
+// Drops the project's setting `key`; a missing key is not an error.
+export const DeleteClientSetting = (key) => marasi.delete(clientSetting(key));
 export const DeleteFinding = notPorted("DeleteFinding");
 export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
-export const DeleteTraffic = notPorted("DeleteTraffic");
+// Deletes the pairs in `selection` with everything they own (marasi
+// docs/adr/2026-10-14-deleting-a-pair-deletes-everything-it-owns.md).
+export const DeleteTraffic = (selection) => bulk("delete", selection);
 export const DownloadArtifact = notPorted("DownloadArtifact");
 // Saves the instance's CA certificate on this machine, through a save
 // dialog. Resolves false when the researcher cancels.
@@ -386,7 +409,9 @@ export const GetArmoryTemplates = async () => {
 // The wordlists on the instance machine, by name.
 export const GetArmoryWordlists = async () => wordlistInfos(await marasi.get("/wordlist"));
 export const GetArtifact = notPorted("GetArtifact");
-export const GetClientSetting = notPorted("GetClientSetting");
+// The project's setting `key`, { client, key, value, updated_at }, or null
+// when it has none.
+export const GetClientSetting = (key) => unlessNotFound(marasi.get(clientSetting(key)));
 // The open project's exclusion: its own list when it has one, else the app
 // default.
 export const GetContentTypeExclusion = async () =>
@@ -437,7 +462,16 @@ export const ToggleIntercept = async () => SetIntercept(!(await GetInterceptFlag
 export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
-export const GetLaunchpads = notPorted("GetLaunchpads");
+// The project's launchpads as v1's Launchpad: { ID, Name, Description,
+// EntryCount, LastStatusCode }.
+export const GetLaunchpads = async () =>
+  ((await marasi.get("/launchpad")).items ?? []).map((launchpad) => ({
+    ID: launchpad.id,
+    Name: launchpad.name,
+    Description: launchpad.description,
+    EntryCount: launchpad.entry_count,
+    LastStatusCode: launchpad.last_status_code ?? null,
+  }));
 // One page of the log, newest first: {items, next_cursor}. `cursor` is the
 // last page's next_cursor.
 export const GetLogs = (cursor) =>
@@ -480,8 +514,12 @@ export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
 export const LinkRequestToTestCase = notPorted("LinkRequestToTestCase");
-export const LinkTraffic = notPorted("LinkTraffic");
-export const ListClientSettings = notPorted("ListClientSettings");
+// Links the pairs in `selection` to a launchpad, finding or test case;
+// resolves how many were newly linked.
+export const LinkTraffic = (selection, target) => bulk("link", selection, linkTarget(target));
+// The project's settings whose keys start with `prefix`, sorted by key.
+export const ListClientSettings = async (prefix = "") =>
+  (await marasi.get(`${clientSettings}?prefix=${encodeURIComponent(prefix)}`)).items ?? [];
 export const ListFindings = notPorted("ListFindings");
 // The open project's background jobs, in v1's JobState shape.
 export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
@@ -604,13 +642,15 @@ export const SaveTestCase = notPorted("SaveTestCase");
 export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
-export const SetClientSetting = notPorted("SetClientSetting");
+// Stores `value`, any JSON, as the project's setting `key`.
+export const SetClientSetting = (key, value) => marasi.put(clientSetting(key), { value });
 // Gives the open project its own exclusion, normalised as Marasi does,
 // which it keeps instead of following the app default.
 export const SetContentTypeExclusion = async (values) => {
   await marasi.put(exclusionSetting, { value: normalizeExclusion(values) });
 };
-export const SetHighlight = notPorted("SetHighlight");
+// Gives every pair in `selection` highlight 1-8.
+export const SetHighlight = (selection, highlight) => bulk("highlight", selection, { highlight });
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
@@ -640,7 +680,7 @@ export const TestScopeMatch = async (url) => {
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
-export const UnlinkTraffic = notPorted("UnlinkTraffic");
+export const UnlinkTraffic = (selection, target) => bulk("unlink", selection, linkTarget(target));
 export const UpdateArmoryTemplate = async (id, name, description, rawTemplate) => {
   await marasi.post(`/armory/template/${encodeURIComponent(id)}`, { name, description, raw_template: rawTemplate });
 };
