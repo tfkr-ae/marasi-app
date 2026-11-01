@@ -1,32 +1,41 @@
 # Launchpad
 
-Which files work together on the Launchpad page, how a launch travels through Go and back as events, and where an entry action goes. Names are functions and files, so search for them.
+Which files work together on the Launchpad page, how launchpad changes and launches arrive as Marasi events, and where an entry action goes. Names are functions and files, so search for them.
 
 ## Files
 
 - `frontend/src/routes/launchpad/+page.svelte` wires everything together: the dock and tree, the workspace, the entry menu, every action function, and `launchpadMenu` for `useMenuActions` and ⌘K.
-- `frontend/src/stores/createLaunchpadStore.js` holds the state, the selectors and the event reducers. It takes its API as an argument. `frontend/src/stores/launchpadStore.js` maps that API to Wails bindings.
+- `frontend/src/stores/createLaunchpadStore.js` holds the state, the selectors and the event reducers. It takes its API as an argument. `frontend/src/stores/launchpadStore.js` maps that API to the v1 bindings in `frontend/src/lib/bindings/App.js`.
 - `frontend/src/lib/launchpad/`:
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
   - `LaunchpadWorkspace.svelte` is the draft editor;
   - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
   - `launchpadMenu.js` (`launchpadMenuFor`) describes the launchpad menu, a launchpad row's context menu, in the same shape, with `recordItems` from `entryMenu.js`;
   - the other files are pure helpers.
-- Go: the launch and launchpad methods in `app.go`, `launchpad_move.go` (`MoveLaunchpadEntries` and its refusal codes), and `launchpad_search.go`.
+- Bindings: the launchpad bindings in `App.js` call Marasi's `/launchpad` routes, and `frontend/src/lib/bindings/launchpads.js` turns its launchpads and launches into v1's shapes. `MoveLaunchpadEntries` resolves the moved ids; Marasi's `already_linked`, `invalid_placement`, `not_found` and `launch_pending` refusals reach `marasiMoveRefusal` in `entryMove.js`. `SearchLaunchpadEntries` composes the search as v1 did: one `/traffic` read of `launchpad:* AND (…)`, then each launchpad's `GET /launchpad/{id}?q=` when that matched. Remove from launchpad and the record links go through `LinkTraffic`/`UnlinkTraffic` (`/traffic/bulk/link`, `/unlink`). `Launch`, `CancelLaunch` and `SetUnsavedDraftCount` are ticket 20 and reject as not ported until then.
+
+## Changes from any client
+
+`handlers` in `frontend/src/lib/marasiEvents.js` sends Marasi's events to the store, so a launchpad change made by the CLI or an agent shows up live. Each handler is idempotent, so this window's own change and its event apply once.
+
+- `launchpad.created`, `launchpad.updated` and `launchpad.deleted` call `onLaunchpadCreated`, `onLaunchpadUpdated` and `onLaunchpadDeleted`. A deleted open launchpad gives way to its neighbour (`forgetLaunchpad`, shared with `deleteLaunchpad`).
+- `launchpad.linked`, `launchpad.unlinked` and `launchpad.entries_moved` call `onEntriesChanged` with their launchpads: a loaded entry list reloads, and the others' summaries are reread (`refreshSummaries`).
+- `traffic.changed` names no launchpad, so a bulk `link`, `unlink` or `delete` calls `onEntriesChanged()` for every launchpad.
+- `traffic.request` and `traffic.response` reach `onRequest` and `onResponse`, which only take launched pairs the store knows.
 
 ## A launch
 
 1. `launch` on the page calls the store's `launch`, which calls the `Launch` binding. Its launch id is also the new entry's pair id.
-2. `configureLaunchHandlers` in `app.go` sends `launch-started` and `launch-finished`. `+layout.svelte` passes them to `onLaunchStarted` and `onLaunchFinished`.
-3. The new entry arrives as a `request` event (`onRequest` in the store).
+2. `+layout.svelte` passes v1's `launch-started` and `launch-finished` to `onLaunchStarted` and `onLaunchFinished`; in v2 they hear nothing until ticket 20 follows `launch.*`.
+3. The new entry arrives as a `traffic.request` event (`onRequest` in the store).
 
-While a launch is pending, Marasi refuses to move or remove its pair, or to delete its launchpad. Go reports that as `launch_pending` through `launchpadError`. The store then reads the pending launches again (`PendingLaunches`), and the page explains the refusal with the helpers in `frontend/src/lib/launchPending.js`, which the Ledger shares. `entryMove.js` handles the codes for stale views.
+While a launch is pending, Marasi refuses to move or remove its pair, or to delete its launchpad. Marasi refuses with `409 launch_pending` and the pending pairs' `request_ids`, which the Marasi client puts in the error's text. The store then reads the pending launches again (`PendingLaunches`), and the page explains the refusal with the helpers in `frontend/src/lib/launchPending.js`, which the Ledger shares. `entryMove.js` handles the codes for stale views.
 
 ## Adding an entry action
 
 1. Add the item to `entryMenuFor`, with an `actionId` if it has a shortcut. Use `unlessLaunching` to disable it for pending entries.
 2. Add a branch to `runEntryAction`, which treats unknown types as a move (see its comment).
-3. Add a store method, and map its API name in `launchpadStore.js` and in `fakeApi` in the tests.
+3. Add a store method, and map its API name in `launchpadStore.js` and in `fakeApi` in the tests. Port its binding in `App.js` if it isn't yet.
 4. For a shortcut, add a catalog row in `launchpad.tree` and a `launchpadMenu` entry that calls `runEntryShortcut` (see `keybindings-and-menus.md`).
 
 ## Findings and test cases

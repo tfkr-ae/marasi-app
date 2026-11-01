@@ -141,41 +141,41 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [x] |
 | `CheckHTTPParse` | binding | GUI | The renderer reads the edited request or response as Go's `http.ReadRequest` or `http.ReadResponse` would, with Go's error text (`lib/checkpoint/httpParse.js`). Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [x] |
 | `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [x] |
-| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal's side is ticket 18. | 17 | [x] |
+| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal settles its connection's queue by `request_id` (ticket 18). | 17 | [x] |
 | `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned`. Reason `shutdown` reads the queue again, as a drop does. | 17 | [x] |
 
 ## WebSocket
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetWSInterceptFlag` | binding | COVERED | `GET /checkpoint` `.websocket_intercept` | 18 | [ ] |
-| `ToggleWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}` with the opposite of the current value, and `checkpoint.updated` | 18 | [ ] |
-| `SetWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}`. v1 bound it but the frontend never called it. | 18 | [ ] |
-| `GetWSIntercepted` | binding | COVERED | C: `GET /checkpoint?kind=websocket`, filtered by `request_id` | 18 | [ ] |
-| `ForwardWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/forward {payload, opcode}` | 18 | [ ] |
-| `DropWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/drop` | 18 | [ ] |
-| `GetWebSocketConnection` | binding | COVERED | `GET /traffic/{request_id}/websocket` | 18 | [ ] |
-| `GetWebSocketMessages` | binding | COVERED | `GET /websocket/{connection_id}/message` (paged) | 18 | [ ] |
-| `InjectWebSocketMessage` | binding | COVERED | `POST /websocket/{connection_id}/inject {direction, opcode, payload, compress:"never"}` | 18 | [ ] |
-| `CloseWebSocket` | binding | COVERED | `POST /websocket/{connection_id}/close {code, reason}` | 18 | [ ] |
-| `ws-intercepted` | event | COVERED | `checkpoint.held` (type `websocket`) | 18 | [ ] |
-| `ws-message` | event | COVERED | `websocket.message` | 18 | [ ] |
-| `ws-open` | event | COVERED | `websocket.opened` | 18 | [ ] |
-| `ws-close` | event | COVERED | `websocket.closed` | 18 | [ ] |
-| `ws-progress` | event | COVERED | `websocket.progress` | 18 | [ ] |
+| `GetWSInterceptFlag` | binding | COVERED | `GET /checkpoint` `.websocket_intercept` | 18 | [x] |
+| `ToggleWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}` with the opposite of the current value, and `checkpoint.updated` | 18 | [x] |
+| `SetWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}`. v1 bound it but the frontend never called it. | 18 | [x] |
+| `GetWSIntercepted` | binding | COVERED | C: `GET /checkpoint?kind=websocket`, the oldest with the pair's `request_id`. Its `CreatedAt` is `intercepted_at`; Marasi's item has no `frame_count`, `compressed` or `metadata`, so the modal's Frames is blank. | 18 | [x] |
+| `ForwardWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/forward {payload, opcode}` | 18 | [x] |
+| `DropWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/drop` | 18 | [x] |
+| `GetWebSocketConnection` | binding | COVERED | `GET /traffic/{request_id}/websocket`; null on `not_found`, before the connection opens | 18 | [x] |
+| `GetWebSocketMessages` | binding | COVERED | C: `GET /traffic/{request_id}/websocket` for the connection id, then every page of `GET /websocket/{connection_id}/message` (newest first, 500 a page), listed oldest first as in v1 | 18 | [x] |
+| `InjectWebSocketMessage` | binding | COVERED | `POST /websocket/{connection_id}/inject {direction, opcode, payload, compress}`, `compress` `"never"` when Send uncompressed is ticked, else `"auto"`, as v1's `neverCompress` | 18 | [x] |
+| `CloseWebSocket` | binding | COVERED | `POST /websocket/{connection_id}/close {code, reason}` | 18 | [x] |
+| `ws-intercepted` | event | COVERED | `checkpoint.held` (type `websocket`) | 18 | [x] |
+| `ws-message` | event | COVERED | `websocket.message` | 18 | [x] |
+| `ws-open` | event | COVERED | `websocket.opened`, to the modal and the upgrade's Ledger row | 18 | [x] |
+| `ws-close` | event | COVERED | `websocket.closed`, to the modal (clearing its queue) and the upgrade's Ledger row | 18 | [x] |
+| `ws-progress` | event | COVERED | `websocket.progress` | 18 | [x] |
 
 ## Launchpad
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetLaunchpads` | binding | COVERED | `GET /launchpad` | 19 | [ ] |
-| `CreateLaunchpadEntry` | binding | COVERED | `POST /launchpad {name, description}`, `launchpad.created` | 19 | [ ] |
-| `UpdateLaunchpadEntry` | binding | COVERED | `POST /launchpad/{id} {name, description}`, `launchpad.updated` | 19 | [ ] |
-| `DeleteLaunchpad` | binding | COVERED | `DELETE /launchpad/{id}`, `launchpad.deleted` (`409 launch_pending`) | 19 | [ ] |
-| `GetLaunchpadRequests` | binding | COVERED | `GET /launchpad/{id}` | 19 | [ ] |
-| `LinkRequestToLaunchpad` | binding | COVERED | `POST /launchpad/{id}/link {request_id}`. v1 bound it but the frontend never called it. | 19 | [ ] |
-| `MoveLaunchpadEntries` | binding | COVERED | `POST /launchpad/{id}/move {request_ids, target_launchpad_id, before_request_id}` | 19 | [ ] |
-| `SearchLaunchpadEntries` | binding | COVERED | C: `GET /launchpad/{id}?q=` for each launchpad | 19 | [ ] |
+| `GetLaunchpads` | binding | COVERED | `GET /launchpad` | 19 | [x] |
+| `CreateLaunchpadEntry` | binding | COVERED | `POST /launchpad {name, description}`, `launchpad.created` | 19 | [x] |
+| `UpdateLaunchpadEntry` | binding | COVERED | `POST /launchpad/{id} {name, description}`, `launchpad.updated` | 19 | [x] |
+| `DeleteLaunchpad` | binding | COVERED | `DELETE /launchpad/{id}`, `launchpad.deleted` (`409 launch_pending`) | 19 | [x] |
+| `GetLaunchpadRequests` | binding | COVERED | `GET /launchpad/{id}` | 19 | [x] |
+| `LinkRequestToLaunchpad` | binding | COVERED | `POST /launchpad/{id}/link {request_id}`. v1 bound it but the frontend never called it; v2's is proven by its binding test. | 19 | [x] |
+| `MoveLaunchpadEntries` | binding | COVERED | `POST /launchpad/{id}/move {request_ids, target_launchpad_id, before_request_id}`, `launchpad.entries_moved` | 19 | [x] |
+| `SearchLaunchpadEntries` | binding | COVERED | C: `GET /traffic?q=launchpad:* AND (…)&limit=1`, then when it matches `GET /launchpad/{id}?q=` for each launchpad | 19 | [x] |
 | `Launch` | binding | COVERED | `POST /launchpad/{id}/launch {raw, scheme}` | 20 | [ ] |
 | `PendingLaunches` | binding | COVERED | `GET /launch` | 20 | [ ] |
 | `GetLaunch` | binding | COVERED | `GET /launch/{id}` | 20 | [ ] |

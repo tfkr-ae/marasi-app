@@ -6,8 +6,10 @@ import { createChromeBindings } from "./chrome.js";
 import { notPorted } from "./notPorted.js";
 import { marasi, MarasiError } from "./marasi.js";
 import { pairRow, pairSummary, rawText, sitemapNodeCount } from "./traffic.js";
+import { launchOf, launchpadOf } from "./launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./armory.js";
 import { artifactMetadata, findingFields, findingRecord, testCaseFields, testCaseRecord } from "./records.js";
+import { heldMessage, webSocketConnection, webSocketMessage } from "./websocket.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
@@ -168,6 +170,11 @@ async function unlessNotFound(call) {
   }
 }
 
+const launchpadPath = (id) => `/launchpad/${encodeURIComponent(id)}`;
+
+// What the entry search wraps the researcher's query in, as v1 did.
+const launchpadSearchPrefix = "launchpad:* AND (";
+
 // A pair in full, as Marasi answers GET /traffic/{id}.
 const readPair = (id) => marasi.get(`/traffic/${encodeURIComponent(id)}`);
 
@@ -211,6 +218,16 @@ const bulk = async (change, selection, fields = {}) =>
 // v1's link target, { Kind: "launchpad" | "finding" | "test_case", ID },
 // as the bulk link body's id field.
 const linkTarget = (target) => ({ [`${target.Kind}_id`]: target.ID });
+
+// The connection behind an upgrade pair, as Marasi answers it. v1's
+// WebSocket bindings take the pair's request id; Marasi's routes take the
+// connection's id.
+const readConnection = (requestId) => marasi.get(`/traffic/${encodeURIComponent(requestId)}/websocket`);
+
+const connectionPath = (connection) => `/websocket/${encodeURIComponent(connection.id)}`;
+
+// The most messages Marasi lists in one GET /websocket/{id}/message page.
+const maxMessagePage = 500;
 
 // A Checkpoint item as v1's domain.CheckpointItem, with its InterceptedAt.
 // Raw and Payload stay base64, as Wails sent a Go []byte.
@@ -336,7 +353,11 @@ export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
 // Clears the highlight of every pair in `selection`.
 export const ClearHighlight = (selection) => bulk("highlight", selection, { highlight: null });
 export const ClearNotes = (selection) => bulk("note", selection, { clear: true });
-export const CloseWebSocket = notPorted("CloseWebSocket");
+// Closes the connection an upgrade pair opened.
+export const CloseWebSocket = async (requestId, code, reason) => {
+  const connection = await readConnection(requestId);
+  await marasi.post(`${connectionPath(connection)}/close`, { code, reason });
+};
 // The instance's CA certificate, on this machine's clipboard. Resolves true.
 export const CopyCertToClipboard = async () => {
   const { pem } = await marasi.get("/certificate");
@@ -409,7 +430,9 @@ export const CreateArmoryTemplateFromRequest = async (requestId) => {
 export const CreateDraftFinding = (requests, testCaseID) =>
   createDraft(findings, requests, { test_case_id: testCaseID ?? null });
 export const CreateDraftTestCase = (requests) => createDraft(testCases, requests);
-export const CreateLaunchpadEntry = notPorted("CreateLaunchpadEntry");
+// Creates a launchpad and resolves its id.
+export const CreateLaunchpadEntry = async (name, description) =>
+  (await marasi.post("/launchpad", { name, description })).id;
 // Marasi refuses an active run: run_active.
 export const DeleteArmoryRun = async (id) => {
   await marasi.delete(`/armory/run/${encodeURIComponent(id)}`);
@@ -422,7 +445,10 @@ export const DeleteArtifact = (id) => marasi.delete(artifactPath(id));
 // Drops the project's setting `key`; a missing key is not an error.
 export const DeleteClientSetting = (key) => marasi.delete(clientSetting(key));
 export const DeleteFinding = (id) => deleteRecord(findings, id);
-export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
+// Marasi refuses with launch_pending while a launch from it is pending.
+export const DeleteLaunchpad = async (id) => {
+  await marasi.delete(launchpadPath(id));
+};
 export const DeleteTestCase = (id) => deleteRecord(testCases, id);
 // Deletes the pairs in `selection` with everything they own (marasi
 // docs/adr/2026-10-14-deleting-a-pair-deletes-everything-it-owns.md).
@@ -439,11 +465,12 @@ export const DownloadCert = async () => {
   const { pem } = await marasi.get("/certificate");
   return Boolean(await bridge().saveCertificate(pem));
 };
-export const DropWSIntercepted = notPorted("DropWSIntercepted");
+export const DropWSIntercepted = (id) => DropCheckpoint(id);
 export const ExportReport = notPorted("ExportReport");
-export const ForwardWSIntercepted = notPorted("ForwardWSIntercepted");
-// The runs in progress, found in every template's runs. Marasi cancels the
-// runs an instance left in progress when it opens the project.
+// Forwards a held WebSocket message with `payload`, its text, and `opcode`.
+export const ForwardWSIntercepted = async (id, opcode, payload) => {
+  await marasi.post(`${checkpointPath(id)}/forward`, { payload: base64(payload), opcode });
+};
 export const GetActiveArmoryRunIDs = async () => {
   const { items = [] } = await marasi.get("/armory/template");
   const runs = await Promise.all(items.map((item) => GetArmoryRuns(item.id)));
@@ -524,18 +551,10 @@ export const ToggleIntercept = async () => SetIntercept(!(await GetInterceptFlag
 // The instance machine's addresses the listener can bind:
 // [{address, family, interface}], IPv4 first.
 export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
-export const GetLaunch = notPorted("GetLaunch");
-export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
-// The project's launchpads as v1's Launchpad: { ID, Name, Description,
-// EntryCount, LastStatusCode }.
-export const GetLaunchpads = async () =>
-  ((await marasi.get("/launchpad")).items ?? []).map((launchpad) => ({
-    ID: launchpad.id,
-    Name: launchpad.name,
-    Description: launchpad.description,
-    EntryCount: launchpad.entry_count,
-    LastStatusCode: launchpad.last_status_code ?? null,
-  }));
+export const GetLaunch = async (id) => launchOf(await marasi.get(`/launch/${encodeURIComponent(id)}`));
+// A launchpad's entries in entry order, as v1's RequestResponseSummary.
+export const GetLaunchpadRequests = async (id) => ((await marasi.get(launchpadPath(id))).items ?? []).map(pairSummary);
+export const GetLaunchpads = async () => ((await marasi.get("/launchpad")).items ?? []).map(launchpadOf);
 // One page of the log, newest first: {items, next_cursor}. `cursor` is the
 // last page's next_cursor.
 export const GetLogs = (cursor) =>
@@ -566,17 +585,55 @@ export const GetScopeRules = async () => {
 };
 // This machine's user, the report assessor default.
 export const GetUserName = () => bridge().userName();
-export const GetWSInterceptFlag = notPorted("GetWSInterceptFlag");
-export const GetWSIntercepted = notPorted("GetWSIntercepted");
-export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
-export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
+// WebSocket interception, which Marasi sets rather than toggles, as Intercept all.
+export const GetWSInterceptFlag = async () => (await marasi.get("/checkpoint")).websocket_intercept;
+// The oldest message held on the connection an upgrade pair opened, or null.
+export const GetWSIntercepted = async (requestId) => {
+  const { items = [] } = await marasi.get("/checkpoint?kind=websocket");
+  const held = items.find((item) => item.request_id === requestId);
+  return held ? heldMessage(held) : null;
+};
+// The connection an upgrade pair opened, live or closed, or null before it
+// opens.
+export const GetWebSocketConnection = async (requestId) => {
+  const connection = await unlessNotFound(readConnection(requestId));
+  return connection && webSocketConnection(connection);
+};
+// Every message on the connection an upgrade pair opened, oldest first, as
+// v1 listed them. Marasi pages them newest first.
+export const GetWebSocketMessages = async (requestId) => {
+  const connection = await unlessNotFound(readConnection(requestId));
+  if (!connection) return [];
+  const path = `${connectionPath(connection)}/message`;
+  const messages = [];
+  let cursor = null;
+  do {
+    const page = await marasi.get(`${path}${trafficQuery({ limit: maxMessagePage, cursor })}`);
+    messages.push(...(page.items ?? []));
+    cursor = page.next_cursor;
+  } while (cursor);
+  return messages.reverse().map(webSocketMessage);
+};
 // Whether the open project keeps its own exclusion; false when it follows
 // the app default.
 export const HasOwnContentTypeExclusion = async () => (await ownExclusion()) !== null;
-export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
+// Sends `payload`, text, as a whole message on the connection an upgrade
+// pair opened. A data message on a permessage-deflate connection is
+// compressed by the leg's rules unless `neverCompress`.
+export const InjectWebSocketMessage = async (requestId, direction, opcode, payload, neverCompress) => {
+  const connection = await readConnection(requestId);
+  await marasi.post(`${connectionPath(connection)}/inject`, {
+    direction,
+    opcode,
+    payload: base64(payload),
+    compress: neverCompress ? "never" : "auto",
+  });
+};
 export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = (id, request) => linkPair(findings, id, request);
-export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
+export const LinkRequestToLaunchpad = async (requestId, launchpadId) => {
+  await marasi.post(`${launchpadPath(launchpadId)}/link`, { request_id: requestId });
+};
 export const LinkRequestToTestCase = (id, request) => linkPair(testCases, id, request);
 // Links the pairs in `selection` to a launchpad, finding or test case;
 // resolves how many were newly linked.
@@ -633,7 +690,14 @@ export const ListSitemapLevels = (request) =>
   });
 export const ListTemplates = notPorted("ListTemplates");
 export const ListTestCases = () => listRecords(testCases);
-export const MoveLaunchpadEntries = notPorted("MoveLaunchpadEntries");
+// Moves `ids` out of launchpad `sourceId` to `targetId` (which may be the
+// source), before the entry `before`, or at the end for "". Resolves the
+// moved ids in their new entry order; Marasi moves all or none.
+export const MoveLaunchpadEntries = async (sourceId, targetId, ids, before) => {
+  const body = { request_ids: ids, target_launchpad_id: targetId };
+  if (before) body.before_request_id = before;
+  return (await marasi.post(`${launchpadPath(sourceId)}/move`, body)).request_ids ?? [];
+};
 // A project file picked in this machine's open dialog, for a local
 // connection: its path, or null.
 export const OpenFileDialog = () => bridge().pickProject("Open project");
@@ -645,7 +709,8 @@ export const OpenProject = async (project) => {
   const body = /[\\/]/.test(target) ? { path: target } : { name: target };
   return (await marasi.post("/project/open", body)).project;
 };
-export const PendingLaunches = notPorted("PendingLaunches");
+// The launches that have not ended, oldest first, as v1's Launch.
+export const PendingLaunches = async () => ((await marasi.get("/launch")).items ?? []).map(launchOf);
 // A wordlist's first `limit` entries; Marasi reads at most 100.
 export const PreviewArmoryWordlist = async (name, limit) =>
   (await marasi.get(`/wordlist/${encodeURIComponent(name)}?limit=${limit}`)).items ?? [];
@@ -709,7 +774,30 @@ export const SaveTestCase = (testCase) => saveRecord(testCases, testCase);
 // The instance's scratchpad's path, or null when it has none yet.
 export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
-export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
+// The entries `query` matches, by launchpad id, in entry order: v1's {
+// EntriesByLaunchpad, QueryError }. One read over every launchpad's pairs
+// answers the usual keystroke that matches nothing; otherwise each
+// launchpad runs the query, so a pair maps to every launchpad holding it.
+export const SearchLaunchpadEntries = async (query) => {
+  const result = { EntriesByLaunchpad: {}, QueryError: null };
+  const any = await readTraffic(() =>
+    marasi.get("/traffic" + trafficQuery({ q: `${launchpadSearchPrefix}${query})`, limit: 1 })),
+  );
+  if (any.QueryError) {
+    // Its place in the researcher's text, not in the wrapped query.
+    const position = Math.max(0, any.QueryError.Position - launchpadSearchPrefix.length);
+    return { ...result, QueryError: { ...any.QueryError, Position: position } };
+  }
+  if (!any.items?.length) return result;
+  const launchpads = (await marasi.get("/launchpad")).items ?? [];
+  const matches = await Promise.all(
+    launchpads.map(async (launchpad) => (await marasi.get(launchpadPath(launchpad.id) + trafficQuery({ q: query }))).items ?? []),
+  );
+  launchpads.forEach((launchpad, index) => {
+    if (matches[index].length) result.EntriesByLaunchpad[launchpad.id] = matches[index].map((item) => item.id);
+  });
+  return result;
+};
 // Stores `value`, any JSON, as the project's setting `key`.
 export const SetClientSetting = (key, value) => marasi.put(clientSetting(key), { value });
 // Gives the open project its own exclusion, normalised as Marasi does,
@@ -720,7 +808,8 @@ export const SetContentTypeExclusion = async (values) => {
 // Gives every pair in `selection` highlight 1-8.
 export const SetHighlight = (selection, highlight) => bulk("highlight", selection, { highlight });
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
-export const SetWSIntercept = notPorted("SetWSIntercept");
+export const SetWSIntercept = async (enabled) =>
+  (await marasi.post("/checkpoint/websocket-intercept", { websocket_intercept: Boolean(enabled) })).websocket_intercept;
 export const SetupScratchpad = notPorted("SetupScratchpad");
 // Starts a draft; Marasi refuses any other run with not_a_draft or run_active.
 export const StartArmoryRun = async (id) => {
@@ -745,14 +834,16 @@ export const TestScopeMatch = async (url) => {
     compassEnabled: check.compass_enabled,
   };
 };
-export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
+export const ToggleWSIntercept = async () => SetWSIntercept(!(await GetWSInterceptFlag()));
 export const UnlinkRequestFromFinding = (id, request) => unlinkPair(findings, id, request);
 export const UnlinkRequestFromTestCase = (id, request) => unlinkPair(testCases, id, request);
 export const UnlinkTraffic = (selection, target) => bulk("unlink", selection, linkTarget(target));
 export const UpdateArmoryTemplate = async (id, name, description, rawTemplate) => {
   await marasi.post(`/armory/template/${encodeURIComponent(id)}`, { name, description, raw_template: rawTemplate });
 };
-export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
+export const UpdateLaunchpadEntry = async (id, name, description) => {
+  await marasi.post(launchpadPath(id), { name, description });
+};
 // Saves a pair's note; an empty one deletes it, as v1 saved "".
 export const UpdateNote = async (id, note) => {
   const path = `/notes/${encodeURIComponent(id)}`;
