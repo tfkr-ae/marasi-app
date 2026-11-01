@@ -5,7 +5,7 @@
 - The page: dock outline (`+ Finding`, `+ Test case`, the All · In progress · Done toggle, Group by), the toolbar (search, kind toggles, Severity, Category and Tags menus, Export) and the summary
 - The record view: checklist, inline fixes with their leave prompt, linked records, evidence (requests and artifacts) and the expanded pair
 - The finding and test case modal and its edit session: Save and close, Close without saving, the dirty prompt
-- Export review, with Include test cases
+- Export review, with Include test cases; export and save on this machine; report templates (upload, delete, restore default)
 
 The code map is `docs/agents/maps/logbook.md`.
 
@@ -152,7 +152,8 @@ Then check the project: `sqlite3 -readonly <project> "select title, severity, cv
 
 ## Gotchas
 
-- Export report opens a native Save dialog on the desktop, which the driver cannot answer, and isn't ported yet (ticket 22).
+- Export report opens a native Save dialog, which the driver cannot answer, and the browser can't save a report. Prove it in Electron started with `MARASI_REPORT_DIR=/tmp/<dir>`: `#exportReport`, wait for `Report saved`, and read the file (`<title>.md` for the default template). The title field is `{"click":".logbook-export input","nth":1}` (the Assessor is `nth` 2). For the zone, start a second instance with `TZ=Pacific/Auckland … service start` and connect to it as a remote: the report's `created` is this machine's time, while a CLI `report export` with no `--created-at` prints the instance's.
+- The template row (ticket 22): `<option>` text is in the select's `innerText`, so `{"waitText":"<name>","within":"#exportTemplate"}` waits for a template to join or leave the list. Upload is `{"files":"[data-template-input]","paths":["/tmp/<file>"]}`; `#exportDeleteTemplate` and `#exportRestoreDefault` ask once (`Delete <name>?`, `Overwrite default_template.md?`). `marasi report template add` moves its source file, so add a copy.
 - A click outside a modal needs `"edge":"top"` on `.modal-backdrop`: the modal covers the backdrop's centre. The same goes for `.logbook-pair-expanded`.
 - Escape on a dirty record modal only toggles its prompt. `reset.sh` answers `Discard` on `[data-close-prompt]`.
 - The Marasi menu's search matches a page action's keywords, not its label: `next` finds Next Record, `export` finds nothing.
