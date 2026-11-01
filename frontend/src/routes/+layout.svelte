@@ -322,9 +322,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			EventsOn("request", (newRequest) => {
-				launchpadStore.onRequest(newRequest);
-			});
 			EventsOn("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
 			);
@@ -332,7 +329,6 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			EventsOn("response", (newResponse) => {
-				launchpadStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&

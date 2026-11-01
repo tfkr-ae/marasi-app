@@ -4,6 +4,7 @@
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
 import { handshakeEndedEvent, requestEvent, responseEvent } from "./bindings/traffic.js";
+import { launchpadOf } from "./bindings/launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./bindings/armory.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
@@ -33,6 +34,10 @@ const checkpointResolved = (event) =>
     console.error("Reading Checkpoint items failed:", err),
   );
 
+// Logs a failed reread after a launchpad event.
+const followLaunchpads = (reading) =>
+  reading.catch((err) => console.error("Reading launchpads failed:", err));
+
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
@@ -42,6 +47,7 @@ const handlers = {
     ledgerStore.onRequest(request);
     sitemapStore.onRequest(request);
     recentTraffic.onRequest(request);
+    launchpadStore.onRequest(request);
     armoryStore.onRequest(request);
   },
   "traffic.response": (event) => {
@@ -50,7 +56,23 @@ const handlers = {
     sitemapStore.onResponse(response);
     recentTraffic.onResponse(response);
     armoryStore.onResponse(response);
+    launchpadStore.onResponse(response);
   },
+  // A bulk change names no launchpad, so a link, unlink or delete rereads
+  // them all.
+  "traffic.changed": ({ change }) => {
+    if (["link", "unlink", "delete"].includes(change)) followLaunchpads(launchpadStore.onEntriesChanged());
+  },
+  // Launchpads and their entries, changed by any client.
+  "launchpad.created": (event) => launchpadStore.onLaunchpadCreated(launchpadOf(event)),
+  "launchpad.updated": (event) => launchpadStore.onLaunchpadUpdated(launchpadOf(event)),
+  "launchpad.deleted": ({ id }) => followLaunchpads(launchpadStore.onLaunchpadDeleted(id)),
+  "launchpad.linked": ({ launchpad_id }) => followLaunchpads(launchpadStore.onEntriesChanged([launchpad_id])),
+  "launchpad.unlinked": ({ launchpad_id }) => followLaunchpads(launchpadStore.onEntriesChanged([launchpad_id])),
+  "launchpad.entries_moved": (moved) =>
+    followLaunchpads(
+      launchpadStore.onEntriesChanged([...new Set([moved.source_launchpad_id, moved.target_launchpad_id])]),
+    ),
   // An upgrade whose handshake failed or was dropped opens no connection,
   // so only its Ledger row changes.
   "websocket.handshake_ended": (event) => ledgerStore.patchWebSocketMetadata(handshakeEndedEvent(event)),

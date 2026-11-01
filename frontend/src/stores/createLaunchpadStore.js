@@ -698,6 +698,71 @@ export function createLaunchpadStore(api) {
     return { moved, refused: null };
   }
 
+  // Takes the launchpad out of every map; the open one gives way to its
+  // neighbour. A launchpad already gone does nothing, so a delete made here
+  // and its launchpad.deleted event apply once.
+  async function forgetLaunchpad(id) {
+    const index = current.launchpads.findIndex((launchpad) => launchpad.ID === id);
+    if (index < 0) return;
+    update((state) => ({
+      ...state,
+      launchpads: state.launchpads.filter((launchpad) => launchpad.ID !== id),
+      ...mapPerLaunchpad(state, (map) => without(map, id)),
+      compare: state.compare?.launchpadId === id ? null : state.compare,
+      entrySelection:
+        state.entrySelection.launchpadId === id ? selecting.NO_ENTRY_SELECTION : state.entrySelection,
+    }));
+    if (current.selectedLaunchpadId !== id) return;
+    const neighbour =
+      current.launchpads[Math.min(index, current.launchpads.length - 1)];
+    await selectLaunchpad(neighbour?.ID ?? null);
+  }
+
+  // Adds a launchpad unless it is listed, as when its launchpad.created
+  // event arrived before Marasi answered the create.
+  function addLaunchpad(launchpad) {
+    update((state) =>
+      state.launchpads.some((item) => item.ID === launchpad.ID)
+        ? state
+        : {
+            ...state,
+            launchpads: [...state.launchpads, { EntryCount: 0, LastStatusCode: null, ...launchpad }],
+            entriesByLaunchpad: { ...state.entriesByLaunchpad, [launchpad.ID]: state.entriesByLaunchpad[launchpad.ID] ?? [] },
+          },
+    );
+  }
+
+  // Rereads the launchpad list's names and summaries, adding any launchpad
+  // not listed yet. Drafts, entries and the selection stay.
+  async function refreshSummaries() {
+    const version = projectStateVersion;
+    const launchpads = (await api.getLaunchpads()) || [];
+    if (version !== projectStateVersion) return;
+    update((state) => {
+      const listed = new Map(launchpads.map((launchpad) => [launchpad.ID, launchpad]));
+      const known = new Set(state.launchpads.map((launchpad) => launchpad.ID));
+      return {
+        ...state,
+        launchpads: [
+          ...state.launchpads.map((launchpad) =>
+            listed.has(launchpad.ID) ? { ...listed.get(launchpad.ID), NewestEntryID: launchpad.NewestEntryID } : launchpad,
+          ),
+          ...launchpads.filter((launchpad) => !known.has(launchpad.ID)),
+        ],
+      };
+    });
+  }
+
+  // Entries changed in Marasi: linked, unlinked or moved by any client, in
+  // `launchpadIds`, or anywhere when null (a bulk change names no
+  // launchpad). Loaded entry lists reload; the others' summaries are reread.
+  async function onEntriesChanged(launchpadIds = null) {
+    const ids = launchpadIds ?? current.launchpads.map((launchpad) => launchpad.ID);
+    const loaded = ids.filter((id) => current.entriesByLaunchpad[id] !== undefined);
+    const summaries = launchpadIds === null || loaded.length < ids.length;
+    await Promise.all([summaries ? refreshSummaries() : null, ...loaded.map((id) => loadEntries(id))]);
+  }
+
   async function updateLaunchpad(id, { name, description = "" }) {
     await api.updateLaunchpad(id, name, description);
     update((state) => ({
@@ -836,14 +901,7 @@ export function createLaunchpadStore(api) {
 
     createLaunchpad: async ({ name, description = "" }) => {
       const id = await api.createLaunchpad(name, description);
-      update((state) => ({
-        ...state,
-        launchpads: [
-          ...state.launchpads,
-          { ID: id, Name: name, Description: description, EntryCount: 0, LastStatusCode: null },
-        ],
-        entriesByLaunchpad: { ...state.entriesByLaunchpad, [id]: [] },
-      }));
+      addLaunchpad({ ID: id, Name: name, Description: description });
       await selectLaunchpad(id);
       return id;
     },
@@ -869,20 +927,19 @@ export function createLaunchpadStore(api) {
         if (pendingLaunchIDs(err)) await loadPendingLaunches();
         throw err;
       }
-      const index = current.launchpads.findIndex((launchpad) => launchpad.ID === id);
+      await forgetLaunchpad(id);
+    },
+
+    // Marasi's launchpad events, from any client; each applies once
+    // alongside this store's own change.
+    onLaunchpadCreated: addLaunchpad,
+    onLaunchpadUpdated: ({ ID, Name, Description }) =>
       update((state) => ({
         ...state,
-        launchpads: state.launchpads.filter((launchpad) => launchpad.ID !== id),
-        ...mapPerLaunchpad(state, (map) => without(map, id)),
-        compare: state.compare?.launchpadId === id ? null : state.compare,
-        entrySelection:
-          state.entrySelection.launchpadId === id ? selecting.NO_ENTRY_SELECTION : state.entrySelection,
-      }));
-      if (current.selectedLaunchpadId !== id) return;
-      const neighbour =
-        current.launchpads[Math.min(index, current.launchpads.length - 1)];
-      await selectLaunchpad(neighbour?.ID ?? null);
-    },
+        launchpads: updateSummary(state.launchpads, ID, { Name, Description }),
+      })),
+    onLaunchpadDeleted: forgetLaunchpad,
+    onEntriesChanged,
 
     onRequest: (request) => {
       update((state) => arriveRequest(state, request));
