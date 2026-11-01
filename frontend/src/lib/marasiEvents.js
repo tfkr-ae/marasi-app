@@ -32,11 +32,18 @@ import { scopeStore } from "../stores/scopeStore.js";
 import { reportTemplateStore } from "../stores/reportTemplateStore.js";
 import { highlightsStore } from "../stores/highlightsStore.js";
 
+// Logs a store's failed re-read of what an event changed: `logged(what)`
+// takes the store's promise, or its value when it read nothing.
+const logged = (what) => (reading) =>
+  Promise.resolve(reading).catch((err) => console.error(`${what} failed:`, err));
+const finding = logged("Reading a finding again");
+const testCase = logged("Reading a test case again");
+const followLaunchpads = logged("Reading launchpads");
+const followCheckpoint = logged("Reading Checkpoint items");
+
 const checkpointResolved = (event) => {
-  Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
-    console.error("Reading Checkpoint items failed:", err),
-  );
-  connectionStore.onResolved(event).catch((err) => console.error("Reading held WebSocket messages failed:", err));
+  followCheckpoint(checkpointStore.onResolved(event));
+  logged("Reading held WebSocket messages")(connectionStore.onResolved(event));
 };
 
 // A connection that opened or closed, for the WebSocket modal and its
@@ -47,15 +54,6 @@ const webSocketChanged = (event) => {
   ledgerStore.patchWebSocketMetadata(connection);
   return connection;
 };
-
-// Logs a failed reread after a launchpad event.
-const followLaunchpads = (reading) =>
-  reading.catch((err) => console.error("Reading launchpads failed:", err));
-
-// Logs a store's failed re-read of what an event changed.
-const logged = (what) => (promise) => promise.catch((err) => console.error(`Reading ${what} again failed:`, err));
-const finding = logged("a finding");
-const testCase = logged("a test case");
 
 // Findings and test cases, by any client: the record an event names is read
 // again, or leaves its list.
@@ -157,14 +155,14 @@ const handlers = {
   "job.progress": (job) => jobsStore.onJobProgress(job),
   "job.complete": (job) => {
     jobsStore.onJobComplete(job);
-    dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
+    logged("Counting the dashboard")(dashboardStore.onJobComplete(job));
   },
   // Checkpoint, HTTP and WebSocket items alike, by any client. An item
   // whose client left, or whose WebSocket connection closed, arrives as
   // checkpoint.dropped, reason abandoned. The WebSocket modal queues held
   // messages by connection.
   "checkpoint.held": (item) => {
-    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err));
+    followCheckpoint(checkpointStore.onHeld());
     connectionStore.onHeld(item);
   },
   "checkpoint.forwarded": (event) => checkpointResolved(event),
@@ -203,16 +201,16 @@ const handlers = {
   "project.upgrading": (event) => projectSwitch.onUpgrading(event),
   "project.waiting": (event) => projectSwitch.onWaiting(event),
   "project.opened": (event) =>
-    projectSwitch.onOpened(event).catch((err) => console.error("Loading the opened project failed:", err)),
+    logged("Loading the opened project")(projectSwitch.onOpened(event)),
   "project.opening_failed": (event) => projectSwitch.onOpeningFailed(event),
   "extension.enabled": (extension) => extensionsStore.onExtension(extension),
   "extension.updated": (extension) => {
     extensionsStore.onExtension(extension);
     // Compass's code holds the scope rules.
-    scopeStore.onExtension(extension).catch((err) => console.error("Reading the scope rules failed:", err));
+    logged("Reading the scope rules")(scopeStore.onExtension(extension));
   },
   "extension.settings.updated": (event) =>
-    extensionsStore.onSettingsUpdated(event).catch((err) => console.error("Reading extension settings failed:", err)),
+    logged("Reading extension settings")(extensionsStore.onSettingsUpdated(event)),
   "extension.gui.rendered": (event) => extensionsStore.onRendered(event),
   "extension.gui.updated": (event) => extensionsStore.onUpdated(event),
   "extension.log": (line) => extensionsStore.onLog(line),
