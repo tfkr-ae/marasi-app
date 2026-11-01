@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createExtensionsStore, extensionToast } from "./createExtensionsStore.js";
+import { createExtensionsStore, extensionToast, parseSettings } from "./createExtensionsStore.js";
 
 const workshop = { ID: "w-1", Name: "workshop", Enabled: true, Author: "TenSoon", Description: "Lua Workshop" };
 const compass = { ID: "c-1", Name: "compass", Enabled: true, Author: "Steris", Description: "Scope" };
@@ -148,4 +148,18 @@ test("clear forgets the settings read", async () => {
   await store.loadSettings("w-1");
   store.clear();
   assert.deepEqual(get(store.settings), {});
+});
+
+test("settings text that is a JSON object parses to the settings", () => {
+  assert.deepEqual(parseSettings('{"depth": 2, "hosts": ["a"]}'), { settings: { depth: 2, hosts: ["a"] } });
+});
+
+test("empty settings text is no settings", () => {
+  assert.deepEqual(parseSettings("  "), { settings: {} });
+});
+
+test("settings text that isn't a JSON object is refused", () => {
+  assert.deepEqual(parseSettings("[1]"), { error: "Settings must be a JSON object" });
+  assert.deepEqual(parseSettings("null"), { error: "Settings must be a JSON object" });
+  assert.equal(typeof parseSettings("{depth").error, "string");
 });

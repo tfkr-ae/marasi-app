@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, Puzzle, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		CreateWaypoint,
 		DeleteWaypoint,
@@ -34,6 +34,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
+	import ExtensionsSettings from "../../lib/components/ExtensionsSettings.svelte";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
 	import { setLightMode } from "../../lib/lightMode.js";
@@ -86,6 +87,7 @@
 		{ id: "upstream", name: "Upstream Proxy", hint: "Route traffic through a proxy", icon: Network },
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
+		{ id: "extensions", name: "Extensions", hint: "On or off, and their settings", icon: Puzzle },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
 		{ id: "updates", name: "Updates", hint: "Channel and checks", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
@@ -1054,6 +1056,8 @@
 						</div>
 					</div>
 				{/each}
+			{:else if section === "extensions"}
+				<ExtensionsSettings {row} {control} />
 			{:else if section === "maintenance"}
 				<h3 class="text-sm font-bold">Maintenance</h3>
 				<p class="mb-4 text-xs opacity-70">

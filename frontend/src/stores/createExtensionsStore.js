@@ -25,6 +25,24 @@ export function extensionToast(schema = {}) {
   return { message: schema.message, background: `variant-filled-${variant}` };
 }
 
+/**
+ * The settings typed in an extension's settings editor: {settings}, or
+ * {error} when the text isn't a JSON object, which Marasi stores settings as.
+ */
+export function parseSettings(text) {
+  if (!text.trim()) return { settings: {} };
+  let settings;
+  try {
+    settings = JSON.parse(text);
+  } catch (error) {
+    return { error: `Invalid JSON: ${error.message}` };
+  }
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    return { error: "Settings must be a JSON object" };
+  }
+  return { settings };
+}
+
 export function createExtensionsStore(api) {
   const list = writable([]);
   const ui = writable({});

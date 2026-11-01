@@ -9,6 +9,8 @@ import {
 } from "../lib/bindings/extensions.js";
 import { createExtensionsStore } from "./createExtensionsStore.js";
 
+export { parseSettings } from "./createExtensionsStore.js";
+
 export const extensionsStore = createExtensionsStore({
   list: () => GetExtensions(),
   setEnabled: (id, enabled) => setExtensionEnabled(id, enabled),
