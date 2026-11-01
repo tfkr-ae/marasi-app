@@ -50,8 +50,44 @@ const webSocketChanged = (event) => {
 const followLaunchpads = (reading) =>
   reading.catch((err) => console.error("Reading launchpads failed:", err));
 
+// Logs a store's failed re-read of what an event changed.
+const logged = (what) => (promise) => promise.catch((err) => console.error(`Reading ${what} again failed:`, err));
+const finding = logged("a finding");
+const testCase = logged("a test case");
+
+// Findings and test cases, by any client: the record an event names is read
+// again, or leaves its list.
+const recordHandlers = {
+  "finding.created": (event) => finding(findingStore.onChanged(event.id)),
+  "finding.updated": (event) => finding(findingStore.onChanged(event.id)),
+  "finding.linked": (event) => finding(findingStore.onChanged(event.finding_id)),
+  "finding.unlinked": (event) => finding(findingStore.onChanged(event.finding_id)),
+  "finding.deleted": (event) => findingStore.onDeleted(event.id),
+  "test-case.created": (event) => testCase(testCaseStore.onChanged(event.id)),
+  "test-case.updated": (event) => testCase(testCaseStore.onChanged(event.id)),
+  "test-case.linked": (event) => testCase(testCaseStore.onChanged(event.test_case_id)),
+  "test-case.unlinked": (event) => testCase(testCaseStore.onChanged(event.test_case_id)),
+  "test-case.deleted": (event) => {
+    testCaseStore.onDeleted(event.id);
+    findingStore.onTestCaseDeleted(event.id);
+  },
+  "artifact.created": (event) =>
+    event.finding_id
+      ? finding(findingStore.onChanged(event.finding_id))
+      : testCase(testCaseStore.onChanged(event.test_case_id)),
+  "artifact.deleted": (event) => {
+    findingStore.onArtifactDeleted(event.id);
+    testCaseStore.onArtifactDeleted(event.id);
+  },
+};
+
+// The bulk changes that link, unlink or delete pairs, whose traffic.changed
+// event names no record, so the lists they touch are read again.
+const relinkingChanges = new Set(["link", "unlink", "delete"]);
+
 // Each Marasi event's handler, by event name.
 const handlers = {
+  ...recordHandlers,
   "log.added": (log) => logStore.onLogAdded(log),
   // Captured traffic, in v1's request and response shapes.
   "traffic.request": (event) => {
@@ -70,10 +106,13 @@ const handlers = {
     armoryStore.onResponse(response);
     launchpadStore.onResponse(response);
   },
-  // A bulk change names no launchpad, so a link, unlink or delete rereads
-  // them all.
+  // A bulk change names no launchpad, finding or test case, so a link,
+  // unlink or delete rereads them all.
   "traffic.changed": ({ change }) => {
-    if (["link", "unlink", "delete"].includes(change)) followLaunchpads(launchpadStore.onEntriesChanged());
+    if (!relinkingChanges.has(change)) return;
+    followLaunchpads(launchpadStore.onEntriesChanged());
+    finding(findingStore.reload());
+    testCase(testCaseStore.reload());
   },
   // Launchpads and their entries, changed by any client.
   "launchpad.created": (event) => launchpadStore.onLaunchpadCreated(launchpadOf(event)),

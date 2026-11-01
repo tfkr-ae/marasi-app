@@ -1,4 +1,4 @@
-// The app's Logbook store, bound to the Wails backend. The logic lives in
+// The app's Logbook store, bound to the connected Marasi. The logic lives in
 // createLogbookStore.js, which tests load with a fake API.
 import {
   CreateDraftFinding,
@@ -40,8 +40,8 @@ export {
   testCaseCountsOf,
 } from "./createLogbookStore.js";
 
-// A File's bytes as the bindings take a Go []byte.
-const bytesOf = async (file) => Array.from(new Uint8Array(await file.arrayBuffer()));
+// A File's bytes, as the upload bindings take them.
+const bytesOf = async (file) => new Uint8Array(await file.arrayBuffer());
 const upload = (save) => async (id, file) => save(id, file.name, file.type || "application/octet-stream", file.size, await bytesOf(file));
 
 export const logbookStore = createLogbookStore({

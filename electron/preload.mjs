@@ -82,6 +82,9 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // Saves the instance's CA certificate `pem` through a save dialog; resolves
   // the path, or "" if cancelled.
   saveCertificate: (pem) => ipcRenderer.invoke("certificate:save", pem),
+  // Saves an artifact's `bytes` (a Uint8Array) through a save dialog,
+  // offering `filename`; resolves the path, or "" if cancelled.
+  saveArtifact: (filename, bytes) => ipcRenderer.invoke("artifact:save", filename, bytes),
   // The text of an upstream proxy CA file picked in an open dialog on this
   // machine; "" if cancelled.
   readCAFile: () => ipcRenderer.invoke("upstreamProxy:readCAFile"),

@@ -352,6 +352,23 @@ test("Save again after a failure replays only what is still unsaved", async () =
   assert.equal(api.calls[0][1], "new-f");
 });
 
+test("a new record links each pair its create left out, and a pair that fails to link is reported", async () => {
+  const api = fakeApi({ fail: "linkRequestToFinding" });
+  // The create linked r1, but not r2, which is gone from the project.
+  const create = api.createDraftFinding;
+  api.createDraftFinding = async (requestIds, testCaseId) => ({ ...(await create(requestIds, testCaseId)), Requests: ["r1"] });
+  const store = createLogbookStore(api);
+  store.startNew("finding", { requestIds: ["r1", "r2"] });
+  store.updateDraft({ Title: "XSS" });
+  const result = await store.save();
+
+  assert.equal(result.ok, false);
+  assert.match(String(result.error), /reporting_failed/);
+  assert.deepEqual(api.names(), ["createDraftFinding", "saveFinding", "linkRequestToFinding"]);
+  assert.deepEqual(api.calls[2], ["linkRequestToFinding", "new-f", "r2"]);
+  assert.deepEqual(changesOf(session(store)), ["+1 request"], "the record exists; only the link is left");
+});
+
 test("Save says when it made the record Done, and only then", async () => {
   const { store } = await loaded({ findings: [finding("f1", { TreatmentPlan: "" }), finding("f2")] });
   store.edit("finding", "f1");

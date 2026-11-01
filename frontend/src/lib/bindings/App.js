@@ -8,6 +8,7 @@ import { marasi, MarasiError } from "./marasi.js";
 import { pairRow, pairSummary, rawText, sitemapNodeCount } from "./traffic.js";
 import { launchOf, launchpadOf } from "./launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./armory.js";
+import { artifactMetadata, findingFields, findingRecord, testCaseFields, testCaseRecord } from "./records.js";
 import { heldMessage, webSocketConnection, webSocketMessage } from "./websocket.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
@@ -273,6 +274,69 @@ async function settleCheckpoints(ids, settle) {
   return result;
 }
 
+// Findings and test cases: their routes, how each reads as v1's record, how
+// v1's record saves as Marasi's fields, v1's draft, and the field a bulk
+// link names it in.
+const findings = {
+  path: "/finding",
+  record: findingRecord,
+  fields: findingFields,
+  draft: { title: "Draft Finding", severity: "High", writeup: "Writeup" },
+  linkField: "finding_id",
+};
+const testCases = {
+  path: "/test-case",
+  record: testCaseRecord,
+  fields: testCaseFields,
+  draft: { title: "Draft Test Case", description: "Test Case Description", category: "XSS", note: "Test Note" },
+  linkField: "test_case_id",
+};
+
+const recordPath = (kind, id) => `${kind.path}/${encodeURIComponent(id)}`;
+
+// One record in full, with its pairs and artifacts.
+const readRecord = async (kind, id) => kind.record(await marasi.get(recordPath(kind, id)));
+
+// Every record of `kind`, each read in full, in Marasi's order.
+async function listRecords(kind) {
+  const { items } = await marasi.get(kind.path);
+  return Promise.all((items ?? []).map((item) => readRecord(kind, item.id)));
+}
+
+// Saves every field of v1's `record`; its links and artifacts save apart.
+const saveRecord = (kind, record) => marasi.post(recordPath(kind, record.ID), kind.fields(record));
+
+// Creates v1's draft with `fields`, links `requests` to it in one call, and
+// reads it back. A link that fails leaves the draft with the pairs it has:
+// the Logbook links the rest one by one, and reports the one that fails.
+async function createDraft(kind, requests, fields = {}) {
+  const { id } = await marasi.post(kind.path, { ...kind.draft, ...fields });
+  if (requests?.length) {
+    await bulk("link", { ids: requests }, { [kind.linkField]: id }).catch((err) =>
+      console.error(`Linking pairs to ${kind.path}/${id} failed:`, err),
+    );
+  }
+  return readRecord(kind, id);
+}
+
+// Uploads a file read on this machine to the record, as v1's
+// SaveArtifactTo*: its bytes (a Uint8Array or v1's list of numbers) as the
+// body. Answers v1's ArtifactMetadata.
+async function uploadArtifact(kind, id, filename, mimeType, data) {
+  const path = `${recordPath(kind, id)}/artifact?${new URLSearchParams({ filename })}`;
+  const bytes = data instanceof Uint8Array ? data : Uint8Array.from(data ?? []);
+  return artifactMetadata(await marasi.sendBytes("POST", path, bytes, mimeType || "application/octet-stream"));
+}
+
+const artifactPath = (id) => `/artifact/${encodeURIComponent(id)}`;
+
+const deleteRecord = (kind, id) => marasi.delete(recordPath(kind, id));
+
+const linkPair = (kind, id, request) => marasi.post(`${recordPath(kind, id)}/traffic`, { id: request });
+
+const unlinkPair = (kind, id, request) =>
+  marasi.delete(`${recordPath(kind, id)}/traffic/${encodeURIComponent(request)}`);
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
@@ -361,8 +425,11 @@ export const CreateArmoryTemplateFromRequest = async (requestId) => {
     rawText(request.raw) ?? "",
   );
 };
-export const CreateDraftFinding = notPorted("CreateDraftFinding");
-export const CreateDraftTestCase = notPorted("CreateDraftTestCase");
+// A draft finding or test case with `requests` linked, as v1's
+// CreateDraft*.
+export const CreateDraftFinding = (requests, testCaseID) =>
+  createDraft(findings, requests, { test_case_id: testCaseID ?? null });
+export const CreateDraftTestCase = (requests) => createDraft(testCases, requests);
 // Creates a launchpad and resolves its id.
 export const CreateLaunchpadEntry = async (name, description) =>
   (await marasi.post("/launchpad", { name, description })).id;
@@ -374,19 +441,24 @@ export const DeleteArmoryRun = async (id) => {
 export const DeleteArmoryTemplate = async (id) => {
   await marasi.delete(`/armory/template/${encodeURIComponent(id)}`);
 };
-export const DeleteArtifact = notPorted("DeleteArtifact");
+export const DeleteArtifact = (id) => marasi.delete(artifactPath(id));
 // Drops the project's setting `key`; a missing key is not an error.
 export const DeleteClientSetting = (key) => marasi.delete(clientSetting(key));
-export const DeleteFinding = notPorted("DeleteFinding");
+export const DeleteFinding = (id) => deleteRecord(findings, id);
 // Marasi refuses with launch_pending while a launch from it is pending.
 export const DeleteLaunchpad = async (id) => {
   await marasi.delete(launchpadPath(id));
 };
-export const DeleteTestCase = notPorted("DeleteTestCase");
+export const DeleteTestCase = (id) => deleteRecord(testCases, id);
 // Deletes the pairs in `selection` with everything they own (marasi
 // docs/adr/2026-10-14-deleting-a-pair-deletes-everything-it-owns.md).
 export const DeleteTraffic = (selection) => bulk("delete", selection);
-export const DownloadArtifact = notPorted("DownloadArtifact");
+// Saves an artifact on this machine, through a save dialog. Resolves false
+// when the researcher cancels.
+export const DownloadArtifact = async (id) => {
+  const { Filename, Data } = await GetArtifact(id);
+  return Boolean(await bridge().saveArtifact(Filename, Data));
+};
 // Saves the instance's CA certificate on this machine, through a save
 // dialog. Resolves false when the researcher cancels.
 export const DownloadCert = async () => {
@@ -415,7 +487,19 @@ export const GetArmoryTemplates = async () => {
 };
 // The wordlists on the instance machine, by name.
 export const GetArmoryWordlists = async () => wordlistInfos(await marasi.get("/wordlist"));
-export const GetArtifact = notPorted("GetArtifact");
+// An artifact with its bytes, as v1's Artifact: Data is a Uint8Array.
+export const GetArtifact = async (id) => {
+  const [artifact, data] = await Promise.all([
+    marasi.get(artifactPath(id)),
+    marasi.readBytes(`${artifactPath(id)}/content`),
+  ]);
+  return {
+    ...artifactMetadata(artifact),
+    TestCaseID: artifact.test_case_id ?? null,
+    FindingID: artifact.finding_id ?? null,
+    Data: data,
+  };
+};
 // The project's setting `key`, { client, key, value, updated_at }, or null
 // when it has none.
 export const GetClientSetting = (key) => unlessNotFound(marasi.get(clientSetting(key)));
@@ -546,18 +630,19 @@ export const InjectWebSocketMessage = async (requestId, direction, opcode, paylo
   });
 };
 export const Launch = notPorted("Launch");
-export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
+export const LinkRequestToFinding = (id, request) => linkPair(findings, id, request);
 export const LinkRequestToLaunchpad = async (requestId, launchpadId) => {
   await marasi.post(`${launchpadPath(launchpadId)}/link`, { request_id: requestId });
 };
-export const LinkRequestToTestCase = notPorted("LinkRequestToTestCase");
+export const LinkRequestToTestCase = (id, request) => linkPair(testCases, id, request);
 // Links the pairs in `selection` to a launchpad, finding or test case;
 // resolves how many were newly linked.
 export const LinkTraffic = (selection, target) => bulk("link", selection, linkTarget(target));
 // The project's settings whose keys start with `prefix`, sorted by key.
 export const ListClientSettings = async (prefix = "") =>
   (await marasi.get(`${clientSettings}?prefix=${encodeURIComponent(prefix)}`)).items ?? [];
-export const ListFindings = notPorted("ListFindings");
+// The open project's findings and test cases, as v1's Finding and TestCase.
+export const ListFindings = () => listRecords(findings);
 // The open project's background jobs, in v1's JobState shape.
 export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
 // The most children Marasi lists in one sitemap page.
@@ -604,7 +689,7 @@ export const ListSitemapLevels = (request) =>
     };
   });
 export const ListTemplates = notPorted("ListTemplates");
-export const ListTestCases = notPorted("ListTestCases");
+export const ListTestCases = () => listRecords(testCases);
 // Moves `ids` out of launchpad `sourceId` to `targetId` (which may be the
 // source), before the entry `before`, or at the end for "". Resolves the
 // moved ids in their new entry order; Marasi moves all or none.
@@ -679,10 +764,13 @@ export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name
 // Drops the open project's own exclusion, so it follows the app default again.
 export const ResetContentTypeExclusion = () => unlessNotFound(marasi.delete(exclusionSetting));
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
-export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
-export const SaveArtifactToTestCase = notPorted("SaveArtifactToTestCase");
-export const SaveFinding = notPorted("SaveFinding");
-export const SaveTestCase = notPorted("SaveTestCase");
+export const SaveArtifactToFinding = (id, filename, mimeType, size, data) =>
+  uploadArtifact(findings, id, filename, mimeType, data);
+export const SaveArtifactToTestCase = (id, filename, mimeType, size, data) =>
+  uploadArtifact(testCases, id, filename, mimeType, data);
+// Saves a finding's or test case's fields, as v1 saved the record.
+export const SaveFinding = (finding) => saveRecord(findings, finding);
+export const SaveTestCase = (testCase) => saveRecord(testCases, testCase);
 // The instance's scratchpad's path, or null when it has none yet.
 export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
@@ -747,8 +835,8 @@ export const TestScopeMatch = async (url) => {
   };
 };
 export const ToggleWSIntercept = async () => SetWSIntercept(!(await GetWSInterceptFlag()));
-export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
-export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
+export const UnlinkRequestFromFinding = (id, request) => unlinkPair(findings, id, request);
+export const UnlinkRequestFromTestCase = (id, request) => unlinkPair(testCases, id, request);
 export const UnlinkTraffic = (selection, target) => bulk("unlink", selection, linkTarget(target));
 export const UpdateArmoryTemplate = async (id, name, description, rawTemplate) => {
   await marasi.post(`/armory/template/${encodeURIComponent(id)}`, { name, description, raw_template: rawTemplate });

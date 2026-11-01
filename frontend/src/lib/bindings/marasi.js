@@ -78,13 +78,9 @@ async function readRefusal(response) {
 export function createMarasiClient({ baseURL, fetch = globalThis.fetch.bind(globalThis) }) {
   const base = String(baseURL).replace(/\/+$/, "");
 
-  async function request(method, path, body) {
-    const init = { method, headers: {} };
-    if (body !== undefined) {
-      init.headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetch(base + path, init);
+  // The answer to `init` on `path`, once Marasi accepted it.
+  async function accepted(method, path, init = {}) {
+    const response = await fetch(base + path, { method, headers: {}, ...init });
     const what = `${method} ${path.split("?")[0]}`;
     if (!response.ok) {
       const refusal = await readRefusal(response);
@@ -93,13 +89,31 @@ export function createMarasiClient({ baseURL, fetch = globalThis.fetch.bind(glob
       }
       throw new MarasiError(what, response.status, refusal);
     }
+    return response;
+  }
+
+  const answerOf = async (response) => {
     const text = await response.text();
     return text ? JSON.parse(text) : null;
+  };
+
+  async function request(method, path, body) {
+    const init = body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+    return answerOf(await accepted(method, path, init));
   }
+
+  // Sends `bytes` as the body, as an artifact upload takes them.
+  const sendBytes = async (method, path, bytes, contentType) =>
+    answerOf(await accepted(method, path, { headers: { "Content-Type": contentType }, body: bytes }));
+
+  // A route's body as bytes, such as an artifact's content.
+  const readBytes = async (path) => new Uint8Array(await (await accepted("GET", path)).arrayBuffer());
 
   return {
     baseURL: base,
     request,
+    sendBytes,
+    readBytes,
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body),
     put: (path, body) => request("PUT", path, body),
@@ -139,4 +153,6 @@ export const marasi = {
   post: (path, body) => client().post(path, body),
   put: (path, body) => client().put(path, body),
   delete: (path, body) => client().delete(path, body),
+  sendBytes: (method, path, bytes, contentType) => client().sendBytes(method, path, bytes, contentType),
+  readBytes: (path) => client().readBytes(path),
 };

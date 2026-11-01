@@ -1,4 +1,5 @@
-import { writable } from 'svelte/store';
+import { createRecordListStore } from './createRecordListStore.js';
+import { readTestCase } from '../lib/bindings/records.js';
 import {
 	CreateDraftTestCase,
 	SaveArtifactToTestCase,
@@ -8,16 +9,12 @@ import { DeleteTestCase, LinkRequestToTestCase, ListTestCases, SaveTestCase, Unl
 import { findingStore } from './findingStore';
 
 function createTestCaseStore() {
-	const { subscribe, set, update } = writable([]);
+	// The list follows Marasi's test-case.* events (lib/marasiEvents.js).
+	const list = createRecordListStore({ list: ListTestCases, read: readTestCase });
+	const { update } = list;
 
 	return {
-		subscribe,
-		populate: async () => {
-			const cases = await ListTestCases();
-			set(cases || []);
-		},
-		// Reads the test cases again, after the event stream reopens.
-		reload: async () => set((await ListTestCases()) || []),
+		...list,
 		create: async (requestIds) => {
 			const newCase = await CreateDraftTestCase(requestIds);
 			update(cases => [newCase, ...cases]);
@@ -156,7 +153,6 @@ function createTestCaseStore() {
 				throw err;
 			}
 		},
-		clear: () => set([]),
 	};
 }
 
