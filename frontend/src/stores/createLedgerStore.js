@@ -412,6 +412,15 @@ function withoutBodies(pair) {
   return row;
 }
 
+// The results with `n` counted pairs moved to the exclusion's hidden count.
+function withHidden(r, n) {
+  return {
+    ...r,
+    count: r.count && { ...r.count, count: r.count.capped ? r.count.count : Math.max(0, r.count.count - n) },
+    hidden: r.hidden == null ? r.hidden : r.hidden + n,
+  };
+}
+
 // Applies `fn` to every row of `chunks`; returns `chunks` itself when `fn`
 // replaced none.
 function mapChunks(chunks, fn) {
@@ -567,8 +576,19 @@ export function createLedgerStore(api) {
   let firstPageGen = 0;
   // Bumped on a project switch, so the old project's exclusion is dropped.
   let projectVersion = 0;
-  // Settles once the project's exclusion has loaded; counts wait for it.
+  // Settles once the project's exclusion has loaded; traffic reads wait for it.
   let exclusionLoaded = Promise.resolve();
+
+  // Traffic reads name the exclusion the store holds, so the bindings don't
+  // read it again for each one.
+  async function underExclusion(options) {
+    if (options.IgnoreExclusion) return options;
+    await exclusionLoaded;
+    return { ...options, Exclusion: current.exclusion };
+  }
+  const queryTraffic = async (request) => api.queryTraffic(await underExclusion(request));
+  const countTraffic = async (query, after, options = {}) =>
+    api.countTraffic(query, after, await underExclusion(options));
 
   // Request and response events wait here until the next flush, so a burst
   // of traffic updates the table once.
@@ -625,9 +645,9 @@ export function createLedgerStore(api) {
     const asOf = results.shownAsOf ?? "";
     try {
       const [counted, all] = await Promise.all([
-        api.countTraffic(query.ranQuery, "", { AsOf: asOf }),
+        countTraffic(query.ranQuery, "", { AsOf: asOf }),
         exclusion.length
-          ? api.countTraffic(query.ranQuery, "", { AsOf: asOf, IgnoreExclusion: true })
+          ? countTraffic(query.ranQuery, "", { AsOf: asOf, IgnoreExclusion: true })
           : null,
       ]);
       if (gen !== generation || counted.QueryError) return;
@@ -660,7 +680,7 @@ export function createLedgerStore(api) {
     };
     let page;
     try {
-      page = await api.queryTraffic(pageRequest(text, current.sort));
+      page = await queryTraffic(pageRequest(text, current.sort));
     } catch (err) {
       console.error("Reading traffic failed:", err);
       if (gen === generation) {
@@ -736,7 +756,7 @@ export function createLedgerStore(api) {
     loadingForward = true;
     let page;
     try {
-      page = await api.queryTraffic(
+      page = await queryTraffic(
         pageRequest(current.query.ranQuery, current.sort, { Cursor: edge, AsOf: r.asOf ?? "" }),
       );
       if (page.QueryError) throw new Error(page.QueryError.Message);
@@ -774,7 +794,7 @@ export function createLedgerStore(api) {
     loadingBackward = true;
     let page;
     try {
-      page = await api.queryTraffic(
+      page = await queryTraffic(
         pageRequest(current.query.ranQuery, current.sort, {
           Cursor: edge,
           Direction: "backward",
@@ -840,7 +860,7 @@ export function createLedgerStore(api) {
     if (r.loading || reading) return;
     let counted;
     try {
-      counted = await api.countTraffic(current.query.ranQuery, r.shownAsOf ?? "");
+      counted = await countTraffic(current.query.ranQuery, r.shownAsOf ?? "");
     } catch (err) {
       console.error("Counting new matches failed:", err);
       return;
@@ -908,7 +928,7 @@ export function createLedgerStore(api) {
     reading = true;
     let page;
     try {
-      page = await api.queryTraffic(
+      page = await queryTraffic(
         pageRequest(current.query.ranQuery, current.sort, { Cursor: cursor, Limit: limit, AsOf: asOf }),
       );
       if (page.QueryError) throw new Error(page.QueryError.Message);
@@ -1026,14 +1046,18 @@ export function createLedgerStore(api) {
     updateResults((r) => {
       let chunks = r.chunks;
       if (responses.size > 0) {
+        let dropped = 0;
         chunks = mapChunks(chunks, (item) => {
           const res = responses.get(item.ID);
           if (!res) return item;
           const next = withoutBodies({ ...item, ...res });
           // The live view drops a pair once its response shows the
-          // exclusion hides it.
-          return live && hiddenBy(next.ContentType, exclusion) ? null : next;
+          // exclusion hides it, and Marasi counts it as hidden from then.
+          if (!live || !hiddenBy(next.ContentType, exclusion)) return next;
+          dropped++;
+          return null;
         });
+        if (dropped > 0) r = withHidden(r, dropped);
       }
       if (!showAtTop || requests.length === 0) return { ...r, chunks };
       // A pair joins once, however many times its request event came.
@@ -1297,7 +1321,7 @@ export function createLedgerStore(api) {
     let pair = shownPairAtNumber(number + Math.sign(step)) ?? null;
     if (!pair) {
       try {
-        const page = await api.queryTraffic({
+        const page = await queryTraffic({
           ...pageRequest(`number ${step > 0 ? ">" : "<"} ${number}`, current.sort, { Limit: 1 }),
           OrderBy: step > 0 ? "number" : "number desc",
           IgnoreExclusion: true,
@@ -1327,7 +1351,7 @@ export function createLedgerStore(api) {
     const r = current.results;
     let pair = null;
     try {
-      const page = await api.queryTraffic({
+      const page = await queryTraffic({
         ...pageRequest(current.query.ranQuery, current.sort, { AsOf: r.shownAsOf ?? r.asOf ?? "", Limit: 1 }),
         OrderBy: highest ? "number desc" : "number",
       });
@@ -1361,7 +1385,7 @@ export function createLedgerStore(api) {
     reading = true;
     let page;
     try {
-      page = await api.queryTraffic(
+      page = await queryTraffic(
         pageRequest(current.query.ranQuery, current.sort, {
           AsOf: r.shownAsOf ?? r.asOf ?? "",
           Direction: end ? "backward" : "forward",
@@ -1434,7 +1458,7 @@ export function createLedgerStore(api) {
   async function countSelection(query) {
     let counted;
     try {
-      counted = await api.countTraffic(query.text, "", { AsOf: query.asOf });
+      counted = await api.countTraffic(query.text, "", { AsOf: query.asOf, Exclusion: query.exclusion });
     } catch (err) {
       console.error("Counting the selection failed:", err);
       return;
@@ -1516,7 +1540,7 @@ export function createLedgerStore(api) {
   // The one pair of the current results that `condition` picks first under
   // `orderBy`, or null.
   async function onePair(condition, orderBy) {
-    const page = await api.queryTraffic({
+    const page = await queryTraffic({
       ...pageRequest(withinQuery(condition), current.sort, { AsOf: current.results.asOf ?? "", Limit: 1 }),
       OrderBy: orderBy,
     });
@@ -1526,7 +1550,7 @@ export function createLedgerStore(api) {
   // Pair `number` wherever it is: outside the query, the type exclusion and
   // the results' as_of. Null when the project has no such pair.
   async function anyPair(number) {
-    const page = await api.queryTraffic({
+    const page = await queryTraffic({
       ...pageRequest(`number = ${number}`, current.sort, { Limit: 1 }),
       OrderBy: "number",
       IgnoreExclusion: true,
@@ -1604,9 +1628,9 @@ export function createLedgerStore(api) {
     let after, before, above;
     try {
       [after, before, above] = await Promise.all([
-        api.queryTraffic(pageRequest(from, current.sort, { AsOf: asOf })),
-        api.queryTraffic(pageRequest(upTo, current.sort, { AsOf: asOf, Direction: "backward" })),
-        api.countTraffic(within(`number ${desc ? ">" : "<"} ${number}`), "", { AsOf: asOf }),
+        queryTraffic(pageRequest(from, current.sort, { AsOf: asOf })),
+        queryTraffic(pageRequest(upTo, current.sort, { AsOf: asOf, Direction: "backward" })),
+        countTraffic(within(`number ${desc ? ">" : "<"} ${number}`), "", { AsOf: asOf }),
       ]);
     } catch (err) {
       console.error("Reading traffic failed:", err);
@@ -1768,7 +1792,7 @@ export function createLedgerStore(api) {
       const counts = await Promise.all(
         queries.map(async (query) => {
           try {
-            const result = await api.countTraffic(query, "");
+            const result = await countTraffic(query, "");
             return result.QueryError ? null : { count: result.Count, capped: result.Capped };
           } catch (err) {
             console.error(`Counting matches for ${query} failed:`, err);
@@ -1949,7 +1973,7 @@ export function createLedgerStore(api) {
       return selection.ids.filter((id) => linked.has(String(id))).length;
     }
     const text = selection.query.trim() ? `(${selection.query}) AND finding:*` : "finding:*";
-    const counted = await api.countTraffic(text, "", { AsOf: selection.as_of });
+    const counted = await api.countTraffic(text, "", { AsOf: selection.as_of, Exclusion: selection.exclusion });
     return counted.QueryError ? 0 : counted.Count;
   }
 

@@ -135,6 +135,17 @@ export function createHighlightsStore(api) {
     if (fresh() && result?.Ran) onMigrated?.(result);
   }
 
+  // Reads the open project's labels into projectLabels, unless another
+  // project opened meanwhile.
+  async function readLabels(fresh) {
+    try {
+      const settings = await api.listClientSettings(LABEL_PREFIX);
+      if (fresh()) projectLabels.set(labelsFrom(settings));
+    } catch (error) {
+      console.error("Reading the project's highlight labels failed:", error);
+    }
+  }
+
   const store = {
     appHighlights,
     projectLabels,
@@ -158,12 +169,7 @@ export function createHighlightsStore(api) {
       projectLabels.set({});
       migrating.set(false);
       store.migration = Promise.resolve();
-      try {
-        const settings = await api.listClientSettings(LABEL_PREFIX);
-        if (fresh()) projectLabels.set(labelsFrom(settings));
-      } catch (error) {
-        console.error("Reading the project's highlight labels failed:", error);
-      }
+      await readLabels(fresh);
       let flag;
       try {
         flag = await api.getClientSetting(MIGRATED_KEY);
@@ -174,6 +180,12 @@ export function createHighlightsStore(api) {
       if (flag != null || !fresh()) return;
       migrating.set(true);
       store.migration = migrate(fresh, onMigrated);
+    },
+
+    /** Reads the open project's labels again, as after the event stream reopens. */
+    reload() {
+      const current = generation;
+      return readLabels(() => current === generation);
     },
   };
   return store;

@@ -53,11 +53,17 @@ function fakeMachine(running = {}, { portBusy = false } = {}) {
     }
     return { status: 404, body: null };
   };
-  return { run, call, commands, stopped, instances };
+  // A network address answers while its instance runs.
+  const fetch = async (url) => {
+    const running = [...instances].find(([, control]) => url.startsWith(`http://${control}/`));
+    if (!running) throw new TypeError("fetch failed");
+    return new Response(JSON.stringify({ status: "running", instance: running[0] }), { status: 200 });
+  };
+  return { run, call, fetch, commands, stopped, instances };
 }
 
 const local = (machine, marasiBin = () => bundled) =>
-  createLocalConnections({ configDir, run: machine.run, call: machine.call, marasiBin });
+  createLocalConnections({ configDir, run: machine.run, call: machine.call, fetch: machine.fetch, marasiBin });
 
 test("a first launch with no instance running starts default on the scratchpad and connects", async () => {
   const machine = fakeMachine();

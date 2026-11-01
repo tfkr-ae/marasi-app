@@ -5,6 +5,7 @@
 	// an install replaced its build.
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { instanceUpdate } from "../../stores/instanceUpdateStore.js";
+	import { primaryVariant } from "../launchpad/format.js";
 
 	const modalStore = getModalStore();
 
@@ -13,9 +14,7 @@
 	$: running = install.state === "running";
 	$: percent = running && install.total ? Math.floor((100 * install.received) / install.total) : null;
 
-	$: button =
-		"btn btn-sm rounded-none px-2 py-0.5 " +
-		($modeCurrent ? "variant-ghost-surface border-0 ring-0" : "variant-ghost-surface");
+	$: button = "btn btn-sm rounded-none px-2 py-0.5 " + primaryVariant($modeCurrent);
 
 	async function restart() {
 		const result = await instanceUpdate.restart();

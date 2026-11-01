@@ -1,5 +1,8 @@
-// The Electron main process. It draws the window and serves the static
-// frontend build; it has no Marasi domain logic (see
+// The Electron main process: the windows and their menus, the frontend
+// build on app://marasi/, each window's connection to a local or remote
+// instance (local.js, remotes.js), the app config, native dialogs and
+// files, local Chrome and the updater. It reaches Marasi only through the
+// control API and has no Marasi domain logic (see
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, safeStorage, session, shell, webContents } from "electron";
 import { execFile, spawn } from "node:child_process";
@@ -101,8 +104,9 @@ function serveFrontend() {
   });
 }
 
-// The app config v1 and v2 share, the keybinding profile files, and the
-// certificate and artifact files and clipboard, for every window.
+// The app config v1 and v2 share, the keybinding profile files, the
+// certificate, artifact, report and CA files, and the clipboard, for every
+// window.
 async function serveAppConfig() {
   const appConfig = createAppConfig({
     dir: configDir,
@@ -115,36 +119,25 @@ async function serveAppConfig() {
     const parent = BrowserWindow.getFocusedWindow();
     return parent ? open(parent, options) : open(options);
   };
+  const save = async (options) => chosen(await show(dialog.showSaveDialog, options));
+  const saving = { fs: nodeFS, home: app.getPath("home"), dialog: { save } };
   const keybindingFiles = createKeybindingFiles({
-    fs: nodeFS,
-    home: app.getPath("home"),
+    ...saving,
     dialog: {
-      save: async (options) => chosen(await show(dialog.showSaveDialog, options)),
+      save,
       open: async (options) => chosen(await show(dialog.showOpenDialog, { ...options, properties: ["openFile"] })),
     },
   });
   handleAppConfig({ handle }, { appConfig, keybindingFiles });
   // The instance's CA certificate, which the renderer read from its
   // instance, saved or copied on this machine.
-  const certificateFile = createCertificateFile({
-    fs: nodeFS,
-    home: app.getPath("home"),
-    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
-  });
+  const certificateFile = createCertificateFile(saving);
   handle("certificate:save", (event, pem) => certificateFile.save(pem));
   // A Logbook artifact, which the renderer read from its instance.
-  const artifactFile = createArtifactFile({
-    fs: nodeFS,
-    home: app.getPath("home"),
-    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
-  });
+  const artifactFile = createArtifactFile(saving);
   handle("artifact:save", (event, filename, bytes) => artifactFile.save(filename, bytes));
   // A Logbook report, which the renderer exported from its instance.
-  const reportFile = createReportFile({
-    fs: nodeFS,
-    home: app.getPath("home"),
-    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
-  });
+  const reportFile = createReportFile(saving);
   handle("report:save", (event, filename, bytes) => reportFile.save(filename, bytes));
   // An upstream proxy's CA, read from a file on this machine.
   const caFile = createCAFile({
@@ -155,6 +148,7 @@ async function serveAppConfig() {
   });
   handle("upstreamProxy:readCAFile", () => caFile.read());
   handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
+  handle("shell:openURL", (event, url) => openOutside(String(url)));
   handle("app:buildInfo", () => build);
   handle("app:userName", () => userInfo().username);
   // A config v2 can't prepare stays as it is; each read then reports why.
@@ -218,12 +212,7 @@ async function serveUpdates(appConfig) {
     emit: (name, payload) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send(updateEventChannel, name, payload);
     },
-    confirm: async (title, message) => {
-      const parent = BrowserWindow.getFocusedWindow();
-      const options = { type: "warning", message: title, detail: message, buttons: [title, "Cancel"], defaultId: 0, cancelId: 1 };
-      const { response } = await (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options));
-      return response === 0;
-    },
+    confirm: (title, message) => confirmWarning(title, title, message),
     // v1 warned here about unsaved Launchpad drafts and active Armory runs.
     // Drafts live in the windows; runs in the instances, whose ticket adds
     // its warning.
@@ -232,6 +221,11 @@ async function serveUpdates(appConfig) {
   });
   handleUpdates({ handle }, updater);
   updater.removeUpdateLeftovers();
+}
+
+// Opens an http(s) `url` in the default browser; any other is ignored.
+async function openOutside(url) {
+  if (/^https?:/.test(url)) await shell.openExternal(url);
 }
 
 // The window with webContents id `id`, or null once it has closed.
@@ -314,7 +308,7 @@ function createWindow({ blank = false, instance = null } = {}) {
   const home = devServerURL ?? `${origin}/`;
   // Links that leave the app open in the default browser.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url);
+    openOutside(url);
     return { action: "deny" };
   });
   window.webContents.on("will-navigate", (event, url) => {
@@ -580,14 +574,14 @@ let draftsAgreed = false;
 // memory. True with none.
 async function confirmLosingDrafts(action, count = windows.drafts(), parent = BrowserWindow.getFocusedWindow()) {
   if (!count) return true;
-  const options = {
-    type: "warning",
-    message: `${action}?`,
-    detail: `${count === 1 ? "1 launchpad draft has" : `${count} launchpad drafts have`} unsaved edits, which will be discarded.`,
-    buttons: [action, "Cancel"],
-    defaultId: 0,
-    cancelId: 1,
-  };
+  const drafts = count === 1 ? "1 launchpad draft has" : `${count} launchpad drafts have`;
+  return confirmWarning(`${action}?`, action, `${drafts} unsaved edits, which will be discarded.`, parent);
+}
+
+// A warning box headed `message` with `detail`, as a sheet on `parent` when
+// there is one; true when the researcher chose `action` over Cancel.
+async function confirmWarning(message, action, detail, parent = BrowserWindow.getFocusedWindow()) {
+  const options = { type: "warning", message, detail, buttons: [action, "Cancel"], defaultId: 0, cancelId: 1 };
   const { response } = await (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options));
   return response === 0;
 }

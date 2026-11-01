@@ -12,6 +12,11 @@ function splitListener(listener) {
   return { address: listener.slice(0, at).replace(/^\[(.*)\]$/, "$1"), port: listener.slice(at + 1) };
 }
 
+/** The listener's `{address, port}` as "127.0.0.1:8080" or "[::1]:8080". */
+export function listenerAddress({ address, port }) {
+  return `${address.includes(":") ? `[${address}]` : address}:${port}`;
+}
+
 /**
  * The listener store. `api` is `{status(), start(address, port),
  * update(address, port), stop()}`, each resolving Marasi's listener status,

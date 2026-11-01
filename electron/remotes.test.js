@@ -92,7 +92,7 @@ test("a saved remote reconnects after a restart without its token, which the fil
   await first.remotes.connect({ url: "http://10.1.26.31:7070/ignored/path", token, name: "Lab box", save: true });
   const file = fs.files.get(path);
   assert.doesNotMatch(file, new RegExp(token));
-  assert.match(file, /remote_connections:/);
+  assert.match(file, /^v2_remote_connections:/m);
 
   const restarted = setup({ fs });
   assert.deepEqual(await restarted.remotes.list(), [{ name: "Lab box", url: "http://10.1.26.31:7070" }]);

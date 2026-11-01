@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createListenerStore } from "./createListenerStore.js";
+import { createListenerStore, listenerAddress } from "./createListenerStore.js";
 
 const active = (proxy_listener) => ({ status: "active", proxy_listener });
 const inactive = { status: "inactive", proxy_listener: null };
@@ -96,4 +96,9 @@ test("a listener change made elsewhere shows up from its event", async () => {
   assert.deepEqual(get(store), { status: true, address: "10.0.0.2", port: "8888" });
   store.onListener({ status: "inactive", proxy_listener: "10.0.0.2:8888", reason: "failed" });
   assert.deepEqual(get(store), { status: false, address: "10.0.0.2", port: "8888" });
+});
+
+test("the listener's address reads as host:port, IPv6 in brackets", () => {
+  assert.equal(listenerAddress({ address: "127.0.0.1", port: "8081" }), "127.0.0.1:8081");
+  assert.equal(listenerAddress({ address: "::1", port: "52114" }), "[::1]:52114");
 });

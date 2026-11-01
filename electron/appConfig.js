@@ -68,7 +68,11 @@ const hiddenBuiltinQueriesKey = "hidden_builtin_queries";
 // v2's saved remote instances: {name, url, sealed_token}, where the token
 // is sealed by the OS through Electron's safeStorage (remotes.js). v1
 // doesn't read it. Not seeded: a missing key means none.
-const remoteConnectionsKey = "remote_connections";
+const remoteConnectionsKey = "v2_remote_connections";
+
+// The saved remotes' entries that are objects.
+const readRemoteConnections = (saved) =>
+  (Array.isArray(saved) ? saved : []).filter((entry) => entry && typeof entry === "object");
 
 const hexColor = /^#[0-9a-f]{6}$/;
 
@@ -368,7 +372,8 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
 
     /**
      * Rewrites the v2_* key `key` with `change(saved)` inside the write
-     * queue, as updateRemoteConnections does; returns what it wrote.
+     * queue, so two windows changing it at once both land; returns what it
+     * wrote.
      */
     updateV2Value(key, change) {
       return serialized(async () => {
@@ -381,20 +386,12 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
 
     /** The saved remote instances, as written; entries that aren't objects are skipped. */
     async remoteConnections() {
-      const saved = (await file.values())[remoteConnectionsKey];
-      return (Array.isArray(saved) ? saved : []).filter((entry) => entry && typeof entry === "object");
+      return readRemoteConnections((await file.values())[remoteConnectionsKey]);
     },
 
-    /**
-     * Rewrites the saved remotes with `change(saved)`, inside the write
-     * queue, so two windows saving at once both land.
-     */
+    /** Rewrites the saved remotes with `change(saved)`, as updateV2Value does. */
     updateRemoteConnections(change) {
-      return serialized(async () => {
-        const next = await change(await appConfig.remoteConnections());
-        await file.write({ [remoteConnectionsKey]: next });
-        return next;
-      });
+      return appConfig.updateV2Value(remoteConnectionsKey, (saved) => change(readRemoteConnections(saved)));
     },
 
     /** Flips the switch preference `name`; returns the preferences. */

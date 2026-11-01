@@ -93,6 +93,8 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // The text of an upstream proxy CA file picked in an open dialog on this
   // machine; "" if cancelled.
   readCAFile: () => ipcRenderer.invoke("upstreamProxy:readCAFile"),
+  // Opens an http(s) `url` in the default browser.
+  openURL: (url) => ipcRenderer.invoke("shell:openURL", url),
   // Puts `text` on this machine's clipboard.
   copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
   // This machine's Chrome, for a remote connection: its paths, profiles,

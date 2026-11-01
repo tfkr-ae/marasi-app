@@ -50,10 +50,11 @@ export {
 
 export const ledgerStore = createLedgerStore({
   // A page of the live view or of a query's results:
-  // { Query, OrderBy, Cursor, Direction, AsOf, Limit, IgnoreExclusion }.
+  // { Query, OrderBy, Cursor, Direction, AsOf, Limit, Exclusion, IgnoreExclusion }.
   queryTraffic: (request) => QueryTraffic(request),
   // after: "" counts every match, else only pairs captured after that id.
-  // options: { AsOf, IgnoreExclusion }; AsOf counts only pairs up to it.
+  // options: { AsOf, Exclusion, IgnoreExclusion }; AsOf counts only pairs up
+  // to it.
   countTraffic: (query, after, options = {}) => CountTraffic(query, after, options),
   getExclusion: () => GetContentTypeExclusion(),
   setExclusion: (types) => SetContentTypeExclusion(types),

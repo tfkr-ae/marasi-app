@@ -1,8 +1,7 @@
-// The app's Go side puts a code in the text of an error Marasi refused, since
-// the text is all Wails passes on: "<what>: <code> (<id>, <id>): <cause>"
-// when the refusal names ids (launch_pending, selection_incomplete), and
-// "<what>: <code>: <cause>" when it does not (launchpad_move.go,
-// traffic_bulk.go, and app.go's project_locked).
+// A refusal's code is in its error's text (MarasiError, bindings/marasi.js),
+// as v1's errors carried it: "<what>: <code> (<id>, <id>): <cause>" when the
+// refusal names ids (launch_pending, selection_incomplete), and
+// "<what>: <code>: <cause>" when it does not.
 
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

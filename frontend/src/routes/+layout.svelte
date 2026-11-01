@@ -339,20 +339,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			EventsOn("response", (newResponse) => {
-				if (
-					$drawerStore.id ===
-						"request-response" &&
-					$drawerStore.meta?.request?.ID ===
-						newResponse.ID
-				) {
-					drawerStore.update((s) => {
-						s.meta.incomingResponse =
-							newResponse;
-						return s;
-					});
-				}
-			});
 			// Marasi dropped a held item because its client left
 			// (checkpoint.dropped, reason abandoned; see marasiEvents.js).
 			// The toast shows on any page.
@@ -382,8 +368,6 @@
 			stopReportingDrafts();
 			stopDraftNotices();
 			removeMenuShortcuts();
-			EventsOff("request");
-			EventsOff("response");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
 			EventsOff("update-progress");

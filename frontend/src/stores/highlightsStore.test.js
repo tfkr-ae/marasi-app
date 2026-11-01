@@ -218,3 +218,18 @@ test("a migration that finishes after another project opened doesn't refresh it"
   assert.deepEqual(migrated, []);
   assert.equal(get(store.migrating), false);
 });
+
+test("reload reads the project's labels again, as after the event stream reopens, without migrating", async () => {
+  const api = fakeApi({ settings: { "ledger.highlight.3": "IDOR candidate", "ledger.highlight_migrated": true } });
+  const store = createHighlightsStore(api);
+  await store.readApp();
+  await store.openProject();
+  // Another client renames while the stream is closed.
+  api.settings["ledger.highlight.3"] = "Confirmed IDOR";
+  api.settings["ledger.highlight.5"] = "Auth bypass";
+
+  await store.reload();
+
+  assert.deepEqual(labels(store).slice(2, 5), ["Confirmed IDOR (project)", "Green", "Auth bypass (project)"]);
+  assert.ok(!api.calls.some((c) => c[0] === "migrateOldHighlights"));
+});

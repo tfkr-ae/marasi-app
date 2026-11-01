@@ -1,7 +1,7 @@
 // Each window's connection to a local service instance, and the instances
 // the app started. Marasi runs through `run(file, args)`, which resolves to
-// the command's {stdout} (execFile in main.js), and the sockets through
-// `call` (socket.js), so tests pass fakes for both.
+// the command's {stdout} (execFile in main.js), the sockets through `call`
+// (socket.js) and network addresses through `fetch`, so tests pass fakes.
 import { connectLocal, readToken, stopLocal } from "./instances.js";
 
 /** The default instance, which startup connects to (see GLOSSARY.md). */
@@ -23,7 +23,7 @@ function startRefusal(err) {
  * `marasiBin()` names the Marasi that Start runs: the one the researcher
  * chose, or the bundled one. Windows are keyed by their webContents id.
  */
-export function createLocalConnections({ configDir, run, call, marasiBin }) {
+export function createLocalConnections({ configDir, run, call, marasiBin, fetch = globalThis.fetch }) {
   // Each window's {instance, origin, token, loopbackTurnedOn}, plus
   // `remote` for a remote one.
   const connections = new Map();
@@ -107,11 +107,14 @@ export function createLocalConnections({ configDir, run, call, marasiBin }) {
     if (instance) wanted.set(id, instance);
   }
 
-  /** Stops the instances the app started; resolves to their names. */
+  /**
+   * Stops the instances the app started; resolves to their names once
+   * each has released its locks.
+   */
   async function quit() {
     const names = [...started];
     started.clear();
-    await Promise.all(names.map((instance) => stopLocal({ configDir, instance, call }).catch(() => {})));
+    await Promise.all(names.map((instance) => stopLocal({ configDir, instance, call, fetch }).catch(() => {})));
     return names;
   }
 
