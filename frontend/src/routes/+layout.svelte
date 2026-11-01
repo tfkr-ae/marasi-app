@@ -56,7 +56,6 @@
 		openConnectedProject,
 		retryOpen,
 	} from "../lib/globalActions.js";
-	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { armoryStore } from "../stores/armoryStore";
 	import {
@@ -350,26 +349,6 @@
 					});
 				}
 			});
-			EventsOn("ws-message", (msg) =>
-				connectionStore.upsertMessage(msg),
-			);
-			EventsOn("ws-intercepted", (msg) =>
-				connectionStore.upsertInterception(msg),
-			);
-			EventsOn("ws-open", (conn) => {
-				connectionStore.upsertConnection(conn);
-				ledgerStore.patchWebSocketMetadata(conn);
-			});
-			EventsOn("ws-close", (conn) => {
-				connectionStore.upsertConnection(conn);
-				connectionStore.clearInterceptions(
-					conn.RequestID,
-				);
-				ledgerStore.patchWebSocketMetadata(conn);
-			});
-			EventsOn("ws-progress", (progress) =>
-				connectionStore.upsertProgress(progress),
-			);
 			// An upgrade whose handshake failed or was dropped opens no
 			// connection, so only its Ledger row changes.
 			EventsOn("ws-state", ({ RequestID, State }) =>
@@ -467,11 +446,6 @@
 			removeMenuShortcuts();
 			EventsOff("request");
 			EventsOff("response");
-			EventsOff("ws-message");
-			EventsOff("ws-intercepted");
-			EventsOff("ws-open");
-			EventsOff("ws-close");
-			EventsOff("ws-progress");
 			EventsOff("ws-state");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
