@@ -42,6 +42,7 @@ export const browserBridge = {
   runsBundled: async () => false,
   chooseMarasi: outsideElectron,
   saveCertificate: outsideElectron,
+  saveArtifact: outsideElectron,
   copyText: (text) => navigator.clipboard.writeText(text),
   // A plain browser tab is the only window, so there is no other to list.
   newWindow: outsideElectron,

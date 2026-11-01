@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
 import { createCertificateFile } from "./certificateFile.js";
+import { createArtifactFile } from "./artifactFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
@@ -97,7 +98,7 @@ function serveFrontend() {
 }
 
 // The app config v1 and v2 share, the keybinding profile files, and the
-// certificate file and clipboard, for every window.
+// certificate and artifact files and clipboard, for every window.
 async function serveAppConfig() {
   const appConfig = createAppConfig({
     dir: configDir,
@@ -127,6 +128,13 @@ async function serveAppConfig() {
     dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
   });
   handle("certificate:save", (event, pem) => certificateFile.save(pem));
+  // A Logbook artifact, which the renderer read from its instance.
+  const artifactFile = createArtifactFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("artifact:save", (event, filename, bytes) => artifactFile.save(filename, bytes));
   handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
   handle("app:buildInfo", () => build);
   handle("app:userName", () => userInfo().username);
