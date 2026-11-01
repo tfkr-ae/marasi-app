@@ -180,10 +180,12 @@ jobs:
           if [ "$total" -gt "$limit" ]; then
             subjects=$(printf '%s\n- …and %d more' "$subjects" "$((total - limit))")
           fi
+          # The system requirements follow the subjects.
+          requirements=$(cat .github/release-requirements.txt)
           if [ -n "$subjects" ]; then
-            notes=$(printf '%s\n\nRef: %s\nCommit: %s\nMarasi: %s\n' "$subjects" "$REF" "$SHA" "$MARASI")
+            notes=$(printf '%s\n\n%s\n\nRef: %s\nCommit: %s\nMarasi: %s\n' "$subjects" "$requirements" "$REF" "$SHA" "$MARASI")
           else
-            notes=$(printf 'Ref: %s\nCommit: %s\nMarasi: %s\n' "$REF" "$SHA" "$MARASI")
+            notes=$(printf '%s\n\nRef: %s\nCommit: %s\nMarasi: %s\n' "$requirements" "$REF" "$SHA" "$MARASI")
           fi
           if gh release view nightly >/dev/null 2>&1; then
             gh release delete nightly --yes
