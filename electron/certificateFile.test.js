@@ -1,13 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createCertificateFile } from "./certificateFile.js";
+import { certificateFileFilters, createCertificateFile } from "./certificateFile.js";
 
 // A fake fs that records writes, and a save dialog that answers `chosen`.
 function setup(chosen, env = {}) {
   const writes = [];
   const asked = [];
   const certificateFile = createCertificateFile({
-    fs: { writeFile: async (path, contents, options) => writes.push({ path, contents, options }) },
+    fs: {
+      writeFile: async (path, bytes, options) => writes.push({ path, contents: new TextDecoder().decode(bytes), options }),
+    },
     dialog: { save: async (options) => (asked.push(options), chosen) },
     env,
     home: "/Users/r",
@@ -20,6 +22,7 @@ test("save writes the certificate where the researcher chose, as v1 did", async 
   assert.equal(await certificateFile.save("PEM"), "/Users/r/Downloads/marasi-proxy.crt");
   assert.equal(asked[0].title, "Save Proxy Certificate");
   assert.equal(asked[0].defaultPath, "/Users/r/Downloads/marasi-proxy.crt");
+  assert.deepEqual(asked[0].filters, certificateFileFilters);
   assert.deepEqual(writes, [{ path: "/Users/r/Downloads/marasi-proxy.crt", contents: "PEM", options: { mode: 0o600 } }]);
 });
 
@@ -29,11 +32,11 @@ test("a cancelled save writes nothing", async () => {
   assert.deepEqual(writes, []);
 });
 
-test("MARASI_CERTIFICATE_FILE saves without a dialog, for headless verification", async () => {
-  const { certificateFile, writes, asked } = setup(null, { MARASI_CERTIFICATE_FILE: "/tmp/cert.crt" });
-  assert.equal(await certificateFile.save("PEM"), "/tmp/cert.crt");
+test("MARASI_CERTIFICATE_DIR saves there without a dialog, for headless verification", async () => {
+  const { certificateFile, writes, asked } = setup(null, { MARASI_CERTIFICATE_DIR: "/tmp/certs" });
+  assert.equal(await certificateFile.save("PEM"), "/tmp/certs/marasi-proxy.crt");
   assert.deepEqual(asked, []);
-  assert.equal(writes[0].path, "/tmp/cert.crt");
+  assert.equal(writes[0].path, "/tmp/certs/marasi-proxy.crt");
 });
 
 test("save refuses anything that isn't a certificate's text", async () => {
