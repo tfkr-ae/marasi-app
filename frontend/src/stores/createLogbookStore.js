@@ -189,13 +189,15 @@ const nonEmpty =(groups) => groups.filter((group) => group.items.length);
 // or "none".
 function grouping(items, by) {
   if (by === "severity")
-    return nonEmpty(
-      SEVERITIES.map((severity) => ({
+    return nonEmpty([
+      ...SEVERITIES.map((severity) => ({
         key: severity,
         title: severity,
         items: items.filter((f) => f.Severity === severity),
       })),
-    );
+      // Marasi takes a finding with no severity, which another client may save.
+      { key: "none", title: "No severity", items: items.filter((f) => !SEVERITIES.includes(f.Severity)) },
+    ]);
   if (by === "category")
     return sortedSet(items.map(categoryOf)).map((category) => ({
       key: category,
