@@ -47,7 +47,7 @@ const handlers = {
     ledgerStore.onRequest(request);
     sitemapStore.onRequest(request);
     recentTraffic.onRequest(request);
-    launchpadStore.onRequest(request);
+    followLaunchpads(launchpadStore.onRequest(request));
     armoryStore.onRequest(request);
   },
   "traffic.response": (event) => {
@@ -56,7 +56,7 @@ const handlers = {
     sitemapStore.onResponse(response);
     recentTraffic.onResponse(response);
     armoryStore.onResponse(response);
-    launchpadStore.onResponse(response);
+    followLaunchpads(launchpadStore.onResponse(response));
   },
   // A bulk change names no launchpad, so a link, unlink or delete rereads
   // them all.

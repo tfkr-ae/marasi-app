@@ -372,6 +372,9 @@ export function createLaunchpadStore(api) {
   // Launches from this store whose entry has not arrived yet, by launch id:
   // { launchpadId, raw }. Their entry is selected when it arrives.
   const awaitingEntry = new Map();
+  // The drafts this store launched, by launch id, until their pair's bytes
+  // are read: a draft still holding one then reseeds from the request as sent.
+  const launchedRaws = new Map();
   // Launchpads this store is deleting, whose launchpad.deleted is its own.
   const deleting = new Set();
   let current = initialState();
@@ -462,6 +465,32 @@ export function createLaunchpadStore(api) {
     const sent = sentRaw(launchId, details);
     if (!awaitingEntry.delete(launchId)) return;
     update((state) => selectLaunched(state, launchpadId, launchId, sent, raw));
+  }
+
+  // Marasi's traffic events carry no bytes, so a launched pair's request and
+  // response are read from the stored pair as each arrives. A draft still as
+  // launched then holds the request as sent, as in v1, which is clean.
+  async function readLaunchedDetails(id) {
+    const launchpadId = launchpadOfLaunch(current, id);
+    if (!launchpadId || !current.detailsById[id]) return;
+    const version = projectStateVersion;
+    const row = await api.getRawDetails(id).catch(() => null);
+    if (version !== projectStateVersion || !row?.Request) return;
+    const launchedRaw = launchedRaws.get(id);
+    launchedRaws.delete(id);
+    update((state) => {
+      const known = state.detailsById[id];
+      const draft = state.draftsByLaunchpad[launchpadId];
+      const follows = draft?.seededFrom === id && draft.raw === (known?.Request?.Raw ?? launchedRaw);
+      return {
+        ...state,
+        // An unanswered pair reads with an empty response: none yet.
+        detailsById: { ...state.detailsById, [id]: { ...known, ...row, Response: row.Response?.Raw ? row.Response : known?.Response ?? null } },
+        draftsByLaunchpad: follows
+          ? { ...state.draftsByLaunchpad, [launchpadId]: { ...draft, raw: row.Request.Raw } }
+          : state.draftsByLaunchpad,
+      };
+    });
   }
 
   // The request an entry sent, from its details `row`. A launch from this
@@ -832,6 +861,7 @@ export function createLaunchpadStore(api) {
 
   function reset(project = null, keptDrafts = {}) {
     awaitingEntry.clear();
+    launchedRaws.clear();
     clearTimeout(searchTimer);
     searchSeq += 1;
     set(initialState(++projectStateVersion, project, keptDrafts));
@@ -953,6 +983,7 @@ export function createLaunchpadStore(api) {
         recordLaunch(state, { ID: id, LaunchpadID: launchpadId, Status: "pending" }),
       );
       awaitingEntry.set(id, { launchpadId, raw: draft.raw });
+      launchedRaws.set(id, draft.raw);
       await selectArrivedLaunch(id);
       return id;
     },
@@ -1027,9 +1058,12 @@ export function createLaunchpadStore(api) {
 
     onRequest: (request) => {
       update((state) => arriveRequest(state, request));
-      selectArrivedLaunch(request?.ID);
+      return Promise.all([selectArrivedLaunch(request?.ID), readLaunchedDetails(request?.ID)]);
     },
-    onResponse: (response) => update((state) => arriveResponse(state, response)),
+    onResponse: (response) => {
+      update((state) => arriveResponse(state, response));
+      return readLaunchedDetails(response?.ID);
+    },
 
     // Compare starts from an entry of the open launchpad as A. `picking`
     // names the side the next entry click fills.
