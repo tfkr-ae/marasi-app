@@ -41,7 +41,7 @@
 		StartBrowser,
 		ToggleFlag,
 		ToggleIntercept,
-	} from "../../wailsjs/go/main/App";
+	} from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { updatePanelModal } from "../../updates.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {

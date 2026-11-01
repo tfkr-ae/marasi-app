@@ -19,7 +19,7 @@
 		GetBuildInfo,
 		GetUpdateSettings,
 		SetAutomaticUpdateChecks,
-	} from "../../lib/wailsjs/go/main/App";
+	} from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import {
 		keybindingState,
 		lineWrap,

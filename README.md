@@ -29,7 +29,7 @@ Marasi (مراسي) is Arabic for dockyards — places where ships are received,
 ## Core Components
 
 ### Desktop Application
-- Built with [Wails v2](https://wails.io) for cross-platform desktop functionality
+- Built with [Wails v3](https://v3.wails.io) for cross-platform desktop functionality
 - Svelte frontend with modern UI components
 - Real-time event communication between frontend and backend
 - Project file management with .marasi format
@@ -60,26 +60,25 @@ SQLite-based application file format stores:
 Requirements:
 - Go
 - Node.js
-- Wails v2
-
+- On Linux, GTK 4 and WebKitGTK 6.0 (`libgtk-4-dev libwebkitgtk-6.0-dev` on Debian and Ubuntu)
 
 ```bash
-# Install Wails
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
 # Clone the repository
 git clone https://github.com/tfkr-ae/marasi-app
 cd marasi-app
 
-# Build the application
-wails build
+# Install the frontend dependencies, the wails3 CLI and the bindings
+scripts/bootstrap.sh
+
+# Build the application into bin/ (on macOS, `wails3 package` builds bin/marasi-app.app)
+wails3 build
 ```
 
 ## Development
 
 ```bash
 # Run in development mode
-wails dev
+wails3 dev
 ```
 
 ## Usage

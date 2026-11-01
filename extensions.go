@@ -69,7 +69,7 @@ func registerGUI(ext *extensions.Runtime, emit emitFunc) error {
 // attachExtensionHooks gives an extension the app's GUI library and live log
 // events. The project lifecycle applies it to every extension it loads, before
 // the extension's code runs. The hooks read a.emitEvent when they fire, so they
-// reach the frontend once startup has set a.ctx.
+// reach the frontend once main has set a.wails.
 func (a *App) attachExtensionHooks(ext *extensions.Runtime) error {
 	emit := func(name string, data ...any) { a.emitEvent(name, data...) }
 	ext.OnLog = extensionLogHandler(ext.Data.Name, emit)

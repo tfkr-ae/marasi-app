@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { GetExtensionUI } from "../wailsjs/go/main/App";
+  import { GetExtensionUI } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
   import { on } from "../runtime.js";
   import { extensionElements } from "../../stores";
   import { recentTraffic } from "../../stores/recentTrafficStore";

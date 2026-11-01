@@ -1,7 +1,10 @@
-build/bin
+bin
+.task
 node_modules
 frontend/build
-frontend/src/lib/wailsjs/
+frontend/src/lib/bindings/
+build/linux/marasi-app.desktop
+*.syso
 .DS_Store
 .artifacts
 .scratch

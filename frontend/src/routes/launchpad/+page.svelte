@@ -45,7 +45,7 @@
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
     import { menuAction } from "../../lib/ledger/rowMenu.js";
-    import { GetMetadata, GetNote } from "../../lib/wailsjs/go/main/App";
+    import { GetMetadata, GetNote } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { listener } from "../../stores";
     import { findingStore } from "../../stores/findingStore";
     import { testCaseStore } from "../../stores/testCaseStore";

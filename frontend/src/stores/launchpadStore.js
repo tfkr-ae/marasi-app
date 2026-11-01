@@ -16,7 +16,7 @@ import {
   SetUnsavedDraftCount,
   UnlinkTraffic,
   UpdateLaunchpadEntry,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { createLaunchpadStore } from "./createLaunchpadStore.js";
 import { reportUnsavedDraftCount } from "./draftGuards.js";
 import { relinked } from "./relinked.js";
