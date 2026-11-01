@@ -13,7 +13,7 @@
 	import { getModalStore, getToastStore, modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
 	import { AlertTriangle, Check, Download, ExternalLink, RotateCw, X } from "lucide-svelte";
 	import { goto } from "$app/navigation";
-	import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
+	import { openURL } from "../runtime.js";
 	import {
 		cancelUpdateDownload,
 		dismissUpdate,
@@ -171,7 +171,7 @@
 							type="button"
 							class="anchor inline-flex items-center gap-1"
 							class:mt-3={notes}
-							on:click={() => BrowserOpenURL(update.CompareURL)}
+							on:click={() => openURL(update.CompareURL)}
 						>
 							<span>Changes since your build</span>
 							<ExternalLink size={14} />
@@ -218,7 +218,7 @@
 						<button
 							type="button"
 							class="btn btn-sm {neutral}"
-							on:click={() => BrowserOpenURL(update.ReleasePage)}
+							on:click={() => openURL(update.ReleasePage)}
 						>
 							<ExternalLink size={14} />
 							<span>Release page</span>
