@@ -168,14 +168,14 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetLaunchpads` | binding | COVERED | `GET /launchpad` | 19 | [ ] |
-| `CreateLaunchpadEntry` | binding | COVERED | `POST /launchpad {name, description}`, `launchpad.created` | 19 | [ ] |
-| `UpdateLaunchpadEntry` | binding | COVERED | `POST /launchpad/{id} {name, description}`, `launchpad.updated` | 19 | [ ] |
-| `DeleteLaunchpad` | binding | COVERED | `DELETE /launchpad/{id}`, `launchpad.deleted` (`409 launch_pending`) | 19 | [ ] |
-| `GetLaunchpadRequests` | binding | COVERED | `GET /launchpad/{id}` | 19 | [ ] |
-| `LinkRequestToLaunchpad` | binding | COVERED | `POST /launchpad/{id}/link {request_id}`. v1 bound it but the frontend never called it. | 19 | [ ] |
-| `MoveLaunchpadEntries` | binding | COVERED | `POST /launchpad/{id}/move {request_ids, target_launchpad_id, before_request_id}` | 19 | [ ] |
-| `SearchLaunchpadEntries` | binding | COVERED | C: `GET /launchpad/{id}?q=` for each launchpad | 19 | [ ] |
+| `GetLaunchpads` | binding | COVERED | `GET /launchpad` | 19 | [x] |
+| `CreateLaunchpadEntry` | binding | COVERED | `POST /launchpad {name, description}`, `launchpad.created` | 19 | [x] |
+| `UpdateLaunchpadEntry` | binding | COVERED | `POST /launchpad/{id} {name, description}`, `launchpad.updated` | 19 | [x] |
+| `DeleteLaunchpad` | binding | COVERED | `DELETE /launchpad/{id}`, `launchpad.deleted` (`409 launch_pending`) | 19 | [x] |
+| `GetLaunchpadRequests` | binding | COVERED | `GET /launchpad/{id}` | 19 | [x] |
+| `LinkRequestToLaunchpad` | binding | COVERED | `POST /launchpad/{id}/link {request_id}`. v1 bound it but the frontend never called it; v2's is proven by its binding test. | 19 | [x] |
+| `MoveLaunchpadEntries` | binding | COVERED | `POST /launchpad/{id}/move {request_ids, target_launchpad_id, before_request_id}`, `launchpad.entries_moved` | 19 | [x] |
+| `SearchLaunchpadEntries` | binding | COVERED | C: `GET /traffic?q=launchpad:* AND (…)&limit=1`, then when it matches `GET /launchpad/{id}?q=` for each launchpad | 19 | [x] |
 | `Launch` | binding | COVERED | `POST /launchpad/{id}/launch {raw, scheme}` | 20 | [ ] |
 | `PendingLaunches` | binding | COVERED | `GET /launch` | 20 | [ ] |
 | `GetLaunch` | binding | COVERED | `GET /launch/{id}` | 20 | [ ] |

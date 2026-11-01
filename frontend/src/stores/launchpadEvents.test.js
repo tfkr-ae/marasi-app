@@ -1,0 +1,151 @@
+// The Launchpad follows Marasi's launchpad and traffic events, so changes
+// made by another client (the CLI, an agent) show up live, and its own
+// changes are not applied twice when their event arrives too.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { get } from "svelte/store";
+import { createLaunchpadStore } from "./createLaunchpadStore.js";
+
+// An in-memory Marasi: launchpads with entry lists, which tests change
+// behind the store's back as another client would.
+function instance() {
+  const state = {
+    launchpads: [
+      { ID: "lp1", Name: "Login", Description: "auth flow" },
+      { ID: "lp2", Name: "Search", Description: "" },
+    ],
+    entries: { lp1: ["a", "b"], lp2: ["c"] },
+  };
+  const entryRow = (id) => ({ ID: id, Number: id.charCodeAt(0), StatusCode: 200, Method: "GET", Path: `/${id}` });
+  const reads = [];
+  const api = {
+    state,
+    reads,
+    getLaunchpads: async () => {
+      reads.push("launchpads");
+      return state.launchpads.map((launchpad) => ({
+        ...launchpad,
+        EntryCount: (state.entries[launchpad.ID] ?? []).length,
+        LastStatusCode: (state.entries[launchpad.ID] ?? []).length ? 200 : null,
+      }));
+    },
+    getEntries: async (id) => {
+      reads.push(id);
+      return (state.entries[id] ?? []).map(entryRow);
+    },
+    getRawDetails: async (id) => ({ Request: { ID: id, Raw: `GET /${id} HTTP/1.1\nHost: x\n\n` }, Response: null }),
+    createLaunchpad: async (name, description) => {
+      state.launchpads.push({ ID: "lp3", Name: name, Description: description });
+      state.entries.lp3 = [];
+      return "lp3";
+    },
+    deleteLaunchpad: async (id) => {
+      state.launchpads = state.launchpads.filter((launchpad) => launchpad.ID !== id);
+    },
+    pendingLaunches: async () => [],
+    getLaunch: async () => null,
+  };
+  return api;
+}
+
+const names = (store) => get(store).launchpads.map((launchpad) => launchpad.Name);
+const entryIds = (store, id) => get(store).entriesByLaunchpad[id]?.map((entry) => entry.ID);
+
+test("a launchpad another client creates joins the list", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.onLaunchpadCreated({ ID: "lp9", Name: "Agent", Description: "" });
+  assert.deepEqual(names(store), ["Login", "Search", "Agent"]);
+  assert.equal(get(store).launchpads.at(-1).EntryCount, 0);
+  assert.equal(get(store).selectedLaunchpadId, "lp1");
+});
+
+test("a launchpad created here whose event arrives first is listed once", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  const create = api.createLaunchpad;
+  api.createLaunchpad = async (name, description) => {
+    const id = await create(name, description);
+    store.onLaunchpadCreated({ ID: id, Name: name, Description: description });
+    return id;
+  };
+  await store.createLaunchpad({ name: "New" });
+  assert.deepEqual(names(store), ["Login", "Search", "New"]);
+  assert.equal(get(store).selectedLaunchpadId, "lp3");
+});
+
+test("a rename by another client renames the launchpad", async () => {
+  const store = createLaunchpadStore(instance());
+  await store.populate();
+  store.onLaunchpadUpdated({ ID: "lp2", Name: "Find", Description: "the box" });
+  assert.deepEqual(get(store).launchpads[1].Name, "Find");
+  assert.deepEqual(get(store).launchpads[1].Description, "the box");
+});
+
+test("a launchpad another client deletes leaves, and the open one gives way to its neighbour", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  api.state.launchpads.shift();
+  await store.onLaunchpadDeleted("lp1");
+  const state = get(store);
+  assert.deepEqual(names(store), ["Search"]);
+  assert.equal(state.entriesByLaunchpad.lp1, undefined);
+  assert.equal(state.draftsByLaunchpad.lp1, undefined);
+  assert.equal(state.selectedLaunchpadId, "lp2");
+});
+
+test("a launchpad deleted here whose event arrives first opens one neighbour", async () => {
+  const api = instance();
+  api.state.launchpads.push({ ID: "lp3", Name: "Third", Description: "" });
+  const store = createLaunchpadStore(api);
+  await store.populate("lp2");
+  const remove = api.deleteLaunchpad;
+  api.deleteLaunchpad = async (id) => {
+    await remove(id);
+    await store.onLaunchpadDeleted(id);
+  };
+  await store.deleteLaunchpad("lp2");
+  assert.deepEqual(names(store), ["Login", "Third"]);
+  assert.equal(get(store).selectedLaunchpadId, "lp3");
+});
+
+test("entries another client links, unlinks or moves reload the launchpads whose entries are loaded", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  api.state.entries.lp1 = ["b", "a", "d"];
+  api.state.entries.lp2 = [];
+  await store.onEntriesChanged(["lp1", "lp2"]);
+  assert.deepEqual(entryIds(store, "lp1"), ["b", "a", "d"]);
+  // lp2's entries were never loaded: only its summary changes.
+  assert.equal(get(store).entriesByLaunchpad.lp2, undefined);
+  assert.equal(get(store).launchpads[1].EntryCount, 0);
+  assert.equal(get(store).launchpads[0].EntryCount, 3);
+});
+
+test("a bulk change that doesn't name its launchpads rereads every summary and loaded entry list", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await store.loadEntries("lp2");
+  api.state.entries.lp1 = ["a"];
+  api.state.entries.lp2 = ["c", "e"];
+  api.reads.length = 0;
+  await store.onEntriesChanged();
+  assert.deepEqual(entryIds(store, "lp1"), ["a"]);
+  assert.deepEqual(entryIds(store, "lp2"), ["c", "e"]);
+  assert.deepEqual(get(store).launchpads.map((launchpad) => launchpad.EntryCount), [1, 2]);
+  assert.deepEqual(api.reads.sort(), ["launchpads", "lp1", "lp2"]);
+});
+
+test("a launchpad another client creates in a bulk change's wake is listed by its reread", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  api.state.launchpads.push({ ID: "lp4", Name: "Late", Description: "" });
+  await store.onEntriesChanged();
+  assert.deepEqual(names(store), ["Login", "Search", "Late"]);
+});
