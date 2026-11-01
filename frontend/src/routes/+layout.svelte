@@ -51,6 +51,7 @@
 		pagesKey,
 	} from "../stores.js";
 	import { projectSwitch } from "../stores/projectSwitchStore.js";
+	import { extensionsStore } from "../stores/extensionsStore.js";
 	import {
 		openProjectFile,
 		openConnectedProject,
@@ -178,6 +179,7 @@
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
 	let stopAbandonToasts;
+	let stopExtensionToasts;
 	// Full class names, so Tailwind keeps them.
 	const dotTones = {
 		success: { dot: "bg-success-500", ping: "bg-success-400" },
@@ -427,70 +429,8 @@
 			});
 			// The Checkpoint rail badge shows the count; no toast.
 			EventsOn("intercepted", () => readCheckpointItems());
-			EventsOn(
-				"extension_gui_render",
-				({ extensionName, target, schema }) => {
-					if (target === "toast") {
-						const allowedVariants = [
-							"primary",
-							"secondary",
-							"tertiary",
-							"success",
-							"warning",
-							"error",
-							"surface",
-						];
-						const variant =
-							allowedVariants.includes(
-								schema.variant,
-							)
-								? "variant-filled-" +
-									schema.variant
-								: "variant-filled-primary";
-						const t = {
-							message: schema.message,
-							background: variant,
-						};
-
-						toastStore.trigger(t);
-					} else {
-						extensions_ui.update(
-							(store) => {
-								const ext =
-									store[
-										extensionName
-									] || {
-										state: {},
-									};
-								ext[target] =
-									schema;
-								return {
-									...store,
-									[extensionName]:
-										ext,
-								};
-							},
-						);
-					}
-				},
-			);
-
-			EventsOn(
-				"extension_state_update",
-				({ extensionName, key, value }) => {
-					extensions_ui.update((store) => {
-						const ext = store[
-							extensionName
-						] || { state: {} };
-						ext.state[key] = value;
-						return {
-							...store,
-							[extensionName]: ext,
-						};
-					});
-					console.log($extensions_ui);
-				},
-			);
+			// An extension's toasts show on any page.
+			stopExtensionToasts = extensionsStore.onToast((toast) => toastStore.trigger(toast));
 		});
 		return () => {
 			window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -514,8 +454,7 @@
 			EventsOff("update-progress");
 			EventsOff("update-installed");
 			EventsOff("update-failed");
-			EventsOff("extension_gui_render");
-			EventsOff("extension_state_update");
+			stopExtensionToasts?.();
 		};
 	});
 </script>

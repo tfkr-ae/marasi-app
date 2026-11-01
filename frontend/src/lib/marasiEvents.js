@@ -21,6 +21,7 @@ import { listenerStore } from "../stores/listenerStore.js";
 import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
+import { extensionsStore } from "../stores/extensionsStore.js";
 
 // Each Marasi event's handler, by event name.
 const handlers = {
@@ -47,6 +48,13 @@ const handlers = {
   "project.opened": (event) =>
     projectSwitch.onOpened(event).catch((err) => console.error("Loading the opened project failed:", err)),
   "project.opening_failed": (event) => projectSwitch.onOpeningFailed(event),
+  "extension.enabled": (extension) => extensionsStore.onExtension(extension),
+  "extension.updated": (extension) => extensionsStore.onExtension(extension),
+  "extension.settings.updated": (event) =>
+    extensionsStore.onSettingsUpdated(event).catch((err) => console.error("Reading extension settings failed:", err)),
+  "extension.gui.rendered": (event) => extensionsStore.onRendered(event),
+  "extension.gui.updated": (event) => extensionsStore.onUpdated(event),
+  "extension.log": (line) => extensionsStore.onLog(line),
 };
 
 // Every store that shows the instance's data. Launchpad drafts live in the
@@ -68,6 +76,7 @@ const stores = [
   testCaseStore,
   upstreamProxyStore,
   instanceUpdate,
+  extensionsStore,
 ];
 
 /** Reloads every store, as after the event stream reopens. */
