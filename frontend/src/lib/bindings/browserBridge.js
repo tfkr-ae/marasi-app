@@ -72,6 +72,7 @@ export const browserBridge = {
   onWindowsChanged: () => () => {},
   reportProject: async () => {},
   reportHeld: async () => {},
+  reportDrafts: async () => {},
   // Each app config call resolves { value } or { error }, as over IPC.
   appConfig: new Proxy(
     {},

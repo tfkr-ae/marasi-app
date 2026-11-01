@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createLaunchpadStore } from "./createLaunchpadStore.js";
+import { createLaunchpadStore, launchOf, pendingLaunchOf } from "./createLaunchpadStore.js";
 
 // An in-memory Marasi: launchpads with entry lists, which tests change
 // behind the store's back as another client would.
@@ -148,4 +148,86 @@ test("a launchpad another client creates in a bulk change's wake is listed by it
   api.state.launchpads.push({ ID: "lp4", Name: "Late", Description: "" });
   await store.onEntriesChanged();
   assert.deepEqual(names(store), ["Login", "Search", "Late"]);
+});
+
+// A launch record as launch.* events carry it, through launchOf.
+const launchRecord = (id, launchpadId, status, reason = "") => ({ ID: id, LaunchpadID: launchpadId, Status: status, Reason: reason });
+const request = (id) => ({ ID: id, Number: 99, Scheme: "https", Method: "GET", Host: "x", Path: `/${id}`, Metadata: {} });
+
+test("a launch another client starts shows pending, and its pair joins its launchpad as it arrives", async () => {
+  const store = createLaunchpadStore(instance());
+  await store.populate();
+  store.onLaunchStarted(launchRecord("l9", "lp1", "pending"));
+  assert.equal(pendingLaunchOf(get(store), "lp1")?.ID, "l9");
+  store.onRequest(request("l9"));
+  assert.deepEqual(entryIds(store, "lp1"), ["a", "b", "l9"]);
+  await store.onLaunchFinished(launchRecord("l9", "lp1", "completed"));
+  assert.equal(pendingLaunchOf(get(store), "lp1"), null);
+  assert.deepEqual(launchOf(get(store), "l9"), { Status: "completed", Reason: "" });
+});
+
+test("a launch another client cancels before its request arrives still joins its launchpad", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.onLaunchStarted(launchRecord("l9", "lp1", "pending"));
+  // Marasi stores a launch's request as launched when it ends first.
+  api.state.entries.lp1.push("l9");
+  await store.onLaunchFinished(launchRecord("l9", "lp1", "cancelled"));
+  assert.deepEqual(entryIds(store, "lp1"), ["a", "b", "l9"]);
+  assert.equal(pendingLaunchOf(get(store), "lp1"), null);
+});
+
+test("a launch from an unloaded launchpad ending updates that launchpad's summary", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.onLaunchStarted(launchRecord("l9", "lp2", "pending"));
+  api.state.entries.lp2.push("l9");
+  await store.onLaunchFinished(launchRecord("l9", "lp2", "failed", "interrupted"));
+  assert.equal(get(store).launchpads.find((launchpad) => launchpad.ID === "lp2").EntryCount, 2);
+});
+
+test("after a delete refused for another client's launch, that launch ending frees the launchpad", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  api.deleteLaunchpad = async () => {
+    throw new Error("DELETE /launchpad/lp1: launch_pending (l9): launch pending");
+  };
+  api.pendingLaunches = async () => [launchRecord("l9", "lp1", "pending")];
+  await assert.rejects(store.deleteLaunchpad("lp1"));
+  assert.equal(pendingLaunchOf(get(store), "lp1")?.ID, "l9");
+  api.pendingLaunches = async () => [];
+  await store.onLaunchFinished(launchRecord("l9", "lp1", "completed"));
+  assert.equal(pendingLaunchOf(get(store), "lp1"), null);
+});
+
+test("a launchpad another client deletes under a dirty draft says the draft is gone", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await store.selectLaunchpad("lp2");
+  store.updateDraft("lp1", "GET /edited HTTP/1.1\nHost: x\n\n");
+  const notices = [];
+  store.onNotice((notice) => notices.push(notice));
+  await store.onLaunchpadDeleted("lp2");
+  await store.onLaunchpadDeleted("lp1");
+  assert.deepEqual(notices, ["Another client deleted Login. Its unsaved draft is gone."]);
+});
+
+test("a launchpad deleted here says nothing when its event arrives, even before Marasi answers", async () => {
+  const api = instance();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "GET /edited HTTP/1.1\nHost: x\n\n");
+  const notices = [];
+  store.onNotice((notice) => notices.push(notice));
+  const remove = api.deleteLaunchpad;
+  api.deleteLaunchpad = async (id) => {
+    await remove(id);
+    await store.onLaunchpadDeleted(id);
+  };
+  await store.deleteLaunchpad("lp1");
+  assert.deepEqual(notices, []);
 });

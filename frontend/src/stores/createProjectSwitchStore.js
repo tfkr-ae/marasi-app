@@ -34,8 +34,12 @@ const isPath = (target) => /[\\/]/.test(target);
  * - `listProjects()`: the instance's /project/list items.
  * - `localInstances()`: this machine's running instances' /service/status.
  * - `isRemote()`: whether the window's connection is remote.
- * - `load(project, loadPart)`: reads the opened project `{name, path}` into
- *   the window, calling `loadPart(signal)` as each part starts.
+ * - `confirmLeaving()`: true when a switch this window starts loses no work
+ *   (dirty Launchpad drafts); otherwise it asks, resolving false to stay.
+ * - `load(project, loadPart, {own})`: reads the opened project `{name,
+ *   path}` into the window, calling `loadPart(signal)` as each part starts.
+ *   `own` is a switch this window started, which the researcher agreed to
+ *   lose work for; another client's keeps it.
  * - `busy(isBusy)`: a switch started, or ended.
  * - `openInstanceWindow(instance)`: a new window on local `instance`.
  * - `showCheckpoint()`: shows the Checkpoint page.
@@ -93,9 +97,13 @@ export function createProjectSwitchStore(api) {
     setOpening(switched);
     current = switched.current;
     try {
-      await api.load(switched.current, (signal) => {
-        if (asked === attempt) setOpening(withLoadPart(opening(), signal));
-      });
+      await api.load(
+        switched.current,
+        (signal) => {
+          if (asked === attempt) setOpening(withLoadPart(opening(), signal));
+        },
+        { own: Boolean(state.own) },
+      );
     } catch (error) {
       // A call that isn't ported to v2 yet leaves its page empty, but the
       // project is open, so the window carries on in it.
@@ -142,10 +150,13 @@ export function createProjectSwitchStore(api) {
   /**
    * Opens `target` on the instance: a bare name in its projects directory,
    * or a path on the instance machine. Resolves to the project that
-   * opened, `{name, path}`, or null when it didn't.
+   * opened, `{name, path}`, or null when it didn't. It asks first when
+   * the switch would lose work, and stays put on Cancel.
    */
   async function open(target) {
     const text = String(target);
+    const leave = api.confirmLeaving();
+    if (leave !== true && !(await leave)) return null;
     lastOpen = () => open(text);
     begin({ name: projectName(text), path: isPath(text) ? text : null, own: true });
     const asked = attempt;

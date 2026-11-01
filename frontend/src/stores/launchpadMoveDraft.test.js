@@ -70,10 +70,11 @@ test("the source reseeds from its last entry once the draft's entry has moved ou
 test("a source whose last entry is still launching reseeds from the request as sent", async () => {
   const { store } = await editingB();
   await store.launch("lp1");
-  store.onRequest({ ID: "L", Method: "GET", Path: "/sent", Raw: "GET /sent HTTP/1.1\n\n" });
+  // Marasi's request event carries no bytes; the stored pair has them.
+  await store.onRequest({ ID: "L", Method: "GET", Path: "/L" });
   await store.selectEntry("lp1", "b", { force: true });
   await store.moveEntries({ sourceId: "lp1", targetId: "lp2", ids: ["b"] });
-  assert.deepEqual(draftOf(store, "lp1"), { raw: "GET /sent HTTP/1.1\n\n", seededFrom: "L", useHttps: false });
+  assert.deepEqual(draftOf(store, "lp1"), { raw: rawOf("L"), seededFrom: "L", useHttps: false });
 });
 
 // Marasi has no request to read for a launch whose request event has not

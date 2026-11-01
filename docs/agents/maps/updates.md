@@ -45,7 +45,7 @@ Changing one of these means changing the others. `electron/updater/releaseString
 
 - A macOS app that Gatekeeper translocated (opened straight from Downloads) asks to be moved to Applications. v1 found the original bundle through a private Security.framework call, which plain Electron can't make.
 - The Windows build is electron-builder's portable `.exe`, which keeps v1's one-file install. An NSIS install has no single file to replace.
-- "Restart now" doesn't yet warn about unsaved Launchpad drafts or active Armory runs (`confirmLosingWork` in `main.js`). The tickets that port those add the warnings.
+- "Restart now" asks first when any window holds dirty Launchpad drafts (`confirmLosingWork` in `main.js`, `confirmLosingDrafts`), and the quit it makes doesn't ask again. It doesn't yet warn about active Armory runs; their ticket adds that.
 
 ## Instance updates (v2)
 

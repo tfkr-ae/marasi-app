@@ -70,3 +70,17 @@ test("a reloaded window holds nothing until it reports again, but keeps its plac
     ["default — scratchpad", "acme"],
   );
 });
+
+test("the unsaved drafts of every window are counted for the quit prompt, and a closed or reloaded window's go", () => {
+  const windows = createWindowList({ connectionOf: () => ({ instance: "default" }) });
+  [1, 2].forEach((id) => windows.opened(id));
+  assert.equal(windows.drafts(), 0);
+  windows.setDrafts(1, 2);
+  windows.setDrafts(2, 1);
+  assert.equal(windows.drafts(), 3);
+  assert.equal(windows.drafts(1), 2);
+  windows.reloaded(2);
+  assert.equal(windows.drafts(), 2);
+  windows.closed(1);
+  assert.equal(windows.drafts(), 0);
+});

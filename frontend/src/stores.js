@@ -118,9 +118,11 @@ export const pagesKey = writable(0);
 /**
  * Reads the project the instance has open into the stores, after startup
  * or a switch. `loadPart(signal)` is told as each part starts loading
- * (loadSignals in lib/openProgress.js), for the opening screen.
+ * (loadSignals in lib/openProgress.js), for the opening screen. `project`
+ * is its path, which keys the window's Launchpad drafts; the dirty drafts of
+ * the project it leaves are kept unless `keepDrafts` is false.
  */
-export async function openProject(loadPart = () => {}) {
+export async function openProject(loadPart = () => {}, { project = null, keepDrafts = true } = {}) {
   // Each loadPart signal tells the opening screen which part loads next.
   loadPart(loadSignals.traffic);
   reportMetadata.set({
@@ -158,7 +160,7 @@ export async function openProject(loadPart = () => {}) {
   logbookStore.clear();
   connectionStore.clear();
   armoryStore.clear();
-  launchpadStore.clear();
+  launchpadStore.openProject(project, { keepDrafts });
   checkpointStore.clear();
   // The Ledger's first page and its exclusion load in the background, and
   // first: it is the page researchers open, and its rows don't wait on the

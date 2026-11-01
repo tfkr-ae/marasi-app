@@ -1037,3 +1037,47 @@ test("text too long to search is an error without a query", async (t) => {
   assert.equal(api.searches.length, 0);
   assert.equal(get(store).entrySearch.status, "error");
 });
+
+test("a launched pair's bytes are read from Marasi, since its traffic events carry none, and the draft reseeds from the request as sent", async () => {
+  const api = twoLaunchpads();
+  api.nextLaunchIds.push("d");
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "GET /d HTTP/1.1\nHost: x\n\n");
+  await store.launch("lp1");
+
+  // Marasi stores the request line with an absolute URL.
+  const sent = "GET http://x/d HTTP/1.1\r\n\r\n";
+  api.getRawDetails = async (id) =>
+    id === "d" ? { Request: { ID: "d", Raw: sent }, Response: api.answered ? { ID: "d", Raw: "HTTP/1.1 200 OK\r\n\r\nok" } : { ID: "d", StatusCode: -1, Raw: "" } } : null;
+  const { Raw, ...withoutBytes } = launched("d", "");
+  store.onRequest(withoutBytes);
+  await settle();
+  let state = get(store);
+  assert.equal(state.draftsByLaunchpad.lp1.raw, sent);
+  assert.equal(isDraftDirty(state, "lp1"), false);
+  // An unanswered pair reads with an empty response, which is none yet.
+  assert.equal(state.detailsById.d.Response, null);
+
+  api.answered = true;
+  store.onResponse({ ID: "d", StatusCode: 200, Status: "200 OK" });
+  await settle();
+  state = get(store);
+  assert.equal(state.detailsById.d.Response.Raw, "HTTP/1.1 200 OK\r\n\r\nok");
+  assert.equal(state.entriesByLaunchpad.lp1.at(-1).StatusCode, 200);
+});
+
+test("an edit made while the launch was on its way stays", async () => {
+  const api = twoLaunchpads();
+  api.nextLaunchIds.push("d");
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "GET /d HTTP/1.1\nHost: x\n\n");
+  await store.launch("lp1");
+  store.updateDraft("lp1", "GET /edited HTTP/1.1\n\n");
+  api.getRawDetails = async (id) => (id === "d" ? { Request: { ID: "d", Raw: "GET http://x/d HTTP/1.1\r\n\r\n" }, Response: null } : null);
+  const { Raw, ...withoutBytes } = launched("d", "");
+  store.onRequest(withoutBytes);
+  await settle();
+  assert.equal(get(store).draftsByLaunchpad.lp1.raw, "GET /edited HTTP/1.1\n\n");
+});

@@ -176,13 +176,13 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `LinkRequestToLaunchpad` | binding | COVERED | `POST /launchpad/{id}/link {request_id}`. v1 bound it but the frontend never called it; v2's is proven by its binding test. | 19 | [x] |
 | `MoveLaunchpadEntries` | binding | COVERED | `POST /launchpad/{id}/move {request_ids, target_launchpad_id, before_request_id}`, `launchpad.entries_moved` | 19 | [x] |
 | `SearchLaunchpadEntries` | binding | COVERED | C: `GET /traffic?q=launchpad:* AND (…)&limit=1`, then when it matches `GET /launchpad/{id}?q=` for each launchpad | 19 | [x] |
-| `Launch` | binding | COVERED | `POST /launchpad/{id}/launch {raw, scheme}` | 20 | [ ] |
-| `PendingLaunches` | binding | COVERED | `GET /launch` | 20 | [ ] |
-| `GetLaunch` | binding | COVERED | `GET /launch/{id}` | 20 | [ ] |
-| `CancelLaunch` | binding | COVERED | `POST /launch/{id}/cancel` (`409 launch_finished`) | 20 | [ ] |
-| `SetUnsavedDraftCount` | binding | GUI | Each window tells the main process its dirty draft count, for the quit prompt | 20 | [ ] |
-| `launch-started` | event | COVERED | `launch.started` | 20 | [ ] |
-| `launch-finished` | event | COVERED | `launch.completed`, `launch.cancelled` or `launch.failed` | 20 | [ ] |
+| `Launch` | binding | COVERED | `POST /launchpad/{id}/launch {raw, scheme}` | 20 | [x] |
+| `PendingLaunches` | binding | COVERED | `GET /launch` | 20 | [x] |
+| `GetLaunch` | binding | COVERED | `GET /launch/{id}` | 20 | [x] |
+| `CancelLaunch` | binding | COVERED | `POST /launch/{id}/cancel` (`409 launch_finished`) | 20 | [x] |
+| `SetUnsavedDraftCount` | binding | GUI | Each window tells the main process its dirty draft count, for the quit prompt | 20 | [x] |
+| `launch-started` | event | COVERED | `launch.started` | 20 | [x] |
+| `launch-finished` | event | COVERED | `launch.completed`, `launch.cancelled` or `launch.failed` | 20 | [x] |
 
 ## Logbook
 

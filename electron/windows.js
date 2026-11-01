@@ -1,7 +1,7 @@
 // The app's windows, for the Window menu, the ⌘K window list and the dock
 // badge (docs/adr/2026-10-31-one-connection-per-window.md). Each renderer
-// reports the project it has open and its Checkpoint's held count; the
-// instance comes from the window's connection.
+// reports the project it has open, its Checkpoint's held count and its
+// unsaved Launchpad drafts; the instance comes from the window's connection.
 
 /**
  * The windows' list and held items. `connectionOf(id)` is a window's
@@ -9,9 +9,11 @@
  * webContents id.
  */
 export function createWindowList({ connectionOf }) {
-  // Each open window's {project, held}, in the order the windows opened.
+  // Each open window's {project, held, drafts}, in the order the windows opened.
   const windows = new Map();
-  const blank = () => ({ project: null, held: 0 });
+  const blank = () => ({ project: null, held: 0, drafts: 0 });
+  const count = (n) => Math.max(0, Number(n) || 0);
+  const sum = (key) => [...windows.values()].reduce((total, window) => total + window[key], 0);
 
   /**
    * The connected windows: {id, instance, project, label, current}, the
@@ -29,7 +31,10 @@ export function createWindowList({ connectionOf }) {
   }
 
   /** The held items of every window, for the dock badge. */
-  const held = () => [...windows.values()].reduce((sum, window) => sum + window.held, 0);
+  const held = () => sum("held");
+
+  /** The dirty Launchpad drafts of window `id`, or of every window. */
+  const drafts = (id) => (id === undefined ? sum("drafts") : (windows.get(id)?.drafts ?? 0));
 
   const report = (id, change) => {
     if (windows.has(id)) windows.set(id, { ...windows.get(id), ...change });
@@ -38,13 +43,15 @@ export function createWindowList({ connectionOf }) {
   return {
     list,
     held,
+    drafts,
     opened: (id) => windows.set(id, blank()),
     closed: (id) => windows.delete(id),
     /** A window that disconnected has no project and holds nothing. */
     disconnected: (id) => report(id, blank()),
-    /** A reloaded window starts again with nothing held, until it reports. */
-    reloaded: (id) => report(id, { held: 0 }),
+    /** A reloaded window starts again with nothing held and no drafts, until it reports. */
+    reloaded: (id) => report(id, { held: 0, drafts: 0 }),
     setProject: (id, project) => report(id, { project: project || null }),
-    setHeld: (id, count) => report(id, { held: Math.max(0, Number(count) || 0) }),
+    setHeld: (id, n) => report(id, { held: count(n) }),
+    setDrafts: (id, n) => report(id, { drafts: count(n) }),
   };
 }

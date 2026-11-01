@@ -1,5 +1,9 @@
 // Display helpers for the Launchpad page.
 
+/** What discarding `count` dirty drafts loses, for the confirmations that ask once for all. */
+export const draftsLostText = (count) =>
+  `${count === 1 ? "1 launchpad draft has" : `${count} launchpad drafts have`} unsaved edits, which will be discarded.`;
+
 /** What a launchpad without a name is called, here and in the Ledger. */
 export const UNTITLED_LAUNCHPAD = "Untitled launchpad";
 
