@@ -282,33 +282,48 @@ export const OpenProject = async (project) => {
 export const PendingLaunches = notPorted("PendingLaunches");
 export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
+// The most rows Marasi lists in one GET /traffic page.
+const maxTrafficPage = 500;
+
 // One page of the traffic that matches `request.Query`, in display order,
 // minus the project's exclusion unless `request.IgnoreExclusion`:
 // v1's { Items, NextCursor, PrevCursor, AsOf, IndexComplete, QueryError }.
+// v1 read any `request.Limit`; above Marasi's cap it reads on by cursor
+// under the first page's as_of.
 export const QueryTraffic = (request) =>
   readTraffic(async () => {
     const exclusion = request.IgnoreExclusion ? [] : await GetContentTypeExclusion();
-    const page = await marasi.get(
-      "/traffic" +
-        trafficQuery(
-          {
-            q: request.Query,
-            order_by: request.OrderBy,
-            cursor: request.Cursor,
-            direction: request.Direction,
-            as_of: request.AsOf,
-            limit: request.Limit,
-          },
-          exclusion,
-        ),
-    );
+    const backward = request.Direction === "backward";
+    const pages = [];
+    let cursor = request.Cursor;
+    let asOf = request.AsOf;
+    let wanted = request.Limit;
+    for (;;) {
+      const limit = wanted == null ? undefined : Math.min(wanted, maxTrafficPage);
+      const page = await marasi.get(
+        "/traffic" +
+          trafficQuery(
+            { q: request.Query, order_by: request.OrderBy, cursor, direction: request.Direction, as_of: asOf, limit },
+            exclusion,
+          ),
+      );
+      pages.push(page);
+      const read = page.items?.length ?? 0;
+      cursor = backward ? page.prev_cursor : page.next_cursor;
+      asOf = page.as_of ?? asOf;
+      if (wanted == null || read < limit || !cursor) break;
+      wanted -= read;
+      if (wanted <= 0) break;
+    }
+    // Pages read backward come before the ones read earlier.
+    const shown = backward ? [...pages].reverse() : pages;
     return {
       // Marasi lists a page in reverse display order.
-      Items: (page.items ?? []).map(pairSummary).reverse(),
-      NextCursor: page.next_cursor ?? null,
-      PrevCursor: page.prev_cursor ?? null,
-      AsOf: page.as_of ?? "",
-      IndexComplete: page.index?.complete ?? true,
+      Items: shown.flatMap((page) => (page.items ?? []).map(pairSummary).reverse()),
+      NextCursor: shown.at(-1).next_cursor ?? null,
+      PrevCursor: shown[0].prev_cursor ?? null,
+      AsOf: pages[0].as_of ?? "",
+      IndexComplete: pages.every((page) => page.index?.complete ?? true),
       QueryError: null,
     };
   });

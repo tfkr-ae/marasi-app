@@ -113,6 +113,40 @@ test("QueryTraffic reads a page under the project's exclusion, in display order 
   assert.equal(page.QueryError, null);
 });
 
+test("QueryTraffic reads past Marasi's 500-row page cap in pages under one as_of, as v1 read any limit", async () => {
+  // Pairs 1 to 900, listed newest first: each page holds the newest pairs
+  // below its cursor, in reverse display order.
+  answers["GET /traffic"] = ({ search }) => {
+    const query = new URLSearchParams(search);
+    const below = Number(query.get("cursor") ?? 901);
+    const limit = Number(query.get("limit"));
+    if (limit > 500) return json({ error: "bad_request" }, 400);
+    const numbers = [];
+    for (let n = below - 1; n >= Math.max(1, below - limit); n--) numbers.unshift(n);
+    return json({
+      items: numbers.map((n) => summary(`p${n}`, n)),
+      next_cursor: numbers[0] > 1 ? String(numbers[0]) : null,
+      prev_cursor: below <= 900 ? String(below - 1) : null,
+      as_of: query.get("as_of") ?? "p900",
+      index: { complete: true },
+    });
+  };
+  const page = await App.QueryTraffic({ Query: "", Limit: 700 });
+  assert.deepEqual(
+    sent.map((request) => new URLSearchParams(request.search)).filter((query) => query.has("limit"))
+      .map((query) => [query.get("limit"), query.get("cursor"), query.get("as_of")]),
+    [
+      ["500", null, null],
+      ["200", "401", "p900"],
+    ],
+  );
+  assert.equal(page.Items.length, 700);
+  assert.deepEqual([page.Items[0].Number, page.Items[499].Number, page.Items[500].Number, page.Items[699].Number], [900, 401, 400, 201]);
+  assert.equal(page.NextCursor, "201");
+  assert.equal(page.PrevCursor, null);
+  assert.equal(page.AsOf, "p900");
+});
+
 test("an invalid query answers as v1's QueryError rather than rejecting", async () => {
   answers["GET /traffic"] = () => json({ error: "invalid_query", message: "unexpected end of query", position: 8 }, 400);
   answers["GET /traffic/count"] = answers["GET /traffic"];
