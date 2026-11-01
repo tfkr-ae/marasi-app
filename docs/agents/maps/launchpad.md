@@ -12,7 +12,7 @@ Which files work together on the Launchpad page, how launchpad changes and launc
   - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
   - `launchpadMenu.js` (`launchpadMenuFor`) describes the launchpad menu, a launchpad row's context menu, in the same shape, with `recordItems` from `entryMenu.js`;
   - the other files are pure helpers.
-- Bindings: the launchpad bindings in `App.js` call Marasi's `/launchpad` routes, and `frontend/src/lib/bindings/launchpads.js` turns its launchpads and launches into v1's shapes. `MoveLaunchpadEntries` resolves the moved ids; Marasi's `already_linked`, `invalid_placement`, `not_found` and `launch_pending` refusals reach `marasiMoveRefusal` in `entryMove.js`. `SearchLaunchpadEntries` composes the search as v1 did: one `/traffic` read of `launchpad:* AND (…)`, then each launchpad's `GET /launchpad/{id}?q=` when that matched. Remove from launchpad and the record links go through `LinkTraffic`/`UnlinkTraffic` (`/traffic/bulk/link`, `/unlink`). `Launch`, `CancelLaunch` and `SetUnsavedDraftCount` are ticket 20 and reject as not ported until then.
+- Bindings: the launchpad bindings in `App.js` call Marasi's `/launchpad` routes, and `frontend/src/lib/bindings/launchpads.js` turns its launchpads and launches into v1's shapes. `MoveLaunchpadEntries` resolves the moved ids; Marasi's `already_linked`, `invalid_placement`, `not_found` and `launch_pending` refusals reach `marasiMoveRefusal` in `entryMove.js`. `SearchLaunchpadEntries` composes the search as v1 did: one `/traffic` read of `launchpad:* AND (…)`, then each launchpad's `GET /launchpad/{id}?q=` when that matched. Remove from launchpad and the record links go through `LinkTraffic`/`UnlinkTraffic` (`/traffic/bulk/link`, `/unlink`). `Launch` sends `POST /launchpad/{id}/launch` with the draft as base64 `raw` and its `scheme`, and resolves the launch id. `CancelLaunch` sends `POST /launch/{id}/cancel`; a launch that ended first (`409 launch_finished`) resolves in its final state. `SetUnsavedDraftCount` tells the main process the window's dirty draft count (preload `reportDrafts`).
 
 ## Changes from any client
 
@@ -21,13 +21,15 @@ Which files work together on the Launchpad page, how launchpad changes and launc
 - `launchpad.created`, `launchpad.updated` and `launchpad.deleted` call `onLaunchpadCreated`, `onLaunchpadUpdated` and `onLaunchpadDeleted`. A deleted open launchpad gives way to its neighbour (`forgetLaunchpad`, shared with `deleteLaunchpad`).
 - `launchpad.linked`, `launchpad.unlinked` and `launchpad.entries_moved` call `onEntriesChanged` with their launchpads: a loaded entry list reloads, and the others' summaries are reread (`refreshSummaries`).
 - `traffic.changed` names no launchpad, so a bulk `link`, `unlink` or `delete` calls `onEntriesChanged()` for every launchpad.
-- `traffic.request` and `traffic.response` reach `onRequest` and `onResponse`, which only take launched pairs the store knows.
+- `traffic.request` and `traffic.response` reach `onRequest` and `onResponse`, which only take launched pairs the store knows. Those events carry no bytes, so each arrival rereads the pair (`readLaunchedDetails`).
+- `launch.started` and `launch.completed|cancelled|failed` (through `launchOf`) reach `onLaunchStarted` and `onLaunchFinished`, so a launch by any client shows pending, ends, and its pair joins its launchpad. Marasi publishes no `launchpad.linked` for a launch's pair, so a launch that ended before its request event rereads its launchpad.
+- A launchpad another client deletes under a dirty draft drops it with a notice (`onNotice`); this window's own delete says nothing.
 
 ## A launch
 
 1. `launch` on the page calls the store's `launch`, which calls the `Launch` binding. Its launch id is also the new entry's pair id.
-2. `+layout.svelte` passes v1's `launch-started` and `launch-finished` to `onLaunchStarted` and `onLaunchFinished`; in v2 they hear nothing until ticket 20 follows `launch.*`.
-3. The new entry arrives as a `traffic.request` event (`onRequest` in the store).
+2. `launch.started` and the `launch.*` that ends it reach `onLaunchStarted` and `onLaunchFinished` from `marasiEvents.js`.
+3. The new entry arrives as a `traffic.request` event (`onRequest` in the store), and is selected. Its request and, later, its response are read from the stored pair; a draft still as launched reseeds from the request as sent (an absolute URL), which is clean.
 
 While a launch is pending, Marasi refuses to move or remove its pair, or to delete its launchpad. Marasi refuses with `409 launch_pending` and the pending pairs' `request_ids`, which the Marasi client puts in the error's text. The store then reads the pending launches again (`PendingLaunches`), and the page explains the refusal with the helpers in `frontend/src/lib/launchPending.js`, which the Ledger shares. `entryMove.js` handles the codes for stale views.
 
@@ -58,9 +60,9 @@ Right-clicking a launchpad row in `LaunchpadTree.svelte` calls the page's `openL
 
 ## Links to the rest of the app
 
-- **Unsaved drafts.** `reportUnsavedDrafts` tells Go how many unsaved drafts there are (`SetUnsavedDraftCount`), so `confirmLosingWork` asks before a project switch or quitting.
+- **Unsaved drafts.** `reportUnsavedDrafts` tells the main process how many dirty drafts the window holds, kept ones included (`unsavedDraftCount`, `SetUnsavedDraftCount`). `windows.js` counts them per window, so `electron/main.js` asks before quitting, closing a window that holds some, or restarting for an update (`confirmLosingDrafts`, the updater's `confirmLosingWork`). Disconnect asks in the page (`confirmLosingDrafts` in `launchpadStore.js`).
 - **The Ledger** reads `launchpads` and `launchesById` from `launchpadStore` for its row menu, and calls `populate` after a change. Its "Jump to Launchpad" opens `/launchpad?id=`, which `openJump` handles.
-- **Project switch.** `openProject` in `frontend/src/stores.js` clears the store and fills it again.
+- **Project switch.** `openProject` in `frontend/src/stores.js` calls the store's `openProject(path, { keepDrafts })` and fills it again: the dirty drafts of the project it leaves go to `keptDrafts` unless the researcher started the switch, and `populate` restores a project's kept drafts on the launchpads that still exist. See `project-open.md`.
 
 ## Decisions
 
