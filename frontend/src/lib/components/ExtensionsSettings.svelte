@@ -30,8 +30,8 @@
 			return;
 		}
 		try {
-			const read = await extensionsStore.loadSettings(extension.ID);
-			draft = JSON.stringify(read, null, 2);
+			await extensionsStore.loadSettings(extension.ID);
+			shown = null;
 			draftError = "";
 			editing = extension.ID;
 		} catch (error) {
@@ -44,16 +44,22 @@
 		draftError = parsed.error ?? "";
 		if (parsed.error) return;
 		try {
-			const saved = await extensionsStore.saveSettings(extension.ID, parsed.settings);
-			draft = JSON.stringify(saved, null, 2);
+			await extensionsStore.saveSettings(extension.ID, parsed.settings);
 			toastStore.trigger({ message: `Saved ${extension.Name} settings`, background: "variant-filled-success" });
 		} catch (error) {
 			toastError(toastStore, `Error saving ${extension.Name} settings`, error);
 		}
 	}
 
-	// Settings changed by another client show in the open editor.
-	$: if (editing && $settings[editing]) draft = JSON.stringify($settings[editing], null, 2);
+	// Settings read or changed by another client show in the open editor;
+	// only a new settings object replaces what is being typed.
+	let shown = null;
+	$: if (editing) showSettings($settings[editing]);
+	function showSettings(read) {
+		if (!read || read === shown) return;
+		shown = read;
+		draft = JSON.stringify(read, null, 2);
+	}
 </script>
 
 <h3 class="text-sm font-bold">Extensions</h3>
