@@ -1,18 +1,20 @@
 <script>
-	// The export modal. On the left, the template (Restore default asks once
-	// inline), the report details and the options as switch rows; on the
-	// right, the review of what the report holds. Export calls ExportReport
-	// with reportMetadata, whose custom_properties.include_test_cases
-	// marasi-app's report payload honours. Clicking a gap closes the modal
-	// and opens that record at the missing item.
+	// The export modal. On the left, the template (upload one from this
+	// machine; Delete and Restore default ask once inline), the report
+	// details and the options as switch rows; on the right, the review of
+	// what the report holds. Export calls ExportReport with reportMetadata,
+	// whose custom_properties.include_test_cases decides whether test cases
+	// are listed, and saves the report on this machine. Clicking a gap closes
+	// the modal and opens that record at the missing item.
 	import { getModalStore, getToastStore, modeCurrent, SlideToggle } from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
-	import { FileText, RotateCcw, SquareArrowRight, X } from "lucide-svelte";
-	import { ExportReport, ListTemplates, RestoreDefaultReportTemplate } from "../bindings/App";
+	import { FileText, RotateCcw, SquareArrowRight, Trash2, Upload, X } from "lucide-svelte";
+	import { ExportReport } from "../bindings/App";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
 	import { reportMetadata } from "../../stores";
 	import { logbookStore } from "../../stores/logbookStore";
+	import { reportTemplateStore } from "../../stores/reportTemplateStore";
 	import ReportReview from "./ReportReview.svelte";
 
 	export let parent = undefined;
@@ -21,43 +23,65 @@
 	const toastStore = getToastStore();
 	const TRUNCATE_DEFAULT = 1000;
 
-	let templates = [];
-	let template;
-	let loadingTemplates = true;
 	let confirmRestore = false;
-	let restoring = false;
+	let confirmDelete = false;
+	// The template change in flight: "upload", "delete" or "restore".
+	let changing = "";
 	let exporting = false;
 
 	$: primary = primaryVariant($modeCurrent);
 	$: neutral = neutralVariant($modeCurrent);
+	$: ({ names: templates, selected: template, loaded: templatesLoaded } = $reportTemplateStore);
 	$: includeTestCases = $reportMetadata.custom_properties?.include_test_cases !== false;
 	$: truncating = $reportMetadata.truncate_length > 0;
 
-	onMount(async () => {
+	onMount(() =>
+		reportTemplateStore.reload().catch((error) => toastError(toastStore, "Failed to load report templates", error)),
+	);
+
+	// Runs one template change, toasting `done` or the failure.
+	async function change(what, run, done, failed) {
+		if (changing) return;
+		changing = what;
 		try {
-			templates = (await ListTemplates()) ?? [];
-			template = templates[0];
+			await run();
+			toastStore.trigger({ message: done, background: "variant-filled-success" });
 		} catch (error) {
-			toastError(toastStore, "Failed to load report templates", error);
+			toastError(toastStore, failed, error);
 		} finally {
-			loadingTemplates = false;
+			changing = "";
 		}
-	});
+	}
+
+	// A template file from this machine, stored under its own name.
+	function upload(file) {
+		if (!file) return;
+		change(
+			"upload",
+			async () => reportTemplateStore.upload(file.name, new Uint8Array(await file.arrayBuffer())),
+			"Template uploaded",
+			"Failed to upload the template",
+		);
+	}
+
+	// The first click asks, the second deletes the picked template.
+	function deleteTemplate() {
+		if (!confirmDelete) return (confirmDelete = true);
+		confirmDelete = false;
+		const name = template;
+		change("delete", () => reportTemplateStore.remove(name), "Template deleted", "Failed to delete the template");
+	}
 
 	// The first click asks, the second overwrites default_template.md.
-	async function restoreDefault() {
-		if (restoring) return;
+	function restoreDefault() {
 		if (!confirmRestore) return (confirmRestore = true);
 		confirmRestore = false;
-		restoring = true;
-		try {
-			await RestoreDefaultReportTemplate();
-			toastStore.trigger({ message: "Default template restored", background: "variant-filled-success" });
-		} catch (error) {
-			toastError(toastStore, "Failed to restore the default template", error);
-		} finally {
-			restoring = false;
-		}
+		change(
+			"restore",
+			() => reportTemplateStore.restore(),
+			"Default template restored",
+			"Failed to restore the default template",
+		);
 	}
 
 	function setIncludeTestCases(on) {
@@ -74,11 +98,10 @@
 	async function exportReport() {
 		if (exporting || !template) return;
 		exporting = true;
+		// ExportReport sends created_at in this machine's zone.
 		const payload = {
 			...$reportMetadata,
 			custom_properties: { ...$reportMetadata.custom_properties, include_test_cases: includeTestCases },
-			start: `${$reportMetadata.start}T00:00:00Z`,
-			end: `${$reportMetadata.end}T00:00:00Z`,
 			created_at: new Date().toISOString(),
 		};
 		try {
@@ -121,21 +144,50 @@
 						<select
 							id="exportTemplate"
 							class="select h-8 min-w-0 flex-1 py-0 text-xs"
-							bind:value={template}
-							disabled={loadingTemplates || !templates.length}
+							value={template}
+							on:change={(e) => reportTemplateStore.select(e.currentTarget.value)}
+							disabled={!templatesLoaded || !templates.length}
 						>
 							{#each templates as name}<option value={name}>{name}</option>{/each}
 						</select>
+						<label
+							id="exportUploadTemplate"
+							class="flex flex-none cursor-pointer items-center gap-1 text-2xs opacity-70 hover:opacity-100"
+							title="Upload a template from this machine"
+							><Upload size={12} />{changing === "upload" ? "Uploading…" : "Upload"}<input
+								type="file"
+								class="hidden"
+								data-template-input
+								disabled={Boolean(changing)}
+								on:change={(e) => {
+									upload(e.currentTarget.files?.[0]);
+									e.currentTarget.value = "";
+								}}
+							/></label
+						>
+						<button
+							id="exportDeleteTemplate"
+							type="button"
+							class="flex max-w-[16rem] flex-none items-center gap-1 text-2xs {confirmDelete
+								? 'font-semibold text-error-700 dark:text-error-400'
+								: 'opacity-70 hover:opacity-100'}"
+							disabled={Boolean(changing) || !template}
+							on:click={deleteTemplate}
+							on:blur={() => (confirmDelete = false)}
+							><Trash2 size={12} class="flex-none" /><span class="truncate"
+								>{changing === "delete" ? "Deleting…" : confirmDelete ? `Delete ${template}?` : "Delete"}</span
+							></button
+						>
 						<button
 							id="exportRestoreDefault"
 							type="button"
 							class="flex flex-none items-center gap-1 text-2xs {confirmRestore
 								? 'font-semibold text-warning-800 dark:text-warning-500'
 								: 'opacity-70 hover:opacity-100'}"
-							disabled={restoring}
+							disabled={Boolean(changing)}
 							on:click={restoreDefault}
 							on:blur={() => (confirmRestore = false)}
-							><RotateCcw size={12} />{restoring
+							><RotateCcw size={12} />{changing === "restore"
 								? "Restoring…"
 								: confirmRestore
 									? "Overwrite default_template.md?"

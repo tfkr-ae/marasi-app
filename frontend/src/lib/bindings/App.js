@@ -8,6 +8,7 @@ import { marasi, MarasiError } from "./marasi.js";
 import { pairRow, pairSummary, rawText, sitemapNodeCount } from "./traffic.js";
 import { launchOf, launchpadOf } from "./launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./armory.js";
+import { reportBody, reportFilename, templateNames } from "./reports.js";
 import { artifactMetadata, findingFields, findingRecord, testCaseFields, testCaseRecord } from "./records.js";
 import { heldMessage, webSocketConnection, webSocketMessage } from "./websocket.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
@@ -464,6 +465,9 @@ export const DeleteFinding = (id) => deleteRecord(findings, id);
 export const DeleteLaunchpad = async (id) => {
   await marasi.delete(launchpadPath(id));
 };
+// Deletes a report template from the instance, and answers the list.
+export const DeleteReportTemplate = async (name) =>
+  templateNames(await marasi.delete(`/report/template/${encodeURIComponent(name)}`));
 export const DeleteTestCase = (id) => deleteRecord(testCases, id);
 // Deletes the pairs in `selection` with everything they own (marasi
 // docs/adr/2026-10-14-deleting-a-pair-deletes-everything-it-owns.md).
@@ -481,7 +485,12 @@ export const DownloadCert = async () => {
   return Boolean(await bridge().saveCertificate(pem));
 };
 export const DropWSIntercepted = (id) => DropCheckpoint(id);
-export const ExportReport = notPorted("ExportReport");
+// Renders `template` on the instance and saves the report on this machine,
+// through a save dialog. Resolves false when the researcher cancels.
+export const ExportReport = async (template, metadata) => {
+  const bytes = await marasi.postBytes("/report", reportBody(template, metadata));
+  return Boolean(await bridge().saveReport(reportFilename(template, metadata.title), bytes));
+};
 // Forwards a held WebSocket message with `payload`, its text, and `opcode`.
 export const ForwardWSIntercepted = async (id, opcode, payload) => {
   await marasi.post(`${checkpointPath(id)}/forward`, { payload: base64(payload), opcode });
@@ -714,7 +723,7 @@ export const ListSitemapLevels = (request) =>
       QueryError: null,
     };
   });
-export const ListTemplates = notPorted("ListTemplates");
+export const ListTemplates = async () => templateNames(await marasi.get("/report/template"));
 export const ListTestCases = () => listRecords(testCases);
 // Moves `ids` out of launchpad `sourceId` to `targetId` (which may be the
 // source), before the entry `before`, or at the end for "". Resolves the
@@ -798,7 +807,9 @@ export const QueryTraffic = (request) =>
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
 // Drops the open project's own exclusion, so it follows the app default again.
 export const ResetContentTypeExclusion = () => unlessNotFound(marasi.delete(exclusionSetting));
-export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
+// Writes the default template back, and answers the list.
+export const RestoreDefaultReportTemplate = async () =>
+  templateNames(await marasi.post("/report/template/restore"));
 export const SaveArtifactToFinding = (id, filename, mimeType, size, data) =>
   uploadArtifact(findings, id, filename, mimeType, data);
 export const SaveArtifactToTestCase = (id, filename, mimeType, size, data) =>
@@ -886,6 +897,13 @@ export const UpdateNote = async (id, note) => {
   else await unlessNotFound(marasi.delete(path));
 };
 export const UpdateProxy = (address, port) => marasi.post("/listener/update", { address, port: Number(port) });
+// Uploads a template file's bytes from this machine under `name`, and
+// answers the list. Marasi refuses a taken name with
+// report_template_already_exists.
+export const UploadReportTemplate = async (name, bytes) =>
+  templateNames(
+    await marasi.sendBytes("POST", `/report/template?${new URLSearchParams({ name })}`, bytes, "application/octet-stream"),
+  );
 // Checks an unsaved run; Marasi refuses one it can't run with
 // invalid_armory_request.
 export const ValidateArmoryRun = async (rawTemplate, attackType, wordlists, maxConcurrent) => {

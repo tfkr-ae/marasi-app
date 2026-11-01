@@ -29,6 +29,7 @@ import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 import { extensionsStore } from "../stores/extensionsStore.js";
 import { scopeStore } from "../stores/scopeStore.js";
+import { reportTemplateStore } from "../stores/reportTemplateStore.js";
 
 const checkpointResolved = (event) => {
   Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
@@ -138,6 +139,10 @@ const handlers = {
   // The instance machine's wordlists, all of them.
   "wordlist.added": (list) => armoryStore.onWordlists(wordlistInfos(list)),
   "wordlist.removed": (list) => armoryStore.onWordlists(wordlistInfos(list)),
+  // The instance's report templates, all of them.
+  "report.template.added": (list) => reportTemplateStore.onTemplates(list),
+  "report.template.removed": (list) => reportTemplateStore.onTemplates(list),
+  "report.template.restored": (list) => reportTemplateStore.onTemplates(list),
   // A rebuild or delete moved the sitemap: read its open levels again.
   "sitemap.changed": () => sitemapStore.reload(),
   "listener.started": (status) => listenerStore.onListener(status),
@@ -224,6 +229,7 @@ const stores = [
   logbookStore,
   findingStore,
   testCaseStore,
+  reportTemplateStore,
   upstreamProxyStore,
   chromeStore,
   waypointStore,
