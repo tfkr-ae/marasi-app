@@ -1,6 +1,6 @@
 // The app's saved queries, bound to the Wails backend. The logic lives in
 // createSavedQueriesStore.js, which tests load with a fake API.
-import { derived } from "svelte/store";
+import { derived, get } from "svelte/store";
 import {
   CountTraffic,
   DeleteClientSetting,
@@ -11,6 +11,14 @@ import {
   SetHiddenBuiltinQueries,
 } from "../lib/bindings/App";
 import { createSavedQueriesStore, visibleSavedQueries } from "./createSavedQueriesStore.js";
+import { ledgerStore } from "./ledgerStore";
+
+// Counts under the exclusion the Ledger loaded, rather than reading it again
+// per query; before it loads, the binding reads it.
+const ledgerExclusion = () => {
+  const { exclusion, exclusionLoaded } = get(ledgerStore);
+  return exclusionLoaded ? { Exclusion: exclusion } : {};
+};
 
 export {
   activeSavedQuery,
@@ -24,7 +32,7 @@ export const savedQueriesStore = createSavedQueriesStore({
   getAppSavedQueries: () => GetAppSavedQueries(),
   saveAppSavedQueries: (list) => SaveAppSavedQueries(list),
   setHiddenBuiltins: (ids) => SetHiddenBuiltinQueries(ids),
-  countMatches: (query) => CountTraffic(query, "", {}),
+  countMatches: (query) => CountTraffic(query, "", ledgerExclusion()),
   listClientSettings: (prefix) => ListClientSettings(prefix),
   setClientSetting: (key, value) => SetClientSetting(key, value),
   deleteClientSetting: (key) => DeleteClientSetting(key),
