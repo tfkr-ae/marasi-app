@@ -14,6 +14,7 @@ import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
 import { createCertificateFile } from "./certificateFile.js";
 import { createArtifactFile } from "./artifactFile.js";
+import { createReportFile } from "./reportFile.js";
 import { createCAFile } from "./caFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
@@ -138,6 +139,13 @@ async function serveAppConfig() {
     dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
   });
   handle("artifact:save", (event, filename, bytes) => artifactFile.save(filename, bytes));
+  // A Logbook report, which the renderer exported from its instance.
+  const reportFile = createReportFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("report:save", (event, filename, bytes) => reportFile.save(filename, bytes));
   // An upstream proxy's CA, read from a file on this machine.
   const caFile = createCAFile({
     fs: { readFile, stat },
