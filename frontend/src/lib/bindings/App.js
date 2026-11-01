@@ -17,6 +17,9 @@ import { browserBridge } from "./browserBridge.js";
 import { isCheckpointGone } from "../checkpointHeld.js";
 import { checkHTTPParse } from "../checkpoint/httpParse.js";
 
+// The items of a list Marasi answers at `path`; [] when it has none.
+const listed = async (path) => (await marasi.get(path)).items ?? [];
+
 // The main process bridge, or in a plain browser the dev server's.
 const bridge = () => (globalThis.window ? (globalThis.window.marasiApp ?? browserBridge) : undefined);
 
@@ -136,7 +139,7 @@ export const ReadUpstreamProxyCAFile = () => bridge().readCAFile();
 
 // The open project's waypoints, as v1's {hostname: override} map.
 export const GetWaypoints = async () =>
-  Object.fromEntries(((await marasi.get("/waypoint")).items ?? []).map((item) => [item.hostname, item.override]));
+  Object.fromEntries((await listed("/waypoint")).map((item) => [item.hostname, item.override]));
 // Sets `host`'s override: adds a waypoint, or updates the one it has, as
 // v1's create or update did.
 export const CreateWaypoint = async (hostname, override) => {
@@ -527,7 +530,7 @@ export const GetArmoryRunRequests = async (runId) => {
   return Promise.all(summaries.map(async (summary) => pairRow(await readPair(summary.ID))));
 };
 export const GetArmoryRuns = async (templateId) =>
-  ((await marasi.get(`/armory/template/${encodeURIComponent(templateId)}/run`)).items ?? []).map(armoryRun);
+  (await listed(`/armory/template/${encodeURIComponent(templateId)}/run`)).map(armoryRun);
 // Every template with its raw template, which Marasi's list leaves out.
 export const GetArmoryTemplates = async () => {
   const { items = [] } = await marasi.get("/armory/template");
@@ -556,7 +559,7 @@ export const GetClientSetting = (key) => unlessNotFound(marasi.get(clientSetting
 export const GetContentTypeExclusion = async () =>
   (await ownExclusion())?.value ?? (await appConfig.GetDefaultContentTypeExclusion());
 // The held Checkpoint items, oldest first.
-export const GetCheckpointItems = async () => ((await marasi.get("/checkpoint")).items ?? []).map(checkpointItem);
+export const GetCheckpointItems = async () => (await listed("/checkpoint")).map(checkpointItem);
 // One held item, or null once it has left.
 export const GetCheckpoint = async (id) => {
   try {
@@ -598,11 +601,11 @@ export const SetIntercept = async (enabled) =>
 export const ToggleIntercept = async () => SetIntercept(!(await GetInterceptFlag()));
 // The instance machine's addresses the listener can bind:
 // [{address, family, interface}], IPv4 first.
-export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
+export const GetInterfaces = () => listed("/listener/interfaces");
 export const GetLaunch = async (id) => launchOf(await marasi.get(`/launch/${encodeURIComponent(id)}`));
 // A launchpad's entries in entry order, as v1's RequestResponseSummary.
-export const GetLaunchpadRequests = async (id) => ((await marasi.get(launchpadPath(id))).items ?? []).map(pairSummary);
-export const GetLaunchpads = async () => ((await marasi.get("/launchpad")).items ?? []).map(launchpadOf);
+export const GetLaunchpadRequests = async (id) => (await listed(launchpadPath(id))).map(pairSummary);
+export const GetLaunchpads = async () => (await listed("/launchpad")).map(launchpadOf);
 // One page of the log, newest first: {items, next_cursor}. `cursor` is the
 // last page's next_cursor.
 export const GetLogs = (cursor) =>
@@ -617,7 +620,7 @@ export const GetRawDetails = async (id) => {
 };
 // The instance's projects, by name: [{name, project, modified_at}], where
 // `project` is the path on the instance machine.
-export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
+export const GetRecentProjects = () => listed("/project/list");
 // A pair's response as v1's ProxyResponse.
 export const GetResponse = async (id) => pairRow(await readPair(id)).Response;
 // A GET /scope rule as v1's scope rule.
@@ -690,12 +693,12 @@ export const LinkRequestToTestCase = (id, request) => linkPair(testCases, id, re
 // resolves how many were newly linked.
 export const LinkTraffic = (selection, target) => bulk("link", selection, linkTarget(target));
 // The project's settings whose keys start with `prefix`, sorted by key.
-export const ListClientSettings = async (prefix = "") =>
-  (await marasi.get(`${clientSettings}?prefix=${encodeURIComponent(prefix)}`)).items ?? [];
+export const ListClientSettings = (prefix = "") =>
+  listed(`${clientSettings}?prefix=${encodeURIComponent(prefix)}`);
 // The open project's findings and test cases, as v1's Finding and TestCase.
 export const ListFindings = () => listRecords(findings);
 // The open project's background jobs, in v1's JobState shape.
-export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
+export const ListJobs = async () => (await listed("/jobs")).map(jobState);
 // The most children Marasi lists in one sitemap page.
 const maxSitemapPage = 500;
 // One page of `request.Node`'s children, read as a one-node
@@ -761,10 +764,10 @@ export const OpenProject = async (project) => {
   return (await marasi.post("/project/open", body)).project;
 };
 // The launches that have not ended, oldest first, as v1's Launch.
-export const PendingLaunches = async () => ((await marasi.get("/launch")).items ?? []).map(launchOf);
+export const PendingLaunches = async () => (await listed("/launch")).map(launchOf);
 // A wordlist's first `limit` entries; Marasi reads at most 100.
-export const PreviewArmoryWordlist = async (name, limit) =>
-  (await marasi.get(`/wordlist/${encodeURIComponent(name)}?limit=${limit}`)).items ?? [];
+export const PreviewArmoryWordlist = (name, limit) =>
+  listed(`/wordlist/${encodeURIComponent(name)}?limit=${limit}`);
 // One page of the pairs an Armory run sent, whatever their content type, as
 // QueryTraffic reads the project's. `request.Query` narrows the run ("" for
 // all of it); `request.OrderBy` "" is "requested_at".
@@ -852,9 +855,9 @@ export const SearchLaunchpadEntries = async (query) => {
     return { ...result, QueryError: { ...any.QueryError, Position: position } };
   }
   if (!any.items?.length) return result;
-  const launchpads = (await marasi.get("/launchpad")).items ?? [];
+  const launchpads = await listed("/launchpad");
   const matches = await Promise.all(
-    launchpads.map(async (launchpad) => (await marasi.get(launchpadPath(launchpad.id) + trafficQuery({ q: query }))).items ?? []),
+    launchpads.map((launchpad) => listed(launchpadPath(launchpad.id) + trafficQuery({ q: query }))),
   );
   launchpads.forEach((launchpad, index) => {
     if (matches[index].length) result.EntriesByLaunchpad[launchpad.id] = matches[index].map((item) => item.id);
