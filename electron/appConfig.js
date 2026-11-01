@@ -68,7 +68,7 @@ const hiddenBuiltinQueriesKey = "hidden_builtin_queries";
 // v2's saved remote instances: {name, url, sealed_token}, where the token
 // is sealed by the OS through Electron's safeStorage (remotes.js). v1
 // doesn't read it. Not seeded: a missing key means none.
-const remoteConnectionsKey = "remote_connections";
+const remoteConnectionsKey = "v2_remote_connections";
 
 const hexColor = /^#[0-9a-f]{6}$/;
 
