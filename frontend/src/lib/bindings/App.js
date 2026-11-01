@@ -62,6 +62,18 @@ const jobState = (job) => ({
   Rebuildable: rebuildableJobs.has(job.name),
 });
 
+// The project's extensions, by name as in v1.
+export {
+  DoExtender,
+  GetExtensionCode,
+  GetExtensionFlag,
+  GetExtensionLogs,
+  GetExtensionUI,
+  GetExtensions,
+  LoadExtensions,
+  RunExtension,
+} from "./extensions.js";
+
 // The Ledger's content-type exclusion: the project's own list, a marasi-app
 // client setting, or else the app default
 // (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
@@ -230,7 +242,6 @@ export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
 export const DeleteTraffic = notPorted("DeleteTraffic");
 export const DeleteWaypoint = notPorted("DeleteWaypoint");
-export const DoExtender = notPorted("DoExtender");
 export const DownloadArtifact = notPorted("DownloadArtifact");
 // Saves the instance's CA certificate on this machine, through a save
 // dialog. Resolves false when the researcher cancels.
@@ -255,11 +266,6 @@ export const GetClientSetting = notPorted("GetClientSetting");
 // default.
 export const GetContentTypeExclusion = async () =>
   (await ownExclusion())?.value ?? (await appConfig.GetDefaultContentTypeExclusion());
-export const GetExtensionCode = notPorted("GetExtensionCode");
-export const GetExtensionFlag = notPorted("GetExtensionFlag");
-export const GetExtensionLogs = notPorted("GetExtensionLogs");
-export const GetExtensionUI = notPorted("GetExtensionUI");
-export const GetExtensions = notPorted("GetExtensions");
 // The held Checkpoint items, oldest first.
 export const GetCheckpointItems = async () => ((await marasi.get("/checkpoint")).items ?? []).map(checkpointItem);
 // One held item, or null once it has left.
@@ -324,7 +330,17 @@ export const GetRawDetails = async (id) => {
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
 // A pair's response as v1's ProxyResponse.
 export const GetResponse = async (id) => pairRow(await readPair(id)).Response;
-export const GetScopeRules = notPorted("GetScopeRules");
+// A GET /scope rule as v1's scope rule.
+const scopeRule = (rule) => ({ pattern: rule.pattern, matchType: rule.match_type });
+/** Compass's scope rules, in v1's shape. */
+export const GetScopeRules = async () => {
+  const scope = await marasi.get("/scope");
+  return {
+    defaultAllow: scope.default_allow,
+    includeRules: (scope.include ?? []).map(scopeRule),
+    excludeRules: (scope.exclude ?? []).map(scopeRule),
+  };
+};
 export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
 // This machine's user, the report assessor default.
 export const GetUserName = () => bridge().userName();
@@ -350,7 +366,6 @@ export const ListSitemapChildren = notPorted("ListSitemapChildren");
 export const ListSitemapLevels = notPorted("ListSitemapLevels");
 export const ListTemplates = notPorted("ListTemplates");
 export const ListTestCases = notPorted("ListTestCases");
-export const LoadExtensions = notPorted("LoadExtensions");
 export const MoveLaunchpadEntries = notPorted("MoveLaunchpadEntries");
 // A project file picked in this machine's open dialog, for a local
 // connection: its path, or null.
@@ -417,7 +432,6 @@ export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 // Drops the open project's own exclusion, so it follows the app default again.
 export const ResetContentTypeExclusion = () => unlessNotFound(marasi.delete(exclusionSetting));
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
-export const RunExtension = notPorted("RunExtension");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
 export const SaveArtifactToTestCase = notPorted("SaveArtifactToTestCase");
 export const SaveFinding = notPorted("SaveFinding");
@@ -441,7 +455,22 @@ export const StartBrowser = notPorted("StartBrowser");
 // The proxy listener; each resolves Marasi's listener status.
 export const StartProxy = (address, port) => marasi.post("/listener/start", { address, port: Number(port) });
 export const StopProxy = () => marasi.post("/listener/stop");
-export const TestScopeMatch = notPorted("TestScopeMatch");
+// Tests a URL against the scope, in v1's shape. Marasi names the rule that
+// matched; it put the URL in scope when it is an include rule and out of it
+// when it is an exclude rule. With no rule matched, the default decides.
+export const TestScopeMatch = async (url) => {
+  const check = await marasi.post("/scope/check", { url });
+  const rule = check.rule;
+  return {
+    inScope: check.in_scope,
+    testedUrl: check.tested_url,
+    matchedRule: rule?.pattern ?? "",
+    matchedAs: rule?.match_type ?? "",
+    ruleType: rule ? (check.in_scope ? "include" : "exclude") : "",
+    defaultAllowUsed: !rule,
+    compassEnabled: check.compass_enabled,
+  };
+};
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");

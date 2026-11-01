@@ -9,7 +9,7 @@
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Compass` or press `Command+3`. Expand `Compass Settings` for the scope tester: `#urlInput` and a `Test Rules` button. The Lua editor exposes `data-language="lua"`. `Update Compass Code` (`⌘⇧R`) and `Show Logs` (`⌘⇧L`) are `⌘K` palette commands and shortcuts, not page buttons. Vim behavior follows the global configuration.
+Select the rail item titled `Compass` or press `Command+3`. Expand `Compass Settings` for the rule list (`[data-scope-group=include]`, `[data-scope-group=exclude]`, from `GET /scope`, reread after each Compass update) and the scope tester, which names the matched rule as include or exclude: `#urlInput` and a `Test Rules` button. The Lua editor exposes `data-language="lua"`. `Update Compass Code` (`⌘⇧R`) and `Show Logs` (`⌘⇧L`) are `⌘K` palette commands and shortcuts, not page buttons. Vim behavior follows the global configuration.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `compass` in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
