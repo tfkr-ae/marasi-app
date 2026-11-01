@@ -17,6 +17,8 @@ import { logbookStore } from "../stores/logbookStore";
 import { findingStore } from "../stores/findingStore";
 import { testCaseStore } from "../stores/testCaseStore";
 import { upstreamProxyStore } from "../stores/upstreamProxyStore";
+import { chromeStore } from "../stores/chromeStore.js";
+import { waypointStore } from "../stores/waypointStore.js";
 import { listenerStore } from "../stores/listenerStore.js";
 import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
@@ -39,6 +41,19 @@ const handlers = {
   "update.failed": (failure) => instanceUpdate.onFailed(failure),
   "service.restarting": (restart) => instanceUpdate.onRestarting(restart),
   "service.restart_failed": (failure) => instanceUpdate.onRestartFailed(failure),
+  // The machine's Chrome and upstream proxies, and the project's selection
+  // and waypoints; each list event carries the whole list.
+  "chrome.path.added": (event) => chromeStore.onPaths(event),
+  "chrome.path.removed": (event) => chromeStore.onPaths(event),
+  "chrome.profile.added": (event) => chromeStore.onProfiles(event),
+  "chrome.profile.removed": (event) => chromeStore.onProfiles(event),
+  "upstream_proxy.added": (event) => upstreamProxyStore.onList(event),
+  "upstream_proxy.updated": (event) => upstreamProxyStore.onList(event),
+  "upstream_proxy.removed": (event) => upstreamProxyStore.onList(event),
+  "upstream_proxy.selected": (event) => upstreamProxyStore.onSelected(event),
+  "waypoint.added": (event) => waypointStore.onWaypoints(event),
+  "waypoint.updated": (event) => waypointStore.onWaypoints(event),
+  "waypoint.removed": (event) => waypointStore.onWaypoints(event),
   // A switch of the instance's project, by any client; the window reloads
   // every store's project on project.opened.
   "project.opening": (event) => projectSwitch.onOpening(event),
@@ -67,6 +82,8 @@ const stores = [
   findingStore,
   testCaseStore,
   upstreamProxyStore,
+  chromeStore,
+  waypointStore,
   instanceUpdate,
 ];
 

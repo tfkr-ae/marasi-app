@@ -3,7 +3,6 @@ import {
   GetMarasiConfig,
   GetKeybindings,
   GetExtensionCode,
-  GetWaypoints,
   GetExtensions,
   LoadExtensions,
   GetUserName,
@@ -24,6 +23,7 @@ import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { savedQueriesStore } from "./stores/savedQueriesStore";
 import { upstreamProxyStore } from "./stores/upstreamProxyStore";
+import { waypointStore } from "./stores/waypointStore.js";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";
@@ -66,8 +66,8 @@ export const reportMetadata = writable({
 export const compassCode = writable("");
 export const testerInput = writable("");
 
-// Waypoint
-export const waypoints = writable({});
+// Waypoint: the open project's {hostname: override} map.
+export const waypoints = waypointStore;
 
 // Checkpont
 export const checkpointCode = writable("");
@@ -142,7 +142,7 @@ export async function openProject(loadPart = () => {}) {
   checkpointCodeApplied.set("");
   interceptFlag.set(false);
   workshopCode.set("");
-  waypoints.set({});
+  waypoints.clear();
   ledgerStore.clear();
   sitemapStore.clear();
   jobsStore.clear();
@@ -207,14 +207,7 @@ export async function openProject(loadPart = () => {}) {
 }
 
 export async function populateWaypoints() {
-  GetWaypoints()
-    .then((points) => {
-      console.log(points);
-      waypoints.set(points);
-    })
-    .catch((waypointErr) => {
-      console.log(waypointErr);
-    });
+  await waypoints.reload().catch((err) => console.error("Reading waypoints failed:", err));
 }
 export async function populateWorkshop() {
   GetExtensionCode("workshop")
