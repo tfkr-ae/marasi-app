@@ -239,7 +239,8 @@ export const GetRawDetails = async (id) => {
 // The instance's projects, by name: [{name, project, modified_at}], where
 // `project` is the path on the instance machine.
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
-export const GetResponse = notPorted("GetResponse");
+// A pair's response as v1's ProxyResponse.
+export const GetResponse = async (id) => pairRow(await readPair(id)).Response;
 export const GetScopeRules = notPorted("GetScopeRules");
 export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
 // This machine's user, the report assessor default.

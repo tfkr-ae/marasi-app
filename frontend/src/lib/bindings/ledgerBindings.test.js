@@ -299,6 +299,29 @@ test("GetRawDetails answers null for a pair that is gone, as v1 did", async () =
   assert.equal(await App.GetRawDetails("gone"), null);
 });
 
+test("GetResponse reads the pair's response as v1's ProxyResponse", async () => {
+  answers["GET /traffic/a5"] = {
+    id: "a5",
+    metadata: {},
+    request: {},
+    response: { status: "204 No Content", status_code: 204, content_type: "", length: "0", raw: b64("HTTP/1.1 204 No Content\r\n\r\n"), responded_at: "2026-11-01T01:05:14+04:00" },
+    prettified: { request: null, response: null },
+    upstream_proxy: null,
+  };
+  assert.deepEqual(await App.GetResponse("a5"), {
+    ID: "a5",
+    Status: "204 No Content",
+    StatusCode: 204,
+    ContentType: "",
+    Length: "0",
+    Raw: "HTTP/1.1 204 No Content\r\n\r\n",
+    Metadata: {},
+    Prettified: "",
+    RespondedAt: "2026-11-01T01:05:14+04:00",
+    Route: null,
+  });
+});
+
 test("GetNote and GetMetadata read the pair's note and metadata", async () => {
   answers["GET /traffic/a4"] = { id: "a4", note: "", metadata: {}, request: {}, response: {}, prettified: {} };
   answers["GET /traffic/a4/metadata"] = { has_note: 1, upgrade: "websocket" };
