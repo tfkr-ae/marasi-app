@@ -541,6 +541,20 @@ export function createLedgerStore(api) {
     return promise;
   }
 
+  // Keeps the focused pair's response `res` for the drawer with its raw and
+  // prettified text, unless another pair is focused by the time it is read.
+  async function readIncomingResponse(res) {
+    let row;
+    try {
+      row = await api.getRawDetails(res.ID);
+    } catch (err) {
+      console.error("Reading the response failed:", err);
+    }
+    if (!sameID(current.selection.focus, res.ID)) return;
+    const full = row?.Response ? { Raw: row.Response.Raw, Prettified: row.Response.Prettified } : {};
+    setSelection({ ...current.selection, incomingResponse: { ...res, ...full } });
+  }
+
   // The rows in view, as indexes into the window, and whether the table is
   // scrolled to its very top. The table reports them as it scrolls.
   let viewport = { first: 0, last: 0, atTop: true };
@@ -1711,10 +1725,10 @@ export function createLedgerStore(api) {
       requestBuffer.push(req);
       if (requestBuffer.length > MAX_BUFFERED) flush();
     },
+    // The focused pair's response arrives without its bytes, so the drawer
+    // gets it once the pair is read in full.
     onResponse: (res) => {
-      if (sameID(current.selection.focus, res.ID)) {
-        setSelection({ ...current.selection, incomingResponse: res });
-      }
+      if (sameID(current.selection.focus, res.ID)) track(readIncomingResponse(res));
       responseBuffer.set(res.ID, res);
       if (responseBuffer.size > MAX_BUFFERED) flush();
     },
