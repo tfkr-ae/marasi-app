@@ -108,7 +108,52 @@ export async function readToken({ configDir, instance, call }) {
   return token;
 }
 
-/** Asks local `instance` to stop, through its socket. */
-export async function stopLocal({ configDir, instance, call }) {
-  await callInstance(call, configDir, instance, "POST", "/service/stop");
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// True once `origin` no longer answers as `instance` (marasi cmd/marasi/
+// service.go remoteInstanceGone): a failed dial or any other answer.
+async function networkGone(fetch, origin, token, instance) {
+  let answer;
+  try {
+    answer = await fetch(`${origin}/service/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(1000),
+    });
+  } catch {
+    return true;
+  }
+  if (answer.status !== 200) return true;
+  const body = await answer.json().catch(() => null);
+  return body?.instance !== instance;
+}
+
+/**
+ * Asks local `instance` to stop, through its socket, and resolves once it
+ * has released its project and instance locks, so a start right after
+ * succeeds. Marasi removes the socket, then unlocks, then closes the
+ * network address last, so the wait is for both to stop answering, as
+ * `marasi service stop` waits for the lock. Rejects after `timeoutMs`.
+ */
+export async function stopLocal({ configDir, instance, call, fetch = globalThis.fetch, pollMs = 50, timeoutMs = 15000 }) {
+  const status = await callInstance(call, configDir, instance, "GET", "/service/status");
+  const listener = status.control_listener;
+  const token = listener ? await readToken({ configDir, instance, call }) : null;
+  try {
+    await callInstance(call, configDir, instance, "POST", "/service/stop");
+  } catch (err) {
+    // An instance may close the connection before answering; the wait
+    // below confirms it is gone.
+    if (!err.stopped && err.code !== "ECONNRESET") throw err;
+  }
+  const deadline = Date.now() + timeoutMs;
+  const socketGone = () =>
+    callInstance(call, configDir, instance, "GET", "/service/status").then(
+      () => false,
+      (err) => Boolean(err.stopped),
+    );
+  for (;;) {
+    if ((await socketGone()) && (!listener || (await networkGone(fetch, originOf(listener), token, instance)))) return;
+    if (Date.now() > deadline) throw new Error(`${instance} didn't stop`);
+    await sleep(pollMs);
+  }
 }

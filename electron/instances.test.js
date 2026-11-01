@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { connectLocal, listLocalInstances } from "./instances.js";
+import { connectLocal, listLocalInstances, stopLocal } from "./instances.js";
 
 const configDir = join("/cfg", "Marasi");
 const instancesDir = join(configDir, "instances");
@@ -160,4 +160,59 @@ test("a name that isn't an instance name reaches no socket", async () => {
     await assert.rejects(connectLocal({ configDir, instance, call }), /not an instance name/);
   }
   assert.equal(calls.length, 0);
+});
+
+// An instance stopping as Marasi does: its socket answers a few more times,
+// then its network address, which closes after the locks are released.
+function stoppingInstance({ socketPolls, networkPolls, listener = "127.0.0.1:50037" }) {
+  const events = [];
+  let stopAsked = false;
+  const { call } = fakeMachine([], {
+    default: (method, path) => {
+      if (stopAsked && socketPolls-- <= 0) throw refused("ENOENT");
+      if (path === "/service/status") return { status: 200, body: status("default", { control_listener: listener }) };
+      if (path === "/service/control-listener/token") return { status: 200, body: { token: "t".repeat(64) } };
+      if (method === "POST" && path === "/service/stop") {
+        stopAsked = true;
+        return { status: 202, body: { status: "shutdown_in_progress" } };
+      }
+      return { status: 404, body: null };
+    },
+  });
+  const fetch = async (url, init) => {
+    assert.equal(url, `http://${listener}/service/status`);
+    assert.equal(init.headers.Authorization, `Bearer ${"t".repeat(64)}`);
+    if (!stopAsked || networkPolls-- > 0) return new Response(JSON.stringify(status("default")), { status: 200 });
+    events.push("released");
+    throw Object.assign(new TypeError("fetch failed"), { cause: refused("ECONNREFUSED") });
+  };
+  return { call, fetch, events };
+}
+
+test("stopping waits until the instance has released its locks, as marasi service stop does", async () => {
+  const machine = stoppingInstance({ socketPolls: 2, networkPolls: 3 });
+  await stopLocal({ configDir, instance: "default", call: machine.call, fetch: machine.fetch, pollMs: 1 });
+  assert.deepEqual(machine.events, ["released"]);
+});
+
+test("stopping an instance with no network address waits for its socket to go", async () => {
+  let stopAsked = false;
+  let polls = 3;
+  const { call } = fakeMachine([], {
+    default: (method, path) => {
+      if (stopAsked && polls-- <= 0) throw refused("ENOENT");
+      if (method === "POST" && path === "/service/stop") stopAsked = true;
+      return { status: 200, body: status("default") };
+    },
+  });
+  await stopLocal({ configDir, instance: "default", call, fetch: () => assert.fail("no network address"), pollMs: 1 });
+  assert.equal(polls, -1);
+});
+
+test("stopping gives up when the instance doesn't stop in time", async () => {
+  const machine = stoppingInstance({ socketPolls: Infinity, networkPolls: Infinity });
+  await assert.rejects(
+    stopLocal({ configDir, instance: "default", call: machine.call, fetch: machine.fetch, pollMs: 1, timeoutMs: 20 }),
+    /default didn't stop/,
+  );
 });
