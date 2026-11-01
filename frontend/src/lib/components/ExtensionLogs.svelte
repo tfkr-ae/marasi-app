@@ -1,6 +1,6 @@
 <script>
     import { onMount } from "svelte";
-    import { GetExtensionLogs } from "../wailsjs/go/main/App";
+    import { GetExtensionLogs } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { off, on } from "../runtime.js";
 
     export let extensionName = "";

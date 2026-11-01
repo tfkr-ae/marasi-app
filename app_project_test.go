@@ -12,7 +12,6 @@ import (
 	marasi "github.com/tfkr-ae/marasi"
 	"github.com/tfkr-ae/marasi/service"
 	"github.com/tfkr-ae/marasi/wordlist"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func TestSetupScratchpadOpensThroughLifecycle(t *testing.T) {
@@ -101,7 +100,7 @@ func TestOpenProjectRefusesWhileCheckpointItemHeld(t *testing.T) {
 	app := newCheckpointApp(t)
 	events := &recordedEvents{}
 	app.emitEvent = events.emit
-	app.messageDialog = func(runtime.MessageDialogOptions) (string, error) {
+	app.messageDialog = func(messageDialogOptions) (string, error) {
 		t.Fatal("wanted no unsaved-work prompt while an item is held")
 		return "", nil
 	}
@@ -143,7 +142,7 @@ func TestCloseReleasesOpenProject(t *testing.T) {
 	}
 	path := scratchpadPath(t, app)
 	assertProjectOwned(t, path)
-	app.close(context.Background())
+	app.ServiceShutdown()
 	assertProjectReleased(t, path)
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	marasi "github.com/tfkr-ae/marasi"
 	"github.com/tfkr-ae/marasi/domain"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // Desktop calls (dialogs, the clipboard, events, quitting) go through App's
@@ -26,11 +27,11 @@ type cancellingFileDialogs struct{ shown int }
 
 func withCancelledFileDialogs(app *App) *cancellingFileDialogs {
 	dialogs := &cancellingFileDialogs{}
-	app.openFileDialog = func(runtime.OpenDialogOptions) (string, error) {
+	app.openFileDialog = func(openDialogOptions) (string, error) {
 		dialogs.shown++
 		return "", nil
 	}
-	app.saveFileDialog = func(runtime.SaveDialogOptions) (string, error) {
+	app.saveFileDialog = func(saveDialogOptions) (string, error) {
 		dialogs.shown++
 		return "", nil
 	}
@@ -46,7 +47,7 @@ func TestStartupSendsMarasiEventsThroughEmitEvent(t *testing.T) {
 	events := &recordedEvents{}
 	app.emitEvent = events.emit
 
-	app.startup(context.Background())
+	app.ServiceStartup(context.Background(), application.ServiceOptions{})
 	app.Proxy.OnRequest(domain.ProxyRequest{ID: uuid.New()})
 	app.Proxy.OnResponse(domain.ProxyResponse{ID: uuid.New()})
 	app.Proxy.OnLog(domain.Log{Message: "Marasi log", Timestamp: time.Now()})
@@ -160,7 +161,7 @@ func TestExportingAReportWritesItWhereChosen(t *testing.T) {
 		t.Fatalf("wanted a report template, got %v %v", templates, err)
 	}
 	path := filepath.Join(t.TempDir(), "report.md")
-	app.saveFileDialog = func(runtime.SaveDialogOptions) (string, error) { return path, nil }
+	app.saveFileDialog = func(saveDialogOptions) (string, error) { return path, nil }
 
 	if saved, err := app.ExportReport(templates[0], reportMetadata(map[string]any{})); !saved || err != nil {
 		t.Fatalf("wanted the report saved, got %v %v", saved, err)
@@ -174,8 +175,8 @@ func TestExportingAReportWritesItWhereChosen(t *testing.T) {
 func TestSavingTheCACertificateWritesThePEMWhereChosen(t *testing.T) {
 	app := newCAApp(t)
 	path := filepath.Join(t.TempDir(), "marasi-proxy.crt")
-	var asked runtime.SaveDialogOptions
-	app.saveFileDialog = func(options runtime.SaveDialogOptions) (string, error) {
+	var asked saveDialogOptions
+	app.saveFileDialog = func(options saveDialogOptions) (string, error) {
 		asked = options
 		return path, nil
 	}
@@ -243,19 +244,148 @@ func TestQuittingWithUnsavedWorkCanBeCancelledThenConfirmedOnce(t *testing.T) {
 	app.SetUnsavedDraftCount(1)
 	dialog := withDialog(app, "Cancel")
 
-	if prevent := app.beforeClose(context.Background()); !prevent {
+	if prevent := app.beforeClose(); !prevent {
 		t.Fatal("wanted cancelling to keep Marasi open")
 	}
 	dialog.answer = "Close Marasi"
-	if prevent := app.beforeClose(context.Background()); prevent {
+	if prevent := app.beforeClose(); prevent {
 		t.Fatal("wanted confirming to close Marasi")
 	}
 	// Closing the window and then quitting the app each run beforeClose.
-	if prevent := app.beforeClose(context.Background()); prevent {
+	if prevent := app.beforeClose(); prevent {
 		t.Fatal("wanted the confirmed quit to go ahead")
 	}
 	if len(dialog.asked) != 2 {
 		t.Fatalf("wanted one dialog for the cancel and one for the confirm, got %d", len(dialog.asked))
+	}
+}
+
+// recordQuits stands in for the Wails application's Quit: it asks
+// shouldQuit, and reports each quit that went ahead on the returned channel.
+func recordQuits(app *App) <-chan struct{} {
+	quit := make(chan struct{}, 4)
+	app.quitApp = func() {
+		if app.shouldQuit() {
+			quit <- struct{}{}
+		}
+	}
+	return quit
+}
+
+func waitForQuit(t *testing.T, quit <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-quit:
+	case <-time.After(5 * time.Second):
+		t.Fatal("wanted Marasi to quit")
+	}
+}
+
+func TestQuittingWithUnsavedWorkAsksBeforeQuitting(t *testing.T) {
+	app := newScratchpadApp(t)
+	app.SetUnsavedDraftCount(1)
+	answers := make(chan string)
+	app.messageDialog = func(messageDialogOptions) (string, error) { return <-answers, nil }
+	quit := recordQuits(app)
+
+	// Wails asks on the main thread, which must not wait for a dialog: the
+	// quit is refused, and the question asked in the background. A second
+	// ⌘Q while it is open doesn't ask again.
+	if app.shouldQuit() || app.shouldQuit() {
+		t.Fatal("wanted the quit held until the researcher answers")
+	}
+	answers <- "Cancel"
+	waitUntilAnswered(t, app)
+	select {
+	case answers <- "Cancel":
+		t.Fatal("wanted one dialog for both quits")
+	case <-quit:
+		t.Fatal("wanted cancelling to keep Marasi open")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	app.shouldQuit()
+	answers <- "Close Marasi"
+	waitForQuit(t, quit)
+	// answers has no reader now, so asking again would hang the quit.
+	if !app.shouldQuit() {
+		t.Fatal("wanted the confirmed quit to go ahead without asking again")
+	}
+}
+
+// waitUntilAnswered waits until the app is no longer asking to quit.
+func waitUntilAnswered(t *testing.T, app *App) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for app.askingToQuit.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("wanted the quit prompt answered")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestClosingTheWindowWithUnsavedWorkAsks(t *testing.T) {
+	app := newScratchpadApp(t)
+	app.SetUnsavedDraftCount(1)
+	dialog := withDialog(app, "Cancel")
+	quit := recordQuits(app)
+	cancelled := 0
+	cancel := func() { cancelled++ }
+
+	app.windowClosing(cancel)
+	if cancelled != 1 || len(quit) != 0 || len(dialog.asked) != 1 {
+		t.Fatalf("wanted the close cancelled after one dialog, got %d cancels, %d quits, %d dialogs", cancelled, len(quit), len(dialog.asked))
+	}
+
+	dialog.answer = "Close Marasi"
+	app.windowClosing(cancel)
+	if len(quit) != 1 || len(dialog.asked) != 2 {
+		t.Fatalf("wanted confirming to quit Marasi, got %d quits after %d dialogs", len(quit), len(dialog.asked))
+	}
+	// Quitting closes the window again, which goes ahead without asking.
+	cancelled = 0
+	app.windowClosing(cancel)
+	if cancelled != 0 || len(dialog.asked) != 2 {
+		t.Fatalf("wanted the quit's close to go ahead, got %d cancels and %d dialogs", cancelled, len(dialog.asked))
+	}
+}
+
+func TestClosingTheWindowQuitsMarasi(t *testing.T) {
+	app := newScratchpadApp(t)
+	dialog := withDialog(app, "Cancel")
+	quit := recordQuits(app)
+	cancelled := false
+
+	app.windowClosing(func() { cancelled = true })
+
+	// The close itself is cancelled: the quit closes the window, so every OS
+	// shuts down the same way.
+	if !cancelled || len(quit) != 1 || len(dialog.asked) != 0 {
+		t.Fatalf("wanted the close to become a quit without asking, got cancelled %v, %d quits, %d dialogs", cancelled, len(quit), len(dialog.asked))
+	}
+}
+
+func TestCancelledFileDialogsReadAsNoPath(t *testing.T) {
+	for name, answer := range map[string]struct {
+		path string
+		err  error
+	}{
+		"macOS and Linux": {"", nil},
+		"Windows":         {"", errors.New("cancelled by user")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if path, err := fileDialogResult(answer.path, answer.err); path != "" || err != nil {
+				t.Fatalf("wanted a cancel, got %q %v", path, err)
+			}
+		})
+	}
+	failure := errors.New("dialog failed")
+	if _, err := fileDialogResult("", failure); err != failure {
+		t.Fatalf("wanted a real failure kept, got %v", err)
+	}
+	if path, err := fileDialogResult("/tmp/report.md", nil); path != "/tmp/report.md" || err != nil {
+		t.Fatalf("wanted the chosen path, got %q %v", path, err)
 	}
 }
 

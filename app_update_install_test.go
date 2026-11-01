@@ -408,8 +408,8 @@ func TestFailedInstallCanBeRetried(t *testing.T) {
 }
 
 // restartRecorder stands in for Wails quitting and for relaunching: quitting
-// runs beforeClose and, unless it prevents the close, the shutdown, as
-// runtime.Quit does.
+// asks shouldQuit and, if it lets the quit go ahead, shuts down, as the Wails
+// application's Quit does.
 type restartRecorder struct {
 	quits      int
 	prevented  []bool
@@ -420,10 +420,10 @@ func recordRestarts(app *App) *restartRecorder {
 	recorder := &restartRecorder{}
 	app.quitApp = func() {
 		recorder.quits++
-		prevent := app.beforeClose(context.Background())
+		prevent := !app.shouldQuit()
 		recorder.prevented = append(recorder.prevented, prevent)
 		if !prevent {
-			app.close(context.Background())
+			app.ServiceShutdown()
 		}
 	}
 	app.relaunch = func(location string) error {
@@ -512,7 +512,7 @@ func TestCancellingTheRestartWarningKeepsTheRestartPending(t *testing.T) {
 		t.Fatalf("wanted the restart still pending, got %+v", state)
 	}
 	// Closing Marasi later still warns about the drafts.
-	if prevent := app.beforeClose(context.Background()); !prevent || len(dialog.asked) != 2 {
+	if prevent := app.beforeClose(); !prevent || len(dialog.asked) != 2 {
 		t.Fatalf("wanted a later close to warn again, got prevent %v after %d dialogs", prevent, len(dialog.asked))
 	}
 }

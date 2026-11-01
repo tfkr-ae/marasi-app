@@ -7,7 +7,7 @@
 	// writes the selected profile to a file (docs/keybinding-profile-format.md).
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CheckCircle2, ChevronDown, Copy, Download, Pencil, Plus, RotateCcw, Trash2, Upload } from "lucide-svelte";
-	import { ExportKeybindingProfile, ImportKeybindingProfile } from "../../wailsjs/go/main/App";
+	import { ExportKeybindingProfile, ImportKeybindingProfile } from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { PLATFORM_NAMES as platformNames } from "../../keybindings/platform.js";
 	import { exportBlocker, exportFileName, exportProfile, importProfile } from "../../keybindings/portable.js";
 	import {

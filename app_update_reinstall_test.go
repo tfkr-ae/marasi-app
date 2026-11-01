@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // releaseBinary is the latest release a reinstall puts back.
@@ -42,7 +41,7 @@ func TestReinstallingTheLatestReleaseWarnsThenInstallsItForARestart(t *testing.T
 		t.Fatalf("wanted one warning, got %+v", dialog.asked)
 	}
 	warning := dialog.asked[0]
-	if warning.Type != runtime.WarningDialog || warning.Title != "Reinstall latest release" {
+	if warning.Type != warningDialog || warning.Title != "Reinstall latest release" {
 		t.Fatalf("wanted a Reinstall latest release warning, got %+v", warning)
 	}
 	for _, want := range []string{"16.10.2026", "Projects opened in a newer build"} {

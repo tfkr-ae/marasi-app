@@ -5,7 +5,7 @@
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { Send } from "lucide-svelte";
-	import { InjectWebSocketMessage } from "../wailsjs/go/main/App";
+	import { InjectWebSocketMessage } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { marasiConfig, lineWrap } from "../../stores";
 	import { longStrings } from "../longStrings.js";
 	import {

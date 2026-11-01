@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Keybinding profile files (docs/keybinding-profile-format.md). The
@@ -24,7 +23,7 @@ const keybindingProfileFileEnv = "MARASI_KEYBINDINGS_PROFILE_FILE"
 // every action overridden on both platforms is a few tens of KiB.
 const maxKeybindingProfileFileSize = 1 << 20
 
-var keybindingProfileFilters = []runtime.FileFilter{
+var keybindingProfileFilters = []fileFilter{
 	{DisplayName: "Marasi Keybinding Profiles (*.json)", Pattern: "*.json"},
 	{DisplayName: "All Files (*.*)", Pattern: "*.*"},
 }
@@ -44,7 +43,7 @@ func (a *App) ExportKeybindingProfile(defaultName string, contents string) (stri
 	if path == "" {
 		home, _ := os.UserHomeDir()
 		var err error
-		path, err = a.saveFileDialog(runtime.SaveDialogOptions{
+		path, err = a.saveFileDialog(saveDialogOptions{
 			DefaultDirectory: filepath.Join(home, "Downloads"),
 			DefaultFilename:  filepath.Base(defaultName),
 			Title:            "Export Keybinding Profile",
@@ -66,7 +65,7 @@ func (a *App) ImportKeybindingProfile() (KeybindingProfileFile, error) {
 	path := os.Getenv(keybindingProfileFileEnv)
 	if path == "" {
 		var err error
-		path, err = a.openFileDialog(runtime.OpenDialogOptions{
+		path, err = a.openFileDialog(openDialogOptions{
 			Title:   "Import Keybinding Profile",
 			Filters: keybindingProfileFilters,
 		})

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -208,7 +207,7 @@ func TestCloseUsesTerminalShutdown(t *testing.T) {
 	if err := app.StartProxy("127.0.0.1", "0"); err != nil {
 		t.Fatalf("starting listener: %v", err)
 	}
-	app.close(context.Background())
+	app.ServiceShutdown()
 	if err := app.StartProxy("127.0.0.1", "0"); err == nil {
 		t.Fatal("wanted start after shutdown to fail")
 	}
@@ -253,7 +252,7 @@ func TestCloseInterruptsExtensionHoldingRequest(t *testing.T) {
 
 	closed := make(chan struct{})
 	go func() {
-		app.close(context.Background())
+		app.ServiceShutdown()
 		close(closed)
 	}()
 	select {

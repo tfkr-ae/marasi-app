@@ -8,7 +8,7 @@
 	import { getModalStore, getToastStore, modeCurrent, SlideToggle } from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { FileText, RotateCcw, SquareArrowRight, X } from "lucide-svelte";
-	import { ExportReport, ListTemplates, RestoreDefaultReportTemplate } from "../wailsjs/go/main/App";
+	import { ExportReport, ListTemplates, RestoreDefaultReportTemplate } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
 	import { reportMetadata } from "../../stores";

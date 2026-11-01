@@ -10,7 +10,7 @@ import {
 	DownloadCert,
 	CopyCertToClipboard,
 	GetCheckpointItems,
-} from "./wailsjs/go/main/App";
+} from "./bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { once, setWindowTitle } from "./runtime.js";
 import { projectName } from "./openProgress.js";
 import { checkpointHeldModal, heldCheckpointIDs } from "./checkpointHeld.js";
