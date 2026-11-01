@@ -44,9 +44,10 @@ function emptyList(narrowing = "") {
 // query: whole groups or the run, up to an as_of.
 function emptySelection() {
   return {
-    // A query Selection: { groupBy, groups, asOf, count }, the values of
-    // the groups selected under groupBy (null for the whole run), the
-    // count's as_of and how many pairs it holds. `ids` is empty then.
+    // A query Selection: { groupBy, groups, asOf, count, counts }, the
+    // values of the groups selected under groupBy (null for the whole run),
+    // the count's as_of, how many pairs it holds, and each group's pairs
+    // under that as_of (null when not grouped). `ids` is empty then.
     query: null,
     // The selected pairs' IDs, as strings. Replaced, never mutated, so a
     // subscriber can tell a change by identity.
@@ -281,12 +282,14 @@ export function runSelectionSpec(state) {
 /**
  * How much of a group the Selection holds: "all", "some" or "". A group
  * selected as a whole, or the run, is "all" though not all its rows are
- * read.
+ * read, and "some" once the group counts pairs sent after its as_of.
  */
 export function groupSelection(state, group) {
   const { query } = state.selection;
   if (query && (query.groups == null || query.groupBy === state.groupBy)) {
-    return query.groups == null || query.groups.includes(group.value) ? "all" : "";
+    if (query.groups != null && !query.groups.includes(group.value)) return "";
+    const held = query.groupBy === state.groupBy ? query.counts?.get(group.value) : undefined;
+    return query.asOf === state.grouping.asOf || held === group.count ? "all" : "some";
   }
   const n = group.list.rows.filter((row) => isRowSelected(state, row)).length;
   if (n === 0) return "";
@@ -878,9 +881,14 @@ export function createRunTrafficView(api) {
         count = counted.counts.reduce((sum, c) => sum + c.count, 0);
       }
       if (!count || !asOf) return;
+      const counts = groupBy ? new Map(grouping.counts.map((c) => [c.value, c.count])) : null;
       update((state) => ({
         ...state,
-        selection: { ...emptySelection(), anchor: state.selection.anchor, query: { groupBy, groups: null, asOf, count } },
+        selection: {
+          ...emptySelection(),
+          anchor: state.selection.anchor,
+          query: { groupBy, groups: null, asOf, count, counts },
+        },
       }));
     },
 
@@ -895,7 +903,10 @@ export function createRunTrafficView(api) {
     async toggleGroupSelection(value) {
       const { groupBy, grouping } = current;
       if (!groupBy || !grouping.counts) return;
-      const query = current.selection.query;
+      // Only a Selection of the run or of this grouping's groups grows or
+      // shrinks; any other gives way to the group under the latest count.
+      const selected = current.selection.query;
+      const query = selected && (selected.groups == null || selected.groupBy === groupBy) ? selected : null;
       const asOf = query?.asOf ?? grouping.asOf;
       let counted = grouping.counts;
       if (asOf !== grouping.asOf) {
@@ -918,7 +929,7 @@ export function createRunTrafficView(api) {
         selection: {
           ...emptySelection(),
           anchor: state.selection.anchor,
-          query: { groupBy, groups, asOf, count },
+          query: { groupBy, groups, asOf, count, counts },
         },
       }));
     },
