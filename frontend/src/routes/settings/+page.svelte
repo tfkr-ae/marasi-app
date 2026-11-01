@@ -11,6 +11,8 @@
 		GetBuildInfo,
 		GetUpdateSettings,
 		SetAutomaticUpdateChecks,
+		GetLocalChromeProxy,
+		SetLocalChromeProxy,
 	} from "../../lib/bindings/App";
 	import {
 		keybindingState,
@@ -108,9 +110,11 @@
 	let selectedOS = "";
 	let selectedPath = "";
 	let selectedProfile = "";
-	// Chrome on a remote connection would be this machine's, which isn't
-	// ported yet.
+	// On a remote connection Chrome is this machine's, through the proxy
+	// address saved for the remote or, when there is none, its default.
 	$: remoteConnection = Boolean($windowConnection.connection?.remote);
+	let chromeProxy = "";
+	let chromeProxyDefault = "";
 	let buildInfo = null;
 	// The update settings (Go UpdateSettings), null until read.
 	let updateSettings = null;
@@ -198,6 +202,22 @@
 				)(error),
 			);
 		selectedProfile = "";
+	}
+	function readChromeProxy() {
+		GetLocalChromeProxy()
+			.then((proxy) => {
+				chromeProxy = proxy.Address;
+				chromeProxyDefault = proxy.Default;
+			})
+			.catch((error) => toastError(toastStore, "Error reading the proxy address", error));
+	}
+	function saveChromeProxy() {
+		SetLocalChromeProxy(chromeProxy)
+			.then((saved) => {
+				chromeProxy = saved;
+				toastStore.trigger({ message: "Proxy address saved", background: "variant-filled-success" });
+			})
+			.catch((error) => toastError(toastStore, "Error saving the proxy address", error));
 	}
 	function deleteChromeProfile(profile) {
 		chromeStore.removeProfile(profile).catch(chromeError(toastStore, "Error deleting profile"));
@@ -402,7 +422,8 @@
 				automaticChecks = settings.AutomaticChecks;
 			})
 			.catch((error) => toastError(toastStore, "Error reading the update settings", error));
-		if (!remoteConnection) chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome"));
+		chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome"));
+		if (remoteConnection) readChromeProxy();
 	});
 </script>
 
@@ -739,10 +760,29 @@
 				</div>
 			{:else if section === "browser"}
 				<h3 class="text-sm font-bold">Browser</h3>
-				<p class="mb-4 text-xs opacity-70">Chrome that Marasi starts with the proxy configured.</p>
+				<p class="mb-4 text-xs opacity-70">
+					{remoteConnection
+						? "Chrome on this machine, through the remote instance's proxy."
+						: "Chrome that Marasi starts with the proxy configured."}
+				</p>
 				{#if remoteConnection}
-					<p class="text-xs opacity-70">Not available on a remote connection yet.</p>
-				{:else}
+				<div class="{row} mb-4">
+					<div>
+						<p>Proxy address</p>
+						<p class="text-xs opacity-70">Remembered for this remote. Empty uses the default.</p>
+					</div>
+					<form class="{control} gap-2" on:submit|preventDefault={saveChromeProxy}>
+						<input
+							type="text"
+							class="input h-8 w-full py-1 font-mono text-sm"
+							aria-label="Proxy address"
+							placeholder={chromeProxyDefault || "host:port"}
+							bind:value={chromeProxy}
+						/>
+						<button type="submit" class="btn btn-sm {primary}">Save</button>
+					</form>
+				</div>
+				{/if}
 				<div class="table-container mb-4">
 					<table class="table table-dense">
 						<thead>
@@ -843,7 +883,6 @@
 						</tfoot>
 					</table>
 				</div>
-				{/if}
 			{:else if section === "upstream"}
 				<h3 class="text-sm font-bold">Upstream Proxy</h3>
 				<p class="mb-4 text-xs opacity-70">Send a project's traffic through another proxy.</p>

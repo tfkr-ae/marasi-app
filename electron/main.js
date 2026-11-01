@@ -3,9 +3,9 @@
 // docs/adr/2026-10-31-v2-reaches-marasi-only-through-the-control-api.md).
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, safeStorage, session, shell, webContents } from "electron";
 import { execFile, spawn } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { constants as fsConstants, readFileSync, statSync } from "node:fs";
 import * as fsPromises from "node:fs/promises";
-import { readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { access, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { networkInterfaces, tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
 import { createCertificateFile } from "./certificateFile.js";
+import { createArtifactFile } from "./artifactFile.js";
 import { createCAFile } from "./caFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
@@ -22,6 +23,8 @@ import { marasiConfigDir } from "./configDir.js";
 import { listLocalInstances } from "./instances.js";
 import { createKeybindingFiles } from "./keybindingFiles.js";
 import { createLocalConnections } from "./local.js";
+import { createLocalChrome } from "./localChrome.js";
+import { handleLocalChrome } from "./localChromeIPC.js";
 import { bundledMarasi, createMarasiChoice, runsBundled } from "./marasiBin.js";
 import { nodeFS } from "./nodeFS.js";
 import { createRemotes } from "./remotes.js";
@@ -98,7 +101,7 @@ function serveFrontend() {
 }
 
 // The app config v1 and v2 share, the keybinding profile files, and the
-// certificate file and clipboard, for every window.
+// certificate and artifact files and clipboard, for every window.
 async function serveAppConfig() {
   const appConfig = createAppConfig({
     dir: configDir,
@@ -128,6 +131,13 @@ async function serveAppConfig() {
     dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
   });
   handle("certificate:save", (event, pem) => certificateFile.save(pem));
+  // A Logbook artifact, which the renderer read from its instance.
+  const artifactFile = createArtifactFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("artifact:save", (event, filename, bytes) => artifactFile.save(filename, bytes));
   // An upstream proxy's CA, read from a file on this machine.
   const caFile = createCAFile({
     fs: { readFile, stat },
@@ -144,11 +154,11 @@ async function serveAppConfig() {
   return appConfig;
 }
 
-// Starts `path` so that it outlives the app, as an installed update's
-// relaunch needs.
-function spawnDetached(path) {
+// Starts `path` with `args` so that it outlives the app, as an installed
+// update's relaunch and a started Chrome need.
+function spawnDetached(path, args = []) {
   return new Promise((resolve, reject) => {
-    const child = spawn(path, [], { detached: true, stdio: "ignore" });
+    const child = spawn(path, args, { detached: true, stdio: "ignore" });
     child.once("error", reject);
     child.once("spawn", () => {
       child.unref();
@@ -435,6 +445,16 @@ function serveConnections(appConfig) {
   handle("remotes:connectSaved", (event, url) => answer(() => remotes.connectSaved(url).then(useRemote(event.sender))));
   handle("remotes:forget", (_event, url) => remotes.forget(url));
   handle("remotes:refused", (event) => refusedRemotes.get(event.sender.id) ?? null);
+  // This machine's Chrome, which a remote connection's Start Chrome opens,
+  // with its profiles' user-data-dirs in the config directory.
+  const localChrome = createLocalChrome({
+    appConfig,
+    profilesDir: join(configDir, "v2_chrome_profiles"),
+    isExecutable: (path) => access(path, fsConstants.X_OK).then(() => true, () => false),
+    spawn: spawnDetached,
+    removeDir: (path) => rm(path, { recursive: true, force: true }),
+  });
+  handleLocalChrome({ handle }, { localChrome, connectionOf: (id) => connections.get(id) });
   // The project a Start or an open opens, picked in an OS dialog: a path,
   // or null.
   handle("dialog:pick-project", async (event, title) => {

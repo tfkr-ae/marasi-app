@@ -1,4 +1,4 @@
-// The instance's Chrome paths and profiles, wired to the Chrome bindings
+// The Chrome paths and profiles, wired to the Chrome bindings
 // (createChromeStore.js has the logic).
 import { createChromeStore } from "./createChromeStore.js";
 import {
@@ -9,6 +9,7 @@ import {
   GetChromePaths,
   GetChromeProfiles,
 } from "../lib/bindings/App";
+import { isRemoteConnection } from "../lib/bindings/marasi.js";
 
 export const chromeStore = createChromeStore({
   paths: GetChromePaths,
@@ -17,4 +18,5 @@ export const chromeStore = createChromeStore({
   removePath: DeleteChromePath,
   addProfile: AddChromeProfile,
   removeProfile: DeleteChromeProfile,
+  instanceChrome: () => !isRemoteConnection(),
 });

@@ -17,4 +17,6 @@ export const SEVERITY_MARK = {
   Medium: "bg-yellow-500",
   Low: "bg-blue-500",
   Informational: "bg-green-500",
+  // The No severity group (groupsOf).
+  none: "bg-surface-400",
 };

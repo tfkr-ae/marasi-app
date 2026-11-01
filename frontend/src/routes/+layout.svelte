@@ -57,7 +57,6 @@
 		openConnectedProject,
 		retryOpen,
 	} from "../lib/globalActions.js";
-	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
 	import {
 		checkpointItemContext,
@@ -322,9 +321,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			EventsOn("request", (newRequest) => {
-				launchpadStore.onRequest(newRequest);
-			});
 			EventsOn("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
 			);
@@ -332,7 +328,6 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			EventsOn("response", (newResponse) => {
-				launchpadStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&
@@ -346,31 +341,6 @@
 					});
 				}
 			});
-			EventsOn("ws-message", (msg) =>
-				connectionStore.upsertMessage(msg),
-			);
-			EventsOn("ws-intercepted", (msg) =>
-				connectionStore.upsertInterception(msg),
-			);
-			EventsOn("ws-open", (conn) => {
-				connectionStore.upsertConnection(conn);
-				ledgerStore.patchWebSocketMetadata(conn);
-			});
-			EventsOn("ws-close", (conn) => {
-				connectionStore.upsertConnection(conn);
-				connectionStore.clearInterceptions(
-					conn.RequestID,
-				);
-				ledgerStore.patchWebSocketMetadata(conn);
-			});
-			EventsOn("ws-progress", (progress) =>
-				connectionStore.upsertProgress(progress),
-			);
-			// An upgrade whose handshake failed or was dropped opens no
-			// connection, so only its Ledger row changes.
-			EventsOn("ws-state", ({ RequestID, State }) =>
-				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
-			);
 			// Marasi dropped a held item because its client left
 			// (checkpoint.dropped, reason abandoned; see marasiEvents.js).
 			// The toast shows on any page.
@@ -401,12 +371,6 @@
 			removeMenuShortcuts();
 			EventsOff("request");
 			EventsOff("response");
-			EventsOff("ws-message");
-			EventsOff("ws-intercepted");
-			EventsOff("ws-open");
-			EventsOff("ws-close");
-			EventsOff("ws-progress");
-			EventsOff("ws-state");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
 			EventsOff("update-progress");

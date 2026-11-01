@@ -3,7 +3,6 @@ import { get } from "svelte/store";
 import { DownloadCert, CopyCertToClipboard } from "./bindings/App";
 import { listener } from "../stores.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
-import { isNotPorted } from "./bindings/notPorted.js";
 import { codeIDs } from "./errorCodes.js";
 
 // Listens on the modal's address and port, starting the listener or moving
@@ -137,15 +136,10 @@ export async function copyCertificate(toastStore) {
 }
 
 // chromeError returns a rejection handler for the Chrome bindings. A
-// listener that is off is said so, since Chrome would have no proxy; the
-// bindings aren't ported on a remote connection, which is said so too;
+// listener that is off is said so, since Chrome would have no proxy;
 // anything else shows fallback.
 export function chromeError(toastStore, fallback) {
 	return (error) => {
-		if (isNotPorted(error)) {
-			toastStore.trigger({ message: "Not available on a remote connection yet", background: "variant-filled-warning" });
-			return;
-		}
 		toastStore.trigger({
 			message: codeIDs(error, "listener_inactive") ? "Proxy listener is off" : fallback,
 			background: "variant-filled-error",

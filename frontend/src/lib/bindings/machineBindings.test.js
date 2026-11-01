@@ -5,7 +5,6 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import * as App from "./App.js";
 import { useConnection } from "./marasi.js";
-import { isNotPorted } from "./notPorted.js";
 
 let sent;
 let answers;
@@ -75,20 +74,74 @@ test("StartBrowser rejects with Marasi's refusal, as when the listener is off", 
   await assert.rejects(App.StartBrowser(""), /listener_inactive/);
 });
 
-test("on a remote connection the Chrome bindings aren't ported, so the instance's Chrome never starts", async () => {
+// This machine's Chrome over a fake preload bridge: paths, profiles and
+// proxy addresses kept in `local`, each start kept in `local.started`.
+function localChromeBridge(local = { paths: [], profiles: [], proxy: "", started: [] }) {
+  globalThis.window = {
+    marasiApp: {
+      localChrome: {
+        paths: async () => ({ value: local.paths }),
+        addPath: async (path, os) => ({ value: (local.paths = [...local.paths, { os, path }]) }),
+        removePath: async (path, os) => ({ value: (local.paths = local.paths.filter((p) => p.path !== path || p.os !== os)) }),
+        profiles: async () => ({ value: local.profiles }),
+        addProfile: async (name) =>
+          local.profiles.includes(name)
+            ? { error: `add chrome profile: profile_already_exists: ${name}` }
+            : { value: (local.profiles = [...local.profiles, name]) },
+        removeProfile: async (name) => ({ value: (local.profiles = local.profiles.filter((p) => p !== name)) }),
+        proxyAddress: async () => ({ value: local.proxy }),
+        setProxyAddress: async (address) => ({ value: (local.proxy = address.trim()) }),
+        start: async (options) => (local.started.push(options), { value: undefined }),
+      },
+    },
+  };
+  return local;
+}
+
+const spki = "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
+
+test("on a remote connection the Chrome paths and profiles are this machine's, and the instance isn't asked", async () => {
   useConnection("https://203.0.113.5:9443", { remote: true });
-  for (const call of [
-    () => App.StartBrowser(""),
-    () => App.GetChromePaths(),
-    () => App.AddChromePath("/x", "linux"),
-    () => App.DeleteChromePath("/x", "linux"),
-    () => App.GetChromeProfiles(),
-    () => App.AddChromeProfile("p"),
-    () => App.DeleteChromeProfile("p"),
-  ]) {
-    await assert.rejects(call(), (error) => isNotPorted(error));
-  }
+  localChromeBridge();
+  assert.deepEqual(await App.AddChromePath("/opt/chromium", "linux"), [{ OS: "linux", Path: "/opt/chromium" }]);
+  assert.deepEqual(await App.GetChromePaths(), [{ OS: "linux", Path: "/opt/chromium" }]);
+  assert.deepEqual(await App.DeleteChromePath("/opt/chromium", "linux"), []);
+  assert.deepEqual(await App.AddChromeProfile("work"), ["work"]);
+  assert.deepEqual(await App.GetChromeProfiles(), ["work"]);
+  await assert.rejects(App.AddChromeProfile("work"), /profile_already_exists/);
+  assert.deepEqual(await App.DeleteChromeProfile("work"), []);
   assert.deepEqual(sent, []);
+});
+
+test("on a remote connection StartBrowser opens this machine's Chrome at the remote's host and listener port, trusting its CA", async () => {
+  useConnection("https://203.0.113.5:9443", { remote: true });
+  const local = localChromeBridge();
+  answers["GET /listener/status"] = { status: "active", proxy_listener: "0.0.0.0:8081" };
+  answers["GET /certificate"] = { pem: "PEM", spki_hash: spki };
+  await App.StartBrowser("work");
+  assert.deepEqual(local.started, [{ profile: "work", proxy: "203.0.113.5:8081", spkiHash: spki }]);
+  assert.ok(!sent.some((request) => request.path.startsWith("/chrome")));
+});
+
+test("a remote's saved proxy address, such as an SSH tunnel's, replaces the default", async () => {
+  useConnection("http://[2001:db8::5]:9443", { remote: true });
+  const local = localChromeBridge();
+  answers["GET /listener/status"] = { status: "active", proxy_listener: "[::]:8081" };
+  answers["GET /certificate"] = { spki_hash: spki };
+  assert.deepEqual(await App.GetLocalChromeProxy(), { Address: "", Default: "[2001:db8::5]:8081" });
+  assert.equal(await App.SetLocalChromeProxy(" 127.0.0.1:18081 "), "127.0.0.1:18081");
+  assert.deepEqual(await App.GetLocalChromeProxy(), { Address: "127.0.0.1:18081", Default: "[2001:db8::5]:8081" });
+  await App.StartBrowser("");
+  assert.deepEqual(local.started, [{ profile: "", proxy: "127.0.0.1:18081", spkiHash: spki }]);
+});
+
+test("on a remote connection with its listener off, StartBrowser refuses as the instance would", async () => {
+  useConnection("https://203.0.113.5:9443", { remote: true });
+  const local = localChromeBridge();
+  answers["GET /listener/status"] = { status: "inactive" };
+  answers["GET /certificate"] = { spki_hash: spki };
+  await assert.rejects(App.StartBrowser(""), /listener_inactive/);
+  assert.deepEqual(local.started, []);
 });
 
 const corp = { name: "corp", scheme: "http", host: "10.0.0.1", port: 3128, has_credentials: false, has_ca: false };

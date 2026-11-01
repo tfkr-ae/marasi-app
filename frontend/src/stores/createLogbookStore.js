@@ -189,13 +189,15 @@ const nonEmpty =(groups) => groups.filter((group) => group.items.length);
 // or "none".
 function grouping(items, by) {
   if (by === "severity")
-    return nonEmpty(
-      SEVERITIES.map((severity) => ({
+    return nonEmpty([
+      ...SEVERITIES.map((severity) => ({
         key: severity,
         title: severity,
         items: items.filter((f) => f.Severity === severity),
       })),
-    );
+      // Marasi takes a finding with no severity, which another client may save.
+      { key: "none", title: "No severity", items: items.filter((f) => !SEVERITIES.includes(f.Severity)) },
+    ]);
   if (by === "category")
     return sortedSet(items.map(categoryOf)).map((category) => ({
       key: category,
@@ -816,7 +818,8 @@ export function createLogbookStore(api) {
       if (!original.ID) {
         const created = await calls.create(draft);
         const placed = { ID: created.ID, CreatedAt: created.CreatedAt };
-        advance({ ...placed, Requests: [...draft.Requests], TestCaseID: draft.TestCaseID }, placed);
+        // The create links what it can; the links below add any pair it left out.
+        advance({ ...placed, Requests: [...(created.Requests ?? draft.Requests)], TestCaseID: draft.TestCaseID }, placed);
       }
       if (FIELDS[kind].some(([key]) => !same(original[key], draft[key]))) {
         await calls.save({ ...draft, Requests: original.Requests, Artifacts: undefined });

@@ -1,18 +1,16 @@
-import { writable } from 'svelte/store';
+import { createRecordListStore } from './createRecordListStore.js';
+import { readFinding } from '../lib/bindings/records.js';
 import { CreateDraftFinding, DeleteArtifact, DeleteFinding, LinkRequestToFinding, ListFindings, SaveArtifactToFinding, SaveFinding, UnlinkRequestFromFinding } from '../lib/bindings/App';
 
 function createFindingStore() {
-	const { subscribe, set, update } = writable([]);
+	// The list follows Marasi's finding.* events (lib/marasiEvents.js).
+	const list = createRecordListStore({ list: ListFindings, read: readFinding });
+	const { update } = list;
 	return {
-		subscribe,
-		update,
-		populate: async () => {
-			const findings = await ListFindings();
-			set(findings || []);
-		},
-		// Reads the findings again, after the event stream reopens.
-		reload: async () => set((await ListFindings()) || []),
-		clear: () => set([]),
+		...list,
+		// A deleted test case leaves its findings, as Marasi sets theirs to none.
+		onTestCaseDeleted: (id) =>
+			update((findings) => findings.map((fnd) => (fnd.TestCaseID === id ? { ...fnd, TestCaseID: null } : fnd))),
 		create: async (requestIds, testCaseUUID = null) => {
 			const finding = await CreateDraftFinding(requestIds, testCaseUUID);
 			update(findings => [finding, ...findings])
