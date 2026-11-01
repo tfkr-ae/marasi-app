@@ -7,6 +7,7 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { FolderOpen, Globe, Play, Plug, RotateCw, X } from "lucide-svelte";
 	import Logo from "./Logo.svelte";
+	import { primaryVariant } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { instanceNameFor } from "../../stores/createWindowConnectionStore.js";
 	import { pickProject } from "../../stores/windowConnectionStore.js";
@@ -86,13 +87,8 @@
 		connection.readMarasi();
 	});
 
-	// The Modal's neutral and positive buttons, square.
-	$: neutral =
-		"btn btn-sm rounded-none " +
-		($modeCurrent ? "variant-ghost-surface border-0 ring-0" : "variant-ghost-surface");
-	$: positive =
-		"btn btn-sm rounded-none " +
-		($modeCurrent ? "variant-ghost-primary border-0 ring-0" : "variant-filled-primary");
+	// The theme's buttons, square.
+	$: button = "btn btn-sm rounded-none " + primaryVariant($modeCurrent);
 </script>
 
 <div class="flex min-h-full w-full items-center justify-center py-8">
@@ -148,7 +144,7 @@
 
 		<footer class="mt-2 flex justify-end gap-2">
 			<button
-				class={neutral}
+				class={button}
 				disabled={state.listing}
 				on:click={() => {
 					connection.listInstances();
@@ -158,7 +154,7 @@
 				<RotateCw size={14} /><span>Refresh</span>
 			</button>
 			<button
-				class={positive}
+				class={button}
 				disabled={!picked || state.connecting}
 				on:click={() => connectTo(picked)}
 			>
@@ -241,7 +237,7 @@
 				<p class="min-h-5 flex-1 text-xs text-error-600 dark:text-error-400" role="status">
 					{errorAt === "remote" ? (state.connectError ?? "") : ""}
 				</p>
-				<button class={positive} disabled={!remoteReady || state.connecting} on:click={connectRemote}>
+				<button class={button} disabled={!remoteReady || state.connecting} on:click={connectRemote}>
 					<Globe size={14} /><span>{remoteLabel ? `Connect to ${remoteLabel}` : "Connect"}</span>
 				</button>
 			</div>
@@ -253,7 +249,7 @@
 				<span class="opacity-60">Project</span>
 				<div class="flex min-w-0 items-center gap-2">
 					<span class="truncate" title={project ?? ""}>{project ? projectName(project) : "Scratchpad"}</span>
-					<button class="{neutral} ml-auto" on:click={chooseProject}>
+					<button class="{button} ml-auto" on:click={chooseProject}>
 						<FolderOpen size={14} /><span>Choose…</span>
 					</button>
 				</div>
@@ -271,15 +267,15 @@
 						{state.marasi?.path ?? "Bundled"}
 					</span>
 					{#if state.marasi?.path}
-						<button class="{neutral} ml-auto" on:click={() => connection.chooseMarasi(true)}>Use bundled</button>
+						<button class="{button} ml-auto" on:click={() => connection.chooseMarasi(true)}>Use bundled</button>
 					{/if}
-					<button class="{neutral} {state.marasi?.path ? '' : 'ml-auto'}" on:click={() => connection.chooseMarasi()}>
+					<button class="{button} {state.marasi?.path ? '' : 'ml-auto'}" on:click={() => connection.chooseMarasi()}>
 						Choose…
 					</button>
 				</div>
 			</div>
 			<div class="mt-3 flex justify-end">
-				<button class={positive} disabled={!name.trim() || state.connecting} on:click={start}>
+				<button class={button} disabled={!name.trim() || state.connecting} on:click={start}>
 					<Play size={14} /><span>Start {name.trim()}</span>
 				</button>
 			</div>
