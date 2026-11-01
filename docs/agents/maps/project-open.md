@@ -21,4 +21,3 @@ How the app starts, opens the scratchpad, and switches to another project, acros
 - Go work every open needs: `prepareOpenedProject`.
 - Something the frontend reads per project: a step in `openProject`, reset at its top, plus a `loadSignals` entry and its part in `openProgress.js` so the screen tracks it.
 - A subscription that must exist before the first project loads: the top of `onMount` in `+layout.svelte`. Otherwise use `StartupRoutine2.then`, and remove the listener in the same cleanup.
-- The verify-marasi script `listener-startup.mjs` reads `+layout.svelte` as text. Keep the single `StartProxy(...)` call and the `const StartupRoutine2 = new Promise` line as they are, or update the script.
