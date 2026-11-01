@@ -68,6 +68,11 @@ export function createDevBridge({ configDir, call, readdir, appConfig = null }) 
     const upstream = request(target, { method: req.method, headers }, (answer) => {
       res.writeHead(answer.statusCode, answer.headers);
       answer.pipe(res);
+      // An instance that dies mid-answer ends the page's too, as the page's
+      // own connection would in Electron, so /events reopens.
+      answer.on("close", () => {
+        if (!answer.complete) res.destroy();
+      });
     });
     upstream.on("error", (err) => {
       if (!res.headersSent) sendJSON(res, 502, { message: `${connection?.instance}: ${err.message}` });
