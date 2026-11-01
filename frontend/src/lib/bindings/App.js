@@ -4,7 +4,7 @@
 import { createAppConfigBindings } from "./appConfig.js";
 import { NotPorted, notPorted } from "./notPorted.js";
 import { isRemoteConnection, marasi, MarasiError } from "./marasi.js";
-import { pairRow, pairSummary } from "./traffic.js";
+import { pairRow, pairSummary, sitemapNodeCount } from "./traffic.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
@@ -442,8 +442,49 @@ export const ListClientSettings = notPorted("ListClientSettings");
 export const ListFindings = notPorted("ListFindings");
 // The open project's background jobs, in v1's JobState shape.
 export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
-export const ListSitemapChildren = notPorted("ListSitemapChildren");
-export const ListSitemapLevels = notPorted("ListSitemapLevels");
+// The most children Marasi lists in one sitemap page.
+const maxSitemapPage = 500;
+// One page of `request.Node`'s children, read as a one-node
+// ListSitemapLevels as v1 did: v1's { Children, NextCursor, Complete,
+// Missing, QueryError }.
+export const ListSitemapChildren = async ({ Node, Cursor, ...request }) => {
+  const read = await ListSitemapLevels({ ...request, Nodes: [Node], Cursors: Cursor ? { [Node]: Cursor } : {} });
+  if (read.QueryError) return { Children: [], NextCursor: null, Complete: true, Missing: false, QueryError: read.QueryError };
+  const level = read.Levels[0];
+  if (level.Missing) return { Children: [], NextCursor: null, Complete: true, Missing: true, QueryError: null };
+  return { Children: level.Children, NextCursor: level.NextCursor, Complete: read.Complete, Missing: false, QueryError: null };
+};
+// The sitemap's levels, one page of `request.Nodes`' children each, in v1's
+// { Levels: [{ Node, Children, NextCursor, Missing }], Complete, QueryError }.
+// A `request.Query` adds each child's Matching count, up to the results'
+// `request.AsOf`; `request.Matching` counts only the matches instead.
+export const ListSitemapLevels = (request) =>
+  readTraffic(async () => {
+    const exclusion = normalizeExclusion(request.Exclusion ?? []);
+    const read = await marasi.post("/traffic/sitemap/levels", {
+      nodes: request.Nodes,
+      scope: request.Matching ? "matching" : "all",
+      exclusion,
+      ...(request.Query && { selection: { query: request.Query, exclusion, as_of: request.AsOf } }),
+      cursors: request.Cursors ?? {},
+      limit: request.Limit || maxSitemapPage,
+    });
+    const count = (child) => {
+      const node = sitemapNodeCount(child);
+      if (!request.Matching || child.matching == null) return node;
+      return { ...node, Pairs: child.matching, Errors: child.matching_errors ?? node.Errors, Matching: null };
+    };
+    return {
+      Levels: (read.levels ?? []).map((level) => ({
+        Node: level.node,
+        Children: (level.items ?? []).map(count),
+        NextCursor: level.next_cursor ?? null,
+        Missing: level.missing,
+      })),
+      Complete: read.sitemap?.complete ?? true,
+      QueryError: null,
+    };
+  });
 export const ListTemplates = notPorted("ListTemplates");
 export const ListTestCases = notPorted("ListTestCases");
 export const MoveLaunchpadEntries = notPorted("MoveLaunchpadEntries");

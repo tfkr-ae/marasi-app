@@ -39,13 +39,17 @@ const handlers = {
   "traffic.request": (event) => {
     const request = requestEvent(event);
     ledgerStore.onRequest(request);
+    sitemapStore.onRequest(request);
     recentTraffic.onRequest(request);
   },
   "traffic.response": (event) => {
     const response = responseEvent(event);
     ledgerStore.onResponse(response);
+    sitemapStore.onResponse(response);
     recentTraffic.onResponse(response);
   },
+  // A rebuild or delete moved the sitemap: read its open levels again.
+  "sitemap.changed": () => sitemapStore.reload(),
   "listener.started": (status) => listenerStore.onListener(status),
   "listener.updated": (status) => listenerStore.onListener(status),
   "listener.stopped": (status) => listenerStore.onListener(status),
