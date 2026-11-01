@@ -2,6 +2,7 @@
 // returned (marasi's domain.Finding, domain.TestCase and
 // domain.ArtifactMetadata as Wails encoded them), and the records v1's
 // frontend saves as Marasi's fields.
+import { marasi, MarasiError } from "./marasi.js";
 
 /** An artifact as v1's ArtifactMetadata. */
 export const artifactMetadata = (artifact) => ({
@@ -62,3 +63,20 @@ export const testCaseFields = (testCase) => ({
   tags: testCase.Tags ?? [],
   note: testCase.Note ?? "",
 });
+
+// The record at `path` as `record` reads it, or null when Marasi answers
+// not_found.
+async function readOrNull(path, record) {
+  try {
+    return record(await marasi.get(path));
+  } catch (error) {
+    if (error instanceof MarasiError && error.code === "not_found") return null;
+    throw error;
+  }
+}
+
+/** One finding in full, as an event asks it read again; null once it is gone. */
+export const readFinding = (id) => readOrNull(`/finding/${encodeURIComponent(id)}`, findingRecord);
+
+/** One test case in full, as an event asks it read again; null once it is gone. */
+export const readTestCase = (id) => readOrNull(`/test-case/${encodeURIComponent(id)}`, testCaseRecord);

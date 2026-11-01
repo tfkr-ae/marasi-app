@@ -5,6 +5,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import * as App from "./App.js";
 import { useConnection } from "./marasi.js";
+import { readFinding, readTestCase } from "./records.js";
 
 let sent;
 let answers;
@@ -285,4 +286,12 @@ test("DeleteArtifact deletes it", async () => {
   answers["DELETE /artifact/a1"] = { id: "a1" };
   await App.DeleteArtifact("a1");
   assert.deepEqual(sent.map((r) => `${r.method} ${r.path}`), ["DELETE /artifact/a1"]);
+});
+
+test("readFinding and readTestCase read one record again, null once it is gone", async () => {
+  answers["GET /finding/f1"] = findingDetail;
+  answers["GET /test-case/t1"] = testCaseDetail;
+  assert.deepEqual(await readFinding("f1"), findingRecord);
+  assert.deepEqual(await readTestCase("t1"), testCaseRecord);
+  assert.equal(await readFinding("gone"), null);
 });

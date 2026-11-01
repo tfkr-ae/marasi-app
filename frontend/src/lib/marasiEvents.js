@@ -23,8 +23,49 @@ import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 
+// Logs a store's failed re-read of what an event changed.
+const logged = (what) => (promise) => promise.catch((err) => console.error(`Reading ${what} again failed:`, err));
+const finding = logged("a finding");
+const testCase = logged("a test case");
+
+// Findings and test cases, by any client: the record an event names is read
+// again, or leaves its list.
+const recordHandlers = {
+  "finding.created": (event) => finding(findingStore.onChanged(event.id)),
+  "finding.updated": (event) => finding(findingStore.onChanged(event.id)),
+  "finding.linked": (event) => finding(findingStore.onChanged(event.finding_id)),
+  "finding.unlinked": (event) => finding(findingStore.onChanged(event.finding_id)),
+  "finding.deleted": (event) => findingStore.onDeleted(event.id),
+  "test-case.created": (event) => testCase(testCaseStore.onChanged(event.id)),
+  "test-case.updated": (event) => testCase(testCaseStore.onChanged(event.id)),
+  "test-case.linked": (event) => testCase(testCaseStore.onChanged(event.test_case_id)),
+  "test-case.unlinked": (event) => testCase(testCaseStore.onChanged(event.test_case_id)),
+  "test-case.deleted": (event) => {
+    testCaseStore.onDeleted(event.id);
+    findingStore.onTestCaseDeleted(event.id);
+  },
+  "artifact.created": (event) =>
+    event.finding_id
+      ? finding(findingStore.onChanged(event.finding_id))
+      : testCase(testCaseStore.onChanged(event.test_case_id)),
+  "artifact.deleted": (event) => {
+    findingStore.onArtifactDeleted(event.id);
+    testCaseStore.onArtifactDeleted(event.id);
+  },
+};
+
+// The bulk changes that link, unlink or delete pairs. Their event doesn't
+// name the finding or test case, so both lists are read again.
+const relinkingChanges = new Set(["link", "unlink", "delete"]);
+
 // Each Marasi event's handler, by event name.
 const handlers = {
+  ...recordHandlers,
+  "traffic.changed": (event) => {
+    if (!relinkingChanges.has(event.change)) return;
+    finding(findingStore.reload());
+    testCase(testCaseStore.reload());
+  },
   "log.added": (log) => logStore.onLogAdded(log),
   // Captured traffic, in v1's request and response shapes.
   "traffic.request": (event) => {
