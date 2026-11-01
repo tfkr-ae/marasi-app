@@ -365,7 +365,22 @@ export const CopyCertToClipboard = async () => {
   await bridge().copyText(pem);
   return true;
 };
-export const CountArmoryRunTraffic = notPorted("CountArmoryRunTraffic");
+// The traffic query for the pairs the Armory run `runId` sent.
+const armoryRunQuery = (runId) => `metadata.armory_run_id = ${JSON.stringify(String(runId))}`;
+// An Armory run's pairs, whatever their content type, counted by `field`
+// ("status_code" or "length") under `asOf`, or under the newest pair when
+// it is "": v1's { Counts: [{ Value, Count }], AsOf }, most pairs first, a
+// pair with no value under "". Marasi answers the as_of it counted under,
+// which a group's pages and a query Selection pass back.
+export const CountArmoryRunTraffic = async (runId, field, asOf = "") => {
+  const counted = await marasi.get(
+    "/traffic/count/by-field" + trafficQuery({ field, q: armoryRunQuery(runId), as_of: asOf }),
+  );
+  return {
+    Counts: (counted.items ?? []).map((item) => ({ Value: item.value, Count: item.count })),
+    AsOf: counted.as_of ?? "",
+  };
+};
 // The project's pairs per content type: v1's { Counts: [{ ContentType,
 // Count }], Complete: { sitemap } }.
 export const CountContentTypes = async () => {
@@ -486,7 +501,18 @@ export const GetActiveArmoryRunIDs = async () => {
   return runs.flat().filter((run) => run.Status === "in_progress").map((run) => run.ID);
 };
 export const GetArmoryRun = async (id) => armoryRun(await marasi.get(`/armory/run/${encodeURIComponent(id)}`));
-export const GetArmoryRunRequests = notPorted("GetArmoryRunRequests");
+// Every pair an Armory run sent, in full as v1's RequestResponseRow, in
+// the order they were sent. v1 bound it but its frontend never called it.
+export const GetArmoryRunRequests = async (runId) => {
+  const summaries = [];
+  let page = { NextCursor: undefined, AsOf: "" };
+  do {
+    page = await QueryArmoryRunTraffic(runId, { Query: "", Cursor: page.NextCursor, AsOf: page.AsOf, Limit: maxTrafficPage });
+    summaries.push(...page.Items);
+  } while (page.NextCursor);
+  summaries.sort((a, b) => a.Number - b.Number);
+  return Promise.all(summaries.map(async (summary) => pairRow(await readPair(summary.ID))));
+};
 export const GetArmoryRuns = async (templateId) =>
   ((await marasi.get(`/armory/template/${encodeURIComponent(templateId)}/run`)).items ?? []).map(armoryRun);
 // Every template with its raw template, which Marasi's list leaves out.
@@ -723,7 +749,16 @@ export const PendingLaunches = async () => ((await marasi.get("/launch")).items 
 // A wordlist's first `limit` entries; Marasi reads at most 100.
 export const PreviewArmoryWordlist = async (name, limit) =>
   (await marasi.get(`/wordlist/${encodeURIComponent(name)}?limit=${limit}`)).items ?? [];
-export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
+// One page of the pairs an Armory run sent, whatever their content type, as
+// QueryTraffic reads the project's. `request.Query` narrows the run ("" for
+// all of it); `request.OrderBy` "" is "requested_at".
+export const QueryArmoryRunTraffic = (runId, request) =>
+  QueryTraffic({
+    ...request,
+    Query: request.Query ? `${armoryRunQuery(runId)} AND (${request.Query})` : armoryRunQuery(runId),
+    OrderBy: request.OrderBy || "requested_at",
+    IgnoreExclusion: true,
+  });
 // The most rows Marasi lists in one GET /traffic page.
 const maxTrafficPage = 500;
 
