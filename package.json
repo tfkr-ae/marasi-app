@@ -22,7 +22,7 @@
 		"dist:mac": "GOOS=darwin GOARCH=universal npm run marasi && npm run build && electron-builder --mac --publish never",
 		"dist:win": "GOOS=windows npm run marasi && npm run build && electron-builder --win --publish never",
 		"dist:linux": "GOOS=linux npm run marasi && npm run build && electron-builder --linux --publish never",
-		"test": "node --test electron/ && npm --prefix frontend test"
+		"test": "node --test 'electron/**/*.test.js' && npm --prefix frontend test"
 	},
 	"build": {
 		"appId": "ae.tfkr.marasi-app.v2",
