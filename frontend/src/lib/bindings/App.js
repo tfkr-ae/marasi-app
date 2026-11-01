@@ -104,19 +104,34 @@ async function readTraffic(read) {
   }
 }
 
+// A bulk change on a Ledger selection, Marasi's { ids } or { query,
+// exclusion, as_of } (marasi docs/adr/2026-10-14-query-selections-stop-at-as-of.md):
+// POST /traffic/bulk/{change} with the selection and `fields`. Resolves how
+// many pairs changed, as v1 did. Refusals such as selection_incomplete and
+// launch_pending read through the code helpers.
+const bulk = async (change, selection, fields = {}) =>
+  (await marasi.post(`/traffic/bulk/${change}`, { selection, ...fields })).count;
+
+// v1's link target, { Kind: "launchpad" | "finding" | "test_case", ID },
+// as the bulk link body's id field.
+const linkTarget = (target) => ({ [`${target.Kind}_id`]: target.ID });
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
 export const AddChromePath = notPorted("AddChromePath");
 export const AddChromeProfile = notPorted("AddChromeProfile");
 export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
-export const AppendNote = notPorted("AppendNote");
+// Adds `text` to every note in `selection`, after a blank line when the pair
+// already has one.
+export const AppendNote = (selection, text) => bulk("note", selection, { append: text });
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
 export const CancelLaunch = notPorted("CancelLaunch");
 export const CheckHTTPParse = notPorted("CheckHTTPParse");
 export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
-export const ClearHighlight = notPorted("ClearHighlight");
-export const ClearNotes = notPorted("ClearNotes");
+// Clears the highlight of every pair in `selection`.
+export const ClearHighlight = (selection) => bulk("highlight", selection, { highlight: null });
+export const ClearNotes = (selection) => bulk("note", selection, { clear: true });
 export const CloseWebSocket = notPorted("CloseWebSocket");
 // The instance's CA certificate, on this machine's clipboard. Resolves true.
 export const CopyCertToClipboard = async () => {
@@ -179,7 +194,9 @@ export const DeleteClientSetting = notPorted("DeleteClientSetting");
 export const DeleteFinding = notPorted("DeleteFinding");
 export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
-export const DeleteTraffic = notPorted("DeleteTraffic");
+// Deletes the pairs in `selection` with everything they own (marasi
+// docs/adr/2026-10-14-deleting-a-pair-deletes-everything-it-owns.md).
+export const DeleteTraffic = (selection) => bulk("delete", selection);
 export const DeleteWaypoint = notPorted("DeleteWaypoint");
 export const DoExtender = notPorted("DoExtender");
 export const DownloadArtifact = notPorted("DownloadArtifact");
@@ -258,7 +275,9 @@ export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
 export const LinkRequestToTestCase = notPorted("LinkRequestToTestCase");
-export const LinkTraffic = notPorted("LinkTraffic");
+// Links the pairs in `selection` to a launchpad, finding or test case;
+// resolves how many were newly linked.
+export const LinkTraffic = (selection, target) => bulk("link", selection, linkTarget(target));
 export const ListClientSettings = notPorted("ListClientSettings");
 export const ListFindings = notPorted("ListFindings");
 // The open project's background jobs, in v1's JobState shape.
@@ -349,7 +368,8 @@ export const SetClientSetting = notPorted("SetClientSetting");
 export const SetContentTypeExclusion = async (values) => {
   await marasi.put(exclusionSetting, { value: normalizeExclusion(values) });
 };
-export const SetHighlight = notPorted("SetHighlight");
+// Gives every pair in `selection` highlight 1-8.
+export const SetHighlight = (selection, highlight) => bulk("highlight", selection, { highlight });
 export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
 export const SetWSIntercept = notPorted("SetWSIntercept");
@@ -364,7 +384,7 @@ export const ToggleIntercept = notPorted("ToggleIntercept");
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
-export const UnlinkTraffic = notPorted("UnlinkTraffic");
+export const UnlinkTraffic = (selection, target) => bulk("unlink", selection, linkTarget(target));
 export const UpdateArmoryTemplate = notPorted("UpdateArmoryTemplate");
 export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
 // Saves a pair's note; an empty one deletes it, as v1 saved "".
