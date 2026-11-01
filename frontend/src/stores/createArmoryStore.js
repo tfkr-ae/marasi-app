@@ -1,5 +1,6 @@
-// The Armory's store. armoryStore.js binds it to the Wails backend; tests
-// load it with a fake API holding the same binding names.
+// The Armory's store. armoryStore.js binds it to the Marasi bindings; tests
+// load it with a fake API holding the same binding names. lib/marasiEvents.js
+// passes it Marasi's armory.* and wordlist.* events.
 import { writable } from "svelte/store";
 import { clampDrawerSplit } from "./createLedgerStore.js";
 import { createRunTrafficView } from "./createArmoryRunTraffic.js";
@@ -94,6 +95,50 @@ export function createArmoryStore(api) {
     });
   }
 
+  // Drops a run from its template's runs and from any run selection.
+  function removeRun(id) {
+    update((state) => {
+      const selectedRunByTemplate = Object.fromEntries(
+        Object.entries(state.selectedRunByTemplate).map(
+          ([templateId, runId]) => [templateId, runId === id ? null : runId],
+        ),
+      );
+      const runsByTemplate = Object.fromEntries(
+        Object.entries(state.runsByTemplate).map(([templateId, runs]) => [
+          templateId,
+          runs.filter((run) => run.ID !== id),
+        ]),
+      );
+      return {
+        ...state,
+        runsByTemplate,
+        selectedRunByTemplate,
+        activeRunIds: state.activeRunIds.filter((runId) => runId !== id),
+      };
+    });
+  }
+
+  // Drops a template, its runs and settings, and the selection of it.
+  function withoutTemplate(state, id) {
+    const runsByTemplate = { ...state.runsByTemplate };
+    const runSettingsByTemplate = { ...state.runSettingsByTemplate };
+    const selectedRunByTemplate = { ...state.selectedRunByTemplate };
+    delete runsByTemplate[id];
+    delete runSettingsByTemplate[id];
+    delete selectedRunByTemplate[id];
+    return {
+      ...state,
+      templates: state.templates.filter((template) => template.ID !== id),
+      runsByTemplate,
+      runSettingsByTemplate,
+      selectedRunByTemplate,
+      selectedTemplateId:
+        state.selectedTemplateId === id ? null : state.selectedTemplateId,
+      templateDraft:
+        state.templateDraft?.templateId === id ? null : state.templateDraft,
+    };
+  }
+
   function upsertTemplate(template) {
     update((state) => {
       const exists = state.templates.some((item) => item.ID === template.ID);
@@ -132,6 +177,38 @@ export function createArmoryStore(api) {
     }));
   }
 
+  // Reads the instance again after the event stream reopens, keeping the
+  // open template, its unsaved draft and the run settings; the runs of each
+  // template read before are read again.
+  async function reload() {
+    const version = projectStateVersion;
+    const [templates, wordlists, activeRunIds] = await Promise.all([
+      GetArmoryTemplates(),
+      GetArmoryWordlists(),
+      GetActiveArmoryRunIDs(),
+    ]);
+    if (version !== projectStateVersion) return;
+    const present = new Set((templates || []).map((template) => template.ID));
+    let loaded = [];
+    update((state) => {
+      let next = {
+        ...state,
+        templates: sortTemplates(templates || []),
+        wordlists: wordlists || [],
+        activeRunIds: activeRunIds || [],
+      };
+      for (const id of Object.keys(state.runsByTemplate)) {
+        if (!present.has(id)) next = withoutTemplate(next, id);
+      }
+      if (next.selectedTemplateId != null && !present.has(next.selectedTemplateId)) {
+        next = withoutTemplate(next, next.selectedTemplateId);
+      }
+      loaded = Object.keys(next.runsByTemplate);
+      return next;
+    });
+    await Promise.all(loaded.map((id) => loadRuns(id)));
+  }
+
   async function loadRuns(templateId) {
     const version = projectStateVersion;
     const runs = (await GetArmoryRuns(templateId)) || [];
@@ -167,14 +244,29 @@ export function createArmoryStore(api) {
     runTraffic,
     onRequest: (req) => runTraffic.onRequest(req),
     onResponse: (res) => runTraffic.onResponse(res),
+    // armory.run.created and armory.run.updated: the run's progress, from
+    // draft through in progress to complete, failed or cancelled.
+    onRun: (run) => {
+      upsertRun(run);
+      update((state) => {
+        const others = state.activeRunIds.filter((id) => id !== run.ID);
+        return {
+          ...state,
+          activeRunIds: run.Status === "in_progress" ? [...others, run.ID] : others,
+        };
+      });
+    },
+    onRunDeleted: ({ ID }) => removeRun(ID),
+    onTemplate: (template) => upsertTemplate(template),
+    onTemplateDeleted: ({ ID }) => update((state) => withoutTemplate(state, ID)),
+    onWordlists: (wordlists) => update((state) => ({ ...state, wordlists })),
 
     clear: () => {
       runTraffic.clear();
       set(initialState(++projectStateVersion));
     },
     populate,
-    // Reads it all again, after the event stream reopens.
-    reload: populate,
+    reload,
 
     setSearch: (search) => update((state) => ({ ...state, search })),
 
@@ -279,25 +371,7 @@ export function createArmoryStore(api) {
 
     deleteTemplate: async (id) => {
       await DeleteArmoryTemplate(id);
-      update((state) => {
-        const runsByTemplate = { ...state.runsByTemplate };
-        const runSettingsByTemplate = { ...state.runSettingsByTemplate };
-        const selectedRunByTemplate = { ...state.selectedRunByTemplate };
-        delete runsByTemplate[id];
-        delete runSettingsByTemplate[id];
-        delete selectedRunByTemplate[id];
-        return {
-          ...state,
-          templates: state.templates.filter((template) => template.ID !== id),
-          runsByTemplate,
-          runSettingsByTemplate,
-          selectedRunByTemplate,
-          selectedTemplateId:
-            state.selectedTemplateId === id ? null : state.selectedTemplateId,
-          templateDraft:
-            state.templateDraft?.templateId === id ? null : state.templateDraft,
-        };
-      });
+      update((state) => withoutTemplate(state, id));
     },
 
     loadRuns,
@@ -341,24 +415,7 @@ export function createArmoryStore(api) {
 
     deleteRun: async (id) => {
       await DeleteArmoryRun(id);
-      update((state) => {
-        const selectedRunByTemplate = Object.fromEntries(
-          Object.entries(state.selectedRunByTemplate).map(
-            ([templateId, runId]) => [templateId, runId === id ? null : runId],
-          ),
-        );
-        const runsByTemplate = Object.fromEntries(
-          Object.entries(state.runsByTemplate).map(([templateId, runs]) => [
-            templateId,
-            runs.filter((run) => run.ID !== id),
-          ]),
-        );
-        return {
-          ...state,
-          runsByTemplate,
-          selectedRunByTemplate,
-        };
-      });
+      removeRun(id);
     },
 
     refreshActiveRuns,

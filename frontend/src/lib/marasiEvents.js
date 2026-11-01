@@ -4,6 +4,7 @@
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
 import { requestEvent, responseEvent } from "./bindings/traffic.js";
+import { armoryRun, armoryTemplate, wordlistInfos } from "./bindings/armory.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
 import { ledgerStore } from "../stores/ledgerStore";
@@ -31,12 +32,25 @@ const handlers = {
     const request = requestEvent(event);
     ledgerStore.onRequest(request);
     recentTraffic.onRequest(request);
+    armoryStore.onRequest(request);
   },
   "traffic.response": (event) => {
     const response = responseEvent(event);
     ledgerStore.onResponse(response);
     recentTraffic.onResponse(response);
+    armoryStore.onResponse(response);
   },
+  // The Armory's templates and runs, changed by any client, and each run's
+  // progress; the deleted events carry the id alone.
+  "armory.template.created": (template) => armoryStore.onTemplate(armoryTemplate(template)),
+  "armory.template.updated": (template) => armoryStore.onTemplate(armoryTemplate(template)),
+  "armory.template.deleted": ({ id }) => armoryStore.onTemplateDeleted({ ID: id }),
+  "armory.run.created": (run) => armoryStore.onRun(armoryRun(run)),
+  "armory.run.updated": (run) => armoryStore.onRun(armoryRun(run)),
+  "armory.run.deleted": ({ id }) => armoryStore.onRunDeleted({ ID: id }),
+  // The instance machine's wordlists, all of them.
+  "wordlist.added": (list) => armoryStore.onWordlists(wordlistInfos(list)),
+  "wordlist.removed": (list) => armoryStore.onWordlists(wordlistInfos(list)),
   "listener.started": (status) => listenerStore.onListener(status),
   "listener.updated": (status) => listenerStore.onListener(status),
   "listener.stopped": (status) => listenerStore.onListener(status),
