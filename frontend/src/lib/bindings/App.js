@@ -2,9 +2,11 @@
 // ports it to the Marasi client module or the main process.
 
 import { createAppConfigBindings } from "./appConfig.js";
+import { createChromeBindings } from "./chrome.js";
 import { notPorted } from "./notPorted.js";
 import { marasi, MarasiError } from "./marasi.js";
-import { pairRow, pairSummary } from "./traffic.js";
+import { pairRow, pairSummary, rawText, sitemapNodeCount } from "./traffic.js";
+import { armoryRun, armoryTemplate, wordlistInfos } from "./armory.js";
 import { heldMessage, webSocketConnection, webSocketMessage } from "./websocket.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
@@ -63,10 +65,98 @@ const jobState = (job) => ({
   Rebuildable: rebuildableJobs.has(job.name),
 });
 
+// The project's extensions, by name as in v1.
+export {
+  DoExtender,
+  GetExtensionCode,
+  GetExtensionFlag,
+  GetExtensionLogs,
+  GetExtensionUI,
+  GetExtensions,
+  LoadExtensions,
+  RunExtension,
+} from "./extensions.js";
+
+// Chrome: the instance's on a local connection, this machine's on a remote
+// one (chrome.js).
+export const {
+  AddChromePath,
+  AddChromeProfile,
+  DeleteChromePath,
+  DeleteChromeProfile,
+  GetChromePaths,
+  GetChromeProfiles,
+  GetLocalChromeProxy,
+  SetLocalChromeProxy,
+  StartBrowser,
+} = createChromeBindings(() => bridge()?.localChrome);
+
+// This machine's upstream proxies and the open project's selection:
+// {items, selected, configured}, items redacted to {name, scheme, host,
+// port, has_credentials, has_ca}. Marasi answers a change with the list
+// alone, so each change reads the whole state after it, as v1 answered.
+const upstreamProxyPath = (name) => `/upstream-proxy/${encodeURIComponent(name)}`;
+export const GetUpstreamProxies = () => marasi.get("/upstream-proxy");
+// Adds an entry; `ca` is a PEM bundle, "" for none.
+export const AddUpstreamProxy = async (name, url, ca) => {
+  await marasi.post("/upstream-proxy", ca ? { name, url, ca } : { name, url });
+  return GetUpstreamProxies();
+};
+// Changes the named entry. An empty url or ca leaves it as it is, and
+// removeCA drops the CA.
+export const UpdateUpstreamProxy = async (name, url, ca, removeCA) => {
+  const update = {};
+  if (url) update.url = url;
+  if (removeCA) update.ca = null;
+  else if (ca) update.ca = ca;
+  if (!Object.keys(update).length) throw new Error("upstream proxy update: nothing to change");
+  await marasi.post(upstreamProxyPath(name), update);
+  return GetUpstreamProxies();
+};
+// Removes the named entry. A project that selected it keeps the selection,
+// and its traffic fails closed.
+export const RemoveUpstreamProxy = async (name) => {
+  await marasi.delete(upstreamProxyPath(name));
+  return GetUpstreamProxies();
+};
+// Selects the open project's upstream proxy, "" for direct, and answers
+// the whole list, as v1 did.
+export const UseUpstreamProxy = async (name) => {
+  await marasi.put("/upstream-proxy-selection", { name });
+  return GetUpstreamProxies();
+};
+// One test connection to `target` through the named entry, selected or not.
+export const CheckUpstreamProxy = (name, target) => marasi.post(`${upstreamProxyPath(name)}/check`, { target });
+// A CA file picked on this machine, its text unparsed; "" when cancelled.
+// Marasi checks it when the entry is added or updated.
+export const ReadUpstreamProxyCAFile = () => bridge().readCAFile();
+
+// The open project's waypoints, as v1's {hostname: override} map.
+export const GetWaypoints = async () =>
+  Object.fromEntries(((await marasi.get("/waypoint")).items ?? []).map((item) => [item.hostname, item.override]));
+// Sets `host`'s override: adds a waypoint, or updates the one it has, as
+// v1's create or update did.
+export const CreateWaypoint = async (hostname, override) => {
+  try {
+    await marasi.post("/waypoint", { hostname, override });
+  } catch (error) {
+    if (error?.code !== "waypoint_already_exists") throw error;
+    await marasi.post("/waypoint/update", { hostname, override });
+  }
+};
+export const DeleteWaypoint = async (hostname) => {
+  await marasi.delete("/waypoint", { hostname });
+};
+
 // The Ledger's content-type exclusion: the project's own list, a marasi-app
 // client setting, or else the app default
 // (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
 const exclusionSetting = "/client-settings/marasi-app/ledger.exclusion";
+
+// The app's per-project settings: client settings under the client
+// marasi-app (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
+const clientSettings = "/client-settings/marasi-app";
+const clientSetting = (key) => `${clientSettings}/${encodeURIComponent(key)}`;
 
 // `call`'s answer, or null when Marasi answered not_found.
 async function unlessNotFound(call) {
@@ -80,6 +170,9 @@ async function unlessNotFound(call) {
 
 // A pair in full, as Marasi answers GET /traffic/{id}.
 const readPair = (id) => marasi.get(`/traffic/${encodeURIComponent(id)}`);
+
+// An Armory template in full, as v1's ArmoryTemplate.
+const readTemplate = async (id) => armoryTemplate(await marasi.get(`/armory/template/${encodeURIComponent(id)}`));
 
 // The project's own exclusion setting, or null when it follows the app default.
 const ownExclusion = () => unlessNotFound(marasi.get(exclusionSetting));
@@ -106,6 +199,18 @@ async function readTraffic(read) {
     return { QueryError: { Message: error.body.message ?? "invalid query", Position: error.body.position ?? 0 } };
   }
 }
+
+// A bulk change on a Ledger selection, Marasi's { ids } or { query,
+// exclusion, as_of } (marasi docs/adr/2026-10-14-query-selections-stop-at-as-of.md):
+// POST /traffic/bulk/{change} with the selection and `fields`. Resolves how
+// many pairs changed, as v1 did. Refusals such as selection_incomplete and
+// launch_pending read through the code helpers.
+const bulk = async (change, selection, fields = {}) =>
+  (await marasi.post(`/traffic/bulk/${change}`, { selection, ...fields })).count;
+
+// v1's link target, { Kind: "launchpad" | "finding" | "test_case", ID },
+// as the bulk link body's id field.
+const linkTarget = (target) => ({ [`${target.Kind}_id`]: target.ID });
 
 // The connection behind an upgrade pair, as Marasi answers it. v1's
 // WebSocket bindings take the pair's request id; Marasi's routes take the
@@ -165,18 +270,19 @@ async function settleCheckpoints(ids, settle) {
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
-export const AddChromePath = notPorted("AddChromePath");
-export const AddChromeProfile = notPorted("AddChromeProfile");
-export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
-export const AppendNote = notPorted("AppendNote");
-export const CancelArmoryRun = notPorted("CancelArmoryRun");
+// Adds `text` to every note in `selection`, after a blank line when the pair
+// already has one.
+export const AppendNote = (selection, text) => bulk("note", selection, { append: text });
+export const CancelArmoryRun = async (id) => {
+  await marasi.post(`/armory/run/${encodeURIComponent(id)}/cancel`);
+};
 export const CancelLaunch = notPorted("CancelLaunch");
 // Why an edited held request or response doesn't parse, in Go's words, or
 // "". v1 checked it in Go; Marasi only refuses an unparsable forward.
 export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
-export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
-export const ClearHighlight = notPorted("ClearHighlight");
-export const ClearNotes = notPorted("ClearNotes");
+// Clears the highlight of every pair in `selection`.
+export const ClearHighlight = (selection) => bulk("highlight", selection, { highlight: null });
+export const ClearNotes = (selection) => bulk("note", selection, { clear: true });
 // Closes the connection an upgrade pair opened.
 export const CloseWebSocket = async (requestId, code, reason) => {
   const connection = await readConnection(requestId);
@@ -227,25 +333,48 @@ export const CountTraffic = (query, after, options = {}) =>
       QueryError: null,
     };
   });
-export const CreateArmoryRun = notPorted("CreateArmoryRun");
-export const CreateArmoryTemplate = notPorted("CreateArmoryTemplate");
-export const CreateArmoryTemplateFromRequest = notPorted("CreateArmoryTemplateFromRequest");
+// A draft run of the template's current contents.
+export const CreateArmoryRun = async (templateId, attackType, useHTTPS, wordlists, maxConcurrent) =>
+  armoryRun(
+    await marasi.post("/armory/run", {
+      template_id: templateId,
+      attack_type: attackType,
+      use_https: useHTTPS,
+      wordlists: wordlists ?? [],
+      max_concurrent: maxConcurrent,
+    }),
+  );
+export const CreateArmoryTemplate = async (name, description, rawTemplate) =>
+  armoryTemplate(await marasi.post("/armory/template", { name, description, raw_template: rawTemplate }));
+// A template of a captured pair's raw request, named as v1 named it.
+export const CreateArmoryTemplateFromRequest = async (requestId) => {
+  const { request = {} } = await readPair(requestId);
+  return CreateArmoryTemplate(
+    `${request.method} ${request.host}${request.path}`,
+    "Imported from request history",
+    rawText(request.raw) ?? "",
+  );
+};
 export const CreateDraftFinding = notPorted("CreateDraftFinding");
 export const CreateDraftTestCase = notPorted("CreateDraftTestCase");
 export const CreateLaunchpadEntry = notPorted("CreateLaunchpadEntry");
-export const CreateWaypoint = notPorted("CreateWaypoint");
-export const DeleteArmoryRun = notPorted("DeleteArmoryRun");
-export const DeleteArmoryTemplate = notPorted("DeleteArmoryTemplate");
+// Marasi refuses an active run: run_active.
+export const DeleteArmoryRun = async (id) => {
+  await marasi.delete(`/armory/run/${encodeURIComponent(id)}`);
+};
+// Marasi refuses a template with an active run: template_has_active_run.
+export const DeleteArmoryTemplate = async (id) => {
+  await marasi.delete(`/armory/template/${encodeURIComponent(id)}`);
+};
 export const DeleteArtifact = notPorted("DeleteArtifact");
-export const DeleteChromePath = notPorted("DeleteChromePath");
-export const DeleteChromeProfile = notPorted("DeleteChromeProfile");
-export const DeleteClientSetting = notPorted("DeleteClientSetting");
+// Drops the project's setting `key`; a missing key is not an error.
+export const DeleteClientSetting = (key) => marasi.delete(clientSetting(key));
 export const DeleteFinding = notPorted("DeleteFinding");
 export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
-export const DeleteTraffic = notPorted("DeleteTraffic");
-export const DeleteWaypoint = notPorted("DeleteWaypoint");
-export const DoExtender = notPorted("DoExtender");
+// Deletes the pairs in `selection` with everything they own (marasi
+// docs/adr/2026-10-14-deleting-a-pair-deletes-everything-it-owns.md).
+export const DeleteTraffic = (selection) => bulk("delete", selection);
 export const DownloadArtifact = notPorted("DownloadArtifact");
 // Saves the instance's CA certificate on this machine, through a save
 // dialog. Resolves false when the researcher cancels.
@@ -259,25 +388,30 @@ export const ExportReport = notPorted("ExportReport");
 export const ForwardWSIntercepted = async (id, opcode, payload) => {
   await marasi.post(`${checkpointPath(id)}/forward`, { payload: base64(payload), opcode });
 };
-export const GetActiveArmoryRunIDs = notPorted("GetActiveArmoryRunIDs");
-export const GetArmoryRun = notPorted("GetArmoryRun");
+export const GetActiveArmoryRunIDs = async () => {
+  const { items = [] } = await marasi.get("/armory/template");
+  const runs = await Promise.all(items.map((item) => GetArmoryRuns(item.id)));
+  return runs.flat().filter((run) => run.Status === "in_progress").map((run) => run.ID);
+};
+export const GetArmoryRun = async (id) => armoryRun(await marasi.get(`/armory/run/${encodeURIComponent(id)}`));
 export const GetArmoryRunRequests = notPorted("GetArmoryRunRequests");
-export const GetArmoryRuns = notPorted("GetArmoryRuns");
-export const GetArmoryTemplates = notPorted("GetArmoryTemplates");
-export const GetArmoryWordlists = notPorted("GetArmoryWordlists");
+export const GetArmoryRuns = async (templateId) =>
+  ((await marasi.get(`/armory/template/${encodeURIComponent(templateId)}/run`)).items ?? []).map(armoryRun);
+// Every template with its raw template, which Marasi's list leaves out.
+export const GetArmoryTemplates = async () => {
+  const { items = [] } = await marasi.get("/armory/template");
+  return Promise.all(items.map((item) => readTemplate(item.id)));
+};
+// The wordlists on the instance machine, by name.
+export const GetArmoryWordlists = async () => wordlistInfos(await marasi.get("/wordlist"));
 export const GetArtifact = notPorted("GetArtifact");
-export const GetChromePaths = notPorted("GetChromePaths");
-export const GetChromeProfiles = notPorted("GetChromeProfiles");
-export const GetClientSetting = notPorted("GetClientSetting");
+// The project's setting `key`, { client, key, value, updated_at }, or null
+// when it has none.
+export const GetClientSetting = (key) => unlessNotFound(marasi.get(clientSetting(key)));
 // The open project's exclusion: its own list when it has one, else the app
 // default.
 export const GetContentTypeExclusion = async () =>
   (await ownExclusion())?.value ?? (await appConfig.GetDefaultContentTypeExclusion());
-export const GetExtensionCode = notPorted("GetExtensionCode");
-export const GetExtensionFlag = notPorted("GetExtensionFlag");
-export const GetExtensionLogs = notPorted("GetExtensionLogs");
-export const GetExtensionUI = notPorted("GetExtensionUI");
-export const GetExtensions = notPorted("GetExtensions");
 // The held Checkpoint items, oldest first.
 export const GetCheckpointItems = async () => ((await marasi.get("/checkpoint")).items ?? []).map(checkpointItem);
 // One held item, or null once it has left.
@@ -324,7 +458,16 @@ export const ToggleIntercept = async () => SetIntercept(!(await GetInterceptFlag
 export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
 export const GetLaunch = notPorted("GetLaunch");
 export const GetLaunchpadRequests = notPorted("GetLaunchpadRequests");
-export const GetLaunchpads = notPorted("GetLaunchpads");
+// The project's launchpads as v1's Launchpad: { ID, Name, Description,
+// EntryCount, LastStatusCode }.
+export const GetLaunchpads = async () =>
+  ((await marasi.get("/launchpad")).items ?? []).map((launchpad) => ({
+    ID: launchpad.id,
+    Name: launchpad.name,
+    Description: launchpad.description,
+    EntryCount: launchpad.entry_count,
+    LastStatusCode: launchpad.last_status_code ?? null,
+  }));
 // One page of the log, newest first: {items, next_cursor}. `cursor` is the
 // last page's next_cursor.
 export const GetLogs = (cursor) =>
@@ -342,8 +485,17 @@ export const GetRawDetails = async (id) => {
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
 // A pair's response as v1's ProxyResponse.
 export const GetResponse = async (id) => pairRow(await readPair(id)).Response;
-export const GetScopeRules = notPorted("GetScopeRules");
-export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
+// A GET /scope rule as v1's scope rule.
+const scopeRule = (rule) => ({ pattern: rule.pattern, matchType: rule.match_type });
+/** Compass's scope rules, in v1's shape. */
+export const GetScopeRules = async () => {
+  const scope = await marasi.get("/scope");
+  return {
+    defaultAllow: scope.default_allow,
+    includeRules: (scope.include ?? []).map(scopeRule),
+    excludeRules: (scope.exclude ?? []).map(scopeRule),
+  };
+};
 // This machine's user, the report assessor default.
 export const GetUserName = () => bridge().userName();
 // WebSocket interception, which Marasi sets rather than toggles, as Intercept all.
@@ -354,7 +506,6 @@ export const GetWSIntercepted = async (requestId) => {
   const held = items.find((item) => item.request_id === requestId);
   return held ? heldMessage(held) : null;
 };
-export const GetWaypoints = notPorted("GetWaypoints");
 // The connection an upgrade pair opened, live or closed, or null before it
 // opens.
 export const GetWebSocketConnection = async (requestId) => {
@@ -395,16 +546,60 @@ export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
 export const LinkRequestToTestCase = notPorted("LinkRequestToTestCase");
-export const LinkTraffic = notPorted("LinkTraffic");
-export const ListClientSettings = notPorted("ListClientSettings");
+// Links the pairs in `selection` to a launchpad, finding or test case;
+// resolves how many were newly linked.
+export const LinkTraffic = (selection, target) => bulk("link", selection, linkTarget(target));
+// The project's settings whose keys start with `prefix`, sorted by key.
+export const ListClientSettings = async (prefix = "") =>
+  (await marasi.get(`${clientSettings}?prefix=${encodeURIComponent(prefix)}`)).items ?? [];
 export const ListFindings = notPorted("ListFindings");
 // The open project's background jobs, in v1's JobState shape.
 export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
-export const ListSitemapChildren = notPorted("ListSitemapChildren");
-export const ListSitemapLevels = notPorted("ListSitemapLevels");
+// The most children Marasi lists in one sitemap page.
+const maxSitemapPage = 500;
+// One page of `request.Node`'s children, read as a one-node
+// ListSitemapLevels as v1 did: v1's { Children, NextCursor, Complete,
+// Missing, QueryError }.
+export const ListSitemapChildren = async ({ Node, Cursor, ...request }) => {
+  const read = await ListSitemapLevels({ ...request, Nodes: [Node], Cursors: Cursor ? { [Node]: Cursor } : {} });
+  if (read.QueryError) return { Children: [], NextCursor: null, Complete: true, Missing: false, QueryError: read.QueryError };
+  const level = read.Levels[0];
+  if (level.Missing) return { Children: [], NextCursor: null, Complete: true, Missing: true, QueryError: null };
+  return { Children: level.Children, NextCursor: level.NextCursor, Complete: read.Complete, Missing: false, QueryError: null };
+};
+// The sitemap's levels, one page of `request.Nodes`' children each, in v1's
+// { Levels: [{ Node, Children, NextCursor, Missing }], Complete, QueryError }.
+// A `request.Query` adds each child's Matching count, up to the results'
+// `request.AsOf`; `request.Matching` counts only the matches instead.
+export const ListSitemapLevels = (request) =>
+  readTraffic(async () => {
+    const exclusion = normalizeExclusion(request.Exclusion ?? []);
+    const read = await marasi.post("/traffic/sitemap/levels", {
+      nodes: request.Nodes,
+      scope: request.Matching ? "matching" : "all",
+      exclusion,
+      ...(request.Query && { selection: { query: request.Query, exclusion, as_of: request.AsOf } }),
+      cursors: request.Cursors ?? {},
+      limit: request.Limit || maxSitemapPage,
+    });
+    const count = (child) => {
+      const node = sitemapNodeCount(child);
+      if (!request.Matching || child.matching == null) return node;
+      return { ...node, Pairs: child.matching, Errors: child.matching_errors ?? node.Errors, Matching: null };
+    };
+    return {
+      Levels: (read.levels ?? []).map((level) => ({
+        Node: level.node,
+        Children: (level.items ?? []).map(count),
+        NextCursor: level.next_cursor ?? null,
+        Missing: level.missing,
+      })),
+      Complete: read.sitemap?.complete ?? true,
+      QueryError: null,
+    };
+  });
 export const ListTemplates = notPorted("ListTemplates");
 export const ListTestCases = notPorted("ListTestCases");
-export const LoadExtensions = notPorted("LoadExtensions");
 export const MoveLaunchpadEntries = notPorted("MoveLaunchpadEntries");
 // A project file picked in this machine's open dialog, for a local
 // connection: its path, or null.
@@ -418,7 +613,9 @@ export const OpenProject = async (project) => {
   return (await marasi.post("/project/open", body)).project;
 };
 export const PendingLaunches = notPorted("PendingLaunches");
-export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
+// A wordlist's first `limit` entries; Marasi reads at most 100.
+export const PreviewArmoryWordlist = async (name, limit) =>
+  (await marasi.get(`/wordlist/${encodeURIComponent(name)}?limit=${limit}`)).items ?? [];
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
 // The most rows Marasi lists in one GET /traffic page.
 const maxTrafficPage = 500;
@@ -465,13 +662,10 @@ export const QueryTraffic = (request) =>
       QueryError: null,
     };
   });
-export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
-export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
 // Drops the open project's own exclusion, so it follows the app default again.
 export const ResetContentTypeExclusion = () => unlessNotFound(marasi.delete(exclusionSetting));
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
-export const RunExtension = notPorted("RunExtension");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
 export const SaveArtifactToTestCase = notPorted("SaveArtifactToTestCase");
 export const SaveFinding = notPorted("SaveFinding");
@@ -480,28 +674,49 @@ export const SaveTestCase = notPorted("SaveTestCase");
 export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
-export const SetClientSetting = notPorted("SetClientSetting");
+// Stores `value`, any JSON, as the project's setting `key`.
+export const SetClientSetting = (key, value) => marasi.put(clientSetting(key), { value });
 // Gives the open project its own exclusion, normalised as Marasi does,
 // which it keeps instead of following the app default.
 export const SetContentTypeExclusion = async (values) => {
   await marasi.put(exclusionSetting, { value: normalizeExclusion(values) });
 };
-export const SetHighlight = notPorted("SetHighlight");
+// Gives every pair in `selection` highlight 1-8.
+export const SetHighlight = (selection, highlight) => bulk("highlight", selection, { highlight });
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
 export const SetWSIntercept = async (enabled) =>
   (await marasi.post("/checkpoint/websocket-intercept", { websocket_intercept: Boolean(enabled) })).websocket_intercept;
 export const SetupScratchpad = notPorted("SetupScratchpad");
-export const StartArmoryRun = notPorted("StartArmoryRun");
-export const StartBrowser = notPorted("StartBrowser");
+// Starts a draft; Marasi refuses any other run with not_a_draft or run_active.
+export const StartArmoryRun = async (id) => {
+  await marasi.post(`/armory/run/${encodeURIComponent(id)}/start`);
+};
 // The proxy listener; each resolves Marasi's listener status.
 export const StartProxy = (address, port) => marasi.post("/listener/start", { address, port: Number(port) });
 export const StopProxy = () => marasi.post("/listener/stop");
-export const TestScopeMatch = notPorted("TestScopeMatch");
+// Tests a URL against the scope, in v1's shape. Marasi names the rule that
+// matched; it put the URL in scope when it is an include rule and out of it
+// when it is an exclude rule. With no rule matched, the default decides.
+export const TestScopeMatch = async (url) => {
+  const check = await marasi.post("/scope/check", { url });
+  const rule = check.rule;
+  return {
+    inScope: check.in_scope,
+    testedUrl: check.tested_url,
+    matchedRule: rule?.pattern ?? "",
+    matchedAs: rule?.match_type ?? "",
+    ruleType: rule ? (check.in_scope ? "include" : "exclude") : "",
+    defaultAllowUsed: !rule,
+    compassEnabled: check.compass_enabled,
+  };
+};
 export const ToggleWSIntercept = async () => SetWSIntercept(!(await GetWSInterceptFlag()));
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
-export const UnlinkTraffic = notPorted("UnlinkTraffic");
-export const UpdateArmoryTemplate = notPorted("UpdateArmoryTemplate");
+export const UnlinkTraffic = (selection, target) => bulk("unlink", selection, linkTarget(target));
+export const UpdateArmoryTemplate = async (id, name, description, rawTemplate) => {
+  await marasi.post(`/armory/template/${encodeURIComponent(id)}`, { name, description, raw_template: rawTemplate });
+};
 export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
 // Saves a pair's note; an empty one deletes it, as v1 saved "".
 export const UpdateNote = async (id, note) => {
@@ -510,6 +725,13 @@ export const UpdateNote = async (id, note) => {
   else await unlessNotFound(marasi.delete(path));
 };
 export const UpdateProxy = (address, port) => marasi.post("/listener/update", { address, port: Number(port) });
-export const UpdateUpstreamProxy = notPorted("UpdateUpstreamProxy");
-export const UseUpstreamProxy = notPorted("UseUpstreamProxy");
-export const ValidateArmoryRun = notPorted("ValidateArmoryRun");
+// Checks an unsaved run; Marasi refuses one it can't run with
+// invalid_armory_request.
+export const ValidateArmoryRun = async (rawTemplate, attackType, wordlists, maxConcurrent) => {
+  await marasi.post("/armory/run/validate", {
+    raw_template: rawTemplate,
+    attack_type: attackType,
+    wordlists: wordlists ?? [],
+    max_concurrent: maxConcurrent,
+  });
+};

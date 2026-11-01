@@ -2,7 +2,7 @@
 // request and response events had, which the stores merge into rows.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { requestEvent, responseEvent } from "./traffic.js";
+import { handshakeEndedEvent, requestEvent, responseEvent } from "./traffic.js";
 
 test("a traffic.request event reads as v1's request event", () => {
   assert.deepEqual(
@@ -54,4 +54,11 @@ test("a traffic.response event reads as v1's response event, with its route", ()
   });
   assert.equal(responseEvent({ ...event, upstream_proxy: null, metadata: null }).Route, null);
   assert.deepEqual(responseEvent({ ...event, metadata: null }).Metadata, {});
+});
+
+test("a websocket.handshake_ended event reads as v1's ws-state event", () => {
+  assert.deepEqual(
+    handshakeEndedEvent({ request_id: "019a3b5c-0001-7000-8000-000000000001", state: "dropped" }),
+    { RequestID: "019a3b5c-0001-7000-8000-000000000001", State: "dropped" },
+  );
 });

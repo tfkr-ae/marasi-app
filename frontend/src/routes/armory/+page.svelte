@@ -54,7 +54,6 @@
 		runTrafficRows,
 		runTrafficTotal,
 	} from "../../stores/createArmoryRunTraffic.js";
-	import { activeProject, appState } from "../../stores";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { findingStore } from "../../stores/findingStore";
@@ -605,27 +604,6 @@
 		}
 	}
 
-	async function pollRuns() {
-		if (!$appState.isReady) return;
-		const previousActiveRunIds = $armoryStore.activeRunIds || [];
-		const activeRunIds = await armoryStore.refreshActiveRuns();
-		if (activeRunIds === null) return;
-		const inProgressIds = Object.values(
-			$armoryStore.runsByTemplate,
-		)
-			.flat()
-			.filter((run) => run.Status === "in_progress")
-			.map((run) => run.ID);
-		const idsToRefresh = [...new Set([
-			...previousActiveRunIds,
-			...activeRunIds,
-			...inProgressIds,
-		])];
-
-		await Promise.all(
-			idsToRefresh.map((id) => armoryStore.refreshRun(id)),
-		);
-	}
 
 	const armoryMenu = [
 		{
@@ -733,22 +711,13 @@
 	$: menuOptions = drawerOpen ? drawerMenu : armoryMenu;
 
 	onMount(() => {
+		// Runs change through Marasi's armory.run.* events
+		// (lib/marasiEvents.js), so nothing polls them.
 		validationReady = true;
-		const interval = setInterval(async () => {
-			const project = $activeProject;
-			try {
-				await pollRuns();
-			} catch (error) {
-				if (!$appState.isReady || project !== $activeProject)
-					return;
-				reportError(error);
-			}
-		}, 1500);
 
 		return () => {
 			armoryDrawer.set({ open: false });
 			modalStore.close();
-			clearInterval(interval);
 			clearTimeout(validationTimer);
 		};
 	});

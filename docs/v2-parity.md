@@ -86,25 +86,25 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [x] |
 | `request` | event | COVERED | `traffic.request` | 12 | [x] |
 | `response` | event | COVERED | `traffic.response` | 12 | [x] |
-| `ListSitemapChildren` | binding | COVERED | `GET /traffic/sitemap`, `sitemap.changed` | 13 | [ ] |
-| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [ ] |
+| `ListSitemapChildren` | binding | COVERED | `POST /traffic/sitemap/levels` with one node, as v1 read it, so a query adds the children's matching counts. `sitemap.changed` reads the open levels again. | 13 | [x] |
+| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [x] |
 
 ## Ledger selection, highlights and bulk actions
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `AppendNote` | binding | COVERED | `POST /traffic/bulk/note {selection, append}` | 14 | [ ] |
-| `ClearNotes` | binding | COVERED | `POST /traffic/bulk/note {selection, clear:true}` | 14 | [ ] |
-| `SetHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight}` | 14 | [ ] |
-| `ClearHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight:null}` | 14 | [ ] |
-| `DeleteTraffic` | binding | COVERED | `POST /traffic/bulk/delete {selection}` | 14 | [ ] |
-| `LinkTraffic` | binding | COVERED | `POST /traffic/bulk/link {selection, launchpad_id, finding_id or test_case_id}` | 14 | [ ] |
-| `UnlinkTraffic` | binding | COVERED | `POST /traffic/bulk/unlink {selection, launchpad_id, finding_id or test_case_id}` | 14 | [ ] |
-| `GetClientSetting` | binding | COVERED | `GET /client-settings/marasi-app/{key}` (404 = unset) | 14 | [ ] |
-| `SetClientSetting` | binding | COVERED | `PUT /client-settings/marasi-app/{key} {value}` | 14 | [ ] |
-| `DeleteClientSetting` | binding | COVERED | `DELETE /client-settings/marasi-app/{key}` | 14 | [ ] |
-| `ListClientSettings` | binding | COVERED | `GET /client-settings/marasi-app?prefix=` | 14 | [ ] |
-| `ws-state` | event | COVERED | `websocket.handshake_ended {request_id, state}` | 14 | [ ] |
+| `AppendNote` | binding | COVERED | `POST /traffic/bulk/note {selection, append}` | 14 | [x] |
+| `ClearNotes` | binding | COVERED | `POST /traffic/bulk/note {selection, clear:true}` | 14 | [x] |
+| `SetHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight}` | 14 | [x] |
+| `ClearHighlight` | binding | COVERED | `POST /traffic/bulk/highlight {selection, highlight:null}` | 14 | [x] |
+| `DeleteTraffic` | binding | COVERED | `POST /traffic/bulk/delete {selection}` | 14 | [x] |
+| `LinkTraffic` | binding | COVERED | `POST /traffic/bulk/link {selection, launchpad_id, finding_id or test_case_id}` | 14 | [x] |
+| `UnlinkTraffic` | binding | COVERED | `POST /traffic/bulk/unlink {selection, launchpad_id, finding_id or test_case_id}` | 14 | [x] |
+| `GetClientSetting` | binding | COVERED | `GET /client-settings/marasi-app/{key}` (404 = unset) | 14 | [x] |
+| `SetClientSetting` | binding | COVERED | `PUT /client-settings/marasi-app/{key} {value}` | 14 | [x] |
+| `DeleteClientSetting` | binding | COVERED | `DELETE /client-settings/marasi-app/{key}` | 14 | [x] |
+| `ListClientSettings` | binding | COVERED | `GET /client-settings/marasi-app?prefix=` | 14 | [x] |
+| `ws-state` | event | COVERED | `websocket.handshake_ended {request_id, state}` | 14 | [x] |
 
 ## Updates
 
@@ -219,21 +219,21 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetArmoryTemplates` | binding | COVERED | `GET /armory/template`, and `GET /armory/template/{id}` for `raw_template` | 23 | [ ] |
-| `CreateArmoryTemplate` | binding | COVERED | `POST /armory/template {name, description, raw_template}` | 23 | [ ] |
-| `CreateArmoryTemplateFromRequest` | binding | COVERED | C: `GET /traffic/{id}`, then `POST /armory/template` | 23 | [ ] |
-| `UpdateArmoryTemplate` | binding | COVERED | `POST /armory/template/{id}` | 23 | [ ] |
-| `DeleteArmoryTemplate` | binding | COVERED | `DELETE /armory/template/{id}` | 23 | [ ] |
-| `GetArmoryRuns` | binding | COVERED | `GET /armory/template/{id}/run` | 23 | [ ] |
-| `GetArmoryRun` | binding | COVERED | `GET /armory/run/{id}` | 23 | [ ] |
-| `GetActiveArmoryRunIDs` | binding | COVERED | C: `GET /armory/template/{id}/run` for each template, filtered by `status` `in_progress`. Runs a crash interrupted are cancelled when the project opens. | 23 | [ ] |
-| `CreateArmoryRun` | binding | COVERED | `POST /armory/run {template_id, attack_type, use_https, wordlists, max_concurrent}` | 23 | [ ] |
-| `ValidateArmoryRun` | binding | COVERED | `POST /armory/run/validate` | 23 | [ ] |
-| `StartArmoryRun` | binding | COVERED | `POST /armory/run/{id}/start` | 23 | [ ] |
-| `CancelArmoryRun` | binding | COVERED | `POST /armory/run/{id}/cancel` | 23 | [ ] |
-| `DeleteArmoryRun` | binding | COVERED | `DELETE /armory/run/{id}` | 23 | [ ] |
-| `GetArmoryWordlists` | binding | COVERED | `GET /wordlist` | 23 | [ ] |
-| `PreviewArmoryWordlist` | binding | COVERED | `GET /wordlist/{name}?limit=` | 23 | [ ] |
+| `GetArmoryTemplates` | binding | COVERED | `GET /armory/template`, and `GET /armory/template/{id}` for `raw_template` | 23 | [x] |
+| `CreateArmoryTemplate` | binding | COVERED | `POST /armory/template {name, description, raw_template}` | 23 | [x] |
+| `CreateArmoryTemplateFromRequest` | binding | COVERED | C: `GET /traffic/{id}`, then `POST /armory/template` | 23 | [x] |
+| `UpdateArmoryTemplate` | binding | COVERED | `POST /armory/template/{id}` | 23 | [x] |
+| `DeleteArmoryTemplate` | binding | COVERED | `DELETE /armory/template/{id}` | 23 | [x] |
+| `GetArmoryRuns` | binding | COVERED | `GET /armory/template/{id}/run` | 23 | [x] |
+| `GetArmoryRun` | binding | COVERED | `GET /armory/run/{id}` | 23 | [x] |
+| `GetActiveArmoryRunIDs` | binding | COVERED | C: `GET /armory/template/{id}/run` for each template, filtered by `status` `in_progress`. Runs a crash interrupted are cancelled when the project opens. | 23 | [x] |
+| `CreateArmoryRun` | binding | COVERED | `POST /armory/run {template_id, attack_type, use_https, wordlists, max_concurrent}` | 23 | [x] |
+| `ValidateArmoryRun` | binding | COVERED | `POST /armory/run/validate` | 23 | [x] |
+| `StartArmoryRun` | binding | COVERED | `POST /armory/run/{id}/start` | 23 | [x] |
+| `CancelArmoryRun` | binding | COVERED | `POST /armory/run/{id}/cancel` | 23 | [x] |
+| `DeleteArmoryRun` | binding | COVERED | `DELETE /armory/run/{id}` | 23 | [x] |
+| `GetArmoryWordlists` | binding | COVERED | `GET /wordlist` | 23 | [x] |
+| `PreviewArmoryWordlist` | binding | COVERED | `GET /wordlist/{name}?limit=` | 23 | [x] |
 | `QueryArmoryRunTraffic` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>" AND (<q>)` | 24 | [ ] |
 | `CountArmoryRunTraffic` | binding | COVERED | `GET /traffic/count/by-field?field=&q=metadata.armory_run_id = "<id>"&as_of=` | 24 | [ ] |
 | `GetArmoryRunRequests` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>"`. v1 bound it but the frontend never called it. | 24 | [ ] |
@@ -242,44 +242,46 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetScopeRules` | binding | COVERED | `GET /scope` | 25 | [ ] |
-| `TestScopeMatch` | binding | COVERED | `POST /scope/check {url}` | 25 | [ ] |
-| `GetExtensions` | binding | COVERED | `GET /extension`, `extension.enabled`, `extension.updated` | 25 | [ ] |
-| `GetExtensionCode` | binding | COVERED | `GET /extension/{id}` `.lua_content` | 25 | [ ] |
-| `RunExtension` | binding | COVERED | `POST /extension/{id} {lua_content}` | 25 | [ ] |
-| `DoExtender` | binding | COVERED | `POST /extension/{id} {lua_content}` on the workshop extension | 25 | [ ] |
-| `GetExtensionLogs` | binding | COVERED | `GET /extension/{id}/logs` | 25 | [ ] |
-| `GetExtensionUI` | binding | COVERED | `extension.gui.rendered`. v1's only caller, `WebComponentWrapper.svelte`, was imported nowhere, and extension UI drew from `extension_gui_render`. | 25 | [ ] |
-| `GetExtensionFlag` | binding | GUI | No v1 caller, so the GUI has nothing to read. No route reads an extension's Lua global flags. | 25 | [ ] |
-| `LoadExtensions` | binding | GUI | It only registered v1's Wails listeners. The layout's `EventSource` dispatch does that. | 25 | [ ] |
-| `extension_gui_render` | event | COVERED | `extension.gui.rendered {id, name, target, schema}` (target `toast` is a toast) | 25 | [ ] |
-| `extension_state_update` | event | COVERED | `extension.gui.updated {id, name, key, value}` | 25 | [ ] |
-| `<extensionName>-log` | event | COVERED | `extension.log {id, name, time, text}`, filtered by name | 25 | [ ] |
-| `extension_call_function` | event | COVERED | `POST /extension/{id}/call {function, args:[state]}` | 25 | [ ] |
-| `extension_sync_state` | event | COVERED | `POST /extension/{id}/call {function:"sync", args}` | 25 | [ ] |
-| `EventsEmit` | runtime | COVERED | `POST /extension/{id}/call` | 25 | [ ] |
+| `GetScopeRules` | binding | COVERED | `GET /scope` | 25 | [x] |
+| `TestScopeMatch` | binding | COVERED | `POST /scope/check {url}` | 25 | [x] |
+| `GetExtensions` | binding | COVERED | `GET /extension`, `extension.enabled`, `extension.updated` | 25 | [x] |
+| `GetExtensionCode` | binding | COVERED | `GET /extension/{id}` `.lua_content` | 25 | [x] |
+| `RunExtension` | binding | COVERED | `POST /extension/{id} {lua_content}` | 25 | [x] |
+| `DoExtender` | binding | COVERED | `POST /extension/{id} {lua_content}` on the workshop extension | 25 | [x] |
+| `GetExtensionLogs` | binding | COVERED | `GET /extension/{id}/logs` | 25 | [x] |
+| `GetExtensionUI` | binding | COVERED | `extension.gui.rendered`. v1's only caller, `WebComponentWrapper.svelte`, was imported nowhere, and extension UI drew from `extension_gui_render`. | 25 | [x] |
+| `GetExtensionFlag` | binding | GUI | No v1 caller, so the GUI has nothing to read. No route reads an extension's Lua global flags. | 25 | [x] |
+| `LoadExtensions` | binding | GUI | It only registered v1's Wails listeners. The layout's `EventSource` dispatch does that. | 25 | [x] |
+| `extension_gui_render` | event | COVERED | `extension.gui.rendered {id, name, target, schema}` (target `toast` is a toast) | 25 | [x] |
+| `extension_state_update` | event | COVERED | `extension.gui.updated {id, name, key, value}` | 25 | [x] |
+| `<extensionName>-log` | event | COVERED | `extension.log {id, name, time, text}`, filtered by name | 25 | [x] |
+| `extension_call_function` | event | COVERED | `POST /extension/{id}/call {function, args:[state]}` | 25 | [x] |
+| `extension_sync_state` | event | COVERED | `POST /extension/{id}/call {function:"sync", args}` | 25 | [x] |
+| `EventsEmit` | runtime | COVERED | `POST /extension/{id}/call` | 25 | [x] |
 
 ## Chrome, upstream proxies and waypoints
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. A remote connection keeps its own in the app config (ticket 27). | 26 | [ ] |
-| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: app config (ticket 27). | 26 | [ ] |
-| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: local Chrome with `GET /certificate` `.spki_hash` (ticket 27). | 26 | [ ] |
-| `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [ ] |
-| `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}` | 26 | [ ] |
-| `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA) | 26 | [ ] |
-| `RemoveUpstreamProxy` | binding | COVERED | `DELETE /upstream-proxy/{name}` | 26 | [ ] |
-| `UseUpstreamProxy` | binding | COVERED | `PUT /upstream-proxy-selection {name}` | 26 | [ ] |
-| `CheckUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name}/check {target}` | 26 | [ ] |
-| `ReadUpstreamProxyCAFile` | binding | GUI | OS open dialog reads the PEM on this machine and sends it as `ca` | 26 | [ ] |
-| `GetWaypoints` | binding | COVERED | `GET /waypoint`, `waypoint.*` | 26 | [ ] |
-| `CreateWaypoint` | binding | COVERED | `POST /waypoint {hostname, override}` | 26 | [ ] |
-| `DeleteWaypoint` | binding | COVERED | `DELETE /waypoint {hostname}` | 26 | [ ] |
+| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. Remote: this machine's, in app config key `v2_chrome_paths`. | 27 | [x] |
+| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: this machine's, in app config key `v2_chrome_paths`. | 27 | [x] |
+| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: this machine's, in app config key `v2_chrome_paths`. | 27 | [x] |
+| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: this machine's, in app config key `v2_chrome_profiles`. | 27 | [x] |
+| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: this machine's, in app config key `v2_chrome_profiles`. | 27 | [x] |
+| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: this machine's, in app config key `v2_chrome_profiles`, removing its user-data-dir. | 27 | [x] |
+| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: C: `GET /listener/status` and `GET /certificate` `.spki_hash`, then this machine's Chrome through the remote's host and listener port, or the address saved for it. | 27 | [x] |
+| `GetLocalChromeProxy` | binding | GUI | v2 only: the proxy address this machine's Chrome uses for the window's remote, app config key `v2_chrome_proxy_addresses`, and its default from `GET /listener/status` | 27 | [x] |
+| `SetLocalChromeProxy` | binding | GUI | v2 only: saves the remote's proxy address in `v2_chrome_proxy_addresses`; empty goes back to the default | 27 | [x] |
+| `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [x] |
+| `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA), then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `RemoveUpstreamProxy` | binding | COVERED | `DELETE /upstream-proxy/{name}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `UseUpstreamProxy` | binding | COVERED | `PUT /upstream-proxy-selection {name}` | 26 | [x] |
+| `CheckUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name}/check {target}` | 26 | [x] |
+| `ReadUpstreamProxyCAFile` | binding | GUI | OS open dialog reads the PEM on this machine and sends it as `ca` | 26 | [x] |
+| `GetWaypoints` | binding | COVERED | `GET /waypoint`, `waypoint.*` | 26 | [x] |
+| `CreateWaypoint` | binding | COVERED | `POST /waypoint {hostname, override}` | 26 | [x] |
+| `DeleteWaypoint` | binding | COVERED | `DELETE /waypoint {hostname}` | 26 | [x] |
 
 ## Former gaps
 

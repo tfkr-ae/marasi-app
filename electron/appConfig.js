@@ -366,6 +366,19 @@ export function createAppConfig({ dir, fs, platform = process.platform, defaultT
       });
     },
 
+    /**
+     * Rewrites the v2_* key `key` with `change(saved)` inside the write
+     * queue, as updateRemoteConnections does; returns what it wrote.
+     */
+    updateV2Value(key, change) {
+      return serialized(async () => {
+        v2Key(key);
+        const next = await change((await file.values())[key]);
+        await file.write({ [key]: next });
+        return next;
+      });
+    },
+
     /** The saved remote instances, as written; entries that aren't objects are skipped. */
     async remoteConnections() {
       const saved = (await file.values())[remoteConnectionsKey];

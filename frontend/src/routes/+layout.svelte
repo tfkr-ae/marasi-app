@@ -51,13 +51,13 @@
 		pagesKey,
 	} from "../stores.js";
 	import { projectSwitch } from "../stores/projectSwitchStore.js";
+	import { extensionsStore } from "../stores/extensionsStore.js";
 	import {
 		openProjectFile,
 		openConnectedProject,
 		retryOpen,
 	} from "../lib/globalActions.js";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
-	import { armoryStore } from "../stores/armoryStore";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -66,7 +66,6 @@
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
-	import { sitemapStore } from "../stores/sitemapStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import {
 		EventsOn,
@@ -176,6 +175,7 @@
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
 	let stopAbandonToasts;
+	let stopExtensionToasts;
 	// Full class names, so Tailwind keeps them.
 	const dotTones = {
 		success: { dot: "bg-success-500", ping: "bg-success-400" },
@@ -322,9 +322,7 @@
 			);
 
 			EventsOn("request", (newRequest) => {
-				sitemapStore.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
-				armoryStore.onRequest(newRequest);
 			});
 			EventsOn("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
@@ -333,9 +331,7 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			EventsOn("response", (newResponse) => {
-				sitemapStore.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
-				armoryStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&
@@ -349,11 +345,6 @@
 					});
 				}
 			});
-			// An upgrade whose handshake failed or was dropped opens no
-			// connection, so only its Ledger row changes.
-			EventsOn("ws-state", ({ RequestID, State }) =>
-				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
-			);
 			// Marasi dropped a held item because its client left
 			// (checkpoint.dropped, reason abandoned; see marasiEvents.js).
 			// The toast shows on any page.
@@ -373,70 +364,8 @@
 					});
 				},
 			);
-			EventsOn(
-				"extension_gui_render",
-				({ extensionName, target, schema }) => {
-					if (target === "toast") {
-						const allowedVariants = [
-							"primary",
-							"secondary",
-							"tertiary",
-							"success",
-							"warning",
-							"error",
-							"surface",
-						];
-						const variant =
-							allowedVariants.includes(
-								schema.variant,
-							)
-								? "variant-filled-" +
-									schema.variant
-								: "variant-filled-primary";
-						const t = {
-							message: schema.message,
-							background: variant,
-						};
-
-						toastStore.trigger(t);
-					} else {
-						extensions_ui.update(
-							(store) => {
-								const ext =
-									store[
-										extensionName
-									] || {
-										state: {},
-									};
-								ext[target] =
-									schema;
-								return {
-									...store,
-									[extensionName]:
-										ext,
-								};
-							},
-						);
-					}
-				},
-			);
-
-			EventsOn(
-				"extension_state_update",
-				({ extensionName, key, value }) => {
-					extensions_ui.update((store) => {
-						const ext = store[
-							extensionName
-						] || { state: {} };
-						ext.state[key] = value;
-						return {
-							...store,
-							[extensionName]: ext,
-						};
-					});
-					console.log($extensions_ui);
-				},
-			);
+			// An extension's toasts show on any page.
+			stopExtensionToasts = extensionsStore.onToast((toast) => toastStore.trigger(toast));
 		});
 		return () => {
 			window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -446,14 +375,12 @@
 			removeMenuShortcuts();
 			EventsOff("request");
 			EventsOff("response");
-			EventsOff("ws-state");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
 			EventsOff("update-progress");
 			EventsOff("update-installed");
 			EventsOff("update-failed");
-			EventsOff("extension_gui_render");
-			EventsOff("extension_state_update");
+			stopExtensionToasts?.();
 		};
 	});
 </script>

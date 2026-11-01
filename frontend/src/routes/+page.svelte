@@ -1,8 +1,6 @@
 <script>
-	import {
-		StartBrowser,
-		GetChromeProfiles,
-	} from "../lib/bindings/App";
+	import { StartBrowser } from "../lib/bindings/App";
+	import { chromeStore } from "../stores/chromeStore.js";
 	import { ChromeIcon } from "svelte-feather-icons";
 	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";
@@ -24,19 +22,15 @@
 	import { onMount } from "svelte";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
-	let chromeProfiles = [];
 	const chromeProfilesPopup = {
 		event: "click",
 		target: "chromeProfilesPopup",
 		placement: "bottom-end",
 	};
 
+	// On a remote connection Chrome is this machine's (bindings/chrome.js).
 	onMount(() => {
-		GetChromeProfiles()
-			.then((profiles) => {
-				chromeProfiles = profiles;
-			})
-			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
+		chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome profiles"));
 	});
 	const startChrome = (profile) =>
 		StartBrowser(profile).catch(chromeError(toastStore, "Error starting Chrome"));
@@ -97,14 +91,30 @@
 					</button>
 
 					<div class="relative w-fit">
+						<!-- Before the buttons: the popup action finds its target when the
+						     dropdown button mounts, which is at once when the profiles are
+						     already loaded. -->
+						<div
+							class="card z-10 w-full bg-surface-100-800-token shadow-xl"
+							data-popup="chromeProfilesPopup"
+						>
+							{#each $chromeStore.profiles as profile}
+								<button
+									type="button"
+									class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
+									on:click={() => startChrome(profile)}
+								>
+									{profile}
+								</button>
+							{/each}
+						</div>
 						<div
 							class="flex w-full overflow-hidden rounded-container-token"
 						>
 							<button
 								type="button"
 								class="btn btn-sm text-sm flex-1 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-								class:rounded-none={chromeProfiles.length >
-									0}
+								class:rounded-none={$chromeStore.profiles.length > 0}
 								on:click={() => startChrome("")}
 							>
 								<span
@@ -117,7 +127,7 @@
 								>
 							</button>
 
-							{#if chromeProfiles.length > 0}
+							{#if $chromeStore.profiles.length > 0}
 								<button
 									type="button"
 									class="btn btn-sm text-sm rounded-none px-3 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
@@ -133,22 +143,6 @@
 							{/if}
 						</div>
 
-						{#if chromeProfiles.length >= 0}
-							<div
-								class="card z-10 w-full bg-surface-100-800-token shadow-xl"
-								data-popup="chromeProfilesPopup"
-							>
-								{#each chromeProfiles as profile}
-									<button
-										type="button"
-										class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
-										on:click={() => startChrome(profile)}
-									>
-										{profile}
-									</button>
-								{/each}
-							</div>
-						{/if}
 					</div>
 				</div>
 			</div>
