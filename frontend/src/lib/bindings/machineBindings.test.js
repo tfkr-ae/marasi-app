@@ -99,12 +99,17 @@ test("GetUpstreamProxies reads the machine's list and the project's selection", 
   assert.deepEqual(await App.GetUpstreamProxies(), proxies);
 });
 
-test("AddUpstreamProxy sends the CA only when there is one", async () => {
-  answers["POST /upstream-proxy"] = proxies;
+// Marasi answers a change with the list alone; the bindings answer v1's
+// whole state, the list with the project's selection.
+const changed = { items: [corp] };
+
+test("AddUpstreamProxy sends the CA only when there is one, and answers the whole state", async () => {
+  answers["POST /upstream-proxy"] = changed;
+  answers["GET /upstream-proxy"] = proxies;
   assert.deepEqual(await App.AddUpstreamProxy("corp", "http://10.0.0.1:3128", ""), proxies);
   await App.AddUpstreamProxy("tls", "https://10.0.0.2:3128", "PEM");
   assert.deepEqual(
-    sent.map((s) => s.body),
+    sent.filter((s) => s.method === "POST").map((s) => s.body),
     [
       { name: "corp", url: "http://10.0.0.1:3128" },
       { name: "tls", url: "https://10.0.0.2:3128", ca: "PEM" },
@@ -113,12 +118,13 @@ test("AddUpstreamProxy sends the CA only when there is one", async () => {
 });
 
 test("UpdateUpstreamProxy sends what changes, and null to remove the CA", async () => {
-  answers["POST /upstream-proxy/corp"] = proxies;
-  await App.UpdateUpstreamProxy("corp", "http://10.0.0.9:3128", "", false);
+  answers["POST /upstream-proxy/corp"] = changed;
+  answers["GET /upstream-proxy"] = proxies;
+  assert.deepEqual(await App.UpdateUpstreamProxy("corp", "http://10.0.0.9:3128", "", false), proxies);
   await App.UpdateUpstreamProxy("corp", "", "PEM", false);
   await App.UpdateUpstreamProxy("corp", "", "PEM", true);
   assert.deepEqual(
-    sent.map((s) => s.body),
+    sent.filter((s) => s.method === "POST").map((s) => s.body),
     [{ url: "http://10.0.0.9:3128" }, { ca: "PEM" }, { ca: null }],
   );
 });
@@ -129,11 +135,12 @@ test("UpdateUpstreamProxy with nothing to change sends nothing", async () => {
 });
 
 test("RemoveUpstreamProxy and CheckUpstreamProxy name the entry", async () => {
-  answers["DELETE /upstream-proxy/my%20proxy"] = { items: [], selected: "my proxy", configured: false };
+  answers["DELETE /upstream-proxy/my%20proxy"] = { items: [] };
+  answers["GET /upstream-proxy"] = { items: [], selected: "my proxy", configured: false };
   answers["POST /upstream-proxy/corp/check"] = { name: "corp", outcome: "ok", message: "connected" };
-  assert.equal((await App.RemoveUpstreamProxy("my proxy")).configured, false);
+  assert.deepEqual(await App.RemoveUpstreamProxy("my proxy"), { items: [], selected: "my proxy", configured: false });
   assert.equal((await App.CheckUpstreamProxy("corp", "example.com:443")).outcome, "ok");
-  assert.deepEqual(sent[1], { method: "POST", path: "/upstream-proxy/corp/check", body: { target: "example.com:443" } });
+  assert.deepEqual(sent.at(-1), { method: "POST", path: "/upstream-proxy/corp/check", body: { target: "example.com:443" } });
 });
 
 test("UseUpstreamProxy selects for the project and answers the whole list, as v1", async () => {

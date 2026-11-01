@@ -95,11 +95,15 @@ export const StartBrowser = instanceChrome("StartBrowser", async (profile) => {
 
 // This machine's upstream proxies and the open project's selection:
 // {items, selected, configured}, items redacted to {name, scheme, host,
-// port, has_credentials, has_ca}.
+// port, has_credentials, has_ca}. Marasi answers a change with the list
+// alone, so each change reads the whole state after it, as v1 answered.
 const upstreamProxyPath = (name) => `/upstream-proxy/${encodeURIComponent(name)}`;
 export const GetUpstreamProxies = () => marasi.get("/upstream-proxy");
 // Adds an entry; `ca` is a PEM bundle, "" for none.
-export const AddUpstreamProxy = (name, url, ca) => marasi.post("/upstream-proxy", ca ? { name, url, ca } : { name, url });
+export const AddUpstreamProxy = async (name, url, ca) => {
+  await marasi.post("/upstream-proxy", ca ? { name, url, ca } : { name, url });
+  return GetUpstreamProxies();
+};
 // Changes the named entry. An empty url or ca leaves it as it is, and
 // removeCA drops the CA.
 export const UpdateUpstreamProxy = async (name, url, ca, removeCA) => {
@@ -108,11 +112,15 @@ export const UpdateUpstreamProxy = async (name, url, ca, removeCA) => {
   if (removeCA) update.ca = null;
   else if (ca) update.ca = ca;
   if (!Object.keys(update).length) throw new Error("upstream proxy update: nothing to change");
-  return marasi.post(upstreamProxyPath(name), update);
+  await marasi.post(upstreamProxyPath(name), update);
+  return GetUpstreamProxies();
 };
 // Removes the named entry. A project that selected it keeps the selection,
 // and its traffic fails closed.
-export const RemoveUpstreamProxy = (name) => marasi.delete(upstreamProxyPath(name));
+export const RemoveUpstreamProxy = async (name) => {
+  await marasi.delete(upstreamProxyPath(name));
+  return GetUpstreamProxies();
+};
 // Selects the open project's upstream proxy, "" for direct, and answers
 // the whole list, as v1 did.
 export const UseUpstreamProxy = async (name) => {
