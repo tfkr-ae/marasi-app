@@ -1,8 +1,7 @@
 <script>
-	import {
-		StartBrowser,
-		GetChromeProfiles,
-	} from "../lib/bindings/App";
+	import { StartBrowser } from "../lib/bindings/App";
+	import { chromeStore } from "../stores/chromeStore.js";
+	import { windowConnection } from "../stores/windowConnectionStore.js";
 	import { ChromeIcon } from "svelte-feather-icons";
 	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";
@@ -24,19 +23,18 @@
 	import { onMount } from "svelte";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
-	let chromeProfiles = [];
 	const chromeProfilesPopup = {
 		event: "click",
 		target: "chromeProfilesPopup",
 		placement: "bottom-end",
 	};
 
+	// Chrome on a remote connection would be this machine's, which isn't
+	// ported yet.
+	$: remoteConnection = Boolean($windowConnection.connection?.remote);
+
 	onMount(() => {
-		GetChromeProfiles()
-			.then((profiles) => {
-				chromeProfiles = profiles;
-			})
-			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
+		if (!remoteConnection) chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome profiles"));
 	});
 	const startChrome = (profile) =>
 		StartBrowser(profile).catch(chromeError(toastStore, "Error starting Chrome"));
@@ -97,14 +95,32 @@
 					</button>
 
 					<div class="relative w-fit">
+						<!-- Before the buttons: the popup action finds its target when the
+						     dropdown button mounts, which is at once when the profiles are
+						     already loaded. -->
+						<div
+							class="card z-10 w-full bg-surface-100-800-token shadow-xl"
+							data-popup="chromeProfilesPopup"
+						>
+							{#each $chromeStore.profiles as profile}
+								<button
+									type="button"
+									class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
+									on:click={() => startChrome(profile)}
+								>
+									{profile}
+								</button>
+							{/each}
+						</div>
 						<div
 							class="flex w-full overflow-hidden rounded-container-token"
 						>
 							<button
 								type="button"
 								class="btn btn-sm text-sm flex-1 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-								class:rounded-none={chromeProfiles.length >
-									0}
+								class:rounded-none={!remoteConnection && $chromeStore.profiles.length > 0}
+								disabled={remoteConnection}
+								title={remoteConnection ? "Not available on a remote connection yet" : undefined}
 								on:click={() => startChrome("")}
 							>
 								<span
@@ -117,7 +133,7 @@
 								>
 							</button>
 
-							{#if chromeProfiles.length > 0}
+							{#if !remoteConnection && $chromeStore.profiles.length > 0}
 								<button
 									type="button"
 									class="btn btn-sm text-sm rounded-none px-3 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
@@ -133,22 +149,6 @@
 							{/if}
 						</div>
 
-						{#if chromeProfiles.length >= 0}
-							<div
-								class="card z-10 w-full bg-surface-100-800-token shadow-xl"
-								data-popup="chromeProfilesPopup"
-							>
-								{#each chromeProfiles as profile}
-									<button
-										type="button"
-										class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
-										on:click={() => startChrome(profile)}
-									>
-										{profile}
-									</button>
-								{/each}
-							</div>
-						{/if}
 					</div>
 				</div>
 			</div>

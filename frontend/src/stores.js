@@ -3,8 +3,6 @@ import {
   GetMarasiConfig,
   GetKeybindings,
   GetExtensionCode,
-  GetWaypoints,
-  GetExtensions,
   LoadExtensions,
   GetUserName,
 } from "./lib/bindings/App";
@@ -24,6 +22,9 @@ import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { savedQueriesStore } from "./stores/savedQueriesStore";
 import { upstreamProxyStore } from "./stores/upstreamProxyStore";
+import { extensionsStore } from "./stores/extensionsStore.js";
+import { scopeStore } from "./stores/scopeStore.js";
+import { waypointStore } from "./stores/waypointStore.js";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";
@@ -39,9 +40,10 @@ export const appState = writable({
   details: "",
 });
 
-// Extensions
-export const extensions = writable([]);
-export const extensions_ui = writable({});
+// Extensions: the project's list, and the UI each draws, by name
+// (stores/createExtensionsStore.js).
+export const extensions = extensionsStore.list;
+export const extensions_ui = extensionsStore.ui;
 
 // Logbook Stores
 export const reportMetadata = writable({
@@ -66,8 +68,8 @@ export const reportMetadata = writable({
 export const compassCode = writable("");
 export const testerInput = writable("");
 
-// Waypoint
-export const waypoints = writable({});
+// Waypoint: the open project's {hostname: override} map.
+export const waypoints = waypointStore;
 
 // Checkpont
 export const checkpointCode = writable("");
@@ -142,15 +144,15 @@ export async function openProject(loadPart = () => {}) {
   checkpointCodeApplied.set("");
   interceptFlag.set(false);
   workshopCode.set("");
-  waypoints.set({});
+  waypoints.clear();
   ledgerStore.clear();
   sitemapStore.clear();
   jobsStore.clear();
   recentTraffic.clear();
   // Project saved queries belong to the project just opened.
   savedQueriesStore.loadProject();
-  extensions.set([]);
-  extensions_ui.set({});
+  extensionsStore.clear();
+  scopeStore.clear();
   testCaseStore.clear();
   findingStore.clear();
   logbookStore.clear();
@@ -207,14 +209,7 @@ export async function openProject(loadPart = () => {}) {
 }
 
 export async function populateWaypoints() {
-  GetWaypoints()
-    .then((points) => {
-      console.log(points);
-      waypoints.set(points);
-    })
-    .catch((waypointErr) => {
-      console.log(waypointErr);
-    });
+  await waypoints.reload().catch((err) => console.error("Reading waypoints failed:", err));
 }
 export async function populateWorkshop() {
   GetExtensionCode("workshop")
@@ -240,6 +235,7 @@ export async function populateCheckpoint() {
     .catch((err) => console.error("Failed to read Checkpoint items:", err));
 }
 export async function populateScope() {
+  scopeStore.reload().catch((err) => console.error("Reading the scope rules failed:", err));
   GetExtensionCode("compass")
     .then((code) => {
       compassCode.set(code);
@@ -249,8 +245,5 @@ export async function populateScope() {
     });
 }
 export async function populateExtensions() {
-  GetExtensions().then((exts) => {
-    console.log(exts);
-    extensions.set(exts ? exts : []);
-  });
+  await extensionsStore.reload().catch((err) => console.error("Reading the extensions failed:", err));
 }

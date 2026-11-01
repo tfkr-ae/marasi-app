@@ -2,7 +2,7 @@
 	import { activeProject } from "../../stores";
 	import { windowConnection } from "../../stores/windowConnectionStore.js";
 	import InstanceVersion from "./InstanceVersion.svelte";
-	import { GetScopeRules } from "../bindings/App";
+	import { scopeStore } from "../../stores/scopeStore.js";
 	import { dashboardStore } from "../../stores/dashboardStore.js";
 	import {
 		Edit2Icon,
@@ -33,10 +33,11 @@
 	$: interceptedComplete = counts?.InterceptionsComplete ?? true;
 	$: countsLoading = $dashboardStore.loading;
 
-	// Scope statistics
-	let defaultAllow = true;
-	let includeRulesCount = 0;
-	let excludeRulesCount = 0;
+	// Scope statistics, which follow Compass's rules.
+	$: defaultAllow = $scopeStore.defaultAllow;
+	$: includeRulesCount = $scopeStore.includeRules.length;
+	$: excludeRulesCount = $scopeStore.excludeRules.length;
+	$: scopeLoading = !$scopeStore.loaded;
 
 	$: testCasesCount = $testCaseStore.length;
 	$: findingsCount = $findingStore.length;
@@ -55,30 +56,15 @@
 	}
 
 	// Figures use the reader's locale ("100,000"), as the Ledger's counts do.
-	// While a figure is read its card shows a ghost bar instead; a newer
-	// refresh (a project switch) wins over a slower older one.
-	let scopeLoading = true;
-	let refreshes = 0;
+	// While a figure is read its card shows a ghost bar instead.
 	const ghost =
 		"dashboard-ghost inline-block h-7 w-16 animate-pulse rounded-sm bg-surface-300 align-middle dark:bg-surface-600";
 
 	// Refresh dashboard data
 	function refreshDashboard() {
-		const run = ++refreshes;
 		dashboardStore.reload().catch((err) => console.error("Counting the dashboard failed:", err));
-
-		GetScopeRules()
-			.then((scopeData) => {
-				if (run !== refreshes) return;
-				defaultAllow = scopeData.defaultAllow;
-				includeRulesCount = scopeData.includeRules.length;
-				excludeRulesCount = scopeData.excludeRules.length;
-			})
-			.catch((err) => console.error("Reading the scope rules failed:", err))
-			.finally(() => {
-				if (run === refreshes) scopeLoading = false;
-			});
 	}
+
 
 </script>
 

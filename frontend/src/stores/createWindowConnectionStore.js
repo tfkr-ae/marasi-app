@@ -28,7 +28,7 @@ export function instanceNameFor(project, taken) {
  * connect, start, disconnect, marasi, chooseMarasi, listRemotes,
  * connectRemote, connectSaved, forgetRemote, refusedRemote,
  * useConnection}`: the main process bridge's calls, and the client
- * module's useConnection(baseURL), which points the client at the instance
+ * module's useConnection(baseURL, {remote}), which points the client at the instance
  * and returns it. The remote calls resolve `{value}`, or `{error,
  * tokenRefused, remote}` where `remote` is the refusing remote's {name, url}.
  */
@@ -67,7 +67,7 @@ export function createWindowConnectionStore(api) {
 
   // Reads the instance's status through the client module, and connects.
   async function use({ instance, baseURL, loopbackTurnedOn, remote = false, resumed = false }) {
-    const status = await api.useConnection(baseURL).get("/service/status");
+    const status = await api.useConnection(baseURL, { remote }).get("/service/status");
     const connection = { instance, baseURL, loopbackTurnedOn, remote, resumed, status };
     store.update((s) => ({ ...s, connecting: null, connectError: null, tokenPrompt: null, connection }));
     return connection;

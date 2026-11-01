@@ -1,4 +1,4 @@
-// The app's Checkpoint store, bound to the Wails backend. The logic lives in
+// The app's Checkpoint store, bound to the connected instance. The logic lives in
 // createCheckpointStore.js, which tests load with a fake API.
 import {
   CheckHTTPParse,

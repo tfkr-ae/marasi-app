@@ -4,14 +4,14 @@ import * as App from "./App.js";
 import { isNotPorted } from "./notPorted.js";
 
 test("a binding that isn't ported rejects with a short not ported error", async () => {
-  const error = await App.RunExtension().then(
-    () => assert.fail("RunExtension resolved"),
+  const error = await App.StartArmoryRun().then(
+    () => assert.fail("StartArmoryRun resolved"),
     (err) => err,
   );
   assert.ok(isNotPorted(error));
   // The app's error helpers show String(error) after a colon.
   assert.equal(String(error), "not ported");
-  assert.match(error.message, /RunExtension/);
+  assert.match(error.message, /StartArmoryRun/);
 });
 
 test("every v1 binding the frontend imports is still exported", () => {

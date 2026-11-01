@@ -4,18 +4,10 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, Puzzle, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
-		CreateWaypoint,
-		DeleteWaypoint,
 		SetFlag,
 		ToggleFlag,
-		GetChromePaths,
-		AddChromePath,
-		DeleteChromePath,
-		GetChromeProfiles,
-		AddChromeProfile,
-		DeleteChromeProfile,
 		GetBuildInfo,
 		GetUpdateSettings,
 		SetAutomaticUpdateChecks,
@@ -24,9 +16,10 @@
 		keybindingState,
 		lineWrap,
 		marasiConfig,
-		populateWaypoints,
 		waypoints,
 	} from "../../stores";
+	import { chromeStore } from "../../stores/chromeStore.js";
+	import { windowConnection } from "../../stores/windowConnectionStore.js";
 	import {
 		getModalStore,
 		getToastStore,
@@ -34,6 +27,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
+	import ExtensionsSettings from "../../lib/components/ExtensionsSettings.svelte";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
 	import { setLightMode } from "../../lib/lightMode.js";
@@ -56,6 +50,7 @@
 		updateState,
 	} from "../../stores/updateStore";
 	import { chromeError } from "../../lib/globalActions.js";
+	import { codeIDs } from "../../lib/errorCodes.js";
 	import { toastError } from "../../lib/toasts.js";
 	import { neutralVariant, primaryVariant } from "../../lib/launchpad/format.js";
 	import {
@@ -86,6 +81,7 @@
 		{ id: "upstream", name: "Upstream Proxy", hint: "Route traffic through a proxy", icon: Network },
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
+		{ id: "extensions", name: "Extensions", hint: "On or off, and their settings", icon: Puzzle },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
 		{ id: "updates", name: "Updates", hint: "Channel and checks", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
@@ -112,8 +108,9 @@
 	let selectedOS = "";
 	let selectedPath = "";
 	let selectedProfile = "";
-	let chromePaths = [];
-	let chromeProfiles = [];
+	// Chrome on a remote connection would be this machine's, which isn't
+	// ported yet.
+	$: remoteConnection = Boolean($windowConnection.connection?.remote);
 	let buildInfo = null;
 	// The update settings (Go UpdateSettings), null until read.
 	let updateSettings = null;
@@ -165,51 +162,37 @@
 		});
 	}
 	function saveWaypoint() {
-		CreateWaypoint(targetHost, override)
+		waypoints
+			.save(targetHost, override)
 			.then(() => {
 				targetHost = "";
 				override = "";
 				selected = "";
-				populateWaypoints();
 			})
-			.catch((waypointErr) => {
-				console.log(waypointErr);
-			});
+			.catch((error) => toastError(toastStore, "Error saving waypoint", error));
 	}
 	function deleteWaypoint(host) {
-		DeleteWaypoint(host)
-			.then(() => {
-				populateWaypoints();
-			})
-			.catch((deleteError) => {
-				console.log(deleteError);
-			});
+		waypoints.remove(host).catch((error) => toastError(toastStore, "Error deleting waypoint", error));
 	}
 	function addChromePath() {
-		AddChromePath(selectedPath, selectedOS)
-			.then((paths) => {
-				chromePaths = paths;
+		chromeStore
+			.addPath(selectedPath, selectedOS)
+			.then(() => {
 				selectedPath = "";
 				selectedOS = "";
 			})
 			.catch(chromeError(toastStore, "Error adding path"));
 	}
 	function deleteChromePath(path) {
-		DeleteChromePath(path.Path, path.OS)
-			.then((paths) => {
-				chromePaths = paths;
-			})
-			.catch(chromeError(toastStore, "Error deleting path"));
+		chromeStore.removePath(path).catch(chromeError(toastStore, "Error deleting path"));
 	}
 	function addChromeProfile() {
-		AddChromeProfile(selectedProfile)
-			.then((profiles) => {
-				chromeProfiles = profiles;
-			})
+		chromeStore
+			.addProfile(selectedProfile)
 			.catch((error) =>
 				chromeError(
 					toastStore,
-					String(error).includes("already exists")
+					codeIDs(error, "profile_already_exists")
 						? "Profile already exists"
 						: "Error creating profile",
 				)(error),
@@ -217,11 +200,7 @@
 		selectedProfile = "";
 	}
 	function deleteChromeProfile(profile) {
-		DeleteChromeProfile(profile)
-			.then((profiles) => {
-				chromeProfiles = profiles;
-			})
-			.catch(chromeError(toastStore, "Error deleting profile"));
+		chromeStore.removeProfile(profile).catch(chromeError(toastStore, "Error deleting profile"));
 	}
 
 	// Each change saves all 8 app highlights, so the form mirrors the file.
@@ -423,16 +402,7 @@
 				automaticChecks = settings.AutomaticChecks;
 			})
 			.catch((error) => toastError(toastStore, "Error reading the update settings", error));
-		GetChromePaths()
-			.then((paths) => {
-				chromePaths = paths;
-			})
-			.catch(chromeError(toastStore, "Error reading Chrome paths"));
-		GetChromeProfiles()
-			.then((profiles) => {
-				chromeProfiles = profiles;
-			})
-			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
+		if (!remoteConnection) chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome"));
 	});
 </script>
 
@@ -770,6 +740,9 @@
 			{:else if section === "browser"}
 				<h3 class="text-sm font-bold">Browser</h3>
 				<p class="mb-4 text-xs opacity-70">Chrome that Marasi starts with the proxy configured.</p>
+				{#if remoteConnection}
+					<p class="text-xs opacity-70">Not available on a remote connection yet.</p>
+				{:else}
 				<div class="table-container mb-4">
 					<table class="table table-dense">
 						<thead>
@@ -780,7 +753,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each chromePaths as path}
+							{#each $chromeStore.paths as path}
 								<tr class="[&>td]:!align-middle">
 									<td class="font-mono">{path.Path}</td>
 									<td>{path.OS}</td>
@@ -834,7 +807,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each chromeProfiles as profile}
+							{#each $chromeStore.profiles as profile}
 								<tr class="[&>td]:!align-middle">
 									<td>{profile}</td>
 									<td class="text-center">
@@ -870,6 +843,7 @@
 						</tfoot>
 					</table>
 				</div>
+				{/if}
 			{:else if section === "upstream"}
 				<h3 class="text-sm font-bold">Upstream Proxy</h3>
 				<p class="mb-4 text-xs opacity-70">Send a project's traffic through another proxy.</p>
@@ -1054,6 +1028,8 @@
 						</div>
 					</div>
 				{/each}
+			{:else if section === "extensions"}
+				<ExtensionsSettings {row} {control} />
 			{:else if section === "maintenance"}
 				<h3 class="text-sm font-bold">Maintenance</h3>
 				<p class="mb-4 text-xs opacity-70">

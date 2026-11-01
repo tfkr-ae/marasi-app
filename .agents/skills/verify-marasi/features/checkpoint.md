@@ -157,9 +157,14 @@ Then on the Checkpoint page, send another and forward it with `{"waitSelector":"
 
 ## Gotchas
 
+- Until the extensions are ported, `Update rules` can't run. Hold traffic with `marasi --config-dir <config_dir> checkpoint intercept on` instead; the switch follows it through `checkpoint.updated`. With Intercept all on, every forwarded request's response is held too, so turn it off (the switch or the CLI) before proving `Forward + intercept response`.
+- The theme toggle is a `[role=switch]` too: target the Intercept all switch with `"hasText":"Intercept all"`.
+- To prove a bulk `gone` count, start `Drop n`, and while its confirm is open drop one of its items with `checkpoint drop <id>` from the CLI; confirm reads `Dropped 2 · 1 gone`. The ids freeze at the `Drop n` click.
+- A held response's host and request read `Unknown host` and `Loading…` until `GetRawDetails` is ported (Ledger, ticket 12).
+- The dock badge is `app.setBadgeCount`. Read it with `require('electron').app.getBadgeCount()` over the main process inspector (`node scripts/dev.mjs --inspect=<port> …`) when the Dock can't be seen.
 - Broad rules can hold unrelated traffic. Use a unique verification host or path.
 - `Intercept all` holds every HTTP request and response regardless of a narrow Lua rule, but only while the checkpoint extension is enabled.
-- An edit that doesn't parse shows under the intercepted pane and as `!` in the tree; Forward is disabled until it parses. `Forward n` skips such items (`Forwarded 1 · 1 skipped`). An item whose forward or drop fails on the Go side stays held and counts as `· 1 failed` in a warning toast.
-- Wait for an item's own text (`item 1 of 2`, its path) before acting: items arrive through the `intercepted` event, after the sender starts.
+- An edit that doesn't parse shows under the intercepted pane and as `!` in the tree; Forward is disabled until it parses. `Forward n` skips such items (`Forwarded 1 · 1 skipped`). An item whose forward or drop the instance refuses (other than as gone) stays held and counts as `· 1 failed` in a warning toast.
+- Wait for an item's own text (`item 1 of 2`, its path) before acting: items arrive through Marasi's `checkpoint.held` event, after the sender starts.
 - A request left intercepted keeps its client waiting during cleanup.
 - WebSocket interception has its own `Intercept On`/`Intercept Off` toggle, independent of `Intercept all`; both need the checkpoint extension enabled. The toggle is process-global and holds every message on every connection; the modal's queues are per connection. With it off, `interceptWebSocketMessage` in the Lua rules decides.
