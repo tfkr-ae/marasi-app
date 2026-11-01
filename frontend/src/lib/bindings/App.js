@@ -3,9 +3,13 @@
 
 import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
-import { marasi } from "./marasi.js";
+import { marasi, MarasiError } from "./marasi.js";
+import { pairRow, pairSummary } from "./traffic.js";
+import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
+import { isCheckpointGone } from "../checkpointHeld.js";
+import { checkHTTPParse } from "../checkpoint/httpParse.js";
 
 // The main process bridge, or in a plain browser the dev server's.
 const bridge = () => (globalThis.window ? (globalThis.window.marasiApp ?? browserBridge) : undefined);
@@ -70,6 +74,95 @@ export {
   RunExtension,
 } from "./extensions.js";
 
+// The Ledger's content-type exclusion: the project's own list, a marasi-app
+// client setting, or else the app default
+// (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
+const exclusionSetting = "/client-settings/marasi-app/ledger.exclusion";
+
+// `call`'s answer, or null when Marasi answered not_found.
+async function unlessNotFound(call) {
+  try {
+    return await call;
+  } catch (error) {
+    if (error instanceof MarasiError && error.code === "not_found") return null;
+    throw error;
+  }
+}
+
+// A pair in full, as Marasi answers GET /traffic/{id}.
+const readPair = (id) => marasi.get(`/traffic/${encodeURIComponent(id)}`);
+
+// The project's own exclusion setting, or null when it follows the app default.
+const ownExclusion = () => unlessNotFound(marasi.get(exclusionSetting));
+
+// A traffic read's query string: `params` with empty values dropped, and
+// the exclusion as repeated `exclude`s.
+function trafficQuery(params, exclusion = []) {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(name, String(value));
+  }
+  for (const type of exclusion) query.append("exclude", type);
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
+// Runs a traffic read; Marasi's invalid_query refusal answers as v1's
+// QueryError data, { QueryError: { Message, Position } }.
+async function readTraffic(read) {
+  try {
+    return await read();
+  } catch (error) {
+    if (!(error instanceof MarasiError) || error.code !== "invalid_query") throw error;
+    return { QueryError: { Message: error.body.message ?? "invalid query", Position: error.body.position ?? 0 } };
+  }
+}
+
+// A Checkpoint item as v1's domain.CheckpointItem, with its InterceptedAt.
+// Raw and Payload stay base64, as Wails sent a Go []byte.
+const checkpointItem = (item) => ({
+  ID: item.id,
+  Type: item.type,
+  Raw: item.raw ?? null,
+  Payload: item.payload ?? null,
+  Opcode: item.opcode ?? 0,
+  Direction: item.direction ?? "",
+  ConnectionID: item.connection_id ?? null,
+  RequestID: item.request_id ?? null,
+  InterceptedAt: item.intercepted_at,
+});
+
+// Text as Marasi takes bytes in JSON: UTF-8, base64.
+const base64 = (text) => {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+const checkpointPath = (id) => `/checkpoint/${encodeURIComponent(id)}`;
+
+// Settles each of `ids` in turn with `settle`, as v1's settleCheckpoints:
+// { Done, Gone, Failed }, where Gone counts items that had already left and
+// Failed those whose call failed otherwise, which are logged and don't stop
+// the rest.
+async function settleCheckpoints(ids, settle) {
+  const result = { Done: 0, Gone: 0, Failed: 0 };
+  for (const id of ids) {
+    try {
+      await settle(id);
+      result.Done++;
+    } catch (err) {
+      if (isCheckpointGone(err)) {
+        result.Gone++;
+      } else {
+        result.Failed++;
+        console.error(`Settling Checkpoint item ${id} failed:`, err);
+      }
+    }
+  }
+  return result;
+}
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
@@ -79,7 +172,9 @@ export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
 export const AppendNote = notPorted("AppendNote");
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
 export const CancelLaunch = notPorted("CancelLaunch");
-export const CheckHTTPParse = notPorted("CheckHTTPParse");
+// Why an edited held request or response doesn't parse, in Go's words, or
+// "". v1 checked it in Go; Marasi only refuses an unparsable forward.
+export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
 export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
 export const ClearNotes = notPorted("ClearNotes");
@@ -91,7 +186,15 @@ export const CopyCertToClipboard = async () => {
   return true;
 };
 export const CountArmoryRunTraffic = notPorted("CountArmoryRunTraffic");
-export const CountContentTypes = notPorted("CountContentTypes");
+// The project's pairs per content type: v1's { Counts: [{ ContentType,
+// Count }], Complete: { sitemap } }.
+export const CountContentTypes = async () => {
+  const counts = await marasi.get("/traffic/content-types");
+  return {
+    Counts: (counts.items ?? []).map((item) => ({ ContentType: item.content_type, Count: item.count })),
+    Complete: { sitemap: counts.sitemap?.complete ?? true },
+  };
+};
 // The dashboard's counts, in v1's Dashboard shape. InterceptionsComplete is
 // false while Marasi's intercepted_count job still counts older pairs.
 export const CountNotes = async () => {
@@ -104,7 +207,23 @@ export const CountNotes = async () => {
     InterceptionsComplete: dashboard.intercepted_count?.complete !== false,
   };
 };
-export const CountTraffic = notPorted("CountTraffic");
+// How many pairs `query` matches, minus the project's exclusion unless
+// `options.IgnoreExclusion`; `after` "" counts every match, else only pairs
+// captured after it, and `options.AsOf` only pairs up to it. v1's { Count,
+// Capped, IndexComplete, QueryError }.
+export const CountTraffic = (query, after, options = {}) =>
+  readTraffic(async () => {
+    const exclusion = options.IgnoreExclusion ? [] : await GetContentTypeExclusion();
+    const counted = await marasi.get(
+      "/traffic/count" + trafficQuery({ q: query, after, as_of: options.AsOf }, exclusion),
+    );
+    return {
+      Count: counted.count,
+      Capped: counted.capped,
+      IndexComplete: counted.index?.complete ?? true,
+      QueryError: null,
+    };
+  });
 export const CreateArmoryRun = notPorted("CreateArmoryRun");
 export const CreateArmoryTemplate = notPorted("CreateArmoryTemplate");
 export const CreateArmoryTemplateFromRequest = notPorted("CreateArmoryTemplateFromRequest");
@@ -130,12 +249,8 @@ export const DownloadCert = async () => {
   const { pem } = await marasi.get("/certificate");
   return Boolean(await bridge().saveCertificate(pem));
 };
-export const DropCheckpoint = notPorted("DropCheckpoint");
-export const DropCheckpoints = notPorted("DropCheckpoints");
 export const DropWSIntercepted = notPorted("DropWSIntercepted");
 export const ExportReport = notPorted("ExportReport");
-export const ForwardCheckpoint = notPorted("ForwardCheckpoint");
-export const ForwardCheckpoints = notPorted("ForwardCheckpoints");
 export const ForwardWSIntercepted = notPorted("ForwardWSIntercepted");
 export const GetActiveArmoryRunIDs = notPorted("GetActiveArmoryRunIDs");
 export const GetArmoryRun = notPorted("GetArmoryRun");
@@ -144,13 +259,54 @@ export const GetArmoryRuns = notPorted("GetArmoryRuns");
 export const GetArmoryTemplates = notPorted("GetArmoryTemplates");
 export const GetArmoryWordlists = notPorted("GetArmoryWordlists");
 export const GetArtifact = notPorted("GetArtifact");
-export const GetCheckpoint = notPorted("GetCheckpoint");
-export const GetCheckpointItems = notPorted("GetCheckpointItems");
 export const GetChromePaths = notPorted("GetChromePaths");
 export const GetChromeProfiles = notPorted("GetChromeProfiles");
 export const GetClientSetting = notPorted("GetClientSetting");
-export const GetContentTypeExclusion = notPorted("GetContentTypeExclusion");
-export const GetInterceptFlag = notPorted("GetInterceptFlag");
+// The open project's exclusion: its own list when it has one, else the app
+// default.
+export const GetContentTypeExclusion = async () =>
+  (await ownExclusion())?.value ?? (await appConfig.GetDefaultContentTypeExclusion());
+// The held Checkpoint items, oldest first.
+export const GetCheckpointItems = async () => ((await marasi.get("/checkpoint")).items ?? []).map(checkpointItem);
+// One held item, or null once it has left.
+export const GetCheckpoint = async (id) => {
+  try {
+    return checkpointItem(await marasi.get(checkpointPath(id)));
+  } catch (err) {
+    if (isCheckpointGone(err)) return null;
+    throw err;
+  }
+};
+// Forwards a held item, `body` as its edit, or as held when it is "". An
+// edit replaces a request's or response's raw HTTP, or a WebSocket
+// message's payload, so an edited item is read first for its type. Only a
+// request can intercept its response. An item that has already left
+// rejects as gone (isCheckpointGone).
+export const ForwardCheckpoint = async (id, body, interceptResponse) => {
+  const forward = {};
+  if (body) {
+    const item = await marasi.get(checkpointPath(id));
+    forward[item.type === "websocket" ? "payload" : "raw"] = base64(body);
+  }
+  if (interceptResponse) forward.intercept_response = true;
+  await marasi.post(`${checkpointPath(id)}/forward`, forward);
+};
+export const DropCheckpoint = async (id) => {
+  await marasi.post(`${checkpointPath(id)}/drop`, {});
+};
+// Forward n and Drop n: each item in turn, without intercepting responses.
+// `items` are [{ID, Body}], Body as ForwardCheckpoint's.
+export const ForwardCheckpoints = (items) => {
+  const bodies = new Map(items.map((item) => [item.ID, item.Body]));
+  return settleCheckpoints([...bodies.keys()], (id) => ForwardCheckpoint(id, bodies.get(id), false));
+};
+export const DropCheckpoints = (ids) => settleCheckpoints(ids, DropCheckpoint);
+// Intercept all. Marasi sets it rather than toggling it, so a toggle reads
+// it first; each resolves the instance's value.
+export const GetInterceptFlag = async () => (await marasi.get("/checkpoint")).intercept;
+export const SetIntercept = async (enabled) =>
+  (await marasi.post("/checkpoint/intercept", { intercept: Boolean(enabled) })).intercept;
+export const ToggleIntercept = async () => SetIntercept(!(await GetInterceptFlag()));
 // The instance machine's addresses the listener can bind:
 // [{address, family, interface}], IPv4 first.
 export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
@@ -161,13 +317,19 @@ export const GetLaunchpads = notPorted("GetLaunchpads");
 // last page's next_cursor.
 export const GetLogs = (cursor) =>
   marasi.get(`/logs?limit=500${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-export const GetMetadata = notPorted("GetMetadata");
-export const GetNote = notPorted("GetNote");
-export const GetRawDetails = notPorted("GetRawDetails");
+export const GetMetadata = (id) => marasi.get(`/traffic/${encodeURIComponent(id)}/metadata`);
+// A pair's note, "" when it has none.
+export const GetNote = async (id) => (await readPair(id)).note ?? "";
+// A pair in full as v1's RequestResponseRow, or null when it is gone.
+export const GetRawDetails = async (id) => {
+  const pair = await unlessNotFound(readPair(id));
+  return pair && pairRow(pair);
+};
 // The instance's projects, by name: [{name, project, modified_at}], where
 // `project` is the path on the instance machine.
 export const GetRecentProjects = async () => (await marasi.get("/project/list")).items ?? [];
-export const GetResponse = notPorted("GetResponse");
+// A pair's response as v1's ProxyResponse.
+export const GetResponse = async (id) => pairRow(await readPair(id)).Response;
 // A GET /scope rule as v1's scope rule.
 const scopeRule = (rule) => ({ pattern: rule.pattern, matchType: rule.match_type });
 /** Compass's scope rules, in v1's shape. */
@@ -187,7 +349,9 @@ export const GetWSIntercepted = notPorted("GetWSIntercepted");
 export const GetWaypoints = notPorted("GetWaypoints");
 export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
 export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
-export const HasOwnContentTypeExclusion = notPorted("HasOwnContentTypeExclusion");
+// Whether the open project keeps its own exclusion; false when it follows
+// the app default.
+export const HasOwnContentTypeExclusion = async () => (await ownExclusion()) !== null;
 export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
 export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
@@ -217,11 +381,56 @@ export const OpenProject = async (project) => {
 export const PendingLaunches = notPorted("PendingLaunches");
 export const PreviewArmoryWordlist = notPorted("PreviewArmoryWordlist");
 export const QueryArmoryRunTraffic = notPorted("QueryArmoryRunTraffic");
-export const QueryTraffic = notPorted("QueryTraffic");
+// The most rows Marasi lists in one GET /traffic page.
+const maxTrafficPage = 500;
+
+// One page of the traffic that matches `request.Query`, in display order,
+// minus the project's exclusion unless `request.IgnoreExclusion`:
+// v1's { Items, NextCursor, PrevCursor, AsOf, IndexComplete, QueryError }.
+// v1 read any `request.Limit`; above Marasi's cap it reads on by cursor
+// under the first page's as_of.
+export const QueryTraffic = (request) =>
+  readTraffic(async () => {
+    const exclusion = request.IgnoreExclusion ? [] : await GetContentTypeExclusion();
+    const backward = request.Direction === "backward";
+    const pages = [];
+    let cursor = request.Cursor;
+    let asOf = request.AsOf;
+    let wanted = request.Limit;
+    for (;;) {
+      const limit = wanted == null ? undefined : Math.min(wanted, maxTrafficPage);
+      const page = await marasi.get(
+        "/traffic" +
+          trafficQuery(
+            { q: request.Query, order_by: request.OrderBy, cursor, direction: request.Direction, as_of: asOf, limit },
+            exclusion,
+          ),
+      );
+      pages.push(page);
+      const read = page.items?.length ?? 0;
+      cursor = backward ? page.prev_cursor : page.next_cursor;
+      asOf = page.as_of ?? asOf;
+      if (wanted == null || read < limit || !cursor) break;
+      wanted -= read;
+      if (wanted <= 0) break;
+    }
+    // Pages read backward come before the ones read earlier.
+    const shown = backward ? [...pages].reverse() : pages;
+    return {
+      // Marasi lists a page in reverse display order.
+      Items: shown.flatMap((page) => (page.items ?? []).map(pairSummary).reverse()),
+      NextCursor: shown.at(-1).next_cursor ?? null,
+      PrevCursor: shown[0].prev_cursor ?? null,
+      AsOf: pages[0].as_of ?? "",
+      IndexComplete: pages.every((page) => page.index?.complete ?? true),
+      QueryError: null,
+    };
+  });
 export const ReadUpstreamProxyCAFile = notPorted("ReadUpstreamProxyCAFile");
 export const RebuildJob = (name) => marasi.post(`/jobs/${encodeURIComponent(name)}/rebuild`);
 export const RemoveUpstreamProxy = notPorted("RemoveUpstreamProxy");
-export const ResetContentTypeExclusion = notPorted("ResetContentTypeExclusion");
+// Drops the open project's own exclusion, so it follows the app default again.
+export const ResetContentTypeExclusion = () => unlessNotFound(marasi.delete(exclusionSetting));
 export const RestoreDefaultReportTemplate = notPorted("RestoreDefaultReportTemplate");
 export const SaveArtifactToFinding = notPorted("SaveArtifactToFinding");
 export const SaveArtifactToTestCase = notPorted("SaveArtifactToTestCase");
@@ -232,9 +441,12 @@ export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
 export const SetClientSetting = notPorted("SetClientSetting");
-export const SetContentTypeExclusion = notPorted("SetContentTypeExclusion");
+// Gives the open project its own exclusion, normalised as Marasi does,
+// which it keeps instead of following the app default.
+export const SetContentTypeExclusion = async (values) => {
+  await marasi.put(exclusionSetting, { value: normalizeExclusion(values) });
+};
 export const SetHighlight = notPorted("SetHighlight");
-export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
@@ -259,14 +471,18 @@ export const TestScopeMatch = async (url) => {
     compassEnabled: check.compass_enabled,
   };
 };
-export const ToggleIntercept = notPorted("ToggleIntercept");
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
 export const UnlinkTraffic = notPorted("UnlinkTraffic");
 export const UpdateArmoryTemplate = notPorted("UpdateArmoryTemplate");
 export const UpdateLaunchpadEntry = notPorted("UpdateLaunchpadEntry");
-export const UpdateNote = notPorted("UpdateNote");
+// Saves a pair's note; an empty one deletes it, as v1 saved "".
+export const UpdateNote = async (id, note) => {
+  const path = `/notes/${encodeURIComponent(id)}`;
+  if (note) await marasi.put(path, { note });
+  else await unlessNotFound(marasi.delete(path));
+};
 export const UpdateProxy = (address, port) => marasi.post("/listener/update", { address, port: Number(port) });
 export const UpdateUpstreamProxy = notPorted("UpdateUpstreamProxy");
 export const UseUpstreamProxy = notPorted("UseUpstreamProxy");

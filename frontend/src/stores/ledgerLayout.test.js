@@ -14,7 +14,7 @@ import {
 
 // One page of the live view (oldest first in `liveView`, listed newest
 // first without the excluded types), or of a query's `results`.
-function fakeApi({ liveView = [], exclusion = [], results = {} } = {}) {
+function fakeApi({ liveView = [], exclusion = [], results = {}, details = {} } = {}) {
   const listed = () =>
     [...liveView].reverse().filter((pair) => !exclusion.includes(pair.ContentType));
   return {
@@ -27,6 +27,8 @@ function fakeApi({ liveView = [], exclusion = [], results = {} } = {}) {
       Query === ""
         ? { Items: listed().map((pair) => ({ ...pair })), NextCursor: null, AsOf: "z" }
         : results[Query] ?? { Items: [], NextCursor: null, IndexComplete: true },
+    // A pair in full, from `details` by ID.
+    getRawDetails: async (id) => details[id] ?? null,
     countTraffic: async (query, after, { IgnoreExclusion } = {}) => ({
       Count: query === "" ? (IgnoreExclusion ? liveView.length : listed().length) : 0,
       Capped: false,
@@ -111,15 +113,43 @@ test("the drawer closes when its pair leaves the table, and stays while it remai
   assert.equal(isDrawerOpen(get(store)), false, "the exclusion hides it");
 });
 
-test("a response for the selected pair is kept for the drawer until another pair is selected", async () => {
-  const store = await storeWith([pair("a"), pair("b")]);
+test("a response for the selected pair is read in full and kept for the drawer until another pair is selected", async () => {
+  // Marasi's response event carries no bytes; the pair read has them.
+  const response = (id, status) => ({ ID: id, StatusCode: status, Raw: `HTTP/1.1 ${status}`, Prettified: "" });
+  const store = await storeWith([pair("a"), pair("b")], {
+    details: { a: { Response: response("a", 200) }, b: { Response: response("b", 404) } },
+  });
   store.selectPair("a");
   store.onResponse({ ID: "b", StatusCode: 404 });
+  await store.settled();
   assert.equal(get(store).selection.incomingResponse, null);
-  store.onResponse({ ID: "a", StatusCode: 200 });
-  assert.equal(get(store).selection.incomingResponse.StatusCode, 200);
+  store.onResponse({ ID: "a", StatusCode: 200, RespondedAt: "2026-11-01T01:05:13+04:00" });
+  await store.settled();
+  assert.deepEqual(get(store).selection.incomingResponse, {
+    ID: "a",
+    StatusCode: 200,
+    RespondedAt: "2026-11-01T01:05:13+04:00",
+    Raw: "HTTP/1.1 200",
+    Prettified: "",
+  });
   store.selectPair("b");
   assert.equal(get(store).selection.incomingResponse, null);
+});
+
+test("a response read that finishes after another pair is selected is dropped", async () => {
+  let finish;
+  const api = fakeApi({ liveView: [pair("a"), pair("b")] });
+  const late = createLedgerStore({
+    ...api,
+    getRawDetails: () => new Promise((resolve) => (finish = resolve)),
+  });
+  await late.populate();
+  late.selectPair("a");
+  late.onResponse({ ID: "a", StatusCode: 200 });
+  late.selectPair("b");
+  finish({ Response: { ID: "a", StatusCode: 200, Raw: "HTTP/1.1 200" } });
+  await late.settled();
+  assert.equal(get(late).selection.incomingResponse, null);
 });
 
 test("the drawer takes 42% of the table area at first and resizes between 15% and 85%", () => {

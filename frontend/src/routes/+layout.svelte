@@ -69,7 +69,6 @@
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { sitemapStore } from "../stores/sitemapStore";
-	import { recentTraffic } from "../stores/recentTrafficStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import {
 		EventsOn,
@@ -325,20 +324,8 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			function readCheckpointItems() {
-				checkpointStore
-					.onIntercepted()
-					.catch((err) =>
-						console.error(
-							"Reading Checkpoint items failed:",
-							err,
-						),
-					);
-			}
 			EventsOn("request", (newRequest) => {
-				ledgerStore.onRequest(newRequest);
 				sitemapStore.onRequest(newRequest);
-				recentTraffic.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
 				armoryStore.onRequest(newRequest);
 			});
@@ -349,9 +336,7 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			EventsOn("response", (newResponse) => {
-				ledgerStore.onResponse(newResponse);
 				sitemapStore.onResponse(newResponse);
-				recentTraffic.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
 				armoryStore.onResponse(newResponse);
 				if (
@@ -370,10 +355,9 @@
 			EventsOn("ws-message", (msg) =>
 				connectionStore.upsertMessage(msg),
 			);
-			EventsOn("ws-intercepted", (msg) => {
-				connectionStore.upsertInterception(msg);
-				readCheckpointItems();
-			});
+			EventsOn("ws-intercepted", (msg) =>
+				connectionStore.upsertInterception(msg),
+			);
 			EventsOn("ws-open", (conn) => {
 				connectionStore.upsertConnection(conn);
 				ledgerStore.patchWebSocketMetadata(conn);
@@ -393,11 +377,9 @@
 			EventsOn("ws-state", ({ RequestID, State }) =>
 				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
 			);
-			// Marasi dropped a held item because its client left. The
-			// toast shows on any page.
-			EventsOn("checkpoint-abandoned", (item) =>
-				checkpointStore.onAbandoned(item),
-			);
+			// Marasi dropped a held item because its client left
+			// (checkpoint.dropped, reason abandoned; see marasiEvents.js).
+			// The toast shows on any page.
 			stopAbandonToasts = checkpointStore.onAbandon(
 				({ item, editLost }) => {
 					const context =
@@ -414,21 +396,6 @@
 					});
 				},
 			);
-			// A held item was forwarded or dropped, on the Checkpoint page
-			// or in the WebSocket modal; both drop it.
-			EventsOn("checkpoint-settled", (item) => {
-				readCheckpointItems();
-				connectionStore
-					.onSettled(item)
-					.catch((err) =>
-						console.error(
-							"Reading WebSocket Checkpoint failed:",
-							err,
-						),
-					);
-			});
-			// The Checkpoint rail badge shows the count; no toast.
-			EventsOn("intercepted", () => readCheckpointItems());
 			// An extension's toasts show on any page.
 			stopExtensionToasts = extensionsStore.onToast((toast) => toastStore.trigger(toast));
 		});
@@ -446,9 +413,6 @@
 			EventsOff("ws-close");
 			EventsOff("ws-progress");
 			EventsOff("ws-state");
-			EventsOff("intercepted");
-			EventsOff("checkpoint-abandoned");
-			EventsOff("checkpoint-settled");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
 			EventsOff("update-progress");
