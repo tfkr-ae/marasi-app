@@ -128,6 +128,8 @@ function fakeApi({
     queryTraffic: async (req) => {
       calls.push(["queryTraffic", { ...req }]);
       if (req.Query === "bad") return { QueryError: { Message: "expected a value", Position: 3 } };
+      // Marasi refuses a page of more than 500 rows.
+      if (req.Limit > 500) throw new Error("GET /traffic: bad_request: HTTP 400");
       const { list, sortName, asOf } = listed(req);
       const at = (cursor) => {
         const [sort, id] = cursor.split("|");
@@ -518,6 +520,23 @@ test("a pair keeps its number under any query or sort, gaps included", async () 
   assert.equal(store.pairNumber(idOf(4)), 4);
   assert.equal(store.shownPairAtNumber(4)?.ID, idOf(4));
   assert.equal(store.shownPairAtNumber(3), undefined, "a deleted number finds nothing");
+});
+
+test("a refresh in place deep in a page reads at most Marasi's largest page, and keeps the rows in view", async () => {
+  const api = fakeApi({ traffic: pairs(1000) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await scrollTo(store, 380);
+  await store.refresh();
+  // The refresh left one long page; read again from deep inside it.
+  await scrollTo(store, 350);
+  const topRow = ids(get(store))[350];
+  const reset = get(store).results.reset;
+  await store.refresh();
+  const state = get(store);
+  assert.equal(state.results.reset, reset, "no fallback to the top");
+  assert.ok(ids(state).includes(topRow), "the top row in view is read again");
+  assert.ok(pageCalls(api).every((call) => call.Limit <= 500));
 });
 
 test("jumping to a request that isn't loaded reads the rows around it, under the same query and sort", async () => {

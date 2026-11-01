@@ -71,21 +71,21 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `QueryTraffic` | binding | COVERED | `GET /traffic?q&exclude&order_by&limit&cursor&direction&as_of` | 12 | [ ] |
-| `CountTraffic` | binding | COVERED | `GET /traffic/count?q&exclude&as_of&after` | 12 | [ ] |
-| `CountContentTypes` | binding | COVERED | `GET /traffic/content-types` | 12 | [ ] |
-| `GetRawDetails` | binding | COVERED | `GET /traffic/{id}` | 12 | [ ] |
-| `GetResponse` | binding | COVERED | `GET /traffic/{id}` `.response`. v1 bound it but the frontend never called it. | 12 | [ ] |
-| `GetMetadata` | binding | COVERED | `GET /traffic/{id}/metadata` | 12 | [ ] |
-| `GetNote` | binding | COVERED | `GET /traffic/{id}` `.note` | 12 | [ ] |
-| `UpdateNote` | binding | COVERED | `PUT /notes/{id} {note}`. An empty note is `DELETE /notes/{id}`. | 12 | [ ] |
-| `GetContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion`, falling back to the app default | 12 | [ ] |
-| `SetContentTypeExclusion` | binding | COVERED | `PUT /client-settings/marasi-app/ledger.exclusion` | 12 | [ ] |
-| `HasOwnContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion` (404 = no override) | 12 | [ ] |
-| `ResetContentTypeExclusion` | binding | COVERED | `DELETE /client-settings/marasi-app/ledger.exclusion` | 12 | [ ] |
-| `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [ ] |
-| `request` | event | COVERED | `traffic.request` | 12 | [ ] |
-| `response` | event | COVERED | `traffic.response` | 12 | [ ] |
+| `QueryTraffic` | binding | COVERED | `GET /traffic?q&exclude&order_by&limit&cursor&direction&as_of`. Above Marasi's 500-row page cap it reads on by cursor under the first page's `as_of`, as v1 read any limit. | 12 | [x] |
+| `CountTraffic` | binding | COVERED | `GET /traffic/count?q&exclude&as_of&after` | 12 | [x] |
+| `CountContentTypes` | binding | COVERED | `GET /traffic/content-types` | 12 | [x] |
+| `GetRawDetails` | binding | COVERED | `GET /traffic/{id}` | 12 | [x] |
+| `GetResponse` | binding | COVERED | `GET /traffic/{id}` `.response`. v1 bound it but the frontend never called it. | 12 | [x] |
+| `GetMetadata` | binding | COVERED | `GET /traffic/{id}/metadata` | 12 | [x] |
+| `GetNote` | binding | COVERED | `GET /traffic/{id}` `.note` | 12 | [x] |
+| `UpdateNote` | binding | COVERED | `PUT /notes/{id} {note}`. An empty note is `DELETE /notes/{id}`. | 12 | [x] |
+| `GetContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion`, falling back to the app default | 12 | [x] |
+| `SetContentTypeExclusion` | binding | COVERED | `PUT /client-settings/marasi-app/ledger.exclusion` | 12 | [x] |
+| `HasOwnContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion` (404 = no override) | 12 | [x] |
+| `ResetContentTypeExclusion` | binding | COVERED | `DELETE /client-settings/marasi-app/ledger.exclusion` | 12 | [x] |
+| `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [x] |
+| `request` | event | COVERED | `traffic.request` | 12 | [x] |
+| `response` | event | COVERED | `traffic.response` | 12 | [x] |
 | `ListSitemapChildren` | binding | COVERED | `GET /traffic/sitemap`, `sitemap.changed` | 13 | [ ] |
 | `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [ ] |
 
@@ -130,19 +130,19 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetCheckpointItems` | binding | COVERED | `GET /checkpoint` (items carry `intercepted_at`) | 17 | [ ] |
-| `GetCheckpoint` | binding | COVERED | `GET /checkpoint/{id}`. v1 bound it but the frontend never called it. | 17 | [ ] |
-| `GetInterceptFlag` | binding | COVERED | `GET /checkpoint` `.intercept` | 17 | [ ] |
-| `ToggleIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}` with the opposite of the current value, and `checkpoint.updated` | 17 | [ ] |
-| `SetIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}`. v1 bound it but the frontend never called it. | 17 | [ ] |
-| `ForwardCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/forward {raw, intercept_response}` | 17 | [ ] |
-| `ForwardCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/forward` for each item, counting done, gone (404) and failed | 17 | [ ] |
-| `DropCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/drop` | 17 | [ ] |
-| `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [ ] |
-| `CheckHTTPParse` | binding | GUI | The renderer parses the edited request. Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [ ] |
-| `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [ ] |
-| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped` | 17 | [ ] |
-| `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned` or `shutdown` | 17 | [ ] |
+| `GetCheckpointItems` | binding | COVERED | `GET /checkpoint` (items carry `intercepted_at`) | 17 | [x] |
+| `GetCheckpoint` | binding | COVERED | `GET /checkpoint/{id}`. v1 bound it but the frontend never called it. | 17 | [x] |
+| `GetInterceptFlag` | binding | COVERED | `GET /checkpoint` `.intercept` | 17 | [x] |
+| `ToggleIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}` with the opposite of the current value, and `checkpoint.updated` | 17 | [x] |
+| `SetIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}`. v1 bound it but the frontend never called it. | 17 | [x] |
+| `ForwardCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/forward {raw, intercept_response}`, or `{payload}` for a WebSocket item; an edited item is read first (`GET /checkpoint/{id}`) for its type | 17 | [x] |
+| `ForwardCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/forward` for each item, counting done, gone (404) and failed | 17 | [x] |
+| `DropCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/drop` | 17 | [x] |
+| `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [x] |
+| `CheckHTTPParse` | binding | GUI | The renderer reads the edited request or response as Go's `http.ReadRequest` or `http.ReadResponse` would, with Go's error text (`lib/checkpoint/httpParse.js`). Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [x] |
+| `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [x] |
+| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal's side is ticket 18. | 17 | [x] |
+| `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned`. Reason `shutdown` reads the queue again, as a drop does. | 17 | [x] |
 
 ## WebSocket
 

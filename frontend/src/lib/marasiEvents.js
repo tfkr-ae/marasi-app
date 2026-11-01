@@ -3,6 +3,7 @@
 // that ports a store adds its events here.
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
+import { requestEvent, responseEvent } from "./bindings/traffic.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
 import { ledgerStore } from "../stores/ledgerStore";
@@ -24,9 +25,25 @@ import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 
+const checkpointResolved = (event) =>
+  Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
+    console.error("Reading Checkpoint items failed:", err),
+  );
+
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
+  // Captured traffic, in v1's request and response shapes.
+  "traffic.request": (event) => {
+    const request = requestEvent(event);
+    ledgerStore.onRequest(request);
+    recentTraffic.onRequest(request);
+  },
+  "traffic.response": (event) => {
+    const response = responseEvent(event);
+    ledgerStore.onResponse(response);
+    recentTraffic.onResponse(response);
+  },
   "listener.started": (status) => listenerStore.onListener(status),
   "listener.updated": (status) => listenerStore.onListener(status),
   "listener.stopped": (status) => listenerStore.onListener(status),
@@ -35,6 +52,13 @@ const handlers = {
     jobsStore.onJobComplete(job);
     dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
   },
+  // Checkpoint, HTTP and WebSocket items alike, by any client. An item
+  // whose client left arrives as checkpoint.dropped, reason abandoned.
+  "checkpoint.held": () =>
+    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err)),
+  "checkpoint.forwarded": (event) => checkpointResolved(event),
+  "checkpoint.dropped": (event) => checkpointResolved(event),
+  "checkpoint.updated": (flags) => checkpointStore.onUpdated(flags),
   "update.available": (update) => instanceUpdate.onAvailable(update),
   "update.progress": (progress) => instanceUpdate.onProgress(progress),
   "update.installed": (installed) => instanceUpdate.onInstalled(installed),
