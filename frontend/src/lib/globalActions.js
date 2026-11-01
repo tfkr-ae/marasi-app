@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import { DownloadCert, CopyCertToClipboard } from "./bindings/App";
 import { listener } from "../stores.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
+import { codeIDs } from "./errorCodes.js";
 
 // Listens on the modal's address and port, starting the listener or moving
 // it; the listener store follows what Marasi answers.
@@ -134,15 +135,13 @@ export async function copyCertificate(toastStore) {
 	}
 }
 
-// chromeError returns a rejection handler for the Chrome bindings. They
-// reread the machine config, so a config Marasi refuses (for example a
-// negative websocket_max_message_size) arrives as its "invalid
-// configuration" error, which is shown as is; anything else shows fallback.
+// chromeError returns a rejection handler for the Chrome bindings. A
+// listener that is off is said so, since Chrome would have no proxy;
+// anything else shows fallback.
 export function chromeError(toastStore, fallback) {
 	return (error) => {
-		const text = String(error);
 		toastStore.trigger({
-			message: text.includes("invalid configuration") ? text : fallback,
+			message: codeIDs(error, "listener_inactive") ? "Proxy listener is off" : fallback,
 			background: "variant-filled-error",
 		});
 	};

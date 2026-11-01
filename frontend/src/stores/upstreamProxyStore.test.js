@@ -135,3 +135,34 @@ test("upstreamAddress shows scheme://host:port, or nothing for a broken URL", ()
     "",
   );
 });
+
+test("an upstream_proxy list event shows the CLI's change, and keeps the selection", async () => {
+  const { store } = setup();
+  await store.load();
+  const tls = { ...corp, name: "tls", scheme: "https", has_ca: true };
+  store.onList({ items: [corp, tls] });
+  assert.deepEqual(get(store).items, [corp, tls]);
+  assert.equal(get(store).selected, "corp");
+  assert.equal(get(store).configured, true);
+});
+
+test("a list event without the selected entry fails it closed, and forgets removed checks", async () => {
+  const { store } = setup();
+  await store.load();
+  await store.check("corp", "https://example.com");
+  store.onList({ items: [] });
+  assert.equal(get(store).configured, false);
+  assert.equal(get(store).checks.corp, undefined);
+  assert.match(selectionWarning(get(store)), /"corp" isn't set up/);
+});
+
+test("an upstream_proxy.selected event shows the project's new selection", async () => {
+  const { store } = setup();
+  await store.load();
+  store.onSelected({ name: "" });
+  assert.equal(get(store).selected, "");
+  assert.equal(get(store).configured, true);
+  store.onSelected({ name: "gone" });
+  assert.equal(get(store).selected, "gone");
+  assert.equal(get(store).configured, false);
+});

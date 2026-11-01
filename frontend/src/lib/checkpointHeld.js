@@ -9,10 +9,12 @@ import { codeIDs } from "./errorCodes.js";
 export const heldCheckpointIDs = (error) => codeIDs(error, "checkpoint_held");
 
 /**
- * True when a forward or drop failed because the item had already left
- * Checkpoint: "checkpoint_gone (<id>)" in the error's text.
+ * True when a Checkpoint call failed because the item had already left:
+ * Marasi answers 404 not_found, and v1's Go side put "checkpoint_gone
+ * (<id>)" in the error's text.
  */
-export const isCheckpointGone = (error) => codeIDs(error, "checkpoint_gone") !== null;
+export const isCheckpointGone = (error) =>
+  (error?.status === 404 && error?.code === "not_found") || codeIDs(error, "checkpoint_gone") !== null;
 
 /**
  * The confirm modal for a switch refused over held items. Its buttons take

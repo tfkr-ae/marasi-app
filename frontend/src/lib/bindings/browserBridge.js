@@ -2,7 +2,8 @@
 // shape of `window.marasiApp` (electron/preload.mjs). The dev server answers
 // for the main process (frontend/devBridge.js): it lists and connects to
 // local instances and serves the app config. Start, remote instances, the
-// OS dialogs and profile files need Marasi v2.
+// OS dialogs (but a CA file, which a file input picks) and profile files
+// need Marasi v2.
 
 const outsideElectron = async () => {
   throw new Error("Open Marasi v2 to do this");
@@ -20,6 +21,23 @@ async function call(method, path, body) {
   const answer = await response.json().catch(() => null);
   if (!response.ok) throw new Error(answer?.message ?? `The dev server answered HTTP ${response.status}`);
   return answer;
+}
+
+// A CA file picked with the browser's file input, read as the main process
+// reads one (electron/caFile.js): its text, or "" if cancelled.
+const maxCAFileSize = 1 << 20;
+function readCAFile() {
+  return new Promise((resolve, reject) => {
+    const input = Object.assign(document.createElement("input"), { type: "file", accept: ".pem,.crt,.cer" });
+    input.addEventListener("cancel", () => resolve(""));
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (!file) return resolve("");
+      if (file.size > maxCAFileSize) return reject(new Error(`${file.name} is too large for a CA certificate (over 1 MiB)`));
+      file.text().then(resolve, reject);
+    });
+    input.click();
+  });
 }
 
 export const browserBridge = {
@@ -43,6 +61,7 @@ export const browserBridge = {
   chooseMarasi: outsideElectron,
   saveCertificate: outsideElectron,
   saveArtifact: outsideElectron,
+  readCAFile,
   copyText: (text) => navigator.clipboard.writeText(text),
   // A plain browser tab is the only window, so there is no other to list.
   newWindow: outsideElectron,
