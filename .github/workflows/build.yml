@@ -85,11 +85,18 @@ jobs:
           fi
           npm pkg set "marasiBuild.channel=$CHANNEL" "marasiBuild.version=$VERSION" \
             "marasiBuild.signingPublicKey=$SIGNING_PUBLIC_KEY"
+      # npm runs scripts with cmd.exe on Windows, which can't read the
+      # `GOOS=windows npm run marasi` prefix in dist:win, so run them with
+      # the runner's Git Bash there.
       - name: Build
         if: runner.os != 'macOS'
         env:
           DIST: ${{ matrix.dist }}
-        run: npm run "$DIST"
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            npm config set script-shell "$(cygpath -w "$(command -v bash)")"
+          fi
+          npm run "$DIST"
       # electron-builder signs the app with the Developer ID certificate v1
       # signs with, notarizes and staples it, then makes the zip and dmg.
       - name: Build, sign and notarize
