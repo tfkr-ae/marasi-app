@@ -3,6 +3,7 @@
 // connection reaches the renderer without its control token.
 import { contextBridge, ipcRenderer } from "electron";
 import { appConfigCalls } from "./appConfigIPC.js";
+import { localChromeCalls } from "./localChromeIPC.js";
 import { updateCalls, updateEventChannel } from "./updateIPC.js";
 
 contextBridge.exposeInMainWorld("marasiApp", {
@@ -86,6 +87,12 @@ contextBridge.exposeInMainWorld("marasiApp", {
   readCAFile: () => ipcRenderer.invoke("upstreamProxy:readCAFile"),
   // Puts `text` on this machine's clipboard.
   copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
+  // This machine's Chrome, for a remote connection: its paths, profiles,
+  // the window's remote's proxy address, and start. Each resolves { value }
+  // or { error }.
+  localChrome: Object.fromEntries(
+    localChromeCalls.map((name) => [name, (...args) => ipcRenderer.invoke(`localChrome:${name}`, ...args)]),
+  ),
   // The app config calls; each resolves { value } or { error }.
   appConfig: Object.fromEntries(
     appConfigCalls.map((name) => [name, (...args) => ipcRenderer.invoke(`appConfig:${name}`, ...args)]),
