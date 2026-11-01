@@ -24,6 +24,7 @@
     } from "lucide-svelte";
     import { compassCode, marasiConfig } from "../../stores";
     import ScopeTester from "../../lib/components/ScopeTester.svelte";
+    import ScopeRules from "../../lib/components/ScopeRules.svelte";
     import { autocompletion } from "@codemirror/autocomplete";
     import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
 
@@ -99,6 +100,8 @@
         <svelte:fragment slot="lead"><SettingsIcon size="16" /></svelte:fragment>
         <svelte:fragment slot="summary">Compass Settings</svelte:fragment>
         <svelte:fragment slot="content">
+            <ScopeRules />
+            <hr class="my-3" />
             <ScopeTester />
         </svelte:fragment>
     </AccordionItem>

@@ -42,14 +42,16 @@
       }
     }
     
-    function getResultClass() {
+    // Follows the appearance, so the result recolours on ⌘U.
+    $: resultClass = resultClassFor(lastResult, $modeCurrent);
+    function resultClassFor(lastResult, light) {
       if (!lastResult || lastResult.error) return '';
       if (lastResult.inScope) {
-        return $modeCurrent
+        return light
           ? 'bg-success-100 text-success-800 border border-success-300'
           : 'bg-success-700 text-success-100 border border-success-600';
       }
-      return $modeCurrent
+      return light
         ? 'bg-error-100 text-error-800 border border-error-300'
         : 'bg-error-700 text-error-100 border border-error-600';
     }
@@ -112,7 +114,7 @@
       
       {#if lastResult && !error}
         <!-- Add key attribute to force re-rendering -->
-        <div key={resultKey} class="mt-3 p-3 {getResultClass()}">
+        <div key={resultKey} class="mt-3 p-3 {resultClass}">
           <div class="mt-2">
             <p><b>Tested URL:</b> {lastResult.testedUrl}</p>
             
@@ -127,7 +129,7 @@
               <p><b>In Scope:</b> {lastResult.inScope ? 'Yes' : 'No'}</p>
               
               {#if lastResult.matchedRule}
-                <p><b>Matched Rule:</b> {formatRegexPattern(lastResult.matchedRule)}</p>
+                <p><b>Matched Rule:</b> {formatRegexPattern(lastResult.matchedRule)} ({lastResult.ruleType})</p>
                 <p><b>Matched as:</b> {lastResult.matchedAs}</p>
               {/if}
             {/if}

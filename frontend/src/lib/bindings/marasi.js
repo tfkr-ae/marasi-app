@@ -107,14 +107,23 @@ export function createMarasiClient({ baseURL, fetch = globalThis.fetch.bind(glob
   };
 }
 
-// The window's connection's client, once it has one.
+// The window's connection's client, once it has one, and whether the
+// connection is to a remote instance.
 let connected = null;
+let connectedRemote = false;
 
-/** Points the window's client at the instance at `baseURL`, and returns it. */
-export function useConnection(baseURL) {
+/**
+ * Points the window's client at the instance at `baseURL`, and returns it.
+ * `remote` marks a remote connection, whose machine isn't this one.
+ */
+export function useConnection(baseURL, { remote = false } = {}) {
   connected = createMarasiClient({ baseURL });
+  connectedRemote = Boolean(remote);
   return connected;
 }
+
+/** Whether the window's connection is to a remote instance. */
+export const isRemoteConnection = () => connectedRemote;
 
 // The window's client, which a call before a connection can't use.
 function client() {
@@ -124,6 +133,7 @@ function client() {
 
 /** The window's connected instance's control API, as createMarasiClient's methods. */
 export const marasi = {
+  baseURL: () => client().baseURL,
   request: (method, path, body) => client().request(method, path, body),
   get: (path) => client().get(path),
   post: (path, body) => client().post(path, body),
