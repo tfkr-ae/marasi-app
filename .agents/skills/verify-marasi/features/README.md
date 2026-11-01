@@ -1,6 +1,6 @@
 # Marasi verification feature map
 
-Marasi's primary user interface is the Wails desktop app. Verification drives the browser-connected Wails dev server because it runs the same Svelte UI against the real Go backend and exposes DOM, console, network, and screenshot evidence. Start with the route matching the change, then cover every entry point named in that feature file. Embedded CyberChef, Excalidraw, and Interactsh pages are secondary network-dependent tools and are outside this map.
+Marasi's primary user interface is the Wails desktop app. Verification drives its `-tags server` build from headless Chrome, because that runs the same Svelte UI against the real Go backend and exposes DOM, console, network, and screenshot evidence. Flows that need a native dialog, the clipboard, the window or the menu bar are listed in [native.md](native.md) with how each is checked. Start with the route matching the change, then cover every entry point named in that feature file. Embedded CyberChef, Excalidraw, and Interactsh pages are secondary network-dependent tools and are outside this map.
 
 | Feature | File | Primary proof |
 | --- | --- | --- |
@@ -13,5 +13,6 @@ Marasi's primary user interface is the Wails desktop app. Verification drives th
 | Findings and test cases | [logbook.md](logbook.md) | Logbook route opens, a record saved from the modal or an inline fix persists, and a discarded one leaves nothing in the project |
 | Lua workshop | [workshop.md](workshop.md) | Workshop route opens and saved code executes with visible log output |
 | Application settings | [settings.md](settings.md) | Settings route opens and a reversible setting persists to isolated config |
+| Native flows | [native.md](native.md) | Each flow's stub, Go test, or check by hand on a native build |
 
 Use `.agents/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. Use `drive.sh <feature> compare "<visible label>" "<shortcut>"` when an in-page control also has a MarasiKeys binding. The feature files describe the additional actions needed for complete behavioral proof.

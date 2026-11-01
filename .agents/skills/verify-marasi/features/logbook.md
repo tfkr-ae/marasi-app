@@ -144,7 +144,7 @@ Then check the project: `sqlite3 -readonly <project> "select title, severity, cv
 
 ## Gotchas
 
-- Export report opens a native Save dialog on the desktop, which the driver cannot answer. `custom_properties.include_test_cases` reaching the report is covered by `app_reporting_test.go`.
+- Export report and artifact downloads need a native Save dialog, which the server build fails with an error toast ([native.md](native.md)). `custom_properties.include_test_cases` reaching the report is covered by `app_reporting_test.go`.
 - A click outside a modal needs `"edge":"top"` on `.modal-backdrop`: the modal covers the backdrop's centre. The same goes for `.logbook-pair-expanded`.
 - Escape on a dirty record modal only toggles its prompt. `reset.sh` answers `Discard` on `[data-close-prompt]`.
 - The Marasi menu's search matches a page action's keywords, not its label: `next` finds Next Record, `export` finds nothing.
