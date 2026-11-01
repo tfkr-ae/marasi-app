@@ -5,6 +5,7 @@ import { createAppConfigBindings } from "./appConfig.js";
 import { notPorted } from "./notPorted.js";
 import { marasi, MarasiError } from "./marasi.js";
 import { pairRow, pairSummary } from "./traffic.js";
+import { heldMessage, webSocketConnection, webSocketMessage } from "./websocket.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
@@ -106,6 +107,16 @@ async function readTraffic(read) {
   }
 }
 
+// The connection behind an upgrade pair, as Marasi answers it. v1's
+// WebSocket bindings take the pair's request id; Marasi's routes take the
+// connection's id.
+const readConnection = (requestId) => marasi.get(`/traffic/${encodeURIComponent(requestId)}/websocket`);
+
+const connectionPath = (connection) => `/websocket/${encodeURIComponent(connection.id)}`;
+
+// The most messages Marasi lists in one GET /websocket/{id}/message page.
+const maxMessagePage = 500;
+
 // A Checkpoint item as v1's domain.CheckpointItem, with its InterceptedAt.
 // Raw and Payload stay base64, as Wails sent a Go []byte.
 const checkpointItem = (item) => ({
@@ -166,7 +177,11 @@ export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
 export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
 export const ClearNotes = notPorted("ClearNotes");
-export const CloseWebSocket = notPorted("CloseWebSocket");
+// Closes the connection an upgrade pair opened.
+export const CloseWebSocket = async (requestId, code, reason) => {
+  const connection = await readConnection(requestId);
+  await marasi.post(`${connectionPath(connection)}/close`, { code, reason });
+};
 // The instance's CA certificate, on this machine's clipboard. Resolves true.
 export const CopyCertToClipboard = async () => {
   const { pem } = await marasi.get("/certificate");
@@ -238,9 +253,12 @@ export const DownloadCert = async () => {
   const { pem } = await marasi.get("/certificate");
   return Boolean(await bridge().saveCertificate(pem));
 };
-export const DropWSIntercepted = notPorted("DropWSIntercepted");
+export const DropWSIntercepted = (id) => DropCheckpoint(id);
 export const ExportReport = notPorted("ExportReport");
-export const ForwardWSIntercepted = notPorted("ForwardWSIntercepted");
+// Forwards a held WebSocket message with `payload`, its text, and `opcode`.
+export const ForwardWSIntercepted = async (id, opcode, payload) => {
+  await marasi.post(`${checkpointPath(id)}/forward`, { payload: base64(payload), opcode });
+};
 export const GetActiveArmoryRunIDs = notPorted("GetActiveArmoryRunIDs");
 export const GetArmoryRun = notPorted("GetArmoryRun");
 export const GetArmoryRunRequests = notPorted("GetArmoryRunRequests");
@@ -328,15 +346,51 @@ export const GetScopeRules = notPorted("GetScopeRules");
 export const GetUpstreamProxies = notPorted("GetUpstreamProxies");
 // This machine's user, the report assessor default.
 export const GetUserName = () => bridge().userName();
-export const GetWSInterceptFlag = notPorted("GetWSInterceptFlag");
-export const GetWSIntercepted = notPorted("GetWSIntercepted");
+// WebSocket interception, which Marasi sets rather than toggles, as Intercept all.
+export const GetWSInterceptFlag = async () => (await marasi.get("/checkpoint")).websocket_intercept;
+// The oldest message held on the connection an upgrade pair opened, or null.
+export const GetWSIntercepted = async (requestId) => {
+  const { items = [] } = await marasi.get("/checkpoint?kind=websocket");
+  const held = items.find((item) => item.request_id === requestId);
+  return held ? heldMessage(held) : null;
+};
 export const GetWaypoints = notPorted("GetWaypoints");
-export const GetWebSocketConnection = notPorted("GetWebSocketConnection");
-export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
+// The connection an upgrade pair opened, live or closed, or null before it
+// opens.
+export const GetWebSocketConnection = async (requestId) => {
+  const connection = await unlessNotFound(readConnection(requestId));
+  return connection && webSocketConnection(connection);
+};
+// Every message on the connection an upgrade pair opened, oldest first, as
+// v1 listed them. Marasi pages them newest first.
+export const GetWebSocketMessages = async (requestId) => {
+  const connection = await unlessNotFound(readConnection(requestId));
+  if (!connection) return [];
+  const path = `${connectionPath(connection)}/message`;
+  const messages = [];
+  let cursor = null;
+  do {
+    const page = await marasi.get(`${path}${trafficQuery({ limit: maxMessagePage, cursor })}`);
+    messages.push(...(page.items ?? []));
+    cursor = page.next_cursor;
+  } while (cursor);
+  return messages.reverse().map(webSocketMessage);
+};
 // Whether the open project keeps its own exclusion; false when it follows
 // the app default.
 export const HasOwnContentTypeExclusion = async () => (await ownExclusion()) !== null;
-export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
+// Sends `payload`, text, as a whole message on the connection an upgrade
+// pair opened. A data message on a permessage-deflate connection is
+// compressed by the leg's rules unless `neverCompress`.
+export const InjectWebSocketMessage = async (requestId, direction, opcode, payload, neverCompress) => {
+  const connection = await readConnection(requestId);
+  await marasi.post(`${connectionPath(connection)}/inject`, {
+    direction,
+    opcode,
+    payload: base64(payload),
+    compress: neverCompress ? "never" : "auto",
+  });
+};
 export const Launch = notPorted("Launch");
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = notPorted("LinkRequestToLaunchpad");
@@ -434,7 +488,8 @@ export const SetContentTypeExclusion = async (values) => {
 };
 export const SetHighlight = notPorted("SetHighlight");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
-export const SetWSIntercept = notPorted("SetWSIntercept");
+export const SetWSIntercept = async (enabled) =>
+  (await marasi.post("/checkpoint/websocket-intercept", { websocket_intercept: Boolean(enabled) })).websocket_intercept;
 export const SetupScratchpad = notPorted("SetupScratchpad");
 export const StartArmoryRun = notPorted("StartArmoryRun");
 export const StartBrowser = notPorted("StartBrowser");
@@ -442,7 +497,7 @@ export const StartBrowser = notPorted("StartBrowser");
 export const StartProxy = (address, port) => marasi.post("/listener/start", { address, port: Number(port) });
 export const StopProxy = () => marasi.post("/listener/stop");
 export const TestScopeMatch = notPorted("TestScopeMatch");
-export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
+export const ToggleWSIntercept = async () => SetWSIntercept(!(await GetWSInterceptFlag()));
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
 export const UnlinkTraffic = notPorted("UnlinkTraffic");
