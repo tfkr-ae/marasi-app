@@ -35,5 +35,6 @@ Then confirm `select lua_content from extensions where name='workshop'` holds th
 - `Update Workshop` reports execution errors; the settings panel's `Execute` button does not, and shows no toast.
 - Both execution paths persist before executing, so invalid Lua may remain saved.
 - `Show Logs` toggles whatever drawer is open: if another drawer is open, the first press closes it.
-- The logs drawer subscribes to `workshop-log` only after loading the existing log snapshot, so a print that lands in that gap can be missing. Use a unique token per run.
+- The logs drawer follows `extension.log` before it reads the buffered lines, so a print in between is kept. Old lines stay in the buffer across runs, so use a unique token per run, and for a live line wait for its absence first (`waitNoText`), then for it.
+- Code that calls `marasi.gui:render` draws the page at `/extension/workshop` (`⌘⌥1`, the first extension page; the page's `⌘K` lists only its own actions). Marasi doesn't replay renders, and each drive reloads the page, so run the code and open the page in one recipe. An extension input's value reaches the state 250 ms after the last keystroke; let another step pass before a button that reads it.
 - A success message alone does not prove request or response handlers changed traffic.
