@@ -6,6 +6,8 @@ import { notPorted } from "./notPorted.js";
 import { marasi } from "./marasi.js";
 import { createUpdateBindings } from "./updates.js";
 import { browserBridge } from "./browserBridge.js";
+import { isCheckpointGone } from "../checkpointHeld.js";
+import { checkHTTPParse } from "../checkpoint/httpParse.js";
 
 // The main process bridge, or in a plain browser the dev server's.
 const bridge = () => (globalThis.window ? (globalThis.window.marasiApp ?? browserBridge) : undefined);
@@ -58,6 +60,51 @@ const jobState = (job) => ({
   Rebuildable: rebuildableJobs.has(job.name),
 });
 
+// A Checkpoint item as v1's domain.CheckpointItem, with its InterceptedAt.
+// Raw and Payload stay base64, as Wails sent a Go []byte.
+const checkpointItem = (item) => ({
+  ID: item.id,
+  Type: item.type,
+  Raw: item.raw ?? null,
+  Payload: item.payload ?? null,
+  Opcode: item.opcode ?? 0,
+  Direction: item.direction ?? "",
+  ConnectionID: item.connection_id ?? null,
+  RequestID: item.request_id ?? null,
+  InterceptedAt: item.intercepted_at,
+});
+
+// Text as Marasi takes bytes in JSON: UTF-8, base64.
+const base64 = (text) => {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+const checkpointPath = (id) => `/checkpoint/${encodeURIComponent(id)}`;
+
+// Settles each of `ids` in turn with `settle`, as v1's settleCheckpoints:
+// { Done, Gone, Failed }, where Gone counts items that had already left and
+// Failed those whose call failed otherwise, which are logged and don't stop
+// the rest.
+async function settleCheckpoints(ids, settle) {
+  const result = { Done: 0, Gone: 0, Failed: 0 };
+  for (const id of ids) {
+    try {
+      await settle(id);
+      result.Done++;
+    } catch (err) {
+      if (isCheckpointGone(err)) {
+        result.Gone++;
+      } else {
+        result.Failed++;
+        console.error(`Settling Checkpoint item ${id} failed:`, err);
+      }
+    }
+  }
+  return result;
+}
+
 /** The app's own build, { Channel, Version }, from the main process. */
 export const GetBuildInfo = () => bridge().buildInfo();
 
@@ -67,7 +114,9 @@ export const AddUpstreamProxy = notPorted("AddUpstreamProxy");
 export const AppendNote = notPorted("AppendNote");
 export const CancelArmoryRun = notPorted("CancelArmoryRun");
 export const CancelLaunch = notPorted("CancelLaunch");
-export const CheckHTTPParse = notPorted("CheckHTTPParse");
+// Why an edited held request or response doesn't parse, in Go's words, or
+// "". v1 checked it in Go; Marasi only refuses an unparsable forward.
+export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
 export const CheckUpstreamProxy = notPorted("CheckUpstreamProxy");
 export const ClearHighlight = notPorted("ClearHighlight");
 export const ClearNotes = notPorted("ClearNotes");
@@ -119,12 +168,8 @@ export const DownloadCert = async () => {
   const { pem } = await marasi.get("/certificate");
   return Boolean(await bridge().saveCertificate(pem));
 };
-export const DropCheckpoint = notPorted("DropCheckpoint");
-export const DropCheckpoints = notPorted("DropCheckpoints");
 export const DropWSIntercepted = notPorted("DropWSIntercepted");
 export const ExportReport = notPorted("ExportReport");
-export const ForwardCheckpoint = notPorted("ForwardCheckpoint");
-export const ForwardCheckpoints = notPorted("ForwardCheckpoints");
 export const ForwardWSIntercepted = notPorted("ForwardWSIntercepted");
 export const GetActiveArmoryRunIDs = notPorted("GetActiveArmoryRunIDs");
 export const GetArmoryRun = notPorted("GetArmoryRun");
@@ -133,8 +178,6 @@ export const GetArmoryRuns = notPorted("GetArmoryRuns");
 export const GetArmoryTemplates = notPorted("GetArmoryTemplates");
 export const GetArmoryWordlists = notPorted("GetArmoryWordlists");
 export const GetArtifact = notPorted("GetArtifact");
-export const GetCheckpoint = notPorted("GetCheckpoint");
-export const GetCheckpointItems = notPorted("GetCheckpointItems");
 export const GetChromePaths = notPorted("GetChromePaths");
 export const GetChromeProfiles = notPorted("GetChromeProfiles");
 export const GetClientSetting = notPorted("GetClientSetting");
@@ -144,7 +187,47 @@ export const GetExtensionFlag = notPorted("GetExtensionFlag");
 export const GetExtensionLogs = notPorted("GetExtensionLogs");
 export const GetExtensionUI = notPorted("GetExtensionUI");
 export const GetExtensions = notPorted("GetExtensions");
-export const GetInterceptFlag = notPorted("GetInterceptFlag");
+// The held Checkpoint items, oldest first.
+export const GetCheckpointItems = async () => ((await marasi.get("/checkpoint")).items ?? []).map(checkpointItem);
+// One held item, or null once it has left.
+export const GetCheckpoint = async (id) => {
+  try {
+    return checkpointItem(await marasi.get(checkpointPath(id)));
+  } catch (err) {
+    if (isCheckpointGone(err)) return null;
+    throw err;
+  }
+};
+// Forwards a held item, `body` as its edit, or as held when it is "". An
+// edit replaces a request's or response's raw HTTP, or a WebSocket
+// message's payload, so an edited item is read first for its type. Only a
+// request can intercept its response. An item that has already left
+// rejects as gone (isCheckpointGone).
+export const ForwardCheckpoint = async (id, body, interceptResponse) => {
+  const forward = {};
+  if (body) {
+    const item = await marasi.get(checkpointPath(id));
+    forward[item.type === "websocket" ? "payload" : "raw"] = base64(body);
+  }
+  if (interceptResponse) forward.intercept_response = true;
+  await marasi.post(`${checkpointPath(id)}/forward`, forward);
+};
+export const DropCheckpoint = async (id) => {
+  await marasi.post(`${checkpointPath(id)}/drop`, {});
+};
+// Forward n and Drop n: each item in turn, without intercepting responses.
+// `items` are [{ID, Body}], Body as ForwardCheckpoint's.
+export const ForwardCheckpoints = (items) => {
+  const bodies = new Map(items.map((item) => [item.ID, item.Body]));
+  return settleCheckpoints([...bodies.keys()], (id) => ForwardCheckpoint(id, bodies.get(id), false));
+};
+export const DropCheckpoints = (ids) => settleCheckpoints(ids, DropCheckpoint);
+// Intercept all. Marasi sets it rather than toggling it, so a toggle reads
+// it first; each resolves the instance's value.
+export const GetInterceptFlag = async () => (await marasi.get("/checkpoint")).intercept;
+export const SetIntercept = async (enabled) =>
+  (await marasi.post("/checkpoint/intercept", { intercept: Boolean(enabled) })).intercept;
+export const ToggleIntercept = async () => SetIntercept(!(await GetInterceptFlag()));
 // The instance machine's addresses the listener can bind:
 // [{address, family, interface}], IPv4 first.
 export const GetInterfaces = async () => (await marasi.get("/listener/interfaces")).items ?? [];
@@ -220,7 +303,6 @@ export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
 export const SetClientSetting = notPorted("SetClientSetting");
 export const SetContentTypeExclusion = notPorted("SetContentTypeExclusion");
 export const SetHighlight = notPorted("SetHighlight");
-export const SetIntercept = notPorted("SetIntercept");
 export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
@@ -230,7 +312,6 @@ export const StartBrowser = notPorted("StartBrowser");
 export const StartProxy = (address, port) => marasi.post("/listener/start", { address, port: Number(port) });
 export const StopProxy = () => marasi.post("/listener/stop");
 export const TestScopeMatch = notPorted("TestScopeMatch");
-export const ToggleIntercept = notPorted("ToggleIntercept");
 export const ToggleWSIntercept = notPorted("ToggleWSIntercept");
 export const UnlinkRequestFromFinding = notPorted("UnlinkRequestFromFinding");
 export const UnlinkRequestFromTestCase = notPorted("UnlinkRequestFromTestCase");
