@@ -4,14 +4,14 @@ import * as App from "./App.js";
 import { isNotPorted } from "./notPorted.js";
 
 test("a binding that isn't ported rejects with a short not ported error", async () => {
-  const error = await App.RestoreDefaultReportTemplate().then(
-    () => assert.fail("RestoreDefaultReportTemplate resolved"),
+  const error = await App.SetupScratchpad().then(
+    () => assert.fail("SetupScratchpad resolved"),
     (err) => err,
   );
   assert.ok(isNotPorted(error));
   // The app's error helpers show String(error) after a colon.
   assert.equal(String(error), "not ported");
-  assert.match(error.message, /RestoreDefaultReportTemplate/);
+  assert.match(error.message, /SetupScratchpad/);
 });
 
 test("every v1 binding the frontend imports is still exported", () => {
