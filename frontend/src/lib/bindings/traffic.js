@@ -76,3 +76,32 @@ export function pairRow(pair) {
     Route: route(pair.upstream_proxy),
   };
 }
+
+/** A traffic.request event as v1's request event, a ProxyRequest. */
+export function requestEvent(event) {
+  return {
+    ID: event.id,
+    Number: event.number,
+    Scheme: event.scheme,
+    Method: event.method,
+    Host: event.host,
+    Path: event.path,
+    Metadata: event.metadata ?? {},
+    RequestedAt: event.requested_at,
+    SitemapNode: event.sitemap_node,
+  };
+}
+
+/** A traffic.response event as v1's response event, a ProxyResponse. */
+export function responseEvent(event) {
+  return {
+    ID: event.id,
+    Status: event.status,
+    StatusCode: event.status_code,
+    ContentType: event.content_type,
+    Length: event.length,
+    Metadata: event.metadata ?? {},
+    RespondedAt: event.responded_at,
+    Route: route(event.upstream_proxy),
+  };
+}

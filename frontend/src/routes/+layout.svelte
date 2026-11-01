@@ -68,7 +68,6 @@
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { sitemapStore } from "../stores/sitemapStore";
-	import { recentTraffic } from "../stores/recentTrafficStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import {
 		EventsOn,
@@ -334,9 +333,7 @@
 					);
 			}
 			EventsOn("request", (newRequest) => {
-				ledgerStore.onRequest(newRequest);
 				sitemapStore.onRequest(newRequest);
-				recentTraffic.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
 				armoryStore.onRequest(newRequest);
 			});
@@ -347,9 +344,7 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			EventsOn("response", (newResponse) => {
-				ledgerStore.onResponse(newResponse);
 				sitemapStore.onResponse(newResponse);
-				recentTraffic.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
 				armoryStore.onResponse(newResponse);
 				if (

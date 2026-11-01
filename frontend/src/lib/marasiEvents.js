@@ -3,6 +3,7 @@
 // that ports a store adds its events here.
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
+import { requestEvent, responseEvent } from "./bindings/traffic.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
 import { ledgerStore } from "../stores/ledgerStore";
@@ -25,6 +26,17 @@ import { projectSwitch } from "../stores/projectSwitchStore.js";
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
+  // Captured traffic, in v1's request and response shapes.
+  "traffic.request": (event) => {
+    const request = requestEvent(event);
+    ledgerStore.onRequest(request);
+    recentTraffic.onRequest(request);
+  },
+  "traffic.response": (event) => {
+    const response = responseEvent(event);
+    ledgerStore.onResponse(response);
+    recentTraffic.onResponse(response);
+  },
   "listener.started": (status) => listenerStore.onListener(status),
   "listener.updated": (status) => listenerStore.onListener(status),
   "listener.stopped": (status) => listenerStore.onListener(status),
