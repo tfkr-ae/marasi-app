@@ -86,8 +86,8 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [x] |
 | `request` | event | COVERED | `traffic.request` | 12 | [x] |
 | `response` | event | COVERED | `traffic.response` | 12 | [x] |
-| `ListSitemapChildren` | binding | COVERED | `GET /traffic/sitemap`, `sitemap.changed` | 13 | [ ] |
-| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [ ] |
+| `ListSitemapChildren` | binding | COVERED | `POST /traffic/sitemap/levels` with one node, as v1 read it, so a query adds the children's matching counts. `sitemap.changed` reads the open levels again. | 13 | [x] |
+| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [x] |
 
 ## Ledger selection, highlights and bulk actions
 
