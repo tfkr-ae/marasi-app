@@ -2,7 +2,7 @@
 	import {
 		StartBrowser,
 		GetChromeProfiles,
-	} from "../lib/wailsjs/go/main/App";
+	} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { ChromeIcon } from "svelte-feather-icons";
 	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";

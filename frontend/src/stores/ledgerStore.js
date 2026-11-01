@@ -23,7 +23,7 @@ import {
   SetHighlight,
   UnlinkTraffic,
   UpdateNote,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { armoryStore } from "./armoryStore";
 import { relinked } from "./relinked.js";
 import { createLedgerStore, FLUSH_INTERVAL_MS } from "./createLedgerStore.js";

@@ -3,7 +3,7 @@
 // it to the root element. After that, read it here, not from
 // $marasiConfig.TextSize, which is only what the app started with.
 import { writable } from "svelte/store";
-import { SetFlag } from "../lib/wailsjs/go/main/App";
+import { SetFlag } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { DEFAULT_TEXT_SIZE, rootFontSize } from "../lib/textSize.js";
 
 /** The current Text size, one of TEXT_SIZES. */

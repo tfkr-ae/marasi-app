@@ -3,8 +3,8 @@ import {
 	CreateDraftTestCase,
 	SaveArtifactToTestCase,
 	DeleteArtifact
-} from '$lib/wailsjs/go/main/App';
-import { DeleteTestCase, LinkRequestToTestCase, ListTestCases, SaveTestCase, UnlinkRequestFromTestCase } from '../lib/wailsjs/go/main/App';
+} from '$lib/bindings/github.com/tfkr-ae/marasi-app/app.js';
+import { DeleteTestCase, LinkRequestToTestCase, ListTestCases, SaveTestCase, UnlinkRequestFromTestCase } from '../lib/bindings/github.com/tfkr-ae/marasi-app/app.js';
 import { findingStore } from './findingStore';
 
 function createTestCaseStore() {

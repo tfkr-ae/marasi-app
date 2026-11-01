@@ -11,7 +11,7 @@ import {
   GetRawDetails,
   GetWebSocketConnection,
   ToggleIntercept,
-} from "../lib/wailsjs/go/main/App";
+} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { createItemContext } from "../lib/checkpoint/itemContext.js";
 import { createCheckpointStore } from "./createCheckpointStore.js";
 import { interceptFlag } from "./interceptFlag.js";

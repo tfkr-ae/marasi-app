@@ -2,7 +2,7 @@
 // lives in createJobsStore.js, which tests load with a fake API. When the
 // Ledger or the sitemap reads incomplete results, the store polls the jobs
 // and reloads that view once they finish, so its notice goes away.
-import { ListJobs, RebuildJob } from "../lib/wailsjs/go/main/App";
+import { ListJobs, RebuildJob } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { createJobsStore } from "./createJobsStore.js";
 import { ledgerStore } from "./ledgerStore";
 import { sitemapStore } from "./sitemapStore";

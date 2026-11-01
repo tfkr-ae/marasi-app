@@ -17,7 +17,6 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
-	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -33,11 +32,15 @@ import (
 	"github.com/tfkr-ae/marasi/service"
 
 	"github.com/google/uuid"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // App struct
 type App struct {
+	// wails is the Wails application the desktop functions call
+	// (desktop.go). main sets it; tests leave it nil.
+	wails *application.App
+	// ctx is the context Wails starts the app with, cancelled at shutdown.
 	ctx       context.Context
 	emitEvent emitFunc
 	Proxy     *marasi.Proxy
@@ -52,11 +55,21 @@ type App struct {
 	// intercepted (checkpoint.go).
 	checkpointTimes checkpointTimes
 	// attachFrontendLog sends the project lifecycle's log to the frontend
-	// once startup has the Wails context. Nil in tests.
+	// once the app starts. Nil in tests.
 	attachFrontendLog func(slog.Handler)
 	// messageDialog shows a native message dialog and returns the pressed
 	// button. Tests replace it.
-	messageDialog func(runtime.MessageDialogOptions) (string, error)
+	messageDialog func(messageDialogOptions) (string, error)
+	// openFileDialog and saveFileDialog show a native file dialog and
+	// return the chosen path, "" when the user cancelled. Tests replace them.
+	openFileDialog func(openDialogOptions) (string, error)
+	saveFileDialog func(saveDialogOptions) (string, error)
+	// setClipboardText puts text on the system clipboard. Tests replace it.
+	setClipboardText func(text string) error
+	// onEvent listens for the frontend event name, replacing any listener
+	// already set for it, and hands handle the event's payload. Tests
+	// replace it.
+	onEvent func(name string, handle func(payload any))
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
 	// draft, reported by the frontend, which holds drafts in memory only.
 	unsavedDrafts atomic.Int64
@@ -93,8 +106,15 @@ type App struct {
 	// relaunch starts the build at installLocation while the app shuts down
 	// after "Restart now". Tests record the call.
 	relaunch func(location string) error
-	// quitApp quits through the normal shutdown, beforeClose included.
+	// quitApp quits through the normal shutdown, shouldQuit included.
 	quitApp func()
+	// quitting is set once beforeClose lets Marasi close, so a quit that
+	// passes through it twice (closing the window, then quitting the app)
+	// asks only once.
+	quitting atomic.Bool
+	// askingToQuit is set while askThenQuit waits for an answer, so a second
+	// ⌘Q or close doesn't open a second prompt.
+	askingToQuit atomic.Bool
 	// restarting is set once the researcher confirmed "Restart now", so
 	// beforeClose does not ask about losing work a second time and close
 	// relaunches.
@@ -145,7 +165,7 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 		build:         BuildInfo{Channel: buildChannel, Version: version},
 		releaseSource: defaultReleaseSource,
 	}
-	app.emitEvent = app.emit
+	app.useDesktopRuntime()
 	app.signingKey = loadSigningKey()
 	app.installer = defaultInstaller()
 	app.installLocation = resolveInstallLocation(app.installer)
@@ -155,50 +175,52 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 		}
 		return app.installer.relaunch(location)
 	}
-	app.quitApp = func() { runtime.Quit(app.ctx) }
-	app.messageDialog = nativeMessageDialog(goruntime.GOOS, func(options runtime.MessageDialogOptions) (string, error) {
-		return runtime.MessageDialog(app.ctx, options)
-	})
 	listener := service.NewListenerLifecycle(proxy, logWriter)
 	app.projects = service.NewProjectLifecycle(proxy, configDir, wordlists, logger, app.attachExtensionHooks)
 	listener.BindProject(app.projects)
 	app.listener = listener
 	app.chrome = service.NewChrome(proxy, listener, logWriter)
 	app.upstreamProxies = service.NewUpstreamProxies(proxy)
+	app.configureTrafficHandlers()
 	app.configureWebSocketHandlers()
 	app.configureLaunchHandlers()
 	app.configureCheckpointHandlers()
 	return app
 }
 
-// startup is called when the app starts. It saves the context for the
-// runtime methods, sends the project lifecycle's log to the frontend, and
-// sets Marasi's request, response and log handlers. Those three call
-// runtime.EventsEmit directly, so a test's emitEvent does not see them.
-// It opens no project and starts no listener: the frontend does both.
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	go a.removeUpdateLeftovers()
-	logHandler := NewLogHandler(ctx)
-	if a.attachFrontendLog != nil {
-		a.attachFrontendLog(logHandler.Handler())
-	}
+// configureTrafficHandlers sends Marasi's requests, responses and logs to
+// the frontend as request, response and log events.
+func (a *App) configureTrafficHandlers() {
 	a.Proxy.WithOptions(
 		marasi.WithRequestHandler(func(req domain.ProxyRequest) error {
-			runtime.EventsEmit(a.ctx, "request", req)
+			a.emitEvent("request", req)
 			return nil
 		}),
 		marasi.WithResponseHandler(func(res domain.ProxyResponse) error {
-			runtime.EventsEmit(a.ctx, "response", res)
+			a.emitEvent("response", res)
 			return nil
 		}),
 		marasi.WithLogHandler(func(logItem domain.Log) error {
-			runtime.EventsEmit(a.ctx, "log", logItem)
+			a.emitEvent("log", logItem)
 			return nil
 		}),
-		marasi.WithLogger(logHandler),
 	)
+}
+
+// ServiceStartup is called when Wails starts the app, before the window
+// loads. It saves the app's context, and sends the project lifecycle's log
+// and Marasi's own logger to the frontend through a.emitEvent. It opens no
+// project and starts no listener: the frontend does both.
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.ctx = ctx
+	go a.removeUpdateLeftovers()
+	logHandler := NewLogHandler(func(name string, data ...any) { a.emitEvent(name, data...) })
+	if a.attachFrontendLog != nil {
+		a.attachFrontendLog(logHandler.Handler())
+	}
+	a.Proxy.WithOptions(marasi.WithLogger(logHandler))
 	a.startUpdateChecks(ctx)
+	return nil
 }
 func (a *App) ToggleFlag(name string) (*Config, error) {
 	err := a.Config.ToggleFlag(name)
@@ -295,7 +317,7 @@ func (a *App) UpdateProxy(addr string, port string) error {
 // OpenFileDialog shows a file selection dialog and returns the selected file path
 func (a *App) OpenFileDialog() (string, error) {
 	// Create simple file filters for project files
-	filters := []runtime.FileFilter{
+	filters := []fileFilter{
 		{
 			DisplayName: "Project Files (*.marasi)",
 			Pattern:     "*.marasi",
@@ -307,13 +329,13 @@ func (a *App) OpenFileDialog() (string, error) {
 	}
 
 	// Create the dialog options
-	dialogOptions := runtime.OpenDialogOptions{
+	dialogOptions := openDialogOptions{
 		Title:   "Select Project File",
 		Filters: filters,
 	}
 
 	// Show the dialog and return the selected path
-	return runtime.OpenFileDialog(a.ctx, dialogOptions)
+	return a.openFileDialog(dialogOptions)
 }
 
 // OpenProject switches to the project at name, a path or a bare name in the
@@ -426,7 +448,9 @@ func (a *App) prepareOpenedProject() {
 		log.Printf("migrating content-type exclusion: %v", err)
 	}
 }
-func (a *App) close(ctx context.Context) {
+// ServiceShutdown is called when Wails shuts the app down, after the quit
+// went ahead. It releases the project and, after "Restart now", relaunches.
+func (a *App) ServiceShutdown() error {
 	a.stopUpdateChecks()
 	a.CancelUpdateDownload()
 	// Like the service's shutdown: end pending launches first, so their
@@ -439,18 +463,66 @@ func (a *App) close(ctx context.Context) {
 		}
 	}
 	a.relaunchIfRestarting()
+	return nil
 }
 
-func (a *App) beforeClose(ctx context.Context) bool {
-	// "Restart now" has already warned about losing work.
-	if a.restarting.Load() {
+// shouldQuit is Wails' ShouldQuit: it reports whether a quit may go ahead.
+// It runs on the main thread, where waiting for a dialog would hang Linux, so
+// when the quit would lose work and isn't confirmed yet it refuses, and asks
+// in the background before quitting again.
+func (a *App) shouldQuit() bool {
+	if a.restarting.Load() || a.quitting.Load() {
+		return true
+	}
+	if !a.hasWorkToLose() {
+		a.quitting.Store(true)
+		return true
+	}
+	if a.askingToQuit.CompareAndSwap(false, true) {
+		go a.askThenQuit()
+	}
+	return false
+}
+
+// windowClosing runs when the researcher closes the window. Closing it quits
+// Marasi, so the close is cancelled and Marasi asks and quits instead: one
+// shutdown path on every OS. The quit's own closing of the window goes ahead.
+func (a *App) windowClosing(cancel func()) {
+	if a.restarting.Load() || a.quitting.Load() {
+		return
+	}
+	cancel()
+	if a.askingToQuit.CompareAndSwap(false, true) {
+		a.askThenQuit()
+	}
+}
+
+// askThenQuit quits unless beforeClose keeps Marasi open. The caller has set
+// askingToQuit, so only one prompt is open at a time.
+func (a *App) askThenQuit() {
+	defer a.askingToQuit.Store(false)
+	if a.beforeClose() {
+		return
+	}
+	a.quitApp()
+}
+
+// beforeClose asks before closing Marasi would lose work, and reports whether
+// to keep Marasi open.
+func (a *App) beforeClose() bool {
+	// "Restart now" or an earlier pass has already warned about losing work.
+	if a.restarting.Load() || a.quitting.Load() {
 		return false
 	}
 	confirmed, err := a.confirmLosingWork("Close Marasi")
 	if err != nil {
 		log.Printf("cancelling active Armory runs: %v", err)
 	}
-	return err != nil || !confirmed
+	if err != nil || !confirmed {
+		return true
+	}
+	a.quitting.Store(true)
+	return false
 }
 
 // SetUnsavedDraftCount records how many launchpads have a dirty Launchpad
@@ -469,7 +541,7 @@ func (a *App) confirmLosingWork(action string) (bool, error) {
 	if drafts := a.draftsMessage(); drafts != "" {
 		losses = append(losses, drafts+" "+action+" will discard them.")
 	}
-	hasRuns := a.Proxy != nil && a.Proxy.Armory != nil && len(a.Proxy.Armory.ActiveRunIDs()) > 0
+	hasRuns := a.hasActiveArmoryRuns()
 	if hasRuns {
 		losses = append(losses, action+" will cancel all active Armory runs.")
 	}
@@ -483,6 +555,16 @@ func (a *App) confirmLosingWork(action string) (bool, error) {
 		return true, nil
 	}
 	return a.cancelArmoryRuns()
+}
+
+// hasWorkToLose reports whether closing Marasi now would discard unsaved
+// Launchpad drafts or cancel active Armory runs.
+func (a *App) hasWorkToLose() bool {
+	return a.unsavedDrafts.Load() > 0 || a.hasActiveArmoryRuns()
+}
+
+func (a *App) hasActiveArmoryRuns() bool {
+	return a.Proxy != nil && a.Proxy.Armory != nil && len(a.Proxy.Armory.ActiveRunIDs()) > 0
 }
 
 // draftsMessage describes the unsaved Launchpad drafts, or is empty.
@@ -501,8 +583,8 @@ func (a *App) draftsMessage() string {
 // confirm shows a warning dialog with Cancel and action buttons and reports
 // whether the user pressed action.
 func (a *App) confirm(action, message string) bool {
-	result, err := a.messageDialog(runtime.MessageDialogOptions{
-		Type:          runtime.WarningDialog,
+	result, err := a.messageDialog(messageDialogOptions{
+		Type:          warningDialog,
 		Title:         action,
 		Message:       message,
 		Buttons:       []string{"Cancel", action},
@@ -1102,11 +1184,11 @@ func (a *App) DownloadCert() (bool, error) {
 
 	home, _ := os.UserHomeDir()
 
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	path, err := a.saveFileDialog(saveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
 		DefaultFilename:  "marasi-proxy.crt",
 		Title:            "Save Proxy Certificate",
-		Filters: []runtime.FileFilter{
+		Filters: []fileFilter{
 			{DisplayName: "Certificate Files (*.crt)", Pattern: "*.crt"},
 			{DisplayName: "PEM Files (*.pem)", Pattern: "*.pem"},
 			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
@@ -1139,7 +1221,7 @@ func (a *App) CopyCertToClipboard() (bool, error) {
 		Bytes: a.Proxy.Cert.Raw,
 	})
 
-	err := runtime.ClipboardSetText(a.ctx, string(certPEM))
+	err := a.setClipboardText(string(certPEM))
 	if err != nil {
 		return false, err
 	}

@@ -1,6 +1,6 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
-    import { UpdateNote } from "../wailsjs/go/main/App";
+    import { UpdateNote } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { onDestroy, onMount } from "svelte";
     import { ledgerStore } from "../../stores/ledgerStore";
     import { X } from "lucide-svelte";

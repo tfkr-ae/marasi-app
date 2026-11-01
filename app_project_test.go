@@ -10,10 +10,8 @@ import (
 	"testing"
 
 	marasi "github.com/tfkr-ae/marasi"
-	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/service"
 	"github.com/tfkr-ae/marasi/wordlist"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func TestSetupScratchpadOpensThroughLifecycle(t *testing.T) {
@@ -102,7 +100,7 @@ func TestOpenProjectRefusesWhileCheckpointItemHeld(t *testing.T) {
 	app := newCheckpointApp(t)
 	events := &recordedEvents{}
 	app.emitEvent = events.emit
-	app.messageDialog = func(runtime.MessageDialogOptions) (string, error) {
+	app.messageDialog = func(messageDialogOptions) (string, error) {
 		t.Fatal("wanted no unsaved-work prompt while an item is held")
 		return "", nil
 	}
@@ -144,7 +142,7 @@ func TestCloseReleasesOpenProject(t *testing.T) {
 	}
 	path := scratchpadPath(t, app)
 	assertProjectOwned(t, path)
-	app.close(context.Background())
+	app.ServiceShutdown()
 	assertProjectReleased(t, path)
 }
 
@@ -160,9 +158,6 @@ func newProjectApp(t *testing.T) *App {
 		marasi.WithLogger(logger),
 		marasi.WithConfigDir(configDir),
 		marasi.WithWordlistManager(manager),
-		marasi.WithRequestHandler(func(domain.ProxyRequest) error { return nil }),
-		marasi.WithResponseHandler(func(domain.ProxyResponse) error { return nil }),
-		marasi.WithLogHandler(func(domain.Log) error { return nil }),
 		marasi.WithBasePipeline(),
 		marasi.WithDefaultModifierPipeline(),
 	)

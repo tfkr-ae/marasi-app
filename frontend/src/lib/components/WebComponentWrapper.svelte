@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
-  import { GetExtensionUI } from "../wailsjs/go/main/App";
-  import { EventsOn } from "../wailsjs/runtime/runtime";
+  import { GetExtensionUI } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+  import { on } from "../runtime.js";
   import { extensionElements } from "../../stores";
   import { recentTraffic } from "../../stores/recentTrafficStore";
 
@@ -46,9 +46,9 @@
         return elements;
       });
 
-      // Optionally assign the EventsOn handler if needed.
+      // Optionally give the element an event subscriber if needed.
       if (type === "extension" && customElement) {
-        customElement.EventsOn = EventsOn;
+        customElement.EventsOn = on;
       }
     });
   });

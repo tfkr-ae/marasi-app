@@ -1,0 +1,1 @@
+Requirements: macOS 12 or later. Windows needs the WebView2 runtime. Linux needs GTK 4 and WebKitGTK 6.0, new since the app moved to Wails v3 (on Ubuntu 24.04 and Debian 13: libgtk-4-1 and libwebkitgtk-6.0-4).
