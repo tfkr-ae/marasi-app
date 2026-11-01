@@ -444,8 +444,8 @@
             return;
         }
         try {
-            // The launched entry arrives through the layout's request event
-            // and the store selects it; launch-finished ends it.
+            // The launched entry arrives as a traffic.request event and the
+            // store selects it; launch.completed, cancelled or failed ends it.
             await launchpadStore.launch(id);
             toastStore.trigger({
                 message: "Request launched",

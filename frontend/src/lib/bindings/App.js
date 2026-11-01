@@ -271,7 +271,16 @@ export const AppendNote = (selection, text) => bulk("note", selection, { append:
 export const CancelArmoryRun = async (id) => {
   await marasi.post(`/armory/run/${encodeURIComponent(id)}/cancel`);
 };
-export const CancelLaunch = notPorted("CancelLaunch");
+// Cancels a launch from any client. One that ended first resolves in its
+// final state, as v1's did: Marasi's launch_finished carries it.
+export const CancelLaunch = async (id) => {
+  try {
+    return launchOf(await marasi.post(`/launch/${encodeURIComponent(id)}/cancel`));
+  } catch (err) {
+    if (err instanceof MarasiError && err.code === "launch_finished") return launchOf(err.body);
+    throw err;
+  }
+};
 // Why an edited held request or response doesn't parse, in Go's words, or
 // "". v1 checked it in Go; Marasi only refuses an unparsable forward.
 export const CheckHTTPParse = async (text, type) => checkHTTPParse(text, type);
@@ -493,7 +502,10 @@ export const GetWebSocketMessages = notPorted("GetWebSocketMessages");
 // the app default.
 export const HasOwnContentTypeExclusion = async () => (await ownExclusion()) !== null;
 export const InjectWebSocketMessage = notPorted("InjectWebSocketMessage");
-export const Launch = notPorted("Launch");
+// Launches the draft `raw` from launchpad `id` and resolves the launch id,
+// which is also its pair's id (marasi docs/adr/2026-10-13-launches-are-tracked-and-cancellable.md).
+export const Launch = async (raw, id, useHttps) =>
+  (await marasi.post(`${launchpadPath(id)}/launch`, { raw: base64(raw), scheme: useHttps ? "https" : "http" })).launch_id;
 export const LinkRequestToFinding = notPorted("LinkRequestToFinding");
 export const LinkRequestToLaunchpad = async (requestId, launchpadId) => {
   await marasi.post(`${launchpadPath(launchpadId)}/link`, { request_id: requestId });
@@ -667,7 +679,9 @@ export const SetContentTypeExclusion = async (values) => {
 };
 // Gives every pair in `selection` highlight 1-8.
 export const SetHighlight = (selection, highlight) => bulk("highlight", selection, { highlight });
-export const SetUnsavedDraftCount = notPorted("SetUnsavedDraftCount");
+// The window's dirty draft count, which the main process asks about before
+// quitting or restarting.
+export const SetUnsavedDraftCount = (count) => bridge().reportDrafts(count);
 export const SetWSIntercept = notPorted("SetWSIntercept");
 export const SetupScratchpad = notPorted("SetupScratchpad");
 // Starts a draft; Marasi refuses any other run with not_a_draft or run_active.

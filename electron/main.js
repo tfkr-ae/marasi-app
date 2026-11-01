@@ -209,9 +209,9 @@ async function serveUpdates(appConfig) {
       return response === 0;
     },
     // v1 warned here about unsaved Launchpad drafts and active Armory runs.
-    // Drafts live in the windows and runs in the instances; the tickets that
-    // port them add their warnings.
-    confirmLosingWork: async () => true,
+    // Drafts live in the windows; runs in the instances, whose ticket adds
+    // its warning.
+    confirmLosingWork: async (action) => (draftsAgreed = await confirmLosingDrafts(action)),
     quit: () => app.quit(),
   });
   handleUpdates({ handle }, updater);
@@ -313,6 +313,17 @@ function createWindow({ blank = false, instance = null } = {}) {
     refusedRemotes.delete(id);
     windows.closed(id);
     windowsChanged();
+  });
+  // Closing a window loses its drafts; quitting has already asked.
+  window.on("close", (event) => {
+    const count = windows.drafts(id);
+    if (stopping || !count) return;
+    event.preventDefault();
+    confirmLosingDrafts("Close window", count, window).then((close) => {
+      if (!close || window.isDestroyed()) return;
+      windows.setDrafts(id, 0);
+      window.close();
+    });
   });
   window.on("focus", () => Menu.setApplicationMenu(appMenu()));
   window.webContents.on("did-navigate", () => {
@@ -475,6 +486,7 @@ function serveConnections(appConfig) {
     windows.setHeld(event.sender.id, count);
     windowsChanged();
   });
+  handle("window:drafts", (event, count) => windows.setDrafts(event.sender.id, count));
   handle("marasi:current", () => marasi.shown());
   // Whether a local instance's build path is the bundled Marasi.
   handle("marasi:runs-bundled", (event, installPath) =>
@@ -527,9 +539,39 @@ app.on("window-all-closed", () => app.quit());
 let stopping = false;
 app.on("before-quit", (event) => {
   if (stopping) return;
-  stopping = true;
   event.preventDefault();
+  const agreed = draftsAgreed;
+  draftsAgreed = false;
+  (agreed ? Promise.resolve(true) : confirmLosingDrafts("Quit Marasi")).then((quit) => {
+    if (!quit || stopping) return;
+    stopping = true;
+    stopAndQuit();
+  });
+});
+
+function stopAndQuit() {
   Promise.allSettled([updater?.stopUpdateChecks(), connections.quit()])
     .then(() => updater?.relaunchIfRestarting())
     .finally(() => app.quit());
-});
+}
+
+// Whether the researcher just agreed to lose the drafts for a restart, so
+// the quit it makes doesn't ask again.
+let draftsAgreed = false;
+
+// Asks before `action` ("Quit Marasi") loses `count` unsaved Launchpad
+// drafts, by default every window's; they live only in the windows'
+// memory. True with none.
+async function confirmLosingDrafts(action, count = windows.drafts(), parent = BrowserWindow.getFocusedWindow()) {
+  if (!count) return true;
+  const options = {
+    type: "warning",
+    message: `${action}?`,
+    detail: `${count === 1 ? "1 launchpad draft has" : `${count} launchpad drafts have`} unsaved edits, which will be discarded.`,
+    buttons: [action, "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  };
+  const { response } = await (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options));
+  return response === 0;
+}

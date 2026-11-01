@@ -194,3 +194,45 @@ test("GetLaunch reads one launch's outcome as v1's Launch", async () => {
   answers[`GET /launch/${A}`] = { launch_id: A, launchpad_id: LP1, status: "failed", reason: "network_error" };
   assert.deepEqual(await App.GetLaunch(A), { ID: A, LaunchpadID: LP1, Status: "failed", Reason: "network_error" });
 });
+
+test("Launch sends the draft as Marasi's base64 bytes over its scheme and resolves the launch id", async () => {
+  answers[`POST /launchpad/${LP1}/launch`] = { launch_id: A, status: "pending" };
+  const raw = "POST /login HTTP/1.1\nHost: example.com\n\nname=é";
+  assert.equal(await App.Launch(raw, LP1, true), A);
+  assert.equal(await App.Launch(raw, LP1, false), A);
+  assert.deepEqual(sent.map((request) => request.body), [
+    { raw: Buffer.from(raw, "utf8").toString("base64"), scheme: "https" },
+    { raw: Buffer.from(raw, "utf8").toString("base64"), scheme: "http" },
+  ]);
+});
+
+test("a launch Marasi can't start rejects", async () => {
+  answers[`POST /launchpad/${LP1}/launch`] = () => json({ error: "invalid_launchpad_request" }, 400);
+  await assert.rejects(App.Launch("nonsense", LP1, true), /invalid_launchpad_request/);
+});
+
+test("CancelLaunch cancels a launch and resolves it cancelled, as v1's Launch", async () => {
+  answers[`POST /launch/${A}/cancel`] = { launch_id: A, launchpad_id: LP1, status: "cancelled" };
+  assert.deepEqual(await App.CancelLaunch(A), { ID: A, LaunchpadID: LP1, Status: "cancelled", Reason: "" });
+});
+
+test("cancelling a launch that already ended resolves its final state, as v1's did", async () => {
+  answers[`POST /launch/${A}/cancel`] = () =>
+    json({ error: "launch_finished", launch_id: A, launchpad_id: LP1, status: "completed" }, 409);
+  assert.deepEqual(await App.CancelLaunch(A), { ID: A, LaunchpadID: LP1, Status: "completed", Reason: "" });
+});
+
+test("cancelling a launch Marasi doesn't know rejects", async () => {
+  await assert.rejects(App.CancelLaunch(B), /not_found/);
+});
+
+test("SetUnsavedDraftCount tells the main process the window's dirty draft count", async () => {
+  const reported = [];
+  globalThis.window = { marasiApp: { reportDrafts: async (count) => reported.push(count) } };
+  try {
+    await App.SetUnsavedDraftCount(2);
+  } finally {
+    delete globalThis.window;
+  }
+  assert.deepEqual(reported, [2]);
+});

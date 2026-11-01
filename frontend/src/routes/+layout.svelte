@@ -58,7 +58,7 @@
 		retryOpen,
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -322,12 +322,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			EventsOn("launch-started", (launch) =>
-				launchpadStore.onLaunchStarted(launch),
-			);
-			EventsOn("launch-finished", (launch) =>
-				launchpadStore.onLaunchFinished(launch),
-			);
 			EventsOn("response", (newResponse) => {
 				if (
 					$drawerStore.id ===

@@ -4,7 +4,7 @@
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
 import { handshakeEndedEvent, requestEvent, responseEvent } from "./bindings/traffic.js";
-import { launchpadOf } from "./bindings/launchpads.js";
+import { launchOf, launchpadOf } from "./bindings/launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./bindings/armory.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
@@ -73,6 +73,11 @@ const handlers = {
     followLaunchpads(
       launchpadStore.onEntriesChanged([...new Set([moved.source_launchpad_id, moved.target_launchpad_id])]),
     ),
+  // Launches by any client: pending, then how each ended.
+  "launch.started": (event) => launchpadStore.onLaunchStarted(launchOf(event)),
+  "launch.completed": (event) => followLaunchpads(launchpadStore.onLaunchFinished(launchOf(event))),
+  "launch.cancelled": (event) => followLaunchpads(launchpadStore.onLaunchFinished(launchOf(event))),
+  "launch.failed": (event) => followLaunchpads(launchpadStore.onLaunchFinished(launchOf(event))),
   // An upgrade whose handshake failed or was dropped opens no connection,
   // so only its Ledger row changes.
   "websocket.handshake_ended": (event) => ledgerStore.patchWebSocketMetadata(handshakeEndedEvent(event)),

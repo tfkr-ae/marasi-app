@@ -890,10 +890,15 @@ export function createLaunchpadStore(api) {
       update((state) => recordLaunch(state, launch));
     },
 
+    // Marasi's launch.* events, from any client: launch.started, then
+    // launch.completed, cancelled or failed. Another client's launch whose
+    // request event never came (it ended first) is read from its launchpad.
     onLaunchStarted: (launch) => update((state) => recordLaunch(state, launch)),
     onLaunchFinished: async (launch) => {
       update((state) => recordLaunch(state, launch));
-      await selectArrivedLaunch(launch?.ID);
+      if (awaitingEntry.has(launch?.ID)) return selectArrivedLaunch(launch.ID);
+      const launchpadId = launchpadOfLaunch(current, launch?.ID);
+      if (launchpadId && !current.detailsById[launch.ID]) await onEntriesChanged([launchpadId]);
     },
 
     // Names and descriptions match locally at once; entries through Marasi.

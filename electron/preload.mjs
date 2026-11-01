@@ -46,6 +46,8 @@ contextBridge.exposeInMainWorld("marasiApp", {
   reportProject: (project) => ipcRenderer.invoke("window:project", project),
   // This window's Checkpoint held count, for the dock badge.
   reportHeld: (count) => ipcRenderer.invoke("window:held", count),
+  // This window's dirty Launchpad draft count, which quitting asks about.
+  reportDrafts: (count) => ipcRenderer.invoke("window:drafts", count),
   // The saved remote instances: [{name, url}].
   listRemotes: () => ipcRenderer.invoke("remotes:list"),
   // Connects this window to the remote at `url` with `token`, saving it
