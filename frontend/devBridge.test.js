@@ -189,6 +189,28 @@ test("a stream the page closes is closed at the instance too", async (t) => {
   await streamClosed;
 });
 
+test("an instance that dies mid-stream ends the page's stream, so the page reopens it", async (t) => {
+  const instance = await fakeInstance((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    res.write(": connected\n\n");
+    // Killed: the socket is reset, with no end to the stream.
+    setTimeout(() => res.socket.destroy(), 20);
+  });
+  const sockets = fakeSockets({ default: instance.origin });
+  const dev = await devServer(createDevBridge({ configDir: "/cfg", call: sockets.call, readdir: sockets.readdir }));
+  t.after(() => Promise.all([instance.close(), dev.close()]));
+  await post(`${dev.origin}/__marasi/connect`, { instance: "default" });
+
+  const events = await fetch(`${dev.origin}/__marasi/instance/events`);
+  const reader = events.body.getReader();
+  await reader.read();
+  // The read ends, cleanly or in error, rather than hanging.
+  await reader.read().then(
+    ({ done }) => assert.equal(done, true),
+    () => {},
+  );
+});
+
 test("without a config directory the bridge reaches no instance and says how to name one", async (t) => {
   const sockets = fakeSockets({ default: "http://127.0.0.1:1" });
   const dev = await devServer(createDevBridge({ configDir: null, call: sockets.call, readdir: sockets.readdir }));

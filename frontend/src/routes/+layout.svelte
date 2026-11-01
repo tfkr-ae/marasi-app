@@ -59,7 +59,6 @@
 	} from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
-	import { armoryStore } from "../stores/armoryStore";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -68,7 +67,6 @@
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
-	import { sitemapStore } from "../stores/sitemapStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import {
 		EventsOn,
@@ -325,9 +323,7 @@
 			);
 
 			EventsOn("request", (newRequest) => {
-				sitemapStore.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
-				armoryStore.onRequest(newRequest);
 			});
 			EventsOn("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
@@ -336,9 +332,7 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			EventsOn("response", (newResponse) => {
-				sitemapStore.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
-				armoryStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&

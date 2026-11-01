@@ -86,8 +86,8 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [x] |
 | `request` | event | COVERED | `traffic.request` | 12 | [x] |
 | `response` | event | COVERED | `traffic.response` | 12 | [x] |
-| `ListSitemapChildren` | binding | COVERED | `GET /traffic/sitemap`, `sitemap.changed` | 13 | [ ] |
-| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [ ] |
+| `ListSitemapChildren` | binding | COVERED | `POST /traffic/sitemap/levels` with one node, as v1 read it, so a query adds the children's matching counts. `sitemap.changed` reads the open levels again. | 13 | [x] |
+| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [x] |
 
 ## Ledger selection, highlights and bulk actions
 
@@ -219,21 +219,21 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetArmoryTemplates` | binding | COVERED | `GET /armory/template`, and `GET /armory/template/{id}` for `raw_template` | 23 | [ ] |
-| `CreateArmoryTemplate` | binding | COVERED | `POST /armory/template {name, description, raw_template}` | 23 | [ ] |
-| `CreateArmoryTemplateFromRequest` | binding | COVERED | C: `GET /traffic/{id}`, then `POST /armory/template` | 23 | [ ] |
-| `UpdateArmoryTemplate` | binding | COVERED | `POST /armory/template/{id}` | 23 | [ ] |
-| `DeleteArmoryTemplate` | binding | COVERED | `DELETE /armory/template/{id}` | 23 | [ ] |
-| `GetArmoryRuns` | binding | COVERED | `GET /armory/template/{id}/run` | 23 | [ ] |
-| `GetArmoryRun` | binding | COVERED | `GET /armory/run/{id}` | 23 | [ ] |
-| `GetActiveArmoryRunIDs` | binding | COVERED | C: `GET /armory/template/{id}/run` for each template, filtered by `status` `in_progress`. Runs a crash interrupted are cancelled when the project opens. | 23 | [ ] |
-| `CreateArmoryRun` | binding | COVERED | `POST /armory/run {template_id, attack_type, use_https, wordlists, max_concurrent}` | 23 | [ ] |
-| `ValidateArmoryRun` | binding | COVERED | `POST /armory/run/validate` | 23 | [ ] |
-| `StartArmoryRun` | binding | COVERED | `POST /armory/run/{id}/start` | 23 | [ ] |
-| `CancelArmoryRun` | binding | COVERED | `POST /armory/run/{id}/cancel` | 23 | [ ] |
-| `DeleteArmoryRun` | binding | COVERED | `DELETE /armory/run/{id}` | 23 | [ ] |
-| `GetArmoryWordlists` | binding | COVERED | `GET /wordlist` | 23 | [ ] |
-| `PreviewArmoryWordlist` | binding | COVERED | `GET /wordlist/{name}?limit=` | 23 | [ ] |
+| `GetArmoryTemplates` | binding | COVERED | `GET /armory/template`, and `GET /armory/template/{id}` for `raw_template` | 23 | [x] |
+| `CreateArmoryTemplate` | binding | COVERED | `POST /armory/template {name, description, raw_template}` | 23 | [x] |
+| `CreateArmoryTemplateFromRequest` | binding | COVERED | C: `GET /traffic/{id}`, then `POST /armory/template` | 23 | [x] |
+| `UpdateArmoryTemplate` | binding | COVERED | `POST /armory/template/{id}` | 23 | [x] |
+| `DeleteArmoryTemplate` | binding | COVERED | `DELETE /armory/template/{id}` | 23 | [x] |
+| `GetArmoryRuns` | binding | COVERED | `GET /armory/template/{id}/run` | 23 | [x] |
+| `GetArmoryRun` | binding | COVERED | `GET /armory/run/{id}` | 23 | [x] |
+| `GetActiveArmoryRunIDs` | binding | COVERED | C: `GET /armory/template/{id}/run` for each template, filtered by `status` `in_progress`. Runs a crash interrupted are cancelled when the project opens. | 23 | [x] |
+| `CreateArmoryRun` | binding | COVERED | `POST /armory/run {template_id, attack_type, use_https, wordlists, max_concurrent}` | 23 | [x] |
+| `ValidateArmoryRun` | binding | COVERED | `POST /armory/run/validate` | 23 | [x] |
+| `StartArmoryRun` | binding | COVERED | `POST /armory/run/{id}/start` | 23 | [x] |
+| `CancelArmoryRun` | binding | COVERED | `POST /armory/run/{id}/cancel` | 23 | [x] |
+| `DeleteArmoryRun` | binding | COVERED | `DELETE /armory/run/{id}` | 23 | [x] |
+| `GetArmoryWordlists` | binding | COVERED | `GET /wordlist` | 23 | [x] |
+| `PreviewArmoryWordlist` | binding | COVERED | `GET /wordlist/{name}?limit=` | 23 | [x] |
 | `QueryArmoryRunTraffic` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>" AND (<q>)` | 24 | [ ] |
 | `CountArmoryRunTraffic` | binding | COVERED | `GET /traffic/count/by-field?field=&q=metadata.armory_run_id = "<id>"&as_of=` | 24 | [ ] |
 | `GetArmoryRunRequests` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>"`. v1 bound it but the frontend never called it. | 24 | [ ] |

@@ -111,3 +111,15 @@ export function responseEvent(event) {
  * failed or was dropped, whose state Marasi has already stored.
  */
 export const handshakeEndedEvent = (event) => ({ RequestID: event.request_id, State: event.state });
+
+/** A sitemap levels read's child as v1's SitemapNodeCount. */
+export function sitemapNodeCount(child) {
+  return {
+    Name: child.name,
+    Segment: child.segment,
+    Pairs: child.pairs,
+    Errors: child.errors,
+    HasChildren: child.has_children,
+    Matching: child.matching ?? null,
+  };
+}
