@@ -133,6 +133,7 @@ function client() {
 
 /** The window's connected instance's control API, as createMarasiClient's methods. */
 export const marasi = {
+  baseURL: () => client().baseURL,
   request: (method, path, body) => client().request(method, path, body),
   get: (path) => client().get(path),
   post: (path, body) => client().post(path, body),

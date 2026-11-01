@@ -2,8 +2,9 @@
 // ports it to the Marasi client module or the main process.
 
 import { createAppConfigBindings } from "./appConfig.js";
-import { NotPorted, notPorted } from "./notPorted.js";
-import { isRemoteConnection, marasi, MarasiError } from "./marasi.js";
+import { createChromeBindings } from "./chrome.js";
+import { notPorted } from "./notPorted.js";
+import { marasi, MarasiError } from "./marasi.js";
 import { pairRow, pairSummary } from "./traffic.js";
 import { normalizeExclusion } from "../ledger/contentTypes.js";
 import { createUpdateBindings } from "./updates.js";
@@ -74,40 +75,19 @@ export {
   RunExtension,
 } from "./extensions.js";
 
-// The instance's Chrome, on a local connection: its paths and profiles are
-// the machine's, and Start Chrome opens a window on it through the
-// instance's proxy listener. A remote connection's Chrome is this
-// machine's, which isn't ported yet, so the instance's never starts there.
-const instanceChrome =
-  (binding, call) =>
-  (...args) =>
-    isRemoteConnection() ? Promise.reject(new NotPorted(binding)) : call(...args);
-// A GET /chrome/path list as v1's [{OS, Path}], and a profile list as names.
-const chromePaths = (answer) => (answer?.items ?? []).map((item) => ({ OS: item.os, Path: item.path }));
-const chromeProfiles = (answer) => (answer?.items ?? []).map((item) => item.name);
-const chromeProfilePath = (name) => `/chrome/profile/${encodeURIComponent(name)}`;
-
-export const GetChromePaths = instanceChrome("GetChromePaths", async () => chromePaths(await marasi.get("/chrome/path")));
-export const AddChromePath = instanceChrome("AddChromePath", async (path, os) =>
-  chromePaths(await marasi.post("/chrome/path", { os, path })),
-);
-export const DeleteChromePath = instanceChrome("DeleteChromePath", async (path, os) =>
-  chromePaths(await marasi.delete("/chrome/path", { os, path })),
-);
-export const GetChromeProfiles = instanceChrome("GetChromeProfiles", async () =>
-  chromeProfiles(await marasi.get("/chrome/profile")),
-);
-export const AddChromeProfile = instanceChrome("AddChromeProfile", async (name) =>
-  chromeProfiles(await marasi.post("/chrome/profile", { name })),
-);
-export const DeleteChromeProfile = instanceChrome("DeleteChromeProfile", async (name) =>
-  chromeProfiles(await marasi.delete(chromeProfilePath(name))),
-);
-// Opens a Chrome window on `profile`, or the default profile for "". The
-// app opens it for the researcher, so it asks for no CDP endpoint, as v1.
-export const StartBrowser = instanceChrome("StartBrowser", async (profile) => {
-  await marasi.post("/chrome/start", profile ? { profile } : {});
-});
+// Chrome: the instance's on a local connection, this machine's on a remote
+// one (chrome.js).
+export const {
+  AddChromePath,
+  AddChromeProfile,
+  DeleteChromePath,
+  DeleteChromeProfile,
+  GetChromePaths,
+  GetChromeProfiles,
+  GetLocalChromeProxy,
+  SetLocalChromeProxy,
+  StartBrowser,
+} = createChromeBindings(() => bridge()?.localChrome);
 
 // This machine's upstream proxies and the open project's selection:
 // {items, selected, configured}, items redacted to {name, scheme, host,
