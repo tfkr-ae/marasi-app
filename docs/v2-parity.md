@@ -141,28 +141,28 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [x] |
 | `CheckHTTPParse` | binding | GUI | The renderer reads the edited request or response as Go's `http.ReadRequest` or `http.ReadResponse` would, with Go's error text (`lib/checkpoint/httpParse.js`). Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [x] |
 | `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [x] |
-| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal's side is ticket 18. | 17 | [x] |
+| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal settles its connection's queue by `request_id` (ticket 18). | 17 | [x] |
 | `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned`. Reason `shutdown` reads the queue again, as a drop does. | 17 | [x] |
 
 ## WebSocket
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetWSInterceptFlag` | binding | COVERED | `GET /checkpoint` `.websocket_intercept` | 18 | [ ] |
-| `ToggleWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}` with the opposite of the current value, and `checkpoint.updated` | 18 | [ ] |
-| `SetWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}`. v1 bound it but the frontend never called it. | 18 | [ ] |
-| `GetWSIntercepted` | binding | COVERED | C: `GET /checkpoint?kind=websocket`, filtered by `request_id` | 18 | [ ] |
-| `ForwardWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/forward {payload, opcode}` | 18 | [ ] |
-| `DropWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/drop` | 18 | [ ] |
-| `GetWebSocketConnection` | binding | COVERED | `GET /traffic/{request_id}/websocket` | 18 | [ ] |
-| `GetWebSocketMessages` | binding | COVERED | `GET /websocket/{connection_id}/message` (paged) | 18 | [ ] |
-| `InjectWebSocketMessage` | binding | COVERED | `POST /websocket/{connection_id}/inject {direction, opcode, payload, compress:"never"}` | 18 | [ ] |
-| `CloseWebSocket` | binding | COVERED | `POST /websocket/{connection_id}/close {code, reason}` | 18 | [ ] |
-| `ws-intercepted` | event | COVERED | `checkpoint.held` (type `websocket`) | 18 | [ ] |
-| `ws-message` | event | COVERED | `websocket.message` | 18 | [ ] |
-| `ws-open` | event | COVERED | `websocket.opened` | 18 | [ ] |
-| `ws-close` | event | COVERED | `websocket.closed` | 18 | [ ] |
-| `ws-progress` | event | COVERED | `websocket.progress` | 18 | [ ] |
+| `GetWSInterceptFlag` | binding | COVERED | `GET /checkpoint` `.websocket_intercept` | 18 | [x] |
+| `ToggleWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}` with the opposite of the current value, and `checkpoint.updated` | 18 | [x] |
+| `SetWSIntercept` | binding | COVERED | `POST /checkpoint/websocket-intercept {websocket_intercept}`. v1 bound it but the frontend never called it. | 18 | [x] |
+| `GetWSIntercepted` | binding | COVERED | C: `GET /checkpoint?kind=websocket`, the oldest with the pair's `request_id`. Its `CreatedAt` is `intercepted_at`; Marasi's item has no `frame_count`, `compressed` or `metadata`, so the modal's Frames is blank. | 18 | [x] |
+| `ForwardWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/forward {payload, opcode}` | 18 | [x] |
+| `DropWSIntercepted` | binding | COVERED | `POST /checkpoint/{id}/drop` | 18 | [x] |
+| `GetWebSocketConnection` | binding | COVERED | `GET /traffic/{request_id}/websocket`; null on `not_found`, before the connection opens | 18 | [x] |
+| `GetWebSocketMessages` | binding | COVERED | C: `GET /traffic/{request_id}/websocket` for the connection id, then every page of `GET /websocket/{connection_id}/message` (newest first, 500 a page), listed oldest first as in v1 | 18 | [x] |
+| `InjectWebSocketMessage` | binding | COVERED | `POST /websocket/{connection_id}/inject {direction, opcode, payload, compress}`, `compress` `"never"` when Send uncompressed is ticked, else `"auto"`, as v1's `neverCompress` | 18 | [x] |
+| `CloseWebSocket` | binding | COVERED | `POST /websocket/{connection_id}/close {code, reason}` | 18 | [x] |
+| `ws-intercepted` | event | COVERED | `checkpoint.held` (type `websocket`) | 18 | [x] |
+| `ws-message` | event | COVERED | `websocket.message` | 18 | [x] |
+| `ws-open` | event | COVERED | `websocket.opened`, to the modal and the upgrade's Ledger row | 18 | [x] |
+| `ws-close` | event | COVERED | `websocket.closed`, to the modal (clearing its queue) and the upgrade's Ledger row | 18 | [x] |
+| `ws-progress` | event | COVERED | `websocket.progress` | 18 | [x] |
 
 ## Launchpad
 
@@ -188,32 +188,34 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `ListFindings` | binding | COVERED | C: `GET /finding`, then `GET /finding/{id}` for each | 21 | [ ] |
-| `SaveFinding` | binding | COVERED | `POST /finding` (new) or `POST /finding/{id}` (edit) | 21 | [ ] |
-| `DeleteFinding` | binding | COVERED | `DELETE /finding/{id}` | 21 | [ ] |
-| `CreateDraftFinding` | binding | COVERED | C: `POST /finding`, then `POST /traffic/bulk/link {selection, finding_id}` | 21 | [ ] |
-| `LinkRequestToFinding` | binding | COVERED | `POST /finding/{id}/traffic {id}` | 21 | [ ] |
-| `UnlinkRequestFromFinding` | binding | COVERED | `DELETE /finding/{id}/traffic/{request_id}` | 21 | [ ] |
-| `SaveArtifactToFinding` | binding | COVERED | `POST /finding/{id}/artifact?filename=` with the file read on this machine | 21 | [ ] |
-| `ListTestCases` | binding | COVERED | C: `GET /test-case`, then `GET /test-case/{id}` for each | 21 | [ ] |
-| `SaveTestCase` | binding | COVERED | `POST /test-case` (new) or `POST /test-case/{id}` (edit) | 21 | [ ] |
-| `DeleteTestCase` | binding | COVERED | `DELETE /test-case/{id}` | 21 | [ ] |
-| `CreateDraftTestCase` | binding | COVERED | C: `POST /test-case`, then `POST /traffic/bulk/link {selection, test_case_id}` | 21 | [ ] |
-| `LinkRequestToTestCase` | binding | COVERED | `POST /test-case/{id}/traffic {id}` | 21 | [ ] |
-| `UnlinkRequestFromTestCase` | binding | COVERED | `DELETE /test-case/{id}/traffic/{request_id}` | 21 | [ ] |
-| `SaveArtifactToTestCase` | binding | COVERED | `POST /test-case/{id}/artifact?filename=` with the file read on this machine | 21 | [ ] |
-| `GetArtifact` | binding | COVERED | `GET /artifact/{id}` and `GET /artifact/{id}/content` | 21 | [ ] |
-| `DownloadArtifact` | binding | COVERED | `GET /artifact/{id}/content`, saved through an OS save dialog | 21 | [ ] |
-| `DeleteArtifact` | binding | COVERED | `DELETE /artifact/{id}` | 21 | [ ] |
+| `ListFindings` | binding | COVERED | C: `GET /finding`, then `GET /finding/{id}` for each | 21 | [x] |
+| `SaveFinding` | binding | COVERED | `POST /finding` (new) or `POST /finding/{id}` (edit) | 21 | [x] |
+| `DeleteFinding` | binding | COVERED | `DELETE /finding/{id}` | 21 | [x] |
+| `CreateDraftFinding` | binding | COVERED | C: `POST /finding`, then `POST /traffic/bulk/link {selection, finding_id}`, then `GET /finding/{id}`; a pair the link left out is linked alone, and its failure reported | 21 | [x] |
+| `LinkRequestToFinding` | binding | COVERED | `POST /finding/{id}/traffic {id}` | 21 | [x] |
+| `UnlinkRequestFromFinding` | binding | COVERED | `DELETE /finding/{id}/traffic/{request_id}` | 21 | [x] |
+| `SaveArtifactToFinding` | binding | COVERED | `POST /finding/{id}/artifact?filename=` with the file read on this machine | 21 | [x] |
+| `ListTestCases` | binding | COVERED | C: `GET /test-case`, then `GET /test-case/{id}` for each | 21 | [x] |
+| `SaveTestCase` | binding | COVERED | `POST /test-case` (new) or `POST /test-case/{id}` (edit) | 21 | [x] |
+| `DeleteTestCase` | binding | COVERED | `DELETE /test-case/{id}` | 21 | [x] |
+| `CreateDraftTestCase` | binding | COVERED | C: `POST /test-case`, then `POST /traffic/bulk/link {selection, test_case_id}`, then `GET /test-case/{id}`; as CreateDraftFinding | 21 | [x] |
+| `LinkRequestToTestCase` | binding | COVERED | `POST /test-case/{id}/traffic {id}` | 21 | [x] |
+| `UnlinkRequestFromTestCase` | binding | COVERED | `DELETE /test-case/{id}/traffic/{request_id}` | 21 | [x] |
+| `SaveArtifactToTestCase` | binding | COVERED | `POST /test-case/{id}/artifact?filename=` with the file read on this machine | 21 | [x] |
+| `GetArtifact` | binding | COVERED | `GET /artifact/{id}` and `GET /artifact/{id}/content` | 21 | [x] |
+| `DownloadArtifact` | binding | COVERED | `GET /artifact/{id}/content`, saved through an OS save dialog | 21 | [x] |
+| `DeleteArtifact` | binding | COVERED | `DELETE /artifact/{id}` | 21 | [x] |
 
 ## Reports
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `ListTemplates` | binding | COVERED | `GET /report/template` | 22 | [ ] |
-| `ExportReport` | binding | COVERED | `POST /report {template, …, created_at, custom_properties}`, saved through an OS save dialog | 22 | [ ] |
-| `RestoreDefaultReportTemplate` | binding | COVERED | `POST /report/template/restore` | 22 | [ ] |
-| `GetUserName` | binding | GUI | `os.userInfo()`, the report assessor default | 22 | [ ] |
+| `ListTemplates` | binding | COVERED | `GET /report/template`, followed live through `report.template.*` | 22 | [x] |
+| `ExportReport` | binding | COVERED | `POST /report {template, …, start, end (YYYY-MM-DD), include_test_cases, created_at (this machine's offset), custom_properties}`, saved through an OS save dialog | 22 | [x] |
+| `RestoreDefaultReportTemplate` | binding | COVERED | `POST /report/template/restore`; `report.template.restored` | 22 | [x] |
+| `GetUserName` | binding | GUI | `os.userInfo()`, the report assessor default | 22 | [x] |
+| `UploadReportTemplate` | binding | COVERED | v2 only: a template file from this machine, its bytes to `POST /report/template?name=`; `report.template.added` | 22 | [x] |
+| `DeleteReportTemplate` | binding | COVERED | v2 only: `DELETE /report/template/{name}`; `report.template.removed` | 22 | [x] |
 
 ## Armory
 
@@ -234,9 +236,9 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `DeleteArmoryRun` | binding | COVERED | `DELETE /armory/run/{id}` | 23 | [x] |
 | `GetArmoryWordlists` | binding | COVERED | `GET /wordlist` | 23 | [x] |
 | `PreviewArmoryWordlist` | binding | COVERED | `GET /wordlist/{name}?limit=` | 23 | [x] |
-| `QueryArmoryRunTraffic` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>" AND (<q>)` | 24 | [ ] |
-| `CountArmoryRunTraffic` | binding | COVERED | `GET /traffic/count/by-field?field=&q=metadata.armory_run_id = "<id>"&as_of=` | 24 | [ ] |
-| `GetArmoryRunRequests` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>"`. v1 bound it but the frontend never called it. | 24 | [ ] |
+| `QueryArmoryRunTraffic` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>" AND (<q>)` | 24 | [x] |
+| `CountArmoryRunTraffic` | binding | COVERED | `GET /traffic/count/by-field?field=&q=metadata.armory_run_id = "<id>"&as_of=` | 24 | [x] |
+| `GetArmoryRunRequests` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>"`. v1 bound it but the frontend never called it. | 24 | [x] |
 
 ## Scope and extensions
 

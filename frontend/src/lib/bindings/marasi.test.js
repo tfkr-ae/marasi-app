@@ -122,3 +122,29 @@ test("a failure that isn't a refusal names its status", async () => {
   assert.match(String(error), /502/);
   assert.equal(isNeedsNewerMarasi(error), false);
 });
+
+test("sendBytes posts raw bytes with their content type and returns the JSON answer", async () => {
+  const { fetch, sent } = fakeFetch(200, { id: "a1", filename: "shot.png" });
+  const marasi = createMarasiClient({ baseURL: "http://127.0.0.1:1", fetch });
+  const bytes = new Uint8Array([137, 80, 78, 71]);
+  assert.deepEqual(await marasi.sendBytes("POST", "/finding/f1/artifact?filename=shot.png", bytes, "image/png"), {
+    id: "a1",
+    filename: "shot.png",
+  });
+  assert.equal(sent[0].url, "http://127.0.0.1:1/finding/f1/artifact?filename=shot.png");
+  assert.equal(sent[0].headers["Content-Type"], "image/png");
+  assert.deepEqual(new Uint8Array(await new Response(sent[0].body).arrayBuffer()), bytes);
+});
+
+test("readBytes returns a route's body as bytes", async () => {
+  const { fetch } = fakeFetch(200, "\u0000PK", "application/zip");
+  const marasi = createMarasiClient({ baseURL: "http://127.0.0.1:1", fetch });
+  assert.deepEqual(await marasi.readBytes("/artifact/a1/content"), new Uint8Array([0, 80, 75]));
+});
+
+test("readBytes rejects with Marasi's refusal", async () => {
+  const { fetch } = fakeFetch(404, { error: "not_found" });
+  const marasi = createMarasiClient({ baseURL: "http://127.0.0.1:1", fetch });
+  const err = await rejection(marasi.readBytes("/artifact/a1/content"));
+  assert.equal(err.code, "not_found");
+});

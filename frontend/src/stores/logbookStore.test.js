@@ -403,6 +403,16 @@ test("findings group by severity, most severe first, or not at all", async () =>
   assert.deepEqual(grouped(groupsOf(get(store)).findings), [[null, ["crit", "low-3", "low"]]]);
 });
 
+test("a finding with no severity, as another client may save one, groups last under No severity", async () => {
+  const { store } = await loaded({
+    findings: [finding("cli", { Severity: "" }), finding("low", { Severity: "Low" })],
+  });
+  assert.deepEqual(grouped(groupsOf(get(store)).findings), [
+    ["Low", ["low"]],
+    ["No severity", ["cli"]],
+  ]);
+});
+
 test("test cases group by category, by tag, or not at all", async () => {
   const { store } = await loaded({
     testCases: [

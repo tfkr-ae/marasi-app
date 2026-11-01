@@ -6,6 +6,7 @@ import { followConnection, reloadStores } from "./followConnection.js";
 import { handshakeEndedEvent, requestEvent, responseEvent } from "./bindings/traffic.js";
 import { launchOf, launchpadOf } from "./bindings/launchpads.js";
 import { armoryRun, armoryTemplate, wordlistInfos } from "./bindings/armory.js";
+import { webSocketConnection, webSocketMessage, webSocketProgress } from "./bindings/websocket.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
 import { ledgerStore } from "../stores/ledgerStore";
@@ -28,18 +29,66 @@ import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 import { extensionsStore } from "../stores/extensionsStore.js";
 import { scopeStore } from "../stores/scopeStore.js";
+import { reportTemplateStore } from "../stores/reportTemplateStore.js";
 
-const checkpointResolved = (event) =>
+const checkpointResolved = (event) => {
   Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
     console.error("Reading Checkpoint items failed:", err),
   );
+  connectionStore.onResolved(event).catch((err) => console.error("Reading held WebSocket messages failed:", err));
+};
+
+// A connection that opened or closed, for the WebSocket modal and its
+// upgrade's Ledger row.
+const webSocketChanged = (event) => {
+  const connection = webSocketConnection(event);
+  connectionStore.upsertConnection(connection);
+  ledgerStore.patchWebSocketMetadata(connection);
+  return connection;
+};
 
 // Logs a failed reread after a launchpad event.
 const followLaunchpads = (reading) =>
   reading.catch((err) => console.error("Reading launchpads failed:", err));
 
+// Logs a store's failed re-read of what an event changed.
+const logged = (what) => (promise) => promise.catch((err) => console.error(`Reading ${what} again failed:`, err));
+const finding = logged("a finding");
+const testCase = logged("a test case");
+
+// Findings and test cases, by any client: the record an event names is read
+// again, or leaves its list.
+const recordHandlers = {
+  "finding.created": (event) => finding(findingStore.onChanged(event.id)),
+  "finding.updated": (event) => finding(findingStore.onChanged(event.id)),
+  "finding.linked": (event) => finding(findingStore.onChanged(event.finding_id)),
+  "finding.unlinked": (event) => finding(findingStore.onChanged(event.finding_id)),
+  "finding.deleted": (event) => findingStore.onDeleted(event.id),
+  "test-case.created": (event) => testCase(testCaseStore.onChanged(event.id)),
+  "test-case.updated": (event) => testCase(testCaseStore.onChanged(event.id)),
+  "test-case.linked": (event) => testCase(testCaseStore.onChanged(event.test_case_id)),
+  "test-case.unlinked": (event) => testCase(testCaseStore.onChanged(event.test_case_id)),
+  "test-case.deleted": (event) => {
+    testCaseStore.onDeleted(event.id);
+    findingStore.onTestCaseDeleted(event.id);
+  },
+  "artifact.created": (event) =>
+    event.finding_id
+      ? finding(findingStore.onChanged(event.finding_id))
+      : testCase(testCaseStore.onChanged(event.test_case_id)),
+  "artifact.deleted": (event) => {
+    findingStore.onArtifactDeleted(event.id);
+    testCaseStore.onArtifactDeleted(event.id);
+  },
+};
+
+// The bulk changes that link, unlink or delete pairs, whose traffic.changed
+// event names no record, so the lists they touch are read again.
+const relinkingChanges = new Set(["link", "unlink", "delete"]);
+
 // Each Marasi event's handler, by event name.
 const handlers = {
+  ...recordHandlers,
   "log.added": (log) => logStore.onLogAdded(log),
   // Captured traffic, in v1's request and response shapes.
   "traffic.request": (event) => {
@@ -58,10 +107,13 @@ const handlers = {
     armoryStore.onResponse(response);
     followLaunchpads(launchpadStore.onResponse(response));
   },
-  // A bulk change names no launchpad, so a link, unlink or delete rereads
-  // them all.
+  // A bulk change names no launchpad, finding or test case, so a link,
+  // unlink or delete rereads them all.
   "traffic.changed": ({ change }) => {
-    if (["link", "unlink", "delete"].includes(change)) followLaunchpads(launchpadStore.onEntriesChanged());
+    if (!relinkingChanges.has(change)) return;
+    followLaunchpads(launchpadStore.onEntriesChanged());
+    finding(findingStore.reload());
+    testCase(testCaseStore.reload());
   },
   // Launchpads and their entries, changed by any client.
   "launchpad.created": (event) => launchpadStore.onLaunchpadCreated(launchpadOf(event)),
@@ -92,6 +144,10 @@ const handlers = {
   // The instance machine's wordlists, all of them.
   "wordlist.added": (list) => armoryStore.onWordlists(wordlistInfos(list)),
   "wordlist.removed": (list) => armoryStore.onWordlists(wordlistInfos(list)),
+  // The instance's report templates, all of them.
+  "report.template.added": (list) => reportTemplateStore.onTemplates(list),
+  "report.template.removed": (list) => reportTemplateStore.onTemplates(list),
+  "report.template.restored": (list) => reportTemplateStore.onTemplates(list),
   // A rebuild or delete moved the sitemap: read its open levels again.
   "sitemap.changed": () => sitemapStore.reload(),
   "listener.started": (status) => listenerStore.onListener(status),
@@ -103,12 +159,24 @@ const handlers = {
     dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
   },
   // Checkpoint, HTTP and WebSocket items alike, by any client. An item
-  // whose client left arrives as checkpoint.dropped, reason abandoned.
-  "checkpoint.held": () =>
-    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err)),
+  // whose client left, or whose WebSocket connection closed, arrives as
+  // checkpoint.dropped, reason abandoned. The WebSocket modal queues held
+  // messages by connection.
+  "checkpoint.held": (item) => {
+    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err));
+    connectionStore.onHeld(item);
+  },
   "checkpoint.forwarded": (event) => checkpointResolved(event),
   "checkpoint.dropped": (event) => checkpointResolved(event),
-  "checkpoint.updated": (flags) => checkpointStore.onUpdated(flags),
+  "checkpoint.updated": (flags) => {
+    checkpointStore.onUpdated(flags);
+    connectionStore.onUpdated(flags);
+  },
+  // WebSocket connections and their messages, in v1's shapes.
+  "websocket.opened": (event) => webSocketChanged(event),
+  "websocket.closed": (event) => connectionStore.clearInterceptions(webSocketChanged(event).RequestID),
+  "websocket.message": (event) => connectionStore.upsertMessage(webSocketMessage(event)),
+  "websocket.progress": (event) => connectionStore.upsertProgress(webSocketProgress(event)),
   "update.available": (update) => instanceUpdate.onAvailable(update),
   "update.progress": (progress) => instanceUpdate.onProgress(progress),
   "update.installed": (installed) => instanceUpdate.onInstalled(installed),
@@ -166,6 +234,7 @@ const stores = [
   logbookStore,
   findingStore,
   testCaseStore,
+  reportTemplateStore,
   upstreamProxyStore,
   chromeStore,
   waypointStore,

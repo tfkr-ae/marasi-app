@@ -1,4 +1,4 @@
-// The app's WebSocket connection store, bound to the Wails backend. The logic
+// The app's WebSocket connection store, bound to the v1 bindings. The logic
 // lives in createConnectionStore.js, which tests load with a fake API.
 import { writable } from "svelte/store";
 import {

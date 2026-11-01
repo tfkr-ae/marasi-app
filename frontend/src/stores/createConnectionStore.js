@@ -1,9 +1,10 @@
 // The WebSocket modal's state: messages, connections, progress and each
 // connection's Checkpoint queue, by upgrade request id. Every backend call
-// goes through the injected `api` (see connectionStore.js for the Wails
+// goes through the injected `api` (see connectionStore.js for the app's
 // one), so this module loads under node --test.
 import { get, writable } from "svelte/store";
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
+import { heldMessage } from "../lib/bindings/websocket.js";
 import {
 	applyProgress,
 	clearProgress,
@@ -158,14 +159,27 @@ export function createConnectionStore(api) {
 		upsertInterception,
 		populateInterception,
 
+		/** Marasi's checkpoint.held: a held WebSocket message joins its connection's queue. */
+		onHeld: (item) => {
+			if (item?.type === "websocket") upsertInterception(heldMessage(item));
+		},
+
 		/**
-		 * The checkpoint-settled event: a held message was forwarded or
-		 * dropped, here or on the Checkpoint page.
+		 * Marasi's checkpoint.forwarded and checkpoint.dropped: a held message
+		 * was forwarded or dropped by any client, here, on the Checkpoint page
+		 * or from the CLI, or left because its connection closed.
 		 */
-		onSettled: ({ ID, Type, RequestID } = {}) =>
-			Type === "websocket" && RequestID
-				? settleInterception(RequestID, ID)
+		onResolved: ({ id, type, request_id } = {}) =>
+			type === "websocket" && request_id
+				? settleInterception(request_id, id)
 				: Promise.resolve(),
+
+		/** Marasi's checkpoint.updated: WebSocket interception, set by any client. */
+		onUpdated: ({ websocket_intercept } = {}) =>
+			update((state) => ({
+				...state,
+				wsInterceptEnabled: Boolean(websocket_intercept),
+			})),
 		clearInterceptions: (requestId) => {
 			if (!requestId) return;
 			update((state) => ({

@@ -13,6 +13,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
 import { createCertificateFile } from "./certificateFile.js";
+import { createArtifactFile } from "./artifactFile.js";
+import { createReportFile } from "./reportFile.js";
 import { createCAFile } from "./caFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
@@ -100,7 +102,7 @@ function serveFrontend() {
 }
 
 // The app config v1 and v2 share, the keybinding profile files, and the
-// certificate file and clipboard, for every window.
+// certificate and artifact files and clipboard, for every window.
 async function serveAppConfig() {
   const appConfig = createAppConfig({
     dir: configDir,
@@ -130,6 +132,20 @@ async function serveAppConfig() {
     dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
   });
   handle("certificate:save", (event, pem) => certificateFile.save(pem));
+  // A Logbook artifact, which the renderer read from its instance.
+  const artifactFile = createArtifactFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("artifact:save", (event, filename, bytes) => artifactFile.save(filename, bytes));
+  // A Logbook report, which the renderer exported from its instance.
+  const reportFile = createReportFile({
+    fs: nodeFS,
+    home: app.getPath("home"),
+    dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
+  });
+  handle("report:save", (event, filename, bytes) => reportFile.save(filename, bytes));
   // An upstream proxy's CA, read from a file on this machine.
   const caFile = createCAFile({
     fs: { readFile, stat },

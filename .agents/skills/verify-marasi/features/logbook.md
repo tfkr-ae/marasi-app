@@ -5,7 +5,7 @@
 - The page: dock outline (`+ Finding`, `+ Test case`, the All · In progress · Done toggle, Group by), the toolbar (search, kind toggles, Severity, Category and Tags menus, Export) and the summary
 - The record view: checklist, inline fixes with their leave prompt, linked records, evidence (requests and artifacts) and the expanded pair
 - The finding and test case modal and its edit session: Save and close, Close without saving, the dirty prompt
-- Export review, with Include test cases
+- Export review, with Include test cases; export and save on this machine; report templates (upload, delete, restore default)
 
 The code map is `docs/agents/maps/logbook.md`.
 
@@ -142,9 +142,18 @@ N follows the outline's order (findings by severity then title, then test cases)
 
 Then check the project: `sqlite3 -readonly <project> "select title, severity, cvss_score from findings; select title, category from test_cases"`. Each marker has one IDOR finding (Critical, 9.1; Discard left nothing), with its original title.
 
+**Artifacts, live changes and drafts from the Ledger.** Proven in light and dark (ticket 21).
+
+- Upload: the modal's Artifacts tab (`{"text":"Artifacts 0"}`; the count follows the label) holds the hidden `[data-artifact-input]`. Hand it files with the `files` step: `{"files":"[data-artifact-input]","paths":["/tmp/shot.png"]}`. Nothing uploads until `Save and close`. Check the bytes with `marasi artifact download <id> --output <file>` and `shasum`.
+- Record view: the evidence tabs read `Requests N` and `Artifacts N` (click with `{"text":"Artifacts 2","within":".logbook-record"}`); an artifact row is `.logbook-record button` with its file name, an image previews as `[data-preview=image] img`, and a text or JSON one in the editor. `waitText` can't read `Requests 2` from the tab (its count is a separate span): wait for `2 requests` within `.logbook-checklist`.
+- Live from the CLI: start the CLI change in the background with a `sleep` first (`(sleep 8; marasi … finding update <id> --title …; marasi … finding link <id> --request <pair>; marasi … artifact upload --finding <id> --file …; marasi … test-case create --title …) &`), then drive waits with `"timeoutMs":30000` on the open record and `.logbook-outline`. `finding unlink`, `artifact delete`, `finding delete`, `test-case delete` and `traffic bulk link --test-case <id> --id …` show up the same way.
+- A draft from the Ledger: select rows (`{"click":".ledger-row","hasText":"/a"}`, then `"modifiers":["shift"]` or `["cmd"]`), `cmd+shift+f` or `cmd+shift+t`, title, `Save and close`. To prove a failed link is reported, delete one selected pair while the modal is open: every drive runs doctor first, which refuses an open modal, so do it inside one recipe. Run `(sleep 15; marasi … traffic bulk delete --id <pair>; marasi … test-case create --title <marker>) &` with no test cases in the project, and wait `{"waitNoSelector":"[data-record-modal] input[placeholder=\"No test cases yet\"]","timeoutMs":40000}` before `Save and close`. The modal stays open with `Not saved: POST /finding/<id>/traffic: not_found`, only the gone pair marked `new`, and the record saved with the other pairs.
+- Download needs Electron (the browser has no save dialog): `MARASI_ARTIFACT_DIR=/tmp/<dir> scripts/electron.sh start` saves under the artifact's own name there without a dialog. Click `.logbook-record [aria-label=Download]` and wait for `Saved`. For a remote connection, disconnect the Electron window (`cmd+shift+backspace`, the capture after it may land mid-reload), then drive feature `connection`: `#remote-address` (`http://<control_listener>`), `#remote-token` (`<config_dir>/instances/default.token`), untick `Remember` (else the token goes to the keychain), and `Connect to http://…`.
+
 ## Gotchas
 
-- Export report opens a native Save dialog on the desktop, which the driver cannot answer. `custom_properties.include_test_cases` reaching the report is covered by `app_reporting_test.go`.
+- Export report opens a native Save dialog, which the driver cannot answer, and the browser can't save a report. Prove it in Electron started with `MARASI_REPORT_DIR=/tmp/<dir>`: `#exportReport`, wait for `Report saved`, and read the file (`<title>.md` for the default template). The title field is `{"click":".logbook-export input","nth":1}` (the Assessor is `nth` 2). For the zone, start a second instance with `TZ=Pacific/Auckland … service start` and connect to it as a remote: the report's `created` is this machine's time, while a CLI `report export` with no `--created-at` prints the instance's.
+- The template row (ticket 22): `<option>` text is in the select's `innerText`, so `{"waitText":"<name>","within":"#exportTemplate"}` waits for a template to join or leave the list. Upload is `{"files":"[data-template-input]","paths":["/tmp/<file>"]}`; `#exportDeleteTemplate` and `#exportRestoreDefault` ask once (`Delete <name>?`, `Overwrite default_template.md?`). `marasi report template add` moves its source file, so add a copy.
 - A click outside a modal needs `"edge":"top"` on `.modal-backdrop`: the modal covers the backdrop's centre. The same goes for `.logbook-pair-expanded`.
 - Escape on a dirty record modal only toggles its prompt. `reset.sh` answers `Discard` on `[data-close-prompt]`.
 - The Marasi menu's search matches a page action's keywords, not its label: `next` finds Next Record, `export` finds nothing.
