@@ -81,6 +81,9 @@ contextBridge.exposeInMainWorld("marasiApp", {
   // Saves the instance's CA certificate `pem` through a save dialog; resolves
   // the path, or "" if cancelled.
   saveCertificate: (pem) => ipcRenderer.invoke("certificate:save", pem),
+  // The text of an upstream proxy CA file picked in an open dialog on this
+  // machine; "" if cancelled.
+  readCAFile: () => ipcRenderer.invoke("upstreamProxy:readCAFile"),
   // Puts `text` on this machine's clipboard.
   copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
   // The app config calls; each resolves { value } or { error }.

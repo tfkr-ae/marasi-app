@@ -12,7 +12,7 @@
         extensionMenuActionId,
         extensionPageActionId,
     } from "../../../lib/keybindings/catalog.js";
-    import { EventsEmit } from "../../../lib/bindings/runtime.js";
+    import { callExtensionFunction } from "../../../lib/extensions/components/utils.js";
     let accOpened = false;
 
     $: extensionName = $page.params.name;
@@ -22,13 +22,7 @@
     $: mainSchema = $extensions_ui[extensionName]?.main;
     $: panelSchema = $extensions_ui[extensionName]?.panel;
 
-    function callExtension(action) {
-        EventsEmit("extension_call_function", {
-            extensionID: extensionData.ID,
-            function: action,
-            state: $extensions_ui[extensionData.Name],
-        });
-    }
+    const callExtension = (action) => callExtensionFunction(extensionData, action);
 
     // Declared items keep their catalog identity (extension + action), so
     // the first item wins when two declare the same action, as in the

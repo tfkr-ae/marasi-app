@@ -5,7 +5,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, sa
 import { execFile, spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import * as fsPromises from "node:fs/promises";
-import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { networkInterfaces, tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createAppConfig } from "./appConfig.js";
 import { createCertificateFile } from "./certificateFile.js";
+import { createCAFile } from "./caFile.js";
 import { handleAppConfig } from "./appConfigIPC.js";
 import { assetPath } from "./assets.js";
 import { withBearer } from "./bearer.js";
@@ -127,6 +128,14 @@ async function serveAppConfig() {
     dialog: { save: async (options) => chosen(await show(dialog.showSaveDialog, options)) },
   });
   handle("certificate:save", (event, pem) => certificateFile.save(pem));
+  // An upstream proxy's CA, read from a file on this machine.
+  const caFile = createCAFile({
+    fs: { readFile, stat },
+    dialog: {
+      open: async (options) => chosen(await show(dialog.showOpenDialog, { ...options, properties: ["openFile"] })),
+    },
+  });
+  handle("upstreamProxy:readCAFile", () => caFile.read());
   handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
   handle("app:buildInfo", () => build);
   handle("app:userName", () => userInfo().username);

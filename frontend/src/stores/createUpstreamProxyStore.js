@@ -1,6 +1,7 @@
 // Settings → Upstream Proxy: this machine's upstream proxy list and the open
-// project's selection. Marasi sends the app no upstream proxy events, so the
-// store reads the list when Settings shows it and keeps each call's answer.
+// project's selection. The store reads the list when Settings shows it,
+// keeps each call's answer, and follows the upstream_proxy.* events, so a
+// change the CLI or another window makes shows up too.
 // Backend calls go through the injected `api`, so tests run against a fake:
 //
 //   list() -> { items, selected, configured }
@@ -51,8 +52,27 @@ export function createUpstreamProxyStore(api) {
     return answer;
   }
 
+  // The selection is configured when it is direct or this machine lists it.
+  const listed = (items, selected) => !selected || items.some((item) => item.name === selected);
+
+  /** Shows an upstream_proxy.added/updated/removed event's list. */
+  function onList({ items = [] } = {}) {
+    store.update((state) => {
+      const names = new Set(items.map((item) => item.name));
+      const checks = Object.fromEntries(Object.entries(state.checks).filter(([name]) => names.has(name)));
+      return { ...state, items, configured: listed(items, state.selected), checks };
+    });
+  }
+
+  /** Shows an upstream_proxy.selected event's selection, "" for direct. */
+  function onSelected({ name = "" } = {}) {
+    store.update((state) => ({ ...state, selected: name, configured: listed(state.items, name) }));
+  }
+
   return {
     subscribe: store.subscribe,
+    onList,
+    onSelected,
     load: async () => apply(await api.list()),
     // Reads the list again, after the event stream reopens.
     reload: async () => apply(await api.list()),

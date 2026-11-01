@@ -1,9 +1,8 @@
 <script>
     import { getContext } from "svelte";
     import * as Icons from "lucide-svelte";
-    import { EventsEmit } from "../../../lib/bindings/runtime";
     import { extensions_ui } from "../../../stores";
-    import { resolveBind } from "./utils";
+    import { callExtensionFunction, resolveBind } from "./utils";
 
     const inGroup = getContext("ButtonGroup");
     export let extensionData;
@@ -22,13 +21,7 @@
     $: displayValue = resolveBind($extensions_ui, extensionData, value);
 
     function handleClick() {
-        if (on_click) {
-            EventsEmit("extension_call_function", {
-                extensionID: extensionData.ID,
-                function: on_click,
-                state: $extensions_ui[extensionData.Name],
-            });
-        }
+        if (on_click) callExtensionFunction(extensionData, on_click);
     }
 </script>
 

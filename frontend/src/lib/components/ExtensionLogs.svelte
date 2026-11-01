@@ -1,27 +1,33 @@
 <script>
     import { onMount } from "svelte";
     import { GetExtensionLogs } from "../bindings/App";
-    import { EventsOff, EventsOn } from "../bindings/runtime";
+    import { extensionsStore } from "../../stores/extensionsStore.js";
 
     export let extensionName = "";
     let logs = [];
     onMount(() => {
-        GetExtensionLogs(extensionName).then((extensionLogs) => {
-            logs = extensionLogs;
-            EventsOn(extensionName + "-log", (log) => {
-                console.log("new log ", log);
-                if (logs?.length > 0) {
-                    logs = [...logs, log];
-                } else {
-                    logs = [log];
-                }
+        // Lines printed while the buffer is read are kept after it, unless
+        // the buffer has them too.
+        let live = [];
+        let read = false;
+        const stop = extensionsStore.followLogs(extensionName, (log) => {
+            if (read) logs = [...logs, log];
+            else live = [...live, log];
+        });
+        GetExtensionLogs(extensionName)
+            .then((extensionLogs) => {
+                const buffered = extensionLogs ?? [];
+                const seen = new Set(buffered.map((log) => `${log.Time}\n${log.Text}`));
+                logs = [...buffered, ...live.filter((log) => !seen.has(`${log.Time}\n${log.Text}`))];
+            })
+            .catch((err) => {
+                console.error(`Reading the ${extensionName} logs failed:`, err);
+                logs = live;
+            })
+            .finally(() => {
+                read = true;
             });
-        }).catch((err) => {
-            console.log(err);
-        })
-        return () => {
-            EventsOff(extensionName + "-log");
-        }
+        return stop;
     })
 </script>
 <div class="text-center p-1 text-sm font-bold">
