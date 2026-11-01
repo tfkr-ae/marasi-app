@@ -5,7 +5,7 @@
 - The dock: request templates and their runs as a tree, with run status badges
 - The template header (name, description, Save, Delete) and the request editor with `@@x@@` payload positions
 - Run settings: attack type, concurrency, HTTPS, wordlists, and the pinned Launch / Save as draft footer
-- Persisted runs, status polling, and the run's traffic table: read a page at a time, sorted by #, Time, Status or Length
+- Persisted runs, live status from Marasi's `armory.run.*` events, and the run's traffic table: read a page at a time, sorted by #, Time, Status or Length
 - Group by None, Status or Length: a section per value, counted by Marasi, with fold, Expand all and Collapse all
 - The traffic Selection: ⌘-click, ⇧-click, the selected count and Clear
 - Whole groups and the run: ⌘-click or right-click a group header, ⌘A (`Select All Traffic`)
@@ -150,7 +150,7 @@ Esc closes the drawer even with focus in the template editor or a field. The det
 - A new template's request is empty. Validation then requires at least one `@@x@@` payload position, a `Host` header, and concurrency from 1 to 100.
 - Validation is debounced by 300 ms and starts out pending, so `Launch` is disabled until it finishes. Wait with `waitEnabledText`.
 - Harpoon and broadside require exactly one wordlist; tandem and maelstrom require one per payload position.
-- Run status comes from a 1.5 s poll. Wait for `[role=tree] .badge` to read `complete`, not for any `complete` text. Traffic rows can arrive after the run completes, in arrival order, so numbers can be slightly out of order.
+- Run status comes from Marasi's `armory.run.updated` events, so a short run can pass `in progress` before a wait sees it. Wait for `[role=tree] .badge` to read `complete`, not for any `complete` text. Traffic rows can arrive after the run completes, in arrival order, so numbers can be slightly out of order.
 - Toasts such as `Run started` and `Template saved` cover the bottom right; wait them out (`waitNoText`, `timeoutMs` 20000) before a screenshot or a click there.
 - Doctor and reset treat an open `.armory-drawer-box`, and an open confirm such as `Delete Template`, as residue. End each recipe with the drawer closed (Esc, or `Close the drawer`).
 - Armory traffic goes through the proxy listener, so the listener must be online.
