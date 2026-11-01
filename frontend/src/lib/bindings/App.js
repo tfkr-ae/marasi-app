@@ -65,6 +65,11 @@ const jobState = (job) => ({
 // (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
 const exclusionSetting = "/client-settings/marasi-app/ledger.exclusion";
 
+// The app's per-project settings: client settings under the client
+// marasi-app (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
+const clientSettings = "/client-settings/marasi-app";
+const clientSetting = (key) => `${clientSettings}/${encodeURIComponent(key)}`;
+
 // `call`'s answer, or null when Marasi answered not_found.
 async function unlessNotFound(call) {
   try {
@@ -190,7 +195,8 @@ export const DeleteArmoryTemplate = notPorted("DeleteArmoryTemplate");
 export const DeleteArtifact = notPorted("DeleteArtifact");
 export const DeleteChromePath = notPorted("DeleteChromePath");
 export const DeleteChromeProfile = notPorted("DeleteChromeProfile");
-export const DeleteClientSetting = notPorted("DeleteClientSetting");
+// Drops the project's setting `key`; a missing key is not an error.
+export const DeleteClientSetting = (key) => marasi.delete(clientSetting(key));
 export const DeleteFinding = notPorted("DeleteFinding");
 export const DeleteLaunchpad = notPorted("DeleteLaunchpad");
 export const DeleteTestCase = notPorted("DeleteTestCase");
@@ -224,7 +230,9 @@ export const GetCheckpoint = notPorted("GetCheckpoint");
 export const GetCheckpointItems = notPorted("GetCheckpointItems");
 export const GetChromePaths = notPorted("GetChromePaths");
 export const GetChromeProfiles = notPorted("GetChromeProfiles");
-export const GetClientSetting = notPorted("GetClientSetting");
+// The project's setting `key`, { client, key, value, updated_at }, or null
+// when it has none.
+export const GetClientSetting = (key) => unlessNotFound(marasi.get(clientSetting(key)));
 // The open project's exclusion: its own list when it has one, else the app
 // default.
 export const GetContentTypeExclusion = async () =>
@@ -278,7 +286,9 @@ export const LinkRequestToTestCase = notPorted("LinkRequestToTestCase");
 // Links the pairs in `selection` to a launchpad, finding or test case;
 // resolves how many were newly linked.
 export const LinkTraffic = (selection, target) => bulk("link", selection, linkTarget(target));
-export const ListClientSettings = notPorted("ListClientSettings");
+// The project's settings whose keys start with `prefix`, sorted by key.
+export const ListClientSettings = async (prefix = "") =>
+  (await marasi.get(`${clientSettings}?prefix=${encodeURIComponent(prefix)}`)).items ?? [];
 export const ListFindings = notPorted("ListFindings");
 // The open project's background jobs, in v1's JobState shape.
 export const ListJobs = async () => ((await marasi.get("/jobs")).items ?? []).map(jobState);
@@ -362,7 +372,8 @@ export const SaveTestCase = notPorted("SaveTestCase");
 export const ScratchpadPath = async () =>
   (await GetRecentProjects()).find((item) => item.name === "scratchpad")?.project ?? null;
 export const SearchLaunchpadEntries = notPorted("SearchLaunchpadEntries");
-export const SetClientSetting = notPorted("SetClientSetting");
+// Stores `value`, any JSON, as the project's setting `key`.
+export const SetClientSetting = (key, value) => marasi.put(clientSetting(key), { value });
 // Gives the open project its own exclusion, normalised as Marasi does,
 // which it keeps instead of following the app default.
 export const SetContentTypeExclusion = async (values) => {

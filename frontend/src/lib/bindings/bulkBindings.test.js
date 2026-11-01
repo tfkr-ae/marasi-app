@@ -107,3 +107,32 @@ test("a refused bulk change reads as v1's coded error, so the Ledger offers its 
   const pending = await App.DeleteTraffic(ids).catch((error) => error);
   assert.deepEqual(pendingLaunchIDs(pending), ["a2"]);
 });
+
+const setting = (key, value) => ({ client: "marasi-app", key, value, updated_at: "2026-11-01T09:00:00Z" });
+
+test("the project's client settings are marasi-app's, in v1's ClientSetting shape", async () => {
+  const saved = setting("ledger.saved_query.q1", { name: "Logins", query: "path:/login", order: 0 });
+  answers["GET /client-settings/marasi-app"] = { items: [saved] };
+  answers["GET /client-settings/marasi-app/ledger.saved_query.q1"] = saved;
+  answers["PUT /client-settings/marasi-app/ledger.highlight.3"] = (request) =>
+    json(setting("ledger.highlight.3", request.body.value));
+  answers["DELETE /client-settings/marasi-app/ledger.highlight.3"] = { client: "marasi-app", key: "ledger.highlight.3" };
+
+  assert.deepEqual(await App.ListClientSettings("ledger.saved_query."), [saved]);
+  assert.deepEqual(await App.GetClientSetting("ledger.saved_query.q1"), saved);
+  assert.deepEqual(await App.SetClientSetting("ledger.highlight.3", "IDOR"), setting("ledger.highlight.3", "IDOR"));
+  await App.DeleteClientSetting("ledger.highlight.3");
+  assert.deepEqual(
+    sent.map((request) => [request.method, request.path, request.search, request.body]),
+    [
+      ["GET", "/client-settings/marasi-app", "?prefix=ledger.saved_query.", undefined],
+      ["GET", "/client-settings/marasi-app/ledger.saved_query.q1", "", undefined],
+      ["PUT", "/client-settings/marasi-app/ledger.highlight.3", "", { value: "IDOR" }],
+      ["DELETE", "/client-settings/marasi-app/ledger.highlight.3", "", undefined],
+    ],
+  );
+});
+
+test("an unset client setting reads as null, as in v1", async () => {
+  assert.equal(await App.GetClientSetting("ledger.highlight.5"), null);
+});
