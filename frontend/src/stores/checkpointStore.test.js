@@ -81,11 +81,15 @@ async function loaded(held) {
 const ids = (state) => state.items.map((item) => item.ID);
 const callsTo = (api, name) => api.calls.filter((call) => call[0] === name);
 
-// Marasi drops the item because its client left, then sends checkpoint-abandoned.
+// Marasi's checkpoint.forwarded or checkpoint.dropped for an HTTP item.
+const resolved = (id, type, reason) => ({ id, type, request_id: null, reason });
+
+// Marasi drops the item because its client left, then sends
+// checkpoint.dropped with reason abandoned.
 function abandon(api, store, id) {
   const item = api.held.find((held) => held.ID === id);
   api.held = api.held.filter((held) => held.ID !== id);
-  return store.onAbandoned({ ID: id, Type: item.Type });
+  return store.onResolved(resolved(id, item.Type, "abandoned"));
 }
 
 test("populate lists the held items in hold order", async () => {
@@ -95,7 +99,7 @@ test("populate lists the held items in hold order", async () => {
   assert.deepEqual(ids(get(store)), ["a", "b", "c"]);
 
   api.held.push(request("d"));
-  await store.onIntercepted();
+  await store.onHeld();
   assert.deepEqual(ids(get(store)), ["a", "b", "c", "d"]);
 });
 
@@ -106,7 +110,7 @@ test("the oldest item takes the selection when nothing is selected", async () =>
   assert.equal(get(store).selectedId, null);
 
   api.held.push(request("a"), request("b"));
-  await store.onIntercepted();
+  await store.onHeld();
   assert.equal(get(store).selectedId, "a");
 });
 
@@ -117,7 +121,7 @@ test("a newly held item does not take the selection", async () => {
   store.pick("b");
 
   api.held.push(request("c"));
-  await store.onIntercepted();
+  await store.onHeld();
   assert.equal(get(store).selectedId, "b");
 });
 
@@ -172,7 +176,7 @@ test("edits are kept across selection changes and dropped on forward", async () 
   const edited = "GET /edited HTTP/1.1\r\nHost: x\r\n\r\n";
   await store.edit("a", edited);
   store.pick("b");
-  await store.onIntercepted();
+  await store.onHeld();
   store.pick("a");
 
   let state = get(store);
@@ -207,7 +211,28 @@ test("abandoning an edited item reports the edit as lost", async () => {
   const report = abandon(api, store, "a");
   assert.equal(report.editLost, true);
   assert.deepEqual(get(store).editsById, {});
-  assert.equal(store.onAbandoned({ ID: "gone", Type: "request" }), null);
+  assert.equal(store.onResolved(resolved("gone", "request", "abandoned")), null);
+});
+
+test("an item another client forwarded or dropped leaves without an abandon report", async () => {
+  const { api, store } = await loaded([request("a"), request("b"), request("c")]);
+  await store.edit("a", "GET /edited HTTP/1.1\r\nHost: x\r\n\r\n");
+  const reports = [];
+  store.onAbandon((report) => reports.push(report));
+
+  api.held = api.held.filter((held) => held.ID !== "a");
+  await store.onResolved(resolved("a", "request", "forwarded"));
+  api.held = api.held.filter((held) => held.ID !== "b");
+  await store.onResolved(resolved("b", "request", "dropped"));
+  assert.deepEqual(ids(get(store)), ["c"]);
+  assert.deepEqual(reports, []);
+});
+
+test("a request forwarded to intercept its response stays listed as that response", async () => {
+  const { api, store } = await loaded([request("a")]);
+  api.held = [{ ID: "a", Type: "response", Raw: b64("HTTP/1.1 200 OK\r\n\r\n"), InterceptedAt: "2026-10-23T10:00:05Z" }];
+  await store.onResolved(resolved("a", "request", "forwarded"));
+  assert.deepEqual(get(store).items.map((item) => item.Type), ["response"]);
 });
 
 test("pick toggles picks and extends a range from the anchor", async () => {
@@ -408,6 +433,15 @@ test("Intercept all reads and toggles the shared intercept flag", async () => {
   await store.populate();
   assert.equal(get(interceptFlag), true);
   assert.equal(await store.toggleIntercept(), false);
+  assert.equal(get(interceptFlag), false);
+});
+
+test("Intercept all follows checkpoint.updated, whichever client set it", async () => {
+  const interceptFlag = writable(false);
+  const store = createCheckpointStore(fakeApi(), { interceptFlag });
+  store.onUpdated({ intercept: true, websocket_intercept: false });
+  assert.equal(get(interceptFlag), true);
+  store.onUpdated({ intercept: false, websocket_intercept: true });
   assert.equal(get(interceptFlag), false);
 });
 

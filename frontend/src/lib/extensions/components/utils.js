@@ -1,4 +1,6 @@
+import { get } from "svelte/store";
 import { extensions_ui } from "../../../stores";
+import { extensionsStore } from "../../../stores/extensionsStore.js";
 
 /**
  * Resolves a value that can be either a static primitive or a bound configuration object.
@@ -50,4 +52,18 @@ export function updateBind(extensionData, valueConfig, newValue) {
             [extensionData.Name]: { ...appState, state: newState },
         };
     });
+}
+
+/**
+ * Calls the extension's Lua function `fn` with the extension's UI, as v1's
+ * extension_call_function did. A failed call (a function the extension
+ * doesn't define, a Lua error) is logged, as v1 dropped it.
+ * @param {Object} extensionData - The extension's metadata (requires .ID and .Name)
+ * @param {string} fn - The Lua function's name
+ */
+export function callExtensionFunction(extensionData, fn) {
+    const ui = get(extensions_ui)[extensionData.Name] ?? { state: {} };
+    return extensionsStore
+        .call(extensionData.ID, fn, [ui])
+        .catch((error) => console.error(`Calling ${extensionData.Name}.${fn} failed:`, error));
 }

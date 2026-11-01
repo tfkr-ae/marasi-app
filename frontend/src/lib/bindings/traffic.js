@@ -105,3 +105,15 @@ export function responseEvent(event) {
     Route: route(event.upstream_proxy),
   };
 }
+
+/** A sitemap levels read's child as v1's SitemapNodeCount. */
+export function sitemapNodeCount(child) {
+  return {
+    Name: child.name,
+    Segment: child.segment,
+    Pairs: child.pairs,
+    Errors: child.errors,
+    HasChildren: child.has_children,
+    Matching: child.matching ?? null,
+  };
+}

@@ -86,8 +86,8 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [x] |
 | `request` | event | COVERED | `traffic.request` | 12 | [x] |
 | `response` | event | COVERED | `traffic.response` | 12 | [x] |
-| `ListSitemapChildren` | binding | COVERED | `GET /traffic/sitemap`, `sitemap.changed` | 13 | [ ] |
-| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [ ] |
+| `ListSitemapChildren` | binding | COVERED | `POST /traffic/sitemap/levels` with one node, as v1 read it, so a query adds the children's matching counts. `sitemap.changed` reads the open levels again. | 13 | [x] |
+| `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [x] |
 
 ## Ledger selection, highlights and bulk actions
 
@@ -130,19 +130,19 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetCheckpointItems` | binding | COVERED | `GET /checkpoint` (items carry `intercepted_at`) | 17 | [ ] |
-| `GetCheckpoint` | binding | COVERED | `GET /checkpoint/{id}`. v1 bound it but the frontend never called it. | 17 | [ ] |
-| `GetInterceptFlag` | binding | COVERED | `GET /checkpoint` `.intercept` | 17 | [ ] |
-| `ToggleIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}` with the opposite of the current value, and `checkpoint.updated` | 17 | [ ] |
-| `SetIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}`. v1 bound it but the frontend never called it. | 17 | [ ] |
-| `ForwardCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/forward {raw, intercept_response}` | 17 | [ ] |
-| `ForwardCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/forward` for each item, counting done, gone (404) and failed | 17 | [ ] |
-| `DropCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/drop` | 17 | [ ] |
-| `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [ ] |
-| `CheckHTTPParse` | binding | GUI | The renderer parses the edited request. Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [ ] |
-| `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [ ] |
-| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped` | 17 | [ ] |
-| `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned` or `shutdown` | 17 | [ ] |
+| `GetCheckpointItems` | binding | COVERED | `GET /checkpoint` (items carry `intercepted_at`) | 17 | [x] |
+| `GetCheckpoint` | binding | COVERED | `GET /checkpoint/{id}`. v1 bound it but the frontend never called it. | 17 | [x] |
+| `GetInterceptFlag` | binding | COVERED | `GET /checkpoint` `.intercept` | 17 | [x] |
+| `ToggleIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}` with the opposite of the current value, and `checkpoint.updated` | 17 | [x] |
+| `SetIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}`. v1 bound it but the frontend never called it. | 17 | [x] |
+| `ForwardCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/forward {raw, intercept_response}`, or `{payload}` for a WebSocket item; an edited item is read first (`GET /checkpoint/{id}`) for its type | 17 | [x] |
+| `ForwardCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/forward` for each item, counting done, gone (404) and failed | 17 | [x] |
+| `DropCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/drop` | 17 | [x] |
+| `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [x] |
+| `CheckHTTPParse` | binding | GUI | The renderer reads the edited request or response as Go's `http.ReadRequest` or `http.ReadResponse` would, with Go's error text (`lib/checkpoint/httpParse.js`). Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [x] |
+| `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [x] |
+| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal's side is ticket 18. | 17 | [x] |
+| `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned`. Reason `shutdown` reads the queue again, as a drop does. | 17 | [x] |
 
 ## WebSocket
 
@@ -242,44 +242,44 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetScopeRules` | binding | COVERED | `GET /scope` | 25 | [ ] |
-| `TestScopeMatch` | binding | COVERED | `POST /scope/check {url}` | 25 | [ ] |
-| `GetExtensions` | binding | COVERED | `GET /extension`, `extension.enabled`, `extension.updated` | 25 | [ ] |
-| `GetExtensionCode` | binding | COVERED | `GET /extension/{id}` `.lua_content` | 25 | [ ] |
-| `RunExtension` | binding | COVERED | `POST /extension/{id} {lua_content}` | 25 | [ ] |
-| `DoExtender` | binding | COVERED | `POST /extension/{id} {lua_content}` on the workshop extension | 25 | [ ] |
-| `GetExtensionLogs` | binding | COVERED | `GET /extension/{id}/logs` | 25 | [ ] |
-| `GetExtensionUI` | binding | COVERED | `extension.gui.rendered`. v1's only caller, `WebComponentWrapper.svelte`, was imported nowhere, and extension UI drew from `extension_gui_render`. | 25 | [ ] |
-| `GetExtensionFlag` | binding | GUI | No v1 caller, so the GUI has nothing to read. No route reads an extension's Lua global flags. | 25 | [ ] |
-| `LoadExtensions` | binding | GUI | It only registered v1's Wails listeners. The layout's `EventSource` dispatch does that. | 25 | [ ] |
-| `extension_gui_render` | event | COVERED | `extension.gui.rendered {id, name, target, schema}` (target `toast` is a toast) | 25 | [ ] |
-| `extension_state_update` | event | COVERED | `extension.gui.updated {id, name, key, value}` | 25 | [ ] |
-| `<extensionName>-log` | event | COVERED | `extension.log {id, name, time, text}`, filtered by name | 25 | [ ] |
-| `extension_call_function` | event | COVERED | `POST /extension/{id}/call {function, args:[state]}` | 25 | [ ] |
-| `extension_sync_state` | event | COVERED | `POST /extension/{id}/call {function:"sync", args}` | 25 | [ ] |
-| `EventsEmit` | runtime | COVERED | `POST /extension/{id}/call` | 25 | [ ] |
+| `GetScopeRules` | binding | COVERED | `GET /scope` | 25 | [x] |
+| `TestScopeMatch` | binding | COVERED | `POST /scope/check {url}` | 25 | [x] |
+| `GetExtensions` | binding | COVERED | `GET /extension`, `extension.enabled`, `extension.updated` | 25 | [x] |
+| `GetExtensionCode` | binding | COVERED | `GET /extension/{id}` `.lua_content` | 25 | [x] |
+| `RunExtension` | binding | COVERED | `POST /extension/{id} {lua_content}` | 25 | [x] |
+| `DoExtender` | binding | COVERED | `POST /extension/{id} {lua_content}` on the workshop extension | 25 | [x] |
+| `GetExtensionLogs` | binding | COVERED | `GET /extension/{id}/logs` | 25 | [x] |
+| `GetExtensionUI` | binding | COVERED | `extension.gui.rendered`. v1's only caller, `WebComponentWrapper.svelte`, was imported nowhere, and extension UI drew from `extension_gui_render`. | 25 | [x] |
+| `GetExtensionFlag` | binding | GUI | No v1 caller, so the GUI has nothing to read. No route reads an extension's Lua global flags. | 25 | [x] |
+| `LoadExtensions` | binding | GUI | It only registered v1's Wails listeners. The layout's `EventSource` dispatch does that. | 25 | [x] |
+| `extension_gui_render` | event | COVERED | `extension.gui.rendered {id, name, target, schema}` (target `toast` is a toast) | 25 | [x] |
+| `extension_state_update` | event | COVERED | `extension.gui.updated {id, name, key, value}` | 25 | [x] |
+| `<extensionName>-log` | event | COVERED | `extension.log {id, name, time, text}`, filtered by name | 25 | [x] |
+| `extension_call_function` | event | COVERED | `POST /extension/{id}/call {function, args:[state]}` | 25 | [x] |
+| `extension_sync_state` | event | COVERED | `POST /extension/{id}/call {function:"sync", args}` | 25 | [x] |
+| `EventsEmit` | runtime | COVERED | `POST /extension/{id}/call` | 25 | [x] |
 
 ## Chrome, upstream proxies and waypoints
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. A remote connection keeps its own in the app config (ticket 27). | 26 | [ ] |
-| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: app config (ticket 27). | 26 | [ ] |
-| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: app config (ticket 27). | 26 | [ ] |
-| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: local Chrome with `GET /certificate` `.spki_hash` (ticket 27). | 26 | [ ] |
-| `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [ ] |
-| `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}` | 26 | [ ] |
-| `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA) | 26 | [ ] |
-| `RemoveUpstreamProxy` | binding | COVERED | `DELETE /upstream-proxy/{name}` | 26 | [ ] |
-| `UseUpstreamProxy` | binding | COVERED | `PUT /upstream-proxy-selection {name}` | 26 | [ ] |
-| `CheckUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name}/check {target}` | 26 | [ ] |
-| `ReadUpstreamProxyCAFile` | binding | GUI | OS open dialog reads the PEM on this machine and sends it as `ca` | 26 | [ ] |
-| `GetWaypoints` | binding | COVERED | `GET /waypoint`, `waypoint.*` | 26 | [ ] |
-| `CreateWaypoint` | binding | COVERED | `POST /waypoint {hostname, override}` | 26 | [ ] |
-| `DeleteWaypoint` | binding | COVERED | `DELETE /waypoint {hostname}` | 26 | [ ] |
+| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
+| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: disabled on Home, toast from ⌘K; local Chrome with `GET /certificate` `.spki_hash` in ticket 27. | 26 | [x] |
+| `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [x] |
+| `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA), then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `RemoveUpstreamProxy` | binding | COVERED | `DELETE /upstream-proxy/{name}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
+| `UseUpstreamProxy` | binding | COVERED | `PUT /upstream-proxy-selection {name}` | 26 | [x] |
+| `CheckUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name}/check {target}` | 26 | [x] |
+| `ReadUpstreamProxyCAFile` | binding | GUI | OS open dialog reads the PEM on this machine and sends it as `ca` | 26 | [x] |
+| `GetWaypoints` | binding | COVERED | `GET /waypoint`, `waypoint.*` | 26 | [x] |
+| `CreateWaypoint` | binding | COVERED | `POST /waypoint {hostname, override}` | 26 | [x] |
+| `DeleteWaypoint` | binding | COVERED | `DELETE /waypoint {hostname}` | 26 | [x] |
 
 ## Former gaps
 
