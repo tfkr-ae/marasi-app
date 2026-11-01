@@ -3,7 +3,6 @@
 	import { getDrawerStore } from "@skeletonlabs/skeleton";
 	const drawerStore = getDrawerStore();
 	import ExtensionLogs from "./ExtensionLogs.svelte";
-	import RequestResponseView from "./RequestResponseView.svelte";
 	import ExtensionDrawerWrapper from "../extensions/components/ExtensionDrawerWrapper.svelte";
 
 	$: drawerPosition = $drawerStore?.position || "bottom";
@@ -17,20 +16,8 @@
 	rounded={drawerRounded}
 	height={drawerHeight}
 	width={drawerWidth}
-	bgDrawer={$drawerStore.id === "request-response"
-		? "bg-surface-50 dark:bg-surface-800"
-		: "bg-surface-100-800-token"}
+	bgDrawer="bg-surface-100-800-token"
 >
-	{#if $drawerStore.id === "request-response"}
-		<RequestResponseView
-			showSizeToggle={true}
-			showArmoryAction={true}
-			request_id={$drawerStore.meta.request.ID}
-			titleText={"Request " + $drawerStore.meta.requestIndex}
-			isFiltered={$drawerStore.meta.isFiltered}
-			incomingResponse={$drawerStore.meta.incomingResponse}
-		/>
-	{/if}
 	{#if $drawerStore.id === "extension-logs"}
 		<ExtensionLogs
 			extensionName={$drawerStore.meta.extensionName}

@@ -43,7 +43,8 @@ function on(route, drawer = { open: false }) {
   return { route, modal: null, dialogOpen: false, drawer };
 }
 
-const requestDrawer = (meta = {}) => ({ open: true, id: "request-response", meta });
+// The Ledger drawer open on a request.
+const requestDrawer = (meta = {}) => ({ open: true, meta });
 // Armory's drawer is part of its page too; the layout reports it as
 // `armoryDrawer`.
 const armoryDrawerOpen = () => ({ ...on("/armory"), armoryDrawer: { open: true } });
@@ -160,7 +161,7 @@ test("⌘⇧] steps Armory runs on the page and the run's requests in its reques
   assert.equal(dispatcher.resolve(press(), armoryDrawerOpen()), "armory.drawer.next-request");
   assert.equal(dispatcher.resolve(cmd("p", "KeyP"), armoryDrawerOpen()), null);
   // Only Armory's own drawer replaces the Armory menu, not Skeleton's.
-  for (const drawer of [requestDrawer(), { open: true, id: "extension-logs" }]) {
+  for (const drawer of [{ open: true, id: "extension-drawer" }, { open: true, id: "extension-logs" }]) {
     assert.equal(dispatcher.resolve(press(), on("/armory", drawer)), "armory.page.next-run", drawer.id);
   }
 });
