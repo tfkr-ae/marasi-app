@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import path from "node:path";
 import { collectExpression, dropPoint, pickTarget, sameBox } from "./targets.mjs";
 
 const [mode, portText, appURL, evidenceDir, widthText, heightText, feature, action, label, shortcut] = process.argv.slice(2);
@@ -648,6 +649,19 @@ async function runStep(step) {
 		// wait for the reply; wait for the scrolled state in the next step.
 		send("Input.dispatchMouseEvent", { type: "mouseWheel", x: point.x, y: point.y, deltaX: 0, deltaY: step.deltaY }).catch(() => {});
 		return { wheel: point };
+	}
+	if (step.files) {
+		// Hands files on this machine to a file input, as the native picker
+		// it opens would (the driver can't answer that picker). The input
+		// may be hidden behind its label, so it need only exist.
+		if (!Array.isArray(step.paths) || !step.paths.length) throw new Error(`files needs a list of paths: ${JSON.stringify(step)}`);
+		const paths = step.paths.map((file) => path.resolve(file));
+		for (const file of paths) if (!fs.existsSync(file)) throw new Error(`no file ${file}`);
+		const query = `document.querySelector(${JSON.stringify(step.files)})`;
+		await waitFor(`!!${query}`, `file input ${step.files}`, timeoutMs);
+		const { result } = await send("Runtime.evaluate", { expression: query });
+		await send("DOM.setFileInputFiles", { files: paths, objectId: result.objectId });
+		return { files: paths };
 	}
 	if (step.key) return void await pressShortcut(step.key);
 	if (typeof step.insert === "string") return void await insertText(step.insert);
