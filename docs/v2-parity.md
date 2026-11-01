@@ -71,21 +71,21 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `QueryTraffic` | binding | COVERED | `GET /traffic?q&exclude&order_by&limit&cursor&direction&as_of` | 12 | [ ] |
-| `CountTraffic` | binding | COVERED | `GET /traffic/count?q&exclude&as_of&after` | 12 | [ ] |
-| `CountContentTypes` | binding | COVERED | `GET /traffic/content-types` | 12 | [ ] |
-| `GetRawDetails` | binding | COVERED | `GET /traffic/{id}` | 12 | [ ] |
-| `GetResponse` | binding | COVERED | `GET /traffic/{id}` `.response`. v1 bound it but the frontend never called it. | 12 | [ ] |
-| `GetMetadata` | binding | COVERED | `GET /traffic/{id}/metadata` | 12 | [ ] |
-| `GetNote` | binding | COVERED | `GET /traffic/{id}` `.note` | 12 | [ ] |
-| `UpdateNote` | binding | COVERED | `PUT /notes/{id} {note}`. An empty note is `DELETE /notes/{id}`. | 12 | [ ] |
-| `GetContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion`, falling back to the app default | 12 | [ ] |
-| `SetContentTypeExclusion` | binding | COVERED | `PUT /client-settings/marasi-app/ledger.exclusion` | 12 | [ ] |
-| `HasOwnContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion` (404 = no override) | 12 | [ ] |
-| `ResetContentTypeExclusion` | binding | COVERED | `DELETE /client-settings/marasi-app/ledger.exclusion` | 12 | [ ] |
-| `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [ ] |
-| `request` | event | COVERED | `traffic.request` | 12 | [ ] |
-| `response` | event | COVERED | `traffic.response` | 12 | [ ] |
+| `QueryTraffic` | binding | COVERED | `GET /traffic?q&exclude&order_by&limit&cursor&direction&as_of`. Above Marasi's 500-row page cap it reads on by cursor under the first page's `as_of`, as v1 read any limit. | 12 | [x] |
+| `CountTraffic` | binding | COVERED | `GET /traffic/count?q&exclude&as_of&after` | 12 | [x] |
+| `CountContentTypes` | binding | COVERED | `GET /traffic/content-types` | 12 | [x] |
+| `GetRawDetails` | binding | COVERED | `GET /traffic/{id}` | 12 | [x] |
+| `GetResponse` | binding | COVERED | `GET /traffic/{id}` `.response`. v1 bound it but the frontend never called it. | 12 | [x] |
+| `GetMetadata` | binding | COVERED | `GET /traffic/{id}/metadata` | 12 | [x] |
+| `GetNote` | binding | COVERED | `GET /traffic/{id}` `.note` | 12 | [x] |
+| `UpdateNote` | binding | COVERED | `PUT /notes/{id} {note}`. An empty note is `DELETE /notes/{id}`. | 12 | [x] |
+| `GetContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion`, falling back to the app default | 12 | [x] |
+| `SetContentTypeExclusion` | binding | COVERED | `PUT /client-settings/marasi-app/ledger.exclusion` | 12 | [x] |
+| `HasOwnContentTypeExclusion` | binding | COVERED | `GET /client-settings/marasi-app/ledger.exclusion` (404 = no override) | 12 | [x] |
+| `ResetContentTypeExclusion` | binding | COVERED | `DELETE /client-settings/marasi-app/ledger.exclusion` | 12 | [x] |
+| `migrateLegacyExclusion` | behaviour | DROPPED | Legacy migration: on project open, v1 moved the exclusion Marasi's migration 00012 kept under `legacy.content_type_exclusion` into `marasi-app/ledger.exclusion`. v2 reads only the `marasi-app` key. | 12 | [x] |
+| `request` | event | COVERED | `traffic.request` | 12 | [x] |
+| `response` | event | COVERED | `traffic.response` | 12 | [x] |
 | `ListSitemapChildren` | binding | COVERED | `GET /traffic/sitemap`, `sitemap.changed` | 13 | [ ] |
 | `ListSitemapLevels` | binding | COVERED | `POST /traffic/sitemap/levels` | 13 | [ ] |
 
