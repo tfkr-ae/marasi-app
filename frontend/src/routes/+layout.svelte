@@ -334,7 +334,6 @@
 			}
 			EventsOn("request", (newRequest) => {
 				sitemapStore.onRequest(newRequest);
-				launchpadStore.onRequest(newRequest);
 				armoryStore.onRequest(newRequest);
 			});
 			EventsOn("launch-started", (launch) =>
@@ -345,7 +344,6 @@
 			);
 			EventsOn("response", (newResponse) => {
 				sitemapStore.onResponse(newResponse);
-				launchpadStore.onResponse(newResponse);
 				armoryStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===

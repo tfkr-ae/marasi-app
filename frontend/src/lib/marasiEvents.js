@@ -4,6 +4,7 @@
 import { createEventStream } from "./eventStream.js";
 import { followConnection, reloadStores } from "./followConnection.js";
 import { requestEvent, responseEvent } from "./bindings/traffic.js";
+import { launchpadOf } from "./bindings/launchpads.js";
 import { windowConnection } from "../stores/windowConnectionStore.js";
 import { logStore } from "../stores/logStore.js";
 import { ledgerStore } from "../stores/ledgerStore";
@@ -23,6 +24,10 @@ import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 
+// Logs a failed reread after a launchpad event.
+const followLaunchpads = (reading) =>
+  reading.catch((err) => console.error("Reading launchpads failed:", err));
+
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
@@ -31,12 +36,29 @@ const handlers = {
     const request = requestEvent(event);
     ledgerStore.onRequest(request);
     recentTraffic.onRequest(request);
+    launchpadStore.onRequest(request);
   },
   "traffic.response": (event) => {
     const response = responseEvent(event);
     ledgerStore.onResponse(response);
     recentTraffic.onResponse(response);
+    launchpadStore.onResponse(response);
   },
+  // A bulk change names no launchpad, so a link, unlink or delete rereads
+  // them all.
+  "traffic.changed": ({ change }) => {
+    if (["link", "unlink", "delete"].includes(change)) followLaunchpads(launchpadStore.onEntriesChanged());
+  },
+  // Launchpads and their entries, changed by any client.
+  "launchpad.created": (event) => launchpadStore.onLaunchpadCreated(launchpadOf(event)),
+  "launchpad.updated": (event) => launchpadStore.onLaunchpadUpdated(launchpadOf(event)),
+  "launchpad.deleted": ({ id }) => followLaunchpads(launchpadStore.onLaunchpadDeleted(id)),
+  "launchpad.linked": ({ launchpad_id }) => followLaunchpads(launchpadStore.onEntriesChanged([launchpad_id])),
+  "launchpad.unlinked": ({ launchpad_id }) => followLaunchpads(launchpadStore.onEntriesChanged([launchpad_id])),
+  "launchpad.entries_moved": (moved) =>
+    followLaunchpads(
+      launchpadStore.onEntriesChanged([...new Set([moved.source_launchpad_id, moved.target_launchpad_id])]),
+    ),
   "listener.started": (status) => listenerStore.onListener(status),
   "listener.updated": (status) => listenerStore.onListener(status),
   "listener.stopped": (status) => listenerStore.onListener(status),

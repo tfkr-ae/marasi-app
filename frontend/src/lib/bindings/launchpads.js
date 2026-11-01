@@ -1,6 +1,9 @@
 // Marasi's launchpad payloads in the shapes v1's frontend reads.
 
-/** A GET /launchpad item as v1's Launchpad. */
+/**
+ * A GET /launchpad item, or a launchpad.created or launchpad.updated event,
+ * as v1's Launchpad. An event has no summary: no entries yet.
+ */
 export const launchpadOf = (item) => ({
   ID: item.id,
   Name: item.name,
