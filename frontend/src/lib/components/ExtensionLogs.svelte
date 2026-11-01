@@ -1,14 +1,14 @@
 <script>
     import { onMount } from "svelte";
     import { GetExtensionLogs } from "../wailsjs/go/main/App";
-    import { EventsOff, EventsOn } from "../wailsjs/runtime/runtime";
+    import { off, on } from "../runtime.js";
 
     export let extensionName = "";
     let logs = [];
     onMount(() => {
         GetExtensionLogs(extensionName).then((extensionLogs) => {
             logs = extensionLogs;
-            EventsOn(extensionName + "-log", (log) => {
+            on(extensionName + "-log", (log) => {
                 console.log("new log ", log);
                 if (logs?.length > 0) {
                     logs = [...logs, log];
@@ -20,7 +20,7 @@
             console.log(err);
         })
         return () => {
-            EventsOff(extensionName + "-log");
+            off(extensionName + "-log");
         }
     })
 </script>

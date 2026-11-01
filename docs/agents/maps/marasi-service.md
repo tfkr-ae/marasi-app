@@ -35,7 +35,8 @@ The frontend can only match error text, so an error it must act on carries a cod
 ## Events
 
 - **Go to frontend.** Every event goes through `a.emitEvent`, which tests replace (`recordedEvents`), including Marasi's request, response and log events (`configureTrafficHandlers`) and the `log` events of the logger `startup` attaches (`LogHandler`). Register Marasi handlers in a `configure*Handlers` function called from `newApp`, not in `startup`: each Marasi `With*Handler` option fails when its handler is already set.
-- **Frontend subscriptions** are in `onMount` in `frontend/src/routes/+layout.svelte`, which forwards each event to a store's `on*` method. Add the matching `EventsOff` to its cleanup. `EventsOff` removes every listener for that name.
+- **The frontend's runtime module.** `frontend/src/lib/runtime.js` is the only frontend file that calls the Wails runtime for anything that isn't a binding: `on`, `once`, `off`, `emit`, `setWindowTitle` and `openURL`. A subscriber's callback receives the event's payload. `on` and `once` return a function that removes that one listener, and `off` removes every listener for a name. Import from it, never from `wailsjs/runtime`. `runtime.test.js` runs it against a fake runtime.
+- **Frontend subscriptions** are in `onMount` in `frontend/src/routes/+layout.svelte`, which forwards each event to a store's `on*` method. Add the matching `off` to its cleanup.
 - **Two shapes on `log`.** Marasi's stored logs (`domain.Log`) have capitalised fields. The app's own records (`LogHandler`, and the project lifecycle's log through `newRelayLogger`) have lowercase ones. The Home log table (`LogTable.svelte`) reads `Level`, and `withOpenLog` reads `level`.
 - **Frontend to Go.** Extension UIs send `extension_call_function` and `extension_sync_state`. `LoadExtensions` listens for them through `a.onEvent`, and `decodeExtensionFunctionCall` and `decodeExtensionSync` read their payloads.
 
