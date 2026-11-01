@@ -23,6 +23,11 @@ import { dashboardStore } from "../stores/dashboardStore.js";
 import { instanceUpdate } from "../stores/instanceUpdateStore.js";
 import { projectSwitch } from "../stores/projectSwitchStore.js";
 
+const checkpointResolved = (event) =>
+  Promise.resolve(checkpointStore.onResolved(event)).catch((err) =>
+    console.error("Reading Checkpoint items failed:", err),
+  );
+
 // Each Marasi event's handler, by event name.
 const handlers = {
   "log.added": (log) => logStore.onLogAdded(log),
@@ -45,6 +50,13 @@ const handlers = {
     jobsStore.onJobComplete(job);
     dashboardStore.onJobComplete(job).catch((err) => console.error("Counting the dashboard failed:", err));
   },
+  // Checkpoint, HTTP and WebSocket items alike, by any client. An item
+  // whose client left arrives as checkpoint.dropped, reason abandoned.
+  "checkpoint.held": () =>
+    checkpointStore.onHeld().catch((err) => console.error("Reading Checkpoint items failed:", err)),
+  "checkpoint.forwarded": (event) => checkpointResolved(event),
+  "checkpoint.dropped": (event) => checkpointResolved(event),
+  "checkpoint.updated": (flags) => checkpointStore.onUpdated(flags),
   "update.available": (update) => instanceUpdate.onAvailable(update),
   "update.progress": (progress) => instanceUpdate.onProgress(progress),
   "update.installed": (installed) => instanceUpdate.onInstalled(installed),

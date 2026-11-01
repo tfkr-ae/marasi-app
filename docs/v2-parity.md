@@ -130,19 +130,19 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetCheckpointItems` | binding | COVERED | `GET /checkpoint` (items carry `intercepted_at`) | 17 | [ ] |
-| `GetCheckpoint` | binding | COVERED | `GET /checkpoint/{id}`. v1 bound it but the frontend never called it. | 17 | [ ] |
-| `GetInterceptFlag` | binding | COVERED | `GET /checkpoint` `.intercept` | 17 | [ ] |
-| `ToggleIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}` with the opposite of the current value, and `checkpoint.updated` | 17 | [ ] |
-| `SetIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}`. v1 bound it but the frontend never called it. | 17 | [ ] |
-| `ForwardCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/forward {raw, intercept_response}` | 17 | [ ] |
-| `ForwardCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/forward` for each item, counting done, gone (404) and failed | 17 | [ ] |
-| `DropCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/drop` | 17 | [ ] |
-| `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [ ] |
-| `CheckHTTPParse` | binding | GUI | The renderer parses the edited request. Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [ ] |
-| `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [ ] |
-| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped` | 17 | [ ] |
-| `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned` or `shutdown` | 17 | [ ] |
+| `GetCheckpointItems` | binding | COVERED | `GET /checkpoint` (items carry `intercepted_at`) | 17 | [x] |
+| `GetCheckpoint` | binding | COVERED | `GET /checkpoint/{id}`. v1 bound it but the frontend never called it. | 17 | [x] |
+| `GetInterceptFlag` | binding | COVERED | `GET /checkpoint` `.intercept` | 17 | [x] |
+| `ToggleIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}` with the opposite of the current value, and `checkpoint.updated` | 17 | [x] |
+| `SetIntercept` | binding | COVERED | `POST /checkpoint/intercept {intercept}`. v1 bound it but the frontend never called it. | 17 | [x] |
+| `ForwardCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/forward {raw, intercept_response}`, or `{payload}` for a WebSocket item; an edited item is read first (`GET /checkpoint/{id}`) for its type | 17 | [x] |
+| `ForwardCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/forward` for each item, counting done, gone (404) and failed | 17 | [x] |
+| `DropCheckpoint` | binding | COVERED | `POST /checkpoint/{id}/drop` | 17 | [x] |
+| `DropCheckpoints` | binding | COVERED | C: `POST /checkpoint/{id}/drop` for each item, counting done, gone (404) and failed | 17 | [x] |
+| `CheckHTTPParse` | binding | GUI | The renderer reads the edited request or response as Go's `http.ReadRequest` or `http.ReadResponse` would, with Go's error text (`lib/checkpoint/httpParse.js`). Marasi's `400 invalid_checkpoint_request` carries no parse message. | 17 | [x] |
+| `intercepted` | event | COVERED | `checkpoint.held` (type `request` or `response`) | 17 | [x] |
+| `checkpoint-settled` | event | COVERED | `checkpoint.forwarded` or `checkpoint.dropped` with `request_id` and reason `forwarded` or `dropped`, by any client. The WebSocket modal's side is ticket 18. | 17 | [x] |
+| `checkpoint-abandoned` | event | COVERED | `checkpoint.dropped` with reason `abandoned`. Reason `shutdown` reads the queue again, as a drop does. | 17 | [x] |
 
 ## WebSocket
 

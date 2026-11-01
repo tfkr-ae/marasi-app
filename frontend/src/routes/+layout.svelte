@@ -322,16 +322,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			function readCheckpointItems() {
-				checkpointStore
-					.onIntercepted()
-					.catch((err) =>
-						console.error(
-							"Reading Checkpoint items failed:",
-							err,
-						),
-					);
-			}
 			EventsOn("request", (newRequest) => {
 				sitemapStore.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
@@ -363,10 +353,9 @@
 			EventsOn("ws-message", (msg) =>
 				connectionStore.upsertMessage(msg),
 			);
-			EventsOn("ws-intercepted", (msg) => {
-				connectionStore.upsertInterception(msg);
-				readCheckpointItems();
-			});
+			EventsOn("ws-intercepted", (msg) =>
+				connectionStore.upsertInterception(msg),
+			);
 			EventsOn("ws-open", (conn) => {
 				connectionStore.upsertConnection(conn);
 				ledgerStore.patchWebSocketMetadata(conn);
@@ -386,11 +375,9 @@
 			EventsOn("ws-state", ({ RequestID, State }) =>
 				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
 			);
-			// Marasi dropped a held item because its client left. The
-			// toast shows on any page.
-			EventsOn("checkpoint-abandoned", (item) =>
-				checkpointStore.onAbandoned(item),
-			);
+			// Marasi dropped a held item because its client left
+			// (checkpoint.dropped, reason abandoned; see marasiEvents.js).
+			// The toast shows on any page.
 			stopAbandonToasts = checkpointStore.onAbandon(
 				({ item, editLost }) => {
 					const context =
@@ -407,21 +394,6 @@
 					});
 				},
 			);
-			// A held item was forwarded or dropped, on the Checkpoint page
-			// or in the WebSocket modal; both drop it.
-			EventsOn("checkpoint-settled", (item) => {
-				readCheckpointItems();
-				connectionStore
-					.onSettled(item)
-					.catch((err) =>
-						console.error(
-							"Reading WebSocket Checkpoint failed:",
-							err,
-						),
-					);
-			});
-			// The Checkpoint rail badge shows the count; no toast.
-			EventsOn("intercepted", () => readCheckpointItems());
 			EventsOn(
 				"extension_gui_render",
 				({ extensionName, target, schema }) => {
@@ -501,9 +473,6 @@
 			EventsOff("ws-close");
 			EventsOff("ws-progress");
 			EventsOff("ws-state");
-			EventsOff("intercepted");
-			EventsOff("checkpoint-abandoned");
-			EventsOff("checkpoint-settled");
 			stopAbandonToasts?.();
 			EventsOff("update-available");
 			EventsOff("update-progress");

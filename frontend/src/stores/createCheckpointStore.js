@@ -324,18 +324,35 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
     return () => abandonListeners.delete(listener);
   }
 
-  // The checkpoint-abandoned event: Marasi dropped the item because its
-  // client left. Returns { item, editLost }, or null for an unknown id.
-  function onAbandoned({ ID } = {}) {
+  // Marasi dropped the item because its client left. Returns { item,
+  // editLost }, or null for an item this window doesn't list.
+  function abandoned(id) {
     const state = get(store);
-    const item = itemOf(state, ID);
+    const item = itemOf(state, id);
     if (!item) return null;
-    const report = { item, editLost: isDirty(state, ID) };
+    const report = { item, editLost: isDirty(state, id) };
     readSeq++;
-    store.update((current) => without(current, new Set([ID])));
+    store.update((current) => without(current, new Set([id])));
     refresh().catch((err) => console.error("reading Checkpoint items:", err));
     for (const listener of abandonListeners) listener(report);
     return report;
+  }
+
+  /**
+   * Marasi's checkpoint.forwarded or checkpoint.dropped, by any client:
+   * { id, type, request_id, reason }. An item whose client left (reason
+   * abandoned) is reported to the onAbandon listeners, and its report
+   * returned; any other reason reads the queue again, which may hold the
+   * forwarded request's response under the same id.
+   */
+  function onResolved({ id, reason } = {}) {
+    if (reason === "abandoned") return abandoned(id);
+    return refresh();
+  }
+
+  /** Marasi's checkpoint.updated: Intercept all, set by any client. */
+  function onUpdated({ intercept } = {}) {
+    interceptFlag.set(Boolean(intercept));
   }
 
   // Reads the queue and the Intercept all flag.
@@ -367,8 +384,10 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
     reload: populate,
     clear,
     toggleIntercept,
-    onIntercepted: refresh,
-    onAbandoned,
+    // Marasi's checkpoint.held.
+    onHeld: refresh,
+    onResolved,
+    onUpdated,
     onAbandon,
     pick,
     edit,
