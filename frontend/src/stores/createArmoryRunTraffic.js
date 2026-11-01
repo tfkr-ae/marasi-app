@@ -3,7 +3,7 @@
 // grouped by status or length, the pair open in the drawer, and the
 // Selection the row menu acts on. Backend calls go through the injected
 // `api` ({ queryRunTraffic(runId, TrafficPageRequest), countRunTraffic(runId,
-// field) }); createArmoryStore.js binds them to QueryArmoryRunTraffic and
+// field, asOf) }); createArmoryStore.js binds them to QueryArmoryRunTraffic and
 // CountArmoryRunTraffic.
 //
 // The rows are a list: a narrowing of the run's query ("" for the whole
