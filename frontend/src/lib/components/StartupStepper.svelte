@@ -31,7 +31,7 @@
                     <p>Whenever you open Marasi it will automatically do two things:</p>
                     <ol class="list">
                         <li><span>1.</span><span class="flex-auto">Open the scratchpad project</span></li>
-                        <li><span>2.</span><span class="flex-auto">Start the proxy listener{#if $listenerStore.status} on <code class="code">{listenerAddress($listenerStore)}</code>{/if}</span></li>
+                        <li><span>2.</span><span class="flex-auto">Start the proxy listener{#if $listenerStore.status}{' '}on <code class="code">{listenerAddress($listenerStore)}</code>{/if}</span></li>
                     </ol>
                     <p>Think of the scratchpad as a not quite temporary, temporary project file!</p>
                     <p>You can press <kbd class="kbd">⌘O</kbd> at any point, or click on the Open Project button to switch to another project</p>
