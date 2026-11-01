@@ -8,20 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tfkr-ae/marasi/domain"
 	"github.com/tfkr-ae/marasi/extensions"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
-
-// emitFunc sends a Wails event to the frontend.
-type emitFunc func(name string, data ...any)
-
-// emit sends a Wails event once startup has given the app its context. Events
-// fired before then have no frontend to reach and are dropped.
-func (a *App) emit(name string, data ...any) {
-	if a.ctx == nil {
-		return
-	}
-	runtime.EventsEmit(a.ctx, name, data...)
-}
 
 func extensionLogHandler(name string, emit emitFunc) func(extensions.ExtensionLog) error {
 	return func(log extensions.ExtensionLog) error {
@@ -97,58 +84,76 @@ func (a *App) attachExtensionHooks(ext *extensions.Runtime) error {
 // UIs send, extension_call_function and extension_sync_state, which call
 // into the open project's extensions. The frontend calls it after each open.
 func (a *App) LoadExtensions() error {
-	runtime.EventsOff(a.ctx, "extension_sync_state")
-	runtime.EventsOff(a.ctx, "extension_call_function")
-
-	runtime.EventsOn(a.ctx, "extension_call_function", func(data ...any) {
-		if payload, ok := data[0].(map[string]any); ok {
-			idString, okID := payload["extensionID"].(string)
-			function, okFunc := payload["function"].(string)
-			state, okState := payload["state"].(map[string]any)
-
-			if !okID || !okFunc || !okState {
-				return
-			}
-
-			extID, err := uuid.Parse(idString)
-			if err != nil {
-				return
-			}
-
-			for _, ext := range a.Proxy.Extensions {
-				if ext.Data.ID == extID {
-					ext.CallFunction(function, state)
-				}
-			}
+	a.onEvent("extension_call_function", func(payload any) {
+		if call, ok := decodeExtensionFunctionCall(payload); ok {
+			a.callExtension(call)
 		}
 	})
-
-	runtime.EventsOn(a.ctx, "extension_sync_state", func(data ...any) {
-		if payload, ok := data[0].(map[string]any); ok {
-			idString, okID := payload["extensionID"].(string)
-
-			if !okID {
-				return
-			}
-
-			extID, err := uuid.Parse(idString)
-			if err != nil {
-				return
-			}
-
-			var args []any
-			if rawArgs, ok := payload["args"].([]any); ok {
-				args = rawArgs
-			}
-
-			for _, ext := range a.Proxy.Extensions {
-				if ext.Data.ID == extID {
-					ext.CallFunction("sync", args...)
-				}
-			}
+	a.onEvent("extension_sync_state", func(payload any) {
+		if call, ok := decodeExtensionSync(payload); ok {
+			a.callExtension(call)
 		}
 	})
 	return nil
+}
+
+// extensionCall is a call an extension UI asked for: function on the
+// extension with extensionID, with args.
+type extensionCall struct {
+	extensionID uuid.UUID
+	function    string
+	args        []any
+}
+
+// decodeExtensionFunctionCall reads an extension_call_function payload,
+// {extensionID, function, state}, as a call of function with state. It is
+// false for a payload missing any of them.
+func decodeExtensionFunctionCall(payload any) (extensionCall, bool) {
+	fields, ok := payload.(map[string]any)
+	if !ok {
+		return extensionCall{}, false
+	}
+	id, okID := extensionID(fields)
+	function, okFunc := fields["function"].(string)
+	state, okState := fields["state"].(map[string]any)
+	if !okID || !okFunc || !okState {
+		return extensionCall{}, false
+	}
+	return extensionCall{extensionID: id, function: function, args: []any{state}}, true
+}
+
+// decodeExtensionSync reads an extension_sync_state payload,
+// {extensionID, args}, as a call of sync with args, none when args is
+// absent. It is false for a payload without a valid extensionID.
+func decodeExtensionSync(payload any) (extensionCall, bool) {
+	fields, ok := payload.(map[string]any)
+	if !ok {
+		return extensionCall{}, false
+	}
+	id, ok := extensionID(fields)
+	if !ok {
+		return extensionCall{}, false
+	}
+	args, _ := fields["args"].([]any)
+	return extensionCall{extensionID: id, function: "sync", args: args}, true
+}
+
+func extensionID(fields map[string]any) (uuid.UUID, bool) {
+	idString, ok := fields["extensionID"].(string)
+	if !ok {
+		return uuid.UUID{}, false
+	}
+	id, err := uuid.Parse(idString)
+	return id, err == nil
+}
+
+// callExtension runs call on the open project's extension it names.
+func (a *App) callExtension(call extensionCall) {
+	for _, ext := range a.Proxy.Extensions {
+		if ext.Data.ID == call.extensionID {
+			ext.CallFunction(call.function, call.args...)
+		}
+	}
 }
 
 func (a *App) GetExtensions() []*domain.Extension {

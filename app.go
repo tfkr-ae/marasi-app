@@ -17,7 +17,6 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
-	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -57,6 +56,16 @@ type App struct {
 	// messageDialog shows a native message dialog and returns the pressed
 	// button. Tests replace it.
 	messageDialog func(runtime.MessageDialogOptions) (string, error)
+	// openFileDialog and saveFileDialog show a native file dialog and
+	// return the chosen path, "" when the user cancelled. Tests replace them.
+	openFileDialog func(runtime.OpenDialogOptions) (string, error)
+	saveFileDialog func(runtime.SaveDialogOptions) (string, error)
+	// setClipboardText puts text on the system clipboard. Tests replace it.
+	setClipboardText func(text string) error
+	// onEvent listens for the frontend event name, replacing any listener
+	// already set for it, and hands handle the event's payload. Tests
+	// replace it.
+	onEvent func(name string, handle func(payload any))
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
 	// draft, reported by the frontend, which holds drafts in memory only.
 	unsavedDrafts atomic.Int64
@@ -95,6 +104,10 @@ type App struct {
 	relaunch func(location string) error
 	// quitApp quits through the normal shutdown, beforeClose included.
 	quitApp func()
+	// quitting is set once beforeClose lets Marasi close, so a quit that
+	// passes through it twice (closing the window, then quitting the app)
+	// asks only once.
+	quitting atomic.Bool
 	// restarting is set once the researcher confirmed "Restart now", so
 	// beforeClose does not ask about losing work a second time and close
 	// relaunches.
@@ -145,7 +158,7 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 		build:         BuildInfo{Channel: buildChannel, Version: version},
 		releaseSource: defaultReleaseSource,
 	}
-	app.emitEvent = app.emit
+	app.useDesktopRuntime()
 	app.signingKey = loadSigningKey()
 	app.installer = defaultInstaller()
 	app.installLocation = resolveInstallLocation(app.installer)
@@ -155,49 +168,50 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 		}
 		return app.installer.relaunch(location)
 	}
-	app.quitApp = func() { runtime.Quit(app.ctx) }
-	app.messageDialog = nativeMessageDialog(goruntime.GOOS, func(options runtime.MessageDialogOptions) (string, error) {
-		return runtime.MessageDialog(app.ctx, options)
-	})
 	listener := service.NewListenerLifecycle(proxy, logWriter)
 	app.projects = service.NewProjectLifecycle(proxy, configDir, wordlists, logger, app.attachExtensionHooks)
 	listener.BindProject(app.projects)
 	app.listener = listener
 	app.chrome = service.NewChrome(proxy, listener, logWriter)
 	app.upstreamProxies = service.NewUpstreamProxies(proxy)
+	app.configureTrafficHandlers()
 	app.configureWebSocketHandlers()
 	app.configureLaunchHandlers()
 	app.configureCheckpointHandlers()
 	return app
 }
 
-// startup is called when the app starts. It saves the context for the
-// runtime methods, sends the project lifecycle's log to the frontend, and
-// sets Marasi's request, response and log handlers. Those three call
-// runtime.EventsEmit directly, so a test's emitEvent does not see them.
-// It opens no project and starts no listener: the frontend does both.
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	go a.removeUpdateLeftovers()
-	logHandler := NewLogHandler(ctx)
-	if a.attachFrontendLog != nil {
-		a.attachFrontendLog(logHandler.Handler())
-	}
+// configureTrafficHandlers sends Marasi's requests, responses and logs to
+// the frontend as request, response and log events.
+func (a *App) configureTrafficHandlers() {
 	a.Proxy.WithOptions(
 		marasi.WithRequestHandler(func(req domain.ProxyRequest) error {
-			runtime.EventsEmit(a.ctx, "request", req)
+			a.emitEvent("request", req)
 			return nil
 		}),
 		marasi.WithResponseHandler(func(res domain.ProxyResponse) error {
-			runtime.EventsEmit(a.ctx, "response", res)
+			a.emitEvent("response", res)
 			return nil
 		}),
 		marasi.WithLogHandler(func(logItem domain.Log) error {
-			runtime.EventsEmit(a.ctx, "log", logItem)
+			a.emitEvent("log", logItem)
 			return nil
 		}),
-		marasi.WithLogger(logHandler),
 	)
+}
+
+// startup is called when the app starts. It saves the context for the
+// runtime methods, and sends the project lifecycle's log and Marasi's own
+// logger to the frontend through a.emitEvent. It opens no project and starts
+// no listener: the frontend does both.
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	go a.removeUpdateLeftovers()
+	logHandler := NewLogHandler(func(name string, data ...any) { a.emitEvent(name, data...) })
+	if a.attachFrontendLog != nil {
+		a.attachFrontendLog(logHandler.Handler())
+	}
+	a.Proxy.WithOptions(marasi.WithLogger(logHandler))
 	a.startUpdateChecks(ctx)
 }
 func (a *App) ToggleFlag(name string) (*Config, error) {
@@ -313,7 +327,7 @@ func (a *App) OpenFileDialog() (string, error) {
 	}
 
 	// Show the dialog and return the selected path
-	return runtime.OpenFileDialog(a.ctx, dialogOptions)
+	return a.openFileDialog(dialogOptions)
 }
 
 // OpenProject switches to the project at name, a path or a bare name in the
@@ -442,15 +456,19 @@ func (a *App) close(ctx context.Context) {
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
-	// "Restart now" has already warned about losing work.
-	if a.restarting.Load() {
+	// "Restart now" or an earlier pass has already warned about losing work.
+	if a.restarting.Load() || a.quitting.Load() {
 		return false
 	}
 	confirmed, err := a.confirmLosingWork("Close Marasi")
 	if err != nil {
 		log.Printf("cancelling active Armory runs: %v", err)
 	}
-	return err != nil || !confirmed
+	if err != nil || !confirmed {
+		return true
+	}
+	a.quitting.Store(true)
+	return false
 }
 
 // SetUnsavedDraftCount records how many launchpads have a dirty Launchpad
@@ -1102,7 +1120,7 @@ func (a *App) DownloadCert() (bool, error) {
 
 	home, _ := os.UserHomeDir()
 
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	path, err := a.saveFileDialog(runtime.SaveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
 		DefaultFilename:  "marasi-proxy.crt",
 		Title:            "Save Proxy Certificate",
@@ -1139,7 +1157,7 @@ func (a *App) CopyCertToClipboard() (bool, error) {
 		Bytes: a.Proxy.Cert.Raw,
 	})
 
-	err := runtime.ClipboardSetText(a.ctx, string(certPEM))
+	err := a.setClipboardText(string(certPEM))
 	if err != nil {
 		return false, err
 	}

@@ -20,6 +20,36 @@ on:
         required: false
         type: string
         default: ''
+  # A test build: builds, signs and notarizes like a nightly or release, but
+  # publishes nothing. The assets are this run's workflow artifacts.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag, or branch to build (defaults to the branch selected above)
+        required: false
+        type: string
+      channel:
+        description: Build channel embedded in the app
+        required: true
+        type: choice
+        options:
+          - nightly
+          - release
+        default: nightly
+      version:
+        description: Version string embedded in the app (defaults to today's date, plus "(nightly <commit>)" on the nightly channel)
+        required: false
+        type: string
+      marasi_ref:
+        description: marasi commit to build against instead of the go.mod version
+        required: false
+        type: string
+        default: ''
+
+# Building needs no write access, so a manual run cannot publish or change a
+# release, tag or nightly. The callers publish in their own jobs.
+permissions:
+  contents: read
 
 env:
   NODE_OPTIONS: "--max-old-space-size=4096"
@@ -30,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -77,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -107,6 +137,13 @@ jobs:
           if [ -z "$SIGNING_PUBLIC_KEY" ]; then
             echo "::error::repository variable MARASI_SIGNING_PUBLIC_KEY is not set"
             exit 1
+          fi
+          # Only a manual run leaves the version empty.
+          if [ -z "$VERSION" ]; then
+            VERSION=$(date -u '+%d.%m.%Y')
+            if [ "$CHANNEL" = nightly ]; then
+              VERSION="$VERSION (nightly $(git rev-parse --short=7 HEAD))"
+            fi
           fi
           args=(-platform "$PLATFORM" -webview2 download -o "$OUTPUT"
             -ldflags "-X main.buildChannel=$CHANNEL -X 'main.version=$VERSION' -X main.signingPublicKey=$SIGNING_PUBLIC_KEY")
