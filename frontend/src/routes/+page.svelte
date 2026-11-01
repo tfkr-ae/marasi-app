@@ -1,7 +1,6 @@
 <script>
 	import { StartBrowser } from "../lib/bindings/App";
 	import { chromeStore } from "../stores/chromeStore.js";
-	import { windowConnection } from "../stores/windowConnectionStore.js";
 	import { ChromeIcon } from "svelte-feather-icons";
 	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";
@@ -29,12 +28,9 @@
 		placement: "bottom-end",
 	};
 
-	// Chrome on a remote connection would be this machine's, which isn't
-	// ported yet.
-	$: remoteConnection = Boolean($windowConnection.connection?.remote);
-
+	// On a remote connection Chrome is this machine's (bindings/chrome.js).
 	onMount(() => {
-		if (!remoteConnection) chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome profiles"));
+		chromeStore.reload().catch(chromeError(toastStore, "Error reading Chrome profiles"));
 	});
 	const startChrome = (profile) =>
 		StartBrowser(profile).catch(chromeError(toastStore, "Error starting Chrome"));
@@ -118,9 +114,7 @@
 							<button
 								type="button"
 								class="btn btn-sm text-sm flex-1 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-								class:rounded-none={!remoteConnection && $chromeStore.profiles.length > 0}
-								disabled={remoteConnection}
-								title={remoteConnection ? "Not available on a remote connection yet" : undefined}
+								class:rounded-none={$chromeStore.profiles.length > 0}
 								on:click={() => startChrome("")}
 							>
 								<span
@@ -133,7 +127,7 @@
 								>
 							</button>
 
-							{#if !remoteConnection && $chromeStore.profiles.length > 0}
+							{#if $chromeStore.profiles.length > 0}
 								<button
 									type="button"
 									class="btn btn-sm text-sm rounded-none px-3 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"

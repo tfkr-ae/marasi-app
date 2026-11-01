@@ -263,13 +263,15 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
-| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
-| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
-| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
-| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
-| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: not available yet; app config in ticket 27. | 26 | [x] |
-| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: disabled on Home, toast from ⌘K; local Chrome with `GET /certificate` `.spki_hash` in ticket 27. | 26 | [x] |
+| `GetChromePaths` | binding | COVERED | `GET /chrome/path`. Remote: this machine's, in app config key `v2_chrome_paths`. | 27 | [x] |
+| `AddChromePath` | binding | COVERED | `POST /chrome/path {os, path}`. Remote: this machine's, in app config key `v2_chrome_paths`. | 27 | [x] |
+| `DeleteChromePath` | binding | COVERED | `DELETE /chrome/path {os, path}`. Remote: this machine's, in app config key `v2_chrome_paths`. | 27 | [x] |
+| `GetChromeProfiles` | binding | COVERED | `GET /chrome/profile`. Remote: this machine's, in app config key `v2_chrome_profiles`. | 27 | [x] |
+| `AddChromeProfile` | binding | COVERED | `POST /chrome/profile {name}`. Remote: this machine's, in app config key `v2_chrome_profiles`. | 27 | [x] |
+| `DeleteChromeProfile` | binding | COVERED | `DELETE /chrome/profile/{name}`. Remote: this machine's, in app config key `v2_chrome_profiles`, removing its user-data-dir. | 27 | [x] |
+| `StartBrowser` | binding | COVERED | `POST /chrome/start {profile}`. Remote: C: `GET /listener/status` and `GET /certificate` `.spki_hash`, then this machine's Chrome through the remote's host and listener port, or the address saved for it. | 27 | [x] |
+| `GetLocalChromeProxy` | binding | GUI | v2 only: the proxy address this machine's Chrome uses for the window's remote, app config key `v2_chrome_proxy_addresses`, and its default from `GET /listener/status` | 27 | [x] |
+| `SetLocalChromeProxy` | binding | GUI | v2 only: saves the remote's proxy address in `v2_chrome_proxy_addresses`; empty goes back to the default | 27 | [x] |
 | `GetUpstreamProxies` | binding | COVERED | `GET /upstream-proxy`, `upstream_proxy.*` | 26 | [x] |
 | `AddUpstreamProxy` | binding | COVERED | `POST /upstream-proxy {name, url, ca}`, then `GET /upstream-proxy` for the selection | 26 | [x] |
 | `UpdateUpstreamProxy` | binding | COVERED | `POST /upstream-proxy/{name} {url, ca}` (`ca:null` removes the CA), then `GET /upstream-proxy` for the selection | 26 | [x] |

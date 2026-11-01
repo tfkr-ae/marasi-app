@@ -51,3 +51,11 @@ test("chrome.* events show a change the CLI or another window made", () => {
   store.onProfiles({ items: [{ name: "cli" }] });
   assert.deepEqual(get(store), { paths: [{ OS: "linux", Path: "/usr/bin/chromium" }], profiles: ["cli"] });
 });
+
+test("on a remote connection Chrome is this machine's, so the instance's chrome.* events are ignored", async () => {
+  const { store } = setup({ instanceChrome: () => false });
+  await store.reload();
+  store.onPaths({ items: [{ os: "linux", path: "/remote/chromium" }] });
+  store.onProfiles({ items: [{ name: "remote" }] });
+  assert.deepEqual(get(store), { paths: [chromium], profiles: ["work"] });
+});
