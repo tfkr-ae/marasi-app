@@ -188,23 +188,23 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `ListFindings` | binding | COVERED | C: `GET /finding`, then `GET /finding/{id}` for each | 21 | [ ] |
-| `SaveFinding` | binding | COVERED | `POST /finding` (new) or `POST /finding/{id}` (edit) | 21 | [ ] |
-| `DeleteFinding` | binding | COVERED | `DELETE /finding/{id}` | 21 | [ ] |
-| `CreateDraftFinding` | binding | COVERED | C: `POST /finding`, then `POST /traffic/bulk/link {selection, finding_id}` | 21 | [ ] |
-| `LinkRequestToFinding` | binding | COVERED | `POST /finding/{id}/traffic {id}` | 21 | [ ] |
-| `UnlinkRequestFromFinding` | binding | COVERED | `DELETE /finding/{id}/traffic/{request_id}` | 21 | [ ] |
-| `SaveArtifactToFinding` | binding | COVERED | `POST /finding/{id}/artifact?filename=` with the file read on this machine | 21 | [ ] |
-| `ListTestCases` | binding | COVERED | C: `GET /test-case`, then `GET /test-case/{id}` for each | 21 | [ ] |
-| `SaveTestCase` | binding | COVERED | `POST /test-case` (new) or `POST /test-case/{id}` (edit) | 21 | [ ] |
-| `DeleteTestCase` | binding | COVERED | `DELETE /test-case/{id}` | 21 | [ ] |
-| `CreateDraftTestCase` | binding | COVERED | C: `POST /test-case`, then `POST /traffic/bulk/link {selection, test_case_id}` | 21 | [ ] |
-| `LinkRequestToTestCase` | binding | COVERED | `POST /test-case/{id}/traffic {id}` | 21 | [ ] |
-| `UnlinkRequestFromTestCase` | binding | COVERED | `DELETE /test-case/{id}/traffic/{request_id}` | 21 | [ ] |
-| `SaveArtifactToTestCase` | binding | COVERED | `POST /test-case/{id}/artifact?filename=` with the file read on this machine | 21 | [ ] |
-| `GetArtifact` | binding | COVERED | `GET /artifact/{id}` and `GET /artifact/{id}/content` | 21 | [ ] |
-| `DownloadArtifact` | binding | COVERED | `GET /artifact/{id}/content`, saved through an OS save dialog | 21 | [ ] |
-| `DeleteArtifact` | binding | COVERED | `DELETE /artifact/{id}` | 21 | [ ] |
+| `ListFindings` | binding | COVERED | C: `GET /finding`, then `GET /finding/{id}` for each | 21 | [x] |
+| `SaveFinding` | binding | COVERED | `POST /finding` (new) or `POST /finding/{id}` (edit) | 21 | [x] |
+| `DeleteFinding` | binding | COVERED | `DELETE /finding/{id}` | 21 | [x] |
+| `CreateDraftFinding` | binding | COVERED | C: `POST /finding`, then `POST /traffic/bulk/link {selection, finding_id}`, then `GET /finding/{id}`; a pair the link left out is linked alone, and its failure reported | 21 | [x] |
+| `LinkRequestToFinding` | binding | COVERED | `POST /finding/{id}/traffic {id}` | 21 | [x] |
+| `UnlinkRequestFromFinding` | binding | COVERED | `DELETE /finding/{id}/traffic/{request_id}` | 21 | [x] |
+| `SaveArtifactToFinding` | binding | COVERED | `POST /finding/{id}/artifact?filename=` with the file read on this machine | 21 | [x] |
+| `ListTestCases` | binding | COVERED | C: `GET /test-case`, then `GET /test-case/{id}` for each | 21 | [x] |
+| `SaveTestCase` | binding | COVERED | `POST /test-case` (new) or `POST /test-case/{id}` (edit) | 21 | [x] |
+| `DeleteTestCase` | binding | COVERED | `DELETE /test-case/{id}` | 21 | [x] |
+| `CreateDraftTestCase` | binding | COVERED | C: `POST /test-case`, then `POST /traffic/bulk/link {selection, test_case_id}`, then `GET /test-case/{id}`; as CreateDraftFinding | 21 | [x] |
+| `LinkRequestToTestCase` | binding | COVERED | `POST /test-case/{id}/traffic {id}` | 21 | [x] |
+| `UnlinkRequestFromTestCase` | binding | COVERED | `DELETE /test-case/{id}/traffic/{request_id}` | 21 | [x] |
+| `SaveArtifactToTestCase` | binding | COVERED | `POST /test-case/{id}/artifact?filename=` with the file read on this machine | 21 | [x] |
+| `GetArtifact` | binding | COVERED | `GET /artifact/{id}` and `GET /artifact/{id}/content` | 21 | [x] |
+| `DownloadArtifact` | binding | COVERED | `GET /artifact/{id}/content`, saved through an OS save dialog | 21 | [x] |
+| `DeleteArtifact` | binding | COVERED | `DELETE /artifact/{id}` | 21 | [x] |
 
 ## Reports
 
