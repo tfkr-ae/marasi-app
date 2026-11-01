@@ -128,7 +128,7 @@ test("⌘A selects the whole query up to the results' as_of, never ids", async (
   assert.deepEqual(selectionSpec(state), { query: "host:api", exclusion: ["image/png"], as_of: idOf(4) });
   assert.deepEqual(selected(store), [idOf(1), idOf(3)], "the loaded rows show as selected");
   assert.equal(state.selection.focus, idOf(3), "the top row is focused");
-  assert.deepEqual(api.calls.at(-1), ["countTraffic", "host:api", "", { AsOf: idOf(4) }]);
+  assert.deepEqual(api.calls.at(-1), ["countTraffic", "host:api", "", { AsOf: idOf(4), Exclusion: ["image/png"] }]);
   assert.equal(selectionSize(state), 2);
   assert.equal(allSelectedLabel(state), "All 2 matching selected");
 });
@@ -321,8 +321,8 @@ test("finding evidence: listed pairs check the findings, ⌘A counts the query's
   assert.equal(await store.findingEvidence({ query: "", exclusion: [], as_of: idOf(4) }, findings), 3);
   assert.equal(await store.findingEvidence({ query: "a OR b", exclusion: [], as_of: idOf(4) }, findings), 3);
   assert.deepEqual(api.calls.slice(-2), [
-    ["countTraffic", "finding:*", "", { AsOf: idOf(4) }],
-    ["countTraffic", "(a OR b) AND finding:*", "", { AsOf: idOf(4) }],
+    ["countTraffic", "finding:*", "", { AsOf: idOf(4), Exclusion: [] }],
+    ["countTraffic", "(a OR b) AND finding:*", "", { AsOf: idOf(4), Exclusion: [] }],
   ]);
 });
 

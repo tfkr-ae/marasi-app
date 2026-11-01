@@ -184,6 +184,10 @@ const readTemplate = async (id) => armoryTemplate(await marasi.get(`/armory/temp
 
 // The project's own exclusion setting, or null when it follows the app default.
 const ownExclusion = () => unlessNotFound(marasi.get(exclusionSetting));
+// The exclusion a traffic read names, else the project's; none with
+// IgnoreExclusion. The Ledger names the one it holds, so it isn't read again.
+const exclusionFor = async (options) =>
+  options.IgnoreExclusion ? [] : (options.Exclusion ?? (await GetContentTypeExclusion()));
 
 // A traffic read's query string: `params` with empty values dropped, and
 // the exclusion as repeated `exclude`s.
@@ -411,13 +415,13 @@ export const CountNotes = async () => {
     InterceptionsComplete: dashboard.intercepted_count?.complete !== false,
   };
 };
-// How many pairs `query` matches, minus the project's exclusion unless
-// `options.IgnoreExclusion`; `after` "" counts every match, else only pairs
-// captured after it, and `options.AsOf` only pairs up to it. v1's { Count,
-// Capped, IndexComplete, QueryError }.
+// How many pairs `query` matches, minus `options.Exclusion`, else the
+// project's exclusion, unless `options.IgnoreExclusion`; `after` "" counts
+// every match, else only pairs captured after it, and `options.AsOf` only
+// pairs up to it. v1's { Count, Capped, IndexComplete, QueryError }.
 export const CountTraffic = (query, after, options = {}) =>
   readTraffic(async () => {
-    const exclusion = options.IgnoreExclusion ? [] : await GetContentTypeExclusion();
+    const exclusion = await exclusionFor(options);
     const counted = await marasi.get(
       "/traffic/count" + trafficQuery({ q: query, after, as_of: options.AsOf }, exclusion),
     );
@@ -775,13 +779,14 @@ export const QueryArmoryRunTraffic = (runId, request) =>
 const maxTrafficPage = 500;
 
 // One page of the traffic that matches `request.Query`, in display order,
-// minus the project's exclusion unless `request.IgnoreExclusion`:
+// minus `request.Exclusion`, else the project's exclusion, unless
+// `request.IgnoreExclusion`:
 // v1's { Items, NextCursor, PrevCursor, AsOf, IndexComplete, QueryError }.
 // v1 read any `request.Limit`; above Marasi's cap it reads on by cursor
 // under the first page's as_of.
 export const QueryTraffic = (request) =>
   readTraffic(async () => {
-    const exclusion = request.IgnoreExclusion ? [] : await GetContentTypeExclusion();
+    const exclusion = await exclusionFor(request);
     const backward = request.Direction === "backward";
     const pages = [];
     let cursor = request.Cursor;

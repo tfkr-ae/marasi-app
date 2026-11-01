@@ -176,6 +176,20 @@ test("CountTraffic counts new matches after a pair, bounded by as_of, under the 
   assert.equal(sent.at(-1).search, "", "every pair, whatever its content type");
 });
 
+test("a read that names its exclusion sends it without reading the project's", async () => {
+  answers["GET /traffic"] = { items: [], next_cursor: null, prev_cursor: null, as_of: null, index: { complete: true } };
+  answers["GET /traffic/count"] = { count: 1, capped: false, index: { complete: true } };
+  await App.QueryTraffic({ Query: "", Exclusion: ["text/css"] });
+  await App.CountTraffic("", "", { Exclusion: ["font/*"] });
+  assert.deepEqual(
+    sent.map((r) => [r.path, new URLSearchParams(r.search).getAll("exclude")]),
+    [
+      ["/traffic", ["text/css"]],
+      ["/traffic/count", ["font/*"]],
+    ],
+  );
+});
+
 test("CountContentTypes counts the project's pairs per content type", async () => {
   answers["GET /traffic/content-types"] = {
     items: [

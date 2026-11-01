@@ -67,7 +67,9 @@ function fakeApi({
 } = {}) {
   const calls = [];
   let ownExclusion = exclusion;
-  const excluded = () => ownExclusion ?? defaultExclusion;
+  // A read that names its exclusion uses it, as the bindings do.
+  let named = null;
+  const excluded = () => named ?? ownExclusion ?? defaultExclusion;
   const db = traffic.map((p) => ({ ...p }));
   const newest = () => db.reduce((max, p) => (p.ID > max ? p.ID : max), "");
   // Query text: "" for every pair, a key of `queries`, or either with a
@@ -106,7 +108,10 @@ function fakeApi({
     capture(p) {
       db.push({ ...p });
     },
-    getExclusion: async () => [...excluded()],
+    getExclusion: async () => {
+      calls.push(["getExclusion"]);
+      return [...(ownExclusion ?? defaultExclusion)];
+    },
     hasOwnExclusion: async () => ownExclusion !== undefined,
     setExclusion: async (types) => {
       calls.push(["setExclusion", types]);
@@ -127,6 +132,7 @@ function fakeApi({
     },
     queryTraffic: async (req) => {
       calls.push(["queryTraffic", { ...req }]);
+      named = req.Exclusion ?? null;
       if (req.Query === "bad") return { QueryError: { Message: "expected a value", Position: 3 } };
       // Marasi refuses a page of more than 500 rows.
       if (req.Limit > 500) throw new Error("GET /traffic: bad_request: HTTP 400");
@@ -164,6 +170,7 @@ function fakeApi({
     countTraffic: async (query, after, options = {}) => {
       const req = { Query: query, After: after, ...options };
       calls.push(["countTraffic", req]);
+      named = req.Exclusion ?? null;
       const canned = counts[query];
       if (canned instanceof Error) throw canned;
       if (canned) return canned;
@@ -211,6 +218,7 @@ test("the live view loads its first page newest first, then the count", async ()
     Direction: "forward",
     AsOf: "",
     Limit: PAGE_SIZE,
+    Exclusion: [],
   });
   assert.equal(store.pairNumber(idOf(3)), 3, "a pair's number is Marasi's pair number");
   assert.equal(store.pairNumber("missing"), "?");
@@ -378,7 +386,7 @@ test("scrolled down in the live view, rows don't move and an N new count waits",
   await store.countNewMatches();
   let state = get(store);
   assert.equal(state.results.newCount, 2);
-  assert.deepEqual(countCalls(api).at(-1), { Query: "", After: idOf(50) });
+  assert.deepEqual(countCalls(api).at(-1), { Query: "", After: idOf(50), Exclusion: [] });
 
   // Back at the top, the new pairs load in.
   await scrollTo(store, 0);
@@ -414,7 +422,7 @@ test("query results count new matches after their as_of and show them in place",
   store.flush();
   await store.countNewMatches();
   assert.equal(get(store).results.newCount, 2);
-  assert.deepEqual(countCalls(api).at(-1), { Query: "even", After: asOf });
+  assert.deepEqual(countCalls(api).at(-1), { Query: "even", After: asOf, Exclusion: [] });
   assert.equal(get(store).results.asOf, asOf, "the rows stay until Show");
 
   const reset = get(store).results.reset;
@@ -860,6 +868,27 @@ test("the live count drops a pair its response hides, as Marasi counts it", asyn
   assert.equal(hiddenByTypeCount(get(store)), 1);
 });
 
+test("traffic reads carry the exclusion the store loaded once, and follow a change", async () => {
+  const api = fakeApi({ traffic: pairs(120, (n) => ({ ContentType: n % 2 ? "image/png" : "text/html" })), exclusion: ["image/*"] });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await scrollTo(store, 40);
+  await store.countNewMatches();
+  await store.saveExclusion(["text/css"]);
+  await store.settled();
+  const exclusionReads = api.calls.filter((c) => c[0] === "getExclusion").length;
+  assert.equal(exclusionReads, 1);
+  const reads = api.calls.filter((c) => (c[0] === "queryTraffic" || c[0] === "countTraffic") && !c[1].IgnoreExclusion);
+  const saved = api.calls.findIndex((c) => c[0] === "setExclusion");
+  assert.ok(reads.length > 3);
+  for (const [, req] of api.calls.slice(0, saved).filter((c) => reads.includes(c))) {
+    assert.deepEqual(req.Exclusion, ["image/*"]);
+  }
+  for (const [, req] of api.calls.slice(saved).filter((c) => reads.includes(c))) {
+    assert.deepEqual(req.Exclusion, ["text/css"]);
+  }
+});
+
 test("hiding a type updates the table and the hidden count", async () => {
   const store = createLedgerStore(
     fakeApi({
@@ -996,6 +1025,7 @@ test("clearing for another project drops a page still loading", async () => {
   api.queryTraffic = () => new Promise((resolve) => (release = resolve));
   const store = createLedgerStore(api);
   const loading = store.populate();
+  while (!release) await new Promise(setImmediate);
   store.clear();
   release({ Items: [pair(1)], NextCursor: null, PrevCursor: null, AsOf: idOf(1), IndexComplete: true });
   await loading;
@@ -1074,7 +1104,7 @@ test("live pairs at the top leave the results' as_of alone, so later pages agree
   store.flush();
   await store.countNewMatches();
   assert.equal(get(store).results.newCount, 1);
-  assert.deepEqual(countCalls(api).at(-1), { Query: "", After: idOf(arrived) });
+  assert.deepEqual(countCalls(api).at(-1), { Query: "", After: idOf(arrived), Exclusion: [] });
 });
 
 test("⌘A after live pairs joined the top covers them", async () => {
