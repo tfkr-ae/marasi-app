@@ -242,22 +242,22 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 
 | v1 | kind | status | v2 | ticket | done |
 |---|---|---|---|---|---|
-| `GetScopeRules` | binding | COVERED | `GET /scope` | 25 | [ ] |
-| `TestScopeMatch` | binding | COVERED | `POST /scope/check {url}` | 25 | [ ] |
-| `GetExtensions` | binding | COVERED | `GET /extension`, `extension.enabled`, `extension.updated` | 25 | [ ] |
-| `GetExtensionCode` | binding | COVERED | `GET /extension/{id}` `.lua_content` | 25 | [ ] |
-| `RunExtension` | binding | COVERED | `POST /extension/{id} {lua_content}` | 25 | [ ] |
-| `DoExtender` | binding | COVERED | `POST /extension/{id} {lua_content}` on the workshop extension | 25 | [ ] |
-| `GetExtensionLogs` | binding | COVERED | `GET /extension/{id}/logs` | 25 | [ ] |
-| `GetExtensionUI` | binding | COVERED | `extension.gui.rendered`. v1's only caller, `WebComponentWrapper.svelte`, was imported nowhere, and extension UI drew from `extension_gui_render`. | 25 | [ ] |
-| `GetExtensionFlag` | binding | GUI | No v1 caller, so the GUI has nothing to read. No route reads an extension's Lua global flags. | 25 | [ ] |
-| `LoadExtensions` | binding | GUI | It only registered v1's Wails listeners. The layout's `EventSource` dispatch does that. | 25 | [ ] |
-| `extension_gui_render` | event | COVERED | `extension.gui.rendered {id, name, target, schema}` (target `toast` is a toast) | 25 | [ ] |
-| `extension_state_update` | event | COVERED | `extension.gui.updated {id, name, key, value}` | 25 | [ ] |
-| `<extensionName>-log` | event | COVERED | `extension.log {id, name, time, text}`, filtered by name | 25 | [ ] |
-| `extension_call_function` | event | COVERED | `POST /extension/{id}/call {function, args:[state]}` | 25 | [ ] |
-| `extension_sync_state` | event | COVERED | `POST /extension/{id}/call {function:"sync", args}` | 25 | [ ] |
-| `EventsEmit` | runtime | COVERED | `POST /extension/{id}/call` | 25 | [ ] |
+| `GetScopeRules` | binding | COVERED | `GET /scope` | 25 | [x] |
+| `TestScopeMatch` | binding | COVERED | `POST /scope/check {url}` | 25 | [x] |
+| `GetExtensions` | binding | COVERED | `GET /extension`, `extension.enabled`, `extension.updated` | 25 | [x] |
+| `GetExtensionCode` | binding | COVERED | `GET /extension/{id}` `.lua_content` | 25 | [x] |
+| `RunExtension` | binding | COVERED | `POST /extension/{id} {lua_content}` | 25 | [x] |
+| `DoExtender` | binding | COVERED | `POST /extension/{id} {lua_content}` on the workshop extension | 25 | [x] |
+| `GetExtensionLogs` | binding | COVERED | `GET /extension/{id}/logs` | 25 | [x] |
+| `GetExtensionUI` | binding | COVERED | `extension.gui.rendered`. v1's only caller, `WebComponentWrapper.svelte`, was imported nowhere, and extension UI drew from `extension_gui_render`. | 25 | [x] |
+| `GetExtensionFlag` | binding | GUI | No v1 caller, so the GUI has nothing to read. No route reads an extension's Lua global flags. | 25 | [x] |
+| `LoadExtensions` | binding | GUI | It only registered v1's Wails listeners. The layout's `EventSource` dispatch does that. | 25 | [x] |
+| `extension_gui_render` | event | COVERED | `extension.gui.rendered {id, name, target, schema}` (target `toast` is a toast) | 25 | [x] |
+| `extension_state_update` | event | COVERED | `extension.gui.updated {id, name, key, value}` | 25 | [x] |
+| `<extensionName>-log` | event | COVERED | `extension.log {id, name, time, text}`, filtered by name | 25 | [x] |
+| `extension_call_function` | event | COVERED | `POST /extension/{id}/call {function, args:[state]}` | 25 | [x] |
+| `extension_sync_state` | event | COVERED | `POST /extension/{id}/call {function:"sync", args}` | 25 | [x] |
+| `EventsEmit` | runtime | COVERED | `POST /extension/{id}/call` | 25 | [x] |
 
 ## Chrome, upstream proxies and waypoints
 
