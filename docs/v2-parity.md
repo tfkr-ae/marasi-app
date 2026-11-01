@@ -234,9 +234,9 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `DeleteArmoryRun` | binding | COVERED | `DELETE /armory/run/{id}` | 23 | [x] |
 | `GetArmoryWordlists` | binding | COVERED | `GET /wordlist` | 23 | [x] |
 | `PreviewArmoryWordlist` | binding | COVERED | `GET /wordlist/{name}?limit=` | 23 | [x] |
-| `QueryArmoryRunTraffic` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>" AND (<q>)` | 24 | [ ] |
-| `CountArmoryRunTraffic` | binding | COVERED | `GET /traffic/count/by-field?field=&q=metadata.armory_run_id = "<id>"&as_of=` | 24 | [ ] |
-| `GetArmoryRunRequests` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>"`. v1 bound it but the frontend never called it. | 24 | [ ] |
+| `QueryArmoryRunTraffic` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>" AND (<q>)` | 24 | [x] |
+| `CountArmoryRunTraffic` | binding | COVERED | `GET /traffic/count/by-field?field=&q=metadata.armory_run_id = "<id>"&as_of=` | 24 | [x] |
+| `GetArmoryRunRequests` | binding | COVERED | `GET /traffic?q=metadata.armory_run_id = "<id>"`. v1 bound it but the frontend never called it. | 24 | [x] |
 
 ## Scope and extensions
 
