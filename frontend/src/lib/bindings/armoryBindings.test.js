@@ -203,3 +203,126 @@ test("PreviewArmoryWordlist reads a wordlist's first entries", async () => {
   assert.deepEqual(await App.PreviewArmoryWordlist("my list.txt", 20), ["admin", "login"]);
   assert.equal(sent.at(-1).search, "?limit=20");
 });
+
+const P1 = "019a3b5c-0001-7000-8000-000000000001";
+const P2 = "019a3b5c-0001-7000-8000-000000000002";
+
+const summary = (id, number, statusCode, length) => ({
+  id,
+  number,
+  scheme: "https",
+  method: "GET",
+  host: "example.com",
+  path: `/${number}`,
+  status: `${statusCode} OK`,
+  status_code: statusCode,
+  content_type: "text/html",
+  length,
+  metadata: { armory_run_id: R1 },
+  requested_at: "2026-11-01T10:00:02+04:00",
+  responded_at: "2026-11-01T10:00:03+04:00",
+});
+
+test("QueryArmoryRunTraffic reads a page of the run's pairs, narrowed by the request's query and whatever their content type", async () => {
+  answers["GET /traffic"] = { items: [summary(P2, 2, 404, 9), summary(P1, 1, 200, 12)], next_cursor: P1, as_of: P2 };
+  const page = await App.QueryArmoryRunTraffic(R1, { Query: "status_code = 404", OrderBy: "", Limit: 2, AsOf: "" });
+  const params = new URLSearchParams(sent.at(-1).search);
+  assert.equal(params.get("q"), `metadata.armory_run_id = "${R1}" AND (status_code = 404)`);
+  assert.equal(params.get("order_by"), "requested_at");
+  assert.deepEqual(params.getAll("exclude"), []);
+  assert.equal(sent.some((req) => req.path.startsWith("/settings")), false);
+  assert.deepEqual(
+    page.Items.map((item) => [item.ID, item.StatusCode, item.Length]),
+    [
+      [P1, 200, 12],
+      [P2, 404, 9],
+    ],
+  );
+  assert.equal(page.NextCursor, P1);
+  assert.equal(page.AsOf, P2);
+});
+
+test("QueryArmoryRunTraffic with no query reads the whole run", async () => {
+  answers["GET /traffic"] = { items: [], next_cursor: null, as_of: null };
+  await App.QueryArmoryRunTraffic(R1, { Query: "", OrderBy: "length desc", Cursor: P1, AsOf: P2, Limit: 200 });
+  const params = new URLSearchParams(sent.at(-1).search);
+  assert.equal(params.get("q"), `metadata.armory_run_id = "${R1}"`);
+  assert.equal(params.get("order_by"), "length desc");
+  assert.equal(params.get("cursor"), P1);
+  assert.equal(params.get("as_of"), P2);
+});
+
+test("CountArmoryRunTraffic counts the run's pairs by a field and answers the as_of Marasi counted under", async () => {
+  answers["GET /traffic/count/by-field"] = {
+    items: [
+      { value: "200", count: 30 },
+      { value: "404", count: 9 },
+      { value: "", count: 1 },
+    ],
+    as_of: P2,
+    index: { complete: true },
+  };
+  const counts = await App.CountArmoryRunTraffic(R1, "status_code", "");
+  const params = new URLSearchParams(sent.at(-1).search);
+  assert.equal(params.get("field"), "status_code");
+  assert.equal(params.get("q"), `metadata.armory_run_id = "${R1}"`);
+  assert.equal(params.has("as_of"), false);
+  assert.deepEqual(params.getAll("exclude"), []);
+  assert.deepEqual(counts, {
+    Counts: [
+      { Value: "200", Count: 30 },
+      { Value: "404", Count: 9 },
+      { Value: "", Count: 1 },
+    ],
+    AsOf: P2,
+  });
+});
+
+test("CountArmoryRunTraffic passes an as_of back, so the counts stop where a group's pages do", async () => {
+  answers["GET /traffic/count/by-field"] = { items: [{ value: "12", count: 2 }], as_of: P1, index: { complete: true } };
+  const counts = await App.CountArmoryRunTraffic(R1, "length", P1);
+  const params = new URLSearchParams(sent.at(-1).search);
+  assert.equal(params.get("field"), "length");
+  assert.equal(params.get("as_of"), P1);
+  assert.equal(counts.AsOf, P1);
+});
+
+test("CountArmoryRunTraffic answers an empty as_of for a run with no pairs", async () => {
+  answers["GET /traffic/count/by-field"] = { items: [], as_of: null, index: { complete: true } };
+  assert.deepEqual(await App.CountArmoryRunTraffic(R1, "status_code", ""), { Counts: [], AsOf: "" });
+});
+
+test("CountArmoryRunTraffic rejects with Marasi's code for a field it can't count by", async () => {
+  answers["GET /traffic/count/by-field"] = () => json({ error: "invalid_count_field", message: "cannot count by host" }, 400);
+  await assert.rejects(App.CountArmoryRunTraffic(R1, "host", ""), (err) => err.code === "invalid_count_field");
+});
+
+test("GetArmoryRunRequests reads every pair the run sent, page by page, as v1's RequestResponseRow", async () => {
+  answers["GET /traffic"] = ({ search }) => {
+    const params = new URLSearchParams(search);
+    assert.equal(params.get("q"), `metadata.armory_run_id = "${R1}"`);
+    return params.get("cursor") === P2
+      ? json({ items: [summary(P1, 1, 200, 12)], next_cursor: null, as_of: P2 })
+      : json({ items: [summary(P2, 2, 404, 9)], next_cursor: P2, as_of: P2 });
+  };
+  for (const [id, number] of [
+    [P1, 1],
+    [P2, 2],
+  ]) {
+    answers[`GET /traffic/${id}`] = {
+      id,
+      number,
+      request: { scheme: "https", method: "GET", host: "example.com", path: `/${number}`, raw: btoa(`GET /${number} HTTP/1.1`) },
+      response: { status_code: 200, raw: btoa("HTTP/1.1 200 OK") },
+      metadata: { armory_run_id: R1 },
+    };
+  }
+  const rows = await App.GetArmoryRunRequests(R1);
+  assert.deepEqual(
+    rows.map((row) => [row.Request.ID, row.Request.Raw]),
+    [
+      [P1, "GET /1 HTTP/1.1"],
+      [P2, "GET /2 HTTP/1.1"],
+    ],
+  );
+});

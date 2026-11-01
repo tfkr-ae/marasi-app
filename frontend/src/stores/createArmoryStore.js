@@ -75,7 +75,7 @@ export function createArmoryStore(api) {
   // flushes its buffered events.
   const runTraffic = createRunTrafficView({
     queryRunTraffic: (runId, req) => QueryArmoryRunTraffic(runId, req),
-    countRunTraffic: (runId, field) => CountArmoryRunTraffic(runId, field),
+    countRunTraffic: (runId, field, asOf) => CountArmoryRunTraffic(runId, field, asOf),
   });
 
   function upsertRun(run) {

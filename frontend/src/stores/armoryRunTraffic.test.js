@@ -913,6 +913,26 @@ test("adding a group to a whole-group Selection keeps its as_of, so pairs sent s
   assert.equal(runSelectionLabel(get(view)), `${RUN_TRAFFIC_PAGE_SIZE + 5} selected`);
 });
 
+test("⌘-clicking a group under another grouping selects the whole group under the latest count, not the old Selection's as_of", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+  view.toggleGroupSelection("403");
+
+  // More 404s arrive after the 403s were selected, and the view counts them.
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 8, { status: 404, length: 100 });
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 9, { status: 404, length: 100 });
+  view.flush();
+  await view.settled();
+  await view.groupBy("length");
+
+  await view.toggleGroupSelection("100");
+
+  const all = RUN_TRAFFIC_PAGE_SIZE + 9;
+  assert.equal(runSelectionLabel(get(view)), `${all} selected`);
+  assert.deepEqual(pairsIn(api, runSelectionSpec(get(view))).length, all);
+  assert.equal(runSelectionSpec(get(view)).as_of, id(all));
+});
+
 const headerStates = (view) =>
   runTrafficGroups(get(view)).map((g) => `${g.value}:${groupSelection(get(view), g) || "-"}`);
 
@@ -947,6 +967,35 @@ test("a group header says some selected when the Selection holds some of its pai
   assert.deepEqual(headerStates(view), ["200:-", "500:-", ":-", "403:some", "404:-"]);
   view.clickPair(id(9), { toggle: true });
   assert.deepEqual(headerStates(view), ["200:-", "500:-", ":-", "403:all", "404:-"]);
+});
+
+test("a selected group's header says some selected once the run sends it pairs past the Selection's as_of", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+  view.toggleGroupSelection("403");
+
+  // A 404 arrives: every 403 the header counts is still selected.
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 8, { status: 404 });
+  view.flush();
+  await view.settled();
+  assert.deepEqual(headerStates(view), ["403:all", "404:-"]);
+
+  // A 403 arrives: the header counts one the Selection doesn't hold.
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 9, { status: 403 });
+  view.flush();
+  await view.settled();
+  assert.deepEqual(headerStates(view), ["403:some", "404:-"]);
+  assert.equal(runSelectionLabel(get(view)), "2 selected");
+});
+
+test("⌘A's group headers say some selected for the groups the run sent pairs to since", async () => {
+  const { api, view } = await opened(bigRun());
+  await view.groupBy("status");
+  await view.selectAll();
+  sends(api, view, RUN_TRAFFIC_PAGE_SIZE + 8, { status: 403 });
+  view.flush();
+  await view.settled();
+  assert.deepEqual(headerStates(view), ["403:some", "404:all"]);
 });
 
 test("⌘-clicking a group header while pairs are picked one by one selects the group instead", async () => {
