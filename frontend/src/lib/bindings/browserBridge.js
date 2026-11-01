@@ -64,6 +64,7 @@ export const browserBridge = {
   saveReport: outsideElectron,
   readCAFile,
   copyText: (text) => navigator.clipboard.writeText(text),
+  openURL: (url) => window.open(url, "_blank", "noopener"),
   // A plain browser tab is the only window, so there is no other to list.
   newWindow: outsideElectron,
   openInstanceWindow: outsideElectron,

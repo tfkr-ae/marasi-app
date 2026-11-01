@@ -148,6 +148,7 @@ async function serveAppConfig() {
   });
   handle("upstreamProxy:readCAFile", () => caFile.read());
   handle("clipboard:writeText", (event, text) => clipboard.writeText(String(text)));
+  handle("shell:openURL", (event, url) => openOutside(String(url)));
   handle("app:buildInfo", () => build);
   handle("app:userName", () => userInfo().username);
   // A config v2 can't prepare stays as it is; each read then reports why.
@@ -220,6 +221,11 @@ async function serveUpdates(appConfig) {
   });
   handleUpdates({ handle }, updater);
   updater.removeUpdateLeftovers();
+}
+
+// Opens an http(s) `url` in the default browser; any other is ignored.
+async function openOutside(url) {
+  if (/^https?:/.test(url)) await shell.openExternal(url);
 }
 
 // The window with webContents id `id`, or null once it has closed.
@@ -302,7 +308,7 @@ function createWindow({ blank = false, instance = null } = {}) {
   const home = devServerURL ?? `${origin}/`;
   // Links that leave the app open in the default browser.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url);
+    openOutside(url);
     return { action: "deny" };
   });
   window.webContents.on("will-navigate", (event, url) => {

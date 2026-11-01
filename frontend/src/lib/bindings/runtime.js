@@ -2,7 +2,8 @@
 // events (the updater's) arrive through the preload's `onUpdateEvent`.
 // Marasi's events arrive on the connection's event stream
 // (lib/marasiEvents.js), so a subscription to any other name hears nothing,
-// and the window and browser calls use the page.
+// and the window and browser calls use the page or the main process.
+import { browserBridge } from "./browserBridge.js";
 
 // The events the main process sends, by name.
 const mainEvents = new Set(["update-available", "update-progress", "update-installed", "update-failed"]);
@@ -50,7 +51,10 @@ export function WindowSetTitle(title) {
   document.title = title;
 }
 
-/** Opens `url` in the default browser: the main process sends new windows there. */
+/**
+ * Opens `url` in the default browser, through the main process; in a plain
+ * browser, in a new tab.
+ */
 export function BrowserOpenURL(url) {
-  window.open(url, "_blank", "noopener");
+  (globalThis.window?.marasiApp ?? browserBridge).openURL(url);
 }

@@ -49,7 +49,7 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 |---|---|---|---|---|---|
 | `EventsOn` | runtime | GUI | One `EventSource` on `/events` in the layout, sent to the stores' `on*` methods | 04 | [x] |
 | `EventsOff` | runtime | GUI | The layout closes the `EventSource` | 04 | [x] |
-| `EventsOnce` | runtime | GUI | The layout's `EventSource` dispatch | 04 | [ ] |
+| `EventsOnce` | runtime | GUI | `runtime.js` hears the next main-process event (the updater's) once. Marasi events go to the stores through `marasiEvents.js`, which has no once. | 04 | [x] |
 | `GetLogs` | binding | COVERED | `GET /logs` (paged) | 04 | [x] |
 | `log` | event | COVERED | `log.added`. The opening screen's steps come from the `project.*` events. v1's own slog lines have no v2 source, because v2 has no Go process. | 04 | [ ] |
 
@@ -124,7 +124,7 @@ This table is the checklist that proves Marasi App v2 has every v1 feature. It h
 | `update-progress` | event | GUI | Main-process updater IPC. Instance updates use `update.progress` (ticket 16). | 15 | [x] |
 | `update-installed` | event | GUI | Main-process updater IPC. Instance updates use `update.installed` (ticket 16). | 15 | [x] |
 | `update-failed` | event | GUI | Main-process updater IPC. Instance updates use `update.failed` (ticket 16). | 15 | [x] |
-| `BrowserOpenURL` | runtime | GUI | `shell.openExternal` | 15 | [ ] |
+| `BrowserOpenURL` | runtime | GUI | `shell.openExternal` in the main process (`shell:openURL`), http(s) only; a new tab in a plain browser | 15 | [ ] |
 
 ## Checkpoint
 
