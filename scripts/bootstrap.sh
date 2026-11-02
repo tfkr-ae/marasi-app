@@ -16,7 +16,7 @@ fi
 (cd frontend && npm ci)
 
 wails_version=$(GOWORK=off go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
-if ! command -v wails3 >/dev/null 2>&1 || [ "$(wails3 version)" != "$wails_version" ]; then
+if ! command -v wails3 >/dev/null 2>&1 || [ "$(wails3 version 2>&1)" != "$wails_version" ]; then
 	GOWORK=off go install "github.com/wailsapp/wails/v3/cmd/wails3@$wails_version"
 	gobin=$(go env GOBIN)
 	PATH="${gobin:-$(go env GOPATH)/bin}:$PATH"
