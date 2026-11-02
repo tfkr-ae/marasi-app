@@ -174,6 +174,32 @@
 
 	const viewportSize = () => ({ width: innerWidth, height: innerHeight });
 
+	// The Text size or the window changed while it was open: the menu and
+	// its submenus are placed again, outermost first, so each stays beside
+	// its row instead of keeping the px place worked out for the old size.
+	async function relayout() {
+		if (!open || !root) return;
+		const rect = root.getBoundingClientRect();
+		position = placeMenu({ x, y, width: rect.width, height: rect.height, viewport: viewportSize() });
+		for (let level = 0; level < subs.length; level++) {
+			await tick();
+			placeSub(level);
+		}
+	}
+
+	// Calls relayout when `node`'s width changes, as it does with the Text
+	// size. Not its height: the filter changes that, and the menu stays put.
+	function followSize(node) {
+		let width = node.offsetWidth;
+		const observer = new ResizeObserver(() => {
+			if (node.offsetWidth === width) return;
+			width = node.offsetWidth;
+			relayout();
+		});
+		observer.observe(node);
+		return { destroy: () => observer.disconnect() };
+	}
+
 	// Closes the submenus at `level` and deeper (level 0 closes them all).
 	function closeFrom(level) {
 		if (subs.length > level) subs = subs.slice(0, level);
@@ -186,14 +212,20 @@
 		return 1 + Math.max(0, ...item.sub.map(subDepth));
 	}
 
-	// Opens the submenu of item `index` of level `level` beside its row: see
-	// placeSubmenu. It is measured hidden first.
+	// Opens the submenu of item `index` of level `level` beside its row. It
+	// is measured hidden first.
 	async function openSub(level, index) {
 		if (subs[level]?.index === index) return;
 		subs = [...subs.slice(0, level), { index, active: -1, style: "visibility: hidden" }];
 		await tick();
+		if (subs[level]?.index === index) placeSub(level);
+	}
+
+	// Places the open submenu at `level` beside its row: see placeSubmenu.
+	function placeSub(level) {
 		const panel = subPanels[level];
 		const parent = level === 0 ? root : subPanels[level - 1];
+		const index = subs[level]?.index;
 		const row = parent?.querySelector(`[data-menu-index="${index}"]`);
 		if (!panel || !row || !parent) return;
 		const place = placeSubmenu({
@@ -320,11 +352,12 @@
 			: plural(summary.count, ...noun);
 </script>
 
-<svelte:window on:keydown|capture={onKeydown} on:pointerdown|capture={onPointerDown} on:blur={() => open && close(false)} />
+<svelte:window on:keydown|capture={onKeydown} on:pointerdown|capture={onPointerDown} on:blur={() => open && close(false)} on:resize={relayout} />
 
 {#if open && summary}
 	<div
 		bind:this={root}
+		use:followSize
 		tabindex="-1"
 		class="ledger-row-menu fixed z-50 w-72 border border-surface-300-600-token bg-surface-100-800-token text-xs shadow-2xl"
 		style="left: {position.left}px; top: {position.top}px"
