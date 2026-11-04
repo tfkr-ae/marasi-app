@@ -34,6 +34,11 @@ const routes = {
 // page's own, which sits inside the page and has no backdrop.
 const openDrawers = ".drawer, .armory-drawer-box";
 
+// The row menu (Ledger, Armory, Launchpad) is a fixed div, not a <dialog>,
+// and covers the rows under it. Escape closes its deepest submenu first,
+// then the menu.
+const openMenus = ".ledger-row-menu";
+
 // Skeleton's modal wrapper is display: contents, so measure its card. The
 // built-in confirm, alert and prompt dialogs carry data-testid="modal" on the
 // card itself, and a one-line confirm is about 130 px tall. The Marasi menu
@@ -319,6 +324,10 @@ function keyEvent(key) {
 		"\\": { key: "\\", code: "Backslash", keyCode: 220 },
 		up: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
 		down: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
+		left: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
+		right: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
+		f10: { key: "F10", code: "F10", keyCode: 121 },
+		contextmenu: { key: "ContextMenu", code: "ContextMenu", keyCode: 93 },
 		enter: { key: "Enter", code: "Enter", keyCode: 13 },
 		escape: { key: "Escape", code: "Escape", keyCode: 27 },
 		backspace: { key: "Backspace", code: "Backspace", keyCode: 8 },
@@ -695,11 +704,11 @@ if (mode === "launch") {
 	await waitFor(`performance.timeOrigin === ${timeOrigin}`, "the page launch loaded (it was reloaded since, so its listener state is stale; run cleanup.sh and relaunch)", 1000);
 	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
 	await waitFor(`document.visibilityState === "visible"`, "the Marasi page in front, not hidden behind another tab", 2000);
-	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)})`, "no open modal, command palette, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
+	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)}) && !(${paintedSelector(openMenus)})`, "no open modal, command palette, row menu, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {
 	// Dismiss what an earlier drive left open with the same input a user
 	// would: Escape, then a click on the drawer backdrop.
-	const residue = `${overlayPainted} || ${paintedSelector(openDrawers)}`;
+	const residue = `${overlayPainted} || ${paintedSelector(openDrawers)} || ${paintedSelector(openMenus)}`;
 	for (let attempt = 0; attempt < 3 && await evaluate(residue); attempt++) {
 		await pressEscape();
 		try {
@@ -718,7 +727,7 @@ if (mode === "launch") {
 	}
 	if (await evaluate(residue)) {
 		await capture("reset-failed");
-		throw new Error("an overlay or drawer is still open after reset; run cleanup.sh and relaunch");
+		throw new Error("an overlay, row menu, or drawer is still open after reset; run cleanup.sh and relaunch");
 	}
 	console.log("reset=clean");
 } else if (mode === "drive") {

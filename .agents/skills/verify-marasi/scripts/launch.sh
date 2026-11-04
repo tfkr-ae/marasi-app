@@ -41,6 +41,15 @@ preflight "Proxy=$PORT" "Server=$SERVER_PORT" "Chrome DevTools=$CDP_PORT"
 	printf 'Proxy and server ports are both %s.\n' "$PORT" >&2
 	exit 1
 }
+# Chrome asked for port 0 can take the free port just picked for the proxy,
+# which Marasi binds only once the page starts the listener; then the page
+# stays on "Starting...". Pick DevTools' port here, apart from both.
+if [ "$CDP_PORT" = 0 ]; then
+	CDP_PORT=$(free_port)
+	while [ "$CDP_PORT" = "$PORT" ] || [ "$CDP_PORT" = "$SERVER_PORT" ]; do
+		CDP_PORT=$(free_port)
+	done
+fi
 [ -x "$CHROME_BIN" ] || {
 	printf 'Chrome executable not found at %s. Set MARASI_VERIFY_CHROME_BIN.\n' "$CHROME_BIN" >&2
 	exit 1
@@ -132,6 +141,9 @@ done
 	printf 'Chrome DevTools endpoint did not become ready. See %s/chrome.log\n' "$EVIDENCE_DIR" >&2
 	exit 1
 }
+# A port chosen here (or by MARASI_VERIFY_CDP_PORT) can answer before Chrome
+# writes DevToolsActivePort, so record it once the endpoint is up.
+printf '%s\n' "$CDP_PORT" > "$CDP_PORT_FILE"
 
 node "$SCRIPT_DIR/cdp.mjs" launch "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT"
 LISTENER_PID=$(lsof -nP -t -iTCP:"$PORT" -sTCP:LISTEN | head -n 1)
