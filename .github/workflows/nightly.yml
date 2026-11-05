@@ -71,9 +71,16 @@ jobs:
           # Marasi line of its notes; empty when there is none.
           last_marasi=$(gh release view nightly --json body --jq .body 2>/dev/null |
             sed -n 's/^Marasi: *\([0-9a-f]\{40\}\).*$/\1/p' | head -n 1 || true)
-          if [ "$EVENT_NAME" = schedule ] && [ "$sha" = "$last" ] && [ "$MARASI" = "$last_marasi" ]; then
+          # Commits that touch only docs, tests, agent skills, dev scripts or
+          # README images change nothing in the build, so they don't need a
+          # nightly.
+          if [ "$EVENT_NAME" = schedule ] && [ -n "$last" ] && [ "$MARASI" = "$last_marasi" ] &&
+            git diff --quiet "$last" "$sha" -- . \
+              ':(exclude)*.md' ':(exclude)LICENSE' ':(exclude).agents' ':(exclude).claude' \
+              ':(exclude).scratch' ':(exclude)docs' ':(exclude)scripts' ':(exclude)images' \
+              ':(exclude)*_test.go' ':(exclude)*.test.*' ':(exclude)frontend/src/lib/keybindings/testing.js'; then
             echo 'publish=false' >> "$GITHUB_OUTPUT"
-            echo "No commits to the app (${sha:0:7}) or marasi (${MARASI:0:7}) since the last nightly, skipping."
+            echo "No code changes to the app (${last:0:7}..${sha:0:7}) or marasi (${MARASI:0:7}) since the last nightly, skipping."
             exit 0
           fi
           {
