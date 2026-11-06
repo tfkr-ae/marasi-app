@@ -26,6 +26,6 @@ What the server build does, from the v3.1.0 source (`pkg/application/application
 | Window title after opening a project | `Window.SetTitle` | No-op. | Native: the title reads the project's name. |
 | The update panel's `Compare` and release-page links (`Browser.OpenURL`) | System browser | Opens the host's browser; shown only with a known update. | Native: the link opens the default browser. |
 | macOS menu bar (App and Edit menus only) and its shortcuts | Application menu | No menu. | Native: only App and Edit show, and ⌘R, ⌘W and ⌘=/⌘- reach Marasi's own bindings. |
-| Start Chrome (`StartBrowser`) | None: it starts a real Chrome process | Works as on desktop and leaves a process running. | Record and stop it yourself. |
+| Start Chrome (`StartBrowser`) | None: it starts a real Chrome process | Works as on desktop and leaves a process running. Launch's isolated `HOME` makes Chrome hang on macOS, so prove it with a custom Chrome path (Settings › Browser) pointing at a wrapper that records its arguments and runs `HOME=<your home> "<Chrome>" <args except about:blank> --headless --dump-dom https://example.com/<marker>`; the marker then shows up as a pair on the service (`GET /traffic`). | Record and stop it yourself. |
 
 `Failed to …` toasts show the Go error's bare message. A `RuntimeError: ` prefix there is a bug.
