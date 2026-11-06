@@ -458,6 +458,22 @@ export function createLaunchpadStore(api) {
     return row;
   }
 
+  // Rereads a loaded pair's details. Only the latest read for an id is kept,
+  // so a request's read finishing after its response's can't undo it.
+  const detailReads = new Map();
+  async function refreshDetails(id) {
+    const version = projectStateVersion;
+    const read = (detailReads.get(id) ?? 0) + 1;
+    detailReads.set(id, read);
+    const row = await api.getRawDetails(id);
+    if (version !== projectStateVersion || detailReads.get(id) !== read || !row) return;
+    detailReads.delete(id);
+    update((state) => ({
+      ...state,
+      detailsById: { ...state.detailsById, [id]: row },
+    }));
+  }
+
   async function loadEntries(launchpadId) {
     const version = projectStateVersion;
     const entries = (await api.getEntries(launchpadId)) || [];
@@ -619,6 +635,26 @@ export function createLaunchpadStore(api) {
     await Promise.all([selectLaunchpad(selected), loadPendingLaunches()]);
   }
 
+  // After a reconnect to the same project: rereads the launchpads, every
+  // loaded entry list, the pending launches and any loaded pair still
+  // waiting for its response, in place. Drafts, the open launchpad, the
+  // Entry selection, the search and Compare stay as they are. A launch of
+  // this store's whose entry arrived meanwhile is selected as usual.
+  async function resync() {
+    const version = projectStateVersion;
+    await populate();
+    if (version !== projectStateVersion) return;
+    const unanswered = Object.entries(current.detailsById)
+      .filter(([, details]) => !details?.Response)
+      .map(([id]) => id);
+    await Promise.all([
+      ...Object.keys(current.entriesByLaunchpad).map((id) => loadEntries(id)),
+      ...unanswered.map((id) => refreshDetails(id)),
+    ]);
+    if (version !== projectStateVersion) return;
+    for (const id of [...awaitingEntry.keys()]) await selectArrivedLaunch(id);
+  }
+
   // Jump to Launchpad: refreshes the list, opens `launchpadId` and selects
   // its newest entry, which may have been linked since its entries loaded.
   // `found` is false for an unknown id; the selection is then as populate
@@ -719,6 +755,7 @@ export function createLaunchpadStore(api) {
       set(initialState(++projectStateVersion));
     },
     populate,
+    resync,
     jumpTo,
     loadEntries,
     ensureDetails,
@@ -882,11 +919,19 @@ export function createLaunchpadStore(api) {
       await selectLaunchpad(neighbour?.ID ?? null);
     },
 
-    onRequest: (request) => {
+    // The stream's request and response events carry no raw bytes, so an
+    // arrival without them reads its pair's details from Marasi.
+    onRequest: async (request) => {
+      const before = current;
       update((state) => arriveRequest(state, request));
-      selectArrivedLaunch(request?.ID);
+      if (current !== before && request.Raw === undefined) await refreshDetails(request.ID);
+      await selectArrivedLaunch(request?.ID);
     },
-    onResponse: (response) => update((state) => arriveResponse(state, response)),
+    onResponse: async (response) => {
+      const before = current;
+      update((state) => arriveResponse(state, response));
+      if (current !== before && response.Raw === undefined) await refreshDetails(response.ID);
+    },
 
     // Compare starts from an entry of the open launchpad as A. `picking`
     // names the side the next entry click fills.

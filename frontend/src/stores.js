@@ -13,7 +13,7 @@ import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
 import { webSocketStore } from "./stores/webSocketStore";
 import { armoryStore } from "./stores/armoryStore";
-import { launchpadStore } from "./stores/launchpadStore";
+import "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
 import { interceptFlag } from "./stores/interceptFlag.js";
 import { readHighlights } from "./stores/highlightsStore";
@@ -146,7 +146,6 @@ export async function resetProject(name) {
   logbookStore.clear();
   webSocketStore.clear();
   armoryStore.clear();
-  launchpadStore.clear();
   checkpointStore.clear();
 }
 

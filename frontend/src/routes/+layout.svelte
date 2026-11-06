@@ -55,7 +55,7 @@
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { webSocketStore } from "../stores/webSocketStore";
-	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { armoryStore } from "../stores/armoryStore";
 	import {
 		checkpointItemContext,
@@ -279,20 +279,12 @@
 				ledgerStore.onRequest(newRequest);
 				sitemapStore.onRequest(newRequest);
 				recentTraffic.onRequest(newRequest);
-				launchpadStore.onRequest(newRequest);
 				armoryStore.onRequest(newRequest);
 			});
-			on("launch-started", (launch) =>
-				launchpadStore.onLaunchStarted(launch),
-			);
-			on("launch-finished", (launch) =>
-				launchpadStore.onLaunchFinished(launch),
-			);
 			on("response", (newResponse) => {
 				ledgerStore.onResponse(newResponse);
 				sitemapStore.onResponse(newResponse);
 				recentTraffic.onResponse(newResponse);
-				launchpadStore.onResponse(newResponse);
 				armoryStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
