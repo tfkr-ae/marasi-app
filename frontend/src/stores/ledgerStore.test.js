@@ -1192,3 +1192,46 @@ test("a failed note save leaves the pair's note mark as it was and rejects", asy
   await assert.rejects(store.saveNote(idOf(1), "x"), /disk full/);
   assert.equal(store.findShownPair(idOf(1)).Metadata?.has_note, undefined);
 });
+
+test("resync brings the rows up to date in place, keeping the view, selection and drawer", async () => {
+  const api = fakeApi({ traffic: pairs(50) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await scrollTo(store, 10);
+  store.clickRow(idOf(30));
+  store.clickRow(idOf(31), { toggle: true });
+  const before = get(store);
+
+  // Missed while the stream was down: a pair deleted, one highlighted, one
+  // captured.
+  api.db.splice(api.db.findIndex((p) => p.ID === idOf(45)), 1);
+  api.db.find((p) => p.ID === idOf(31)).Highlight = 4;
+  api.capture(pair(51));
+
+  await store.resync();
+  const state = get(store);
+  assert.equal(state.results.reset, before.results.reset, "the table keeps its scroll");
+  assert.ok(!ids(state).includes(idOf(45)), "the deleted pair goes");
+  assert.ok(!ids(state).includes(idOf(51)), "rows don't move: the new pair waits");
+  assert.equal(state.results.newCount, 1);
+  assert.equal(tableRows(state).find((row) => row.ID === idOf(31)).Highlight, 4);
+  assert.deepEqual([...state.selection.ids], [idOf(30), idOf(31)]);
+  assert.equal(state.selection.focus, idOf(31));
+  assert.equal(focusedPair(state).Highlight, 4, "the drawer shows the pair as it is now");
+  assert.equal(countLabel(state), "49 in the live view");
+});
+
+test("resync reads the project's exclusion again, and reloads when another client changed it", async () => {
+  const api = fakeApi({ traffic: pairs(5, (n) => ({ ContentType: n === 5 ? "text/css" : "application/json" })) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  assert.equal(tableRows(get(store)).length, 5);
+
+  // Another client gave the project its own list.
+  await api.setExclusion(["text/css"]);
+  await store.resync();
+  const state = get(store);
+  assert.deepEqual(state.exclusion, ["text/css"]);
+  assert.equal(state.ownExclusion, true);
+  assert.ok(!ids(state).includes(idOf(5)));
+});

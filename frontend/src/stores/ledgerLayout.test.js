@@ -199,3 +199,52 @@ test("the drawer's details column starts collapsed and stays as left across clos
   store.setDrawerExpanded(false);
   assert.equal(get(store).layout.drawer.expanded, false);
 });
+
+test("the selected pair's live response gains its body from the full pair, for the drawer", async () => {
+  let release;
+  const read = new Promise((resolve) => (release = resolve));
+  const reads = [];
+  const store = createLedgerStore({
+    ...fakeApi({ liveView: [pair("a"), pair("b")] }),
+    getRawDetails: async (id) => {
+      reads.push(id);
+      await read;
+      return { Response: { ID: id, StatusCode: 200, Raw: "HTTP/1.1 200 OK\r\n\r\nhi" }, Prettified: { Request: "", Response: "pretty hi" } };
+    },
+  });
+  await store.populate();
+  store.selectPair("a");
+  // The stream's response carries no body: the drawer has the status at once.
+  store.onResponse({ ID: "a", StatusCode: 200, RespondedAt: "t2" });
+  assert.equal(get(store).selection.incomingResponse.StatusCode, 200);
+  assert.deepEqual(reads, ["a"]);
+  release();
+  await store.settled();
+  const incoming = get(store).selection.incomingResponse;
+  assert.equal(incoming.Raw, "HTTP/1.1 200 OK\r\n\r\nhi");
+  assert.equal(incoming.Prettified, "pretty hi");
+  assert.equal(incoming.RespondedAt, "t2");
+
+  // Another pair's response reads nothing.
+  store.onResponse({ ID: "b", StatusCode: 500 });
+  assert.deepEqual(reads, ["a"]);
+});
+
+test("a body read for a pair the drawer has left is dropped", async () => {
+  let release;
+  const read = new Promise((resolve) => (release = resolve));
+  const store = createLedgerStore({
+    ...fakeApi({ liveView: [pair("a"), pair("b")] }),
+    getRawDetails: async () => {
+      await read;
+      return { Response: { Raw: "late" }, Prettified: { Response: "" } };
+    },
+  });
+  await store.populate();
+  store.selectPair("a");
+  store.onResponse({ ID: "a", StatusCode: 200 });
+  store.selectPair("b");
+  release();
+  await store.settled();
+  assert.equal(get(store).selection.incomingResponse, null);
+});

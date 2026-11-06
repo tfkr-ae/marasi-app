@@ -1,21 +1,18 @@
 // The highlight palette's state: the app's colours and labels (the app
 // config YAML), the open project's labels (client settings
-// `ledger.highlight.<n>`, docs/adr/2026-10-16-app-defaults-with-project-overrides.md), renaming a label, and the once-per-
-// project migration of the old context menu's hex highlights. Backend calls
-// go through the injected `api`, so tests run against a fake:
+// `ledger.highlight.<n>`, docs/adr/2026-10-16-app-defaults-with-project-overrides.md),
+// and renaming a label. Backend calls go through the injected `api`
+// (highlightsApi.js), so tests run against a fake:
 //
 //   getHighlights() / saveHighlights(list) / resetHighlights()   app highlights
-//   listClientSettings(prefix) / getClientSetting(key)            project settings
+//   listClientSettings(prefix)                                    project settings
 //   setClientSetting(key, value) / deleteClientSetting(key)
-//   migrateOldHighlights() -> { Ran, Highlighted, Cleared }
 import { derived, get, writable } from "svelte/store";
 import { DEFAULT_HIGHLIGHTS, effectivePalette } from "../lib/ledger/highlights.js";
 
 /** The project setting that holds highlight `number`'s label. */
 export const projectLabelKey = (number) => `ledger.highlight.${number}`;
 const LABEL_PREFIX = "ledger.highlight.";
-/** Set once the project's old highlights were migrated. */
-export const MIGRATED_KEY = "ledger.highlight_migrated";
 
 // Reads ledger.highlight.<n> settings into { n: label }.
 function labelsFrom(settings) {
@@ -38,15 +35,13 @@ export function createHighlightsStore(api) {
   const palette = derived([appHighlights, projectLabels], ([$app, $project]) =>
     effectivePalette($app, $project),
   );
-  /** True while the open project's old highlights are being migrated. */
-  const migrating = writable(false);
 
   let app = null;
   appHighlights.subscribe((value) => (app = value));
   let labels = {};
   projectLabels.subscribe((value) => (labels = value));
-  // Increases on every project open, so late results for an earlier project
-  // are dropped.
+  // Increases on every load and clear, so late results for an earlier
+  // project are dropped.
   let generation = 0;
 
   async function readApp() {
@@ -120,60 +115,33 @@ export function createHighlightsStore(api) {
     }
   }
 
-  // Runs the migration unless the project has the flag. `fresh` tells
-  // whether the project is still the one open.
-  async function migrate(fresh, onMigrated) {
-    let result;
+  async function loadProject() {
+    const loading = ++generation;
     try {
-      result = await api.migrateOldHighlights();
+      const settings = await api.listClientSettings(LABEL_PREFIX);
+      if (loading === generation) projectLabels.set(labelsFrom(settings));
     } catch (error) {
-      console.error("Updating old highlights failed:", error);
-      return;
-    } finally {
-      if (fresh()) migrating.set(false);
+      console.error("Reading the project's highlight labels failed:", error);
     }
-    if (fresh() && result?.Ran) onMigrated?.(result);
   }
 
   const store = {
     appHighlights,
     projectLabels,
     palette,
-    migrating,
-    /** The migration started by the last openProject; resolves when it ends. */
-    migration: Promise.resolve(),
     readApp,
     save,
     reset,
     rename,
 
-    /**
-     * Loads the open project's labels, then starts migrating its old
-     * highlights in the background unless it was done before. `onMigrated`
-     * gets Marasi's result when a migration ran, so the Ledger can reload.
-     */
-    async openProject({ onMigrated } = {}) {
-      const opened = ++generation;
-      const fresh = () => opened === generation;
+    /** Loads the open project's labels. */
+    loadProject,
+    /** Reads the project's labels again; another client may have renamed one. */
+    resync: loadProject,
+    /** Forgets the last project's labels. */
+    clear() {
+      generation++;
       projectLabels.set({});
-      migrating.set(false);
-      store.migration = Promise.resolve();
-      try {
-        const settings = await api.listClientSettings(LABEL_PREFIX);
-        if (fresh()) projectLabels.set(labelsFrom(settings));
-      } catch (error) {
-        console.error("Reading the project's highlight labels failed:", error);
-      }
-      let flag;
-      try {
-        flag = await api.getClientSetting(MIGRATED_KEY);
-      } catch (error) {
-        console.error("Reading whether old highlights were updated failed:", error);
-        return;
-      }
-      if (flag != null || !fresh()) return;
-      migrating.set(true);
-      store.migration = migrate(fresh, onMigrated);
     },
   };
   return store;

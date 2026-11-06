@@ -1,6 +1,6 @@
 // The Ledger store: the rows the table shows, the query, the sort, the
 // content-type exclusion and new matches. Every backend call goes through
-// the injected `api` (see ledgerStore.js for the Wails one), so this module
+// the injected `api` (ledgerApi.js maps the service to it), so this module
 // loads under node --test.
 //
 // The table shows one set of results: the live view (an empty query) or a
@@ -955,6 +955,38 @@ export function createLedgerStore(api) {
     ]);
   }
 
+  /**
+   * Brings the Ledger up to date after a reconnect to the same project, in
+   * place: the project's exclusion is read again (another client may have
+   * changed it), the rows are read again where they are, as after a bulk
+   * change, and the matches captured meanwhile are counted. The scroll,
+   * selection, drawer, query and sort stay. A changed exclusion reads the
+   * results again from the top instead, as saving one does.
+   */
+  async function resync() {
+    const version = projectVersion;
+    api.forgetExclusion?.();
+    let exclusion = current.exclusion;
+    let ownExclusion = current.ownExclusion;
+    try {
+      [exclusion, ownExclusion] = await Promise.all([api.getExclusion(), api.hasOwnExclusion()]);
+    } catch (err) {
+      console.error("Reading the content-type exclusion failed:", err);
+    }
+    if (version !== projectVersion) return;
+    exclusion = exclusion ?? [];
+    const changedExclusion =
+      exclusion.length !== current.exclusion.length || exclusion.some((type, i) => type !== current.exclusion[i]);
+    update((state) => ({ ...state, exclusion, ownExclusion, exclusionLoaded: true }));
+    if (current.typeCounts.loaded) track(loadTypeCounts());
+    if (changedExclusion) {
+      await reload();
+      return;
+    }
+    await refresh();
+    await track(countNewMatches());
+  }
+
   // Stores a new exclusion. The caller reads the results again so they
   // reflect it, which drops the pairs it hides from the selection.
   function applyExclusion(exclusion, ownExclusion) {
@@ -1045,6 +1077,30 @@ export function createLedgerStore(api) {
     });
     if (!showAtTop) scheduleNewMatches();
     else if (tableRows(current).length > MAX_WINDOW_ROWS) track(readInPlace({ asOf: "" }));
+  }
+
+  // A live response carries no body; the drawer's copy of the focused
+  // pair's response gains its raw text and prettified copy from the full
+  // pair. Dropped when the drawer has moved on meanwhile.
+  async function readIncomingBody(res) {
+    if (!api.getRawDetails) return;
+    let details;
+    try {
+      details = await api.getRawDetails(res.ID);
+    } catch (err) {
+      console.error("Reading the response failed:", err);
+      return;
+    }
+    const incoming = current.selection.incomingResponse;
+    if (!details || incoming?.ID !== res.ID) return;
+    setSelection({
+      ...current.selection,
+      incomingResponse: {
+        ...incoming,
+        Raw: details.Response?.Raw ?? "",
+        Prettified: details.Prettified?.Response ?? "",
+      },
+    });
   }
 
   /**
@@ -1673,6 +1729,8 @@ export function createLedgerStore(api) {
       projectVersion++;
       reading = false;
       exclusionLoaded = Promise.resolve();
+      // The next project has its own exclusion.
+      api.forgetExclusion?.();
       cancelDelay();
       cancelNewMatches();
       latestRequest++;
@@ -1688,6 +1746,7 @@ export function createLedgerStore(api) {
       });
     },
     populate,
+    resync,
     reload,
     settled,
 
@@ -1714,6 +1773,7 @@ export function createLedgerStore(api) {
     onResponse: (res) => {
       if (sameID(current.selection.focus, res.ID)) {
         setSelection({ ...current.selection, incomingResponse: res });
+        track(readIncomingBody(res));
       }
       responseBuffer.set(res.ID, res);
       if (responseBuffer.size > MAX_BUFFERED) flush();
