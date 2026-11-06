@@ -170,6 +170,18 @@ export function switchOpening() {
   currentProject.set(get(opening)?.current ?? null);
 }
 /**
+ * Records the project the service has open, its canonical `path`, as the
+ * loaded project: the window and Home name it, and startup carries on.
+ */
+export function serviceProjectLoaded(path) {
+  const name = path.split(/[\\/]/).pop().replace(/\.marasi$/, "");
+  const project = { name, path };
+  activeProject.set(name);
+  currentProject.set(project);
+  loadedProject.set(project);
+  return project;
+}
+/**
  * Records that the open in progress succeeded, and closes the screen.
  * Returns the project that opened, `{name, path}`.
  */

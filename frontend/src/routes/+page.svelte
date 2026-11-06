@@ -13,7 +13,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import { ChevronDown, Download, FolderOpen } from "lucide-svelte";
-	import { listener } from "../stores";
+	import { homeStore } from "../stores/homeStore";
 	import {
 		chromeError,
 		downloadCertificate,
@@ -56,14 +56,16 @@
 							if (!$modalStore[0]) modalStore.trigger(listenerModal(toastStore));
 						}}
 					>
-						<span
-							>{$listener.address +
-								":" +
-								$listener.port}</span
+						<span data-testid="home-listener"
+							>{$homeStore.listener.status
+								? $homeStore.listener.address +
+									":" +
+									$homeStore.listener.port
+								: "Listener off"}</span
 						>
 						<span
 							class={"flex w-3 h-3 me-3 rounded-full " +
-								($listener.status
+								($homeStore.listener.status
 									? "bg-success-500"
 									: "bg-primary-500")}
 						></span>

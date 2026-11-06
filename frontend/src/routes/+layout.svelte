@@ -38,11 +38,8 @@
 	let currentTile = 0;
 	import { page } from "$app/stores";
 	import {
-		logItems,
 		activeProject,
-		listener,
 		readConfig,
-		marasiConfig,
 		extensions,
 		extensions_ui,
 		appState,
@@ -53,11 +50,8 @@
 		loadedProject,
 		stayInCurrentProject,
 	} from "../stores.js";
-	import {
-		openProjectFile,
-		openScratchpad,
-		retryOpen,
-	} from "../lib/globalActions.js";
+	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
+	import { connectionStore } from "../stores/connectionStore";
 	import { webSocketStore } from "../stores/webSocketStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { armoryStore } from "../stores/armoryStore";
@@ -78,10 +72,7 @@
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
-	import {
-		OpenFileDialog,
-		StartProxy,
-	} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import {
 		ChefHat,
 		Brush,
@@ -212,34 +203,24 @@
 	// Text size sizes the root element, so everything in rem follows it.
 	// readConfig sets it before startup draws any text.
 	$: applyTextSize($textSize);
-	// Startup opens the scratchpad, and carries on once the first project
-	// has opened and loaded: the scratchpad, or one picked on the opening
-	// screen when the scratchpad can't open. It resolves to that project.
+	// Startup reaches the Marasi service (the local instance, started or
+	// attached to by the connection store), and carries on once the
+	// service's project has loaded. It resolves to that project.
 	let stopWaitingForProject = () => {};
 	const StartupRoutine2 = new Promise((resolve) => {
 		stopWaitingForProject = loadedProject.subscribe(
 			(project) => project && resolve(project),
 		);
-		readConfig().then(openScratchpad);
+		readConfig().then(() => connectionStore.start());
 	});
-	// Starts the listener on the configured address.
-	function startListener() {
-		return StartProxy($marasiConfig.DefaultAddress, $marasiConfig.DefaultPort)
-			.then(() => {
-				listener.set({
-					status: true,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			})
-			.catch((listenerError) => {
-				listener.set({
-					status: false,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			});
-	}
+	// What the start screen says while the app reaches the service.
+	const startingText = {
+		idle: "Starting...",
+		starting: "Starting Marasi...",
+		connecting: "Connecting to Marasi...",
+		connected: "Loading project...",
+		failed: "Couldn't reach Marasi",
+	};
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
 		return {
@@ -272,20 +253,6 @@
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
-			// The listener starts on the configured address, and the first-run
-			// setup shows only once it has started (or failed to), as it sets
-			// the listener up.
-			startListener().then(() => {
-				if (!$marasiConfig.FirstRun || $modalStore[0]) return;
-				modalStore.trigger({
-					type: "component",
-					component: "Startup",
-					title: "Setup Listener",
-					response: (r) => {
-						console.log(r);
-					},
-				});
-			});
 			// The project that opened, which may not be the scratchpad, names
 			// the window and the app's project, as a switch does.
 			setWindowTitle(project.name);
@@ -298,9 +265,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			function handleNewLog(newLog) {
-				$logItems = [...$logItems, newLog];
-			}
 			function readCheckpointItems() {
 				checkpointStore
 					.onIntercepted()
@@ -369,12 +333,6 @@
 			on("ws-state", ({ RequestID, State }) =>
 				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
 			);
-			on("log", (newLog) => {
-				if (typeof newLog?.Level !== "string") {
-					return;
-				}
-				handleNewLog(newLog);
-			});
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
 			on("checkpoint-abandoned", (item) =>
@@ -938,9 +896,23 @@
 						size="128"
 						mode={$modeCurrent ? "light" : "dark"}
 					/>
-					<p class="text-xs">
-						{$appState.message}
+					<p class="text-xs text-center" data-testid="connection-status">
+						{startingText[$connectionStore.phase] ?? $appState.message}
 					</p>
+					{#if $connectionStore.phase === "failed"}
+						<p class="mt-2 max-w-md text-xs text-center opacity-70 break-words">
+							{$connectionStore.error}
+						</p>
+						<div class="mt-3 flex justify-center">
+							<button
+								type="button"
+								class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
+								on:click={() => connectionStore.retry()}
+							>
+								Retry
+							</button>
+						</div>
+					{/if}
 				</div>
 			</div>
 		{/if}
