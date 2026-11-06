@@ -5,9 +5,11 @@ How the app starts, opens the scratchpad, and switches to another project, acros
 ## Startup order
 
 1. **Go.** `main` registers `App` as the Wails application's service, so Wails calls `App.ServiceStartup` before the window loads. `NewApp` builds the Marasi proxy and calls `newApp`, which tests call directly. `newApp` wires the project lifecycle and the `configure*Handlers` events. `ServiceStartup` opens no project and starts no listener.
-2. **Layout.** `StartupRoutine2` in `frontend/src/routes/+layout.svelte` runs `readConfig` (in `frontend/src/stores.js`), then `openScratchpad`, and resolves when `loadedProject` is set.
-3. **Open.** `openScratchpad` and `openProjectFile` in `frontend/src/lib/globalActions.js` both go through `openWithScreen`. It calls `SetupScratchpad` or `OpenProject` in `app.go`, then `openProject` in `stores.js`, which reads the project into the stores. `finishOpening` sets `loadedProject`.
-4. **After the first open.** `StartupRoutine2.then` starts the listener (`startListener`), installs the menu shortcuts, and subscribes to the traffic, WebSocket, launch and log events (see `marasi-service.md`).
+2. **Layout.** `StartupRoutine2` in `frontend/src/routes/+layout.svelte` runs `readConfig` (in `frontend/src/stores.js`), then `connectionStore.start()`, and resolves when `loadedProject` is set. Until then the start screen shows the connection's phase, or its error and Retry.
+3. **The service.** The connection store starts or attaches to the local instance (`ConnectLocal`), reads `/service/status`, opens `/events`, and runs `loadProject` (`stores/connectionStore.js`): Home's store loads, and `serviceProjectLoaded` names the service's open project and sets `loadedProject` (see `marasi-service.md`, "Moving onto the service").
+4. **After the first load.** `StartupRoutine2.then` installs the menu shortcuts and subscribes to the Wails traffic, WebSocket, launch and Checkpoint events the pages not yet on the service still read. No listener starts in process, and the first-run listener setup no longer shows.
+
+Opening and switching below still run in process until the projects ticket moves them to the service.
 
 ## Opening and switching
 

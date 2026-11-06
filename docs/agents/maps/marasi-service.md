@@ -2,6 +2,26 @@
 
 How the app reaches the Marasi library, how Go and the frontend talk (bindings, events, errors), and where app and project settings live. Names are functions, types and files, so search for them.
 
+## Moving onto the service
+
+The app is moving from the in-process Marasi library to a Marasi service instance it reaches through the control API (`.scratch/service-implementation/spec.md`). Home runs on the service; the other pages still call the bindings below until their tickets move them. Startup no longer opens a project or starts a listener in process.
+
+- **Local instance (Go, `local_instance.go`).** `ConnectLocal` finds `marasi` on PATH (`findCLI`), runs `service status --json`, and either starts the `default` instance (`service start --port 0 --control-address 127.0.0.1:0`, a generated password in `MARASI_PASSWORD`, never in the arguments) or attaches, turning a control listener on with `service control start` when it has none. It reads the address and password back from `service control pair` over the socket, and returns `LocalConnection {url, password, instance, startedByApp}`. `ServiceShutdown` stops the instance only when the app started it (`stopOwnedLocal`). Every call goes through `runCLI`, `findCLI` and `newPassword`, which tests replace (`app_local_instance_test.go`'s `fakeCLI`), passes `--config-dir` from `MARASI_APP_CLI_CONFIG_DIR` when set, and drops inherited `MARASI_*` variables. Failures carry the `cli_missing` or `instance_failed` code.
+- **Service client (`frontend/src/lib/service/`).** `client.js`'s `createServiceClient({fetch, EventSource})` is the only code that calls `fetch` for the service: `use({url, password})`, `get`/`post`/`put`/`del`/`request`, `on(eventName, handler)` (returns its unsubscribe), `openEvents({onOpen, onDrop})` and `closeEvents()`. It sends `Authorization: Bearer` unless the connection has no password. `errors.js` turns a refusal into a `ServiceError` whose text is `"<METHOD> <path>: <code>[ (<ids>)]: <message>"`, so `codeIDs` and its helpers read it; its `renames` table maps service codes the app knew by another name (`project_already_open` → `project_locked`, a 404 on a Checkpoint forward or drop → `checkpoint_gone (<id>)`, a 404 on a launchpad unlink → `not_linked`). A non-JSON refusal is `http_error` with `status`. `sse.js` is the production EventSource: a fetch-stream reader, since a native `EventSource` can't send the password. `index.js` exports the app's client, `service`. Tests: `client.test.js`, `sse.test.js`.
+- **Connection store (`stores/createConnectionStore.js`, bound in `connectionStore.js`).** A pure `reduce(state, action)` returns `{state, steps, refusal}`, and the store performs the steps through its `api` (Go's `ConnectLocal`, the service client, and `loadProject`). Phases: `idle`, `starting`, `connecting`, `connected`, `failed` (Retry begins again). A new phase or event is a case in `reduce`, a step in `perform`, and a scenario in `connectionStore.test.js`. The password passes through steps and never sits in the state.
+- **Startup.** `StartupRoutine2` (`+layout.svelte`) runs `readConfig`, then `connectionStore.start()`. On `connected`, the store opens `/events` and runs `loadProject`, which loads Home and calls `serviceProjectLoaded` (`stores.js`) to name the project and set `loadedProject`.
+
+### Adding a store to the service client
+
+Each page ticket moves its store the same way, as `homeStore` did:
+
+1. **The adapter, `stores/xApi.js`:** `createXApi(client)` returns the `api` object `createXStore(api)` already takes. Each method calls `client.get/post/…` and maps the API's snake_case shapes to the shape the store reads (PascalCase today), so store logic and components barely change. Logic the Go binding did on top of Marasi (paging past 500, exclusions, empty note = delete) goes here or in a small pure helper beside it. Export the mappers stream events need too (`homeApi.js`'s `toLog`).
+2. **The store, `stores/xStore.js`:** `export const xStore = createXStore(createXApi(service))`, importing `service` from `lib/service/index.js`, never a binding for service data. Route its events here: `service.on("log.added", homeStore.onLog)`, with the event name from `api.md`. Handlers get the event's parsed data as the service sends it.
+3. **Load and resync:** add the store's `populate()` to `loadProject` in `connectionStore.js`, and give it a `resync()` (its `populate()` when it holds nothing local).
+4. **Tests:** run `createXStore(createXApi(fakeClient))` with a fake client whose `get`/`post` answer from a route table, as `homeStore.test.js` does, so the mapping and the store are tested together through their public surface. Keep the store's existing fake-api suites.
+5. **Errors:** a refusal the page acts on is read with `codeIDs` as before. If the app knew it by another code, add a row to `renames` in `lib/service/errors.js` with a case in `client.test.js`.
+6. **Wails events:** remove the page's `on`/`off` for the old Wails event in `+layout.svelte`.
+
 ## Marasi source
 
 The app pins `github.com/tfkr-ae/marasi` in `go.mod`. `GOWORK=off go list -m -f '{{.Dir}}' github.com/tfkr-ae/marasi` gives that version's source. `~/Projects/marasi-project/marasi` is the sibling checkout, for unreleased changes.
