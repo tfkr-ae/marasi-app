@@ -74,67 +74,38 @@ func TestQuitConfirmedOverUnsavedDraftsCloses(t *testing.T) {
 
 func TestSwitchProjectOverUnsavedDraftsCanBeCancelled(t *testing.T) {
 	app := newScratchpadApp(t)
-	oldPath := scratchpadPath(t, app)
 	app.SetUnsavedDraftCount(2)
 	dialog := withDialog(app, "Cancel")
 
-	_, err := app.OpenProject("other")
-	if err == nil || !strings.Contains(err.Error(), "project switch cancelled") {
-		t.Fatalf("wanted project switch cancelled, got %v", err)
+	confirmed, err := app.ConfirmProjectSwitch()
+	if err != nil || confirmed {
+		t.Fatalf("wanted the switch cancelled, got %v %v", confirmed, err)
 	}
-	if len(dialog.asked) != 1 {
-		t.Fatalf("wanted one dialog, got %d", len(dialog.asked))
+	if len(dialog.asked) != 1 || !strings.Contains(dialog.asked[0].Message, "2 launchpads have unsaved drafts") {
+		t.Fatalf("wanted one dialog naming the drafts, got %v", dialog.asked)
 	}
-	assertProjectOwned(t, oldPath)
 }
 
-func TestSwitchProjectConfirmedOverUnsavedDraftsDiscardsThem(t *testing.T) {
+func TestSwitchProjectConfirmedOverUnsavedDrafts(t *testing.T) {
 	app := newScratchpadApp(t)
-	oldPath := scratchpadPath(t, app)
 	app.SetUnsavedDraftCount(2)
 	withDialog(app, "Switch Project")
 
-	if _, err := app.OpenProject("other"); err != nil {
-		t.Fatalf("opening other project: %v", err)
+	confirmed, err := app.ConfirmProjectSwitch()
+	if err != nil || !confirmed {
+		t.Fatalf("wanted the switch confirmed, got %v %v", confirmed, err)
 	}
-	assertProjectReleased(t, oldPath)
+}
 
-	// The drafts went with the old project, so quitting no longer asks.
+func TestSwitchProjectWithNothingToLoseNeverAsks(t *testing.T) {
+	app := newScratchpadApp(t)
 	dialog := withDialog(app, "Cancel")
-	if prevent := app.beforeClose(); prevent {
-		t.Fatal("wanted close to go ahead")
+
+	confirmed, err := app.ConfirmProjectSwitch()
+	if err != nil || !confirmed {
+		t.Fatalf("wanted the switch to go ahead, got %v %v", confirmed, err)
 	}
 	if len(dialog.asked) != 0 {
 		t.Fatalf("wanted no dialog, got %d", len(dialog.asked))
-	}
-}
-
-// A switch cancelled at the unsaved-work prompt never starts opening, so the
-// frontend's opening screen stays away; a confirmed one says it has started.
-func TestSwitchProjectCancelledAtThePromptNeverStartsOpening(t *testing.T) {
-	app := newScratchpadApp(t)
-	events := &recordedEvents{}
-	app.emitEvent = events.emit
-	app.SetUnsavedDraftCount(2)
-	withDialog(app, "Cancel")
-
-	app.OpenProject("other")
-	if _, ok := events.first(projectOpeningEvent); ok {
-		t.Fatalf("wanted no %s event for a cancelled switch", projectOpeningEvent)
-	}
-}
-
-func TestSwitchProjectConfirmedAtThePromptStartsOpening(t *testing.T) {
-	app := newScratchpadApp(t)
-	events := &recordedEvents{}
-	app.emitEvent = events.emit
-	app.SetUnsavedDraftCount(2)
-	withDialog(app, "Switch Project")
-
-	if _, err := app.OpenProject("other"); err != nil {
-		t.Fatalf("opening other project: %v", err)
-	}
-	if _, ok := events.first(projectOpeningEvent); !ok {
-		t.Fatalf("wanted a %s event once the switch was confirmed", projectOpeningEvent)
 	}
 }

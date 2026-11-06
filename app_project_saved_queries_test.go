@@ -14,17 +14,13 @@ func TestProjectSavedQueriesStayWithTheirProject(t *testing.T) {
 		t.Fatalf("saving: %v", err)
 	}
 
-	if _, err := app.OpenProject("other"); err != nil {
-		t.Fatalf("opening other project: %v", err)
-	}
+	openTestProject(t, app, "other")
 	listed, err := app.ListClientSettings("ledger.saved_query.")
 	if err != nil || len(listed) != 0 {
 		t.Fatalf("wanted no saved queries in the other project, got %+v, %v", listed, err)
 	}
 
-	if _, err := app.OpenProject(scratchpadPath(t, app)); err != nil {
-		t.Fatalf("reopening scratchpad: %v", err)
-	}
+	openTestProject(t, app, scratchpadPath(t, app))
 	listed, err = app.ListClientSettings("ledger.saved_query.")
 	if err != nil || len(listed) != 1 || listed[0].Key != "ledger.saved_query.p1" {
 		t.Fatalf("wanted the scratchpad's saved query back, got %+v, %v", listed, err)

@@ -6,7 +6,7 @@ import {
   withFailed,
   withLoadPart,
   withOpened,
-  withOpenLog,
+  withProjectEvent,
   withRecents,
   withSwitched,
 } from "./openProgress.js";
@@ -14,67 +14,73 @@ import {
 // The opening screen's steps as "label:mark" pairs, for compact assertions.
 const marks = (state) => openingScreen(state).steps.map((step) => `${step.label}:${step.mark}`);
 
-// Log events as the app's slog relay emits them while a project opens.
-const db = (message, data = {}) => ({ message, level: "INFO", timestamp: "08:40:21", data: { component: "db", ...data } });
-const goose = (message, data = {}) => ({ message, level: "INFO", timestamp: "08:40:21", data: { logger: "goose", ...data } });
+// The service's project.* events while a project opens, as [name, data].
+const target = "/Users/r/acme-portal.marasi";
+const opening = (project = target) => ["project.opening", { project }];
+const upgrading = (migration, applied, total, project = target) => [
+  "project.upgrading",
+  { project, migration, applied, total },
+];
+const waiting = (waiting_for, project = target) => ["project.waiting", { project, waiting_for }];
+const opened = (project = target) => ["project.opened", { project }];
+const openingFailed = (error, project = target) => ["project.opening_failed", { project, error }];
 
-const replay = (state, events) => events.reduce(withOpenLog, state);
-const acme = () => openingFor({ name: "acme-portal", path: "/Users/r/acme-portal.marasi", current: { name: "scratchpad", path: null } });
+const replay = (state, events) => events.reduce((next, [name, data]) => withProjectEvent(next, name, data), state);
+const acme = () => openingFor({ name: "acme-portal", path: target, current: { name: "scratchpad", path: null } });
 
 test("an open starts by checking the project lock, under the project's name and path", () => {
   const screen = openingScreen(acme());
 
-  assert.deepEqual(screen.project, { name: "acme-portal", path: "/Users/r/acme-portal.marasi" });
-  assert.deepEqual(marks(acme()), ["Locking:current", "Open:todo", "Upgrade:todo", "Load:todo"]);
+  assert.deepEqual(screen.project, { name: "acme-portal", path: target });
+  assert.deepEqual(marks(acme()), ["Locking:current", "Open:todo", "Upgrade:todo", "Wait:todo", "Load:todo"]);
   assert.equal(screen.sentence, "Checking the project lock.");
 });
 
-test("connecting to the database means the lock is held, and the database is opening", () => {
-  const state = replay(acme(), [db("Connecting to SQLite...", { path: "/Users/r/acme-portal.marasi" })]);
+test("the service starting the open means the lock is being taken and the database opened", () => {
+  const state = replay(acme(), [opening()]);
 
-  assert.deepEqual(marks(state), ["Lock:done", "Opening:current", "Upgrade:todo", "Load:todo"]);
+  assert.deepEqual(marks(state), ["Lock:done", "Opening:current", "Upgrade:todo", "Wait:todo", "Load:todo"]);
   assert.equal(openingScreen(state).sentence, "Opening the database.");
 });
 
-test("an up-to-date database ticks Upgrade straight away and moves on to Load", () => {
+test("a database upgrade shows the running migration and how many of the total have applied", () => {
+  const first = replay(acme(), [opening(), upgrading("00022_pair_number.sql", 1, 3)]);
+  assert.deepEqual(marks(first), ["Lock:done", "Open:done", "Upgrading:current", "Wait:todo", "Load:todo"]);
+  assert.equal(openingScreen(first).sentence, "Upgrading the database. Keep Marasi open.");
+  assert.deepEqual(openingScreen(first).upgrade, { file: "00022_pair_number.sql", applied: 1, total: 3 });
+
+  const third = replay(first, [upgrading("00023_dashboard_counts.sql", 2, 3), upgrading("00025_launchpad_entry_order.go", 3, 3)]);
+  assert.deepEqual(openingScreen(third).upgrade, { file: "00025_launchpad_entry_order.go", applied: 3, total: 3 });
+});
+
+test("the service waiting on the open project's work says what it waits for", () => {
   const state = replay(acme(), [
-    db("Connecting to SQLite..."),
-    goose("no migrations to run", { current_version: 25 }),
-    db("Migrations up to date", { count: 0 }),
+    opening(),
+    waiting([
+      { kind: "extension", name: "compass" },
+      { kind: "work", count: 2 },
+      { kind: "checkpoint", id: "c1", type: "request", summary: "GET /login HTTP/1.1" },
+    ]),
   ]);
 
-  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Loading:current"]);
+  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Waiting:current", "Load:todo"]);
+  assert.equal(openingScreen(state).sentence, "Waiting for compass, 2 requests, GET /login HTTP/1.1.");
   assert.equal(openingScreen(state).upgrade, null);
 });
 
-test("a database upgrade shows the running upgrade file and counts each new file as one more applied", () => {
-  const opened = replay(acme(), [db("Connecting to SQLite...")]);
-  const first = replay(opened, [
-    goose("executing statement", { source: "00022_pair_number.sql", statement: "ALTER TABLE …" }),
-    goose("executing statement", { source: "00022_pair_number.sql", statement: "UPDATE …" }),
-  ]);
-  assert.deepEqual(marks(first), ["Lock:done", "Open:done", "Upgrading:current", "Load:todo"]);
-  assert.equal(openingScreen(first).sentence, "Upgrading the database. Keep Marasi open.");
-  assert.deepEqual(openingScreen(first).upgrade, { file: "00022_pair_number.sql", applied: 0 });
-
-  const third = replay(first, [
-    goose("migration completed", { source: "00022_pair_number.sql", state: "applied" }),
-    goose("executing statement", { source: "00023_dashboard_counts.sql" }),
-    goose("migration completed", { source: "00023_dashboard_counts.sql", state: "applied" }),
-    // A Go migration logs no statements, only its completion.
-    goose("migration completed", { source: "00025_launchpad_entry_order.go", state: "applied" }),
-  ]);
-  assert.deepEqual(openingScreen(third).upgrade, { file: "00025_launchpad_entry_order.go", applied: 2 });
-
-  const done = replay(third, [
-    goose("successfully migrated database", { current_version: 25 }),
-    db("Migrations completed", { count: 3 }),
-  ]);
-  assert.deepEqual(marks(done), ["Lock:done", "Open:done", "Upgrade:done", "Loading:current"]);
-  assert.equal(openingScreen(done).upgrade, null);
+test("one request waited on reads in the singular", () => {
+  const state = replay(acme(), [waiting([{ kind: "work", count: 1 }])]);
+  assert.equal(openingScreen(state).sentence, "Waiting for 1 request.");
 });
 
-const upToDate = [db("Connecting to SQLite..."), db("Migrations up to date", { count: 0 })];
+test("the service having opened the project moves on to Load", () => {
+  const state = replay(acme(), [opening(), upgrading("00022_pair_number.sql", 1, 1), opened()]);
+
+  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Wait:done", "Loading:current"]);
+  assert.equal(openingScreen(state).upgrade, null);
+});
+
+const upToDate = [opening(), opened()];
 
 test("the Load step says which part of the project is loading and how many of the five are done", () => {
   const ready = replay(acme(), upToDate);
@@ -95,11 +101,10 @@ test("the Load step says which part of the project is loading and how many of th
   });
   assert.deepEqual(load("launchpads").load, { part: "Launchpads", done: 4, total: 5 });
   assert.equal(load("launchpads").sentence, "Loading launchpads.");
-  assert.deepEqual(marks(["launchpads"].reduce(withLoadPart, ready)), ["Lock:done", "Open:done", "Upgrade:done", "Loading:current"]);
 });
 
-test("a part signalled before the database is open doesn't skip ahead, and parts never move back", () => {
-  assert.deepEqual(marks(withLoadPart(acme(), "traffic")), ["Locking:current", "Open:todo", "Upgrade:todo", "Load:todo"]);
+test("a part signalled before the project is open doesn't skip ahead, and parts never move back", () => {
+  assert.deepEqual(marks(withLoadPart(acme(), "traffic")), ["Locking:current", "Open:todo", "Upgrade:todo", "Wait:todo", "Load:todo"]);
   const ready = replay(acme(), upToDate);
   assert.equal(openingScreen(["scope", "traffic"].reduce(withLoadPart, ready)).load.part, "Scope & checkpoint");
 });
@@ -107,82 +112,89 @@ test("a part signalled before the database is open doesn't skip ahead, and parts
 test("a quick open ends with every step ticked and the sentence Opened.", () => {
   const state = withOpened(replay(acme(), upToDate));
 
-  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Load:done"]);
+  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Wait:done", "Load:done"]);
   assert.equal(openingScreen(state).sentence, "Opened.");
-  assert.equal(openingScreen(state).upgrade, null);
   assert.deepEqual(openingScreen(state).load, { part: null, done: 5, total: 5 });
 });
 
-test("log events after the open succeeded aren't part of it", () => {
-  const state = withOpened(replay(acme(), upToDate));
-  const later = withOpenLog(state, db("Connecting to SQLite...", { path: "/elsewhere.marasi" }));
+test("an open that succeeds before any event still ends with every step ticked", () => {
+  assert.deepEqual(marks(withOpened(acme())), ["Lock:done", "Open:done", "Upgrade:done", "Wait:done", "Load:done"]);
+});
 
-  assert.deepEqual(marks(later), ["Lock:done", "Open:done", "Upgrade:done", "Load:done"]);
+test("events arriving after the service answered never move a step back", () => {
+  const state = replay(withSwitched(acme()), [opening(), upgrading("00022_pair_number.sql", 1, 1)]);
+
+  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Wait:done", "Loading:current"]);
+  assert.equal(openingScreen(state).upgrade, null);
+});
+
+test("events for another project, and events after the open succeeded, aren't part of it", () => {
+  const other = replay(acme(), [opening("/Users/r/other.marasi"), upgrading("00022_pair_number.sql", 1, 1, "/Users/r/other.marasi")]);
+  assert.deepEqual(marks(other), ["Locking:current", "Open:todo", "Upgrade:todo", "Wait:todo", "Load:todo"]);
+  assert.deepEqual(openingScreen(other).log, []);
+
+  const done = withOpened(replay(acme(), upToDate));
+  const later = replay(done, [opening()]);
   assert.equal(openingScreen(later).log.length, 2);
 });
 
-test("an open that succeeds before any log event still ends with every step ticked", () => {
-  assert.deepEqual(marks(withOpened(acme())), ["Lock:done", "Open:done", "Upgrade:done", "Load:done"]);
-});
-
-test("Details lists the open's log lines unchanged, in order, and leaves out logs from outside the open", () => {
+test("Details lists the open's events in order, with their fields", () => {
   const state = replay(acme(), [
-    db("Connecting to SQLite...", { path: "/Users/r/acme-portal.marasi" }),
-    { Level: "INFO", Message: "proxy request", Source: "proxy" },
-    { message: "Listener started", level: "INFO", timestamp: "08:40:22", data: { component: "proxy" } },
-    goose("executing statement", { source: "00022_pair_number.sql", statement: "ALTER TABLE pairs ADD number INTEGER" }),
-    { message: "Failed to apply migrations", level: "ERROR", timestamp: "08:40:23", data: { component: "db", error: "disk full" } },
+    opening(),
+    upgrading("00022_pair_number.sql", 1, 2),
+    waiting([{ kind: "work", count: 2 }]),
+    openingFailed("disk full"),
   ]);
 
   assert.deepEqual(openingScreen(state).log, [
-    "08:40:21 INFO Connecting to SQLite... component=db path=/Users/r/acme-portal.marasi",
-    "08:40:21 INFO executing statement logger=goose source=00022_pair_number.sql statement=ALTER TABLE pairs ADD number INTEGER",
-    "08:40:23 ERROR Failed to apply migrations component=db error=disk full",
+    `project.opening project=${target}`,
+    `project.upgrading project=${target} migration=00022_pair_number.sql applied=1 total=2`,
+    `project.waiting project=${target} waiting_for=[{"kind":"work","count":2}]`,
+    `project.opening_failed project=${target} error=disk full`,
   ]);
 });
 
-test("an open by bare name takes the project's path from the database it connects to", () => {
+test("an open by name takes the project's path from the service's first event for that name", () => {
   const state = openingFor({ name: "new-target", path: null, current: { name: "scratchpad", path: null } });
   assert.equal(openingScreen(state).project.path, null);
 
-  const connected = withOpenLog(state, db("Connecting to SQLite...", { path: "/cfg/Marasi/new-target.marasi" }));
-  assert.deepEqual(openingScreen(connected).project, { name: "new-target", path: "/cfg/Marasi/new-target.marasi" });
+  const elsewhere = replay(state, [opening("/cfg/projects/other.marasi")]);
+  assert.equal(openingScreen(elsewhere).project.path, null);
+  const started = replay(state, [opening("/cfg/projects/new-target.marasi")]);
+  assert.deepEqual(openingScreen(started).project, { name: "new-target", path: "/cfg/projects/new-target.marasi" });
 });
 
-test("an up-to-date database ticks Open and Upgrade even without a goose event first", () => {
-  const state = replay(acme(), [db("Connecting to SQLite..."), db("Migrations up to date", { count: 0 })]);
-
-  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Loading:current"]);
-});
-
-// Errors as the app's Go side returns them through Wails.
-const lockedError = "opening project: project_locked: project already open: /Users/r/acme-portal.marasi";
-
-test("a locked project opened by bare name takes its path from the error", () => {
-  const state = openingFor({ name: "acme-portal", path: null, current: { name: "scratchpad", path: null } });
-
-  assert.deepEqual(openingScreen(withFailed(state, lockedError)).project, {
-    name: "acme-portal",
-    path: "/Users/r/acme-portal.marasi",
-  });
-});
+// A locked project as the service client reports it: 409 project_already_open
+// renamed to project_locked, with no message.
+const lockedError = "POST /project/open: project_locked: HTTP 409";
 
 test("a locked project fails the Lock step as Locked, says it's opened by another instance, and offers Stay in and Try again", () => {
-  const state = withFailed(acme(), lockedError);
+  const state = withFailed(replay(acme(), [opening(), openingFailed(`project already open: ${target}`)]), lockedError);
   const screen = openingScreen(state);
 
-  assert.deepEqual(marks(state), ["Locked:failed", "Open:todo", "Upgrade:todo", "Load:todo"]);
+  assert.deepEqual(marks(state), ["Locked:failed", "Open:todo", "Upgrade:todo", "Wait:todo", "Load:todo"]);
   assert.equal(screen.sentence, "The project is opened by another instance.");
   assert.deepEqual(screen.failure, { kind: "locked", error: lockedError });
   assert.deepEqual(screen.actions, { stayIn: "scratchpad", tryAgain: true });
 });
 
+test("the service's reason for a failure reaches Details even when it arrives after the refusal", () => {
+  const state = replay(withFailed(replay(acme(), [opening()]), lockedError), [openingFailed(`project already open: ${target}`)]);
+
+  assert.deepEqual(openingScreen(state).log, [
+    `project.opening project=${target}`,
+    lockedError,
+    `project.opening_failed project=${target} error=project already open: ${target}`,
+  ]);
+  assert.deepEqual(marks(state), ["Locked:failed", "Open:todo", "Upgrade:todo", "Wait:todo", "Load:todo"]);
+});
+
 test("another failure fails the step that was running, offers Stay in but no Try again, and puts the raw error in the log", () => {
-  const error = "file is not a database (26)";
-  const state = withFailed(replay(acme(), [db("Connecting to SQLite...")]), error);
+  const error = "POST /project/open: internal_server_error: HTTP 500";
+  const state = withFailed(replay(acme(), [opening()]), error);
   const screen = openingScreen(state);
 
-  assert.deepEqual(marks(state), ["Lock:done", "Open:failed", "Upgrade:todo", "Load:todo"]);
+  assert.deepEqual(marks(state), ["Lock:done", "Open:failed", "Upgrade:todo", "Wait:todo", "Load:todo"]);
   assert.equal(screen.sentence, "Couldn't open the project.");
   assert.deepEqual(screen.failure, { kind: "other", error });
   assert.deepEqual(screen.actions, { stayIn: "scratchpad", tryAgain: false });
@@ -191,22 +203,22 @@ test("another failure fails the step that was running, offers Stay in but no Try
 });
 
 test("a failed upgrade fails Upgrade, and stops showing upgrade progress", () => {
-  const upgrading = replay(acme(), [db("Connecting to SQLite..."), goose("executing statement", { source: "00022_pair_number.sql" })]);
-  const state = withFailed(upgrading, "opening project database: migrating: disk full");
+  const state = withFailed(replay(acme(), [opening(), upgrading("00022_pair_number.sql", 1, 2)]), "migrating: disk full");
 
-  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:failed", "Load:todo"]);
+  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:failed", "Wait:todo", "Load:todo"]);
   assert.equal(openingScreen(state).upgrade, null);
 });
 
-// Recent projects as GetRecentProjects returns them: every project in the
-// config dir, with Go's time.Time.String() as the date.
-const cfg = "/Users/r/Library/Application Support/Marasi";
+// Recent projects as the project store lists them from the service's
+// GET /project/list: its named projects, with RFC 3339 modification times.
+const cfg = "/Users/r/Library/Application Support/Marasi/projects";
+const recent = (name, modifiedAt) => ({ name, path: `${cfg}/${name}.marasi`, modifiedAt });
 const recentProjects = [
-  { ProjectName: `${cfg}/build.marasi`, Date: "2026-10-18 09:12:01.5 +0400 +04" },
-  { ProjectName: `${cfg}/scratchpad.marasi`, Date: "2026-10-20 08:40:21.123456789 +0400 +04" },
-  { ProjectName: `${cfg}/ai-sec.marasi`, Date: "2026-10-19 17:03:44.25 +0400 +04" },
-  { ProjectName: `${cfg}/acme-portal.marasi`, Date: "2026-10-20 07:00:00 +0400 +04" },
-  { ProjectName: `${cfg}/car.marasi`, Date: "2026-10-01 10:00:00.1 +0000 UTC" },
+  recent("build", "2026-10-18T09:12:01.5+04:00"),
+  recent("scratchpad", "2026-10-20T08:40:21.123456789+04:00"),
+  recent("ai-sec", "2026-10-19T17:03:44.25+04:00"),
+  recent("acme-portal", "2026-10-20T07:00:00+04:00"),
+  recent("car", "2026-10-01T10:00:00.1Z"),
 ];
 const names = (state) => openingScreen(state).choices.map((choice) => choice.name);
 
@@ -230,8 +242,8 @@ const openedTimes = (state) => Object.fromEntries(openingScreen(state).choices.m
 test("each recent project says when it was last opened", () => {
   const recents = [
     ...recentProjects,
-    { ProjectName: `${cfg}/old.marasi`, Date: "2026-08-02 11:00:00 +0400 +04" },
-    { ProjectName: `${cfg}/odd.marasi`, Date: "last Tuesday" },
+    recent("old", "2026-08-02T11:00:00+04:00"),
+    recent("odd", "last Tuesday"),
   ];
   const state = withRecents(openingFor({ name: "target", path: `${cfg}/target.marasi` }), recents, now);
 
@@ -247,13 +259,13 @@ test("each recent project says when it was last opened", () => {
 });
 
 test("a project opened a few minutes or days ago, or last week, says so", () => {
-  const at = (date) => [{ ProjectName: `${cfg}/p.marasi`, Date: date }];
+  const at = (date) => [recent("p", date)];
   const opened = (date) => openingScreen(withRecents(openingFor({ name: "target" }), at(date), now)).choices[0].opened;
 
-  assert.equal(opened("2026-10-20 08:39:00 +0400 +04"), "1 minute ago");
-  assert.equal(opened("2026-10-20 08:20:00 +0400 +04"), "20 minutes ago");
-  assert.equal(opened("2026-10-17 08:00:00 +0400 +04"), "3 days ago");
-  assert.equal(opened("2026-10-11 08:00:00 +0400 +04"), "Last week");
+  assert.equal(opened("2026-10-20T08:39:00+04:00"), "1 minute ago");
+  assert.equal(opened("2026-10-20T08:20:00+04:00"), "20 minutes ago");
+  assert.equal(opened("2026-10-17T08:00:00+04:00"), "3 days ago");
+  assert.equal(opened("2026-10-11T08:00:00+04:00"), "Last week");
 });
 
 test("a target or open project with no known path is left out of the list by name", () => {
@@ -280,7 +292,7 @@ test("once the target's database is open the previous project is gone, so a fail
   const loading = withSwitched(replay(acme(), upToDate));
   const state = withFailed(withLoadPart(loading, "extensions"), "loading extensions: boom");
 
-  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Load:failed"]);
+  assert.deepEqual(marks(state), ["Lock:done", "Open:done", "Upgrade:done", "Wait:done", "Load:failed"]);
   assert.deepEqual(openingScreen(state).actions, { stayIn: "acme-portal", tryAgain: false });
 });
 
@@ -291,13 +303,13 @@ test("an open in progress has no failure and offers no actions", () => {
 
 // At startup nothing is open yet, and the app opens the scratchpad first.
 const scratchpad = () => openingFor({ name: "scratchpad", scratchpad: true });
-const lockedScratchpad = `opening project: project_locked: project already open: ${cfg}/scratchpad.marasi`;
+const lockedScratchpad = lockedError;
 
 test("a locked scratchpad at startup says the scratchpad is opened by another instance, offers Try again but no Stay in, and a project instead", () => {
   const state = withRecents(withFailed(scratchpad(), lockedScratchpad), recentProjects);
   const screen = openingScreen(state);
 
-  assert.deepEqual(marks(state), ["Locked:failed", "Open:todo", "Upgrade:todo", "Load:todo"]);
+  assert.deepEqual(marks(state), ["Locked:failed", "Open:todo", "Upgrade:todo", "Wait:todo", "Load:todo"]);
   assert.equal(screen.sentence, "The scratchpad is opened by another instance.");
   assert.deepEqual(screen.actions, { stayIn: null, tryAgain: true });
   assert.equal(screen.choicesLabel, "Open a project instead");
@@ -305,7 +317,7 @@ test("a locked scratchpad at startup says the scratchpad is opened by another in
 });
 
 test("any other scratchpad failure at startup says it couldn't open, with the same list and neither Stay in nor Try again", () => {
-  const state = withFailed(replay(scratchpad(), [db("Connecting to SQLite...")]), "file is not a database (26)");
+  const state = withFailed(replay(scratchpad(), [opening(`${cfg}/scratchpad.marasi`)]), "file is not a database (26)");
   const screen = openingScreen(state);
 
   assert.equal(screen.sentence, "Couldn't open the project.");

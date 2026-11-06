@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	marasi "github.com/tfkr-ae/marasi"
@@ -14,130 +13,12 @@ import (
 	"github.com/tfkr-ae/marasi/wordlist"
 )
 
-func TestSetupScratchpadOpensThroughLifecycle(t *testing.T) {
-	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
-		t.Fatalf("opening scratchpad: %v", err)
-	}
-	path := scratchpadPath(t, app)
-	assertProjectOwned(t, path)
-	if app.Proxy.TrafficRepo == nil || app.Proxy.Armory == nil {
-		t.Fatal("wanted scratchpad repositories published")
-	}
-}
-
-func TestOpenProjectSwitchesThroughLifecycle(t *testing.T) {
-	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
-		t.Fatalf("opening scratchpad: %v", err)
-	}
-	oldPath := scratchpadPath(t, app)
-	name, err := app.OpenProject("other")
-	if err != nil {
-		t.Fatalf("opening other project: %v", err)
-	}
-	if name != "other" {
-		t.Fatalf("wanted project name other, got %q", name)
-	}
-	assertProjectOwned(t, projectPath(t, app, "other.marasi"))
-	assertProjectReleased(t, oldPath)
-}
-
-// A project another Marasi owns refuses with the project_locked code, and
-// the project the app had open stays open and owned by the app.
-func TestOpenProjectRefusesLockedProjectAndKeepsOpenProject(t *testing.T) {
-	app := newScratchpadApp(t)
-	holder := newDetachedProjectLifecycle(t)
-	if err := holder.Open(context.Background(), projectPath(t, app, "locked.marasi")); err != nil {
-		t.Fatalf("holding locked project: %v", err)
-	}
-
-	_, err := app.OpenProject("locked")
-	if err == nil || !strings.Contains(err.Error(), "project_locked") {
-		t.Fatalf("wanted a project_locked error, got %v", err)
-	}
-	assertProjectOwned(t, scratchpadPath(t, app))
-	if app.Proxy.TrafficRepo == nil {
-		t.Fatal("wanted the scratchpad's repositories still published")
-	}
-}
-
-// With the scratchpad owned by another Marasi, opening it refuses with the
-// project_locked code too.
-func TestSetupScratchpadRefusesLockedScratchpad(t *testing.T) {
-	app := newProjectApp(t)
-	holder := newDetachedProjectLifecycle(t)
-	if err := holder.Open(context.Background(), scratchpadPath(t, app)); err != nil {
-		t.Fatalf("holding scratchpad: %v", err)
-	}
-
-	err := app.SetupScratchpad()
-	if err == nil || !strings.Contains(err.Error(), "project_locked") {
-		t.Fatalf("wanted a project_locked error, got %v", err)
-	}
-}
-
-// The frontend shows the scratchpad's file path before it opens.
-func TestScratchpadPathIsTheScratchpadSetupOpens(t *testing.T) {
-	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
-		t.Fatalf("opening scratchpad: %v", err)
-	}
-	got, err := service.ResolveProjectPath(app.ScratchpadPath())
-	if err != nil {
-		t.Fatalf("resolving %q: %v", app.ScratchpadPath(), err)
-	}
-	if want := scratchpadPath(t, app); got != want {
-		t.Fatalf("wanted scratchpad path %q, got %q", want, got)
-	}
-}
-
-// A held Checkpoint item refuses the switch with the checkpoint_held code
-// naming it, before the unsaved-work prompt and the opening screen. The open
-// project and the held item stay as they were, and once the item is dropped
-// the switch goes through.
-func TestOpenProjectRefusesWhileCheckpointItemHeld(t *testing.T) {
-	app := newCheckpointApp(t)
-	events := &recordedEvents{}
-	app.emitEvent = events.emit
-	app.messageDialog = func(messageDialogOptions) (string, error) {
-		t.Fatal("wanted no unsaved-work prompt while an item is held")
-		return "", nil
-	}
-	app.unsavedDrafts.Store(1)
-	oldPath := scratchpadPath(t, app)
-	_, reqID, done := startAppRequestHold(t, app)
-	waitForAppCheckpoint(t, app, 1)
-
-	_, err := app.OpenProject("other")
-	if err == nil || !strings.Contains(err.Error(), checkpointHeld+" ("+reqID.String()+")") {
-		t.Fatalf("wanted a checkpoint_held error naming %s, got %v", reqID, err)
-	}
-	if _, ok := events.first(projectOpeningEvent); ok {
-		t.Fatal("wanted no project-opening event for a refused switch")
-	}
-	assertProjectOwned(t, oldPath)
-	if items := app.GetCheckpointItems(); len(items) != 1 || items[0].ID != reqID {
-		t.Fatalf("wanted the item still held, got %v", items)
-	}
-
-	if err := app.DropCheckpoint(reqID); err != nil {
-		t.Fatalf("dropping checkpoint: %v", err)
-	}
-	if err := receiveAppHoldResult(t, done); !errors.Is(err, marasi.ErrDropped) {
-		t.Fatalf("wanted: %v\ngot: %v", marasi.ErrDropped, err)
-	}
-	app.unsavedDrafts.Store(0)
-	if name, err := app.OpenProject("other"); err != nil || name != "other" {
-		t.Fatalf("wanted switch to other once the item was dropped, got %q %v", name, err)
-	}
-	assertProjectOwned(t, projectPath(t, app, "other.marasi"))
-	assertProjectReleased(t, oldPath)
-}
+// Opening projects moved to the service (projectStore.test.js); the pages
+// not yet on the service still open them in process for their tests.
 
 func TestCloseReleasesOpenProject(t *testing.T) {
 	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
+	if err := app.setupScratchpad(); err != nil {
 		t.Fatalf("opening scratchpad: %v", err)
 	}
 	path := scratchpadPath(t, app)
@@ -182,10 +63,23 @@ func newProjectApp(t *testing.T) *App {
 func newScratchpadApp(t *testing.T) *App {
 	t.Helper()
 	app := newProjectApp(t)
-	if err := app.SetupScratchpad(); err != nil {
+	if err := app.setupScratchpad(); err != nil {
 		t.Fatalf("opening scratchpad: %v", err)
 	}
 	return app
+}
+
+// openTestProject opens the project named name, or at an absolute path,
+// in process.
+func openTestProject(t *testing.T, app *App, name string) {
+	t.Helper()
+	path := name
+	if !filepath.IsAbs(name) {
+		path = filepath.Join(app.Proxy.ConfigDir, name+".marasi")
+	}
+	if err := app.openInProcess(path); err != nil {
+		t.Fatalf("opening %s: %v", name, err)
+	}
 }
 
 func scratchpadPath(t *testing.T, app *App) string {

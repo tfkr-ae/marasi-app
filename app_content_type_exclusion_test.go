@@ -187,9 +187,7 @@ func TestOpeningAProjectMigratesItsLegacyExclusion(t *testing.T) {
 	app := newProjectApp(t)
 	path := legacyProject(t, t.TempDir(), `["text/html","image/png"]`)
 
-	if _, err := app.OpenProject(path); err != nil {
-		t.Fatalf("opening legacy project: %v", err)
-	}
+	openTestProject(t, app, path)
 
 	assertStrings(t, []string{"text/html", "image/png"}, projectExclusion(t, app))
 	configRepo, err := app.Proxy.GetConfigRepo()

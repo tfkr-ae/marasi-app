@@ -1,4 +1,4 @@
-import { get, writable } from "svelte/store";
+import { writable } from "svelte/store";
 import {
   GetLogs,
   GetMarasiConfig,
@@ -6,9 +6,7 @@ import {
   GetExtensionCode,
   GetWaypoints,
   GetExtensions,
-  LoadExtensions,
   GetUserName,
-  GetRecentProjects,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
@@ -18,26 +16,14 @@ import { armoryStore } from "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
 import { interceptFlag } from "./stores/interceptFlag.js";
-import { highlightsStore, readHighlights } from "./stores/highlightsStore";
+import { readHighlights } from "./stores/highlightsStore";
 import { ledgerStore } from "./stores/ledgerStore";
 import { sitemapStore } from "./stores/sitemapStore";
 import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
-import { savedQueriesStore } from "./stores/savedQueriesStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";
-import {
-  loadSignals,
-  openingFor,
-  openingScreen,
-  withFailed,
-  withLoadPart,
-  withOpened,
-  withOpenLog,
-  withRecents,
-  withSwitched,
-} from "./lib/openProgress.js";
 
 // Startup. `started` turns true once the first project has loaded, and the
 // app's pages stay mounted from then on; `isReady` is false while a project
@@ -122,117 +108,13 @@ export let listener = writable({
 });
 export let activeProject = writable("Marasi");
 /**
- * The open in progress, as lib/openProgress.js's state, or null. The root
- * layout shows it as the opening screen over the app while `openingShown`.
+ * Resets what the app holds for the project, before the project at `name`
+ * loads (projectStore.js's loadProject, which each page's ticket gives its
+ * store's populate).
  */
-export const opening = writable(null);
-/** Whether the opening screen is up: slow opens, failures and startup. */
-export const openingShown = writable(false);
-/**
- * The project the app's Go side has open, `{name, path}` (path null when
- * unknown), so a failed open can offer to stay in it and leave it out of
- * the list.
- */
-const currentProject = writable(null);
-/**
- * Bumped after each project loads, so the app's pages mount afresh on the
- * new project's stores.
- */
-export const pagesKey = writable(0);
-/**
- * The project last opened and loaded, `{name, path}`, or null until the
- * first one has: startup carries on once it's set.
- */
-export const loadedProject = writable(null);
-/**
- * Starts the opening screen's state for opening `name` at `path` (null when
- * only a bare name is known), and returns it. `scratchpad` marks the
- * scratchpad. Before the first project has loaded (startup), nothing is
- * open to stay in. An opening screen that's up stays up for the new open.
- */
-export function startOpening({ name, path = null, scratchpad = false }) {
-  const current = get(appState).started ? get(currentProject) : null;
-  const state = openingFor({ name, path, current, scratchpad });
-  opening.set(state);
-  return state;
-}
-/** Shows the opening screen for the open in progress. */
-export function showOpening() {
-  openingShown.set(true);
-}
-/** Feeds a backend log event to the open in progress, if any. */
-export function feedOpeningLog(log) {
-  opening.update((state) => state && withOpenLog(state, log));
-}
-/** Records that the target is open and the previous project released. */
-export function switchOpening() {
-  opening.update((state) => state && withSwitched(state));
-  currentProject.set(get(opening)?.current ?? null);
-}
-/**
- * Records the project the service has open, its canonical `path`, as the
- * loaded project: the window and Home name it, and startup carries on.
- */
-export function serviceProjectLoaded(path) {
-  const name = path.split(/[\\/]/).pop().replace(/\.marasi$/, "");
-  const project = { name, path };
-  activeProject.set(name);
-  currentProject.set(project);
-  loadedProject.set(project);
-  return project;
-}
-/**
- * Records that the open in progress succeeded, and closes the screen.
- * Returns the project that opened, `{name, path}`.
- */
-export function finishOpening() {
-  const state = get(opening);
-  const opened = state && openingScreen(withOpened(state)).opened;
-  clearOpening();
-  if (!opened) return null;
-  currentProject.set(opened);
-  loadedProject.set(opened);
-  return opened;
-}
-/**
- * Stays in the project still open after a failed open, and closes the
- * screen. When the target opened but didn't load, that's the target.
- */
-export function stayInCurrentProject() {
-  const state = get(opening);
-  clearOpening();
-  if (state?.current) loadedProject.set(state.current);
-}
-/**
- * Records that the open in progress failed with `error`, and shows the
- * opening screen with the recent projects to open instead, however fast
- * the open failed.
- */
-export function failOpening(error) {
-  const current = get(opening);
-  if (!current) return;
-  const failed = withFailed(current, error);
-  opening.set(failed);
-  showOpening();
-  GetRecentProjects()
-    .then((recents) => opening.update((state) => (state === failed ? withRecents(state, recents) : state)))
-    .catch((err) => console.error("Listing recent projects failed:", err));
-}
-/** Closes the opening screen, as after a cancelled open or Stay in. */
-export function clearOpening() {
-  opening.set(null);
-  openingShown.set(false);
-}
-// Signals that the load sequence starts loading `signal`.
-function loadPart(signal) {
-  opening.update((state) => state && withLoadPart(state, signal));
-}
-
-export async function openProject() {
-  // Each loadPart signal tells the opening screen which part loads next.
-  loadPart(loadSignals.traffic);
+export async function resetProject(name) {
   reportMetadata.set({
-    title: get(activeProject) + " Report",
+    title: name + " Report",
     client: "Client Name",
     type: "Assessment Type",
     is_draft: true,
@@ -257,8 +139,6 @@ export async function openProject() {
   sitemapStore.clear();
   jobsStore.clear();
   recentTraffic.clear();
-  // Project saved queries belong to the project just opened.
-  savedQueriesStore.loadProject();
   extensions.set([]);
   extensions_ui.set({});
   testCaseStore.clear();
@@ -268,47 +148,6 @@ export async function openProject() {
   armoryStore.clear();
   launchpadStore.clear();
   checkpointStore.clear();
-  // The Ledger's first page and its exclusion load in the background, and
-  // first: it is the page researchers open, and its rows don't wait on the
-  // project's extensions.
-  ledgerStore.populate();
-  loadPart(loadSignals.extensions);
-  try {
-    await LoadExtensions();
-  } catch (err) {
-    console.error("Failed to load project extensions:", err);
-  }
-
-  // Reset items. The recent traffic for extensions loads in the background.
-  recentTraffic.populate();
-  // Marasi's background jobs, polled while one runs.
-  jobsStore.refresh();
-  // The project's highlight labels, then its old hex highlights migrated in
-  // the background; the Ledger reloads once they are numbers.
-  highlightsStore.openProject({ onMigrated: () => ledgerStore.reload() });
-  loadPart(loadSignals.logs);
-  await populateLogs();
-  loadPart(loadSignals.scope);
-  await populateScope();
-  loadPart(loadSignals.checkpoint);
-  await populateCheckpoint();
-  loadPart(loadSignals.workshop);
-  await populateWorkshop();
-  loadPart(loadSignals.waypoints);
-  await populateWaypoints();
-  loadPart(loadSignals.extensionList);
-  await populateExtensions();
-  loadPart(loadSignals.testCases);
-  await testCaseStore.populate();
-  loadPart(loadSignals.findings);
-  await findingStore.populate();
-  await logbookStore.populate();
-  loadPart(loadSignals.intercept);
-  await webSocketStore.populateInterceptFlag();
-  loadPart(loadSignals.armory);
-  await armoryStore.populate();
-  loadPart(loadSignals.launchpads);
-  await launchpadStore.populate();
 }
 
 export async function populateWaypoints() {

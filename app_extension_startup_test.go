@@ -14,7 +14,7 @@ func TestSetupScratchpadGivesStartupTheGUI(t *testing.T) {
 	events := &recordedEvents{}
 	app.emitEvent = events.emit
 	seedWorkshopLua(t, filepath.Join(app.Proxy.ConfigDir, "scratchpad.marasi"), `function startup() marasi.gui:render("toast", {}) end`)
-	if err := app.SetupScratchpad(); err != nil {
+	if err := app.setupScratchpad(); err != nil {
 		t.Fatalf("opening scratchpad: %v", err)
 	}
 	if !events.has("extension_gui_render") {

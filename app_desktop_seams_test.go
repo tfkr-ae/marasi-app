@@ -391,7 +391,7 @@ func TestCancelledFileDialogsReadAsNoPath(t *testing.T) {
 
 func TestRestartToUpdateRelaunchesOnlyAfterTheProjectIsReleased(t *testing.T) {
 	app, _ := newInstalledApp(t)
-	if err := app.SetupScratchpad(); err != nil {
+	if err := app.setupScratchpad(); err != nil {
 		t.Fatalf("opening scratchpad: %v", err)
 	}
 	path := scratchpadPath(t, app)

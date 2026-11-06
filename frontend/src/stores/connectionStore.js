@@ -4,8 +4,7 @@
 import { ConnectLocal } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
 import { createConnectionStore } from "./createConnectionStore.js";
-import { serviceProjectLoaded } from "../stores.js";
-import { homeStore } from "./homeStore.js";
+import { loadProject, projectStore } from "./projectStore.js";
 
 export const connectionStore = createConnectionStore({
   connectLocal: () => ConnectLocal(),
@@ -13,10 +12,10 @@ export const connectionStore = createConnectionStore({
   readStatus: () => service.get("/service/status"),
   openEvents: (handlers) => service.openEvents(handlers),
   closeEvents: () => service.closeEvents(),
-  // Only Home reads the service so far; each page's ticket adds its store.
+  // The project the service has open, whichever it is: the scratchpad on a
+  // fresh instance, or what it had open when the app attached.
   loadProject: async (status) => {
-    homeStore.clear();
-    await homeStore.populate();
-    serviceProjectLoaded(status.project);
+    await loadProject(status.project);
+    projectStore.loaded(status.project);
   },
 });

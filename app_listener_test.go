@@ -224,7 +224,7 @@ func TestCloseInterruptsExtensionHoldingRequest(t *testing.T) {
 	app := newProjectApp(t)
 	events := &recordedEvents{}
 	app.emitEvent = events.emit
-	if err := app.SetupScratchpad(); err != nil {
+	if err := app.setupScratchpad(); err != nil {
 		t.Fatalf("opening scratchpad: %v", err)
 	}
 	hang := `function processRequest(request) print("entered"); while true do end end`

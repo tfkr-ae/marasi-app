@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"os/user"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -348,101 +347,25 @@ func (a *App) OpenFileDialog() (string, error) {
 	return a.openFileDialog(dialogOptions)
 }
 
-// OpenProject switches to the project at name, a path or a bare name in the
-// config directory, and returns its name. It asks first when unsaved work
-// would be lost; a refusal is "project switch cancelled", which the frontend
-// matches to close its opening screen quietly.
-func (a *App) OpenProject(name string) (string, error) {
-	var filePath string
-
-	// Check if name already has directory information
-	if filepath.IsAbs(name) || strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		// Use the provided path directly
-		filePath = name
-	} else {
-		// It's just a name, add the config directory
-		filePath = filepath.Join(a.Proxy.ConfigDir, name)
-	}
-
-	// Ensure it has the .marasi extension
-	if !strings.HasSuffix(filePath, ".marasi") {
-		filePath = filePath + ".marasi"
-	}
-
-	if err := checkpointHeldError(a.Proxy.CheckpointItems()); err != nil {
-		return "", err
-	}
-	confirmed, err := a.confirmLosingWork("Switch Project")
-	if err != nil {
-		return "", err
-	}
-	if !confirmed {
-		return "", errors.New("project switch cancelled")
-	}
-	// From here the open is underway: the frontend's opening screen may show.
-	a.emitEvent(projectOpeningEvent)
-	// The project lifecycle interrupts pending launches before it switches
-	// (marasi docs/adr/2026-10-13-launches-are-tracked-and-cancellable.md), so they end in the project they were launched in.
-	if err := a.projects.Open(context.Background(), filePath); err != nil {
-		return "", openProjectError(err)
-	}
-	// The drafts belonged to the old project and are gone with it.
-	a.unsavedDrafts.Store(0)
-	a.prepareOpenedProject()
-	base := filepath.Base(filePath)
-	projectName := strings.TrimSuffix(base, filepath.Ext(base))
-	return projectName, nil
+// ConfirmProjectSwitch asks before a project switch discards unsaved
+// Launchpad drafts or cancels active Armory runs, and reports whether the
+// switch goes ahead. The frontend opens the project on the service once it
+// does.
+func (a *App) ConfirmProjectSwitch() (bool, error) {
+	return a.confirmLosingWork("Switch Project")
 }
 
-// A project another Marasi (an app or a service instance) owns reads as
-// projectLocked: "opening project: project_locked: project already open: <path>".
-// A failed open leaves the open project as it was.
-const projectLocked = "project_locked"
-
-// openProjectError gives a refused open its code for the frontend.
-func openProjectError(err error) error {
-	if errors.Is(err, service.ErrProjectAlreadyOpen) {
-		return fmt.Errorf("opening project: %s: %w", projectLocked, err)
-	}
-	return err
+// setupScratchpad opens the scratchpad in process. Only the tests of pages
+// not yet on the service use it; the service opens projects now.
+func (a *App) setupScratchpad() error {
+	return a.openInProcess(filepath.Join(a.Proxy.ConfigDir, "scratchpad.marasi"))
 }
 
-// checkpointHeld refuses a switch while Checkpoint holds an item:
-// "opening project: checkpoint_held (<id>, <id>): <cause>". Marasi would
-// wait for the item, or drop it when a launch holds it
-// (marasi docs/adr/2026-10-17-project-switch-waits-for-held-checkpoint-items.md),
-// so the frontend asks to forward or drop the items first.
-const checkpointHeld = "checkpoint_held"
-
-var errCheckpointHeld = errors.New("forward or drop the held Checkpoint items before switching projects")
-
-// checkpointHeldError refuses with checkpointHeld naming the held items, or
-// is nil when none is held.
-func checkpointHeldError(items []domain.CheckpointItem) error {
-	if len(items) == 0 {
-		return nil
-	}
-	ids := make([]string, len(items))
-	for i, item := range items {
-		ids[i] = item.ID.String()
-	}
-	return codedError("opening project", checkpointHeld, ids, errCheckpointHeld)
-}
-
-// projectOpeningEvent tells the frontend that OpenProject has got past the
-// unsaved-work prompt and is opening the project.
-const projectOpeningEvent = "project-opening"
-
-// ScratchpadPath is the scratchpad's file path, which startup opens first.
-func (a *App) ScratchpadPath() string {
-	return path.Join(a.Proxy.ConfigDir, "scratchpad.marasi")
-}
-
-// SetupScratchpad opens the scratchpad like OpenProject, without the
-// unsaved-work prompt or the project-opening event.
-func (a *App) SetupScratchpad() error {
-	if err := a.projects.Open(context.Background(), a.ScratchpadPath()); err != nil {
-		return openProjectError(err)
+// openInProcess opens the project file at path in process, for the tests of
+// pages not yet on the service.
+func (a *App) openInProcess(path string) error {
+	if err := a.projects.Open(context.Background(), path); err != nil {
+		return err
 	}
 	a.prepareOpenedProject()
 	return nil
@@ -1098,39 +1021,6 @@ func (a *App) GetInterfaces() ([]string, error) {
 }
 func (a *App) GetMarasiConfig() *Config {
 	return a.Config
-}
-func (a *App) GetRecentProjects() []struct {
-	ProjectName string
-	Date        string
-} {
-	var recent []struct {
-		ProjectName string
-		Date        string
-	}
-	files, err := os.ReadDir(a.Proxy.ConfigDir)
-	if err != nil {
-		return recent
-	}
-	for _, file := range files {
-		if path.Ext(file.Name()) == ".marasi" {
-			fileInfo, err := file.Info()
-			if err != nil {
-				log.Print(err)
-				return recent
-			}
-			date := fileInfo.ModTime().String()
-			fullPath := path.Join(a.Proxy.ConfigDir, file.Name())
-			project := struct {
-				ProjectName string
-				Date        string
-			}{
-				ProjectName: fullPath,
-				Date:        date,
-			}
-			recent = append(recent, project)
-		}
-	}
-	return recent
 }
 
 // Chrome settings live in the machine config shared with service instances,

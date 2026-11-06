@@ -43,13 +43,14 @@
 		extensions,
 		extensions_ui,
 		appState,
+	} from "../stores.js";
+	import {
+		projectStore,
 		opening,
 		openingShown,
 		pagesKey,
-		feedOpeningLog,
 		loadedProject,
-		stayInCurrentProject,
-	} from "../stores.js";
+	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { webSocketStore } from "../stores/webSocketStore";
@@ -248,8 +249,6 @@
 		on("update-installed", onUpdateInstalled);
 		on("update-failed", onUpdateFailed);
 		refreshUpdateState();
-		// The open in progress takes its steps from the backend's log events.
-		on("log", feedOpeningLog);
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
@@ -927,8 +926,8 @@
 	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
 		<OpeningScreen
 			state={$opening}
-			on:stay={stayInCurrentProject}
-			on:retry={retryOpen}
+			on:stay={() => projectStore.stay()}
+			on:retry={() => retryOpen(toastStore, modalStore)}
 			on:open={(event) => openProjectFile(event.detail, toastStore, modalStore)}
 			on:browse={() =>
 				OpenFileDialog()

@@ -114,7 +114,7 @@
 			{#if screen.upgrade}
 				<div class="mt-3"><ProgressBar {...bar} /></div>
 				<p class="mt-1 font-mono text-xs opacity-60">
-					{screen.upgrade.file} · {screen.upgrade.applied} applied
+					{screen.upgrade.file} · {screen.upgrade.applied}/{screen.upgrade.total}
 				</p>
 			{:else if screen.load.part}
 				<div class="mt-3">

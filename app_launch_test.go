@@ -118,9 +118,7 @@ func TestAppLaunch(t *testing.T) {
 		}
 		launchEvent(t, events, "launch-started")
 
-		if _, err := app.OpenProject("other"); err != nil {
-			t.Fatalf("switching project: %v", err)
-		}
+		openTestProject(t, app, "other")
 		finished := launchEvent(t, events, "launch-finished")
 		if finished.ID != id || finished.Status != domain.LaunchFailed || finished.Reason != domain.LaunchReasonInterrupted {
 			t.Fatalf("wanted launch %s failed interrupted\ngot: %+v", id, finished)

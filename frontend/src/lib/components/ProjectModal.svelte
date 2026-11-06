@@ -1,7 +1,7 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
-    import { GetRecentProjects } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { projectStore } from "../../stores/projectStore.js";
     import { OpenFileDialog } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { X } from "lucide-svelte";
 
@@ -30,8 +30,6 @@
     }
     
     function openSelected() {
-        console.log(selectedIndex)
-        console.log(filteredList)
         if (selectedIndex >= 0 && selectedIndex < filteredList.length) {
             $modalStore[0].response(filteredList[selectedIndex].value);
             modalStore.close();
@@ -112,27 +110,14 @@
     }
     
     onMount(() => {
-        GetRecentProjects().then((recents) => {
-            const placeholder = []
-            recents.forEach((project) => {
-                console.log(project)
-                // Get just the filename for display
-                const fileName = project.ProjectName.split("/").pop()?.split("\\").pop() || project.ProjectName;
-                const entry = {
-                    // The label is now the name for display in the UI
-                    label: fileName.replace('.marasi', ''),
-                    // Store full path in value
-                    value: project.ProjectName,
-                    // Store the path separately for display
-                    path: project.ProjectName,
-                    // Store the date for sorting
-                    date: new Date(project.Date)
-                }
-                placeholder.push(entry);
-            });
-            
-            // Sort projects by date, most recent first
-            placeholder.sort((a, b) => b.date - a.date);
+        // The service's named projects, most recent first; picking one
+        // opens it by name.
+        projectStore.list().then((projects) => {
+            const placeholder = projects.map((project) => ({
+                label: project.name,
+                value: project.name,
+                path: project.path,
+            }));
             
             recent = placeholder;
             filteredList = placeholder;
@@ -144,7 +129,7 @@
             setTimeout(() => {
                 document.querySelector('input[type="search"]')?.focus();
             }, 10);
-        });
+        }).catch((error) => console.error("Listing projects failed:", error));
     });
 </script>
 

@@ -69,9 +69,9 @@ func TestSwitchProjectWithDraftsAndArmoryRunsAsksOnce(t *testing.T) {
 	app, armory := appWithDraftsAndArmoryRuns(3)
 	dialog := withDialog(app, "Cancel")
 
-	_, err := app.OpenProject("/tmp/other")
-	if err == nil || !strings.Contains(err.Error(), "project switch cancelled") {
-		t.Fatalf("wanted project switch cancelled, got %v", err)
+	confirmed, err := app.ConfirmProjectSwitch()
+	if err != nil || confirmed {
+		t.Fatalf("wanted the switch cancelled, got %v %v", confirmed, err)
 	}
 	if len(dialog.asked) != 1 {
 		t.Fatalf("wanted one dialog, got %d", len(dialog.asked))
