@@ -9,9 +9,9 @@
 	import { marasiConfig, lineWrap } from "../../stores";
 	import { longStrings } from "../longStrings.js";
 	import {
-		connectionStore,
+		webSocketStore,
 		wsInjectDraft,
-	} from "../../stores/connectionStore";
+	} from "../../stores/webSocketStore";
 	import {
 		INJECT_OPCODES,
 		draftOpcode,
@@ -31,7 +31,7 @@
 	let error = "";
 	let neverCompress = false;
 
-	$: connection = $connectionStore.connectionsByRequestId[requestId];
+	$: connection = $webSocketStore.connectionsByRequestId[requestId];
 	$: connectionOpen = connection?.State === "open";
 	$: showSendUncompressed = offersSendUncompressed(connection, opcode);
 

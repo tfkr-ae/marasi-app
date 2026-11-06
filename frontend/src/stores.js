@@ -13,7 +13,7 @@ import {
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
-import { connectionStore } from "./stores/connectionStore";
+import { webSocketStore } from "./stores/webSocketStore";
 import { armoryStore } from "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
@@ -252,7 +252,7 @@ export async function openProject() {
   testCaseStore.clear();
   findingStore.clear();
   logbookStore.clear();
-  connectionStore.clear();
+  webSocketStore.clear();
   armoryStore.clear();
   launchpadStore.clear();
   checkpointStore.clear();
@@ -292,7 +292,7 @@ export async function openProject() {
   await findingStore.populate();
   await logbookStore.populate();
   loadPart(loadSignals.intercept);
-  await connectionStore.populateInterceptFlag();
+  await webSocketStore.populateInterceptFlag();
   loadPart(loadSignals.armory);
   await armoryStore.populate();
   loadPart(loadSignals.launchpads);

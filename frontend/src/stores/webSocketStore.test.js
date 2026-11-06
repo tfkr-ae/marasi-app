@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createConnectionStore } from "./createConnectionStore.js";
+import { createWebSocketStore } from "./createWebSocketStore.js";
 
 // A fake backend whose `held` is the WebSocket Checkpoint queue, oldest
 // first. A forward or drop of a message no longer held fails as the app's
@@ -30,7 +30,7 @@ const message = (id, at) => ({ ID: id, RequestID: "conn", Opcode: 1, Payload: ""
 
 function holding(...messages) {
   const api = fakeApi([...messages]);
-  const store = createConnectionStore(api);
+  const store = createWebSocketStore(api);
   for (const msg of messages) store.upsertInterception(msg);
   const queued = () => (get(store).interceptionsByRequestId.conn ?? []).map((msg) => msg.ID);
   return { api, store, queued };

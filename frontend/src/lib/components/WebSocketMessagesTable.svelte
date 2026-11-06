@@ -21,9 +21,9 @@
 		Send,
 	} from "lucide-svelte";
 	import {
-		connectionStore,
+		webSocketStore,
 		wsInjectDraft,
-	} from "../../stores/connectionStore";
+	} from "../../stores/webSocketStore";
 	import { marasiConfig, lineWrap } from "../../stores";
 	import { longStrings } from "../longStrings.js";
 	import { messageRow } from "../websocket/presentation.js";
@@ -45,9 +45,9 @@
 	let scrollRequestId;
 	let previousMessageCount = 0;
 
-	$: messages = $connectionStore.messagesByRequestId[requestId] || [];
+	$: messages = $webSocketStore.messagesByRequestId[requestId] || [];
 	$: connectionState =
-		$connectionStore.connectionsByRequestId[requestId]?.State || "";
+		$webSocketStore.connectionsByRequestId[requestId]?.State || "";
 
 	const opcodeLabel = {
 		0: "cont",
@@ -216,7 +216,7 @@
 		loading = true;
 		error = "";
 		try {
-			await connectionStore.populate(requestId);
+			await webSocketStore.populate(requestId);
 		} catch (err) {
 			error = String(err);
 		} finally {

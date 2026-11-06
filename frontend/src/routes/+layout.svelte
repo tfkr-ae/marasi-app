@@ -58,7 +58,7 @@
 		openScratchpad,
 		retryOpen,
 	} from "../lib/globalActions.js";
-	import { connectionStore } from "../stores/connectionStore";
+	import { webSocketStore } from "../stores/webSocketStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { armoryStore } from "../stores/armoryStore";
 	import {
@@ -344,25 +344,25 @@
 				}
 			});
 			on("ws-message", (msg) =>
-				connectionStore.upsertMessage(msg),
+				webSocketStore.upsertMessage(msg),
 			);
 			on("ws-intercepted", (msg) => {
-				connectionStore.upsertInterception(msg);
+				webSocketStore.upsertInterception(msg);
 				readCheckpointItems();
 			});
 			on("ws-open", (conn) => {
-				connectionStore.upsertConnection(conn);
+				webSocketStore.upsertConnection(conn);
 				ledgerStore.patchWebSocketMetadata(conn);
 			});
 			on("ws-close", (conn) => {
-				connectionStore.upsertConnection(conn);
-				connectionStore.clearInterceptions(
+				webSocketStore.upsertConnection(conn);
+				webSocketStore.clearInterceptions(
 					conn.RequestID,
 				);
 				ledgerStore.patchWebSocketMetadata(conn);
 			});
 			on("ws-progress", (progress) =>
-				connectionStore.upsertProgress(progress),
+				webSocketStore.upsertProgress(progress),
 			);
 			// An upgrade whose handshake failed or was dropped opens no
 			// connection, so only its Ledger row changes.
@@ -400,7 +400,7 @@
 			// or in the WebSocket modal; both drop it.
 			on("checkpoint-settled", (item) => {
 				readCheckpointItems();
-				connectionStore
+				webSocketStore
 					.onSettled(item)
 					.catch((err) =>
 						console.error(

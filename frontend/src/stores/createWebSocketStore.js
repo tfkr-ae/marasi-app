@@ -1,6 +1,6 @@
 // The WebSocket modal's state: messages, connections, progress and each
 // connection's Checkpoint queue, by upgrade request id. Every backend call
-// goes through the injected `api` (see connectionStore.js for the Wails
+// goes through the injected `api` (see webSocketStore.js for the Wails
 // one), so this module loads under node --test.
 import { get, writable } from "svelte/store";
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
@@ -12,7 +12,7 @@ import {
 } from "../lib/websocket/progress.js";
 
 
-export function createConnectionStore(api) {
+export function createWebSocketStore(api) {
 	const store = writable({
 		messagesByRequestId: {},
 		connectionsByRequestId: {},
