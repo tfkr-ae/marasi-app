@@ -56,7 +56,6 @@
 	import { connectionStore } from "../stores/connectionStore";
 	import { webSocketStore } from "../stores/webSocketStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
-	import { armoryStore } from "../stores/armoryStore";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -280,7 +279,6 @@
 				sitemapStore.onRequest(newRequest);
 				recentTraffic.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
-				armoryStore.onRequest(newRequest);
 			});
 			on("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
@@ -293,7 +291,6 @@
 				sitemapStore.onResponse(newResponse);
 				recentTraffic.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
-				armoryStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&

@@ -12,7 +12,8 @@ import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
 import { webSocketStore } from "./stores/webSocketStore";
-import { armoryStore } from "./stores/armoryStore";
+// Registers the Armory with projectData before the first load.
+import "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
 import { interceptFlag } from "./stores/interceptFlag.js";
@@ -145,7 +146,6 @@ export async function resetProject(name) {
   findingStore.clear();
   logbookStore.clear();
   webSocketStore.clear();
-  armoryStore.clear();
   launchpadStore.clear();
   checkpointStore.clear();
 }
