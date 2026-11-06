@@ -10,6 +10,9 @@ import {
   savedQueryGroups,
   visibleSavedQueries,
 } from "./createSavedQueriesStore.js";
+import { createSavedQueriesApi } from "./savedQueriesApi.js";
+import { createExclusion } from "./contentTypeExclusion.js";
+import { fakeServiceClient } from "./fakeServiceClient.js";
 
 // An in-memory config file: the app-wide saved queries and hidden built-in
 // ids, as the Go side keeps them (sorted by order on save), plus match
@@ -548,4 +551,74 @@ test("a move whose delete fails takes back the new copy and rejects", async () =
   assert.equal(group(store, "project"), undefined, "no project copy is left");
   assert.deepEqual(api.settings, {});
   assert.deepEqual(names(group(store, "app").items), ["Third-party noise"]);
+});
+
+// Over the service: app-wide queries stay in the app config (Go), the
+// project's are client settings, and counts leave out the exclusion.
+function serviceSetup(settings = {}) {
+  const client = fakeServiceClient({
+    "GET /client-settings/marasi-app": (query) => ({
+      items: Object.keys(settings)
+        .filter((key) => key.startsWith(query.prefix ?? ""))
+        .sort()
+        .map((key) => ({ client: "marasi-app", key, value: settings[key], updated_at: "2026-11-06T18:07:12Z" })),
+    }),
+    "GET /client-settings/marasi-app/ledger.exclusion": { status: 404, body: { error: "not_found" } },
+    "GET /traffic/count": (query) => (query.q === "(" ? { status: 400, body: { error: "invalid_query", message: "bad", position: 1 } } : { count: 7, capped: false, index: { complete: true } }),
+  });
+  const appConfig = {
+    getAppSavedQueries: async () => ({ queries: [], hidden_builtins: [] }),
+    saveAppSavedQueries: async (list) => list,
+    setHiddenBuiltins: async (ids) => ids,
+    getDefaultExclusion: async () => ["image/*"],
+    setDefaultExclusion: async () => {},
+  };
+  const exclusion = createExclusion(client, appConfig);
+  return { client, store: createSavedQueriesStore(createSavedQueriesApi(client, { appConfig, exclusion })) };
+}
+
+test("over the service, the project's saved queries are client settings and resync rereads them", async () => {
+  const settings = { "ledger.saved_query.q1": { name: "Logins", query: 'path = "/login"', order: 0 } };
+  const { store, client } = serviceSetup(settings);
+  await store.load();
+  assert.deepEqual(
+    get(store).queries.project.map((q) => q.name),
+    ["Logins"],
+  );
+  assert.deepEqual(client.calls[0].query, { prefix: "ledger.saved_query." });
+
+  // Another client saved one in the project.
+  settings["ledger.saved_query.q2"] = { name: "Admin", query: 'path = "/admin"', order: 1 };
+  await store.loadProject();
+  assert.deepEqual(
+    get(store).queries.project.map((q) => q.name),
+    ["Logins", "Admin"],
+  );
+});
+
+test("over the service, saving a project query writes its client setting", async () => {
+  const { store, client } = serviceSetup();
+  client.put = async (path, body) => {
+    client.calls.push({ method: "PUT", path, body });
+    return { client: "marasi-app", key: path.split("/").pop(), value: body.value };
+  };
+  await store.load();
+  const entry = await store.save("Errors", "status_code >= 500", "project");
+  const put = client.calls.find((call) => call.method === "PUT");
+  assert.equal(put.path, `/client-settings/marasi-app/ledger.saved_query.${entry.id}`);
+  assert.deepEqual(put.body, { value: { name: "Errors", query: "status_code >= 500", order: 0 } });
+});
+
+test("over the service, saved-query counts leave out the exclusion and report a bad query", async () => {
+  const { store, client } = serviceSetup({
+    "ledger.saved_query.q1": { name: "Bad", query: "(", order: 0 },
+    "ledger.saved_query.q2": { name: "Good", query: 'host = "a"', order: 1 },
+  });
+  await store.load();
+  await store.loadCounts();
+  const counts = get(store).counts;
+  assert.deepEqual(counts["("], { error: "bad" });
+  assert.deepEqual(counts['host = "a"'], { count: 7, capped: false });
+  const count = client.calls.find((call) => call.path === "/traffic/count" && call.query.q === 'host = "a"');
+  assert.deepEqual(count.query.exclude, ["image/*"]);
 });
