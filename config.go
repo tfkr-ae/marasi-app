@@ -77,6 +77,12 @@ type Config struct {
 	// dismissedUpdate is the identity of the dismissed update, "" for none
 	// (update_dismiss.go).
 	dismissedUpdate string
+	// connections are the saved remotes, activeConnection the id the app
+	// reaches on start ("" = local), and recentProjects the projects opened
+	// per connection id (connections.go).
+	connections      []SavedConnection
+	activeConnection string
+	recentProjects   map[string][]RecentProject
 }
 
 const appConfigName = "marasi_appconfig"
@@ -223,6 +229,9 @@ func LoadConfig(appConfigDir string) (*Config, error) {
 	config.updateSettings = parseUpdateSettings(doc)
 	config.updateChannel = parseUpdateChannel(documentValue(doc, updateChannelKey))
 	config.dismissedUpdate = parseDismissedUpdate(documentValue(doc, dismissedUpdateKey))
+	config.connections = parseConnections(documentValue(doc, connectionsKey))
+	config.activeConnection = parseActiveConnection(documentValue(doc, activeConnectionKey))
+	config.recentProjects = parseRecentProjects(documentValue(doc, recentProjectsKey))
 
 	if err := loadTestCases(appConfigDir, config); err != nil {
 		return nil, fmt.Errorf("loading test cases: %w", err)
