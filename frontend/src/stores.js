@@ -17,8 +17,9 @@ import { launchpadStore } from "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
 import { interceptFlag } from "./stores/interceptFlag.js";
 import { readHighlights } from "./stores/highlightsStore";
-import { ledgerStore } from "./stores/ledgerStore";
-import { sitemapStore } from "./stores/sitemapStore";
+// The Ledger's stores register with projectData as they load.
+import "./stores/ledgerStore";
+import "./stores/sitemapStore";
 import { jobsStore } from "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
@@ -135,8 +136,6 @@ export async function resetProject(name) {
   interceptFlag.set(false);
   workshopCode.set("");
   waypoints.set({});
-  ledgerStore.clear();
-  sitemapStore.clear();
   jobsStore.clear();
   recentTraffic.clear();
   extensions.set([]);

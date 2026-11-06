@@ -87,7 +87,7 @@
 	import { positionLabel, rowHighlight } from "../../lib/ledger/table.js";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { primaryVariant, UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
-	import { highlightMigrating, highlightPalette, renameHighlight } from "../../stores/highlightsStore";
+	import { highlightPalette, renameHighlight } from "../../stores/highlightsStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { newRecord } from "../../lib/logbook/recordEditor.js";
@@ -1174,14 +1174,6 @@
 							><TriangleAlert size={13} />{$indexNote}</span
 						>
 					{/if}
-				{/if}
-				{#if $highlightMigrating}
-					<span
-						id="ledgerHighlightMigration"
-						class="flex items-center gap-1 whitespace-nowrap text-xs opacity-70"
-						role="status"
-						><LoaderCircle size={13} class="animate-spin" />Updating old highlights…</span
-					>
 				{/if}
 				{#if $queryText}
 					<button

@@ -65,7 +65,6 @@
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
-	import { sitemapStore } from "../stores/sitemapStore";
 	import { recentTraffic } from "../stores/recentTrafficStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
@@ -276,8 +275,6 @@
 					);
 			}
 			on("request", (newRequest) => {
-				ledgerStore.onRequest(newRequest);
-				sitemapStore.onRequest(newRequest);
 				recentTraffic.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
 				armoryStore.onRequest(newRequest);
@@ -289,8 +286,6 @@
 				launchpadStore.onLaunchFinished(launch),
 			);
 			on("response", (newResponse) => {
-				ledgerStore.onResponse(newResponse);
-				sitemapStore.onResponse(newResponse);
 				recentTraffic.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
 				armoryStore.onResponse(newResponse);
@@ -316,22 +311,15 @@
 			});
 			on("ws-open", (conn) => {
 				webSocketStore.upsertConnection(conn);
-				ledgerStore.patchWebSocketMetadata(conn);
 			});
 			on("ws-close", (conn) => {
 				webSocketStore.upsertConnection(conn);
 				webSocketStore.clearInterceptions(
 					conn.RequestID,
 				);
-				ledgerStore.patchWebSocketMetadata(conn);
 			});
 			on("ws-progress", (progress) =>
 				webSocketStore.upsertProgress(progress),
-			);
-			// An upgrade whose handshake failed or was dropped opens no
-			// connection, so only its Ledger row changes.
-			on("ws-state", ({ RequestID, State }) =>
-				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
 			);
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
@@ -444,7 +432,6 @@
 			off("ws-open");
 			off("ws-close");
 			off("ws-progress");
-			off("ws-state");
 			off("intercepted");
 			off("checkpoint-abandoned");
 			off("checkpoint-settled");
