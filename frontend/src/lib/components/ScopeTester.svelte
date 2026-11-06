@@ -2,7 +2,8 @@
     import { onMount } from "svelte";
     import { modeCurrent } from "@skeletonlabs/skeleton";
     import { testerInput } from "../../stores";
-    import { TestScopeMatch } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { service } from "../service/index.js";
+    import { checkScope } from "../scopeCheck.js";
 
     // Result data
     let lastResult = null;
@@ -23,8 +24,7 @@
       lastResult = null;
       
       try {
-        // Call the Go backend function
-        const result = await TestScopeMatch($testerInput);
+        const result = await checkScope(service, $testerInput);
         
         // Increment the key to force re-rendering
         resultKey++;
