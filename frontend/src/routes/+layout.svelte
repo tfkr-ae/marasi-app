@@ -2,6 +2,8 @@
 	import Logo from "../lib/components/Logo.svelte";
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
 	import ConnectionBanner from "../lib/components/ConnectionBanner.svelte";
+	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
+	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
 	import {
 		computePosition,
 		autoUpdate,
@@ -204,6 +206,7 @@
 		UpstreamProxy: { ref: UpstreamProxyModal },
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 		ExportReport: { ref: ExportReview },
+		Connections: { ref: ConnectionsModal },
 	};
 	// Text size sizes the root element, so everything in rem follows it.
 	// readConfig sets it before startup draws any text.
@@ -710,6 +713,7 @@
 					{/if}
 				{/each}
 				<svelte:fragment slot="trail">
+					<ConnectionRailTile />
 					<div
 						class="flex justify-center items-center w-full py-2"
 					>

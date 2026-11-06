@@ -134,7 +134,6 @@ export async function resetProject(name) {
   waypoints.set({});
   ledgerStore.clear();
   sitemapStore.clear();
-  jobsStore.clear();
   recentTraffic.clear();
   testCaseStore.clear();
   findingStore.clear();
