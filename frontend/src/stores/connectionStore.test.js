@@ -74,10 +74,126 @@ test("a service that can't be reached fails the connection", () => {
   assert.equal(state.error, "unauthorized");
 });
 
-test("a dropped stream fails the connection and closes the stream", () => {
-  const { state, steps } = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status }, { type: "STREAM_DROPPED" });
-  assert.equal(state.phase, "failed");
-  assert.equal(steps.at(-1), "close-events");
+const connected = [{ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status }];
+
+// Runs `actions` after connecting, and returns the steps they added, with
+// their details.
+function after(...actions) {
+  let state = run(...connected).state;
+  const steps = [];
+  const refusals = [];
+  for (const action of actions) {
+    const next = reduce(state, action);
+    if (next.refusal) refusals.push(next.refusal);
+    state = next.state;
+    steps.push(...next.steps);
+  }
+  return { state, steps, types: steps.map((step) => step.type), refusals };
+}
+
+test("a dropped stream reconnects after a second, and the pages stay", () => {
+  const { state, steps, types } = after({ type: "STREAM_DROPPED" });
+  assert.equal(state.phase, "reconnecting");
+  assert.equal(state.attempt, 1);
+  assert.equal(state.project, "/p/scratchpad.marasi");
+  assert.deepEqual(types, ["close-events", "wait"]);
+  assert.equal(steps.at(-1).ms, 1000);
+});
+
+test("each failed attempt waits twice as long, up to 30 seconds", () => {
+  const drops = Array.from({ length: 8 }, () => [{ type: "RECONNECT_NOW" }, { type: "STREAM_DROPPED" }]).flat();
+  const { state, steps } = after({ type: "STREAM_DROPPED" }, ...drops);
+  const waits = steps.filter((step) => step.type === "wait").map((step) => step.ms / 1000);
+  assert.deepEqual(waits, [1, 2, 4, 8, 16, 30, 30, 30, 30]);
+  assert.equal(state.attempt, 9);
+});
+
+test("the wait's end or Retry now reaches the service again, once at a time", () => {
+  const { state, types, refusals } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, { type: "RECONNECT_NOW" });
+  assert.equal(state.phase, "reconnecting");
+  assert.deepEqual(types, ["close-events", "wait", "cancel-wait", "reconnect"]);
+  assert.equal(refusals.length, 1);
+});
+
+test("a queue overflow drop reconnects like any other drop", () => {
+  const { state, types } = after({ type: "STREAM_DROPPED", reason: "overflow" });
+  assert.equal(state.phase, "reconnecting");
+  assert.deepEqual(types, ["close-events", "wait"]);
+});
+
+const reconnected = (patch = {}) => ({
+  type: "RECONNECTED",
+  url: "http://127.0.0.1:51391",
+  status: { ...status, ...patch },
+});
+
+test("reconnecting to the same project resyncs every store in place", () => {
+  const { state, types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected());
+  assert.equal(state.phase, "connected");
+  assert.equal(state.attempt, 0);
+  assert.deepEqual(types.slice(-2), ["open-events", "resync"]);
+});
+
+test("the project a switch loaded is the one a reconnect compares against", () => {
+  const { types } = after(
+    { type: "PROJECT_LOADED", path: "/p/acme.marasi" },
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected({ project: "/p/acme.marasi" }),
+  );
+  assert.deepEqual(types.slice(-2), ["open-events", "resync"]);
+});
+
+for (const [why, actions, patch] of [
+  ["the service opened another project", [], { project: "/p/other.marasi" }],
+  ["the service announced a restart", [{ type: "SERVICE_RESTARTING" }], {}],
+  ["the service's version changed", [], { version: "06.11.2026" }],
+]) {
+  test(`when ${why}, a reconnect asks about unsaved work before the full load`, () => {
+    const asked = after(...actions, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected(patch));
+    assert.equal(asked.state.phase, "project-changed");
+    assert.deepEqual(asked.types.at(-1), "confirm-load");
+    assert.equal(asked.steps.at(-1).status.project, patch.project ?? status.project);
+
+    const loaded = after(
+      ...actions,
+      { type: "STREAM_DROPPED" },
+      { type: "RECONNECT_NOW" },
+      reconnected(patch),
+      { type: "LOAD_CONFIRMED" },
+    );
+    assert.equal(loaded.state.phase, "connected");
+    assert.deepEqual(loaded.types.slice(-2), ["open-events", "reload-project"]);
+    assert.equal(loaded.steps.at(-1).status.project, patch.project ?? status.project);
+  });
+}
+
+test("declining the load keeps the pages and offers the load again", () => {
+  const { state, types } = after(
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected({ project: "/p/other.marasi" }),
+    { type: "LOAD_DECLINED" },
+    { type: "LOAD_PROJECT" },
+  );
+  assert.equal(state.phase, "project-changed");
+  assert.equal(state.project, "/p/scratchpad.marasi");
+  assert.equal(state.pendingProject, "/p/other.marasi");
+  assert.deepEqual(types.slice(-2), ["confirm-load", "confirm-load"]);
+});
+
+test("a restart seen before an earlier reconnect doesn't count again", () => {
+  const { types } = after(
+    { type: "SERVICE_RESTARTING" },
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected(),
+    { type: "LOAD_CONFIRMED" },
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected(),
+  );
+  assert.equal(types.at(-1), "resync");
 });
 
 test("an action out of turn is refused and changes nothing", () => {
@@ -86,8 +202,9 @@ test("an action out of turn is refused and changes nothing", () => {
   assert.equal(refusals.length, 2);
 });
 
-// The store performs each step through `api`, recorded in `calls`.
-function fakeApi({ connectLocal, readStatus } = {}) {
+// The store performs each step through `api`, recorded in `calls`. Timers
+// are fake: `timers.fire()` ends the pending wait.
+function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
   const calls = [];
   let onDrop = null;
   const api = {
@@ -106,8 +223,29 @@ function fakeApi({ connectLocal, readStatus } = {}) {
     },
     closeEvents: () => calls.push("closeEvents"),
     loadProject: async (loaded) => calls.push(["loadProject", loaded.project]),
+    resync: async () => calls.push("resync"),
+    confirmSwitch: async () => {
+      calls.push("confirmSwitch");
+      return confirmSwitch ? confirmSwitch() : true;
+    },
+    reloadProject: async (loaded) => calls.push(["reloadProject", loaded.project]),
   };
-  return { api, calls, drop: () => onDrop?.({ status: null }) };
+  const pending = new Map();
+  let nextTimer = 0;
+  const timers = {
+    setTimeout: (fn, ms) => {
+      pending.set(++nextTimer, { fn, ms });
+      return nextTimer;
+    },
+    clearTimeout: (id) => pending.delete(id),
+    waits: () => [...pending.values()].map((timer) => timer.ms),
+    fire() {
+      const [[id, timer]] = pending;
+      pending.delete(id);
+      timer.fn();
+    },
+  };
+  return { api, calls, timers, drop: () => onDrop?.({ status: null }) };
 }
 
 // Resolves once the store reaches `phase`.
@@ -121,13 +259,15 @@ function reached(store, phase) {
   });
 }
 
+const settle = () => new Promise((r) => setTimeout(r, 0));
+
 test("start() reaches the service through the api and loads its project", async () => {
   const { api, calls } = fakeApi();
   const store = createConnectionStore(api);
 
   store.start();
   await reached(store, "connected");
-  await new Promise((r) => setTimeout(r, 0));
+  await settle();
 
   assert.deepEqual(calls, [
     "connectLocal",
@@ -171,12 +311,116 @@ test("a refused status fails the connection with the service's error", async () 
   assert.match(failed.error, /unauthorized/);
 });
 
-test("a dropped stream fails the connection", async () => {
-  const fake = fakeApi();
-  const store = createConnectionStore(fake.api);
+// A store connected through a fake api, with its calls cleared. `options`
+// apply from then on, so the first connect reaches `status`.
+async function connectedStore(options = {}) {
+  let connectedYet = false;
+  const later = (name) => (...args) => (connectedYet && options[name] ? options[name](...args) : undefined);
+  const fake = fakeApi({
+    readStatus: () => later("readStatus")() ?? status,
+    confirmSwitch: () => later("confirmSwitch")() ?? true,
+  });
+  const store = createConnectionStore(fake.api, fake.timers);
   store.start();
   await reached(store, "connected");
-  fake.drop();
-  const failed = await reached(store, "failed");
-  assert.match(failed.error, /Lost connection/);
+  await settle();
+  connectedYet = true;
+  fake.calls.length = 0;
+  return { store, ...fake };
+}
+
+test("a dropped stream waits, reaches the local instance again and resyncs in place", async () => {
+  const { store, calls, timers, drop } = await connectedStore();
+
+  drop();
+  assert.equal(get(store).phase, "reconnecting");
+  assert.deepEqual(timers.waits(), [1000]);
+  assert.deepEqual(calls, ["closeEvents"]);
+
+  timers.fire();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls, [
+    "closeEvents",
+    "connectLocal",
+    ["use", { url: "http://127.0.0.1:51391", password: "pw" }],
+    "readStatus",
+    "openEvents",
+    "resync",
+  ]);
+  assert.equal(get(store).attempt, 0);
+});
+
+test("a failed attempt backs off, and Retry now skips the wait", async () => {
+  let down = true;
+  const { store, calls, timers, drop } = await connectedStore({
+    readStatus: () => {
+      if (down) throw new Error("GET /service/status: fetch failed");
+      return status;
+    },
+  });
+  drop();
+  timers.fire();
+  await settle();
+  assert.equal(get(store).attempt, 2);
+  assert.deepEqual(timers.waits(), [2000]);
+
+  down = false;
+  store.retryNow();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(timers.waits(), []);
+  assert.equal(calls.at(-1), "resync");
+});
+
+test("an overflow drop (the stream simply ends) reconnects the same way", async () => {
+  const { store, calls, timers, drop } = await connectedStore();
+  drop();
+  timers.fire();
+  await reached(store, "connected");
+  await settle();
+  assert.equal(calls.at(-1), "resync");
+});
+
+test("a project the service opened meanwhile loads in full once the guard agrees", async () => {
+  const { store, calls, timers, drop } = await connectedStore({
+    readStatus: () => ({ ...status, project: "/p/other.marasi" }),
+  });
+  drop();
+  timers.fire();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/other.marasi"]]);
+  assert.equal(get(store).project, "/p/other.marasi");
+  assert.equal(calls.includes("resync"), false);
+});
+
+test("a restart announced before the drop loads the project in full", async () => {
+  const { store, calls, timers, drop } = await connectedStore();
+  store.dispatch({ type: "SERVICE_RESTARTING" });
+  drop();
+  timers.fire();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+});
+
+test("declining the guard keeps the pages until Load is chosen", async () => {
+  let agree = false;
+  const { store, calls, timers, drop } = await connectedStore({
+    readStatus: () => ({ ...status, project: "/p/other.marasi" }),
+    confirmSwitch: () => agree,
+  });
+  drop();
+  timers.fire();
+  await reached(store, "project-changed");
+  await settle();
+  assert.equal(calls.some((call) => call[0] === "reloadProject"), false);
+  assert.equal(get(store).project, "/p/scratchpad.marasi");
+
+  agree = true;
+  store.loadPending();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls.at(-1), ["reloadProject", "/p/other.marasi"]);
 });

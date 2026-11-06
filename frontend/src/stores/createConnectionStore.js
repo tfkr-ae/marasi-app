@@ -31,7 +31,21 @@ export function initialConnection() {
     version: null,
     proxyListener: null,
     error: null,
+    // Reconnect attempts since the stream dropped, and whether one is
+    // reaching the service now.
+    attempt: 0,
+    trying: false,
+    // The service said it is restarting before the stream dropped.
+    restartSeen: false,
+    // The project a reconnect found open instead, waiting for the
+    // unsaved-work guard before it loads.
+    pendingProject: null,
   };
+}
+
+/** The wait before reconnect attempt `attempt` (1, 2, …): 1s doubling to 30s. */
+export function backoff(attempt) {
+  return Math.min(2 ** (attempt - 1), 30) * 1000;
 }
 
 const go = (state, patch, steps = []) => ({ state: { ...state, ...patch }, steps, refusal: null });
@@ -82,11 +96,71 @@ export function reduce(state, action) {
       if (state.phase !== "connecting") return refuse(state, "Nothing is connecting.");
       return go(state, { phase: "failed", error: action.error });
 
-    case "STREAM_DROPPED":
-      if (state.phase !== "connected") return refuse(state, "Not connected.");
-      return go(state, { phase: "failed", error: `Lost connection to ${state.connection.name}.` }, [
-        { type: "close-events" },
+    case "STREAM_DROPPED": {
+      // A drop of the stream (whatever the reason: a network failure, a
+      // restart, the service dropping a subscriber whose queue overflowed),
+      // or a failed reconnect attempt. The pages stay; only the stream goes.
+      if (state.phase !== "connected" && state.phase !== "reconnecting") return refuse(state, "Not connected.");
+      const attempt = state.attempt + 1;
+      return go(state, { phase: "reconnecting", attempt, trying: false }, [
+        ...(state.phase === "connected" ? [{ type: "close-events" }] : []),
+        { type: "wait", ms: backoff(attempt) },
       ]);
+    }
+
+    case "RECONNECT_NOW":
+      // The wait ended, or Retry now.
+      if (state.phase !== "reconnecting") return refuse(state, "Not reconnecting.");
+      if (state.trying) return refuse(state, "Already reconnecting.");
+      return go(state, { trying: true }, [{ type: "cancel-wait" }, { type: "reconnect" }]);
+
+    case "SERVICE_RESTARTING":
+      return go(state, { restartSeen: true });
+
+    case "RECONNECTED": {
+      if (state.phase !== "reconnecting") return refuse(state, "Not reconnecting.");
+      const { status } = action;
+      // /service/status has no boot id: a restart is a service.restarting
+      // seen before the drop, or a new version (decisions.md, ruling 2).
+      const restarted = state.restartSeen || status.version !== state.version;
+      const patch = {
+        attempt: 0,
+        trying: false,
+        restartSeen: false,
+        url: action.url ?? state.url,
+        owned: state.owned || Boolean(action.startedByApp),
+        version: status.version,
+        proxyListener: status.proxy_listener ?? null,
+      };
+      if (status.project === state.project && !restarted) {
+        return go(state, { ...patch, phase: "connected" }, [{ type: "open-events" }, { type: "resync" }]);
+      }
+      return go(state, { ...patch, phase: "project-changed", pendingProject: status.project }, [
+        { type: "confirm-load", status },
+      ]);
+    }
+
+    case "LOAD_PROJECT":
+      // Load the project a reconnect found, after declining it once.
+      if (state.phase !== "project-changed") return refuse(state, "No project waits to load.");
+      return go(state, {}, [{ type: "confirm-load", status: { project: state.pendingProject } }]);
+
+    case "LOAD_CONFIRMED": {
+      if (state.phase !== "project-changed") return refuse(state, "No project waits to load.");
+      const status = { project: state.pendingProject, version: state.version, proxy_listener: state.proxyListener };
+      return go(state, { phase: "connected", project: state.pendingProject, pendingProject: null }, [
+        { type: "open-events" },
+        { type: "reload-project", status },
+      ]);
+    }
+
+    case "LOAD_DECLINED":
+      if (state.phase !== "project-changed") return refuse(state, "No project waits to load.");
+      return go(state, {});
+
+    case "PROJECT_LOADED":
+      // A switch loaded another project: reconnects compare against it.
+      return go(state, { project: action.path });
 
     case "RETRY":
       if (state.phase !== "failed") return refuse(state, "Nothing to retry.");
@@ -99,8 +173,10 @@ export function reduce(state, action) {
 
 const message = (err) => String(err?.message ?? err);
 
-export function createConnectionStore(api) {
+export function createConnectionStore(api, timers = globalThis) {
   const store = writable(initialConnection());
+  // The pending wait before the next reconnect attempt.
+  let waiting = null;
 
   function dispatch(action) {
     const next = reduce(get(store), action);
@@ -138,7 +214,58 @@ export function createConnectionStore(api) {
         return;
       }
       case "open-events":
-        api.openEvents({ onDrop: () => dispatch({ type: "STREAM_DROPPED" }) });
+        api.openEvents({ onDrop: (drop) => dispatch({ type: "STREAM_DROPPED", status: drop?.status ?? null }) });
+        return;
+      case "wait":
+        timers.clearTimeout(waiting);
+        waiting = timers.setTimeout(() => {
+          waiting = null;
+          dispatch({ type: "RECONNECT_NOW" });
+        }, step.ms);
+        return;
+      case "cancel-wait":
+        if (waiting !== null) timers.clearTimeout(waiting);
+        waiting = null;
+        return;
+      case "reconnect": {
+        // The local instance's address can change (its control listener
+        // restarted on a new port), so reach it as on starting.
+        let local, status;
+        try {
+          local = await api.connectLocal();
+          api.use({ url: local.url, password: local.password });
+          status = await api.readStatus();
+        } catch (err) {
+          console.error("Reconnecting to Marasi failed:", err);
+          dispatch({ type: "STREAM_DROPPED" });
+          return;
+        }
+        dispatch({ type: "RECONNECTED", url: local.url, startedByApp: local.startedByApp, status });
+        return;
+      }
+      case "resync":
+        try {
+          await api.resync();
+        } catch (err) {
+          console.error("Resyncing the stores failed:", err);
+        }
+        return;
+      case "confirm-load": {
+        let agreed = false;
+        try {
+          agreed = await api.confirmSwitch();
+        } catch (err) {
+          console.error("Asking about unsaved work failed:", err);
+        }
+        dispatch({ type: agreed ? "LOAD_CONFIRMED" : "LOAD_DECLINED" });
+        return;
+      }
+      case "reload-project":
+        try {
+          await api.reloadProject(step.status);
+        } catch (err) {
+          console.error("Loading the service's project failed:", err);
+        }
         return;
       case "close-events":
         api.closeEvents();
@@ -159,6 +286,10 @@ export function createConnectionStore(api) {
     start: () => dispatch({ type: "APP_STARTED" }),
     /** Begins again after a failure. */
     retry: () => dispatch({ type: "RETRY" }),
+    /** Reconnects now instead of waiting (the banner's Retry now). */
+    retryNow: () => dispatch({ type: "RECONNECT_NOW" }),
+    /** Loads the project a reconnect found, asking about unsaved work again. */
+    loadPending: () => dispatch({ type: "LOAD_PROJECT" }),
     dispatch,
   };
 }
