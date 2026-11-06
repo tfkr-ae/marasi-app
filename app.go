@@ -46,7 +46,12 @@ type App struct {
 	Proxy     *marasi.Proxy
 	listener  service.ListenerLifecycle
 	projects  *service.ProjectLifecycle
-	chrome    *service.Chrome
+	// chrome reads and writes this machine's Chrome paths and profiles;
+	// launchChrome starts Chrome with them (chrome.go). Tests replace
+	// launchChrome. chromeConfigDir holds the Chrome profiles.
+	chrome          *service.Chrome
+	launchChrome    func(ChromeLaunch) error
+	chromeConfigDir string
 	// upstreamProxies edits this machine's upstream proxy list and the open
 	// project's selection (upstream_proxy.go).
 	upstreamProxies *service.UpstreamProxies
@@ -190,6 +195,8 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 	listener.BindProject(app.projects)
 	app.listener = listener
 	app.chrome = service.NewChrome(proxy, listener, logWriter)
+	app.launchChrome = launchWithMarasi
+	app.chromeConfigDir = configDir
 	app.upstreamProxies = service.NewUpstreamProxies(proxy)
 	app.configureTrafficHandlers()
 	app.configureWebSocketHandlers()
@@ -709,14 +716,6 @@ func (a *App) CountNotes() (Dashboard, error) {
 		Interceptions:         counts.Intercepted,
 		InterceptionsComplete: complete || !known,
 	}, nil
-}
-func (a *App) StartBrowser(profile string) error {
-	// The app opens a window for the user, so it asks for no CDP endpoint.
-	_, err := a.chrome.Start(context.Background(), profile, service.ChromeStartOptions{})
-	if err != nil {
-		return fmt.Errorf("starting chrome : %w", err)
-	}
-	return nil
 }
 func (a *App) GetExtensionUI(extensionName string) (extUI ExtensionUI) {
 	if extension, ok := a.Proxy.GetExtension(extensionName); ok {

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
 	"slices"
 	"strings"
@@ -86,36 +87,148 @@ func TestAppChrome(t *testing.T) {
 		}
 	})
 
-	t.Run("should refuse to start Chrome while the proxy is stopped", func(t *testing.T) {
+	t.Run("should aim Chrome at the local connection's proxy listener and pin its SPKI hash", func(t *testing.T) {
 		app := newProjectApp(t)
-		if err := app.StartBrowser(""); !errors.Is(err, service.ErrListenerInactive) {
-			t.Fatalf("wanted: %v\ngot: %v", service.ErrListenerInactive, err)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ConnectionURL: "http://127.0.0.1:51391", ProxyListener: "127.0.0.1:51390", SPKIHash: "spki-from-service"})
+		if err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		want := ChromeLaunch{Address: "127.0.0.1", Port: "51390", SPKIHash: "spki-from-service", ConfigDir: app.Proxy.ConfigDir, Profile: "default-profile", Paths: []chrome.PathConfig{}}
+		if len(*launches) != 1 || !reflect.DeepEqual((*launches)[0], want) {
+			t.Fatalf("wanted: one launch %+v\ngot: %+v", want, *launches)
+		}
+	})
+	t.Run("should aim Chrome at loopback when the local listener binds every address", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		for _, listener := range []string{"0.0.0.0:8080", "[::]:8080"} {
+			if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: listener, SPKIHash: "h"}); err != nil {
+				t.Fatalf("starting Chrome on %s: %v", listener, err)
+			}
+		}
+		for _, launch := range *launches {
+			if launch.Address != "127.0.0.1" || launch.Port != "8080" {
+				t.Fatalf("wanted: 127.0.0.1:8080\ngot: %s:%s", launch.Address, launch.Port)
+			}
+		}
+	})
+	t.Run("should aim Chrome at the remote service's host when its listener binds every address", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "remote", ConnectionURL: "http://lab.example:51391", ProxyListener: "0.0.0.0:8080", SPKIHash: "h"})
+		if err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		if got := (*launches)[0]; got.Address != "lab.example" || got.Port != "8080" {
+			t.Fatalf("wanted: lab.example:8080\ngot: %s:%s", got.Address, got.Port)
+		}
+	})
+	t.Run("should aim Chrome at a remote listener's own address", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "remote", ConnectionURL: "http://lab.example:51391", ProxyListener: "[fd00::5]:8080", SPKIHash: "h"})
+		if err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		if got := (*launches)[0]; got.Address != "fd00::5" || got.Port != "8080" {
+			t.Fatalf("wanted: fd00::5 port 8080\ngot: %s port %s", got.Address, got.Port)
+		}
+	})
+	t.Run("should refuse a remote listener that binds loopback only", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		for _, listener := range []string{"127.0.0.1:8080", "127.0.0.2:8080", "[::1]:8080", "localhost:8080"} {
+			err := app.StartBrowser(ChromeStart{ConnectionKind: "remote", ConnectionURL: "http://lab.example:51391", ProxyListener: listener, SPKIHash: "h"})
+			if err == nil || !strings.Contains(err.Error(), "listener_loopback:") {
+				t.Errorf("%s: wanted: listener_loopback error\ngot: %v", listener, err)
+			}
+		}
+		if len(*launches) != 0 {
+			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
+		}
+	})
+	t.Run("should refuse to start Chrome while the proxy listener is stopped", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", SPKIHash: "h"})
+		if err == nil || !strings.Contains(err.Error(), "listener_inactive:") {
+			t.Fatalf("wanted: listener_inactive error\ngot: %v", err)
+		}
+		if len(*launches) != 0 {
+			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
+		}
+	})
+	t.Run("should start a configured profile with the configured paths", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		if _, err := app.AddChromeProfile("work"); err != nil {
+			t.Fatalf("adding profile: %v", err)
+		}
+		path := chrome.PathConfig{OS: "darwin", Path: "/custom/chrome"}
+		if _, err := app.AddChromePath(path.Path, path.OS); err != nil {
+			t.Fatalf("adding path: %v", err)
+		}
+		if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080", SPKIHash: "h", Profile: "work"}); err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		got := (*launches)[0]
+		if got.Profile != "work" || !reflect.DeepEqual(got.Paths, []chrome.PathConfig{path}) {
+			t.Fatalf("wanted: profile work with %v\ngot: %+v", path, got)
+		}
+	})
+	t.Run("should refuse a profile that isn't configured", func(t *testing.T) {
+		app := newProjectApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080", SPKIHash: "h", Profile: "missing"})
+		if !errors.Is(err, service.ErrChromeNotFound) {
+			t.Fatalf("wanted: %v\ngot: %v", service.ErrChromeNotFound, err)
+		}
+		if len(*launches) != 0 {
+			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
+		}
+	})
+	t.Run("should refuse to start Chrome without the certificate's SPKI hash", func(t *testing.T) {
+		app := newProjectApp(t)
+		recordChromeLaunches(app)
+		if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080"}); err == nil {
+			t.Fatal("wanted: an error\ngot: nil")
 		}
 	})
 
-	t.Run("should start Chrome through the proxy without a CDP endpoint", func(t *testing.T) {
+	t.Run("should start Chrome through the launcher without a CDP endpoint", func(t *testing.T) {
 		if goruntime.GOOS == "windows" {
 			t.Skip("test executable is a shell script")
 		}
-		app := newScratchpadApp(t)
-		if err := app.StartProxy("127.0.0.1", "0"); err != nil {
-			t.Fatalf("starting listener: %v", err)
-		}
+		app := newProjectApp(t)
 		executable, argsPath := writeFakeChrome(t)
 		if _, err := app.AddChromePath(executable, goruntime.GOOS); err != nil {
 			t.Fatalf("adding fake Chrome: %v", err)
 		}
-		if err := app.StartBrowser(""); err != nil {
+		if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:51390", SPKIHash: "spki-from-service"}); err != nil {
 			t.Fatalf("starting Chrome: %v", err)
 		}
 		args := readFakeChromeArgs(t, argsPath)
-		if !strings.Contains(args, "--proxy-server=http://"+listenerAddress(t, app)+"\n") {
-			t.Fatalf("wanted: --proxy-server for the listener among arguments\ngot:\n%s", args)
+		for _, want := range []string{"--proxy-server=http://127.0.0.1:51390\n", "--ignore-certificate-errors-spki-list=spki-from-service\n"} {
+			if !strings.Contains(args, want) {
+				t.Fatalf("wanted: %q among arguments\ngot:\n%s", want, args)
+			}
 		}
 		if strings.Contains(args, "--remote-debugging-port") {
 			t.Fatalf("wanted: no --remote-debugging-port among arguments\ngot:\n%s", args)
 		}
 	})
+}
+
+// recordChromeLaunches replaces app's Chrome launcher with one that records
+// each launch instead of starting Chrome.
+func recordChromeLaunches(app *App) *[]ChromeLaunch {
+	launches := &[]ChromeLaunch{}
+	app.launchChrome = func(launch ChromeLaunch) error {
+		*launches = append(*launches, launch)
+		return nil
+	}
+	return launches
 }
 
 // writeFakeChrome writes a Chrome stand-in that records its arguments, one
