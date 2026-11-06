@@ -4,7 +4,13 @@
 // them through the injected `api`, and each step's outcome comes back as the
 // next action. Tests run the reducer alone, and the store with a fake api:
 //
+//   listConnections() -> {connections, activeId}     the saved connections (Go)
 //   connectLocal() -> {url, password, startedByApp}  start or attach (Go)
+//   connectionPassword(id) -> password               a remote's saved password (Go)
+//   savePassword(id, password)                       replace it (Go)
+//   setActive(id)                                    save the active connection (Go)
+//   clearStores()                                    forget the last service's data
+//   confirmSwitch() -> bool                          the unsaved-work prompt (Go)
 //   use({url, password})                             point the service client
 //   readStatus() -> GET /service/status
 //   openEvents({onDrop})                              open GET /events
@@ -22,8 +28,14 @@ import { get, writable } from "svelte/store";
 export function initialConnection() {
   return {
     phase: "idle",
-    // Only the local connection exists so far.
-    connection: { id: "local", kind: "local", name: "Local" },
+    // The saved connections (Go's ListConnections), local first, and the
+    // active one.
+    connections: [localConnection],
+    connection: localConnection,
+    // A switch is under way: the next connect remounts the pages.
+    switching: false,
+    // Where a refused password came from, to resume it once entered.
+    authFrom: null,
     // The app started the local instance, so it stops it on quit (Go).
     owned: false,
     url: null,
@@ -48,6 +60,11 @@ export function initialConnection() {
     pendingProject: null,
   };
 }
+
+const localConnection = { id: "local", kind: "local", name: "Local", url: "" };
+
+/** Whether `err` is the service refusing the password (401 unauthorized). */
+export const isAuthRefusal = (err) => err?.code === "unauthorized" || err?.status === 401;
 
 /** The wait before reconnect attempt `attempt` (1, 2, …): 1s doubling to 30s. */
 export function backoff(attempt) {
@@ -75,13 +92,33 @@ export function versionWarning(version, pin) {
 const go = (state, patch, steps = []) => ({ state: { ...state, ...patch }, steps, refusal: null });
 const refuse = (state, refusal) => ({ state, steps: [], refusal });
 
-// Reaches the active connection from scratch.
+// Reaches the active connection from scratch: the local instance through
+// the CLI, a remote with its saved password.
 function begin(state) {
-  const reset = { url: null, project: null, version: null, versionWarning: null, proxyListener: null };
-  return go(state, { phase: "starting", error: null, ...reset }, [
-    { type: "connect-local" },
+  const reset = {
+    url: null,
+    project: null,
+    version: null,
+    versionWarning: null,
+    proxyListener: null,
+    instance: null,
+    attempt: 0,
+    trying: false,
+    restartSeen: false,
+    pendingProject: null,
+    authFrom: null,
+  };
+  const { connection } = state;
+  if (connection.kind === "local") {
+    return go(state, { phase: "starting", error: null, ...reset }, [{ type: "connect-local" }]);
+  }
+  return go(state, { phase: "connecting", error: null, ...reset }, [
+    { type: "connect-remote", id: connection.id, url: connection.url },
   ]);
 }
+
+// An outcome for a connection the app has since switched away from.
+const stale = (state, action) => action.id !== undefined && action.id !== state.connection.id;
 
 /** The next state for `action`, the steps to perform, and any refusal. */
 export function reduce(state, action) {
@@ -103,11 +140,14 @@ export function reduce(state, action) {
 
     case "CONNECTED": {
       if (state.phase !== "connecting") return refuse(state, "Nothing is connecting.");
+      if (stale(state, action)) return refuse(state, "That connection isn't active any more.");
       const { status } = action;
       return go(
         state,
         {
           phase: "connected",
+          url: action.url ?? state.url,
+          switching: false,
           project: status.project,
           version: status.version,
           versionWarning: versionWarning(status.version, state.pin),
@@ -115,13 +155,85 @@ export function reduce(state, action) {
           proxyListener: status.proxy_listener ?? null,
           error: null,
         },
-        [{ type: "open-events" }, { type: "load-project", status }],
+        // After a switch the pages remount on the other service's project.
+        [{ type: "open-events" }, { type: state.switching ? "reload-project" : "load-project", status }],
       );
     }
 
     case "CONNECT_FAILED":
       if (state.phase !== "connecting") return refuse(state, "Nothing is connecting.");
+      if (stale(state, action)) return refuse(state, "That connection isn't active any more.");
       return go(state, { phase: "failed", error: action.error });
+
+    case "AUTH_REJECTED":
+      // The service refused the password: ask for it, never retry on a timer.
+      if (state.phase !== "connecting" && state.phase !== "reconnecting") return refuse(state, "Nothing is connecting.");
+      if (stale(state, action)) return refuse(state, "That connection isn't active any more.");
+      return go(
+        state,
+        {
+          phase: "auth-failed",
+          authFrom: state.phase,
+          attempt: 0,
+          trying: false,
+          error: `${state.connection.name} refused the password`,
+        },
+        state.phase === "reconnecting" ? [{ type: "cancel-wait" }] : [],
+      );
+
+    case "ENTER_PASSWORD":
+      if (state.phase !== "auth-failed") return refuse(state, "No password is being asked for.");
+      if (!action.password) return refuse(state, "Enter the password.");
+      return go(state, { error: null }, [{ type: "save-password", id: state.connection.id, password: action.password }]);
+
+    case "PASSWORD_SAVED":
+      if (state.phase !== "auth-failed") return refuse(state, "No password is being asked for.");
+      if (stale(state, action)) return refuse(state, "That connection isn't active any more.");
+      // A refused reconnect resumes in place; a refused connect begins again.
+      if (state.authFrom === "reconnecting") {
+        return go(state, { phase: "reconnecting", authFrom: null, trying: true, attempt: 1 }, [{ type: "reconnect" }]);
+      }
+      return begin(state);
+
+    case "PASSWORD_SAVE_FAILED":
+      if (state.phase !== "auth-failed") return refuse(state, "No password is being asked for.");
+      return go(state, { error: action.error });
+
+    case "CONNECTIONS_LOADED": {
+      // The saved connections, on start and after one is added, edited or
+      // removed. An edited address of the active remote reaches it again.
+      const connections = action.connections?.length ? action.connections : [localConnection];
+      const wanted = state.phase === "idle" ? action.activeId : state.connection.id;
+      const connection = connections.find((c) => c.id === wanted) ?? connections[0];
+      const next = { ...state, connections, connection };
+      const moved = state.phase !== "idle" && connection.kind === "remote" && connection.url !== state.connection.url;
+      if (!moved) return go(next, {});
+      const restart = begin(next);
+      return { ...restart, steps: [{ type: "close-events" }, { type: "cancel-wait" }, ...restart.steps] };
+    }
+
+    case "SWITCH_CONNECTION": {
+      if (action.id === state.connection.id) return refuse(state, "Already on that connection.");
+      if (!state.connections.some((c) => c.id === action.id)) return refuse(state, "No such connection.");
+      return go(state, {}, [{ type: "confirm-leave", id: action.id }]);
+    }
+
+    case "SWITCH_CONFIRMED": {
+      const connection = state.connections.find((c) => c.id === action.id);
+      if (!connection || connection.id === state.connection.id) return refuse(state, "No such connection.");
+      // The local instance keeps running until quit, so `owned` stays.
+      const next = begin({ ...state, connection, switching: true });
+      return {
+        ...next,
+        steps: [
+          { type: "close-events" },
+          { type: "cancel-wait" },
+          { type: "set-active", id: connection.id },
+          { type: "clear-stores" },
+          ...next.steps,
+        ],
+      };
+    }
 
     case "STREAM_DROPPED": {
       // A drop of the stream (whatever the reason: a network failure, a
@@ -195,7 +307,7 @@ export function reduce(state, action) {
       return go(state, { pin: action.pin || null, versionWarning: versionWarning(state.version, action.pin) });
 
     case "RETRY":
-      if (state.phase !== "failed") return refuse(state, "Nothing to retry.");
+      if (state.phase !== "failed" && state.phase !== "auth-failed") return refuse(state, "Nothing to retry.");
       return begin(state);
 
     default:
@@ -231,6 +343,56 @@ export function createConnectionStore(api, timers = globalThis) {
         dispatch({ type: "INSTANCE_UP", url: local.url, password: local.password, startedByApp: local.startedByApp });
         return;
       }
+      case "connect-remote": {
+        let status;
+        try {
+          const password = await api.connectionPassword(step.id);
+          api.use({ url: step.url, password });
+          status = await api.readStatus();
+        } catch (err) {
+          dispatch(
+            isAuthRefusal(err)
+              ? { type: "AUTH_REJECTED", id: step.id }
+              : { type: "CONNECT_FAILED", id: step.id, error: message(err) },
+          );
+          return;
+        }
+        dispatch({ type: "CONNECTED", id: step.id, url: step.url, status });
+        return;
+      }
+      case "save-password":
+        try {
+          await api.savePassword(step.id, step.password);
+        } catch (err) {
+          dispatch({ type: "PASSWORD_SAVE_FAILED", error: message(err) });
+          return;
+        }
+        dispatch({ type: "PASSWORD_SAVED", id: step.id });
+        return;
+      case "confirm-leave": {
+        let agreed = false;
+        try {
+          agreed = await api.confirmSwitch();
+        } catch (err) {
+          console.error("Asking about unsaved work failed:", err);
+        }
+        if (agreed) dispatch({ type: "SWITCH_CONFIRMED", id: step.id });
+        return;
+      }
+      case "set-active":
+        try {
+          await api.setActive(step.id);
+        } catch (err) {
+          console.error("Saving the active connection failed:", err);
+        }
+        return;
+      case "clear-stores":
+        try {
+          await api.clearStores();
+        } catch (err) {
+          console.error("Clearing the stores failed:", err);
+        }
+        return;
       case "use":
         api.use({ url: step.url, password: step.password });
         return;
@@ -239,7 +401,7 @@ export function createConnectionStore(api, timers = globalThis) {
         try {
           status = await api.readStatus();
         } catch (err) {
-          dispatch({ type: "CONNECT_FAILED", error: message(err) });
+          dispatch(isAuthRefusal(err) ? { type: "AUTH_REJECTED" } : { type: "CONNECT_FAILED", error: message(err) });
           return;
         }
         dispatch({ type: "CONNECTED", status });
@@ -261,18 +423,28 @@ export function createConnectionStore(api, timers = globalThis) {
         return;
       case "reconnect": {
         // The local instance's address can change (its control listener
-        // restarted on a new port), so reach it as on starting.
-        let local, status;
+        // restarted on a new port), so reach it as on starting. A remote is
+        // reached with its saved password, which may have changed.
+        const { connection } = get(store);
+        let reached, status;
         try {
-          local = await api.connectLocal();
-          api.use({ url: local.url, password: local.password });
+          if (connection.kind === "local") {
+            reached = await api.connectLocal();
+          } else {
+            reached = { url: connection.url, password: await api.connectionPassword(connection.id), startedByApp: false };
+          }
+          api.use({ url: reached.url, password: reached.password });
           status = await api.readStatus();
         } catch (err) {
+          if (isAuthRefusal(err)) {
+            dispatch({ type: "AUTH_REJECTED", id: connection.id });
+            return;
+          }
           console.error("Reconnecting to Marasi failed:", err);
           dispatch({ type: "STREAM_DROPPED" });
           return;
         }
-        dispatch({ type: "RECONNECTED", url: local.url, startedByApp: local.startedByApp, status });
+        dispatch({ type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, status });
         return;
       }
       case "resync":
@@ -312,10 +484,29 @@ export function createConnectionStore(api, timers = globalThis) {
     }
   }
 
+  /** Reads the saved connections (on start, and after a change). */
+  async function load() {
+    const saved = await api.listConnections();
+    dispatch({ type: "CONNECTIONS_LOADED", connections: saved.connections, activeId: saved.activeId });
+  }
+
   return {
     subscribe: store.subscribe,
-    /** Starts reaching the service, once, when the app opens. */
-    start: () => dispatch({ type: "APP_STARTED" }),
+    load,
+    /** Switches to connection `id`, asking about unsaved work first. */
+    switchTo: (id) => dispatch({ type: "SWITCH_CONNECTION", id }),
+    /** Saves the password a refusal asked for, then connects again. */
+    enterPassword: (password) => dispatch({ type: "ENTER_PASSWORD", password }),
+    /**
+     * Reads the saved connections, then starts reaching the active one,
+     * once, when the app opens. Without them it reaches the local one.
+     */
+    async start() {
+      if (api.listConnections) {
+        await load().catch((err) => console.error("Reading the saved connections failed:", err));
+      }
+      return dispatch({ type: "APP_STARTED" });
+    },
     /** Begins again after a failure. */
     retry: () => dispatch({ type: "RETRY" }),
     /** Reconnects now instead of waiting (the banner's Retry now). */

@@ -56,7 +56,7 @@ function serviceRoutes(client, { held = [], events = [], refuse = null } = {}) {
 
 // The project store over the fake client, with the native prompt answering
 // `confirm`, a load that records what it loaded, and timers run by hand.
-function setup({ held, events, refuse, confirm = true, load = async () => {} } = {}) {
+function setup({ held, events, refuse, confirm = true, load = async () => {}, recents = [] } = {}) {
   const routes = {};
   const client = fakeClient(routes);
   Object.assign(routes, serviceRoutes(client, { held, events, refuse }));
@@ -72,6 +72,7 @@ function setup({ held, events, refuse, confirm = true, load = async () => {} } =
       loads.push(path);
       await load(path, part);
     },
+    recentProjects: async () => recents,
   });
   const store = createProjectStore(api, {
     setTimeout: (fn) => timers.push(fn),
@@ -256,6 +257,22 @@ test("the service's projects list as recents, most recent first", async () => {
   assert.deepEqual(await store.list(), [
     { name: "scratchpad", path: scratchpad, modifiedAt: "2026-11-06T10:00:00+04:00" },
     { name: "acme", path: acme, modifiedAt: "2026-11-06T09:00:00+04:00" },
+  ]);
+});
+
+test("this connection's recent projects list first, then the service's others", async () => {
+  const client = "/srv/client.marasi";
+  const { store } = setup({
+    recents: [
+      { name: "client", path: client, opened: "2026-11-06T11:00:00Z" },
+      { name: "acme", path: acme, opened: "2026-11-06T08:00:00Z" },
+    ],
+  });
+
+  assert.deepEqual(await store.list(), [
+    { name: "client", path: client, modifiedAt: "2026-11-06T11:00:00Z" },
+    { name: "acme", path: acme, modifiedAt: "2026-11-06T08:00:00Z" },
+    { name: "scratchpad", path: scratchpad, modifiedAt: "2026-11-06T10:00:00+04:00" },
   ]);
 });
 
