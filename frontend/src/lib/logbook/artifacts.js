@@ -1,6 +1,6 @@
 // How the Logbook previews an artifact: by its content type, or by its file
 // name's extension when the type says nothing useful, with its bytes read
-// from GetArtifact's base64.
+// from the Logbook store's readArtifact.
 
 const TEXT_TYPE = /^text\/|json|xml|yaml|csv|javascript|\bhar\b/;
 const TEXT_EXT = new Set(["txt", "log", "md", "json", "har", "csv", "xml", "yaml", "yml", "html", "htm", "js"]);
@@ -35,7 +35,7 @@ function byExtension(ext) {
 export const previewOf = (artifact) =>
   byType((artifact?.MimeType ?? "").toLowerCase()) ?? byExtension(extensionOf(artifact?.Filename));
 
-/** An artifact's bytes from GetArtifact's Data: Go's []byte as base64, or a list of numbers. */
+/** An artifact's bytes from readArtifact's Data: bytes, base64, or a list of numbers. */
 export function artifactBytes(data) {
   if (data == null) return new Uint8Array();
   if (typeof data !== "string") return Uint8Array.from(data);

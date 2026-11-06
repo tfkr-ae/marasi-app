@@ -6,10 +6,8 @@ import {
   GetExtensionCode,
   GetWaypoints,
   GetExtensions,
-  GetUserName,
+  OSUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { testCaseStore } from "./stores/testCaseStore";
-import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
 import { webSocketStore } from "./stores/webSocketStore";
 import { armoryStore } from "./stores/armoryStore";
@@ -119,7 +117,7 @@ export async function resetProject(name) {
     type: "Assessment Type",
     is_draft: true,
     scope: "Assessment Scope",
-    assessor: await GetUserName(),
+    assessor: await OSUserName(),
     start: new Date(
       new Date().setDate(new Date().getDate() - 14),
     ).toLocaleDateString("en-CA"),
@@ -141,9 +139,6 @@ export async function resetProject(name) {
   recentTraffic.clear();
   extensions.set([]);
   extensions_ui.set({});
-  testCaseStore.clear();
-  findingStore.clear();
-  logbookStore.clear();
   webSocketStore.clear();
   armoryStore.clear();
   launchpadStore.clear();
