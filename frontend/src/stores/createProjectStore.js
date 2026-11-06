@@ -71,14 +71,8 @@ export function createProjectStore(api, timers = globalThis) {
     if (held.length) return { status: "held", ids: held };
     if (!(await api.confirmSwitch())) return { status: "cancelled" };
 
-    const current = get(store).loaded;
     const name = target.name ?? projectName(target.path);
-    patch({
-      opening: openingFor({ name, path: target.path ?? null, current, scratchpad: name === "scratchpad" }),
-      shown: current === null,
-    });
-    const timer = timers.setTimeout(() => patch({ shown: true }), openingDelay);
-    const stopEvents = api.onProjectEvent((event, data) => updateOpening((state) => withProjectEvent(state, event, data)));
+    const finish = begin(name, target.path ?? null);
     try {
       let path;
       try {
@@ -86,20 +80,56 @@ export function createProjectStore(api, timers = globalThis) {
       } catch (error) {
         return fail(error);
       }
-      updateOpening((state) => withSwitched({ ...state, path }));
-      try {
-        await api.loadProject(path, (signal) => updateOpening((state) => withLoadPart(state, signal)));
-      } catch (error) {
-        return fail(error);
-      } finally {
-        store.update((state) => ({ ...state, generation: state.generation + 1 }));
-      }
-      const project = openingScreen(withOpened(get(store).opening)).opened ?? projectAt(path);
-      patch({ opening: null, shown: false, loaded: project });
-      return { status: "opened", project };
+      return await load(path);
     } finally {
+      finish();
+    }
+  }
+
+  // Shows the opening state for `name` (the screen waits openingDelay), and
+  // follows the service's project events. Returns the function that stops.
+  function begin(name, path) {
+    const current = get(store).loaded;
+    patch({
+      opening: openingFor({ name, path, current, scratchpad: name === "scratchpad" }),
+      shown: current === null,
+    });
+    const timer = timers.setTimeout(() => patch({ shown: true }), openingDelay);
+    const stopEvents = api.onProjectEvent((event, data) => updateOpening((state) => withProjectEvent(state, event, data)));
+    return () => {
       stopEvents();
       timers.clearTimeout(timer);
+    };
+  }
+
+  // Loads the project the service switched to, at `path`, and remounts the
+  // pages.
+  async function load(path) {
+    updateOpening((state) => withSwitched({ ...state, path }));
+    try {
+      await api.loadProject(path, (signal) => updateOpening((state) => withLoadPart(state, signal)));
+    } catch (error) {
+      return fail(error);
+    } finally {
+      store.update((state) => ({ ...state, generation: state.generation + 1 }));
+    }
+    const project = openingScreen(withOpened(get(store).opening)).opened ?? projectAt(path);
+    patch({ opening: null, shown: false, loaded: project });
+    return { status: "opened", project };
+  }
+
+  /**
+   * Loads afresh the project the service has open at `path`, as after a
+   * switch, with no open and no prompt: the connection store's reconnect
+   * found another project or a restarted service, and asked already.
+   */
+  async function reload(path) {
+    lastTarget = { path };
+    const finish = begin(projectName(path), path);
+    try {
+      return await load(path);
+    } finally {
+      finish();
     }
   }
 
@@ -112,6 +142,7 @@ export function createProjectStore(api, timers = globalThis) {
       return project;
     },
     open,
+    reload,
     /** Re-runs the last open, for the opening screen's Try again. */
     retry: () => (lastTarget ? open(lastTarget) : Promise.resolve(null)),
     /**

@@ -271,3 +271,29 @@ test("what the picker gives opens by path when it names a directory, else by nam
   assert.deepEqual(projectTarget("/Users/r/client"), { path: "/Users/r/client.marasi" });
   assert.deepEqual(projectTarget("C:\\Users\\r\\client.marasi"), { path: "C:\\Users\\r\\client.marasi" });
 });
+
+test("reloading the project the service has open loads it afresh, without opening or prompting", async () => {
+  const { client, store, loads, prompts } = setup();
+
+  const result = await store.reload(acme);
+
+  assert.deepEqual(result, { status: "opened", project: { name: "acme", path: acme } });
+  assert.deepEqual(client.calls, [], "the service already has it open");
+  assert.deepEqual(prompts, [], "the connection store asked already");
+  assert.deepEqual(loads, [acme]);
+  assert.deepEqual(get(store).loaded, { name: "acme", path: acme });
+  assert.equal(get(store).generation, 1, "the pages remount");
+});
+
+test("a reload that fails shows the opening screen's failure", async () => {
+  const { store } = setup({
+    load: async () => {
+      throw new Error("GET /dashboard: fetch failed");
+    },
+  });
+
+  const result = await store.reload(acme);
+
+  assert.equal(result.status, "failed");
+  assert.equal(get(store).shown, true);
+});

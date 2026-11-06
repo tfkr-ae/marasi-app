@@ -4,23 +4,30 @@
 import { derived } from "svelte/store";
 import { ConfirmProjectSwitch } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
-import { loadSignals, projectName } from "../lib/openProgress.js";
+import { projectName } from "../lib/openProgress.js";
 import { activeProject, resetProject } from "../stores.js";
 import { createProjectApi } from "./projectApi.js";
 import { createProjectStore } from "./createProjectStore.js";
-import { homeStore } from "./homeStore.js";
+import { projectData } from "./projectData.js";
+// Each store registers itself with projectData when its module loads; these
+// stores aren't imported elsewhere before the first load.
+import "./homeStore.js";
 
 /**
  * Loads the service's project at `path` into every store, on connecting and
  * after each switch. `part(signal)` tells the opening screen what loads
- * next. Each page's ticket adds its store's populate here.
+ * next. Stores join through projectData.register (projectData.js).
  */
 export async function loadProject(path, part = () => {}) {
-  part(loadSignals.traffic);
   await resetProject(projectName(path));
-  homeStore.clear();
-  await homeStore.populate();
+  await projectData.load(part);
 }
+
+/**
+ * Brings every store up to date in place after a reconnect to the same
+ * project: drafts, selection, scroll and open drawers stay.
+ */
+export const resyncProject = () => projectData.resync();
 
 export const projectStore = createProjectStore(
   createProjectApi(service, { confirmSwitch: () => ConfirmProjectSwitch(), loadProject }),

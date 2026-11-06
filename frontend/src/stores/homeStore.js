@@ -5,8 +5,17 @@ import { service } from "../lib/service/index.js";
 import { createHomeApi } from "./homeApi.js";
 import { createHomeStore } from "./createHomeStore.js";
 import { listener } from "../stores.js";
+import { loadSignals } from "../lib/openProgress.js";
+import { projectData } from "./projectData.js";
 
 export const homeStore = createHomeStore(createHomeApi(service));
+
+projectData.register("home", {
+  signal: loadSignals.logs,
+  clear: homeStore.clear,
+  load: homeStore.populate,
+  resync: homeStore.resync,
+});
 
 service.on("log.added", homeStore.onLog);
 service.on("listener.started", homeStore.onListener);

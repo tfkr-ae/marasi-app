@@ -225,3 +225,24 @@ test("a refused listener change rejects and leaves the listener as it was", asyn
   await assert.rejects(store.setListener("127.0.0.1", "80"), /not_found/);
   assert.deepEqual(get(store).listener, { status: true, address: "127.0.0.1", port: "52062" });
 });
+
+test("resync replaces the counts and log in place, keeping the old ones until the new arrive", async () => {
+  const routes = serviceRoutes();
+  const { store } = setup(routes);
+  await store.populate();
+
+  let answer;
+  routes["/dashboard"] = () => new Promise((resolve) => (answer = resolve));
+  routes["/logs"] = {
+    items: [{ id: "l3", timestamp: "2026-11-06T22:20:00+04:00", level: "INFO", message: "while away", context: {} }, ...routes["/logs"].items],
+    next_cursor: null,
+  };
+  const resynced = store.resync();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(get(store).dashboard.requests, 1200, "nothing blanks while the service answers");
+
+  answer({ pairs: 1300, notes: 3, launchpads: 2, intercepted: 7, intercepted_count: { complete: true } });
+  await resynced;
+  assert.equal(get(store).dashboard.requests, 1300);
+  assert.deepEqual(get(store).logs.map((log) => log.ID), ["l1", "l2", "l3"]);
+});
