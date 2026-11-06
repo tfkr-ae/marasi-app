@@ -431,7 +431,7 @@ async function driveRoute(route) {
 }
 
 // Overlays fill in after they paint: the Project modal shows "No recent
-// projects" until GetRecentProjects resolves. Wait until the page or overlay
+// projects" until the service's project list arrives. Wait until the page or overlay
 // text stops changing for `quietMs`, so the capture shows loaded content.
 async function waitForSettledText(description, quietMs = 500, timeoutMs = defaultTimeoutMs) {
 	const deadline = Date.now() + timeoutMs;

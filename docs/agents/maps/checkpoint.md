@@ -25,7 +25,7 @@ Which files work together on the Checkpoint page, how a held item reaches the pa
 5. Every forward or drop that succeeds goes through `settleCheckpoint`, which emits `checkpoint-settled` (`CheckpointSettled`: ID, Type and a WebSocket message's RequestID). `+layout.svelte` reads the queue again and calls `webSocketStore.onSettled`, so the page and the WebSocket modal's Checkpoint tab drop the item whichever of them acted.
 6. When a client leaves, Marasi drops its item and calls the abandoned handler, which emits `checkpoint-abandoned`. `onAbandoned` removes the item and tells `onAbandon` listeners whether an edit was lost; `+layout.svelte` toasts `#412 dropped · client left · edit lost` on any page. A held request has no pair number yet, so its title and that toast use `METHOD path`.
 
-A project switch is refused while items are held (`checkpointHeldError` in `app.go`; see `project-open.md`). `openProject` in `stores.js` clears the store and fills it again.
+A project switch is refused while items are held (the project store reads `GET /checkpoint` first; see `project-open.md`). `resetProject` in `stores.js` clears the store on a switch.
 
 ## Rules
 

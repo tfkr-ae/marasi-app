@@ -53,19 +53,30 @@ Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/
 
 ### Switching projects
 
-`⌘O` or `Open Project` opens `Switch Projects`: a `Search or enter new project name...` field (`input[type=search]`) over the recent projects. Enter opens the highlighted project, or with no match the typed name, which `OpenProject` (`app.go`) resolves to `<config dir>/<name>.marasi`. A slow or failed open covers the app with the opening screen (the project's name and path, steps Lock, Open, Upgrade, Load, one sentence, and a collapsed `Details` with the raw open log); a quick open shows none, so the screen is reached by failing. A project another Marasi holds is refused (`project_locked`): the screen reads `The project is opened by another instance.` (`The scratchpad …` at startup), lists `Open another project` (`Open a project instead` at startup) with `Browse…`, and offers `Stay in <open project>`, `Try again` and `Open <picked>`. Marasi locks a project with `flock` on `<project>.marasi.lock`, so hold that lock from a shell to stand in for the other instance. Proven, with `flock -n <config dir>/locked-probe.marasi.lock sleep 600 &` running:
+`⌘O` or `Open Project` opens `Switch Projects`: a `Search or enter new project name...` field (`input[type=search]`) over the service's named projects (`GET /project/list`, most recent first). Enter or `Open Selected` opens the highlighted project by name, or with no match the typed text: a name opens `<config dir>/projects/<name>.marasi` on the service, and an absolute path (`.marasi` added when missing) opens that file, as `Browse Files...` would. Both go through `POST /project/open`; check the result with `GET /service/status`'s `project`. A slow or failed open covers the app with the opening screen (the project's name and path, steps Lock, Open, Upgrade, Wait, Load, one sentence, and a collapsed `Details` listing the service's `project.*` events); a quick open shows none, so the screen is reached by failing. Proven, opening a new project and switching back:
 
 ```json
-{"name":"open-locked","steps":[
- {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"input[type=search]"},{"insert":"locked-probe"},{"key":"enter"},
- {"waitText":"The project is opened by another instance."},{"waitText":"Open another project"},{"waitText":"Stay in scratchpad"},
- {"text":"Details"},{"waitText":"project_locked"},{"text":"Try again"},{"waitText":"The project is opened by another instance."},
- {"text":"Stay in scratchpad"},{"waitNoText":"The project is opened by another instance."},{"waitText":"Project Dashboard"}]}
+{"name":"open-second","steps":[
+ {"key":"cmd+o"},{"waitText":"Switch Projects"},{"waitText":"scratchpad"},{"click":"input[type=search]"},{"insert":"second"},
+ {"waitText":"Create New Project"},{"key":"enter"},{"waitText":"second Project Dashboard","timeoutMs":20000},{"waitText":"Opened second project"}]}
+{"name":"back-to-scratchpad","steps":[
+ {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"li.project-item","hasText":"scratchpad"},{"text":"Open Selected"},
+ {"waitText":"scratchpad Project Dashboard","timeoutMs":20000}]}
 ```
 
-The scratchpad stays open (doctor still reports `scratchpad.marasi`). Afterwards kill both the `flock` process and its `sleep` child (the child inherits the lock, so killing `flock` alone keeps the project locked); the empty `locked-probe.marasi.lock` stays in the isolated config until cleanup.
+A project another instance holds is refused (`409 project_already_open`, read as `project_locked`): the screen reads `The project is opened by another instance.`, lists `Open another project` with `Browse…`, and offers `Stay in <open project>`, `Try again` and `Open <picked>`. Stand in for the other instance with a second isolated service holding a project file: `MARASI_PASSWORD=<any> "$MARASI_VERIFY_CLI" --config-dir /tmp/<dir>/cfg service start --port 0 --control-address 127.0.0.1:0 --project /tmp/<dir>/locked.marasi`, and stop it afterwards with `service stop` against the same `--config-dir`. Proven:
 
-While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has intercepted items` (`Forward or drop them to switch projects.`) instead of the picker, with `Open Checkpoint` (goes to `/checkpoint`) and `Cancel`; `⌘O` closes it again. An item held after the picker opened makes `OpenProject` refuse with `checkpoint_held` (`app.go`), and the same modal shows. Hold one with the Checkpoint `narrow-rule` recipe and a background request (see `checkpoint.md`), then, from Home:
+```json
+{"name":"locked","steps":[
+ {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"input[type=search]"},{"insert":"/private/tmp/<dir>/locked.marasi"},{"key":"enter"},
+ {"waitText":"The project is opened by another instance.","timeoutMs":20000},{"waitText":"Open another project"},
+ {"text":"Details"},{"waitText":"project.opening_failed"},{"text":"Stay in scratchpad"},
+ {"waitNoText":"opened by another instance"},{"waitText":"scratchpad Project Dashboard"}]}
+```
+
+The service keeps the scratchpad open (`GET /service/status`).
+
+While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has intercepted items` (`Forward or drop them to switch projects.`) instead of the picker, with `Open Checkpoint` (goes to `/checkpoint`) and `Cancel`; `⌘O` closes it again. An item held after the picker opened refuses the open the same way (the project store reads `GET /checkpoint` before `POST /project/open`, because the service would wait instead), and the same modal shows; doctor refuses a drive while the picker is open, so that case is covered by `projectStore.test.js`. Hold one with intercept on (`POST /checkpoint/intercept {"intercept":true}` with the service password) and a background request through the proxy, then, from Home:
 
 ```json
 {"name":"held-switch-open-checkpoint","steps":[
