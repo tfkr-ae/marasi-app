@@ -30,6 +30,18 @@ case $(uname -s) in
 	Darwin) APP_CONFIG_DIR="$HOME_DIR/Library/Application Support/Marasi" ;;
 	*) APP_CONFIG_DIR="$HOME_DIR/.config/Marasi" ;;
 esac
+# The real Marasi service the app reaches: an isolated config dir (never the
+# researcher's own), the CLI linked as $CLI_DIR/marasi (put first on the
+# app's PATH, so the app finds it there), its control password and PID, and
+# who started it: launch ("attach", the default) or the app ("app").
+SERVICE_DIR=$STATE_DIR/marasi
+CLI_DIR=$STATE_DIR/bin
+CLI_BIN=$CLI_DIR/marasi
+SERVICE_PID_FILE=$STATE_DIR/service.pid
+SERVICE_PASSWORD_FILE=$STATE_DIR/service-password
+CONTROL_URL_FILE=$STATE_DIR/control-url
+SERVICE_MODE_FILE=$STATE_DIR/service-mode
+SERVICE_PROJECT=$SERVICE_DIR/projects/scratchpad.marasi
 # build.sh writes the server build here. Launch runs a copy in the state
 # directory, so a rebuild for another session never replaces a running binary.
 BUILD_BIN=$REPO_ROOT/bin/marasi-app-server
@@ -136,6 +148,54 @@ preflight() {
 	done
 }
 
+# Runs the linked CLI against the isolated instance, never another one.
+marasi_cli() {
+	env -u MARASI_PASSWORD -u MARASI_INSTANCE -u MARASI_CONFIG_DIR -u MARASI_REMOTE \
+		"$CLI_BIN" --config-dir "$SERVICE_DIR" --instance default "$@"
+}
+
+# The CLI launch links: MARASI_VERIFY_CLI, else marasi on PATH. It must be
+# new enough to take a control password (MARASI_PASSWORD), which older dev
+# builds lack.
+resolve_cli() {
+	CLI_SOURCE=${MARASI_VERIFY_CLI:-$(command -v marasi 2>/dev/null || true)}
+	[ -n "$CLI_SOURCE" ] && [ -x "$CLI_SOURCE" ] || {
+		printf 'No Marasi CLI. Put marasi on PATH or set MARASI_VERIFY_CLI to a CLI built from Marasi main.\n' >&2
+		return 1
+	}
+	"$CLI_SOURCE" service start --help 2>&1 | grep -q MARASI_PASSWORD || {
+		printf '%s predates control passwords. Set MARASI_VERIFY_CLI to a CLI built from Marasi main.\n' "$CLI_SOURCE" >&2
+		return 1
+	}
+	# The instance's socket path must fit in 104 bytes.
+	SOCKET=$SERVICE_DIR/instances/default.sock
+	[ "${#SOCKET}" -lt 104 ] || {
+		printf 'The service socket path %s is too long; use a shorter MARASI_VERIFY_STATE_DIR.\n' "$SOCKET" >&2
+		return 1
+	}
+}
+
+# A JSON field from stdin, such as `json_field proxy_listener`.
+json_field() {
+	node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s)[process.argv[1]];console.log(v==null?"":v)})' "$1"
+}
+
+# Stops the isolated service instance, if any. `service stop` succeeds when
+# it isn't running too.
+stop_service() {
+	[ -x "$CLI_BIN" ] && [ -d "$SERVICE_DIR" ] || return 0
+	marasi_cli service stop --json >/dev/null 2>&1 || true
+}
+
+# Whether the isolated instance answers its socket: "running" or "stopped".
+service_state() {
+	if [ -x "$CLI_BIN" ] && marasi_cli service status --json >/dev/null 2>&1; then
+		printf 'running\n'
+	else
+		printf 'stopped\n'
+	fi
+}
+
 # Stop the recorded Chrome and Marasi processes without touching the isolated home.
 stop_instance() {
 	if [ -f "$CHROME_PID_FILE" ]; then
@@ -158,6 +218,17 @@ stop_instance() {
 				kill -KILL "$PID"
 			fi
 		fi
+	fi
+
+	# The app stops an instance it started when it quits, and leaves one it
+	# attached to running. Record which, then stop the instance either way.
+	if [ -x "$CLI_BIN" ] && [ -d "$SERVICE_DIR" ]; then
+		AFTER_QUIT=$(service_state)
+		if [ -f "$EVIDENCE_FILE" ] && [ -d "$(cat "$EVIDENCE_FILE")" ]; then
+			printf 'service_mode=%s\nservice_after_app_quit=%s\n' "$(cat "$SERVICE_MODE_FILE" 2>/dev/null || printf unknown)" "$AFTER_QUIT" > "$(cat "$EVIDENCE_FILE")/service-after-quit.txt"
+		fi
+		printf 'Service after the app quit: %s\n' "$AFTER_QUIT"
+		stop_service
 	fi
 
 	for RECORDED in "$PORT_FILE" "$SERVER_PORT_FILE"; do
