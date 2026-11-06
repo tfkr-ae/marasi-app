@@ -11,11 +11,11 @@ import {
 import { testCaseStore } from "./stores/testCaseStore";
 import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
-import { webSocketStore } from "./stores/webSocketStore";
+// Each registers with projectData as it loads.
+import "./stores/webSocketStore";
 import { armoryStore } from "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
-import { checkpointStore } from "./stores/checkpointStore";
-import { interceptFlag } from "./stores/interceptFlag.js";
+import "./stores/checkpointStore";
 import { readHighlights } from "./stores/highlightsStore";
 import { ledgerStore } from "./stores/ledgerStore";
 import { sitemapStore } from "./stores/sitemapStore";
@@ -66,9 +66,8 @@ export const testerInput = writable("");
 export const waypoints = writable({});
 
 // Checkpont
-export const checkpointCode = writable("");
-// The rules Checkpoint runs: what the project loaded, then each Update rules.
-export const checkpointCodeApplied = writable("");
+// The rules in the editor, and the rules Checkpoint runs.
+export { checkpointCode, checkpointCodeApplied } from "./stores/checkpointStore";
 export { interceptFlag } from "./stores/interceptFlag.js";
 
 // Workshop
@@ -130,9 +129,6 @@ export async function resetProject(name) {
   });
   compassCode.set("");
   testerInput.set("");
-  checkpointCode.set("");
-  checkpointCodeApplied.set("");
-  interceptFlag.set(false);
   workshopCode.set("");
   waypoints.set({});
   ledgerStore.clear();
@@ -144,10 +140,8 @@ export async function resetProject(name) {
   testCaseStore.clear();
   findingStore.clear();
   logbookStore.clear();
-  webSocketStore.clear();
   armoryStore.clear();
   launchpadStore.clear();
-  checkpointStore.clear();
 }
 
 export async function populateWaypoints() {
@@ -168,20 +162,6 @@ export async function populateWorkshop() {
     .catch((error) => {
       console.log(error);
     });
-}
-export async function populateCheckpoint() {
-  GetExtensionCode("checkpoint")
-    .then((code) => {
-      checkpointCode.set(code);
-      checkpointCodeApplied.set(code);
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-  // The held items and the Intercept all flag.
-  checkpointStore
-    .populate()
-    .catch((err) => console.error("Failed to read Checkpoint items:", err));
 }
 export async function populateScope() {
   GetExtensionCode("compass")
