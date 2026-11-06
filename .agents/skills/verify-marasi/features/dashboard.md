@@ -86,6 +86,19 @@ While Checkpoint holds an item, `⌘O` and `Open Project` open `Checkpoint has i
 
 After `Forward`, `⌘O` opens `Switch Projects` again.
 
+## Drop and reconnect
+
+When `/events` drops, the pages stay: a warning toast, `Lost connection to Local. Reconnecting…`, stays until the stream is back, and a banner over the page reads `Reconnecting to Local (attempt n). Your work stays where it is.` with `Retry now`. Attempts wait 1, 2, 4, 8, 16, then 30 s. On reconnect the toast gives way to `Reconnected to Local` (3 s); the same project resyncs every store in place, and another project (or a restarted service) loads in full after the unsaved-work prompt, remounting the pages.
+
+Drop the stream by stopping the control listener: `"$MARASI_VERIFY_STATE_DIR"/bin/marasi --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi service control stop`. Each attempt reaches the local instance through the linked CLI again, which turns a control listener back on at once, so the banner shows only for about a second. To watch it and the backoff, hold the CLI back from the app first: move `$MARASI_VERIFY_STATE_DIR/bin/marasi` to `marasi.real` and put a script there that exits 2 when `HOME` is the app's isolated home and otherwise runs `marasi.real "$@"`, so doctor and your own commands still work. Attempts then fail with `instance_failed … exited with 2` (in `app.log` and the console). Restore the link before `Retry now`. Requests sent through the proxy while disconnected show in `Total Requests` after the resync. Proven:
+
+```json
+{"name":"drop","steps":[{"waitText":"Lost connection to Local. Reconnecting…","timeoutMs":15000},{"waitText":"Reconnecting to Local (attempt 5)","timeoutMs":30000}]}
+{"name":"retrynow","steps":[{"text":"Retry now"},{"waitText":"Reconnected to Local","timeoutMs":5000},{"waitNoText":"Lost connection to Local"},{"waitNoText":"Reconnecting to Local"},{"waitText":"Total Requests\n\n3"}]}
+```
+
+Run `retrynow` straight after restoring the CLI, inside the wait, or the scheduled attempt reconnects first and `Retry now` is gone. For the project change, run `"$MARASI_VERIFY_STATE_DIR"/bin/marasi.real --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi project open --name acme` while held back, then reconnect and wait for `acme Project Dashboard`. With no unsaved work the prompt passes without a dialog; a declined prompt (`Load it` in the banner) is covered by `connectionStore.test.js`, since the server build has no dialogs.
+
 ## Gotchas
 
 - Each verification launch picks its own free proxy port (`<proxy port>`, in `$MARASI_VERIFY_STATE_DIR/proxy-port`); an instance the app starts picks one with `--port 0`. The proxy belongs to the service process, never the app.
