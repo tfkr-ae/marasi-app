@@ -28,7 +28,13 @@ export function initialConnection() {
     owned: false,
     url: null,
     project: null,
+    // The instance the service runs as ("default" for the local one).
+    instance: null,
+    // The service's version, and the warning when it is older than the
+    // Marasi the app pins (`pin`, its date, from MARASI_PIN).
     version: null,
+    pin: null,
+    versionWarning: null,
     proxyListener: null,
     error: null,
     // Reconnect attempts since the stream dropped, and whether one is
@@ -48,12 +54,31 @@ export function backoff(attempt) {
   return Math.min(2 ** (attempt - 1), 30) * 1000;
 }
 
+// A version's date as YYYYMMDD, for comparing: "29.10.2026",
+// "29.10.2026-rc1" and "29.10.2026 (nightly abc1234)" all date 20261029.
+function versionDate(version) {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(version ?? "");
+  return m ? `${m[3]}${m[2]}${m[1]}` : null;
+}
+
+/**
+ * The warning for a service `version` older than the app's `pin` date, or
+ * null. A dev service, or a version or pin without a date, never warns.
+ */
+export function versionWarning(version, pin) {
+  const service = versionDate(version);
+  const needed = versionDate(pin);
+  if (!service || !needed || service >= needed) return null;
+  return `Service is ${version}, the app needs ${pin} or later`;
+}
+
 const go = (state, patch, steps = []) => ({ state: { ...state, ...patch }, steps, refusal: null });
 const refuse = (state, refusal) => ({ state, steps: [], refusal });
 
 // Reaches the active connection from scratch.
 function begin(state) {
-  return go(state, { phase: "starting", error: null, url: null, project: null, version: null, proxyListener: null }, [
+  const reset = { url: null, project: null, version: null, versionWarning: null, proxyListener: null };
+  return go(state, { phase: "starting", error: null, ...reset }, [
     { type: "connect-local" },
   ]);
 }
@@ -85,6 +110,8 @@ export function reduce(state, action) {
           phase: "connected",
           project: status.project,
           version: status.version,
+          versionWarning: versionWarning(status.version, state.pin),
+          instance: status.instance ?? null,
           proxyListener: status.proxy_listener ?? null,
           error: null,
         },
@@ -130,6 +157,7 @@ export function reduce(state, action) {
         url: action.url ?? state.url,
         owned: state.owned || Boolean(action.startedByApp),
         version: status.version,
+        versionWarning: versionWarning(status.version, state.pin),
         proxyListener: status.proxy_listener ?? null,
       };
       if (status.project === state.project && !restarted) {
@@ -161,6 +189,10 @@ export function reduce(state, action) {
     case "PROJECT_LOADED":
       // A switch loaded another project: reconnects compare against it.
       return go(state, { project: action.path });
+
+    case "MARASI_PIN":
+      // The app's pinned Marasi date (Go's MarasiPin), read once at start.
+      return go(state, { pin: action.pin || null, versionWarning: versionWarning(state.version, action.pin) });
 
     case "RETRY":
       if (state.phase !== "failed") return refuse(state, "Nothing to retry.");
