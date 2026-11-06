@@ -17,7 +17,6 @@ export function createConnectionToasts(toastStore) {
         message: `Lost connection to ${name}. Reconnecting…`,
         background: "variant-filled-warning",
         autohide: false,
-        hideDismiss: true,
       });
     } else if (previous === "reconnecting" && phase !== "reconnecting") {
       if (dropped !== null) toastStore.close(dropped);

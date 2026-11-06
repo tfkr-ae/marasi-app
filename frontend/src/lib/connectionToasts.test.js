@@ -29,6 +29,8 @@ test("a drop shows a warning that stays until the stream is back", () => {
   assert.equal(toast.message, "Lost connection to Local. Reconnecting…");
   assert.equal(toast.background, "variant-filled-warning");
   assert.equal(toast.autohide, false);
+  // Skeleton hides a toast without a dismiss button after its timeout.
+  assert.notEqual(toast.hideDismiss, true);
   assert.equal(toasts.showing.size, 1);
 });
 
