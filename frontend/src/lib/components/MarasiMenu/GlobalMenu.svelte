@@ -38,11 +38,11 @@
 	import MarasiKeys from "./MarasiKeys.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
 	import {
-		StartBrowser,
 		ToggleFlag,
 		ToggleIntercept,
 	} from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { updatePanelModal } from "../../updates.js";
+	import { startChrome } from "../../chrome.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
 		extensions,
@@ -111,7 +111,7 @@
 		"global.go-workshop": () => closeAndGoto("/workshop"),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		"global.start-chrome": () =>
-			StartBrowser("").catch(chromeError(toastStore, "Error starting Chrome")),
+			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
 		"global.download-certificate": () => downloadCertificate(toastStore),
 		"global.copy-certificate": () => copyCertificate(toastStore),
 		"global.jump-to-toast": () => {

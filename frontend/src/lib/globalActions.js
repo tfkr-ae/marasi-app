@@ -1,4 +1,5 @@
 // Operations shared by the global menu actions and the dashboard buttons.
+import { chromeErrorText } from "./startChrome.js";
 import { goto } from "$app/navigation";
 import { get } from "svelte/store";
 import {
@@ -233,15 +234,12 @@ export async function copyCertificate(toastStore) {
 	}
 }
 
-// chromeError returns a rejection handler for the Chrome bindings. They
-// reread the machine config, so a config Marasi refuses (for example a
-// negative websocket_max_message_size) arrives as its "invalid
-// configuration" error, which is shown as is; anything else shows fallback.
+// chromeError returns a rejection handler for the Chrome calls, toasting
+// why Chrome didn't start, or fallback (chromeErrorText).
 export function chromeError(toastStore, fallback) {
 	return (error) => {
-		const text = String(error);
 		toastStore.trigger({
-			message: text.includes("invalid configuration") ? text : fallback,
+			message: chromeErrorText(error, fallback),
 			background: "variant-filled-error",
 		});
 	};

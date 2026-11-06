@@ -1,8 +1,6 @@
 <script>
-	import {
-		StartBrowser,
-		GetChromeProfiles,
-	} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { GetChromeProfiles } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { startChrome as startChromeOn } from "../lib/chrome.js";
 	import { ChromeIcon } from "svelte-feather-icons";
 	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";
@@ -39,7 +37,7 @@
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
 	});
 	const startChrome = (profile) =>
-		StartBrowser(profile).catch(chromeError(toastStore, "Error starting Chrome"));
+		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));
 </script>
 
 <div class="content">
