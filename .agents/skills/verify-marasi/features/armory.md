@@ -5,7 +5,7 @@
 - The dock: request templates and their runs as a tree, with run status badges
 - The template header (name, description, Save, Delete) and the request editor with `@@x@@` payload positions
 - Run settings: attack type, concurrency, HTTPS, wordlists, and the pinned Launch / Save as draft footer
-- Persisted runs, status polling, and the run's traffic table: read a page at a time, sorted by #, Time, Status or Length
+- Persisted runs, statuses kept current by the service's `armory.run.*` events, and the run's traffic table: read a page at a time, sorted by #, Time, Status or Length
 - Group by None, Status or Length: a section per value, counted by Marasi, with fold, Expand all and Collapse all
 - The traffic Selection: ⌘-click, ⇧-click, the selected count and Clear
 - Whole groups and the run: ⌘-click or right-click a group header, ⌘A (`Select All Traffic`)
@@ -31,7 +31,7 @@ Shortcuts: every menu shortcut for this feature is a catalog action in context `
 
 Run `scripts/drive.sh armory` for route proof (`/armory` plus `Templates`).
 
-**Seeding a run.** Start `python3 scripts/bench-server.py` (127.0.0.1:18999), write a wordlist of paths (one per line, for example 40 lines starting `admin`) to `$APP_CONFIG_DIR/wordlists/common-paths.txt`, and drive:
+**Seeding a run.** Start `python3 scripts/bench-server.py` (127.0.0.1:18999), upload a wordlist of paths (one per line) to the service: `curl -H "Authorization: Bearer $(cat "$MARASI_VERIFY_STATE_DIR/service-password")" -X POST --data-binary @paths.txt "$(cat "$MARASI_VERIFY_STATE_DIR/control-url")/wordlist?name=common-paths.txt"`, and drive (proven with 8 paths, waiting for `8 items`; under concurrency 10 the proxy answers a few `502`):
 
 ```json
 {"name":"seed-run","steps":[
@@ -146,11 +146,14 @@ Esc closes the drawer even with focus in the template editor or a field. The det
 
 ## Gotchas
 
-- Wordlists live in `$APP_CONFIG_DIR/wordlists`, not the `.marasi` file. A list seeded after startup appears after `Refresh wordlists` in the Add wordlist modal; changing routes alone does not reload it.
+- Until the Ledger moves to the service (ticket 05), the drawer's request and response stay empty (`ledgerStore.getDetails` still calls the `GetRawDetails` binding), and the Ledger lists no pairs, so `Send to Armory` can't be driven from it.
+- Active runs reach Go's switch and quit guard through `SetActiveArmoryRunCount`. Proven: with a run started over the API (`POST /armory/run`, then `/start`, concurrency 1, a 20 000-line wordlist), `⌘O` › `second` › Enter is declined (the server build answers the dialog's Cancel) and `second.marasi` isn't created; once the run stops, the same switch opens `second`.
+
+- Wordlists live on the service (`POST /wordlist`), not in the `.marasi` file. A list uploaded after startup appears through the `wordlist.added` event, or `Refresh wordlists` in the Add wordlist modal.
 - A new template's request is empty. Validation then requires at least one `@@x@@` payload position, a `Host` header, and concurrency from 1 to 100.
 - Validation is debounced by 300 ms and starts out pending, so `Launch` is disabled until it finishes. Wait with `waitEnabledText`.
 - Harpoon and broadside require exactly one wordlist; tandem and maelstrom require one per payload position.
-- Run status comes from a 1.5 s poll. Wait for `[role=tree] .badge` to read `complete`, not for any `complete` text. Traffic rows can arrive after the run completes, in arrival order, so numbers can be slightly out of order.
+- Run status comes from the service's `armory.run.*` events (no poll), so a run another client starts shows `in progress` too. Wait for `[role=tree] .badge` to read `complete`, not for any `complete` text. Traffic rows can arrive after the run completes, in arrival order, so numbers can be slightly out of order.
 - Toasts such as `Run started` and `Template saved` cover the bottom right; wait them out (`waitNoText`, `timeoutMs` 20000) before a screenshot or a click there.
 - Doctor and reset treat an open `.armory-drawer-box`, and an open confirm such as `Delete Template`, as residue. End each recipe with the drawer closed (Esc, or `Close the drawer`).
 - Armory traffic goes through the proxy listener, so the listener must be online.
