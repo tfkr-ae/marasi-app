@@ -13,6 +13,12 @@ function fakeClient(routes) {
   const calls = [];
   return {
     calls,
+    post: async (path, body) => {
+      calls.push([path, body]);
+      const answer = routes[`POST ${path}`];
+      if (answer === undefined) throw new Error(`POST ${path}: not_found: HTTP 404`);
+      return typeof answer === "function" ? answer(body) : answer;
+    },
     get: async (path, query) => {
       calls.push([path, query]);
       const answer = routes[path];
@@ -186,4 +192,36 @@ test("refreshDashboard reads the counts and scope again, not the log", async () 
     client.calls.slice(before).map(([path]) => path).sort(),
     ["/dashboard", "/scope"],
   );
+});
+
+test("setListener moves an active listener on the service and shows the new address", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/update"] = (body) => ({ status: "active", proxy_listener: `${body.address}:${body.port}` });
+  const { store, client } = setup(routes);
+  await store.populate();
+
+  await store.setListener("0.0.0.0", "9090");
+
+  assert.deepEqual(client.calls.at(-1), ["/listener/update", { address: "0.0.0.0", port: 9090 }]);
+  assert.deepEqual(get(store).listener, { status: true, address: "0.0.0.0", port: "9090" });
+});
+
+test("setListener starts a listener that is off", async () => {
+  const routes = serviceRoutes();
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  routes["POST /listener/start"] = (body) => ({ status: "active", proxy_listener: `${body.address}:${body.port}` });
+  const { store, client } = setup(routes);
+  await store.populate();
+
+  await store.setListener("127.0.0.1", "8080");
+
+  assert.deepEqual(client.calls.at(-1), ["/listener/start", { address: "127.0.0.1", port: 8080 }]);
+  assert.equal(get(store).listener.status, true);
+});
+
+test("a refused listener change rejects and leaves the listener as it was", async () => {
+  const { store } = setup();
+  await store.populate();
+  await assert.rejects(store.setListener("127.0.0.1", "80"), /not_found/);
+  assert.deepEqual(get(store).listener, { status: true, address: "127.0.0.1", port: "52062" });
 });

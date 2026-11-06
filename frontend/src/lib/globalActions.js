@@ -5,8 +5,6 @@ import {
 	OpenProject,
 	ScratchpadPath,
 	SetupScratchpad,
-	StartProxy,
-	UpdateProxy,
 	DownloadCert,
 	CopyCertToClipboard,
 	GetCheckpointItems,
@@ -20,37 +18,26 @@ import {
 	clearOpening,
 	failOpening,
 	finishOpening,
-	listener,
 	openProject,
 	pagesKey,
 	showOpening,
 	startOpening,
 	switchOpening,
 } from "../stores.js";
+import { homeStore } from "../stores/homeStore.js";
 
+// Starts or moves the service's proxy listener.
 export function setupListener(r, toastStore) {
-	const active = get(listener).status;
-	const apply = active ? UpdateProxy : StartProxy;
-	apply(r.addr, r.port)
+	homeStore
+		.setListener(r.addr, r.port)
 		.then(() => {
-			listener.set({
-				status: true,
-				address: r.addr,
-				port: r.port,
-			});
 			toastStore.trigger({
 				message: "Listening on " + r.addr + ":" + r.port,
 				background: "variant-filled-success",
 			});
 		})
-		.catch(() => {
-			if (!active) {
-				listener.set({
-					status: false,
-					address: r.addr,
-					port: r.port,
-				});
-			}
+		.catch((err) => {
+			console.error("Setting up the listener failed:", err);
 			toastStore.trigger({
 				message: "Failed to setup listener on " + r.addr + ":" + r.port,
 				background: "variant-filled-error",

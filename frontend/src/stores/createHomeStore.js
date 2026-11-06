@@ -7,6 +7,7 @@
 //   logs() -> [log], oldest first, in the log table's fields (toLog)
 //   extensionNames() -> {id: name}
 //   listener() -> {status, address, port}
+//   setListener(address, port, active) -> {status, address, port}
 //
 // homeStore.js routes the stream's events, as the service sends them, to
 // onLog, onListener and onJobComplete.
@@ -72,6 +73,15 @@ export function createHomeStore(api) {
     onLog(event) {
       const log = toLog(event);
       store.update((s) => (s.logs.some((l) => l.ID === log.ID) ? s : { ...s, logs: [...s.logs, log] }));
+    },
+    /**
+     * Starts the proxy listener on `address:port`, or moves it there. A
+     * refusal rejects and leaves the listener as it was.
+     */
+    async setListener(address, port) {
+      const next = await api.setListener(address, port, get(store).listener.status);
+      store.update((s) => ({ ...s, listener: next }));
+      return next;
     },
     /** A listener.started, .updated or .stopped event. */
     onListener(event) {

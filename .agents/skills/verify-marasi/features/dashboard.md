@@ -39,7 +39,15 @@ printf '%s\n' "$NP" > "$MARASI_VERIFY_STATE_DIR/proxy-port"
 
 Launch in attach mode (default), then clean up: `service-after-quit.txt` reads `service_after_app_quit=running`. Launch with `MARASI_VERIFY_SERVICE=app`, drive Home, then clean up: it reads `stopped`. In app mode, `ps -ww -o command= -p "$(cat "$MARASI_VERIFY_STATE_DIR/service.pid")"` shows `--port 0` and `--control-address 127.0.0.1:0` and never the password, which the app passes as `MARASI_PASSWORD`.
 
-Drive the listener button by its painted `127.0.0.1:<port>` text only when reconfiguration is under test. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal shows `No recent projects` until the list loads. `Browse Files...`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
+Drive the listener button (`[data-testid=home-listener]`, `Listener off` when the service has none) only when reconfiguration is under test. Its `Setup Listener` modal starts or moves the service's listener (`POST /listener/start` or `/listener/update`). Proven, with `<NP>` a free port (then write it to `proxy-port`):
+
+```json
+{"name":"listener-modal","steps":[
+ {"click":"[data-testid=home-listener]"},{"waitText":"Setup Listener"},{"click":"input[placeholder=\"8080\"]"},{"key":"cmd+a"},{"insert":"<NP>"},
+ {"text":"Continue"},{"waitText":"Listening on"},{"waitText":":<NP>","within":"[data-testid=home-listener]"}]}
+```
+
+`lsof -nP -t -iTCP:<NP> -sTCP:LISTEN` must print the service PID (`service.pid`), not the app's. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal shows `No recent projects` until the list loads. `Browse Files...`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
 
 Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/dark mode with `Command+U`, and toggle it back. This proves the global shortcut reads the live theme after navigating away from the dashboard.
 

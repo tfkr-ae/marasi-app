@@ -63,5 +63,14 @@ export function createHomeApi(client) {
       const status = await client.get("/listener/status");
       return toListener(status.status === "active" ? status.proxy_listener : null);
     },
+    // Starts the proxy listener on address:port, or moves it there when it
+    // runs, and returns the listener the service reports.
+    async setListener(address, port, active) {
+      const status = await client.post(active ? "/listener/update" : "/listener/start", {
+        address,
+        port: Number(port),
+      });
+      return toListener(status.status === "active" ? status.proxy_listener : null);
+    },
   };
 }
