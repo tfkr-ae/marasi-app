@@ -4,7 +4,6 @@ import {
   GetMarasiConfig,
   GetKeybindings,
   GetExtensionCode,
-  GetWaypoints,
   GetExtensions,
   GetUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
@@ -63,7 +62,7 @@ export const compassCode = writable("");
 export const testerInput = writable("");
 
 // Waypoint
-export const waypoints = writable({});
+export { waypoints } from "./stores/waypointStore.js";
 
 // Checkpont
 export const checkpointCode = writable("");
@@ -134,7 +133,6 @@ export async function resetProject(name) {
   checkpointCodeApplied.set("");
   interceptFlag.set(false);
   workshopCode.set("");
-  waypoints.set({});
   ledgerStore.clear();
   sitemapStore.clear();
   jobsStore.clear();
@@ -149,16 +147,6 @@ export async function resetProject(name) {
   checkpointStore.clear();
 }
 
-export async function populateWaypoints() {
-  GetWaypoints()
-    .then((points) => {
-      console.log(points);
-      waypoints.set(points);
-    })
-    .catch((waypointErr) => {
-      console.log(waypointErr);
-    });
-}
 export async function populateWorkshop() {
   GetExtensionCode("workshop")
     .then((code) => {
