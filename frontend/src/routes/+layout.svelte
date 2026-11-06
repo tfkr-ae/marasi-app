@@ -1,6 +1,7 @@
 <script>
 	import Logo from "../lib/components/Logo.svelte";
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
+	import ConnectionBanner from "../lib/components/ConnectionBanner.svelte";
 	import {
 		computePosition,
 		autoUpdate,
@@ -864,6 +865,7 @@
 
 			<!-- Content area -->
 			<div id="content" class="flex-1 overflow-auto">
+				<div class="sticky top-0 z-20"><ConnectionBanner /></div>
 				{#key $pagesKey}
 					<slot />
 				{/key}
