@@ -141,6 +141,11 @@ test("unlinking an entry no longer in the launchpad reads as not_linked", async 
   assert.deepEqual(codeIDs(err, "not_linked"), []);
 });
 
+test("moving entries no longer in the source launchpad reads as not_linked", async () => {
+  const err = await refusal("POST", "/launchpad/lp1/move", { status: 404, body: { error: "not_found" } });
+  assert.deepEqual(codeIDs(err, "not_linked"), []);
+});
+
 test("a refusal's message is kept as its cause", async () => {
   const err = await refusal("POST", "/listener/start", {
     status: 409,
