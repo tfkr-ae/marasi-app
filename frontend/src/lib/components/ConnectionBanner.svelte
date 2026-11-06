@@ -1,5 +1,6 @@
 <script>
-	// The strip over the page while the connection is unhealthy, and the
+	// The strip over the page while the connection is unhealthy or the
+	// service is older than the pinned Marasi (it warns, never blocks), and the
 	// drop and reconnect toasts (lib/connectionToasts.js). Pages stay
 	// mounted underneath.
 	import { onDestroy } from "svelte";
@@ -27,5 +28,9 @@
 	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">
 		<span class="flex-1">{name} has {projectName($connectionStore.pendingProject)} open now.</span>
 		<button type="button" class={neutral} on:click={() => connectionStore.loadPending()}>Load it</button>
+	</div>
+{:else if $connectionStore.phase === "connected" && $connectionStore.versionWarning}
+	<div class="flex items-center gap-3 bg-warning-500/15 px-4 py-1.5 text-xs" data-testid="connection-banner">
+		<span class="flex-1">{$connectionStore.versionWarning}. Some features may not work.</span>
 	</div>
 {/if}

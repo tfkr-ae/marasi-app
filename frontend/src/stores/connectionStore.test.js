@@ -424,3 +424,56 @@ test("declining the guard keeps the pages until Load is chosen", async () => {
   await settle();
   assert.deepEqual(calls.at(-1), ["reloadProject", "/p/other.marasi"]);
 });
+
+// The version warning: a service older than the Marasi the app pins in
+// go.mod (MARASI_PIN, the pin's date) warns without blocking.
+const pinned = { type: "MARASI_PIN", pin: "30.10.2026" };
+const connectedTo = (version) => [pinned, { type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: { ...status, version } }];
+
+test("a service older than the pinned Marasi connects with a warning", () => {
+  const { state } = run(...connectedTo("29.10.2026"));
+  assert.equal(state.phase, "connected");
+  assert.equal(state.versionWarning, "Service is 29.10.2026, the app needs 30.10.2026 or later");
+});
+
+test("a service as new as the pin or newer, or a dev build, doesn't warn", () => {
+  for (const version of ["30.10.2026", "01.11.2026", "02.01.2027-rc1", "dev"]) {
+    assert.equal(run(...connectedTo(version)).state.versionWarning, null, version);
+  }
+});
+
+test("a nightly is dated by its date, whatever its commit", () => {
+  assert.equal(
+    run(...connectedTo("12.10.2026 (nightly abc1234)")).state.versionWarning,
+    "Service is 12.10.2026 (nightly abc1234), the app needs 30.10.2026 or later",
+  );
+  assert.equal(run(...connectedTo("31.10.2026 (nightly abc1234)")).state.versionWarning, null);
+});
+
+test("dates compare by year first, not as written", () => {
+  assert.equal(run(...connectedTo("01.12.2025")).state.versionWarning !== null, true);
+  assert.equal(run(...connectedTo("01.01.2027")).state.versionWarning, null);
+});
+
+test("a build without a pin never warns", () => {
+  const { state } = run({ type: "MARASI_PIN", pin: "" }, ...connectedTo("01.01.2020").slice(1));
+  assert.equal(state.versionWarning, null);
+});
+
+test("a pin read after connecting still warns", () => {
+  const { state } = run(...connectedTo("29.10.2026").slice(1), pinned);
+  assert.equal(state.versionWarning, "Service is 29.10.2026, the app needs 30.10.2026 or later");
+});
+
+test("a reconnect to an updated service clears the warning", () => {
+  const old = connectedTo("29.10.2026");
+  const before = run(...old, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" });
+  const { state } = run(...old, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected({ version: "05.11.2026" }));
+  assert.equal(before.state.versionWarning !== null, true);
+  assert.equal(state.versionWarning, null);
+});
+
+test("the details name the service's instance", () => {
+  const { state } = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: { ...status, instance: "default" } });
+  assert.equal(state.instance, "default");
+});

@@ -1,8 +1,7 @@
 <script>
     import { onDestroy } from "svelte";
-    import { extensions_ui } from "../../stores.js";
     import SchemaRenderer from "./Renderer.svelte";
-    import { emit } from "../runtime.js";
+    import { extensionsStore } from "../../stores/extensionsStore.js";
 
     export let enableSync = false;
     export let extensionData;
@@ -10,16 +9,10 @@
     export let classes = "";
 
     onDestroy(() => {
-        if (enableSync) {
-            const currentState =
-                $extensions_ui[extensionData.Name]?.state || {};
-
-            if (Object.keys(currentState).length > 0) {
-                emit("extension_sync_state", {
-                    extensionID: extensionData.ID,
-                    args: [currentState],
-                });
-            }
+        if (enableSync && extensionData) {
+            extensionsStore
+                .sync(extensionData.Name)
+                .catch((err) => console.error(`Syncing ${extensionData.Name} failed:`, err));
         }
     });
 </script>

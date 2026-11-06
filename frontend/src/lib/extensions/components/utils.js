@@ -1,4 +1,4 @@
-import { extensions_ui } from "../../../stores";
+import { extensionsStore } from "../../../stores/extensionsStore.js";
 
 /**
  * Resolves a value that can be either a static primitive or a bound configuration object.
@@ -40,14 +40,5 @@ export function updateBind(extensionData, valueConfig, newValue) {
 
     if (!bindKey || !extensionData) return;
 
-    extensions_ui.update((store) => {
-        const appState = store[extensionData.Name] || {};
-        const currentState = appState.state || {};
-        const newState = { ...currentState, [bindKey]: newValue };
-
-        return {
-            ...store,
-            [extensionData.Name]: { ...appState, state: newState },
-        };
-    });
+    extensionsStore.edit(extensionData.Name, bindKey, newValue);
 }

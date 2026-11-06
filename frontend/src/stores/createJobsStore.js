@@ -1,7 +1,7 @@
 // The open project's Marasi background jobs (search index, sitemap, moving
 // prettified copies, the dashboard's intercepted count), for Settings → Maintenance and the Ledger's notices.
-// Marasi emits no in-process job events, so the store polls ListJobs while a
-// job is incomplete and stops once every job is done. Backend calls go
+// The store polls the jobs while one is incomplete and stops once every job
+// is done; jobsStore.js also reads them on the service's job.complete. Backend calls go
 // through the injected `api`, so tests run against a fake:
 //
 //   listJobs() -> [{ Name, Complete, Done, Total, Rebuildable }]
@@ -11,7 +11,7 @@
 // jobs are complete, onFinished(group) tells it to read again.
 import { writable } from "svelte/store";
 
-/** How often ListJobs is read while a job runs. */
+/** How often the jobs are read while one runs. */
 export const POLL_MS = 2000;
 
 /** The jobs behind each notice and Rebuild button. */
