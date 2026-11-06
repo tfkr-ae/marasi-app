@@ -1,6 +1,7 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
-    import { GetInterfaces } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { service } from "../service/index.js";
+    import { listenerAddresses, startingInterface } from "../listenerInterfaces.js";
     import { onMount } from "svelte";
     import { listener } from "../../stores";
     import { X } from "lucide-svelte";
@@ -24,10 +25,13 @@
         }
     }
 	onMount(() => {
-		GetInterfaces().then((interfaces) => {
-			interfaces ? (interfaceList = interfaces) : (interfaceList = []);
-			selectedInterface = interfaceList.indexOf($listener.address) ? interfaceList.indexOf($listener.address) : 0;
-		});
+		// The service host's interfaces, so a remote offers its own.
+		listenerAddresses(service)
+			.then((interfaces) => {
+				interfaceList = interfaces;
+				selectedInterface = startingInterface(interfaceList, $listener.address);
+			})
+			.catch((error) => console.error("Reading the service's interfaces failed:", error));
 	});
 </script>
 

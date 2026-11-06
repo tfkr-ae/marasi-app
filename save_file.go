@@ -7,42 +7,39 @@ import (
 	"path/filepath"
 )
 
-// writeSavedFile writes the file SaveFileAs saves. Tests replace it.
-var writeSavedFile = os.WriteFile
-
-// replaceWriteSavedFile points writeSavedFile at write and returns a
-// function that puts it back.
-func replaceWriteSavedFile(write func(string, []byte, os.FileMode) error) func() {
-	before := writeSavedFile
-	writeSavedFile = write
-	return func() { writeSavedFile = before }
+// writeSavedFile writes what SaveFileAs saves. Tests replace it.
+var writeSavedFile = func(path string, data []byte) error {
+	return os.WriteFile(path, data, 0600)
 }
 
-// SaveFileAs asks where to save bytes the frontend read from the service
-// (a report, an artifact, the CA certificate) through the native Save
-// dialog, suggesting defaultName in Downloads and, when filterPattern is
-// set, one filter. contentBase64 is the file, standard base64. It returns
-// the saved path, or "" when the user cancelled.
+// SaveFileAs asks where to save bytes the frontend fetched from the service
+// (contentBase64, standard base64) and writes them there: the CA
+// certificate, a report, an artifact. The dialog suggests defaultName's base
+// name in Downloads and offers filterName (filterPattern,
+// such as "*.crt"; none when empty) and All Files. It returns the saved
+// path, or "" when the user cancelled.
 func (a *App) SaveFileAs(title, defaultName, filterName, filterPattern, contentBase64 string) (string, error) {
-	content, err := base64.StdEncoding.DecodeString(contentBase64)
+	data, err := base64.StdEncoding.DecodeString(contentBase64)
 	if err != nil {
 		return "", fmt.Errorf("saving %s: the content is not base64: %w", defaultName, err)
 	}
-	options := saveDialogOptions{
+	var filters []fileFilter
+	if filterPattern != "" {
+		filters = append(filters, fileFilter{DisplayName: filterName, Pattern: filterPattern})
+	}
+	filters = append(filters, fileFilter{DisplayName: "All Files (*.*)", Pattern: "*.*"})
+	home, _ := os.UserHomeDir()
+	path, err := a.saveFileDialog(saveDialogOptions{
+		DefaultDirectory: filepath.Join(home, "Downloads"),
+		// Only the name: an artifact's name comes from the service.
 		DefaultFilename: filepath.Base(defaultName),
 		Title:           title,
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		options.DefaultDirectory = filepath.Join(home, "Downloads")
-	}
-	if filterPattern != "" {
-		options.Filters = []fileFilter{{DisplayName: filterName, Pattern: filterPattern}}
-	}
-	path, err := a.saveFileDialog(options)
+		Filters:         filters,
+	})
 	if err != nil || path == "" {
 		return "", err
 	}
-	if err := writeSavedFile(path, content, 0600); err != nil {
+	if err := writeSavedFile(path, data); err != nil {
 		return "", fmt.Errorf("saving %s: %w", path, err)
 	}
 	return path, nil
