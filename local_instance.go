@@ -1,0 +1,248 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+)
+
+// The local connection's instance: the app reaches the `default` instance of
+// the Marasi CLI on this machine, starting it when it isn't running and
+// attaching when it is, and stops it on quit only when the app started it.
+// Every call goes through the replaceable runCLI, findCLI and newPassword.
+
+// cliConfigDirEnv names the environment variable that points every CLI call
+// at another Marasi config directory (passed as --config-dir), so
+// verification never touches the researcher's own instance.
+const cliConfigDirEnv = "MARASI_APP_CLI_CONFIG_DIR"
+
+// localInstanceName is the instance the local connection reaches.
+const localInstanceName = "default"
+
+// cliTimeout bounds one CLI call. Starting an instance opens its project,
+// which can take a while on a large one.
+const cliTimeout = 2 * time.Minute
+
+// runCLIFunc runs the Marasi CLI at path with args and the environment env,
+// and returns its stdout and exit code. err is set only when it couldn't run.
+type runCLIFunc func(ctx context.Context, path string, args, env []string) (stdout []byte, exitCode int, err error)
+
+// LocalConnection is what the frontend needs to reach the local instance's
+// control API.
+type LocalConnection struct {
+	// URL is the control listener network address, such as
+	// http://127.0.0.1:51391.
+	URL string `json:"url"`
+	// Password is the control password, "" when the instance has none.
+	Password string `json:"password"`
+	Instance string `json:"instance"`
+	// StartedByApp is true when the app started the instance, so it stops it
+	// on quit.
+	StartedByApp bool `json:"startedByApp"`
+}
+
+// localInstance is the app's record of the local instance.
+type localInstance struct {
+	mu sync.Mutex
+	// owned is set once the app started the instance.
+	owned bool
+	// cliPath is the CLI the instance was reached with, for stopping it.
+	cliPath string
+}
+
+// useLocalInstanceRuntime points the local instance's replaceable functions
+// at the real CLI on PATH and reads the config-dir override.
+func (a *App) useLocalInstanceRuntime() {
+	a.runCLI = runCLI
+	a.findCLI = func() (string, error) { return exec.LookPath("marasi") }
+	a.newPassword = generatePassword
+	a.cliConfigDir = os.Getenv(cliConfigDirEnv)
+}
+
+// ConnectLocal reaches the local `default` instance and returns its control
+// address and password: it starts the instance with a control listener on
+// 127.0.0.1:0 and a generated password when it isn't running, and when it
+// is, attaches, turning a control listener on when it has none.
+func (a *App) ConnectLocal() (LocalConnection, error) {
+	a.local.mu.Lock()
+	defer a.local.mu.Unlock()
+	path, err := a.findCLI()
+	if err != nil {
+		return LocalConnection{}, codedError("finding the Marasi CLI", "cli_missing", nil, err)
+	}
+	a.local.cliPath = path
+
+	status, running, err := a.localStatus(path)
+	if err != nil {
+		return LocalConnection{}, err
+	}
+	if !running {
+		startErr := a.startLocal(path)
+		if startErr != nil && !strings.Contains(startErr.Error(), "already running") {
+			return LocalConnection{}, codedError("starting the local instance", "instance_failed", nil, startErr)
+		}
+		if startErr != nil {
+			// Someone else started it since the status: attach to theirs.
+			if status, running, err = a.localStatus(path); err != nil {
+				return LocalConnection{}, err
+			}
+		}
+	}
+	if running && status.ControlListener == nil {
+		password, err := a.newPassword()
+		if err != nil {
+			return LocalConnection{}, err
+		}
+		if err := a.cli(path, []string{"MARASI_PASSWORD=" + password}, nil,
+			"service", "control", "start", "--address", "127.0.0.1", "--port", "0"); err != nil {
+			return LocalConnection{}, codedError("turning on the local instance's control listener", "instance_failed", nil, err)
+		}
+	}
+
+	var pair struct {
+		URL      string `json:"url"`
+		Password string `json:"password"`
+		Instance string `json:"instance"`
+	}
+	if err := a.cli(path, nil, &pair, "service", "control", "pair"); err != nil {
+		return LocalConnection{}, codedError("reading the local instance's address", "instance_failed", nil, err)
+	}
+	return LocalConnection{URL: pair.URL, Password: pair.Password, Instance: pair.Instance, StartedByApp: a.local.owned}, nil
+}
+
+// localInstanceStatus is the part of `service status` the app reads.
+type localInstanceStatus struct {
+	ControlListener *string `json:"control_listener"`
+}
+
+// localStatus reads the instance's status; running is false when the CLI
+// says it is not running.
+func (a *App) localStatus(path string) (status localInstanceStatus, running bool, err error) {
+	if err := a.cli(path, nil, &status, "service", "status"); err != nil {
+		if strings.Contains(err.Error(), "is not running") {
+			return status, false, nil
+		}
+		return status, false, codedError("reading the local instance", "instance_failed", nil, err)
+	}
+	return status, true, nil
+}
+
+// startLocal starts the instance with a free proxy port, a control listener
+// on a free loopback port and a generated password, and records that the app
+// owns it.
+func (a *App) startLocal(path string) error {
+	password, err := a.newPassword()
+	if err != nil {
+		return err
+	}
+	err = a.cli(path, []string{"MARASI_PASSWORD=" + password}, nil,
+		"service", "start", "--port", "0", "--control-address", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	a.local.owned = true
+	return nil
+}
+
+// stopOwnedLocal stops the local instance when the app started it, and
+// leaves one it attached to running.
+func (a *App) stopOwnedLocal() error {
+	a.local.mu.Lock()
+	defer a.local.mu.Unlock()
+	if !a.local.owned {
+		return nil
+	}
+	if err := a.cli(a.local.cliPath, nil, nil, "service", "stop"); err != nil {
+		return fmt.Errorf("stopping the local instance: %w", err)
+	}
+	a.local.owned = false
+	return nil
+}
+
+// cli runs a CLI command with --json for the local instance, with extraEnv
+// on top of the app's environment minus any MARASI_ variable, and decodes a
+// success into out (when not nil). A failure is the CLI's error message.
+func (a *App) cli(path string, extraEnv []string, out any, command ...string) error {
+	args := []string{"--instance", localInstanceName}
+	if a.cliConfigDir != "" {
+		args = append(args, "--config-dir", a.cliConfigDir)
+	}
+	args = append(append(args, command...), "--json")
+	ctx, cancel := context.WithTimeout(context.Background(), cliTimeout)
+	defer cancel()
+	stdout, exit, err := a.runCLI(ctx, path, args, cliEnv(os.Environ(), extraEnv))
+	if err != nil {
+		return err
+	}
+	if exit != 0 {
+		var failure struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(stdout, &failure) == nil && failure.Error != "" {
+			return errors.New(failure.Error)
+		}
+		return fmt.Errorf("%s exited with %d: %s", strings.Join(command, " "), exit, strings.TrimSpace(string(stdout)))
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.Unmarshal(stdout, out); err != nil {
+		return fmt.Errorf("reading %s: %w", strings.Join(command, " "), err)
+	}
+	return nil
+}
+
+// cliEnv is environ without MARASI_ variables, which would otherwise pick
+// another instance, config dir or password, plus extra.
+func cliEnv(environ, extra []string) []string {
+	env := make([]string, 0, len(environ)+len(extra))
+	for _, entry := range environ {
+		if !strings.HasPrefix(entry, "MARASI_") {
+			env = append(env, entry)
+		}
+	}
+	return append(env, extra...)
+}
+
+// runCLI runs the CLI and returns its stdout and exit code. Its stderr goes
+// with stdout when stdout is empty, so a failure that skips the JSON contract
+// still says why.
+func runCLI(ctx context.Context, path string, args, env []string) ([]byte, int, error) {
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Env = env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		out := stdout.Bytes()
+		if len(bytes.TrimSpace(out)) == 0 {
+			out = stderr.Bytes()
+		}
+		return out, exit.ExitCode(), nil
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	return stdout.Bytes(), 0, nil
+}
+
+// generatePassword is a random control password: URL-safe base64, so it has
+// no whitespace or control characters, which the service refuses.
+func generatePassword() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generating the control password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}

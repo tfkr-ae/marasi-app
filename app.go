@@ -70,6 +70,15 @@ type App struct {
 	// already set for it, and hands handle the event's payload. Tests
 	// replace it.
 	onEvent func(name string, handle func(payload any))
+	// The local instance (local_instance.go). runCLI runs the Marasi CLI,
+	// findCLI finds it, and newPassword generates a control password; tests
+	// replace all three. cliConfigDir is the --config-dir every CLI call
+	// passes, from MARASI_APP_CLI_CONFIG_DIR; "" uses the CLI's default.
+	runCLI       runCLIFunc
+	findCLI      func() (string, error)
+	newPassword  func() (string, error)
+	cliConfigDir string
+	local        localInstance
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
 	// draft, reported by the frontend, which holds drafts in memory only.
 	unsavedDrafts atomic.Int64
@@ -166,6 +175,7 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 		releaseSource: defaultReleaseSource,
 	}
 	app.useDesktopRuntime()
+	app.useLocalInstanceRuntime()
 	app.signingKey = loadSigningKey()
 	app.installer = defaultInstaller()
 	app.installLocation = resolveInstallLocation(app.installer)
@@ -449,10 +459,14 @@ func (a *App) prepareOpenedProject() {
 	}
 }
 // ServiceShutdown is called when Wails shuts the app down, after the quit
-// went ahead. It releases the project and, after "Restart now", relaunches.
+// went ahead. It stops the local instance when the app started it, releases
+// the project and, after "Restart now", relaunches.
 func (a *App) ServiceShutdown() error {
 	a.stopUpdateChecks()
 	a.CancelUpdateDownload()
+	if err := a.stopOwnedLocal(); err != nil {
+		log.Printf("%v", err)
+	}
 	// Like the service's shutdown: end pending launches first, so their
 	// outcomes are written to the open project before the listener goes.
 	a.Proxy.InterruptLaunches()
