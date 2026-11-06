@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -86,6 +87,14 @@ type App struct {
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
 	// draft, reported by the frontend, which holds drafts in memory only.
 	unsavedDrafts atomic.Int64
+	// activeArmoryRuns is the number of Armory runs active on the service,
+	// reported by the frontend (armory_guard.go). armoryCancelReply waits
+	// for the frontend's answer to a cancel; armoryCancelTimeout bounds it
+	// (0 is the default).
+	activeArmoryRuns    atomic.Int64
+	armoryCancelMu      sync.Mutex
+	armoryCancelReply   chan string
+	armoryCancelTimeout time.Duration
 
 	// Updates (update.go). build is the running build, from the build-time
 	// buildChannel and version; tests set their own.
@@ -507,10 +516,6 @@ func (a *App) hasWorkToLose() bool {
 	return a.unsavedDrafts.Load() > 0 || a.hasActiveArmoryRuns()
 }
 
-func (a *App) hasActiveArmoryRuns() bool {
-	return a.Proxy != nil && a.Proxy.Armory != nil && len(a.Proxy.Armory.ActiveRunIDs()) > 0
-}
-
 // draftsMessage describes the unsaved Launchpad drafts, or is empty.
 func (a *App) draftsMessage() string {
 	count := a.unsavedDrafts.Load()
@@ -540,33 +545,6 @@ func (a *App) confirm(action, message string) bool {
 		return false
 	}
 	return result == action
-}
-
-// cancelArmoryRuns cancels every active Armory run and waits for them to stop.
-func (a *App) cancelArmoryRuns() (bool, error) {
-	activeRunIDs := a.Proxy.Armory.ActiveRunIDs()
-	for _, id := range activeRunIDs {
-		if err := a.Proxy.Armory.CancelRun(id); err != nil {
-			for _, activeID := range a.Proxy.Armory.ActiveRunIDs() {
-				if activeID == id {
-					return false, fmt.Errorf("cancelling armory run %s: %w", id, err)
-				}
-			}
-		}
-	}
-
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	for len(a.Proxy.Armory.ActiveRunIDs()) > 0 {
-		select {
-		case <-ticker.C:
-		case <-timer.C:
-			return false, errors.New("timed out cancelling active Armory runs")
-		}
-	}
-	return true, nil
 }
 
 func recoverInterruptedArmoryRuns(repo domain.ArmoryRepository) error {
