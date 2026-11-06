@@ -57,6 +57,9 @@
 	import { webSocketStore } from "../stores/webSocketStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { armoryStore } from "../stores/armoryStore";
+	import { showExtensionToasts } from "../stores/extensionsStore.js";
+	import { extensionToast } from "../lib/extensions/toast.js";
+	import WebUITile from "../lib/extensions/WebUITile.svelte";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -245,6 +248,9 @@
 	let removeMenuShortcuts = () => {};
 	onMount(() => {
 		const stopReportingDrafts = reportUnsavedDrafts();
+		const stopExtensionToasts = showExtensionToasts((schema) =>
+			toastStore.trigger(extensionToast(schema)),
+		);
 		on("update-available", onUpdateAvailable);
 		on("update-progress", onUpdateProgress);
 		on("update-installed", onUpdateInstalled);
@@ -369,70 +375,6 @@
 			});
 			// The Checkpoint rail badge shows the count; no toast.
 			on("intercepted", () => readCheckpointItems());
-			on(
-				"extension_gui_render",
-				({ extensionName, target, schema }) => {
-					if (target === "toast") {
-						const allowedVariants = [
-							"primary",
-							"secondary",
-							"tertiary",
-							"success",
-							"warning",
-							"error",
-							"surface",
-						];
-						const variant =
-							allowedVariants.includes(
-								schema.variant,
-							)
-								? "variant-filled-" +
-									schema.variant
-								: "variant-filled-primary";
-						const t = {
-							message: schema.message,
-							background: variant,
-						};
-
-						toastStore.trigger(t);
-					} else {
-						extensions_ui.update(
-							(store) => {
-								const ext =
-									store[
-										extensionName
-									] || {
-										state: {},
-									};
-								ext[target] =
-									schema;
-								return {
-									...store,
-									[extensionName]:
-										ext,
-								};
-							},
-						);
-					}
-				},
-			);
-
-			on(
-				"extension_state_update",
-				({ extensionName, key, value }) => {
-					extensions_ui.update((store) => {
-						const ext = store[
-							extensionName
-						] || { state: {} };
-						ext.state[key] = value;
-						return {
-							...store,
-							[extensionName]: ext,
-						};
-					});
-					console.log($extensions_ui);
-				},
-			);
 		});
 		return () => {
 			stopReportingDrafts();
@@ -454,8 +396,7 @@
 			off("update-progress");
 			off("update-installed");
 			off("update-failed");
-			off("extension_gui_render");
-			off("extension_state_update");
+			stopExtensionToasts();
 		};
 	});
 </script>
@@ -764,6 +705,8 @@
 								>{extension.Name}</span
 							>
 						</AppRailAnchor>
+					{:else if extension.WebUI}
+						<WebUITile name={extension.Name} />
 					{/if}
 				{/each}
 				<svelte:fragment slot="trail">
