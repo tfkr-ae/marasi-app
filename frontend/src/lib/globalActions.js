@@ -2,7 +2,9 @@
 import { chromeErrorText } from "./startChrome.js";
 import { goto } from "$app/navigation";
 import { get } from "svelte/store";
-import { DownloadCert, CopyCertToClipboard } from "./bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { SaveFileAs, CopyCertToClipboard } from "./bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { createCertificateActions } from "./certificate.js";
+import { service } from "./service/index.js";
 import { setWindowTitle } from "./runtime.js";
 import { checkpointHeldModal } from "./checkpointHeld.js";
 import { appState } from "../stores.js";
@@ -104,9 +106,15 @@ export function listenerModal(toastStore) {
 	};
 }
 
+const certificate = createCertificateActions({
+	client: service,
+	saveFileAs: SaveFileAs,
+	copyCertToClipboard: CopyCertToClipboard,
+});
+
 export async function downloadCertificate(toastStore) {
 	try {
-		const saved = await DownloadCert();
+		const saved = await certificate.download();
 		if (saved) {
 			toastStore.trigger({
 				message: "Certificate saved successfully",
@@ -123,7 +131,7 @@ export async function downloadCertificate(toastStore) {
 
 export async function copyCertificate(toastStore) {
 	try {
-		const copied = await CopyCertToClipboard();
+		const copied = await certificate.copy();
 		if (copied) {
 			toastStore.trigger({
 				message: "Certificate copied to clipboard",
