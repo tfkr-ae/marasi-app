@@ -365,3 +365,24 @@ test("an entry's metadata is the service's object", async () => {
   const api = createLaunchpadApi(fakeClient({ "GET /traffic/a/metadata": { launch: { status: "completed" } } }));
   assert.deepEqual(await api.getMetadata("a"), { launch: { status: "completed" } });
 });
+
+test("a launch ending while its request's details are still being read seeds the draft from the stored request", async () => {
+  const routes = loginRoutes({ "POST /launchpad/lp1/launch": { launch_id: "c", status: "pending" } });
+  const { store } = setup(routes);
+  await store.populate();
+  const launched = "GET /c HTTP/1.1\nHost: a.test\n\n";
+  const stored = "GET https://a.test/c HTTP/1.1\r\n\r\n";
+  store.updateDraft("lp1", launched);
+  await store.launch("lp1");
+  const reads = [];
+  routes["GET /traffic/c"] = () => new Promise((resolve) => reads.push(resolve));
+  const arrival = store.onRequest(toRequestEvent({ id: "c", number: 3, scheme: "https", method: "GET", host: "a.test", path: "/c", metadata: {}, requested_at: "t" }));
+  const ended = store.onLaunchFinished(toLaunchEvent({ launch_id: "c", launchpad_id: "lp1", status: "completed" }));
+  const answer = (body) => reads.forEach((resolve) => resolve(body));
+  answer(pair("c", 3, stored, { status: "200 OK", status_code: 200, content_type: "text/plain", length: "2", raw: b64("HTTP/1.1 200 OK\r\n\r\nok"), responded_at: "t2" }));
+  await Promise.all([arrival, ended]);
+  const state = get(store);
+  assert.equal(state.selectedEntryByLaunchpad.lp1, "c");
+  assert.equal(state.draftsByLaunchpad.lp1.raw, stored);
+  assert.equal(isDraftDirty(state, "lp1"), false);
+});

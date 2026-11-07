@@ -409,6 +409,14 @@ export function createLaunchpadStore(api) {
       if (!entries.some((entry) => entry.ID === launchId)) return;
       details = await ensureDetails(launchId);
       if (version !== projectStateVersion) return;
+    } else if (details.Request?.Raw === undefined) {
+      // Arrived from the stream, which sends no raw bytes: the draft is
+      // seeded from the request as Marasi stored it, so read it first. If
+      // another read for it is newer, the arrival that started it selects.
+      await refreshDetails(launchId);
+      if (version !== projectStateVersion) return;
+      details = current.detailsById[launchId];
+      if (details?.Request?.Raw === undefined) return;
     }
     const sent = sentRaw(launchId, details);
     if (!awaitingEntry.delete(launchId)) return;
