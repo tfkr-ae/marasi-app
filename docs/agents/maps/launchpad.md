@@ -5,14 +5,14 @@ Which files work together on the Launchpad page, how a launch travels through Go
 ## Files
 
 - `frontend/src/routes/launchpad/+page.svelte` wires everything together: the dock and tree, the workspace, the entry menu, every action function, and `launchpadMenu` for `useMenuActions` and ⌘K.
-- `frontend/src/stores/createLaunchpadStore.js` holds the state, the selectors and the event reducers. It takes its API as an argument. `frontend/src/stores/launchpadStore.js` maps that API to Wails bindings.
+- `frontend/src/stores/createLaunchpadStore.js` holds the state, the selectors and the event reducers. It takes its API as an argument: `frontend/src/stores/launchpadApi.js` over the service client, bound in `launchpadStore.js`.
 - `frontend/src/lib/launchpad/`:
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
   - `LaunchpadWorkspace.svelte` is the draft editor;
   - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
   - `launchpadMenu.js` (`launchpadMenuFor`) describes the launchpad menu, a launchpad row's context menu, in the same shape, with `recordItems` from `entryMenu.js`;
   - the other files are pure helpers.
-- Go: the launch and launchpad methods in `app.go`, `launchpad_move.go` (`MoveLaunchpadEntries` and its refusal codes), and `launchpad_search.go`.
+- Search: the tree's text becomes one quoted traffic query (`lib/launchpad/entrySearch.js`), which the store sends, debounced, as one `GET /launchpad/search?q=` (`searchEntries`): `{launchpad_id: [request ids in entry order]}`. An `invalid_query` refusal is positioned in the typed text, as `/traffic/query`'s is, and shows as the tree's search error.
 
 ## A launch
 
