@@ -60,10 +60,12 @@ type localInstance struct {
 }
 
 // useLocalInstanceRuntime points the local instance's replaceable functions
-// at the real CLI on PATH and reads the config-dir override.
+// at the real CLI (the custom path, then PATH: cli_locate.go) and reads the
+// config-dir override.
 func (a *App) useLocalInstanceRuntime() {
+	a.useCLIRuntime()
 	a.runCLI = runCLI
-	a.findCLI = func() (string, error) { return exec.LookPath("marasi") }
+	a.findCLI = a.locatedCLIPath
 	a.newPassword = generatePassword
 	a.cliConfigDir = os.Getenv(cliConfigDirEnv)
 }
