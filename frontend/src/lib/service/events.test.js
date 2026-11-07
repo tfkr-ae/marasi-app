@@ -11,37 +11,6 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SERVICE_EVENTS, STREAM_EVENTS } from "./events.js";
 
-// Names svc/events-b subscribes to. That branch adds their handlers; merging
-// it empties this list, and the last test below fails until it does.
-const PENDING_SVC_EVENTS_B = [
-  "finding.created",
-  "finding.updated",
-  "finding.deleted",
-  "finding.linked",
-  "finding.unlinked",
-  "test-case.created",
-  "test-case.updated",
-  "test-case.deleted",
-  "test-case.linked",
-  "test-case.unlinked",
-  "artifact.created",
-  "artifact.deleted",
-  "report.template.added",
-  "report.template.removed",
-  "report.template.restored",
-  "chrome.profile.added",
-  "chrome.profile.removed",
-  "chrome.path.added",
-  "chrome.path.removed",
-  "job.progress",
-  "service.restarting",
-  "service.restart_failed",
-  "update.available",
-  "update.progress",
-  "update.installed",
-  "update.failed",
-];
-
 const src = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function sourceFiles(dir) {
@@ -78,11 +47,36 @@ export function subscribedNames(text) {
   return names;
 }
 
-function appSubscriptions() {
+// A file that subscribes with a variable name (`.on(name` or a bare
+// `on(name`) can take its names from a list or handler map another file
+// exports, such as `Object.entries(logbookEvents(store))`. Those names count
+// when the subscribing file uses the export.
+const subscribesByVariable = (code) => /\bon\(\s*[A-Za-z_$]/.test(code);
+
+/** The quoted event names in a source's arrays and object keys. */
+export function listedNames(text) {
+  const code = withoutComments(text);
   const names = new Set();
-  for (const dir of ["stores", "lib"]) {
-    for (const file of sourceFiles(join(src, dir))) {
-      for (const name of subscribedNames(readFileSync(file, "utf8"))) names.add(name);
+  for (const [, name] of code.matchAll(new RegExp(String.raw`["'](${EVENT_NAME})["']\s*[:,\]]`, "g"))) names.add(name);
+  return names;
+}
+
+function appSubscriptions() {
+  const files = ["stores", "lib", "routes"].flatMap((dir) => sourceFiles(join(src, dir)));
+  const code = new Map(files.map((file) => [file, withoutComments(readFileSync(file, "utf8"))]));
+  const exporters = new Map();
+  for (const [file, text] of code) {
+    for (const [, name] of text.matchAll(/export\s+(?:const|function|let)\s+([A-Za-z_$][\w$]*)/g)) exporters.set(name, file);
+  }
+  const names = new Set();
+  for (const [file, text] of code) {
+    for (const name of subscribedNames(text)) names.add(name);
+    if (!subscribesByVariable(text)) continue;
+    for (const name of listedNames(text)) names.add(name);
+    for (const [ident, from] of exporters) {
+      if (from !== file && new RegExp(String.raw`\b${ident.replace(/\$/g, "\\$")}\b`).test(text)) {
+        for (const name of listedNames(code.get(from))) names.add(name);
+      }
     }
   }
   return names;
@@ -98,22 +92,23 @@ test("the scan counts direct subscriptions and names a variable subscribes to", 
   assert.deepEqual([...subscribedNames(`const names = ["a.b"]; service.on("c.d", f);`)], ["c.d"]);
 });
 
+test("a handler map's keys and a list's items are listed names", () => {
+  const map = `export const handlers = () => ({ "finding.created": f, "chrome.path.added": g });
+    export const NAMES = ["update.available", "update.failed"];
+    // "commented.out": nothing
+    const url = "http://example.com/a.b";`;
+  assert.deepEqual([...listedNames(map)].sort(), ["chrome.path.added", "finding.created", "update.available", "update.failed"]);
+});
+
 test("the event list names each event once, apart from the stream's own", () => {
   assert.equal(new Set(SERVICE_EVENTS).size, SERVICE_EVENTS.length);
   for (const name of STREAM_EVENTS) assert.ok(!SERVICE_EVENTS.includes(name), name);
-  for (const name of PENDING_SVC_EVENTS_B) assert.ok(SERVICE_EVENTS.includes(name), `${name} isn't a service event`);
 });
 
 test("every event the service publishes has a subscription in the app", () => {
   const subscribed = appSubscriptions();
-  const missing = SERVICE_EVENTS.filter((name) => !subscribed.has(name) && !PENDING_SVC_EVENTS_B.includes(name));
+  const missing = SERVICE_EVENTS.filter((name) => !subscribed.has(name));
   assert.deepEqual(missing, [], `no service.on(…) for: ${missing.join(", ")}`);
-});
-
-test("a pending name leaves the allowlist once it has a subscription", () => {
-  const subscribed = appSubscriptions();
-  const done = PENDING_SVC_EVENTS_B.filter((name) => subscribed.has(name));
-  assert.deepEqual(done, [], `remove from PENDING_SVC_EVENTS_B: ${done.join(", ")}`);
 });
 
 test("the client handles stream.reset itself", () => {

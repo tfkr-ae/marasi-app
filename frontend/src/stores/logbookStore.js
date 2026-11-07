@@ -7,6 +7,7 @@ import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
 import { createLogbookApi } from "./logbookApi.js";
 import { createLogbookStore } from "./createLogbookStore.js";
+import { logbookEvents } from "./logbookEvents.js";
 import { projectData } from "./projectData.js";
 
 export {
@@ -28,6 +29,8 @@ export {
 } from "./createLogbookStore.js";
 
 export const logbookStore = createLogbookStore(createLogbookApi(service, { saveFile: SaveFileAs }));
+
+for (const [name, handler] of Object.entries(logbookEvents(logbookStore))) service.on(name, handler);
 
 projectData.register("logbook", {
   signal: loadSignals.findings,

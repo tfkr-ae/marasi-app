@@ -118,6 +118,14 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
     await refresh();
   }
 
+  /** A job.progress: the running `job` replaces its row, or joins the list. */
+  function onProgress(job) {
+    store.update((s) => {
+      const listed = s.jobs.some((j) => j.Name === job.Name);
+      return { ...s, jobs: listed ? s.jobs.map((j) => (j.Name === job.Name ? job : j)) : [...s.jobs, job] };
+    });
+  }
+
   /** Forgets the project's jobs, on a project switch. */
   function clear() {
     generation += 1;
@@ -127,5 +135,5 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
     store.set(initial());
   }
 
-  return { subscribe: store.subscribe, refresh, watch, rebuild, clear };
+  return { subscribe: store.subscribe, refresh, watch, rebuild, onProgress, clear };
 }

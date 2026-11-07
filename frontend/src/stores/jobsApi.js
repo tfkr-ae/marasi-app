@@ -16,6 +16,9 @@ export function toJob(job) {
   };
 }
 
+/** The running job a job.progress event names, in the store's fields. */
+export const progressJob = (progress) => toJob({ ...progress, complete: false });
+
 export function createJobsApi(client) {
   return {
     async listJobs() {
