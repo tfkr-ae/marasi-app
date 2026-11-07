@@ -62,6 +62,7 @@
 	import { outdatedVersion, shouldOfferCLISetup } from "../lib/connection/cli.js";
 	import { connectionsModal } from "../lib/connection/modal.js";
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { reportLogbookEdits } from "../stores/logbookStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
 	import WebComponent from "../lib/extensions/WebComponent.svelte";
@@ -277,6 +278,7 @@
 				}),
 		});
 		const stopReportingDrafts = reportUnsavedDrafts();
+		const stopReportingLogbookEdits = reportLogbookEdits();
 		const stopExtensionToasts = showExtensionToasts((schema) =>
 			toastStore.trigger(extensionToast(schema)),
 		);
@@ -322,6 +324,7 @@
 		return () => {
 			stopFollowing();
 			stopReportingDrafts();
+			stopReportingLogbookEdits();
 			removeMenuShortcuts();
 			stopAbandonToasts?.();
 			off("update-available");

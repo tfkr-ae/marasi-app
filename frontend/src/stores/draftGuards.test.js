@@ -1,6 +1,7 @@
 import { test } from "node:test";
+import { writable } from "svelte/store";
 import assert from "node:assert/strict";
-import { reportUnsavedDraftCount } from "./draftGuards.js";
+import { reportUnsavedDraftCount, reportUnsavedLogbookEdits } from "./draftGuards.js";
 import { createLaunchpadStore } from "./createLaunchpadStore.js";
 
 function fakeApi() {
@@ -46,4 +47,18 @@ test("a draft kept from a launchpad another client deleted still counts until di
   stop();
 
   assert.deepEqual(reported, [0, 1, 0]);
+});
+
+test("unsaved Logbook edits are reported as they start and end, and only then", () => {
+  const store = writable({ fix: null, session: null });
+  const unsaved = (state) => Boolean(state.fix?.dirty || state.session?.dirty);
+  const reported = [];
+  const stop = reportUnsavedLogbookEdits(store, (value) => reported.push(value), unsaved);
+  store.set({ fix: null, session: { dirty: false } });
+  store.set({ fix: null, session: { dirty: true } });
+  store.set({ fix: { dirty: true }, session: { dirty: true } });
+  store.set({ fix: null, session: null });
+  stop();
+  store.set({ fix: { dirty: true }, session: null });
+  assert.deepEqual(reported, [false, true, false]);
 });

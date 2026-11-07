@@ -109,3 +109,59 @@ func TestSwitchProjectWithNothingToLoseNeverAsks(t *testing.T) {
 		t.Fatalf("wanted no dialog, got %d", len(dialog.asked))
 	}
 }
+
+func TestSwitchProjectOverUnsavedLogbookEditsAsks(t *testing.T) {
+	app := newTestApp(t)
+	app.SetUnsavedLogbookEdits(true)
+	dialog := withDialog(app, "Cancel")
+
+	confirmed, err := app.ConfirmProjectSwitch()
+	if err != nil || confirmed {
+		t.Fatalf("wanted the switch cancelled, got %v %v", confirmed, err)
+	}
+	if len(dialog.asked) != 1 || !strings.Contains(dialog.asked[0].Message, "The Logbook has unsaved edits") {
+		t.Fatalf("wanted one dialog naming the Logbook edits, got %v", dialog.asked)
+	}
+}
+
+func TestQuitOverUnsavedLogbookEditsAsks(t *testing.T) {
+	app := newTestApp(t)
+	app.SetUnsavedLogbookEdits(true)
+	dialog := withDialog(app, "Cancel")
+
+	if !app.hasWorkToLose() {
+		t.Fatal("wanted unsaved Logbook edits to count as work to lose")
+	}
+	if prevent := app.beforeClose(); !prevent {
+		t.Fatal("wanted cancelling the dialog to keep Marasi open")
+	}
+	if len(dialog.asked) != 1 || !strings.Contains(dialog.asked[0].Message, "The Logbook has unsaved edits") {
+		t.Fatalf("wanted one dialog naming the Logbook edits, got %v", dialog.asked)
+	}
+}
+
+func TestSavedLogbookEditsNoLongerAsk(t *testing.T) {
+	app := newTestApp(t)
+	app.SetUnsavedLogbookEdits(true)
+	app.SetUnsavedLogbookEdits(false)
+	dialog := withDialog(app, "Cancel")
+
+	confirmed, err := app.ConfirmProjectSwitch()
+	if err != nil || !confirmed || len(dialog.asked) != 0 {
+		t.Fatalf("wanted the switch to go ahead without asking, got %v %v %v", confirmed, err, dialog.asked)
+	}
+}
+
+func TestFollowProjectNamesReportedLogbookEdits(t *testing.T) {
+	app := newTestApp(t)
+	app.SetUnsavedLogbookEdits(true)
+	dialog := withDialog(app, "Stay")
+
+	confirmed, err := app.ConfirmFollowProject("other")
+	if err != nil || confirmed {
+		t.Fatalf("wanted Stay, got %v %v", confirmed, err)
+	}
+	if len(dialog.asked) != 1 || !strings.Contains(dialog.asked[0].Message, "The Logbook has unsaved edits. Load other will discard them.") {
+		t.Fatalf("wanted the follow prompt to name the Logbook edits, got %v", dialog.asked)
+	}
+}
