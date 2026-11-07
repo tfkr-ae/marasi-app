@@ -5,12 +5,16 @@
 //   const source = new EventSource(url, { headers });
 //   source.onopen = () => …;          // the service answered 2xx
 //   source.onerror = ({ status }) => …; // refused (status set), failed or ended
-//   source.addEventListener("log.added", ({ type, data }) => …); // data: text
+//   source.addEventListener("log.added", ({ type, data, lastEventId }) => …); // data: text
+//   source.lastEventId                // the last `id:` read, "" before one
 //   source.close();                   // stops, with no onerror
 //
 // It never reconnects: onerror fires once and the source is closed. It reads
-// `event:` and `data:` lines, dispatches on a blank line, and skips comments
-// (`: connected`, `: heartbeat`); Marasi sends no `id:` or `retry:`.
+// `event:`, `data:` and `id:` lines, dispatches on a blank line, and skips
+// comments (`: connected`, `: heartbeat`). As in a native EventSource, an
+// event without an `id:` keeps the last one (Marasi's `stream.dropped` has
+// none), and lastEventId moves even for events nobody listens to. Marasi
+// sends no `retry:`.
 
 export function createFetchEventSource(fetch) {
   return class FetchEventSource {
@@ -20,6 +24,7 @@ export function createFetchEventSource(fetch) {
       this.onerror = null;
       this.listeners = new Map();
       this.closed = false;
+      this.lastEventId = "";
       this.abort = new AbortController();
       this.run(headers);
     }
@@ -46,8 +51,9 @@ export function createFetchEventSource(fetch) {
       this.onerror?.({ type: "error", status });
     }
 
-    dispatch(type, data) {
-      for (const listener of this.listeners.get(type) ?? []) listener({ type, data });
+    dispatch(type, data, lastEventId) {
+      this.lastEventId = lastEventId;
+      for (const listener of this.listeners.get(type) ?? []) listener({ type, data, lastEventId });
     }
 
     async run(headers) {
@@ -73,6 +79,7 @@ export function createFetchEventSource(fetch) {
       let buffer = "";
       let type = "message";
       let data = [];
+      let id = "";
       try {
         while (!this.closed) {
           const { value, done } = await reader.read();
@@ -85,7 +92,7 @@ export function createFetchEventSource(fetch) {
             const line = buffer.slice(0, newline);
             buffer = buffer.slice(newline + (buffer.startsWith("\r\n", newline) ? 2 : 1));
             if (line === "") {
-              if (data.length) this.dispatch(type, data.join("\n"));
+              if (data.length) this.dispatch(type, data.join("\n"), id);
               type = "message";
               data = [];
               continue;
@@ -97,6 +104,7 @@ export function createFetchEventSource(fetch) {
             const fieldValue = raw.startsWith(" ") ? raw.slice(1) : raw;
             if (field === "event") type = fieldValue;
             else if (field === "data") data.push(fieldValue);
+            else if (field === "id" && !fieldValue.includes("\0")) id = fieldValue;
           }
         }
       } catch {
