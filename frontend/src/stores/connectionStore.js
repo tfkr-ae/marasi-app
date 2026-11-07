@@ -20,8 +20,6 @@ import { loadedProject, loadProject, projectStore, resyncProject } from "./proje
 import { activeConnectionId } from "./activeConnection.js";
 import { trackRecents } from "./recentProjects.js";
 import { projectData } from "./projectData.js";
-import { logbookStore } from "./logbookStore.js";
-import { hasUnsavedEdits } from "./createLogbookStore.js";
 import { projectName } from "../lib/openProgress.js";
 
 export const connectionStore = createConnectionStore({
@@ -54,7 +52,7 @@ export const connectionStore = createConnectionStore({
   // the unsaved-work prompt, then the full load (the pages remount).
   confirmSwitch: () => ConfirmProjectSwitch(),
   // Another client opened `project`: the same prompt, naming it.
-  confirmFollow: (project) => ConfirmFollowProject(projectName(project), hasUnsavedEdits(get(logbookStore))),
+  confirmFollow: (project) => ConfirmFollowProject(projectName(project)),
   loadDeclined: () => projectStore.closeFollowed(),
   reloadProject: (status) => projectStore.reload(status.project),
   holdWrites: (on) => service.holdWrites(on),

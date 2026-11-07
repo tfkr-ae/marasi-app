@@ -9,7 +9,7 @@ func TestFollowingAProjectWithNothingToLoseNeverAsks(t *testing.T) {
 	app := newTestApp(t)
 	dialog := withDialog(app, "Stay")
 
-	confirmed, err := app.ConfirmFollowProject("other", false)
+	confirmed, err := app.ConfirmFollowProject("other")
 	if err != nil || !confirmed {
 		t.Fatalf("wanted the load to go ahead, got %v %v", confirmed, err)
 	}
@@ -23,7 +23,7 @@ func TestFollowingAProjectOverUnsavedDraftsNamesTheClientAndCanStay(t *testing.T
 	app.SetUnsavedDraftCount(1)
 	dialog := withDialog(app, "Stay")
 
-	confirmed, err := app.ConfirmFollowProject("other", false)
+	confirmed, err := app.ConfirmFollowProject("other")
 	if err != nil || confirmed {
 		t.Fatalf("wanted Stay to decline the load, got %v %v", confirmed, err)
 	}
@@ -42,9 +42,10 @@ func TestFollowingAProjectOverUnsavedDraftsNamesTheClientAndCanStay(t *testing.T
 
 func TestFollowingAProjectOverLogbookEditsAsks(t *testing.T) {
 	app := newTestApp(t)
+	app.SetUnsavedLogbookEdits(true)
 	dialog := withDialog(app, "Load other")
 
-	confirmed, err := app.ConfirmFollowProject("other", true)
+	confirmed, err := app.ConfirmFollowProject("other")
 	if err != nil || !confirmed {
 		t.Fatalf("wanted Load other to confirm, got %v %v", confirmed, err)
 	}

@@ -64,6 +64,9 @@ type App struct {
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
 	// draft, reported by the frontend, which holds drafts in memory only.
 	unsavedDrafts atomic.Int64
+	// unsavedLogbookEdits is whether a Logbook edit session or inline fix
+	// has unsaved input, reported by the frontend.
+	unsavedLogbookEdits atomic.Bool
 	// activeArmoryRuns is the number of Armory runs active on the service,
 	// reported by the frontend (armory_guard.go). armoryCancelReply waits
 	// for the frontend's answer to a cancel; armoryCancelTimeout bounds it
@@ -304,8 +307,17 @@ func (a *App) SetUnsavedDraftCount(count int) {
 	a.unsavedDrafts.Store(int64(count))
 }
 
+// SetUnsavedLogbookEdits records whether the Logbook has unsaved edits (an
+// open finding or test case, or an inline fix with input). The frontend
+// calls it whenever that changes, so quitting, switching the project or
+// following another client's switch can warn first.
+func (a *App) SetUnsavedLogbookEdits(unsaved bool) {
+	a.unsavedLogbookEdits.Store(unsaved)
+}
+
 // confirmLosingWork asks once before action discards unsaved Launchpad
-// drafts or cancels active Armory runs, naming whichever applies. It returns
+// drafts or Logbook edits or cancels active Armory runs, naming whichever
+// applies. It returns
 // true when there is nothing to lose, or the user goes ahead and any active
 // Armory runs were cancelled.
 func (a *App) confirmLosingWork(action string) (bool, error) {
@@ -314,16 +326,14 @@ func (a *App) confirmLosingWork(action string) (bool, error) {
 
 // ConfirmFollowProject asks before loading project, which another client
 // (the Marasi CLI, another app) opened on the service, discards unsaved
-// Launchpad drafts or Logbook edits (logbookEdits) or cancels active Armory
-// runs. Stay keeps the pages on the project they show. It returns true when
+// Launchpad drafts or Logbook edits or cancels active Armory runs. Stay keeps the pages on the project they show. It returns true when
 // there is nothing to lose or the user chose to load it.
-func (a *App) ConfirmFollowProject(project string, logbookEdits bool) (bool, error) {
+func (a *App) ConfirmFollowProject(project string) (bool, error) {
 	action := "Load " + project
 	return a.askLosingWork(lossPrompt{
-		lead:         "Another client opened " + project + ".",
-		action:       action,
-		cancel:       "Stay",
-		logbookEdits: logbookEdits,
+		lead:   "Another client opened " + project + ".",
+		action: action,
+		cancel: "Stay",
 	})
 }
 
@@ -332,7 +342,6 @@ func (a *App) ConfirmFollowProject(project string, logbookEdits bool) (bool, err
 // end closes the message.
 type lossPrompt struct {
 	lead, action, cancel, end string
-	logbookEdits              bool
 }
 
 func (a *App) askLosingWork(prompt lossPrompt) (bool, error) {
@@ -344,7 +353,7 @@ func (a *App) askLosingWork(prompt lossPrompt) (bool, error) {
 	if drafts := a.draftsMessage(); drafts != "" {
 		losses = append(losses, drafts+" "+prompt.action+" will discard them.")
 	}
-	if prompt.logbookEdits {
+	if a.unsavedLogbookEdits.Load() {
 		losses = append(losses, "The Logbook has unsaved edits. "+prompt.action+" will discard them.")
 	}
 	hasRuns := a.hasActiveArmoryRuns()
@@ -364,9 +373,9 @@ func (a *App) askLosingWork(prompt lossPrompt) (bool, error) {
 }
 
 // hasWorkToLose reports whether closing Marasi now would discard unsaved
-// Launchpad drafts or cancel active Armory runs.
+// Launchpad drafts or Logbook edits, or cancel active Armory runs.
 func (a *App) hasWorkToLose() bool {
-	return a.unsavedDrafts.Load() > 0 || a.hasActiveArmoryRuns()
+	return a.unsavedDrafts.Load() > 0 || a.unsavedLogbookEdits.Load() || a.hasActiveArmoryRuns()
 }
 
 // draftsMessage describes the unsaved Launchpad drafts, or is empty.
