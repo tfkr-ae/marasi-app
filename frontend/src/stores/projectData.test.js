@@ -70,3 +70,14 @@ test("registering a name again replaces it, so a reloaded module isn't counted t
 
   assert.deepEqual(calls, ["home.resync"]);
 });
+
+test("clear() forgets every store's data and loads nothing, as when leaving a connection", () => {
+  const calls = [];
+  const data = createProjectData();
+  data.register("home", recorder(calls, "home"));
+  data.register("ledger", recorder(calls, "ledger"));
+
+  data.clear();
+
+  assert.deepEqual(calls, ["home.clear", "ledger.clear"]);
+});

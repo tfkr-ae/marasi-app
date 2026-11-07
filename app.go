@@ -82,6 +82,9 @@ type App struct {
 	runCLI       runCLIFunc
 	findCLI      func() (string, error)
 	newPassword  func() (string, error)
+	// keychain keeps connection passwords on a release build; nil on a
+	// development build, which uses a 0600 file instead (keychain.go).
+	keychain *keychain
 	cliConfigDir string
 	local        localInstance
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
@@ -189,6 +192,7 @@ func newApp(proxy *marasi.Proxy, configDir string, wordlists wordlist.Provider, 
 	}
 	app.useDesktopRuntime()
 	app.useLocalInstanceRuntime()
+	app.useKeychainRuntime()
 	app.signingKey = loadSigningKey()
 	app.installer = defaultInstaller()
 	app.installLocation = resolveInstallLocation(app.installer)

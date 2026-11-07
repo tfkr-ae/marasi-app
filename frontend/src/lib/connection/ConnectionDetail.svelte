@@ -2,18 +2,46 @@
 	// One connection's details: its status, the service's project and
 	// version, and the version warning. The Connections modal shows it
 	// compact; Settings → Connection in the Settings row layout (`rows`).
-	// The password and sharing rows (ticket 15) go after the service rows.
+	// Another connection offers Switch; a refused password asks for it; a
+	// remote has its address and Remove. The password and sharing rows
+	// (ticket 15) go after the service rows.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { neutralVariant } from "../launchpad/format.js";
+	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
+	import { errorText, removeConnection, setAddress } from "./manage.js";
 
 	export let connection;
 	/** Settings rows instead of the compact layout. */
 	export let rows = false;
 
 	$: neutral = `btn btn-sm rounded-none ${neutralVariant($modeCurrent)}`;
+	$: primary = `btn btn-sm rounded-none ${primaryVariant($modeCurrent)}`;
+	let password = "";
+	let passwordError = "";
+	let address = connection.url ?? "";
+	let manageError = "";
+	function enterPassword() {
+		passwordError = connectionStore.enterPassword(password) ?? "";
+		if (!passwordError) password = "";
+	}
+	async function saveAddress() {
+		manageError = "";
+		try {
+			await setAddress(connection.id, address.trim());
+		} catch (err) {
+			manageError = errorText(err);
+		}
+	}
+	async function remove() {
+		manageError = "";
+		try {
+			await removeConnection(connection.id);
+		} catch (err) {
+			manageError = errorText(err);
+		}
+	}
 	$: state = $connectionStore;
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
@@ -39,6 +67,21 @@
 		<p class="mt-2 bg-warning-500/15 px-2 py-1 text-xs" data-testid="connection-version-warning">
 			{state.versionWarning}. Some features may not work.
 		</p>
+	{/if}
+	{#if !isActive}
+		<div class="mt-3 flex justify-end">
+			<button type="button" class={primary} data-testid="connection-switch" on:click={() => connectionStore.switchTo(connection.id)}>
+				Switch
+			</button>
+		</div>
+	{/if}
+	{#if isActive && phase === "auth-failed"}
+		<form class="mt-3 flex items-center gap-3 bg-error-500/10 p-3" data-testid="connection-password-prompt" on:submit|preventDefault={enterPassword}>
+			<p class="text-xs">{state.error}</p>
+			<input class="input h-8 min-w-0 flex-1 py-1 text-xs" type="password" placeholder="Password" data-testid="connection-password" bind:value={password} />
+			<button type="submit" class={primary} disabled={!password}>Connect</button>
+		</form>
+		{#if passwordError}<p class="mt-1 text-xs text-error-600 dark:text-error-400">{passwordError}</p>{/if}
 	{/if}
 	{#if isActive && phase === "failed"}
 		<div class="mt-3 flex items-center gap-3 bg-error-500/10 p-3">
@@ -67,5 +110,28 @@
 				<p class="font-mono text-xs" data-testid="connection-version">{state.version}</p>
 			</div>
 		</div>
+	{/if}
+
+	{#if connection.kind === "remote"}
+		<div class="mt-3 border-t border-surface-200 dark:border-surface-700">
+			<div class={row}>
+				<div>
+					<p>Address</p>
+					<p class="text-xs opacity-70">The service's control listener</p>
+				</div>
+				<form class="flex min-w-0 items-center gap-2" on:submit|preventDefault={saveAddress}>
+					<input class="input h-8 w-56 py-1 font-mono text-xs" data-testid="connection-address" bind:value={address} />
+					<button type="submit" class={neutral} disabled={!address.trim() || address.trim() === connection.url}>Save</button>
+				</form>
+			</div>
+			<div class={row}>
+				<div>
+					<p>Remove</p>
+					<p class="text-xs opacity-70">{isActive ? "Switch away first" : "Forget it and its password"}</p>
+				</div>
+				<button type="button" class={neutral} disabled={isActive} data-testid="connection-remove" on:click={remove}>Remove</button>
+			</div>
+		</div>
+		{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
 	{/if}
 </div>

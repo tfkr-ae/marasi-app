@@ -1,13 +1,33 @@
-// The connection store bound to the app: the local instance through Go's
-// ConnectLocal, and the service through the app's service client. The
-// lifecycle is in createConnectionStore.js.
-import { ConnectLocal, ConfirmProjectSwitch, MarasiPin } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+// The connection store bound to the app: the saved connections and their
+// passwords through Go (connections.go, keychain.go), the local instance
+// through Go's ConnectLocal, and the service through the app's service
+// client. The lifecycle is in createConnectionStore.js.
+import {
+  AddRecentProject,
+  ConfirmProjectSwitch,
+  ConnectLocal,
+  ConnectionPassword,
+  ListConnections,
+  MarasiPin,
+  SetActiveConnection,
+  SetConnectionPassword,
+} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
+import { get } from "svelte/store";
 import { createConnectionStore } from "./createConnectionStore.js";
 import { loadedProject, loadProject, projectStore, resyncProject } from "./projectStore.js";
+import { activeConnectionId } from "./activeConnection.js";
+import { trackRecents } from "./recentProjects.js";
+import { projectData } from "./projectData.js";
 
 export const connectionStore = createConnectionStore({
+  listConnections: () => ListConnections(),
   connectLocal: () => ConnectLocal(),
+  connectionPassword: (id) => ConnectionPassword(id),
+  savePassword: (id, password) => SetConnectionPassword(id, password),
+  setActive: (id) => SetActiveConnection(id),
+  // Leaving a connection: the last service's data goes before the next loads.
+  clearStores: () => projectData.clear(),
   use: (connection) => service.use(connection),
   readStatus: () => service.get("/service/status"),
   openEvents: (handlers) => service.openEvents(handlers),
@@ -27,8 +47,17 @@ export const connectionStore = createConnectionStore({
 });
 
 // Reconnects compare the service's project with the one loaded last, which
-// a switch changes.
-loadedProject.subscribe((project) => project && connectionStore.dispatch({ type: "PROJECT_LOADED", path: project.path }));
+// a switch changes. Each project loaded joins the connection's recents.
+loadedProject.subscribe(
+  trackRecents({
+    connectionId: () => get(connectionStore).connection.id,
+    addRecent: (id, name, path) =>
+      AddRecentProject(id, name, path).catch((err) => console.error("Saving the recent project failed:", err)),
+    onLoaded: (path) => connectionStore.dispatch({ type: "PROJECT_LOADED", path }),
+  }),
+);
+// The project store reads the active connection's recents.
+connectionStore.subscribe((state) => activeConnectionId.set(state.connection.id));
 // A restart announced before the stream drops means a full load afterwards.
 service.on("service.restarting", () => connectionStore.dispatch({ type: "SERVICE_RESTARTING" }));
 // The Marasi date the app was built against: an older service warns.

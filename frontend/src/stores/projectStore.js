@@ -1,14 +1,15 @@
 // The project store bound to the app: the service client, the native
 // unsaved-work prompt, and the app's full project load. The open flow is in
 // createProjectStore.js.
-import { derived } from "svelte/store";
-import { ConfirmProjectSwitch } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { derived, get } from "svelte/store";
+import { ConfirmProjectSwitch, RecentProjects } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
 import { projectName } from "../lib/openProgress.js";
 import { activeProject, resetProject } from "../stores.js";
 import { createProjectApi } from "./projectApi.js";
 import { createProjectStore } from "./createProjectStore.js";
 import { projectData } from "./projectData.js";
+import { activeConnectionId } from "./activeConnection.js";
 // Each store registers itself with projectData when its module loads; these
 // stores aren't imported elsewhere before the first load.
 import "./homeStore.js";
@@ -30,7 +31,11 @@ export async function loadProject(path, part = () => {}) {
 export const resyncProject = () => projectData.resync();
 
 export const projectStore = createProjectStore(
-  createProjectApi(service, { confirmSwitch: () => ConfirmProjectSwitch(), loadProject }),
+  createProjectApi(service, {
+    confirmSwitch: () => ConfirmProjectSwitch(),
+    loadProject,
+    recentProjects: () => RecentProjects(get(activeConnectionId)),
+  }),
 );
 
 /** The open in progress (lib/openProgress.js state), or null. */

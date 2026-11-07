@@ -24,6 +24,11 @@ export function createProjectData() {
       entries.set(name, { name, signal, clear, load, resync });
     },
 
+    /** Clears every store, as when leaving a connection. */
+    clear() {
+      for (const entry of entries.values()) entry.clear();
+    },
+
     /** Clears every store, then loads each; `part(signal)` before each. */
     async load(part = () => {}) {
       for (const entry of entries.values()) entry.clear();
