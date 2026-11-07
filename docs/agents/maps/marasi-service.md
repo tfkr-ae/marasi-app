@@ -72,7 +72,7 @@ Add a binding only for what the Go shell does (above); anything the service serv
 
 ## Errors the frontend acts on
 
-The frontend can only match error text, so an error it must act on carries a code: `<what>: <code>: <cause>`, or `<what>: <code> (<id>, <id>): <cause>` when it names items. Go builds them with `codedError` (the local instance's `cli_missing` and `instance_failed`) and by hand (Chrome's `listener_inactive`, `listener_loopback`). The service client's `ServiceError` uses the same text for the service's refusals (see Service client). `codeIDs` in `frontend/src/lib/errorCodes.js` reads both, and helpers such as `launchPending.js` build on it. To handle a new Go refusal, add a code constant with a doc comment, wrap the error with `codedError`, then add a frontend helper that calls `codeIDs`.
+The frontend can only match error text, so an error it must act on carries a code: `<what>: <code>: <cause>`, or `<what>: <code> (<id>, <id>): <cause>` when it names items. Go builds them with `codedError` in `coded_error.go`, whose code constants carry doc comments (`cli_missing`, `instance_failed`, `chrome_launch_failed`) and by hand (Chrome's `listener_inactive`, `listener_loopback`). The service client's `ServiceError` uses the same text for the service's refusals (see Service client). `codeIDs` in `frontend/src/lib/errorCodes.js` reads both, and helpers such as `launchPending.js` build on it. To handle a new Go refusal, add a code constant with a doc comment, wrap the error with `codedError`, then add a frontend helper that calls `codeIDs`.
 
 ## Events
 
