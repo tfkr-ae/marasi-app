@@ -1,6 +1,5 @@
 import { writable } from "svelte/store";
 import {
-  GetLogs,
   GetMarasiConfig,
   GetKeybindings,
   OSUserName,
@@ -18,7 +17,6 @@ import { readHighlights } from "./stores/highlightsStore";
 import "./stores/ledgerStore";
 import "./stores/sitemapStore";
 import "./stores/jobsStore";
-import { recentTraffic } from "./stores/recentTrafficStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";
@@ -71,7 +69,6 @@ export { interceptFlag } from "./stores/interceptFlag.js";
 // Workshop (stores/extensionsStore.js loads it)
 export const workshopCode = writable("");
 
-export const logItems = writable([]);
 export const prettify = writable(true);
 export const lineWrap = writable(true);
 
@@ -126,12 +123,4 @@ export async function resetProject(name) {
   });
   compassCode.set("");
   testerInput.set("");
-  recentTraffic.clear();
-}
-
-export async function populateLogs() {
-  GetLogs().then((items) => {
-    console.log(items);
-    logItems.set(items ? items : []);
-  });
 }

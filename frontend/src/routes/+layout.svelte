@@ -71,7 +71,6 @@
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
-	import { recentTraffic } from "../stores/recentTrafficStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
@@ -282,24 +281,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			on("request", (newRequest) => {
-				recentTraffic.onRequest(newRequest);
-			});
-			on("response", (newResponse) => {
-				recentTraffic.onResponse(newResponse);
-				if (
-					$drawerStore.id ===
-						"request-response" &&
-					$drawerStore.meta?.request?.ID ===
-						newResponse.ID
-				) {
-					drawerStore.update((s) => {
-						s.meta.incomingResponse =
-							newResponse;
-						return s;
-					});
-				}
-			});
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
 			stopAbandonToasts = checkpointStore.onAbandon(
@@ -322,10 +303,7 @@
 		return () => {
 			stopReportingDrafts();
 			removeMenuShortcuts();
-			off("request");
-			off("response");
 			stopAbandonToasts?.();
-			off("log");
 			off("update-available");
 			off("update-progress");
 			off("update-installed");
