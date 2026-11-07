@@ -381,3 +381,42 @@ test("a resume with no id to resume from (no event came yet) reports a reset onc
   events.sources[1].open();
   assert.deepEqual(resets, ["none"]);
 });
+
+test("a service the network can't reach is an unreachable error naming its address", async () => {
+  const client = createServiceClient({
+    fetch: async () => {
+      throw new TypeError("Load failed");
+    },
+    EventSource: fakeEventSource().EventSource,
+  });
+  client.use({ url: "http://100.109.251.70:8888", password: "pw" });
+  await assert.rejects(client.get("/service/status"), (err) => {
+    assert.equal(err.code, "unreachable");
+    assert.equal(err.message, "Couldn't reach 100.109.251.70:8888");
+    return true;
+  });
+});
+
+test("a call with a timeout that gets no answer gives up, naming the address", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let signal = null;
+  const client = createServiceClient({
+    // A real fetch rejects with an AbortError once its signal aborts.
+    fetch: (url, init) =>
+      new Promise((_, reject) => {
+        signal = init.signal;
+        signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      }),
+    EventSource: fakeEventSource().EventSource,
+  });
+  client.use({ url: "http://10.255.255.1:8888", password: "pw" });
+  const pending = client.request("GET", "/service/status", { timeout: 10_000 });
+  t.mock.timers.tick(9_999);
+  assert.equal(signal?.aborted, false);
+  t.mock.timers.tick(1);
+  await assert.rejects(pending, (err) => {
+    assert.equal(err.code, "timeout");
+    assert.equal(err.message, "No answer from 10.255.255.1:8888");
+    return true;
+  });
+});

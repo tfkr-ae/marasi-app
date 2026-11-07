@@ -33,7 +33,7 @@
 // addEventListener(name, listener) whose event has `data` as text and
 // `lastEventId`, a `lastEventId` of its own, and close(). The app passes the fetch-based reader in sse.js, since a native
 // EventSource can't send the password.
-import { ServiceError, serviceError } from "./errors.js";
+import { ServiceError, serviceError, unreachable } from "./errors.js";
 
 export function createServiceClient({ fetch, EventSource }) {
   let connection = null;
@@ -64,8 +64,11 @@ export function createServiceClient({ fetch, EventSource }) {
    * which repeat the parameter. For the routes that aren't JSON, `raw`
    * (bytes, such as an artifact) is sent as the body with `contentType`,
    * and `as: "bytes"` resolves to the answer's bytes (a Uint8Array).
+   * `timeout` (ms) gives up on a service that doesn't answer. Either way a
+   * call that gets no answer rejects with a ServiceError coded
+   * `unreachable` or `timeout` whose text names the address.
    */
-  async function request(method, path, { query, body, raw, contentType, as } = {}) {
+  async function request(method, path, { query, body, raw, contentType, as, timeout } = {}) {
     if (writesHeld && method !== "GET" && !path.startsWith("/service/")) {
       throw new ServiceError(`${method} ${path}: project_changed: load the service's project first`, {
         code: "project_changed",
@@ -81,7 +84,26 @@ export function createServiceClient({ fetch, EventSource }) {
       headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    const response = await fetch(urlFor(path, query), init);
+    const url = urlFor(path, query);
+    // `timeout` (ms) bounds the wait for the answer's headers: a host that
+    // drops packets would otherwise keep the call open for minutes.
+    const abort = timeout ? new AbortController() : null;
+    let timedOut = false;
+    const timer = abort
+      ? setTimeout(() => {
+          timedOut = true;
+          abort.abort();
+        }, timeout)
+      : null;
+    if (abort) init.signal = abort.signal;
+    let response;
+    try {
+      response = await fetch(url, init);
+    } catch (err) {
+      throw unreachable(url, err, { timedOut });
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
     if (as === "bytes" && response.ok) return new Uint8Array(await response.arrayBuffer());
     const text = await response.text();
     const isJSON = (response.headers.get("content-type") ?? "").includes("application/json");

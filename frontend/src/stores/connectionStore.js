@@ -37,7 +37,7 @@ export const connectionStore = createConnectionStore({
   // Leaving a connection: the last service's data goes before the next loads.
   clearStores: () => projectData.clear(),
   use: (connection) => service.use(connection),
-  readStatus: () => service.get("/service/status"),
+  readStatus: (options) => service.request("GET", "/service/status", options),
   openEvents: (handlers) => service.openEvents(handlers),
   closeEvents: () => service.closeEvents(),
   // The project the service has open, whichever it is: the scratchpad on a

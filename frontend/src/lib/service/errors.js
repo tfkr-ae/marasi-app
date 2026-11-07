@@ -42,6 +42,23 @@ function bodyIDs(code, body) {
   return [];
 }
 
+/**
+ * The request to `url` never got an answer: fetch rejected (a refused or
+ * blocked connection, such as macOS ATS, reads only "Load failed") or the
+ * wait ran out. Its text names the address alone, since it shows as is in
+ * the connection's details and banner.
+ */
+export function unreachable(url, cause, { timedOut = false } = {}) {
+  let host = url;
+  try {
+    host = new URL(url).host;
+  } catch {}
+  const message = timedOut ? `No answer from ${host}` : `Couldn't reach ${host}`;
+  const err = new ServiceError(message, { code: timedOut ? "timeout" : "unreachable", ids: [] });
+  err.cause = cause;
+  return err;
+}
+
 /** Builds the ServiceError for `method path` answered `status` with `body`. */
 export function serviceError({ method, path, status, body, text = "" }) {
   const what = `${method} ${path}`;
