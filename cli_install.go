@@ -319,8 +319,9 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	return a.placeCLI(download, target)
 }
 
-// placeCLI copies the verified build next to target, renames it over
-// target and marks it executable on Unix.
+// placeCLI copies the verified build next to target, marks the copy
+// executable on Unix, then renames it over target, so a failure at any step
+// leaves target as it was.
 func (a *App) placeCLI(download, target string) error {
 	r := &a.cliRuntime
 	dir := filepath.Dir(target)
@@ -337,14 +338,15 @@ func (a *App) placeCLI(download, target string) error {
 		r.remove(staged)
 		return failed(UpdateFailureInstall, "Could not write to %s: %v", dir, err)
 	}
+	if r.goos != "windows" {
+		if err := r.chmod(staged, 0o755); err != nil {
+			r.remove(staged)
+			return failed(UpdateFailureInstall, "Could not make %s executable: %v", target, err)
+		}
+	}
 	if err := r.rename(staged, target); err != nil {
 		r.remove(staged)
 		return failed(UpdateFailureInstall, "Could not install to %s: %v", target, err)
-	}
-	if r.goos != "windows" {
-		if err := r.chmod(target, 0o755); err != nil {
-			return failed(UpdateFailureInstall, "Could not make %s executable: %v", target, err)
-		}
 	}
 	return nil
 }

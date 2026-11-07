@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -204,12 +205,15 @@ func TestInstallCLIInstallsTheReleaseAssetForThisPlatform(t *testing.T) {
 			if got := dirFiles(t, dir); !slices.Equal(got, []string{platform.file}) {
 				t.Fatalf("folder holds %v, want only %s", got, platform.file)
 			}
-			mode, chmodded := c.chmods[installed]
-			if platform.executable && (!chmodded || mode&0o111 == 0) {
-				t.Fatalf("chmod of %s = %v (%v), want it executable", installed, mode, chmodded)
+			info, err := os.Stat(installed)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if !platform.executable && chmodded {
-				t.Fatalf("chmod %s on Windows, want none", installed)
+			if platform.executable && info.Mode()&0o111 == 0 {
+				t.Fatalf("mode of %s = %v, want it executable", installed, info.Mode())
+			}
+			if !platform.executable && len(c.chmods) != 0 {
+				t.Fatalf("chmod %v on Windows, want none", c.chmods)
 			}
 			if saved := c.app.Config.cliPath(); saved.Path != installed || saved.Source != "installed" {
 				t.Fatalf("app config holds %+v, want the installed path", saved)
@@ -326,6 +330,28 @@ func TestInstallCLIWritesNothingWhenVerificationFails(t *testing.T) {
 				t.Fatalf("app config holds %+v, want nothing saved", saved)
 			}
 		})
+	}
+}
+
+func TestInstallCLIInstallsNothingWhenItCantMakeTheBuildExecutable(t *testing.T) {
+	c := newCLIInstall(t, "linux", "amd64")
+	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": cliBinaryNew}))
+	c.app.cliRuntime.chmod = func(string, os.FileMode) error { return errors.New("operation not permitted") }
+	dir := filepath.Join(t.TempDir(), "bin")
+
+	result, err := c.app.InstallCLI(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Outcome != "failed" || result.Failure == nil || result.Failure.Kind != string(UpdateFailureInstall) {
+		t.Fatalf("result = %+v, want an install failure", result)
+	}
+	if got := dirFiles(t, dir); len(got) != 0 {
+		t.Fatalf("folder holds %v, want nothing installed", got)
+	}
+	if saved := c.app.Config.cliPath(); saved.Path != "" {
+		t.Fatalf("app config holds %+v, want nothing saved", saved)
 	}
 }
 
