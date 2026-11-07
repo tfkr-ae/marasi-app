@@ -17,6 +17,7 @@ import { get } from "svelte/store";
 import { createConnectionStore } from "./createConnectionStore.js";
 import { loadedProject, loadProject, projectStore, resyncProject } from "./projectStore.js";
 import { activeConnectionId } from "./activeConnection.js";
+import { trackRecents } from "./recentProjects.js";
 import { projectData } from "./projectData.js";
 
 export const connectionStore = createConnectionStore({
@@ -47,15 +48,14 @@ export const connectionStore = createConnectionStore({
 
 // Reconnects compare the service's project with the one loaded last, which
 // a switch changes. Each project loaded joins the connection's recents.
-let lastRecent = null;
-loadedProject.subscribe((project) => {
-  if (!project) return;
-  connectionStore.dispatch({ type: "PROJECT_LOADED", path: project.path });
-  const id = get(connectionStore).connection.id;
-  if (lastRecent === `${id}\n${project.path}`) return;
-  lastRecent = `${id}\n${project.path}`;
-  AddRecentProject(id, project.name, project.path).catch((err) => console.error("Saving the recent project failed:", err));
-});
+loadedProject.subscribe(
+  trackRecents({
+    connectionId: () => get(connectionStore).connection.id,
+    addRecent: (id, name, path) =>
+      AddRecentProject(id, name, path).catch((err) => console.error("Saving the recent project failed:", err)),
+    onLoaded: (path) => connectionStore.dispatch({ type: "PROJECT_LOADED", path }),
+  }),
+);
 // The project store reads the active connection's recents.
 connectionStore.subscribe((state) => activeConnectionId.set(state.connection.id));
 // A restart announced before the stream drops means a full load afterwards.
