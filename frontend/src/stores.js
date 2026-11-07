@@ -5,14 +5,12 @@ import {
   GetKeybindings,
   GetExtensionCode,
   GetWaypoints,
-  GetExtensions,
-  GetUserName,
+  OSUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { testCaseStore } from "./stores/testCaseStore";
-import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
 import { webSocketStore } from "./stores/webSocketStore";
-import { armoryStore } from "./stores/armoryStore";
+// Registers the Armory with projectData before the first load.
+import "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
 import { interceptFlag } from "./stores/interceptFlag.js";
@@ -20,7 +18,7 @@ import { readHighlights } from "./stores/highlightsStore";
 // The Ledger's stores register with projectData as they load.
 import "./stores/ledgerStore";
 import "./stores/sitemapStore";
-import { jobsStore } from "./stores/jobsStore";
+import "./stores/jobsStore";
 import { recentTraffic } from "./stores/recentTrafficStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
@@ -36,7 +34,7 @@ export const appState = writable({
   details: "",
 });
 
-// Extensions
+// Extensions (stores/extensionsStore.js keeps them)
 export const extensions = writable([]);
 export const extensions_ui = writable({});
 
@@ -72,11 +70,10 @@ export const checkpointCode = writable("");
 export const checkpointCodeApplied = writable("");
 export { interceptFlag } from "./stores/interceptFlag.js";
 
-// Workshop
+// Workshop (stores/extensionsStore.js loads it)
 export const workshopCode = writable("");
 
 export const logItems = writable([]);
-export const extensionElements = writable({});
 export const prettify = writable(true);
 export const lineWrap = writable(true);
 
@@ -120,7 +117,7 @@ export async function resetProject(name) {
     type: "Assessment Type",
     is_draft: true,
     scope: "Assessment Scope",
-    assessor: await GetUserName(),
+    assessor: await OSUserName(),
     start: new Date(
       new Date().setDate(new Date().getDate() - 14),
     ).toLocaleDateString("en-CA"),
@@ -134,17 +131,9 @@ export async function resetProject(name) {
   checkpointCode.set("");
   checkpointCodeApplied.set("");
   interceptFlag.set(false);
-  workshopCode.set("");
   waypoints.set({});
-  jobsStore.clear();
   recentTraffic.clear();
-  extensions.set([]);
-  extensions_ui.set({});
-  testCaseStore.clear();
-  findingStore.clear();
-  logbookStore.clear();
   webSocketStore.clear();
-  armoryStore.clear();
   launchpadStore.clear();
   checkpointStore.clear();
 }
@@ -157,15 +146,6 @@ export async function populateWaypoints() {
     })
     .catch((waypointErr) => {
       console.log(waypointErr);
-    });
-}
-export async function populateWorkshop() {
-  GetExtensionCode("workshop")
-    .then((code) => {
-      workshopCode.set(code);
-    })
-    .catch((error) => {
-      console.log(error);
     });
 }
 export async function populateCheckpoint() {
@@ -195,11 +175,5 @@ export async function populateLogs() {
   GetLogs().then((items) => {
     console.log(items);
     logItems.set(items ? items : []);
-  });
-}
-export async function populateExtensions() {
-  GetExtensions().then((exts) => {
-    console.log(exts);
-    extensions.set(exts ? exts : []);
   });
 }

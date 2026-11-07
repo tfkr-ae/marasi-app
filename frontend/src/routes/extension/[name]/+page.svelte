@@ -12,7 +12,7 @@
         extensionMenuActionId,
         extensionPageActionId,
     } from "../../../lib/keybindings/catalog.js";
-    import { emit } from "../../../lib/runtime.js";
+    import { extensionsStore } from "../../../stores/extensionsStore.js";
     let accOpened = false;
 
     $: extensionName = $page.params.name;
@@ -23,11 +23,9 @@
     $: panelSchema = $extensions_ui[extensionName]?.panel;
 
     function callExtension(action) {
-        emit("extension_call_function", {
-            extensionID: extensionData.ID,
-            function: action,
-            state: $extensions_ui[extensionData.Name],
-        });
+        extensionsStore
+            .call(extensionName, action)
+            .catch((err) => console.error(`Calling ${action} on ${extensionName} failed:`, err));
     }
 
     // Declared items keep their catalog identity (extension + action), so
