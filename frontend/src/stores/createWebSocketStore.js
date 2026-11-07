@@ -1,7 +1,7 @@
 // The WebSocket modal's state: messages, connections, progress and each
 // connection's Checkpoint queue, by upgrade request id. Every backend call
-// goes through the injected `api` (see webSocketStore.js for the Wails
-// one), so this module loads under node --test.
+// goes through the injected `api` (see webSocketApi.js for the service's),
+// so this module loads under node --test.
 import { get, writable } from "svelte/store";
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
 import {
@@ -140,6 +140,78 @@ export function createWebSocketStore(api) {
 		}
 	}
 
+	async function populateInterceptFlag() {
+		try {
+			const enabled = await api.GetWSInterceptFlag();
+			setInterceptFlag(enabled);
+		} catch (err) {
+			console.error("Loading WebSocket intercept state", err);
+		}
+	}
+
+	function setInterceptFlag(enabled) {
+		update((state) => ({ ...state, wsInterceptEnabled: enabled }));
+	}
+
+	async function populate(requestId) {
+		if (!requestId) return;
+		const [history, connection] = await Promise.all([
+			api.GetWebSocketMessages(requestId),
+			api.GetWebSocketConnection(requestId),
+		]);
+
+		update((state) => {
+			const existing = state.messagesByRequestId[requestId] || [];
+			const byId = new Map();
+			for (const m of history || []) byId.set(m.ID, m);
+			for (const m of existing) byId.set(m.ID, m);
+
+			return {
+				...state,
+				messagesByRequestId: {
+					...state.messagesByRequestId,
+					[requestId]: Array.from(byId.values()),
+				},
+				connectionsByRequestId: connection
+					? {
+							...state.connectionsByRequestId,
+							[requestId]: connection,
+						}
+					: state.connectionsByRequestId,
+			};
+		});
+	}
+
+	function upsertConnection(conn) {
+		if (!conn?.RequestID) return;
+		update((state) => ({
+			...state,
+			connectionsByRequestId: {
+				...state.connectionsByRequestId,
+				[conn.RequestID]: conn,
+			},
+			progressByRequestId:
+				conn.State === "open"
+					? state.progressByRequestId
+					: clearProgress(
+							state.progressByRequestId,
+							conn.RequestID,
+						),
+		}));
+	}
+
+	// Replaces the connection's Checkpoint queue with its held head.
+	async function rereadInterception(requestId) {
+		const head = await api.GetWSIntercepted(requestId);
+		update((state) => ({
+			...state,
+			interceptionsByRequestId: {
+				...state.interceptionsByRequestId,
+				[requestId]: head ? [head] : [],
+			},
+		}));
+	}
+
 	return {
 		subscribe,
 
@@ -159,8 +231,8 @@ export function createWebSocketStore(api) {
 		populateInterception,
 
 		/**
-		 * The checkpoint-settled event: a held message was forwarded or
-		 * dropped, here or on the Checkpoint page.
+		 * checkpoint.forwarded or checkpoint.dropped: a held message left,
+		 * from here, the Checkpoint page or another client.
 		 */
 		onSettled: ({ ID, Type, RequestID } = {}) =>
 			Type === "websocket" && RequestID
@@ -177,17 +249,10 @@ export function createWebSocketStore(api) {
 			}));
 		},
 
-		populateInterceptFlag: async () => {
-			try {
-				const enabled = await api.GetWSInterceptFlag();
-				update((state) => ({
-					...state,
-					wsInterceptEnabled: enabled,
-				}));
-			} catch (err) {
-				console.error("Loading WebSocket intercept state", err);
-			}
-		},
+		populateInterceptFlag,
+
+		/** checkpoint.updated: the WebSocket intercept flag, from any client. */
+		setInterceptFlag,
 
 		toggleIntercept: async () => {
 			try {
@@ -230,23 +295,7 @@ export function createWebSocketStore(api) {
 			});
 		},
 
-		upsertConnection: (conn) => {
-			if (!conn?.RequestID) return;
-			update((state) => ({
-				...state,
-				connectionsByRequestId: {
-					...state.connectionsByRequestId,
-					[conn.RequestID]: conn,
-				},
-				progressByRequestId:
-					conn.State === "open"
-						? state.progressByRequestId
-						: clearProgress(
-								state.progressByRequestId,
-								conn.RequestID,
-							),
-			}));
-		},
+		upsertConnection,
 
 		upsertProgress: (record) => {
 			if (!record?.RequestID) return;
@@ -265,33 +314,47 @@ export function createWebSocketStore(api) {
 			}));
 		},
 
-		populate: async (requestId) => {
-			if (!requestId) return;
-			const [history, connection] = await Promise.all([
-				api.GetWebSocketMessages(requestId),
-				api.GetWebSocketConnection(requestId),
+		populate,
+
+		/**
+		 * Injects a message on the upgrade's connection. Rejects with the
+		 * service's refusal (websocket_not_open on a closed one).
+		 */
+		inject: (requestId, direction, opcode, payload, neverCompress) =>
+			api.InjectWebSocketMessage(
+				requestId,
+				direction,
+				opcode,
+				payload,
+				neverCompress,
+			),
+
+		/** Closes the upgrade's connection and keeps it as it closed. */
+		close: async (requestId, code, reason) => {
+			const conn = await api.CloseWebSocket(requestId, code, reason);
+			if (conn) upsertConnection(conn);
+		},
+
+		/**
+		 * After a reconnect: the flag, and each connection the modal has
+		 * shown, read again; messages already shown stay.
+		 */
+		resync: async () => {
+			const state = get(store);
+			const requestIds = new Set([
+				...Object.keys(state.messagesByRequestId),
+				...Object.keys(state.connectionsByRequestId),
+				...Object.keys(state.interceptionsByRequestId),
 			]);
-
-			update((state) => {
-				const existing = state.messagesByRequestId[requestId] || [];
-				const byId = new Map();
-				for (const m of history || []) byId.set(m.ID, m);
-				for (const m of existing) byId.set(m.ID, m);
-
-				return {
-					...state,
-					messagesByRequestId: {
-						...state.messagesByRequestId,
-						[requestId]: Array.from(byId.values()),
-					},
-					connectionsByRequestId: connection
-						? {
-								...state.connectionsByRequestId,
-								[requestId]: connection,
-							}
-						: state.connectionsByRequestId,
-				};
-			});
+			await Promise.all([
+				populateInterceptFlag(),
+				...[...requestIds].map((requestId) =>
+					Promise.all([
+						populate(requestId),
+						rereadInterception(requestId),
+					]),
+				),
+			]);
 		},
 	};
 }

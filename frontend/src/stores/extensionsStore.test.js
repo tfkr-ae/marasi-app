@@ -242,6 +242,11 @@ test("Workshop runs its Lua through the service, which stores it when it runs", 
   ]);
 });
 
+test("code reads an extension's stored Lua by name", async () => {
+  const { store } = workshopSetup(serviceRoutes());
+  assert.equal(await store.code("checkpoint"), "-- rules");
+});
+
 test("a Workshop run that fails rejects with the Lua error", async () => {
   const routes = {
     ...serviceRoutes(),

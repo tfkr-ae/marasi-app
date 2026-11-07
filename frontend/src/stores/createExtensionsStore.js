@@ -176,6 +176,12 @@ export function createExtensionsStore(
     return api.saveSettings(ext.ID, settings);
   }
 
+  /** The extension's stored Lua (Checkpoint's rules read theirs). */
+  async function code(name) {
+    const ext = await byName(name);
+    return (await api.detail(ext.ID)).LuaContent;
+  }
+
   /**
    * Runs `code` as the extension's Lua (Workshop's Run and Update,
    * Compass's Update); the
@@ -226,6 +232,7 @@ export function createExtensionsStore(
     call,
     sync,
     edit,
+    code,
     run,
     setEnabled,
     saveSettings,

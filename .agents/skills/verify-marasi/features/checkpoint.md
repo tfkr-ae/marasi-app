@@ -131,7 +131,7 @@ Prove each path on one connection: turn `Intercept On`, send a message, then for
 
 #### The page and the modal stay in step
 
-A forward or drop on either side emits `checkpoint-settled`, so the other side drops the message too. A real connection needs no npm package: from a scratch directory outside the repo, run a Node upstream that answers the upgrade with `101` and logs each text frame it receives, and a Node client that opens a raw TCP socket to `127.0.0.1:<proxy port>`, sends `GET http://127.0.0.1:<port>/socket HTTP/1.1` with the upgrade headers, and writes a masked text frame for each line appended to a control file. Run both in the background and stop them yourself before `cleanup.sh`.
+A forward or drop on either side, or by another client of the service, streams `checkpoint.forwarded` or `checkpoint.dropped`, so both sides drop the message. To prove the page follows another client, settle a held item with `curl` against the control API (`POST /checkpoint/{id}/drop`, see SKILL.md) and wait for `Nothing intercepted`; `POST /checkpoint/intercept` with `{"intercept":true}` shows `Intercept all is on` the same way. A real connection needs no npm package: from a scratch directory outside the repo, run a Node upstream that answers the upgrade with `101` and logs each text frame it receives, and a Node client that opens a raw TCP socket to `127.0.0.1:<proxy port>`, sends `GET http://127.0.0.1:<port>/socket HTTP/1.1` with the upgrade headers, and writes a masked text frame for each line appended to a control file. Run both in the background and stop them yourself before `cleanup.sh`.
 
 The upgrade's `101` row has no content type and reads as `application/octet-stream`, which the default Types filter hides (`1 hidden`). Show it before opening the row: `{"click":"#ledgerTypesButton"}`, `{"click":".ledger-types-row[data-type=\"application/octet-stream\"] input"}`, then `{"click":".ledger-status"}`.
 
@@ -159,7 +159,7 @@ Then on the Checkpoint page, send another and forward it with `{"waitSelector":"
 
 - Broad rules can hold unrelated traffic. Use a unique verification host or path.
 - `Intercept all` holds every HTTP request and response regardless of a narrow Lua rule, but only while the checkpoint extension is enabled.
-- An edit that doesn't parse shows under the intercepted pane and as `!` in the tree; Forward is disabled until it parses. `Forward n` skips such items (`Forwarded 1 · 1 skipped`). An item whose forward or drop fails on the Go side stays held and counts as `· 1 failed` in a warning toast.
-- Wait for an item's own text (`item 1 of 2`, its path) before acting: items arrive through the `intercepted` event, after the sender starts.
+- An edit that doesn't parse shows under the intercepted pane and as `!` in the tree; Forward is disabled until it parses. `Forward n` skips such items (`Forwarded 1 · 1 skipped`). An item whose forward or drop the service refuses stays held and counts as `· 1 failed` in a warning toast.
+- Wait for an item's own text (`item 1 of 2`, its path) before acting: items arrive through the service's `checkpoint.held` event, after the sender starts.
 - A request left intercepted keeps its client waiting during cleanup.
 - WebSocket interception has its own `Intercept On`/`Intercept Off` toggle, independent of `Intercept all`; both need the checkpoint extension enabled. The toggle is process-global and holds every message on every connection; the modal's queues are per connection. With it off, `interceptWebSocketMessage` in the Lua rules decides.

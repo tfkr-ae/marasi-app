@@ -3,17 +3,16 @@ import {
   GetLogs,
   GetMarasiConfig,
   GetKeybindings,
-  GetExtensionCode,
   OSUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { logbookStore } from "./stores/logbookStore";
-import { webSocketStore } from "./stores/webSocketStore";
+// Each registers with projectData as it loads.
+import "./stores/logbookStore";
+import "./stores/webSocketStore";
 // Registers the Armory with projectData before the first load.
 import "./stores/armoryStore";
 // Registers the Launchpad with projectData before the first load.
 import "./stores/launchpadStore";
-import { checkpointStore } from "./stores/checkpointStore";
-import { interceptFlag } from "./stores/interceptFlag.js";
+import "./stores/checkpointStore";
 import { readHighlights } from "./stores/highlightsStore";
 // The Ledger's stores register with projectData as they load.
 import "./stores/ledgerStore";
@@ -65,9 +64,8 @@ export const testerInput = writable("");
 export { waypoints } from "./stores/waypointStore.js";
 
 // Checkpont
-export const checkpointCode = writable("");
-// The rules Checkpoint runs: what the project loaded, then each Update rules.
-export const checkpointCodeApplied = writable("");
+// The rules in the editor, and the rules Checkpoint runs.
+export { checkpointCode, checkpointCodeApplied } from "./stores/checkpointStore";
 export { interceptFlag } from "./stores/interceptFlag.js";
 
 // Workshop (stores/extensionsStore.js loads it)
@@ -128,28 +126,9 @@ export async function resetProject(name) {
   });
   compassCode.set("");
   testerInput.set("");
-  checkpointCode.set("");
-  checkpointCodeApplied.set("");
-  interceptFlag.set(false);
   recentTraffic.clear();
-  webSocketStore.clear();
-  checkpointStore.clear();
 }
 
-export async function populateCheckpoint() {
-  GetExtensionCode("checkpoint")
-    .then((code) => {
-      checkpointCode.set(code);
-      checkpointCodeApplied.set(code);
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-  // The held items and the Intercept all flag.
-  checkpointStore
-    .populate()
-    .catch((err) => console.error("Failed to read Checkpoint items:", err));
-}
 export async function populateLogs() {
   GetLogs().then((items) => {
     console.log(items);

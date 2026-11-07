@@ -32,7 +32,6 @@
 	import WebSocketInject from "./WebSocketInject.svelte";
 	import WebSocketMessagesTable from "./WebSocketMessagesTable.svelte";
 	import { webSocketStore } from "../../stores/webSocketStore";
-	import { CloseWebSocket } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { upgradeFromRequest, upgradePresentation } from "../websocket/presentation.js";
 	import { progressChip } from "../websocket/progress.js";
 
@@ -183,7 +182,7 @@
 		if (!requestId || upgrade.state !== "open" || closing) return;
 		closing = true;
 		try {
-			await CloseWebSocket(requestId, 1000, "");
+			await webSocketStore.close(requestId, 1000, "");
 			toastStore.trigger({
 				message: "WebSocket connection closed",
 				background: "variant-filled-success",

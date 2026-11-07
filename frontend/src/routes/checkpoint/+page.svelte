@@ -7,10 +7,9 @@
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
-	import { RunExtension } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
-	import { checkpointItemContext as itemContext, checkpointStore } from "../../stores/checkpointStore";
+	import { checkpointItemContext as itemContext, checkpointRules, checkpointStore } from "../../stores/checkpointStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { checkpointCode, checkpointCodeApplied, interceptFlag } from "../../stores";
 	import { primaryVariant, UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
@@ -130,8 +129,7 @@
 	async function updateRules() {
 		const code = $checkpointCode;
 		try {
-			await RunExtension("checkpoint", code);
-			checkpointCodeApplied.set(code);
+			await checkpointRules.apply(code);
 			toast("Rules updated", "variant-filled-success");
 		} catch (err) {
 			failed("Update rules", err);

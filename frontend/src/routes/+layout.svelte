@@ -56,7 +56,6 @@
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { webSocketStore } from "../stores/webSocketStore";
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
@@ -272,16 +271,6 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			function readCheckpointItems() {
-				checkpointStore
-					.onIntercepted()
-					.catch((err) =>
-						console.error(
-							"Reading Checkpoint items failed:",
-							err,
-						),
-					);
-			}
 			on("request", (newRequest) => {
 				recentTraffic.onRequest(newRequest);
 			});
@@ -300,30 +289,8 @@
 					});
 				}
 			});
-			on("ws-message", (msg) =>
-				webSocketStore.upsertMessage(msg),
-			);
-			on("ws-intercepted", (msg) => {
-				webSocketStore.upsertInterception(msg);
-				readCheckpointItems();
-			});
-			on("ws-open", (conn) => {
-				webSocketStore.upsertConnection(conn);
-			});
-			on("ws-close", (conn) => {
-				webSocketStore.upsertConnection(conn);
-				webSocketStore.clearInterceptions(
-					conn.RequestID,
-				);
-			});
-			on("ws-progress", (progress) =>
-				webSocketStore.upsertProgress(progress),
-			);
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
-			on("checkpoint-abandoned", (item) =>
-				checkpointStore.onAbandoned(item),
-			);
 			stopAbandonToasts = checkpointStore.onAbandon(
 				({ item, editLost }) => {
 					const context =
@@ -340,35 +307,12 @@
 					});
 				},
 			);
-			// A held item was forwarded or dropped, on the Checkpoint page
-			// or in the WebSocket modal; both drop it.
-			on("checkpoint-settled", (item) => {
-				readCheckpointItems();
-				webSocketStore
-					.onSettled(item)
-					.catch((err) =>
-						console.error(
-							"Reading WebSocket Checkpoint failed:",
-							err,
-						),
-					);
-			});
-			// The Checkpoint rail badge shows the count; no toast.
-			on("intercepted", () => readCheckpointItems());
 		});
 		return () => {
 			stopReportingDrafts();
 			removeMenuShortcuts();
 			off("request");
 			off("response");
-			off("ws-message");
-			off("ws-intercepted");
-			off("ws-open");
-			off("ws-close");
-			off("ws-progress");
-			off("intercepted");
-			off("checkpoint-abandoned");
-			off("checkpoint-settled");
 			stopAbandonToasts?.();
 			off("log");
 			off("update-available");
