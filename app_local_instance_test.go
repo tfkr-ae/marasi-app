@@ -429,3 +429,110 @@ func TestConnectLocalDoesNotRetryAStartThatFailedForAnotherReason(t *testing.T) 
 	}
 }
 
+// runningOld is the status of an instance an old Marasi build runs, which
+// has no pairing route.
+const runningOld = `{"status":"running","version":"v2-backlog-3a55b06 (dev)","instance":"default","project":"/p/engagement.marasi","proxy_listener":"127.0.0.1:8080","control_listener":"127.0.0.1:51391"}`
+
+func TestConnectLocalSaysARunningInstanceWithoutPairingIsOutdated(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runningOld).
+		answer("service control pair", 1, `{"error":"reading pairing: 404 Not Found"}`)
+	app := localApp(t, cli)
+
+	_, err := app.ConnectLocal()
+
+	if err == nil || !strings.Contains(err.Error(), "instance_outdated") {
+		t.Fatalf("err = %v, want the instance_outdated code", err)
+	}
+	if !strings.Contains(err.Error(), "Marasi v2-backlog-3a55b06 (dev) is running, older than this app needs") {
+		t.Fatalf("err = %v, want it to name the running version", err)
+	}
+}
+
+func TestConnectLocalReportsOtherPairingFailuresAsInstanceFailed(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runningWithCtl).
+		answer("service control pair", 1, `{"error":"connecting to instance socket: connection refused"}`)
+	app := localApp(t, cli)
+
+	_, err := app.ConnectLocal()
+	if err == nil || !strings.Contains(err.Error(), "instance_failed") || strings.Contains(err.Error(), "instance_outdated") {
+		t.Fatalf("err = %v, want instance_failed", err)
+	}
+}
+
+func TestRestartLocalInstanceStopsTheRunningOneAndStartsItsProjectWithTheAppsCLI(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runningOld).
+		answer("service stop", 0, stopped).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	app := newTestApp(t)
+	app.runCLI = cli.run
+	app.findCLI = func() (string, error) { return "/bin/marasi", nil }
+	app.newPassword = func() (string, error) { return "generated", nil }
+
+	if err := app.RestartLocalInstance(); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"service status", "service stop", "service start"}; !slices.Equal(cli.subcommands(), want) {
+		t.Fatalf("CLI calls = %v, want %v", cli.subcommands(), want)
+	}
+	start := cli.lastCall("service start")
+	if start.path != "/bin/marasi" {
+		t.Fatalf("started with %q, want the app's CLI", start.path)
+	}
+	if project := flagValue(start.args, "--project"); project != "/p/engagement.marasi" {
+		t.Fatalf("started project %q, want the old instance's", project)
+	}
+	if port := flagValue(start.args, "--port"); port != "8080" {
+		t.Fatalf("started on port %q, want the default", port)
+	}
+
+	connection, err := app.ConnectLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !connection.StartedByApp {
+		t.Fatal("the restarted instance doesn't read as the app's")
+	}
+	app.ServiceShutdown()
+	if got := cli.subcommands()[len(cli.subcommands())-1]; got != "service stop" {
+		t.Fatalf("quitting ran %q, want the restarted instance stopped", got)
+	}
+}
+
+func TestRestartLocalInstanceStartsNothingWhenStoppingFails(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runningOld).
+		answer("service stop", 1, `{"error":"stopping instance: 404 Not Found"}`)
+	app := localApp(t, cli)
+
+	err := app.RestartLocalInstance()
+
+	if err == nil || !strings.Contains(err.Error(), "404 Not Found") {
+		t.Fatalf("err = %v, want the stop's error", err)
+	}
+	if len(cli.startCalls()) != 0 {
+		t.Fatalf("started an instance while the old one runs: %v", cli.subcommands())
+	}
+}
+
+func TestRestartLocalInstanceStartsOneThatIsNoLongerRunning(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service start", 0, started)
+	app := localApp(t, cli)
+
+	if err := app.RestartLocalInstance(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"service status", "service start"}; !slices.Equal(cli.subcommands(), want) {
+		t.Fatalf("CLI calls = %v, want %v", cli.subcommands(), want)
+	}
+	if project := flagValue(cli.lastCall("service start").args, "--project"); project != "" {
+		t.Fatalf("started project %q, want the default", project)
+	}
+}
