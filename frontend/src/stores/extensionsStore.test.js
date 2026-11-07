@@ -279,3 +279,20 @@ test("clear forgets the last project's extensions", async () => {
   assert.deepEqual(get(list), []);
   assert.deepEqual(get(ui), {});
 });
+
+test("Compass's editor opens on its stored rules, keeps a draft over a resync and clears with the project", async () => {
+  const COMPASS = "0190-compass";
+  const routes = serviceRoutes();
+  routes["GET /extension"].items.push(summary(COMPASS, "compass"));
+  routes[`GET /extension/${COMPASS}`] = { ...summary(COMPASS, "compass"), lua_content: "-- scope rules", settings: {} };
+  routes[`GET /extension/${COMPASS}/ui`] = { id: COMPASS, name: "compass", renders: {}, state: {} };
+  const compass = writable("");
+  const store = createExtensionsStore(createExtensionsApi(fakeClient(routes)), { editors: { compass } });
+  await store.populate();
+  assert.equal(get(compass), "-- scope rules");
+  compass.set("-- my rules");
+  await store.resync();
+  assert.equal(get(compass), "-- my rules");
+  store.clear();
+  assert.equal(get(compass), "");
+});

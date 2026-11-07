@@ -4,7 +4,7 @@
 // stream's extension.* events to the store.
 import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
-import { extensions, extensions_ui, workshopCode } from "../stores.js";
+import { compassCode, extensions, extensions_ui, workshopCode } from "../stores.js";
 import { createExtensionsApi } from "./extensionsApi.js";
 import { createExtensionsStore } from "./createExtensionsStore.js";
 export { WORKSHOP } from "./createExtensionsStore.js";
@@ -24,6 +24,7 @@ export const extensionsStore = createExtensionsStore(createExtensionsApi(service
   list: extensions,
   ui: extensions_ui,
   workshop: workshopCode,
+  editors: { compass: compassCode },
   toast: (schema) => toast(schema),
 });
 

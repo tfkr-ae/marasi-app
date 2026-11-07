@@ -151,15 +151,6 @@ export async function populateCheckpoint() {
     .populate()
     .catch((err) => console.error("Failed to read Checkpoint items:", err));
 }
-export async function populateScope() {
-  GetExtensionCode("compass")
-    .then((code) => {
-      compassCode.set(code);
-    })
-    .catch((error) => {
-      console.log(error);
-    });
-}
 export async function populateLogs() {
   GetLogs().then((items) => {
     console.log(items);
