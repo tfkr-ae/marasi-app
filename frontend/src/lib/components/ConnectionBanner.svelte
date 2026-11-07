@@ -20,7 +20,7 @@
 	const toastStore = getToastStore();
 	onDestroy(connectionStore.subscribe(createConnectionToasts(toastStore)));
 	// The connected service's own update: a short toast for found, installed
-	// and failed (Settings → Marasi CLI shows the rest).
+	// and failed (Settings → Updates shows the rest).
 	onMount(() => {
 		const stops = SERVICE_UPDATE_EVENTS.map((event) =>
 			service.on(event, (data) => {

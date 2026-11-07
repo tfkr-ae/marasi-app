@@ -1,5 +1,5 @@
 // How the Marasi CLI setup (CLISetup.svelte, in the Connections modal) and
-// Settings → Marasi CLI (CLISettings.svelte) read Go's CLI results
+// Settings → Updates (CLISettings.svelte) read Go's CLI results
 // (cli_locate.go, cli_install.go).
 import { codeCause, codeIDs } from "../errorCodes.js";
 
