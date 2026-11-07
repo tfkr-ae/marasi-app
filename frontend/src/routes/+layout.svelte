@@ -4,6 +4,7 @@
 	import ConnectionBanner from "../lib/components/ConnectionBanner.svelte";
 	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
+	import { filePickerShown } from "../lib/connection/status.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -872,6 +873,7 @@
 	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
 		<OpeningScreen
 			state={$opening}
+			browse={filePickerShown($connectionStore.connection)}
 			on:stay={() => projectStore.stay()}
 			on:retry={() => retryOpen(toastStore, modalStore)}
 			on:open={(event) => openProjectFile(event.detail, toastStore, modalStore)}

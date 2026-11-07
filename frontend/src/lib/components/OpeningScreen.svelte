@@ -3,7 +3,7 @@
 	// the way forward when it can't. It renders only what lib/openProgress.js
 	// returns for the open; the layout shows it over the app and handles the
 	// choices: `stay`, `retry`, `open` (detail: the picked project's path)
-	// and `browse`.
+	// and `browse` (the native file picker, local connection only).
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
 	import {
@@ -20,6 +20,8 @@
 
 	/** The open in progress (openProgress.js state). */
 	export let state;
+	/** The native file picker shows (the local connection). */
+	export let browse = true;
 
 	const dispatch = createEventDispatcher();
 	$: screen = openingScreen(state);
@@ -142,12 +144,14 @@
 							</li>
 						{/each}
 					</ul>
-					<button
-						class="flex w-full items-center gap-2 border-t border-surface-200 px-2 py-1.5 text-left text-sm opacity-80 hover:bg-primary-500/10 dark:border-surface-700"
-						on:click={() => dispatch("browse")}
-					>
-						<FolderOpen size={14} /> Browse…
-					</button>
+					{#if browse}
+						<button
+							class="flex w-full items-center gap-2 border-t border-surface-200 px-2 py-1.5 text-left text-sm opacity-80 hover:bg-primary-500/10 dark:border-surface-700"
+							on:click={() => dispatch("browse")}
+						>
+							<FolderOpen size={14} /> Browse…
+						</button>
+					{/if}
 				</div>
 			{:else if screen.load.done < screen.load.total}
 				<div class="mt-3"><ProgressBar {...bar} /></div>

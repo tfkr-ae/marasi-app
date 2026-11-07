@@ -2,7 +2,7 @@
 // Settings → Connection.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { phaseLabel, phaseTone, statusHint, whereText } from "./status.js";
+import { filePickerShown, phaseLabel, phaseTone, statusHint, whereText } from "./status.js";
 
 test("the dot is green when connected, amber on the way, red when it failed", () => {
   assert.equal(phaseTone("connected"), "bg-success-500");
@@ -10,6 +10,7 @@ test("the dot is green when connected, amber on the way, red when it failed", ()
     assert.equal(phaseTone(phase), "bg-warning-500", phase);
   }
   assert.equal(phaseTone("failed"), "bg-error-500");
+  assert.equal(phaseTone("auth-failed"), "bg-error-500");
   assert.equal(phaseTone("idle"), "bg-surface-400");
 });
 
@@ -19,6 +20,7 @@ test("every phase has a label", () => {
   }
   assert.equal(phaseLabel("reconnecting"), "Reconnecting");
   assert.equal(phaseLabel("failed"), "Couldn't connect");
+  assert.equal(phaseLabel("auth-failed"), "Password refused");
 });
 
 test("the local connection is this machine and its instance", () => {
@@ -29,4 +31,13 @@ test("the local connection is this machine and its instance", () => {
 test("Settings' hint names the active connection and its status", () => {
   const state = { phase: "connected", connection: { name: "Local" } };
   assert.equal(statusHint(state), "Local · Connected");
+});
+
+test("a remote is its address", () => {
+  assert.equal(whereText({ kind: "remote", url: "http://10.0.0.5:9000" }, "default"), "10.0.0.5:9000");
+});
+
+test("the native file picker shows only on the local connection", () => {
+  assert.equal(filePickerShown({ kind: "local" }), true);
+  assert.equal(filePickerShown({ kind: "remote", url: "http://10.0.0.5:9000" }), false);
 });

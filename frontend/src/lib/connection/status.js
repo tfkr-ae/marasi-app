@@ -10,6 +10,7 @@ const labels = {
   reconnecting: "Reconnecting",
   "project-changed": "Project changed",
   failed: "Couldn't connect",
+  "auth-failed": "Password refused",
 };
 
 /** The status text for `phase`. */
@@ -33,3 +34,9 @@ export function whereText(connection, instance) {
 
 /** Settings → Connection's hint: the active connection and its status. */
 export const statusHint = (state) => `${state.connection.name} · ${phaseLabel(state.phase)}`;
+
+/**
+ * Whether the native file picker shows: a remote's projects live on its
+ * host, so they open from the service's list or a typed path.
+ */
+export const filePickerShown = (connection) => connection.kind === "local";

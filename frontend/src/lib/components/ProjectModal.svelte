@@ -2,6 +2,8 @@
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
     import { projectStore } from "../../stores/projectStore.js";
+    import { connectionStore } from "../../stores/connectionStore.js";
+    import { filePickerShown } from "../connection/status.js";
     import { OpenFileDialog } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { X } from "lucide-svelte";
 
@@ -200,7 +202,9 @@
                 </button>
             </div>
             
-            <!-- ALTERNATIVE ACTION (BROWSE FILES) -->
+            <!-- ALTERNATIVE ACTION (BROWSE FILES): local only; a remote's
+                 projects open from its list or a typed path. -->
+            {#if filePickerShown($connectionStore.connection)}
              <hr>
             <div class="w-full mt-2">
                 <button 
@@ -211,6 +215,7 @@
                     Browse Files...
                 </button>
             </div>
+            {/if}
             
             <!-- Simple information about project creation behavior -->
             <div class="text-xs opacity-70 mt-2">
