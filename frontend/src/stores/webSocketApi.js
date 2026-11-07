@@ -134,9 +134,11 @@ export function createWebSocketApi(client) {
       }
     },
     GetWSInterceptFlag: async () => (await flags()).websocket_intercept === true,
+    // The flag is turned over on the connection it was read from.
     async ToggleWSIntercept() {
-      const { websocket_intercept: on } = await flags();
-      const list = await client.post("/checkpoint/websocket-intercept", { websocket_intercept: !on });
+      const link = client.bind?.() ?? client;
+      const { websocket_intercept: on } = await link.get("/checkpoint");
+      const list = await link.post("/checkpoint/websocket-intercept", { websocket_intercept: !on });
       return list.websocket_intercept === true;
     },
     // The connection's oldest held message, or null.

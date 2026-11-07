@@ -26,6 +26,8 @@ const path = (id, rest = "") => `/extension/${encodeURIComponent(id)}${rest}`;
 
 export function createExtensionsApi(client) {
   return {
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
     async list() {
       const list = await client.get("/extension");
       return (list.items ?? []).map(toExtension);

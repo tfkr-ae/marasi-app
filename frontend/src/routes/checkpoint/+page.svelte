@@ -18,6 +18,7 @@
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
 	import { keyOf } from "../../lib/checkpoint/itemContext.js";
 	import { bulkTargets, dropTitle, groupByHost, summarize, treeOrder } from "../../lib/checkpoint/items.js";
+	import { isSuperseded } from "../../lib/service/errors.js";
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -67,7 +68,9 @@
 	function toast(message, background = "variant-filled-surface") {
 		toastStore.trigger({ message, background, timeout: 3000 });
 	}
+	// A connection switch stopped it (superseded): nothing to report.
 	function failed(what, err) {
+		if (isSuperseded(err)) return;
 		console.error(`${what} failed:`, err);
 		toast(`${what} failed`, "variant-filled-error");
 	}

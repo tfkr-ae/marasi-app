@@ -349,7 +349,12 @@
 	// through a toast.
 
 	async function sendToArmory(pairs) {
-		const result = await ledgerStore.sendToArmory(idsOf(pairs));
+		let result;
+		try {
+			result = await ledgerStore.sendToArmory(idsOf(pairs));
+		} catch (error) {
+			return toastError(`Failed to send ${describe(pairs)} to Armory`, error);
+		}
 		if (result.done === 0) return toastError(`Failed to send ${describe(pairs)} to Armory`);
 		const first = result.results[0];
 		toastJump(`${describe(pairs)} sent to Armory${failures(result)}`, "Jump to Armory", `/armory?id=${first.ID}`);

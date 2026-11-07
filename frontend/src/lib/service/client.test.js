@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServiceClient } from "./client.js";
+import { isSuperseded } from "./errors.js";
 import { codeIDs } from "../errorCodes.js";
 import { pendingLaunchIDs } from "../launchPending.js";
 import { isCheckpointGone } from "../checkpointHeld.js";
@@ -419,4 +420,78 @@ test("a call with a timeout that gets no answer gives up, naming the address", a
     assert.equal(err.message, "No answer from 10.255.255.1:8888");
     return true;
   });
+});
+
+// bind(): requests tied to the connection the client points at now. Once
+// use() points it elsewhere, they're superseded: never sent to the next
+// connection, and an answer from the last one is dropped.
+test("a bound request goes to the connection it was bound on", async () => {
+  const { client, http } = setup(() => ({ status: 200, body: { project: "/a.marasi" } }));
+  client.use({ url: "http://a:9000", password: "pa" });
+  const bound = client.bind();
+
+  const answer = await bound.post("/project/open", { path: "/a.marasi" });
+
+  assert.deepEqual(answer, { project: "/a.marasi" });
+  assert.equal(http.requests[0].url, "http://a:9000/project/open");
+  assert.equal(bound.live(), true);
+});
+
+test("a bound request after the client moves to another connection is superseded and never sent", async () => {
+  const { client, http } = setup();
+  client.use({ url: "http://a:9000", password: "pa" });
+  const bound = client.bind();
+  client.use({ url: "http://b:9000", password: "pb" });
+
+  const err = await bound.post("/project/open", { path: "/a.marasi" }).then(
+    () => assert.fail("resolved"),
+    (e) => e,
+  );
+
+  assert.equal(err.code, "superseded");
+  assert.equal(isSuperseded(err), true);
+  assert.equal(bound.live(), false);
+  assert.deepEqual(http.requests, []);
+});
+
+test("any use() supersedes, even pointing at nothing or at the same address", async () => {
+  const { client } = setup();
+  client.use({ url: "http://a:9000", password: "pa" });
+  const first = client.bind();
+  client.use(null);
+  assert.equal(first.live(), false);
+  client.use({ url: "http://a:9000", password: "pa" });
+  const second = client.bind();
+  client.use({ url: "http://a:9000", password: "pa" });
+  assert.equal(second.live(), false);
+});
+
+test("a bound request whose answer lands after the client moved is superseded", async () => {
+  let answer;
+  const held = new Promise((resolve) => (answer = resolve));
+  const fetch = async () => {
+    await held;
+    return { ok: true, status: 200, headers: { get: () => "application/json" }, text: async () => '{"items":[]}' };
+  };
+  const slow = createServiceClient({ fetch, EventSource: class {} });
+  slow.use({ url: "http://a:9000", password: "pa" });
+  const pending = slow.bind().get("/checkpoint");
+  slow.use({ url: "http://b:9000", password: "pb" });
+  answer();
+
+  const err = await pending.then(
+    () => assert.fail("resolved"),
+    (e) => e,
+  );
+  assert.equal(err.code, "superseded");
+});
+
+test("an unbound request follows the client to the next connection", async () => {
+  const { client, http } = setup();
+  client.use({ url: "http://a:9000", password: "pa" });
+  client.use({ url: "http://b:9000", password: "pb" });
+
+  await client.get("/dashboard");
+
+  assert.equal(http.requests[0].url, "http://b:9000/dashboard");
 });

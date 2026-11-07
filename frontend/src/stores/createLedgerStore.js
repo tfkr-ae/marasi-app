@@ -23,6 +23,8 @@
 // current results, counted from the top; it is unknown ("?") while the
 // window's position is.
 import { writable } from "svelte/store";
+import { boundAction } from "../lib/service/boundAction.js";
+import { isSuperseded } from "../lib/service/errors.js";
 import { webSocketMetadataPatch } from "../lib/websocket/metadataPatch.js";
 import { LEDGER_DOCK } from "../lib/dock/dock.js";
 import { toggleQueryTerm } from "../lib/ledgerQueryFields.js";
@@ -1933,7 +1935,7 @@ export function createLedgerStore(api) {
     deleteFromProject,
     findingEvidence,
     /** One Armory template per pair; `results` holds the templates made. */
-    sendToArmory: (ids) => eachPair(ids, (id) => api.sendToArmory(id)),
+    sendToArmory: (ids) => eachPair(ids, (id, action) => action.step(() => api.sendToArmory(id))),
   };
 
   /**
@@ -1957,15 +1959,18 @@ export function createLedgerStore(api) {
     return changed;
   }
 
-  // Runs `fn` on each pair in turn. A failure is logged and counted, and the
-  // rest still run.
+  // Runs `fn(id, action)` on each pair in turn, its calls as steps of one
+  // action (boundAction.js). A failure is logged and counted, and the rest
+  // still run; a connection switch stops them all (superseded).
   async function eachPair(ids, fn) {
+    const action = boundAction(api.bind?.());
     const results = [];
     let failed = 0;
     for (const id of ids) {
       try {
-        results.push(await fn(id));
+        results.push(await fn(id, action));
       } catch (err) {
+        if (isSuperseded(err)) throw err;
         console.error(`Acting on pair ${id} failed:`, err);
         failed += 1;
       }
@@ -2063,16 +2068,19 @@ export function createLedgerStore(api) {
       : count == null
         ? ["Matching requests", "Launchpad for the matching requests"]
         : [requestCount(count), `Launchpad for ${requestCount(count)}`];
-    const launchpadId = await api.createLaunchpad(...name);
+    const action = boundAction(api.bind?.());
+    const launchpadId = await action.step(() => api.createLaunchpad(...name));
     let linked;
     try {
-      linked = await link(selection, "launchpad", launchpadId);
+      linked = await action.step(() => link(selection, "launchpad", launchpadId));
     } catch (err) {
       // Marasi refused the selection (its query waits on a job still
       // building) and linked nothing: the launchpad goes again rather than
       // stay empty.
       if (incompleteJobs(err)) {
-        await api.deleteLaunchpad(launchpadId).catch((cause) => console.error("Removing the empty launchpad failed:", cause));
+        await action
+          .step(() => api.deleteLaunchpad(launchpadId))
+          .catch((cause) => console.error("Removing the empty launchpad failed:", cause));
       }
       throw err;
     }
@@ -2084,9 +2092,9 @@ export function createLedgerStore(api) {
     if (ids.length > LAUNCHPADS_EACH_MAX) {
       throw new Error(`One launchpad each works on up to ${LAUNCHPADS_EACH_MAX} requests`);
     }
-    const { results, failed } = await eachPair(ids, async (id) => {
-      const launchpadId = await api.createLaunchpad(...launchpadName([id]));
-      await api.linkTraffic({ ids: [String(id)] }, { Kind: "launchpad", ID: launchpadId });
+    const { results, failed } = await eachPair(ids, async (id, action) => {
+      const launchpadId = await action.step(() => api.createLaunchpad(...launchpadName([id])));
+      await action.step(() => api.linkTraffic({ ids: [String(id)] }, { Kind: "launchpad", ID: launchpadId }));
       return launchpadId;
     });
     await refresh();

@@ -6,6 +6,8 @@ import { createClientSettings } from "./clientSettingsApi.js";
 export function createHighlightsApi(client, appConfig) {
   const settings = createClientSettings(client);
   return {
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
     getHighlights: () => appConfig.getHighlights(),
     saveHighlights: (list) => appConfig.saveHighlights(list),
     resetHighlights: () => appConfig.resetHighlights(),

@@ -122,9 +122,11 @@ export function reportFilename(template, title) {
 }
 
 export function createLogbookApi(client, { saveFile }) {
+  // The record and its links go to the connection the create went to.
   const draft = (kind, body, requestIds, map) => async () => {
-    const created = map(await client.post(ROUTE[kind], body));
-    for (const id of requestIds ?? []) await client.post(`${ROUTE[kind]}/${created.ID}/traffic`, { id });
+    const link = client.bind?.() ?? client;
+    const created = map(await link.post(ROUTE[kind], body));
+    for (const id of requestIds ?? []) await link.post(`${ROUTE[kind]}/${created.ID}/traffic`, { id });
     return { ...created, Requests: [...(requestIds ?? [])] };
   };
   const upload = (kind) => async (id, file) =>
@@ -144,6 +146,8 @@ export function createLogbookApi(client, { saveFile }) {
   };
 
   return {
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
     listFindings: () => listFull(client, "finding", toFinding),
     listTestCases: () => listFull(client, "testCase", toTestCase),
     getFinding: async (id) => toFinding(await client.get(`/finding/${id}`)),

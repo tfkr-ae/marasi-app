@@ -26,6 +26,7 @@
     import { workshopCode, marasiConfig } from "../../stores";
     import { autocompletion } from "@codemirror/autocomplete";
     import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
+    import { isSuperseded } from "../../lib/service/errors.js";
 
     let accOpened = false;
     const toastStore = getToastStore();
@@ -41,13 +42,15 @@
                     background: "variant-filled-success",
                 }),
             )
-            .catch((error) =>
+            .catch((error) => {
+                // A connection switch stopped it: nothing to report.
+                if (isSuperseded(error)) return;
                 toastStore.trigger({
                     message: luaErrorText(error),
                     background: "variant-filled-error",
                     autohide: false,
-                }),
-            );
+                });
+            });
     }
     const workshopMenu = [
         {

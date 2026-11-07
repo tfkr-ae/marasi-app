@@ -9,6 +9,7 @@
 //   setClientSetting(key, value) / deleteClientSetting(key)
 import { derived, get, writable } from "svelte/store";
 import { DEFAULT_HIGHLIGHTS, effectivePalette } from "../lib/ledger/highlights.js";
+import { boundAction } from "../lib/service/boundAction.js";
 
 /** The project setting that holds highlight `number`'s label. */
 export const projectLabelKey = (number) => `ledger.highlight.${number}`;
@@ -55,13 +56,16 @@ export function createHighlightsStore(api) {
   // Settings writes are optimistic: `store` takes `value` at once, then
   // `write` runs. A failed write puts the old value back and rejects, so
   // the caller can say so. Resolves to what `write` resolves to.
+  // The project's labels stay as a load or clear since left them: they are
+  // the next project's.
   async function optimistic(store, value, write) {
     const before = get(store);
+    const at = generation;
     store.set(value);
     try {
       return await write();
     } catch (error) {
-      store.set(before);
+      if (store !== projectLabels || at === generation) store.set(before);
       throw error;
     }
   }
@@ -101,10 +105,12 @@ export function createHighlightsStore(api) {
       }));
       next[number - 1] = { ...next[number - 1], label: text };
       if (!(number in labels)) return save(next).then(() => {});
-      // The project's own label goes with the app label, so the new one shows.
+      // The project's own label goes with the app label, so the new one
+      // shows: on the connection the rename began on (boundAction.js).
+      const action = boundAction(api.bind?.());
       await optimistic(projectLabels, withoutLabel(number), async () => {
         await save(next);
-        await api.deleteClientSetting(key);
+        await action.step(() => api.deleteClientSetting(key));
       });
       return;
     }

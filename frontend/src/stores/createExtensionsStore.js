@@ -12,6 +12,7 @@
 // its code editor reads (Compass's rules); `workshop` is Workshop's.
 import { get, writable } from "svelte/store";
 import { toExtension, toExtensionLog } from "./extensionsApi.js";
+import { boundAction } from "../lib/service/boundAction.js";
 
 export const WORKSHOP = "workshop";
 
@@ -86,14 +87,22 @@ export function createExtensionsStore(
 
   const stateOf = (name) => get(ui)[name]?.state ?? {};
 
+  // Finds the extension, then writes to it: one action on the connection it
+  // began on (boundAction.js), so a switch on the way stops the write.
+  // Resolves to what `write(ext)` resolves to.
+  async function writeTo(name, write) {
+    const action = boundAction(api.bind?.());
+    const ext = await action.step(() => byName(name));
+    return action.step(() => write(ext));
+  }
+
   /**
    * Calls `fn` on the extension with its UI state, as its buttons and menu
    * items do. Rejects with the service's refusal (lua_error,
    * function_not_found).
    */
   async function call(name, fn) {
-    const ext = await byName(name);
-    await api.call(ext.ID, fn, [stateOf(name)]);
+    await writeTo(name, (ext) => api.call(ext.ID, fn, [stateOf(name)]));
     edited.delete(name);
   }
 
@@ -104,9 +113,8 @@ export function createExtensionsStore(
   async function sync(name) {
     const state = stateOf(name);
     if (Object.keys(state).length === 0) return;
-    const ext = await byName(name);
     try {
-      await api.call(ext.ID, "sync", [state]);
+      await writeTo(name, (ext) => api.call(ext.ID, "sync", [state]));
       edited.delete(name);
     } catch (err) {
       if (err?.code !== "function_not_found") throw err;
@@ -170,8 +178,7 @@ export function createExtensionsStore(
   const onChanged = (summary) => changed(toExtension(summary));
 
   async function setEnabled(name, enabled) {
-    const ext = await byName(name);
-    await changed(await api.setEnabled(ext.ID, enabled));
+    await changed(await writeTo(name, (ext) => api.setEnabled(ext.ID, enabled)));
   }
 
   // Puts an extension's stored settings in its list entry.
@@ -181,9 +188,9 @@ export function createExtensionsStore(
 
   /** Saves the extension's settings; resolves to them as stored. */
   async function saveSettings(name, settings) {
-    const ext = await byName(name);
-    const saved = await api.saveSettings(ext.ID, settings);
-    setSettings(ext.ID, saved);
+    let id;
+    const saved = await writeTo(name, (ext) => api.saveSettings((id = ext.ID), settings));
+    setSettings(id, saved);
     return saved;
   }
 
@@ -203,8 +210,7 @@ export function createExtensionsStore(
    * lua_error.
    */
   async function run(name, code) {
-    const ext = await byName(name);
-    await api.run(ext.ID, code);
+    await writeTo(name, (ext) => api.run(ext.ID, code));
   }
 
   /**

@@ -8,6 +8,8 @@ import { countTraffic } from "./trafficApi.js";
 export function createSavedQueriesApi(client, { appConfig, exclusion }) {
   const settings = createClientSettings(client);
   return {
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
     getAppSavedQueries: () => appConfig.getAppSavedQueries(),
     saveAppSavedQueries: (list) => appConfig.saveAppSavedQueries(list),
     setHiddenBuiltins: (ids) => appConfig.setHiddenBuiltins(ids),
