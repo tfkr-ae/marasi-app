@@ -125,6 +125,16 @@ func (a *App) findConnection(id string) int {
 	return slices.IndexFunc(a.Config.connections, func(c SavedConnection) bool { return c.ID == id })
 }
 
+// remoteConnection is the index of the remote `id` in Config.connections,
+// or an error naming it when there is none. Callers hold Config.mu.
+func (a *App) remoteConnection(id string) (int, error) {
+	i := a.findConnection(id)
+	if i < 0 {
+		return -1, fmt.Errorf("no remote connection %s", id)
+	}
+	return i, nil
+}
+
 func newConnectionID() (string, error) {
 	b := make([]byte, 6)
 	if _, err := rand.Read(b); err != nil {
@@ -176,9 +186,9 @@ func (a *App) SetConnectionAddress(id, address string) (SavedConnection, error) 
 	}
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
-	i := a.findConnection(id)
-	if i < 0 {
-		return SavedConnection{}, fmt.Errorf("no remote connection %s", id)
+	i, err := a.remoteConnection(id)
+	if err != nil {
+		return SavedConnection{}, err
 	}
 	next := slices.Clone(a.Config.connections)
 	next[i].URL = normalised
@@ -196,9 +206,9 @@ func (a *App) SetConnectionPassword(id, password string) error {
 	}
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
-	i := a.findConnection(id)
-	if i < 0 {
-		return fmt.Errorf("no remote connection %s", id)
+	i, err := a.remoteConnection(id)
+	if err != nil {
+		return err
 	}
 	ref, err := a.storePassword(id, password)
 	if err != nil {
@@ -225,9 +235,9 @@ func (a *App) SetConnectionNoPassword(id string, origins []string) error {
 	}
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
-	i := a.findConnection(id)
-	if i < 0 {
-		return fmt.Errorf("no remote connection %s", id)
+	i, err := a.remoteConnection(id)
+	if err != nil {
+		return err
 	}
 	next := slices.Clone(a.Config.connections)
 	old := next[i].PasswordRef
@@ -247,9 +257,9 @@ func (a *App) SetConnectionNoPassword(id string, origins []string) error {
 func (a *App) ConnectionPassword(id string) (string, error) {
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
-	i := a.findConnection(id)
-	if i < 0 {
-		return "", fmt.Errorf("no remote connection %s", id)
+	i, err := a.remoteConnection(id)
+	if err != nil {
+		return "", err
 	}
 	c := a.Config.connections[i]
 	if c.NoPassword {
@@ -270,9 +280,9 @@ func (a *App) RemoveConnection(id string) error {
 	if id == localConnectionID {
 		return errors.New("the local connection can't be removed")
 	}
-	i := a.findConnection(id)
-	if i < 0 {
-		return fmt.Errorf("no remote connection %s", id)
+	i, err := a.remoteConnection(id)
+	if err != nil {
+		return err
 	}
 	if a.Config.activeConnection == id {
 		return errors.New("switch to another connection first")
