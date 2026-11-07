@@ -19,7 +19,9 @@
 //   openEvents({onDrop, onReset, resume})             open GET /events; resume: from
 //                                                    the last event id (no replay when false)
 //   closeEvents()
-//   loadProject(status)                               load the service's project
+//   loadProject(status, {current})                    load the service's project;
+//                                                    current() is false once
+//                                                    another attempt began
 //   readControl() -> GET /service/control-listener/status
 //   updateControl(body) -> POST /service/control-listener/update
 //   forgetPassword(id, origins)                       a remote's password is off (Go)
@@ -37,6 +39,13 @@
 // event (reconnecting, a refused password, switching connections): add its
 // phase or action to `reduce`, its step to `perform`, and a scenario test.
 // The password passes through steps and never lands in the state.
+//
+// Each attempt to reach a connection (start, switch, Retry, an edited
+// address, a saved password) begins a new `session`. The store tags every
+// step, stream handler and wait with the session that made it, and after
+// each await a step whose session has ended does nothing: an older
+// attempt's answer never points the client, touches /events or the stores,
+// or dispatches.
 //
 // A dropped stream reconnects and resumes from the last event id, so the
 // service replays what was missed and nothing resyncs. The status's run ID
@@ -57,6 +66,8 @@ import { apiWarning } from "../lib/service/apiLevel.js";
 export function initialConnection() {
   return {
     phase: "idle",
+    // The attempt the store's effects belong to; begin() starts the next.
+    session: 0,
     // The saved connections (Go's ListConnections), local first, and the
     // active one.
     connections: [localConnection],
@@ -183,6 +194,7 @@ function begin(state) {
     shareHost: "",
   };
   const { connection } = state;
+  reset.session = state.session + 1;
   if (connection.kind === "local") {
     return go(state, { phase: "starting", error: null, ...reset }, [{ type: "connect-local" }]);
   }
@@ -588,50 +600,62 @@ export function createConnectionStore(api, timers = globalThis) {
     // their writes would land in it: hold them until the full load.
     const held = next.state.phase === "project-changed";
     if (held !== (previous.phase === "project-changed")) api.holdWrites?.(held);
-    for (const step of next.steps) perform(step);
+    for (const step of next.steps) perform(step, next.state.session);
     return null;
   }
 
-  async function perform(step) {
+  // Whether `session` is still the store's attempt: a step checks it after
+  // every await, before anything it does next.
+  const current = (session) => get(store).session === session;
+  // Dispatches an outcome of `session`, unless a newer attempt has begun.
+  const settle = (session, action) => {
+    if (current(session)) dispatch(action);
+  };
+
+  async function perform(step, session) {
     switch (step.type) {
       case "connect-local": {
         let local;
         try {
           local = await api.connectLocal();
         } catch (err) {
-          dispatch({ type: "INSTANCE_FAILED", error: message(err) });
+          settle(session, { type: "INSTANCE_FAILED", error: message(err) });
           return;
         }
-        dispatch({ type: "INSTANCE_UP", url: local.url, password: local.password, startedByApp: local.startedByApp });
+        settle(session, { type: "INSTANCE_UP", url: local.url, password: local.password, startedByApp: local.startedByApp });
         return;
       }
       case "connect-remote": {
         let status;
         try {
           const password = await api.connectionPassword(step.id);
+          if (!current(session)) return;
           api.use({ url: step.url, password });
           status = await api.readStatus(statusWait);
         } catch (err) {
-          dispatch(
+          settle(
+            session,
             isAuthRefusal(err)
               ? { type: "AUTH_REJECTED", id: step.id }
               : { type: "CONNECT_FAILED", id: step.id, error: message(err) },
           );
           return;
         }
-        dispatch({ type: "CONNECTED", id: step.id, url: step.url, status });
+        settle(session, { type: "CONNECTED", id: step.id, url: step.url, status });
         return;
       }
       case "save-password":
         try {
           await api.savePassword(step.id, step.password);
         } catch (err) {
-          dispatch({ type: "PASSWORD_SAVE_FAILED", error: message(err) });
+          settle(session, { type: "PASSWORD_SAVE_FAILED", error: message(err) });
           return;
         }
-        dispatch({ type: "PASSWORD_SAVED", id: step.id });
+        settle(session, { type: "PASSWORD_SAVED", id: step.id });
         return;
       case "confirm-leave": {
+        // The user's choice, not an attempt's outcome: a yes switches
+        // whichever attempt is current (SWITCH_CONFIRMED checks the id).
         let agreed = false;
         try {
           agreed = await api.confirmSwitch();
@@ -663,31 +687,35 @@ export function createConnectionStore(api, timers = globalThis) {
         try {
           status = await api.readStatus(statusWait);
         } catch (err) {
-          dispatch(isAuthRefusal(err) ? { type: "AUTH_REJECTED" } : { type: "CONNECT_FAILED", error: message(err) });
+          settle(session, isAuthRefusal(err) ? { type: "AUTH_REJECTED" } : { type: "CONNECT_FAILED", error: message(err) });
           return;
         }
-        dispatch({ type: "CONNECTED", status });
+        settle(session, { type: "CONNECTED", status });
         return;
       }
       case "open-events":
         api.openEvents({
           resume: Boolean(step.resume),
-          onDrop: (drop) => dispatch({ type: "STREAM_DROPPED", status: drop?.status ?? null }),
-          onReset: (reason) => dispatch({ type: "STREAM_RESET", reason }),
+          onDrop: (drop) => settle(session, { type: "STREAM_DROPPED", status: drop?.status ?? null }),
+          onReset: (reason) => settle(session, { type: "STREAM_RESET", reason }),
         });
         return;
-      case "refresh-status":
+      case "refresh-status": {
+        let status;
         try {
-          dispatch({ type: "STATUS_REFRESHED", status: await api.readStatus(statusWait) });
+          status = await api.readStatus(statusWait);
         } catch (err) {
           console.error("Reading the service status failed:", err);
+          return;
         }
+        settle(session, { type: "STATUS_REFRESHED", status });
         return;
+      }
       case "wait":
         timers.clearTimeout(waiting);
         waiting = timers.setTimeout(() => {
           waiting = null;
-          dispatch({ type: "RECONNECT_NOW" });
+          settle(session, { type: "RECONNECT_NOW" });
         }, step.ms);
         return;
       case "cancel-wait":
@@ -706,9 +734,11 @@ export function createConnectionStore(api, timers = globalThis) {
           } else {
             reached = { url: connection.url, password: await api.connectionPassword(connection.id), startedByApp: false };
           }
+          if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });
           status = await api.readStatus(statusWait);
         } catch (err) {
+          if (!current(session)) return;
           if (isAuthRefusal(err)) {
             dispatch({ type: "AUTH_REJECTED", id: connection.id });
             return;
@@ -717,7 +747,7 @@ export function createConnectionStore(api, timers = globalThis) {
           dispatch({ type: "STREAM_DROPPED" });
           return;
         }
-        dispatch({ type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, status });
+        settle(session, { type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, status });
         return;
       }
       case "resync":
@@ -734,6 +764,7 @@ export function createConnectionStore(api, timers = globalThis) {
         } catch (err) {
           console.error("Asking about unsaved work failed:", err);
         }
+        if (!current(session)) return;
         dispatch({ type: agreed ? "LOAD_CONFIRMED" : "LOAD_DECLINED" });
         if (!agreed) api.loadDeclined?.();
         return;
@@ -746,7 +777,7 @@ export function createConnectionStore(api, timers = globalThis) {
           console.error("Reading the service status failed:", err);
           return;
         }
-        dispatch({ type: "SWITCH_CHECKED", status });
+        settle(session, { type: "SWITCH_CHECKED", status });
         return;
       }
       case "reload-project":
@@ -759,41 +790,45 @@ export function createConnectionStore(api, timers = globalThis) {
       case "close-events":
         api.closeEvents();
         return;
-      case "read-control":
+      case "read-control": {
+        let control;
         try {
-          dispatch({ type: "CONTROL_LOADED", control: await api.readControl() });
+          control = await api.readControl();
         } catch (err) {
           console.error("Reading the control listener failed:", err);
+          return;
         }
+        settle(session, { type: "CONTROL_LOADED", control });
         return;
+      }
       case "update-control": {
         let control;
         try {
           control = await api.updateControl(step.body);
         } catch (err) {
-          dispatch({ type: "CONTROL_FAILED", error: message(err) });
+          settle(session, { type: "CONTROL_FAILED", error: message(err) });
           return;
         }
-        dispatch({ type: "CONTROL_UPDATED", control, password: step.body.password });
+        settle(session, { type: "CONTROL_UPDATED", control, password: step.body.password });
         return;
       }
       case "store-password":
         try {
           await api.savePassword(step.id, step.password);
         } catch (err) {
-          dispatch({ type: "KEYCHAIN_DONE", password: step.password, error: message(err) });
+          settle(session, { type: "KEYCHAIN_DONE", password: step.password, error: message(err) });
           return;
         }
-        dispatch({ type: "KEYCHAIN_DONE", password: step.password });
+        settle(session, { type: "KEYCHAIN_DONE", password: step.password });
         return;
       case "forget-password":
         try {
           await api.forgetPassword(step.id, step.origins);
         } catch (err) {
-          dispatch({ type: "KEYCHAIN_DONE", password: "", error: message(err) });
+          settle(session, { type: "KEYCHAIN_DONE", password: "", error: message(err) });
           return;
         }
-        dispatch({ type: "KEYCHAIN_DONE", password: "" });
+        settle(session, { type: "KEYCHAIN_DONE", password: "" });
         return;
       case "rejoin": {
         // After a change the app reaches the service again on purpose: the
@@ -806,19 +841,20 @@ export function createConnectionStore(api, timers = globalThis) {
             connection.kind === "local"
               ? await api.connectLocal()
               : { url: connection.url, password: step.password ?? "", startedByApp: false };
+          if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });
           status = await api.readStatus(statusWait);
           control = await api.readControl().catch(() => null);
         } catch (err) {
-          dispatch({ type: "REJOIN_FAILED", auth: isAuthRefusal(err), error: message(err) });
+          settle(session, { type: "REJOIN_FAILED", auth: isAuthRefusal(err), error: message(err) });
           return;
         }
-        dispatch({ type: "REJOINED", url: reached.url, startedByApp: reached.startedByApp, status, control });
+        settle(session, { type: "REJOINED", url: reached.url, startedByApp: reached.startedByApp, status, control });
         return;
       }
       case "load-project":
         try {
-          await api.loadProject(step.status);
+          await api.loadProject(step.status, { current: () => current(session) });
         } catch (err) {
           console.error("Loading the service's project failed:", err);
         }
