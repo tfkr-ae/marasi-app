@@ -723,9 +723,18 @@
 			<!-- Content area -->
 			<div id="content" class="flex-1 overflow-auto">
 				<div class="sticky top-0 z-20"><ConnectionBanner /></div>
-				{#key $pagesKey}
-					<slot />
-				{/key}
+				<!-- The service has another project open than the pages show:
+				     they stay visible but read-only until the banner's Load it. -->
+				<div
+					class="contents"
+					class:held-pages={$connectionStore.phase === "project-changed"}
+					inert={$connectionStore.phase === "project-changed"}
+					data-testid="pages"
+				>
+					{#key $pagesKey}
+						<slot />
+					{/key}
+				</div>
 				{#if SvelteChef && showChef}
 					<svelte:component
 						this={SvelteChef}
@@ -825,6 +834,9 @@
 />
 
 <style>
+	.held-pages > :global(*) {
+		opacity: 0.6;
+	}
 	:global(.snackbar-wrapper) {
 		z-index: 1000 !important;
 	}

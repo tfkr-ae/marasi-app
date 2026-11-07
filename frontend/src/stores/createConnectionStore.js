@@ -21,6 +21,8 @@
 //   updateControl(body) -> POST /service/control-listener/update
 //   forgetPassword(id, origins)                       a remote's password is off (Go)
 //   appOrigin() -> the app's own Origin
+//   holdWrites(on)                                    refuse project writes while
+//                                                    the service has another project
 //
 // Sharing and password changes (SHARE_LOCAL, STOP_SHARING, ROTATE_PASSWORD,
 // SET_NO_PASSWORD) set `busy`, close /events, change the control listener,
@@ -523,9 +525,14 @@ export function createConnectionStore(api, timers = globalThis) {
   let waiting = null;
 
   function dispatch(action) {
-    const next = reduce(get(store), action);
+    const previous = get(store);
+    const next = reduce(previous, action);
     if (next.refusal) return next.refusal;
     store.set(next.state);
+    // While the service has another project open than the pages show,
+    // their writes would land in it: hold them until the full load.
+    const held = next.state.phase === "project-changed";
+    if (held !== (previous.phase === "project-changed")) api.holdWrites?.(held);
     for (const step of next.steps) perform(step);
     return null;
   }

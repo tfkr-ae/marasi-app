@@ -265,6 +265,7 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
       return confirmSwitch ? confirmSwitch() : true;
     },
     reloadProject: async (loaded) => calls.push(["reloadProject", loaded.project]),
+    holdWrites: (on) => calls.push(["holdWrites", on]),
   };
   const pending = new Map();
   let nextTimer = 0;
@@ -283,6 +284,9 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
   };
   return { api, calls, timers, drop: () => onDrop?.({ status: null }) };
 }
+
+// The calls minus the write holds around a project change.
+const withoutHolds = (calls) => calls.filter((call) => call[0] !== "holdWrites");
 
 // Resolves once the store reaches `phase`.
 function reached(store, phase) {
@@ -427,7 +431,7 @@ test("a project the service opened meanwhile loads in full once the guard agrees
   timers.fire();
   await reached(store, "connected");
   await settle();
-  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/other.marasi"]]);
+  assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/other.marasi"]]);
   assert.equal(get(store).project, "/p/other.marasi");
   assert.equal(calls.includes("resync"), false);
 });
@@ -439,7 +443,7 @@ test("a restart announced before the drop loads the project in full", async () =
   timers.fire();
   await reached(store, "connected");
   await settle();
-  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+  assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
 });
 
 test("a service killed and started again by the reconnect loads the project in full", async () => {
@@ -450,7 +454,7 @@ test("a service killed and started again by the reconnect loads the project in f
   timers.fire();
   await reached(store, "connected");
   await settle();
-  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+  assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
 });
 
 test("a service that didn't answer an attempt loads the project in full once back", async () => {
@@ -468,7 +472,27 @@ test("a service that didn't answer an attempt loads the project in full once bac
   store.retryNow();
   await reached(store, "connected");
   await settle();
-  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+  assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+});
+
+test("declining the guard holds writes and keeps the stream closed until Load is chosen", async () => {
+  let agree = false;
+  const { store, calls, timers, drop } = await connectedStore({
+    readStatus: () => ({ ...status, project: "/p/other.marasi" }),
+    confirmSwitch: () => agree,
+  });
+  drop();
+  timers.fire();
+  await reached(store, "project-changed");
+  await settle();
+  assert.deepEqual(calls.filter((call) => call === "openEvents" || call[0] === "holdWrites"), [["holdWrites", true]]);
+
+  agree = true;
+  store.loadPending();
+  await reached(store, "connected");
+  await settle();
+  const after = calls.slice(calls.findIndex((call) => call === "confirmSwitch" ) + 1);
+  assert.deepEqual(after.slice(-3), [["holdWrites", false], "openEvents", ["reloadProject", "/p/other.marasi"]]);
 });
 
 test("declining the guard keeps the pages until Load is chosen", async () => {

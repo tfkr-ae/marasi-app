@@ -295,3 +295,21 @@ test("a refusal of a bytes call is still a coded error", async () => {
     return true;
   });
 });
+
+test("held writes are refused before they reach the service, and reads and service routes still go", async () => {
+  const { client, http } = setup();
+  client.use({ url: "http://127.0.0.1:51391", password: "" });
+  client.holdWrites(true);
+
+  await assert.rejects(client.post("/finding", { title: "x" }), (err) => codeIDs(err, "project_changed") !== null);
+  await client.get("/traffic");
+  await client.post("/service/control-listener/update", {});
+  assert.deepEqual(
+    http.requests.map((r) => `${r.method} ${new URL(r.url).pathname}`),
+    ["GET /traffic", "POST /service/control-listener/update"],
+  );
+
+  client.holdWrites(false);
+  await client.post("/finding", { title: "x" });
+  assert.equal(http.requests.at(-1).method, "POST");
+});
