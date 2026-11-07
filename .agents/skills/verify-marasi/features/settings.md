@@ -11,12 +11,12 @@
 - App default content-type exclusion (Content Types section): the types the Ledger hides in projects that follow the default, saved to `ledger_content_type_exclusion` in `marasi_appconfig.yaml`
 - Maintenance section: Marasi's background jobs for the open project (search index, sitemap, formatted bodies) with their state, and Rebuild for the search index and the sitemap
 - Build version displayed beside the page heading (`dev` in a local development build)
-- Updates section: the Channel (`Release`/`Nightly`), the update status with `Check`, `Check automatically`, and `Reinstall` of the latest release; the global `Check for updates…` action (`⌘⇧U`, id `global.check-for-updates`) runs the same check
+- Updates section, in two parts under sub-headings. Marasi App (`[data-testid=updates-app]`): the Channel (`Release`/`Nightly`), the update status with `Check`, `Check automatically`, and `Reinstall` of the latest release; the global `Check for updates…` action (`⌘⇧U`, id `global.check-for-updates`) runs the same check. Marasi CLI (`#cli`, `[data-testid=updates-cli]`): the CLI's Location with `Change`, Source, Version with `Check for CLI update` (`[data-testid=cli-check]`), the CLI Channel (`Follow app`/`Release`/`Nightly`), the connected service's own update line, and the CLI setup when no CLI is found. There is no separate Marasi CLI section; `?section=cli` and `?section=updates#cli` open Updates at its CLI part
 - Keybindings modal (`Configure Keybindings`): rebind menu actions per profile and platform, saved to the `keybindings` section of `marasi_appconfig.yaml`
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
+Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates (App and Marasi CLI) and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `global` (Settings has no page menu) in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
@@ -59,6 +59,12 @@ Keybindings: in Keyboard & Editor, `{"text":"Configure Keybindings"}` opens the 
 
 ```json
 {"name":"updates-check","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Updates"},{"waitText":"Check automatically"},{"waitText":"Development builds don't check for updates","within":"section"},{"waitNoSelector":"[role=radiogroup][aria-label=Channel]"},{"waitNoText":"Latest release"},{"text":"Check"},{"waitText":"Development builds don't check for updates","within":".snackbar-wrapper"}]}
+```
+
+- Check for CLI update from Settings → Updates. A `dev` CLI (`MARASI_VERIFY_CLI` built from source) is never replaced: the check toasts `Development build, not updated`. Proven:
+
+```json
+{"name":"cli-check","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Updates"},{"click":"[data-testid=cli-check]"},{"waitText":"Development build, not updated","within":".snackbar-wrapper","timeoutMs":60000}]}
 ```
 
 - While an update is known (a release or nightly build only), the rail's Settings icon carries a dot or download ring and its title becomes `Settings · <status>` (for example `Settings · Update available: <version>`), so `drive.sh settings`, which clicks `[title="Settings"]`, cannot find it; it also links to `/settings?section=updates`.
