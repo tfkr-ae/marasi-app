@@ -65,7 +65,7 @@
 		<button type="button" class={primary} disabled={busy || !payload.trim()} on:click={addPairing}>Add</button>
 	</div>
 
-	<p class="mt-5 text-xs opacity-70">Or by hand</p>
+	<p class="mt-5 text-xs opacity-70">Manual</p>
 	<div class="mt-1 grid grid-cols-[6rem_1fr] items-center gap-x-3 gap-y-2 text-xs">
 		<span>Name</span><input class="input h-8 py-1 text-xs" placeholder="Lab box" data-testid="add-name" bind:value={name} />
 		<span>Address</span><input
