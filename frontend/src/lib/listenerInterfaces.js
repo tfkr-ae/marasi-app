@@ -12,3 +12,12 @@ export async function listenerAddresses(client) {
 export function startingInterface(list, address) {
   return Math.max(0, list.indexOf(address));
 }
+
+/**
+ * Where the listener modal starts: the running listener, or the app's
+ * default listener (default_address, default_port) when it is off.
+ */
+export function listenerStart(listener, config) {
+  if (listener?.status) return { address: listener.address, port: listener.port };
+  return { address: config?.DefaultAddress || "127.0.0.1", port: config?.DefaultPort || "8080" };
+}

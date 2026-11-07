@@ -14,6 +14,7 @@
 // A part that fails to read stays null (or as it was) and the rest load.
 import { get, writable } from "svelte/store";
 import { toListener, toLog } from "./homeApi.js";
+import { codeIDs } from "../lib/errorCodes.js";
 
 const empty = () => ({
   dashboard: null,
@@ -75,11 +76,21 @@ export function createHomeStore(api) {
       store.update((s) => (s.logs.some((l) => l.ID === log.ID) ? s : { ...s, logs: [...s.logs, log] }));
     },
     /**
-     * Starts the proxy listener on `address:port`, or moves it there. A
-     * refusal rejects and leaves the listener as it was.
+     * Starts the proxy listener on `address:port`, or moves it there, and
+     * resolves to the listener the service reports. With `fallback` (the
+     * port is the app's default), a start refused because the port is
+     * taken starts on a free port instead, as the app starts its instance.
+     * A refusal rejects and leaves the listener as it was.
      */
-    async setListener(address, port) {
-      const next = await api.setListener(address, port, get(store).listener.status);
+    async setListener(address, port, { fallback = false } = {}) {
+      const active = get(store).listener.status;
+      let next;
+      try {
+        next = await api.setListener(address, port, active);
+      } catch (err) {
+        if (!fallback || active || codeIDs(err, "listener_unavailable") === null) throw err;
+        next = await api.setListener(address, 0, false);
+      }
       store.update((s) => ({ ...s, listener: next }));
       return next;
     },
