@@ -1,6 +1,6 @@
 // The Ledger store: the rows the table shows, the query, the sort, the
 // content-type exclusion and new matches. Every backend call goes through
-// the injected `api` (see ledgerStore.js for the Wails one), so this module
+// the injected `api` (ledgerApi.js maps the service to it), so this module
 // loads under node --test.
 //
 // The table shows one set of results: the live view (an empty query) or a
@@ -23,6 +23,8 @@
 // current results, counted from the top; it is unknown ("?") while the
 // window's position is.
 import { writable } from "svelte/store";
+import { boundAction } from "../lib/service/boundAction.js";
+import { isSuperseded } from "../lib/service/errors.js";
 import { webSocketMetadataPatch } from "../lib/websocket/metadataPatch.js";
 import { LEDGER_DOCK } from "../lib/dock/dock.js";
 import { toggleQueryTerm } from "../lib/ledgerQueryFields.js";
@@ -54,6 +56,12 @@ export const NEW_MATCHES_MAX_WAIT_MS = 3000;
 
 /** How often buffered request and response events reach the table. */
 export const FLUSH_INTERVAL_MS = 200;
+
+/**
+ * How long the Ledger waits after another client's bulk change
+ * (traffic.changed) before reading the rows again, so a burst reads once.
+ */
+export const EVENT_SETTLE_MS = 300;
 
 /** Rows per ListTraffic page. */
 export const PAGE_SIZE = 200;
@@ -955,6 +963,38 @@ export function createLedgerStore(api) {
     ]);
   }
 
+  /**
+   * Brings the Ledger up to date after a stream reset (expired or invalid), in
+   * place: the project's exclusion is read again (another client may have
+   * changed it), the rows are read again where they are, as after a bulk
+   * change, and the matches captured meanwhile are counted. The scroll,
+   * selection, drawer, query and sort stay. A changed exclusion reads the
+   * results again from the top instead, as saving one does.
+   */
+  async function resync() {
+    const version = projectVersion;
+    api.forgetExclusion?.();
+    let exclusion = current.exclusion;
+    let ownExclusion = current.ownExclusion;
+    try {
+      [exclusion, ownExclusion] = await Promise.all([api.getExclusion(), api.hasOwnExclusion()]);
+    } catch (err) {
+      console.error("Reading the content-type exclusion failed:", err);
+    }
+    if (version !== projectVersion) return;
+    exclusion = exclusion ?? [];
+    const changedExclusion =
+      exclusion.length !== current.exclusion.length || exclusion.some((type, i) => type !== current.exclusion[i]);
+    update((state) => ({ ...state, exclusion, ownExclusion, exclusionLoaded: true }));
+    if (current.typeCounts.loaded) track(loadTypeCounts());
+    if (changedExclusion) {
+      await reload();
+      return;
+    }
+    await refresh();
+    await track(countNewMatches());
+  }
+
   // Stores a new exclusion. The caller reads the results again so they
   // reflect it, which drops the pairs it hides from the selection.
   function applyExclusion(exclusion, ownExclusion) {
@@ -1047,6 +1087,30 @@ export function createLedgerStore(api) {
     else if (tableRows(current).length > MAX_WINDOW_ROWS) track(readInPlace({ asOf: "" }));
   }
 
+  // A live response carries no body; the drawer's copy of the focused
+  // pair's response gains its raw text and prettified copy from the full
+  // pair. Dropped when the drawer has moved on meanwhile.
+  async function readIncomingBody(res) {
+    if (!api.getRawDetails) return;
+    let details;
+    try {
+      details = await api.getRawDetails(res.ID);
+    } catch (err) {
+      console.error("Reading the response failed:", err);
+      return;
+    }
+    const incoming = current.selection.incomingResponse;
+    if (!details || incoming?.ID !== res.ID) return;
+    setSelection({
+      ...current.selection,
+      incomingResponse: {
+        ...incoming,
+        Raw: details.Response?.Raw ?? "",
+        Prettified: details.Prettified?.Response ?? "",
+      },
+    });
+  }
+
   /**
    * Merges `patch` into the Metadata of the loaded pair with this ID.
    */
@@ -1066,6 +1130,39 @@ export function createLedgerStore(api) {
       if (chunks === state.results.chunks && focusRow === outside) return state;
       return { ...state, results: { ...state.results, chunks }, focusRow };
     });
+  }
+
+  // Another client's bulk change (traffic.changed: a highlight, note,
+  // metadata, link, unlink or delete) names its selection but not the new
+  // values, so the rows are read again in place once the burst settles,
+  // keeping the scroll, selection and drawer.
+  let changedTimer = null;
+  function onTrafficChanged() {
+    clearTimeout(changedTimer);
+    changedTimer = setTimeout(() => {
+      changedTimer = null;
+      refresh();
+    }, EVENT_SETTLE_MS);
+  }
+
+  // metadata.updated carries the pair's whole stored metadata. The table
+  // never holds prettified copies, which the drawer reads itself.
+  function onMetadataUpdated({ id, metadata }) {
+    const { prettified, ...shown } = metadata ?? {};
+    patchPairs([String(id)], (item) => ({ ...item, Metadata: shown }));
+  }
+
+  // A note event makes a new row even when has_note stays, so an open
+  // drawer reads the new text (unless its note editor holds an edit).
+  const onNoteUpdated = ({ id, note }) => patchMetadata(id, { has_note: note ? 1 : 0 });
+  const onNoteDeleted = ({ id }) => patchMetadata(id, { has_note: 0 });
+
+  // The search index finished: results read while it was building may miss
+  // older pairs, so those are read again.
+  function onIndexComplete() {
+    const r = current.results;
+    if (r.indexComplete || r.loading) return;
+    track(refresh());
   }
 
   /**
@@ -1671,8 +1768,12 @@ export function createLedgerStore(api) {
     clear: () => {
       generation++;
       projectVersion++;
+      clearTimeout(changedTimer);
+      changedTimer = null;
       reading = false;
       exclusionLoaded = Promise.resolve();
+      // The next project has its own exclusion.
+      api.forgetExclusion?.();
       cancelDelay();
       cancelNewMatches();
       latestRequest++;
@@ -1688,8 +1789,16 @@ export function createLedgerStore(api) {
       });
     },
     populate,
+    resync,
     reload,
     settled,
+
+    // Another client's changes, from the stream (ledgerStore.js).
+    onTrafficChanged,
+    onMetadataUpdated,
+    onNoteUpdated,
+    onNoteDeleted,
+    onIndexComplete,
 
     /**
      * The table reports the rows in view (window indexes) and whether it is
@@ -1714,6 +1823,7 @@ export function createLedgerStore(api) {
     onResponse: (res) => {
       if (sameID(current.selection.focus, res.ID)) {
         setSelection({ ...current.selection, incomingResponse: res });
+        track(readIncomingBody(res));
       }
       responseBuffer.set(res.ID, res);
       if (responseBuffer.size > MAX_BUFFERED) flush();
@@ -1746,23 +1856,18 @@ export function createLedgerStore(api) {
     },
 
     /**
-     * Counts the pairs each query matches, minus the content-type exclusion:
-     * { [query]: { count, capped } }, or null for a query that failed. Counts
-     * stop at marasi's cap, 100,000; `capped` means more matched.
+     * Counts the pairs `query` matches, minus the content-type exclusion:
+     * { count, capped }, or null when it failed. Counts stop at marasi's
+     * cap, 100,000; `capped` means more matched.
      */
-    countQueries: async (queries) => {
-      const counts = await Promise.all(
-        queries.map(async (query) => {
-          try {
-            const result = await api.countTraffic(query, "");
-            return result.QueryError ? null : { count: result.Count, capped: result.Capped };
-          } catch (err) {
-            console.error(`Counting matches for ${query} failed:`, err);
-            return null;
-          }
-        }),
-      );
-      return Object.fromEntries(queries.map((query, i) => [query, counts[i]]));
+    countQuery: async (query) => {
+      try {
+        const result = await api.countTraffic(query, "");
+        return result.QueryError ? null : { count: result.Count, capped: result.Capped };
+      } catch (err) {
+        console.error(`Counting matches for ${query} failed:`, err);
+        return null;
+      }
     },
 
     // Gives the project its own content-type exclusion, normalised as Marasi
@@ -1830,7 +1935,7 @@ export function createLedgerStore(api) {
     deleteFromProject,
     findingEvidence,
     /** One Armory template per pair; `results` holds the templates made. */
-    sendToArmory: (ids) => eachPair(ids, (id) => api.sendToArmory(id)),
+    sendToArmory: (ids) => eachPair(ids, (id, action) => action.step(() => api.sendToArmory(id))),
   };
 
   /**
@@ -1854,15 +1959,18 @@ export function createLedgerStore(api) {
     return changed;
   }
 
-  // Runs `fn` on each pair in turn. A failure is logged and counted, and the
-  // rest still run.
+  // Runs `fn(id, action)` on each pair in turn, its calls as steps of one
+  // action (boundAction.js). A failure is logged and counted, and the rest
+  // still run; a connection switch stops them all (superseded).
   async function eachPair(ids, fn) {
+    const action = boundAction(api.bind?.());
     const results = [];
     let failed = 0;
     for (const id of ids) {
       try {
-        results.push(await fn(id));
+        results.push(await fn(id, action));
       } catch (err) {
+        if (isSuperseded(err)) throw err;
         console.error(`Acting on pair ${id} failed:`, err);
         failed += 1;
       }
@@ -1960,16 +2068,19 @@ export function createLedgerStore(api) {
       : count == null
         ? ["Matching requests", "Launchpad for the matching requests"]
         : [requestCount(count), `Launchpad for ${requestCount(count)}`];
-    const launchpadId = await api.createLaunchpad(...name);
+    const action = boundAction(api.bind?.());
+    const launchpadId = await action.step(() => api.createLaunchpad(...name));
     let linked;
     try {
-      linked = await link(selection, "launchpad", launchpadId);
+      linked = await action.step(() => link(selection, "launchpad", launchpadId));
     } catch (err) {
       // Marasi refused the selection (its query waits on a job still
       // building) and linked nothing: the launchpad goes again rather than
       // stay empty.
       if (incompleteJobs(err)) {
-        await api.deleteLaunchpad(launchpadId).catch((cause) => console.error("Removing the empty launchpad failed:", cause));
+        await action
+          .step(() => api.deleteLaunchpad(launchpadId))
+          .catch((cause) => console.error("Removing the empty launchpad failed:", cause));
       }
       throw err;
     }
@@ -1981,9 +2092,9 @@ export function createLedgerStore(api) {
     if (ids.length > LAUNCHPADS_EACH_MAX) {
       throw new Error(`One launchpad each works on up to ${LAUNCHPADS_EACH_MAX} requests`);
     }
-    const { results, failed } = await eachPair(ids, async (id) => {
-      const launchpadId = await api.createLaunchpad(...launchpadName([id]));
-      await api.linkTraffic({ ids: [String(id)] }, { Kind: "launchpad", ID: launchpadId });
+    const { results, failed } = await eachPair(ids, async (id, action) => {
+      const launchpadId = await action.step(() => api.createLaunchpad(...launchpadName([id])));
+      await action.step(() => api.linkTraffic({ ids: [String(id)] }, { Kind: "launchpad", ID: launchpadId }));
       return launchpadId;
     });
     await refresh();

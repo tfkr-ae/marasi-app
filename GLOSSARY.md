@@ -142,12 +142,26 @@ _Avoid_: beta, preview, snapshot
 
 **Update**:
 A build on the app's channel that is newer than the running one and replaces it once the researcher installs it. It is never an older build; going back to an older release is a reinstall.
-_Avoid_: upgrade, patch; not to be confused with new matches
+_Avoid_: upgrade, patch; not to be confused with new matches or a CLI update
+
+**CLI update**:
+A newer Marasi CLI on its channel that the app installs in place of the one it uses. It never replaces the app itself; that is an update.
+_Avoid_: update on its own, upgrade
+
+### Connections
+
+**Marasi CLI**:
+The separate `marasi` program that runs service instances. The app never bundles it: it uses the one on PATH, or one at a path the researcher sets.
+_Avoid_: binary, backend, marasi executable
+
+**Connection**:
+A saved way to reach one service instance: the local connection, whose instance the app starts with the Marasi CLI, or a remote address with its password. The app is attached through one connection at a time.
+_Avoid_: server, backend, endpoint, session
 
 ### Projects
 
 **Scratchpad**:
-The project the app opens at startup, kept in the app's config directory. A researcher works in it until they open another project.
+The project a service instance opens when it starts, kept in that instance's config directory on the service's host. A researcher works in it until they open another project.
 _Avoid_: default project, temporary project
 
 **Locked project**:
@@ -159,5 +173,5 @@ The one-time step that brings an older project's database up to the running buil
 _Avoid_: migration in what researchers see; not to be confused with an update
 
 **Upstream proxy**:
-A named proxy on this machine that a project's traffic goes through on its way to the origin, as Marasi defines it. The list is shared by every project on the machine; each project selects at most one, or none for a direct connection. A request the selected upstream proxy can't carry fails and is never sent direct.
+A named proxy on the service's host that a project's traffic goes through on its way to the origin, as Marasi defines it. The list is shared by every project on that host; each project selects at most one, or none for a direct connection. A request the selected upstream proxy can't carry fails and is never sent direct.
 _Avoid_: upstream on its own (it means the origin), proxy chain, outbound proxy

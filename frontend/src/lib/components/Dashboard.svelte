@@ -1,6 +1,7 @@
 <script>
+	import { onMount } from "svelte";
 	import { activeProject } from "../../stores";
-	import { CountNotes, GetScopeRules } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { homeStore } from "../../stores/homeStore";
 	import {
 		Edit2Icon,
 		SendIcon,
@@ -17,21 +18,22 @@
 	} from "lucide-svelte";
 	import { findingStore } from "../../stores/findingStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
-	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
 
-	// Dashboard statistics
-	let totalRequests = 0;
-	let notes = 0;
-	let launchpads = 0;
-	let intercepted = 0;
-	// False while Marasi's intercepted_count job is still counting older
-	// pairs after an upgrade: the figure is a floor until it finishes.
-	let interceptedComplete = true;
+	// The service's counts (homeStore). interceptedComplete is false while
+	// Marasi's intercepted_count job still counts older pairs after an
+	// upgrade: the figure is a floor until it finishes, and homeStore reads
+	// it again on the job's job.complete event.
+	$: dashboard = $homeStore.dashboard;
+	$: totalRequests = dashboard?.requests ?? 0;
+	$: notes = dashboard?.notes ?? 0;
+	$: launchpads = dashboard?.launchpads ?? 0;
+	$: intercepted = dashboard?.intercepted ?? 0;
+	$: interceptedComplete = dashboard?.interceptedComplete ?? true;
 
 	// Scope statistics
-	let defaultAllow = true;
-	let includeRulesCount = 0;
-	let excludeRulesCount = 0;
+	$: defaultAllow = $homeStore.scope?.defaultAllow ?? true;
+	$: includeRulesCount = $homeStore.scope?.includeCount ?? 0;
+	$: excludeRulesCount = $homeStore.scope?.excludeCount ?? 0;
 
 	$: testCasesCount = $testCaseStore.length;
 	$: findingsCount = $findingStore.length;
@@ -42,62 +44,17 @@
 		(f) => f.Severity === "High",
 	).length;
 
-	// Refreshes on mount and on each project switch. (A second refresh in
-	// onMount doubled CountNotes, which holds up every other call to Marasi
-	// while it counts a large project.)
-	$: if ($activeProject) {
-		refreshDashboard();
-	}
-
+	// Each figure shows a ghost bar until it's first read; Home reads the
+	// counts again each time it shows, keeping the last figures meanwhile.
 	// Figures use the reader's locale ("100,000"), as the Ledger's counts do.
-	// While a figure is read its card shows a ghost bar instead; a newer
-	// refresh (a project switch) wins over a slower older one.
-	let countsLoading = true;
-	let scopeLoading = true;
-	let refreshes = 0;
+	$: countsLoading = !dashboard;
+	$: scopeLoading = !$homeStore.scope;
 	const ghost =
 		"dashboard-ghost inline-block h-7 w-16 animate-pulse rounded-sm bg-surface-300 align-middle dark:bg-surface-600";
 
-	// Once the job finishes, read the exact count.
-	$: interceptedCounting = groupBuilding($jobsStore, "intercepted");
-	let wasCounting = false;
-	$: {
-		if (wasCounting && !interceptedCounting && !interceptedComplete) refreshDashboard();
-		wasCounting = interceptedCounting;
-	}
-
-	// Refresh dashboard data
-	function refreshDashboard() {
-		const run = ++refreshes;
-		countsLoading = true;
-		scopeLoading = true;
-		CountNotes()
-			.then((dashboard) => {
-				if (run !== refreshes) return;
-				totalRequests = dashboard.Requests;
-				notes = dashboard.Notes;
-				launchpads = dashboard.Launchpads;
-				intercepted = dashboard.Interceptions || 0;
-				interceptedComplete = dashboard.InterceptionsComplete;
-				if (!interceptedComplete) jobsStore.watch("intercepted");
-			})
-			.catch((err) => console.error("Counting the dashboard failed:", err))
-			.finally(() => {
-				if (run === refreshes) countsLoading = false;
-			});
-
-		GetScopeRules()
-			.then((scopeData) => {
-				if (run !== refreshes) return;
-				defaultAllow = scopeData.defaultAllow;
-				includeRulesCount = scopeData.includeRules.length;
-				excludeRulesCount = scopeData.excludeRules.length;
-			})
-			.catch((err) => console.error("Reading the scope rules failed:", err))
-			.finally(() => {
-				if (run === refreshes) scopeLoading = false;
-			});
-	}
+	onMount(() => {
+		homeStore.refreshDashboard();
+	});
 
 </script>
 

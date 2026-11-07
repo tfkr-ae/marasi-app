@@ -33,6 +33,7 @@ test("with no useful content type, the file name's extension decides", () => {
 test("artifact bytes come from Go's base64", () => {
   assert.deepEqual([...artifactBytes("aGk=")], [104, 105]);
   assert.deepEqual([...artifactBytes([1, 2])], [1, 2]);
+  assert.deepEqual([...artifactBytes(new Uint8Array([7, 8]))], [7, 8]);
   assert.deepEqual([...artifactBytes(null)], []);
 });
 

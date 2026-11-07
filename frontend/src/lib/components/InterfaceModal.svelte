@@ -1,14 +1,17 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
-    import { GetInterfaces } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { service } from "../service/index.js";
+    import { listenerAddresses, listenerStart, startingInterface } from "../listenerInterfaces.js";
     import { onMount } from "svelte";
-    import { listener } from "../../stores";
+    import { listener, marasiConfig } from "../../stores";
     import { X } from "lucide-svelte";
 
     export let parent;
 	let interfaceList = [];
 	let selectedInterface = 0;
-	let port = $listener.port;
+	// Off, it starts from the app's default listener.
+	const start = listenerStart($listener, $marasiConfig);
+	let port = start.port;
 	const modalStore = getModalStore();
 	const cBase = 'card p-4 w-modal shadow-xl space-y-3 text-sm bg-surface-50-800-token text-surface-900-50-token';
 	const cHeader = 'text-2xl font-bold';
@@ -24,10 +27,13 @@
         }
     }
 	onMount(() => {
-		GetInterfaces().then((interfaces) => {
-			interfaces ? (interfaceList = interfaces) : (interfaceList = []);
-			selectedInterface = interfaceList.indexOf($listener.address) ? interfaceList.indexOf($listener.address) : 0;
-		});
+		// The service host's interfaces, so a remote offers its own.
+		listenerAddresses(service)
+			.then((interfaces) => {
+				interfaceList = interfaces;
+				selectedInterface = startingInterface(interfaceList, start.address);
+			})
+			.catch((error) => console.error("Reading the service's interfaces failed:", error));
 	});
 </script>
 

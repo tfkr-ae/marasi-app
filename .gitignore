@@ -8,3 +8,6 @@ build/linux/marasi-app.desktop
 .DS_Store
 .artifacts
 .scratch
+
+# A Go build in the repo root (go build -o marasi-app .)
+/marasi-app

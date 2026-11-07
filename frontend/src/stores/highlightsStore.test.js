@@ -1,17 +1,19 @@
 // The highlight palette's labels per project, renaming a label for this
-// project or for all projects, and the once-per-project migration of old
-// hex highlights.
+// project or for all projects, and the project's labels read over the
+// service's client settings.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
 import { createHighlightsStore } from "./createHighlightsStore.js";
+import { createHighlightsApi } from "./highlightsApi.js";
+import { fakeServiceClient } from "./fakeServiceClient.js";
 
 const DEFAULT_APP = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"].map(
   (color) => ({ color, label: "" }),
 );
 
 // Project client settings in `settings` (key -> value); app highlights in `app`.
-function fakeApi({ settings = {}, app = DEFAULT_APP, migration = { Ran: true, Highlighted: 2, Cleared: 3 } } = {}) {
+function fakeApi({ settings = {}, app = DEFAULT_APP } = {}) {
   const calls = [];
   const api = {
     calls,
@@ -29,7 +31,6 @@ function fakeApi({ settings = {}, app = DEFAULT_APP, migration = { Ran: true, Hi
         .filter((key) => key.startsWith(prefix))
         .sort()
         .map((key) => ({ client: "marasi-app", key, value: settings[key] })),
-    getClientSetting: async (key) => (key in settings ? { key, value: settings[key] } : null),
     setClientSetting: async (key, value) => {
       calls.push(["setClientSetting", key, value]);
       settings[key] = value;
@@ -37,11 +38,6 @@ function fakeApi({ settings = {}, app = DEFAULT_APP, migration = { Ran: true, Hi
     deleteClientSetting: async (key) => {
       calls.push(["deleteClientSetting", key]);
       delete settings[key];
-    },
-    migrateOldHighlights: async () => {
-      calls.push(["migrateOldHighlights"]);
-      settings["ledger.highlight_migrated"] = true;
-      return migration;
     },
   };
   return api;
@@ -51,11 +47,11 @@ const labels = (store) => get(store.palette).map((h) => `${h.label}${h.scope ? `
 
 test("a project's labels win over the app's", async () => {
   const app = DEFAULT_APP.map((h, i) => (i === 2 ? { ...h, label: "Revisit" } : i === 0 ? { ...h, label: "Auth" } : h));
-  const api = fakeApi({ app, settings: { "ledger.highlight.3": "IDOR candidate", "ledger.highlight_migrated": true } });
+  const api = fakeApi({ app, settings: { "ledger.highlight.3": "IDOR candidate" } });
   const store = createHighlightsStore(api);
   await store.readApp();
 
-  await store.openProject();
+  await store.loadProject();
 
   assert.deepEqual(labels(store).slice(0, 4), ["Auth (app)", "Orange", "IDOR candidate (project)", "Green"]);
 });
@@ -64,7 +60,7 @@ test("renaming for this project writes ledger.highlight.<n>", async () => {
   const api = fakeApi({ settings: { "ledger.highlight_migrated": true } });
   const store = createHighlightsStore(api);
   await store.readApp();
-  await store.openProject();
+  await store.loadProject();
 
   await store.rename(4, "  Leaks tokens ", { allProjects: false });
 
@@ -73,10 +69,10 @@ test("renaming for this project writes ledger.highlight.<n>", async () => {
 });
 
 test("renaming for all projects writes the app label and drops the project's", async () => {
-  const api = fakeApi({ settings: { "ledger.highlight.4": "Old", "ledger.highlight_migrated": true } });
+  const api = fakeApi({ settings: { "ledger.highlight.4": "Old" } });
   const store = createHighlightsStore(api);
   await store.readApp();
-  await store.openProject();
+  await store.loadProject();
 
   await store.rename(4, "Leaks tokens", { allProjects: true });
 
@@ -104,10 +100,10 @@ function hold(api, name) {
 }
 
 test("a rename shows at once and goes back when the write fails", async () => {
-  const api = fakeApi({ settings: { "ledger.highlight.4": "Old", "ledger.highlight_migrated": true } });
+  const api = fakeApi({ settings: { "ledger.highlight.4": "Old" } });
   const store = createHighlightsStore(api);
   await store.readApp();
-  await store.openProject();
+  await store.loadProject();
 
   let held = hold(api, "setClientSetting");
   const renaming = store.rename(4, "New");
@@ -140,10 +136,10 @@ test("saving the app highlights shows at once and goes back when the write fails
 });
 
 test("a blank project label falls back to the app's", async () => {
-  const api = fakeApi({ settings: { "ledger.highlight.2": "Mine", "ledger.highlight_migrated": true } });
+  const api = fakeApi({ settings: { "ledger.highlight.2": "Mine" } });
   const store = createHighlightsStore(api);
   await store.readApp();
-  await store.openProject();
+  await store.loadProject();
 
   await store.rename(2, "  ", { allProjects: false });
 
@@ -151,70 +147,74 @@ test("a blank project label falls back to the app's", async () => {
   assert.equal(labels(store)[1], "Orange");
 });
 
-test("opening a project migrates its old highlights once, with a notice while it runs", async () => {
-  const api = fakeApi();
-  let finish;
-  api.migrateOldHighlights = () => {
-    api.calls.push(["migrateOldHighlights"]);
-    return new Promise((resolve) => (finish = resolve));
+test("resync reads the project's labels again", async () => {
+  const api = fakeApi({ settings: { "ledger.highlight.3": "IDOR candidate" } });
+  const store = createHighlightsStore(api);
+  await store.readApp();
+  await store.loadProject();
+  // Another client renamed one and dropped the other.
+  delete api.settings["ledger.highlight.3"];
+  api.settings["ledger.highlight.5"] = "Secrets";
+  await store.resync();
+  assert.deepEqual(get(store.projectLabels), { 5: "Secrets" });
+});
+
+test("loadProject drops labels that arrive for a project no longer open", async () => {
+  let release;
+  const slow = new Promise((resolve) => (release = resolve));
+  const api = fakeApi({ settings: { "ledger.highlight.1": "Old" } });
+  const list = api.listClientSettings;
+  let first = true;
+  api.listClientSettings = async (prefix) => {
+    if (first) {
+      first = false;
+      await slow;
+      return [{ key: "ledger.highlight.1", value: "Old" }];
+    }
+    return list(prefix);
   };
   const store = createHighlightsStore(api);
-  const migrated = [];
-
-  const opened = store.openProject({ onMigrated: (result) => migrated.push(result) });
-  await opened;
-  assert.equal(get(store.migrating), true);
-  finish({ Ran: true, Highlighted: 4, Cleared: 5 });
-  await store.migration;
-
-  assert.equal(get(store.migrating), false);
-  assert.deepEqual(migrated, [{ Ran: true, Highlighted: 4, Cleared: 5 }]);
+  const opening = store.loadProject();
+  store.clear();
+  api.settings["ledger.highlight.1"] = "New";
+  await store.loadProject();
+  release();
+  await opening;
+  assert.deepEqual(get(store.projectLabels), { 1: "New" });
 });
 
-test("a migrated project skips the migration and its notice", async () => {
-  const api = fakeApi({ settings: { "ledger.highlight_migrated": true } });
-  const store = createHighlightsStore(api);
-  const migrated = [];
-
-  await store.openProject({ onMigrated: (result) => migrated.push(result) });
-  await store.migration;
-
-  assert.equal(api.calls.some(([name]) => name === "migrateOldHighlights"), false);
-  assert.equal(get(store.migrating), false);
-  assert.deepEqual(migrated, []);
-});
-
-test("a failed migration clears the notice and is retried on the next open", async () => {
-  const api = fakeApi();
-  api.migrateOldHighlights = async () => {
-    api.calls.push(["migrateOldHighlights"]);
-    throw new Error("database is locked");
+test("over the service, the project's labels are client settings ledger.highlight.<n>", async () => {
+  const settings = { "ledger.highlight.2": "Auth bypass", "ledger.other": "x" };
+  const writes = [];
+  const client = fakeServiceClient({
+    "GET /client-settings/marasi-app": (query) => ({
+      items: Object.keys(settings)
+        .filter((key) => key.startsWith(query.prefix ?? ""))
+        .sort()
+        .map((key) => ({ client: "marasi-app", key, value: settings[key], updated_at: "2026-11-06T18:07:12Z" })),
+    }),
+    "PUT /client-settings/marasi-app/ledger.highlight.4": (_, body) => {
+      writes.push(["PUT", body]);
+      return { client: "marasi-app", key: "ledger.highlight.4", value: body.value };
+    },
+    "DELETE /client-settings/marasi-app/ledger.highlight.2": () => {
+      writes.push(["DELETE"]);
+      return { client: "marasi-app", key: "ledger.highlight.2" };
+    },
+  });
+  const appConfig = {
+    getHighlights: async () => DEFAULT_APP,
+    saveHighlights: async (list) => list,
+    resetHighlights: async () => DEFAULT_APP,
   };
-  const store = createHighlightsStore(api);
+  const store = createHighlightsStore(createHighlightsApi(client, appConfig));
+  await store.readApp();
+  await store.loadProject();
+  assert.deepEqual(get(store.projectLabels), { 2: "Auth bypass" });
+  assert.deepEqual(client.calls[0].query, { prefix: "ledger.highlight." });
 
-  await store.openProject();
-  await store.migration;
-  assert.equal(get(store.migrating), false);
-  await store.openProject();
-  await store.migration;
-
-  assert.equal(api.calls.filter(([name]) => name === "migrateOldHighlights").length, 2);
-});
-
-test("a migration that finishes after another project opened doesn't refresh it", async () => {
-  const api = fakeApi();
-  let finish;
-  api.migrateOldHighlights = () => new Promise((resolve) => (finish = resolve));
-  const store = createHighlightsStore(api);
-  const migrated = [];
-  await store.openProject({ onMigrated: (result) => migrated.push(result) });
-  const first = store.migration;
-
-  api.settings["ledger.highlight_migrated"] = true;
-  await store.openProject({ onMigrated: (result) => migrated.push(result) });
-  finish({ Ran: true, Highlighted: 1, Cleared: 1 });
-  await first;
-
-  assert.deepEqual(migrated, []);
-  assert.equal(get(store.migrating), false);
+  await store.rename(4, "  Revisit ");
+  await store.rename(2, "");
+  assert.deepEqual(writes, [["PUT", { value: "Revisit" }], ["DELETE"]]);
+  assert.deepEqual(get(store.projectLabels), { 4: "Revisit" });
 });

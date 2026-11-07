@@ -1,32 +1,21 @@
-// The app's Ledger store, bound to the Wails backend. The logic lives in
-// createLedgerStore.js, which tests load with a fake API.
+// The app's Ledger store over the service client. The logic is in
+// createLedgerStore.js and the API shapes in ledgerApi.js and trafficApi.js;
+// this file binds them to the app's client, routes the stream's traffic and
+// WebSocket events to the store, and registers it for the project's load
+// and resync.
 import {
-  AppendNote,
-  ClearHighlight,
-  ClearNotes,
-  CountContentTypes,
-  CountTraffic,
-  CreateLaunchpadEntry,
-  DeleteLaunchpad,
-  DeleteTraffic,
-  GetContentTypeExclusion,
   GetDefaultContentTypeExclusion,
-  GetMetadata,
-  GetNote,
-  GetRawDetails,
-  HasOwnContentTypeExclusion,
-  LinkTraffic,
-  QueryTraffic,
-  ResetContentTypeExclusion,
-  SetContentTypeExclusion,
   SetDefaultContentTypeExclusion,
-  SetHighlight,
-  UnlinkTraffic,
-  UpdateNote,
 } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { service } from "../lib/service/index.js";
+import { loadSignals } from "../lib/openProgress.js";
 import { armoryStore } from "./armoryStore";
 import { relinked } from "./relinked.js";
+import { createExclusion } from "./contentTypeExclusion.js";
+import { createLedgerApi, toUpgradeEvent } from "./ledgerApi.js";
+import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { createLedgerStore, FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
+import { projectData } from "./projectData.js";
 
 export {
   allSelectedLabel,
@@ -48,42 +37,49 @@ export {
   tableRows,
 } from "./createLedgerStore.js";
 
-export const ledgerStore = createLedgerStore({
-  // A page of the live view or of a query's results:
-  // { Query, OrderBy, Cursor, Direction, AsOf, Limit, IgnoreExclusion }.
-  queryTraffic: (request) => QueryTraffic(request),
-  // after: "" counts every match, else only pairs captured after that id.
-  // options: { AsOf, IgnoreExclusion }; AsOf counts only pairs up to it.
-  countTraffic: (query, after, options = {}) => CountTraffic(query, after, options),
-  getExclusion: () => GetContentTypeExclusion(),
-  setExclusion: (types) => SetContentTypeExclusion(types),
-  // False when the project follows the app default.
-  hasOwnExclusion: () => HasOwnContentTypeExclusion(),
-  resetExclusion: () => ResetContentTypeExclusion(),
+/**
+ * The project's content-type exclusion, which every traffic read leaves
+ * out: the Ledger's, the sitemap's and saved-query counts. The app default
+ * stays in the app config.
+ */
+export const contentTypeExclusion = createExclusion(service, {
   getDefaultExclusion: () => GetDefaultContentTypeExclusion(),
   setDefaultExclusion: (types) => SetDefaultContentTypeExclusion(types),
-  countContentTypes: () => CountContentTypes(),
-  getRawDetails: (id) => GetRawDetails(id),
-  getMetadata: (id) => GetMetadata(id),
-  getNote: (id) => GetNote(id),
-  updateNote: (id, text) => UpdateNote(id, text),
-  // A selection is Marasi's: { ids }, or { query, exclusion, as_of } after
-  // ⌘A. Each bulk call resolves to how many pairs changed.
-  setHighlight: (selection, highlight) => SetHighlight(selection, highlight),
-  clearHighlight: (selection) => ClearHighlight(selection),
-  createLaunchpad: (name, description) => CreateLaunchpadEntry(name, description),
-  deleteLaunchpad: (id) => DeleteLaunchpad(id),
-  // target: { Kind: "launchpad" | "finding" | "test_case", ID }. The
-  // finding and test case lists reread their links afterwards.
-  linkTraffic: (selection, target) => relinked(LinkTraffic(selection, target), target.Kind),
-  unlinkTraffic: (selection, target) => relinked(UnlinkTraffic(selection, target), target.Kind),
-  appendNote: (selection, text) => AppendNote(selection, text),
-  clearNotes: (selection) => ClearNotes(selection),
+});
+
+const api = createLedgerApi(service, { exclusion: contentTypeExclusion });
+
+export const ledgerStore = createLedgerStore({
+  ...api,
+  // The finding and test case lists reread their links afterwards.
+  linkTraffic: (selection, target) => relinked(api.linkTraffic(selection, target), target.Kind),
+  unlinkTraffic: (selection, target) => relinked(api.unlinkTraffic(selection, target), target.Kind),
   // Deleting drops the pairs' links too.
-  deleteTraffic: (selection) => relinked(DeleteTraffic(selection), "all"),
+  deleteTraffic: (selection) => relinked(api.deleteTraffic(selection), "all"),
   // Armory templates go through their store, so its list stays current.
   sendToArmory: (requestId) => armoryStore.createTemplateFromRequest(requestId),
 });
+
+projectData.register("ledger", {
+  signal: loadSignals.traffic,
+  clear: ledgerStore.clear,
+  load: ledgerStore.populate,
+  resync: ledgerStore.resync,
+});
+
+service.on("traffic.request", (data) => ledgerStore.onRequest(toRequestEvent(data)));
+service.on("traffic.response", (data) => ledgerStore.onResponse(toResponseEvent(data)));
+// An upgrade's row follows its connection; a handshake that failed or was
+// dropped opens none, so only its row changes.
+service.on("websocket.opened", (conn) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(conn)));
+service.on("websocket.closed", (conn) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(conn)));
+service.on("websocket.handshake_ended", (event) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(event)));
+// Changes another client makes (the CLI, another app) show without a resync.
+service.on("traffic.changed", ledgerStore.onTrafficChanged);
+service.on("metadata.updated", ledgerStore.onMetadataUpdated);
+service.on("note.updated", ledgerStore.onNoteUpdated);
+service.on("note.deleted", ledgerStore.onNoteDeleted);
+service.on("traffic.index_complete", ledgerStore.onIndexComplete);
 
 if (typeof window !== "undefined") {
   setInterval(ledgerStore.flush, FLUSH_INTERVAL_MS);

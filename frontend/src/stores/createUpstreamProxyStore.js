@@ -1,6 +1,7 @@
 // Settings → Upstream Proxy: this machine's upstream proxy list and the open
-// project's selection. Marasi sends the app no upstream proxy events, so the
-// store reads the list when Settings shows it and keeps each call's answer.
+// project's selection. The store reads the list when Settings shows it,
+// keeps each call's answer, and applies the upstream_proxy.* events another
+// client's edits cause (onListChanged, onSelected) once it has read it.
 // Backend calls go through the injected `api`, so tests run against a fake:
 //
 //   list() -> { items, selected, configured }
@@ -51,8 +52,35 @@ export function createUpstreamProxyStore(api) {
     return answer;
   }
 
+  const isListed = (items, name) => !name || items.some((item) => item.name === name);
+
+  // upstream_proxy.added, .updated and .removed carry the whole list. An
+  // entry that changed loses its last check.
+  function onListChanged({ items = [] } = {}) {
+    store.update((state) => {
+      if (!state.loaded) return state;
+      const before = new Map(state.items.map((item) => [item.name, JSON.stringify(item)]));
+      const checks = {};
+      for (const item of items) {
+        if (state.checks[item.name] && before.get(item.name) === JSON.stringify(item)) {
+          checks[item.name] = state.checks[item.name];
+        }
+      }
+      return { ...state, items, configured: isListed(items, state.selected), checks };
+    });
+  }
+
+  // upstream_proxy.selected: { name }, "" for none.
+  function onSelected({ name = "" } = {}) {
+    store.update((state) =>
+      state.loaded ? { ...state, selected: name, configured: isListed(state.items, name) } : state,
+    );
+  }
+
   return {
     subscribe: store.subscribe,
+    onListChanged,
+    onSelected,
     load: async () => apply(await api.list()),
     add: async (name, url, ca = "") => apply(await api.add(name, url, ca)),
     // An entry's old check no longer says anything about it.

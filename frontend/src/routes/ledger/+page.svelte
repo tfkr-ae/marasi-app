@@ -5,7 +5,7 @@
 	// selection survive page visits.
 	import { goto } from "$app/navigation";
 	import { onDestroy, tick } from "svelte";
-	import { get, writable } from "svelte/store";
+	import { get } from "svelte/store";
 	import { lineWrap } from "../../stores";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import {
@@ -81,13 +81,14 @@
 	import ToolbarMenu from "../../lib/ledger/ToolbarMenu.svelte";
 	import MarksMenu from "../../lib/ledger/MarksMenu.svelte";
 	import HighlightsMenu from "../../lib/ledger/HighlightsMenu.svelte";
-	import { activeHighlightCount, HIGHLIGHT_TERMS } from "../../lib/ledger/highlights.js";
-	import { MARKS, activeMarkCount } from "../../lib/ledger/marks.js";
+	import { activeHighlightCount } from "../../lib/ledger/highlights.js";
+	import { activeMarkCount } from "../../lib/ledger/marks.js";
+	import { highlightCounts, markCounts } from "../../stores/ledgerMenuCounts.js";
 	import LedgerTypesMenu from "../../lib/ledger/LedgerTypesMenu.svelte";
 	import { positionLabel, rowHighlight } from "../../lib/ledger/table.js";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { primaryVariant, UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
-	import { highlightMigrating, highlightPalette, renameHighlight } from "../../stores/highlightsStore";
+	import { highlightPalette, renameHighlight } from "../../stores/highlightsStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { newRecord } from "../../lib/logbook/recordEditor.js";
@@ -348,7 +349,12 @@
 	// through a toast.
 
 	async function sendToArmory(pairs) {
-		const result = await ledgerStore.sendToArmory(idsOf(pairs));
+		let result;
+		try {
+			result = await ledgerStore.sendToArmory(idsOf(pairs));
+		} catch (error) {
+			return toastError(`Failed to send ${describe(pairs)} to Armory`, error);
+		}
 		if (result.done === 0) return toastError(`Failed to send ${describe(pairs)} to Armory`);
 		const first = result.results[0];
 		toastJump(`${describe(pairs)} sent to Armory${failures(result)}`, "Jump to Armory", `/armory?id=${first.ID}`);
@@ -1055,21 +1061,6 @@
 		document.getElementById("searchBox")?.focus();
 	}
 
-	// A toolbar menu's counts for `terms`, read each time it opens: a store
-	// of { [term]: count } with `load()`; a newer read wins.
-	function menuCounts(terms) {
-		const counts = writable({});
-		let reads = 0;
-		async function load() {
-			const read = ++reads;
-			counts.set({});
-			const result = await ledgerStore.countQueries(terms);
-			if (read === reads) counts.set(result);
-		}
-		return { subscribe: counts.subscribe, load };
-	}
-	const markCounts = menuCounts(MARKS.map((mark) => mark.term));
-	const highlightCounts = menuCounts(HIGHLIGHT_TERMS);
 	$: activeMarks = activeMarkCount($queryText);
 	$: activeHighlights = activeHighlightCount($queryText);
 
@@ -1174,14 +1165,6 @@
 							><TriangleAlert size={13} />{$indexNote}</span
 						>
 					{/if}
-				{/if}
-				{#if $highlightMigrating}
-					<span
-						id="ledgerHighlightMigration"
-						class="flex items-center gap-1 whitespace-nowrap text-xs opacity-70"
-						role="status"
-						><LoaderCircle size={13} class="animate-spin" />Updating old highlights…</span
-					>
 				{/if}
 				{#if $queryText}
 					<button

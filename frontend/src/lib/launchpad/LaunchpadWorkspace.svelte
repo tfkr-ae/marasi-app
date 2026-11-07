@@ -72,7 +72,7 @@
 		comparePane?.toggleTab();
 	}
 
-	// Mirrors RequestResponseView: the Syntax setting, with "auto" skipping
+	// Follows the Syntax setting, with "auto" skipping
 	// highlighting on very large bodies.
 	function lang(body) {
 		switch ($marasiConfig.SyntaxMode) {

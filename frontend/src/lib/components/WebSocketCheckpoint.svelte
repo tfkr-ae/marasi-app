@@ -15,7 +15,7 @@
 	} from "lucide-svelte";
 	import { marasiConfig, lineWrap } from "../../stores";
 	import { longStrings } from "../longStrings.js";
-	import { connectionStore } from "../../stores/connectionStore";
+	import { webSocketStore } from "../../stores/webSocketStore";
 	import WebSocketMessageProperties from "./WebSocketMessageProperties.svelte";
 
 	export let requestId;
@@ -23,15 +23,15 @@
 	let payloadText = "";
 	let editorMessageId = null;
 
-	$: queue = $connectionStore.interceptionsByRequestId[requestId] || [];
+	$: queue = $webSocketStore.interceptionsByRequestId[requestId] || [];
 	$: intercepted = queue[0] || null;
 	$: loading =
-		$connectionStore.interceptionLoadingByRequestId[requestId] || false;
+		$webSocketStore.interceptionLoadingByRequestId[requestId] || false;
 	$: processing =
-		$connectionStore.interceptionProcessingByRequestId[requestId] || false;
+		$webSocketStore.interceptionProcessingByRequestId[requestId] || false;
 	$: error =
-		$connectionStore.interceptionErrorsByRequestId[requestId] || "";
-	$: interceptEnabled = $connectionStore.wsInterceptEnabled;
+		$webSocketStore.interceptionErrorsByRequestId[requestId] || "";
+	$: interceptEnabled = $webSocketStore.wsInterceptEnabled;
 
 	const opcodeLabel = {
 		0: "continuation",
@@ -73,23 +73,23 @@
 	}
 
 	export function toggleIntercept() {
-		if (!processing) connectionStore.toggleIntercept();
+		if (!processing) webSocketStore.toggleIntercept();
 	}
 
 	export function forward() {
 		if (intercepted && !processing) {
-			connectionStore.forwardInterception(requestId, payloadText);
+			webSocketStore.forwardInterception(requestId, payloadText);
 		}
 	}
 
 	export function drop() {
 		if (intercepted && !processing) {
-			connectionStore.dropInterception(requestId);
+			webSocketStore.dropInterception(requestId);
 		}
 	}
 
 	onMount(() => {
-		connectionStore.populateInterception(requestId);
+		webSocketStore.populateInterception(requestId);
 	});
 
 	$: if ((intercepted?.ID ?? null) !== editorMessageId) {

@@ -15,6 +15,13 @@ const IDLE_SEARCH = { status: "idle", matches: null, error: null };
 /** Milliseconds the search box waits after a keystroke before asking Marasi. */
 export const ENTRY_SEARCH_DELAY = 250;
 
+/**
+ * How long the store waits after another client's entry changes (links,
+ * unlinks, moves, bulk changes) before reading the launchpads they touch,
+ * so a burst reads each once.
+ */
+export const LAUNCHPAD_SETTLE_MS = 300;
+
 // The draft an empty launchpad starts from.
 export const BLANK_REQUEST = "GET / HTTP/1.1\nHost: \n\n";
 
@@ -41,6 +48,10 @@ function initialState(projectStateVersion = 0) {
     search: "",
     entrySearch: IDLE_SEARCH,
     compare: null,
+    // Dirty drafts of launchpads another client deleted, kept until the
+    // researcher restores or discards them:
+    // [{ launchpadId, name, raw, useHttps }].
+    orphanedDrafts: [],
   };
 }
 
@@ -73,6 +84,14 @@ export function isDraftDirty(state, launchpadId) {
   if (!draft) return false;
   if (draft.seededFrom && !state.detailsById[draft.seededFrom]) return false;
   return normalise(draft.raw) !== normalise(seededRaw(state, launchpadId));
+}
+
+/**
+ * How many unsaved drafts closing the project would lose: dirty drafts and
+ * those kept from launchpads another client deleted.
+ */
+export function unsavedDraftCount(state) {
+  return dirtyLaunchpadIds(state).length + (state.orphanedDrafts?.length ?? 0);
 }
 
 /** IDs of launchpads whose draft would be lost by closing the project. */
@@ -409,6 +428,14 @@ export function createLaunchpadStore(api) {
       if (!entries.some((entry) => entry.ID === launchId)) return;
       details = await ensureDetails(launchId);
       if (version !== projectStateVersion) return;
+    } else if (details.Request?.Raw === undefined) {
+      // Arrived from the stream, which sends no raw bytes: the draft is
+      // seeded from the request as Marasi stored it, so read it first. If
+      // another read for it is newer, the arrival that started it selects.
+      await refreshDetails(launchId);
+      if (version !== projectStateVersion) return;
+      details = current.detailsById[launchId];
+      if (details?.Request?.Raw === undefined) return;
     }
     const sent = sentRaw(launchId, details);
     if (!awaitingEntry.delete(launchId)) return;
@@ -456,6 +483,22 @@ export function createLaunchpadStore(api) {
       detailsById: { ...state.detailsById, [id]: row },
     }));
     return row;
+  }
+
+  // Rereads a loaded pair's details. Only the latest read for an id is kept,
+  // so a request's read finishing after its response's can't undo it.
+  const detailReads = new Map();
+  async function refreshDetails(id) {
+    const version = projectStateVersion;
+    const read = (detailReads.get(id) ?? 0) + 1;
+    detailReads.set(id, read);
+    const row = await api.getRawDetails(id);
+    if (version !== projectStateVersion || detailReads.get(id) !== read || !row) return;
+    detailReads.delete(id);
+    update((state) => ({
+      ...state,
+      detailsById: { ...state.detailsById, [id]: row },
+    }));
   }
 
   async function loadEntries(launchpadId) {
@@ -619,6 +662,26 @@ export function createLaunchpadStore(api) {
     await Promise.all([selectLaunchpad(selected), loadPendingLaunches()]);
   }
 
+  // After a reconnect to the same project: rereads the launchpads, every
+  // loaded entry list, the pending launches and any loaded pair still
+  // waiting for its response, in place. Drafts, the open launchpad, the
+  // Entry selection, the search and Compare stay as they are. A launch of
+  // this store's whose entry arrived meanwhile is selected as usual.
+  async function resync() {
+    const version = projectStateVersion;
+    await populate();
+    if (version !== projectStateVersion) return;
+    const unanswered = Object.entries(current.detailsById)
+      .filter(([, details]) => !details?.Response)
+      .map(([id]) => id);
+    await Promise.all([
+      ...Object.keys(current.entriesByLaunchpad).map((id) => loadEntries(id)),
+      ...unanswered.map((id) => refreshDetails(id)),
+    ]);
+    if (version !== projectStateVersion) return;
+    for (const id of [...awaitingEntry.keys()]) await selectArrivedLaunch(id);
+  }
+
   // Jump to Launchpad: refreshes the list, opens `launchpadId` and selects
   // its newest entry, which may have been linked since its entries loaded.
   // `found` is false for an unknown id; the selection is then as populate
@@ -698,6 +761,106 @@ export function createLaunchpadStore(api) {
     return { moved, refused: null };
   }
 
+  // Drops a deleted launchpad from the state, and opens a neighbour when it
+  // was the open one.
+  // `orphan` is kept in orphanedDrafts in the same change.
+  async function forgetLaunchpad(id, orphan = null) {
+    const index = current.launchpads.findIndex((launchpad) => launchpad.ID === id);
+    update((state) => ({
+      ...state,
+      orphanedDrafts: orphan ? [...state.orphanedDrafts, orphan] : state.orphanedDrafts,
+      launchpads: state.launchpads.filter((launchpad) => launchpad.ID !== id),
+      ...mapPerLaunchpad(state, (map) => without(map, id)),
+      compare: state.compare?.launchpadId === id ? null : state.compare,
+      entrySelection:
+        state.entrySelection.launchpadId === id ? selecting.NO_ENTRY_SELECTION : state.entrySelection,
+    }));
+    if (current.selectedLaunchpadId !== id) return;
+    const neighbour =
+      current.launchpads[Math.min(index, current.launchpads.length - 1)];
+    await selectLaunchpad(neighbour?.ID ?? null);
+  }
+
+  // Another client's entry changes, read once their burst settles: the
+  // loaded entry lists of the launchpads named (every loaded one for
+  // `null`), and the list's summaries for launchpads not loaded. Drafts
+  // stay; entries that left drop out of the Entry selection.
+  let changedTimer = null;
+  let changedIds = new Set();
+  let changedAll = false;
+  const inflight = new Set();
+  function onEntriesChanged(ids) {
+    if (ids == null) changedAll = true;
+    else for (const id of ids) if (id) changedIds.add(String(id));
+    clearTimeout(changedTimer);
+    changedTimer = setTimeout(() => {
+      changedTimer = null;
+      const work = readChanged().catch((err) => console.error("Reading changed launchpads failed:", err));
+      inflight.add(work);
+      work.finally(() => inflight.delete(work));
+    }, LAUNCHPAD_SETTLE_MS);
+  }
+  async function readChanged() {
+    const all = changedAll;
+    const named = [...changedIds];
+    changedAll = false;
+    changedIds = new Set();
+    const loaded = (id) => Boolean(current.entriesByLaunchpad[id]);
+    const known = (id) => current.launchpads.some((launchpad) => launchpad.ID === id);
+    const reads = all ? Object.keys(current.entriesByLaunchpad) : named.filter(loaded);
+    const summaries = all || named.some((id) => known(id) && !loaded(id));
+    const version = projectStateVersion;
+    await Promise.all([...reads.map((id) => loadEntries(id)), summaries ? readSummaries() : null]);
+    if (version !== projectStateVersion) return;
+    updateEntrySelection((selection) => {
+      if (!selection.launchpadId) return selection;
+      const present = new Set(entryIdsOf(current, selection.launchpadId));
+      const ids = selection.ids.filter((id) => present.has(id));
+      if (ids.length === selection.ids.length) return selection;
+      if (!ids.length) return selecting.NO_ENTRY_SELECTION;
+      return { ...selection, ids, anchor: ids.includes(selection.anchor) ? selection.anchor : ids[0] };
+    });
+  }
+  // Reads the list's EntryCount and LastStatusCode for launchpads whose
+  // entries aren't loaded (a loaded list keeps its own).
+  async function readSummaries() {
+    const version = projectStateVersion;
+    const launchpads = (await api.getLaunchpads()) || [];
+    if (version !== projectStateVersion) return;
+    const byId = new Map(launchpads.map((launchpad) => [launchpad.ID, launchpad]));
+    update((state) => ({
+      ...state,
+      launchpads: state.launchpads.map((launchpad) => {
+        const fresh = byId.get(launchpad.ID);
+        if (!fresh || state.entriesByLaunchpad[launchpad.ID]) return launchpad;
+        return { ...launchpad, EntryCount: fresh.EntryCount, LastStatusCode: fresh.LastStatusCode };
+      }),
+    }));
+  }
+
+  // Adds a launchpad the service announced, once.
+  function addLaunchpad({ ID, Name, Description = "" }) {
+    update((state) =>
+      state.launchpads.some((launchpad) => launchpad.ID === ID)
+        ? state
+        : {
+            ...state,
+            launchpads: [
+              ...state.launchpads,
+              { ID, Name, Description, EntryCount: 0, LastStatusCode: null },
+            ],
+            entriesByLaunchpad: { ...state.entriesByLaunchpad, [ID]: state.entriesByLaunchpad[ID] ?? [] },
+          },
+    );
+  }
+
+  async function createLaunchpad({ name, description = "" }) {
+    const id = await api.createLaunchpad(name, description);
+    addLaunchpad({ ID: id, Name: name, Description: description });
+    await selectLaunchpad(id);
+    return id;
+  }
+
   async function updateLaunchpad(id, { name, description = "" }) {
     await api.updateLaunchpad(id, name, description);
     update((state) => ({
@@ -714,11 +877,16 @@ export function createLaunchpadStore(api) {
     subscribe,
     clear: () => {
       awaitingEntry.clear();
+      clearTimeout(changedTimer);
+      changedTimer = null;
+      changedIds = new Set();
+      changedAll = false;
       clearTimeout(searchTimer);
       searchSeq += 1;
       set(initialState(++projectStateVersion));
     },
     populate,
+    resync,
     jumpTo,
     loadEntries,
     ensureDetails,
@@ -832,19 +1000,7 @@ export function createLaunchpadStore(api) {
     // Names and descriptions match locally at once; entries through Marasi.
     setSearch,
 
-    createLaunchpad: async ({ name, description = "" }) => {
-      const id = await api.createLaunchpad(name, description);
-      update((state) => ({
-        ...state,
-        launchpads: [
-          ...state.launchpads,
-          { ID: id, Name: name, Description: description, EntryCount: 0, LastStatusCode: null },
-        ],
-        entriesByLaunchpad: { ...state.entriesByLaunchpad, [id]: [] },
-      }));
-      await selectLaunchpad(id);
-      return id;
-    },
+    createLaunchpad,
 
     updateLaunchpad,
 
@@ -867,26 +1023,73 @@ export function createLaunchpadStore(api) {
         if (pendingLaunchIDs(err)) await loadPendingLaunches();
         throw err;
       }
-      const index = current.launchpads.findIndex((launchpad) => launchpad.ID === id);
-      update((state) => ({
-        ...state,
-        launchpads: state.launchpads.filter((launchpad) => launchpad.ID !== id),
-        ...mapPerLaunchpad(state, (map) => without(map, id)),
-        compare: state.compare?.launchpadId === id ? null : state.compare,
-        entrySelection:
-          state.entrySelection.launchpadId === id ? selecting.NO_ENTRY_SELECTION : state.entrySelection,
-      }));
-      if (current.selectedLaunchpadId !== id) return;
-      const neighbour =
-        current.launchpads[Math.min(index, current.launchpads.length - 1)];
-      await selectLaunchpad(neighbour?.ID ?? null);
+      await forgetLaunchpad(id);
     },
 
-    onRequest: (request) => {
-      update((state) => arriveRequest(state, request));
-      selectArrivedLaunch(request?.ID);
+    // Another client's launchpad changes, from the stream (launchpadStore.js).
+    // launchpad.created: { ID, Name, Description }.
+    onLaunchpadCreated: addLaunchpad,
+    // launchpad.updated: a rename or new description.
+    onLaunchpadUpdated: ({ ID, Name, Description = "" }) =>
+      update((state) => ({
+        ...state,
+        launchpads: updateSummary(state.launchpads, ID, { Name, Description }),
+      })),
+    // launchpad.deleted: a dirty draft is kept in orphanedDrafts, which the
+    // page offers to restore, so the researcher's work never goes with it.
+    onLaunchpadDeleted: async ({ ID }) => {
+      const launchpad = current.launchpads.find((item) => item.ID === ID);
+      if (!launchpad) return;
+      let orphan = null;
+      if (isDraftDirty(current, ID)) {
+        const { raw, useHttps } = current.draftsByLaunchpad[ID];
+        orphan = { launchpadId: ID, name: launchpad.Name, raw, useHttps };
+      }
+      await forgetLaunchpad(ID, orphan);
     },
-    onResponse: (response) => update((state) => arriveResponse(state, response)),
+    // Links, unlinks, moves and bulk changes: the launchpad ids they touch,
+    // or null for any (a delete or highlight can change any entry list).
+    onEntriesChanged,
+    // A kept draft goes into a new launchpad of the same name, opened.
+    // Resolves to its id.
+    restoreOrphanedDraft: async (launchpadId) => {
+      const orphan = current.orphanedDrafts.find((item) => item.launchpadId === launchpadId);
+      if (!orphan) return null;
+      const id = await createLaunchpad({ name: orphan.name });
+      // One change, so the unsaved count never dips.
+      update((state) => ({
+        ...state,
+        orphanedDrafts: state.orphanedDrafts.filter((item) => item !== orphan),
+        draftsByLaunchpad: {
+          ...state.draftsByLaunchpad,
+          [id]: makeDraft(orphan.raw, null, { useHttps: orphan.useHttps }),
+        },
+      }));
+      return id;
+    },
+    discardOrphanedDraft: (launchpadId) =>
+      update((state) => ({
+        ...state,
+        orphanedDrafts: state.orphanedDrafts.filter((item) => item.launchpadId !== launchpadId),
+      })),
+    /** Waits for the reads another client's changes started. */
+    async settled() {
+      while (inflight.size > 0) await Promise.allSettled([...inflight]);
+    },
+
+    // The stream's request and response events carry no raw bytes, so an
+    // arrival without them reads its pair's details from Marasi.
+    onRequest: async (request) => {
+      const before = current;
+      update((state) => arriveRequest(state, request));
+      if (current !== before && request.Raw === undefined) await refreshDetails(request.ID);
+      await selectArrivedLaunch(request?.ID);
+    },
+    onResponse: async (response) => {
+      const before = current;
+      update((state) => arriveResponse(state, response));
+      if (current !== before && response.Raw === undefined) await refreshDetails(response.ID);
+    },
 
     // Compare starts from an entry of the open launchpad as A. `picking`
     // names the side the next entry click fills.

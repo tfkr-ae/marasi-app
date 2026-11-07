@@ -1,7 +1,10 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
-    import { GetRecentProjects } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { projectStore } from "../../stores/projectStore.js";
+    import { pickedProject, projectMatches } from "../../stores/projectApi.js";
+    import { connectionStore } from "../../stores/connectionStore.js";
+    import { filePickerShown } from "../connection/status.js";
     import { OpenFileDialog } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { X } from "lucide-svelte";
 
@@ -15,31 +18,13 @@
     const cHeader = 'text-2xl font-bold';
     const cForm = 'space-y-3';
     
-    function onInput(selected) {
-        if (selected && selected.detail) {
-            $modalStore[0].response(selected.detail.value);
-            modalStore.close();
-        }
-    }
-
-    function createNewProject() {
-        if (input.trim()) {
-            $modalStore[0].response(input.trim());
-            modalStore.close();
-        }
-    }
-    
+    // A listed project opens its exact path; typed text opens by name
+    // (projectTarget).
     function openSelected() {
-        console.log(selectedIndex)
-        console.log(filteredList)
-        if (selectedIndex >= 0 && selectedIndex < filteredList.length) {
-            $modalStore[0].response(filteredList[selectedIndex].value);
+        const picked = pickedProject(filteredList, selectedIndex, input);
+        if (picked) {
+            $modalStore[0].response(picked);
             modalStore.close();
-        } else if (filteredList.length > 0) {
-            $modalStore[0].response(filteredList[0].value);
-            modalStore.close();
-        } else {
-            createNewProject();
         }
     }
     
@@ -61,16 +46,8 @@
     }
     
     function filterProjects() {
-        if (!input.trim()) {
-            filteredList = recent;
-            return;
-        }
-        
-        filteredList = recent.filter(option => 
-            option.label.toLowerCase().includes(input.toLowerCase()) || 
-            option.value.toLowerCase().includes(input.toLowerCase())
-        );
-        
+        filteredList = projectMatches(recent, input);
+        if (!input.trim()) return;
         // Reset selected index when filter changes
         selectedIndex = filteredList.length > 0 ? 0 : -1;
     }
@@ -112,30 +89,10 @@
     }
     
     onMount(() => {
-        GetRecentProjects().then((recents) => {
-            const placeholder = []
-            recents.forEach((project) => {
-                console.log(project)
-                // Get just the filename for display
-                const fileName = project.ProjectName.split("/").pop()?.split("\\").pop() || project.ProjectName;
-                const entry = {
-                    // The label is now the name for display in the UI
-                    label: fileName.replace('.marasi', ''),
-                    // Store full path in value
-                    value: project.ProjectName,
-                    // Store the path separately for display
-                    path: project.ProjectName,
-                    // Store the date for sorting
-                    date: new Date(project.Date)
-                }
-                placeholder.push(entry);
-            });
-            
-            // Sort projects by date, most recent first
-            placeholder.sort((a, b) => b.date - a.date);
-            
-            recent = placeholder;
-            filteredList = placeholder;
+        // The recent projects, then the service's other named projects.
+        projectStore.list().then((projects) => {
+            recent = projects;
+            filteredList = projects;
             if (filteredList.length > 0) {
                 selectedIndex = 0;
             }
@@ -144,7 +101,7 @@
             setTimeout(() => {
                 document.querySelector('input[type="search"]')?.focus();
             }, 10);
-        });
+        }).catch((error) => console.error("Listing projects failed:", error));
     });
 </script>
 
@@ -192,7 +149,7 @@
                                     selectProject(i);
                                     openSelected();
                                 }}>
-                                <div class="project-name">{project.label}</div>
+                                <div class="project-name">{project.name}</div>
                                 <div class="project-path">{project.path}</div>
                             </li>
                         {/each}
@@ -215,7 +172,9 @@
                 </button>
             </div>
             
-            <!-- ALTERNATIVE ACTION (BROWSE FILES) -->
+            <!-- ALTERNATIVE ACTION (BROWSE FILES): local only; a remote's
+                 projects open from its list or a typed path. -->
+            {#if filePickerShown($connectionStore.connection)}
              <hr>
             <div class="w-full mt-2">
                 <button 
@@ -226,6 +185,7 @@
                     Browse Files...
                 </button>
             </div>
+            {/if}
             
             <!-- Simple information about project creation behavior -->
             <div class="text-xs opacity-70 mt-2">

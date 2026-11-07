@@ -1,23 +1,16 @@
 <script>
     import { DataHandler } from "@vincjo/datatables";
-    import { logItems } from "../../stores";
+    import { homeStore } from "../../stores/homeStore";
     import Sort from "./datatables/Sort.svelte";
-    import { onMount } from "svelte";
-    import { GetExtensions } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-    export const extensionsMap = {};
-    const handler = new DataHandler(Object.values($logItems), {
+    // The service's log, oldest first, newest shown first; log.added lines
+    // join it live (homeStore).
+    $: logItems = $homeStore.logs;
+    $: extensionsMap = $homeStore.extensionNames;
+    const handler = new DataHandler([], {
         rowsPerPage: 200,
     });
-    $: handler.setRows(Object.values($logItems).toReversed());
+    $: handler.setRows(logItems.toReversed());
     $: rows = handler.getRows();
-    onMount(() => {
-        GetExtensions().then((exts) => {
-            console.log(exts);
-            exts.forEach((ext) => {
-                extensionsMap[ext.ID] = ext.Name;
-            });
-        });
-    });
 </script>
 
 <div class="table-container">
@@ -28,7 +21,7 @@
                     <Sort
                         {handler}
                         orderBy={(row) => {
-                            return $logItems.indexOf(row);
+                            return logItems.indexOf(row);
                         }}>ID</Sort
                     >
                 </th>
@@ -42,7 +35,7 @@
         <tbody>
             {#each $rows as row}
                 <tr>
-                    <td class="id-cell">{$logItems.indexOf(row) + 1}</td>
+                    <td class="id-cell">{logItems.indexOf(row) + 1}</td>
                     <td class="level-cell">{row.Level}</td>
                     <td class="message-cell">{row.Message}</td>
                     <td class="req-resp-cell"

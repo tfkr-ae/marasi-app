@@ -12,7 +12,8 @@
         modeCurrent,
     } from "@skeletonlabs/skeleton";
     import CodeMirror from "svelte-codemirror-editor";
-    import { DoExtender, RunExtension } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { extensionsStore, WORKSHOP } from "../../stores/extensionsStore.js";
+    import { luaErrorText } from "../../lib/extensions/luaError.js";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
@@ -25,10 +26,32 @@
     import { workshopCode, marasiConfig } from "../../stores";
     import { autocompletion } from "@codemirror/autocomplete";
     import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
+    import { isSuperseded } from "../../lib/service/errors.js";
 
     let accOpened = false;
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
+    // Runs the editor's Lua on the service, which stores it when it runs,
+    // and toasts the result or the Lua error.
+    function runWorkshop() {
+        extensionsStore
+            .run(WORKSHOP, $workshopCode)
+            .then(() =>
+                toastStore.trigger({
+                    message: "Ran Workshop",
+                    background: "variant-filled-success",
+                }),
+            )
+            .catch((error) => {
+                // A connection switch stopped it: nothing to report.
+                if (isSuperseded(error)) return;
+                toastStore.trigger({
+                    message: luaErrorText(error),
+                    background: "variant-filled-error",
+                    autohide: false,
+                });
+            });
+    }
     const workshopMenu = [
         {
             actionId: "workshop.toggle-settings",
@@ -50,23 +73,7 @@
         {
             actionId: "workshop.update-code",
             icon: SquarePlay,
-            handler: () => {
-                RunExtension("workshop", $workshopCode)
-                    .then(() => {
-                        const toastSettings = {
-                            message: "Updated Workshop",
-                            background: "variant-filled-success",
-                        };
-                        toastStore.trigger(toastSettings);
-                    })
-                    .catch((error) => {
-                        const toastSettings = {
-                            message: "Error updating " + error,
-                            background: "variant-filled-error",
-                        };
-                        toastStore.trigger(toastSettings);
-                    });
-            },
+            handler: runWorkshop,
         },
         {
             actionId: "workshop.show-logs",
@@ -103,9 +110,7 @@
                 <button
                     type="button"
                     class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary ring-0 shadow-none' : 'variant-filled-primary'}"
-                    on:click={() => {
-                        DoExtender($workshopCode);
-                    }}>Execute</button
+                    on:click={runWorkshop}>Execute</button
                 >
             </div>
         </svelte:fragment>

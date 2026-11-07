@@ -1,8 +1,12 @@
+import { isSuperseded } from "./service/errors.js";
+
 /**
  * Shows an error toast: `message`, then ": <error>" when there is an error,
- * such as "Failed to save the query: disk full".
+ * such as "Failed to save the query: disk full". An action a connection
+ * switch stopped (superseded) shows nothing.
  */
 export function toastError(toastStore, message, error) {
+  if (isSuperseded(error)) return;
   toastStore.trigger({
     message: error ? `${message}: ${String(error)}` : message,
     background: "variant-filled-error",

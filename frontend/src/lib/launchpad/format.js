@@ -15,6 +15,12 @@ export const tertiaryVariant = (lightMode) =>
 export const neutralVariant = (lightMode) =>
   lightMode ? "variant-ghost border-0 ring-0" : "variant-filled";
 
+/** A small square primary button, as the connection screens use. */
+export const primaryButton = (lightMode) => `btn btn-sm rounded-none ${primaryVariant(lightMode)}`;
+
+/** A small square neutral button, as the connection screens use. */
+export const neutralButton = (lightMode) => `btn btn-sm rounded-none ${neutralVariant(lightMode)}`;
+
 /** Text colour class for an HTTP status code; pending (0, or -1 as stored) is dimmed. */
 export function statusClass(code) {
   if (!(code > 0)) return "opacity-50";

@@ -15,6 +15,8 @@
 // entries live in state.queries[source]. Writes are optimistic: the state
 // changes first, and goes back if the write fails.
 import { writable } from "svelte/store";
+import { COUNT_DELAY_MS, createMatchCounts } from "./createMatchCounts.js";
+import { boundAction } from "../lib/service/boundAction.js";
 
 /** The client-setting key prefix of the project's saved queries. */
 export const PROJECT_QUERY_PREFIX = "ledger.saved_query.";
@@ -49,8 +51,10 @@ function initialState() {
     queries: { project: [], app: [] },
     // Ids of the hidden built-ins.
     hiddenBuiltins: [],
-    // Match counts by query text: { count, capped }, or { error } for a
-    // query Marasi rejects. A query without an entry is still counting.
+    // Match counts by query text: { count, capped }, { error } for a query
+    // Marasi rejects, or null when it couldn't be counted. `stale: true`
+    // marks the last run's count while a refresh recounts it. A query
+    // without an entry hasn't been counted yet.
     counts: {},
   };
 }
@@ -126,7 +130,10 @@ function defaultName(query) {
   return query.length > UNNAMED_LENGTH ? `${query.slice(0, UNNAMED_LENGTH).trimEnd()}…` : query;
 }
 
-export function createSavedQueriesStore(api, { newId = () => crypto.randomUUID() } = {}) {
+export function createSavedQueriesStore(
+  api,
+  { newId = () => crypto.randomUUID(), timers = globalThis, countDelay = COUNT_DELAY_MS } = {},
+) {
   const { subscribe, update } = writable(initialState());
   let current = initialState();
   subscribe((state) => (current = state));
@@ -262,19 +269,27 @@ export function createSavedQueriesStore(api, { newId = () => crypto.randomUUID()
     const { hidden, ...stored } = entry;
     const from = stored.source;
     const moved = { ...stored, order: nextOrder(target), source: target };
-    const putBack = () => setSource(from, byOrder([...without(current.queries[from], stored), stored]));
+    // The project's queries are the connection's: each write to them is a
+    // step of one action (boundAction.js), and once a switch stops it the
+    // project's list is the next connection's, so it stays as it is.
+    const action = boundAction(api.bind?.());
+    const step = (source, write) => (source === "project" ? action.step(write) : write());
+    const putBack = () => {
+      if (from === "project" && !action.live()) return;
+      setSource(from, byOrder([...without(current.queries[from], stored), stored]));
+    };
     setSource(from, without(current.queries[from], stored));
     try {
-      await addEntry(moved);
+      await step(target, () => addEntry(moved));
     } catch (error) {
       putBack();
       throw error;
     }
     try {
-      await backends[from].remove(stored, current.queries[from]);
+      await step(from, () => backends[from].remove(stored, current.queries[from]));
     } catch (error) {
       putBack();
-      await removeEntry(moved).catch((undo) => console.error("taking back a moved query:", undo));
+      await step(target, () => removeEntry(moved)).catch((undo) => console.error("taking back a moved query:", undo));
       throw error;
     }
   }
@@ -307,32 +322,35 @@ export function createSavedQueriesStore(api, { newId = () => crypto.randomUUID()
     }
   }
 
-  let countRun = 0;
-  /**
-   * Counts every saved query's matches, one query at a time so the table's
-   * own reads aren't held up, filling state.counts as each returns. Counts
-   * from earlier runs are dropped; a newer run stops this one.
-   */
-  async function loadCounts() {
-    const run = ++countRun;
-    update((state) => ({ ...state, counts: {} }));
-    const queries = [
-      ...new Set(savedQueryGroups(current, { showHidden: true }).flatMap((g) => g.items.map((q) => q.query))),
-    ];
-    for (const query of queries) {
-      let count;
-      try {
-        const result = await api.countMatches(query);
-        count = result.QueryError
-          ? { error: result.QueryError.Message }
-          : { count: result.Count, capped: result.Capped };
-      } catch (error) {
-        console.error(`counting ${query}:`, error);
-      }
-      if (run !== countRun) return;
-      if (count) update((state) => ({ ...state, counts: { ...state.counts, [query]: count } }));
-    }
-  }
+  // Match counts, mirrored into state.counts: four at a time, the last
+  // run's kept (stale) until each new one arrives; see createMatchCounts.
+  const counts = createMatchCounts({
+    queries: () => savedQueryGroups(current, { showHidden: true }).flatMap((g) => g.items.map((q) => q.query)),
+    count: async (query) => {
+      const result = await api.countMatches(query);
+      return result.QueryError ? { error: result.QueryError.Message } : { count: result.Count, capped: result.Capped };
+    },
+    timers,
+    delay: countDelay,
+  });
+  counts.subscribe((value) => update((state) => ({ ...state, counts: value })));
+  const loadCounts = counts.load;
+  // Counts after a project load, a resync or new traffic, once for a burst.
+  const scheduleCounts = counts.schedule;
+  // Forgets every count and stops counting, as a project switch does.
+  const clearCounts = counts.clear;
 
-  return { subscribe, load, loadProject, save, rename, remove, move, setBuiltinHidden, loadCounts };
+  return {
+    subscribe,
+    load,
+    loadProject,
+    save,
+    rename,
+    remove,
+    move,
+    setBuiltinHidden,
+    loadCounts,
+    scheduleCounts,
+    clearCounts,
+  };
 }

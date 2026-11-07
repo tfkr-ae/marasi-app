@@ -1,6 +1,6 @@
 // The opening screen's state for one open of a project: the steps, the
-// sentence and the progress, built from the open's log events, the load
-// sequence's part signals and the open's outcome. No Svelte or Wails here:
+// sentence and the progress, built from the service's project.* events, the
+// load sequence's part signals and the open's outcome. No Svelte or Wails here:
 // this is the opening screen's test seam (see openProgress.test.js).
 //
 // The state is a plain object; each `with…` function returns a new one, and
@@ -14,6 +14,8 @@ const openSteps = [
   { id: "lock", label: "Lock", running: "Locking", failed: "Locked", sentence: "Checking the project lock." },
   { id: "open", label: "Open", running: "Opening", sentence: "Opening the database." },
   { id: "upgrade", label: "Upgrade", running: "Upgrading", sentence: "Upgrading the database. Keep Marasi open." },
+  // The service waits for the open project's work (Lua, requests) to end.
+  { id: "wait", label: "Wait", running: "Waiting", sentence: "Waiting for the open project." },
   { id: "load", label: "Load", running: "Loading" },
 ];
 const stepIndex = Object.fromEntries(openSteps.map(({ id }, i) => [id, i]));
@@ -68,8 +70,8 @@ export function openingFor({ name, path = null, current = null, scratchpad = fal
     current,
     recents: [],
     step: 0,
-    upgradeFile: null,
-    upgradesApplied: 0,
+    upgrade: null,
+    waitingFor: [],
     part: 0,
     log: [],
     failure: null,
@@ -77,47 +79,56 @@ export function openingFor({ name, path = null, current = null, scratchpad = fal
 }
 
 /**
- * Feeds one log event from the open: the app's slog records from the db
- * component and from goose, which logs one record per migration statement
- * with the migration file as `source`. Other events are ignored.
+ * Feeds one of the service's project.* events (`name`, its `data`):
+ * project.opening, .upgrading, .waiting, .opened and .opening_failed. Events
+ * for another project are ignored; an open by name takes its path from the
+ * first event for a project of that name. Steps only move forward, and
+ * nothing but the failure's reason is taken once the open has ended.
  */
-export function withOpenLog(state, log) {
-  const data = log?.data;
-  // Marasi's own proxy logs (capitalised fields) and other components'
-  // records aren't part of the open.
-  if (typeof log?.level !== "string" || state.step === succeededStep || state.failure) return state;
-  const isGoose = data?.logger === "goose";
-  if (!isGoose && data?.component !== "db") return state;
+export function withProjectEvent(state, name, data) {
+  const project = typeof data?.project === "string" ? data.project : null;
+  if (!project || !name?.startsWith("project.")) return state;
+  if (state.path ? project !== state.path : projectName(project) !== state.name) return state;
+  const path = state.path ?? project;
+  const logged = { ...state, path, log: [...state.log, eventLine(name, data)] };
+  if (state.step === succeededStep) return state;
+  if (state.failure) return name === "project.opening_failed" ? logged : state;
 
-  let step = state.step;
-  // The lock writes no log; connecting to the database means it's held.
-  if (log.message === "Connecting to SQLite...") step = Math.max(step, stepIndex.open);
-  else if (isGoose) step = Math.max(step, stepIndex.upgrade);
-  else if (log.message === "Migrations completed" || log.message === "Migrations up to date") {
-    step = Math.max(step, stepIndex.load);
+  const at = (id) => Math.max(state.step, stepIndex[id]);
+  switch (name) {
+    case "project.opening":
+      return { ...logged, step: at("open") };
+    case "project.upgrading":
+      return {
+        ...logged,
+        step: at("upgrade"),
+        upgrade: { file: data.migration, applied: data.applied, total: data.total },
+      };
+    case "project.waiting":
+      return { ...logged, step: at("wait"), waitingFor: data.waiting_for ?? [] };
+    case "project.opened":
+      return { ...logged, step: at("load") };
+    case "project.opening_failed":
+      return logged;
+    default:
+      return state;
   }
-
-  // Marasi logs the upgrade's total only once it has finished, so count
-  // the upgrade files seen instead: each new source is one more applied.
-  let { upgradeFile, upgradesApplied } = state;
-  const source = isGoose ? data.source : null;
-  if (source && source !== upgradeFile) {
-    if (upgradeFile) upgradesApplied += 1;
-    upgradeFile = source;
-  }
-  // A project opened by bare name has no path until its database says.
-  const path = state.path ?? (!isGoose && typeof data.path === "string" ? data.path : null);
-  return { ...state, step, upgradeFile, upgradesApplied, path, log: [...state.log, logLine(log)] };
 }
 
-// One log event as a Details line: its time, level, message and fields,
-// as logged.
-function logLine({ timestamp, level, message, data }) {
+// One event as a Details line: its name and fields, as sent.
+function eventLine(name, data) {
   const fields = Object.entries(data ?? {}).map(([key, value]) => {
     const text = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
     return ` ${key}=${text}`;
   });
-  return `${timestamp} ${level} ${message}${fields.join("")}`;
+  return `${name}${fields.join("")}`;
+}
+
+// What the service waits for, as the Wait step's sentence names it.
+function waitName(wait) {
+  if (wait.kind === "work") return `${wait.count} request${wait.count === 1 ? "" : "s"}`;
+  if (wait.kind === "extension") return wait.name;
+  return wait.summary || wait.type || "a held item";
 }
 
 /**
@@ -131,8 +142,8 @@ export function withLoadPart(state, signal) {
 }
 
 /**
- * Records that the app's Go side opened the target and released the
- * project open before: from here the open project is the target, even if
+ * Records that the service opened the target and released the project
+ * open before: from here the open project is the target, even if
  * loading it fails.
  */
 export function withSwitched(state) {
@@ -149,18 +160,15 @@ export function withOpened(state) {
 }
 
 /**
- * Records that the open failed with `error`, as the app's Go side returned
+ * Records that the open failed with `error`, as the service client reports
  * it. A locked project (the `project_locked` code: another Marasi owns it)
  * fails the Lock step; any other error fails the step that was running.
  */
 export function withFailed(state, error) {
   const text = String(error ?? "");
   const locked = codeIDs(text, "project_locked") !== null;
-  // Marasi's lock error names the project's file: "project already open: <path>".
-  const lockedPath = locked ? (/project already open: (.+)$/.exec(text)?.[1] ?? null) : null;
   return {
     ...state,
-    path: state.path ?? lockedPath,
     step: locked ? stepIndex.lock : Math.min(state.step, stepIndex.load),
     failure: { kind: locked ? "locked" : "other", error: text },
     // Details ends with the error, as returned.
@@ -169,16 +177,16 @@ export function withFailed(state, error) {
 }
 
 /**
- * Feeds the recent projects, as GetRecentProjects returns them
- * (`{ProjectName: <path>, Date: <Go time>}`), to pick from after a failure.
- * `now` (epoch ms) is when they're listed, for how long ago each opened.
+ * Feeds the recent projects, `[{name, path, modifiedAt}]` with RFC 3339
+ * times (the service's project list), to pick from after a failure. `now`
+ * (epoch ms) is when they're listed, for how long ago each opened.
  */
 export function withRecents(state, recents, now = Date.now()) {
-  const projects = (recents ?? []).map(({ ProjectName, Date: date }) => ({
-    name: projectName(ProjectName),
-    path: ProjectName,
-    at: goTime(date),
-    opened: openedAgo(date, now),
+  const projects = (recents ?? []).map(({ name, path, modifiedAt }) => ({
+    name,
+    path,
+    at: parseTime(modifiedAt),
+    opened: openedAgo(modifiedAt, now),
   }));
   // Most recent first; a date that doesn't parse goes last.
   projects.sort((a, b) => (Number.isNaN(b.at) ? -Infinity : b.at) - (Number.isNaN(a.at) ? -Infinity : a.at));
@@ -192,20 +200,20 @@ export const projectName = (path) =>
     .pop()
     .replace(/\.marasi$/, "");
 
-// Go's time.Time.String(), "2006-01-02 15:04:05.999999999 -0700 MST", as
-// epoch ms; WebKit's Date doesn't parse it as is. NaN when it doesn't match.
-function goTime(text) {
-  const match = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)(?:\.(\d+))? ([+-]\d\d)(\d\d)/.exec(String(text ?? ""));
+// An RFC 3339 time as epoch ms, its fraction cut to milliseconds, which
+// every engine parses. NaN when it doesn't match.
+function parseTime(text) {
+  const match = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$/.exec(String(text ?? ""));
   if (!match) return NaN;
-  const [, day, time, fraction = "0", hours, minutes] = match;
-  return Date.parse(`${day}T${time}.${fraction.padEnd(3, "0").slice(0, 3)}${hours}:${minutes}`);
+  const [, time, fraction = "0", zone] = match;
+  return Date.parse(`${time}.${fraction.padEnd(3, "0").slice(0, 3)}${zone}`);
 }
 
-// How long before `now` a project last opened, from Go's time `text`:
+// How long before `now` a project last opened, from the RFC 3339 `text`:
 // "Just now", "20 minutes ago", "Yesterday", "Last week", up to four weeks,
 // then the day it opened ("2026-08-02"). Empty when the time doesn't parse.
 function openedAgo(text, now) {
-  const at = goTime(text);
+  const at = parseTime(text);
   if (Number.isNaN(at)) return "";
   const minutes = Math.floor(Math.max(0, now - at) / 60000);
   const hours = Math.floor(minutes / 60);
@@ -219,13 +227,13 @@ function openedAgo(text, now) {
   if (weeks < 1) return ago(days, "day");
   if (weeks === 1) return "Last week";
   if (weeks < 5) return ago(weeks, "week");
-  // The day as Go wrote it, in the time zone it was written in.
+  // The day as the service wrote it, in the time zone it was written in.
   return String(text).slice(0, 10);
 }
 
 // Whether a recent project is `name` at `path`: by path when both are
-// known, else by name (projects opened by bare name live in the config dir,
-// as every recent project does).
+// known, else by name (a project opened by name lives in the service's
+// projects dir, as every recent project does).
 const isProject = (recent, name, path) =>
   recent.path && path ? recent.path === path : recent.name === name;
 
@@ -249,7 +257,9 @@ export function openingScreen(state) {
   }
   else if (failure) sentence = "Couldn't open the project.";
   else if (loading) sentence = `Loading ${part.toLowerCase()}.`;
-  else if (state.step < succeededStep) sentence = openSteps[state.step].sentence;
+  else if (state.step === stepIndex.wait && state.waitingFor.length) {
+    sentence = `Waiting for ${state.waitingFor.map(waitName).join(", ")}.`;
+  } else if (state.step < succeededStep) sentence = openSteps[state.step].sentence;
   return {
     project: { name: state.name, path: state.path },
     // The project that opened, once the open succeeded: what startup and
@@ -257,10 +267,7 @@ export function openingScreen(state) {
     opened: state.step === succeededStep ? { name: state.name, path: state.path } : null,
     steps,
     sentence,
-    upgrade:
-      !failure && state.step === stepIndex.upgrade && state.upgradeFile
-        ? { file: state.upgradeFile, applied: state.upgradesApplied }
-        : null,
+    upgrade: !failure && state.step === stepIndex.upgrade ? state.upgrade : null,
     load: {
       part,
       done: state.step === succeededStep ? loadParts.length : loading ? state.part : 0,

@@ -1,26 +1,20 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
+	"mime"
 	"slices"
+	"strings"
 
-	"github.com/tfkr-ae/marasi/domain"
 	"go.yaml.in/yaml/v3"
 )
 
 // The content-type exclusion hides pairs by content type from every traffic
 // read. The app default lives in the app config; a project that has edited
-// its list keeps it in ledgerExclusionKey and stops following the default
+// its list keeps it as the service client setting ledger.exclusion, which the
+// frontend reads and writes, and stops following the default
 // (docs/adr/2026-10-16-app-defaults-with-project-overrides.md).
-const (
-	contentTypeExclusionConfigKey = "ledger_content_type_exclusion"
-	ledgerExclusionKey            = "ledger.exclusion"
-	// legacyExclusionKey is where Marasi's migration 00012 moved a project's
-	// edited app.filters.
-	legacyExclusionKey = "legacy.content_type_exclusion"
-)
+const contentTypeExclusionConfigKey = "ledger_content_type_exclusion"
 
 // seededContentTypeExclusion is the default Marasi seeded into app.filters,
 // which every project followed before the exclusion moved to the app.
@@ -54,15 +48,22 @@ var seededContentTypeExclusion = []string{
 	"application/x-bzip", "application/x-bzip2",
 }
 
-// normalizeExclusion lowercases values and drops parameters, as Marasi does,
-// and returns an empty list rather than nil so it stores as [].
+// normalizeExclusion parses each value with mime.ParseMediaType, lowercases
+// it and drops its parameters, as Marasi does. A value must be an exact type
+// such as "text/html" or a whole major type such as "image/*". It returns an
+// empty list rather than nil so it stores as [].
 func normalizeExclusion(values []string) ([]string, error) {
-	normalized, err := domain.NormalizeExclusion(values)
-	if err != nil {
-		return nil, err
-	}
-	if normalized == nil {
-		return []string{}, nil
+	normalized := make([]string, len(values))
+	for i, value := range values {
+		mediaType, _, err := mime.ParseMediaType(value)
+		major, minor, ok := strings.Cut(mediaType, "/")
+		switch {
+		case err != nil || !ok || major == "" || minor == "":
+			return nil, fmt.Errorf("invalid content-type exclusion %q: want type/subtype or type/*", value)
+		case strings.Contains(major, "*") || (strings.Contains(minor, "*") && minor != "*"):
+			return nil, fmt.Errorf("invalid content-type exclusion %q: * may only stand for a whole subtype, as in image/*", value)
+		}
+		normalized[i] = mediaType
 	}
 	return normalized, nil
 }
@@ -97,80 +98,5 @@ func (a *App) SetDefaultContentTypeExclusion(values []string) error {
 		return fmt.Errorf("saving default content-type exclusion: %w", err)
 	}
 	cfg.contentTypeExclusion = normalized
-	return nil
-}
-
-// GetContentTypeExclusion returns the open project's exclusion: its own list
-// when it has one, else the app default.
-func (a *App) GetContentTypeExclusion() ([]string, error) {
-	setting, err := a.GetClientSetting(ledgerExclusionKey)
-	if err != nil {
-		return nil, fmt.Errorf("reading content-type exclusion: %w", err)
-	}
-	if setting == nil {
-		return a.GetDefaultContentTypeExclusion(), nil
-	}
-	values := []string{}
-	if err := json.Unmarshal(setting.Value, &values); err != nil {
-		return nil, fmt.Errorf("reading content-type exclusion: %s is not a list of content types: %w", ledgerExclusionKey, err)
-	}
-	if values == nil {
-		values = []string{}
-	}
-	return values, nil
-}
-
-// HasOwnContentTypeExclusion reports whether the open project keeps its own
-// exclusion; false means it follows the app default.
-func (a *App) HasOwnContentTypeExclusion() (bool, error) {
-	setting, err := a.GetClientSetting(ledgerExclusionKey)
-	if err != nil {
-		return false, fmt.Errorf("reading content-type exclusion: %w", err)
-	}
-	return setting != nil, nil
-}
-
-// SetContentTypeExclusion gives the open project its own exclusion, which it
-// keeps instead of following the app default.
-func (a *App) SetContentTypeExclusion(values []string) error {
-	normalized, err := normalizeExclusion(values)
-	if err != nil {
-		return err
-	}
-	value, err := json.Marshal(normalized)
-	if err != nil {
-		return fmt.Errorf("encoding content-type exclusion: %w", err)
-	}
-	_, err = a.SetClientSetting(ledgerExclusionKey, value)
-	return err
-}
-
-// ResetContentTypeExclusion drops the open project's own exclusion, so it
-// follows the app default again.
-func (a *App) ResetContentTypeExclusion() error {
-	return a.DeleteClientSetting(ledgerExclusionKey)
-}
-
-// migrateLegacyExclusion moves the exclusion Marasi kept for the project
-// into the app's own setting, once: the Marasi key is deleted after the copy.
-// A project without one follows the app default.
-func (a *App) migrateLegacyExclusion() error {
-	repo, err := a.configRepo()
-	if err != nil {
-		return err
-	}
-	legacy, err := repo.GetClientSetting(domain.ReservedClient, legacyExclusionKey)
-	if errors.Is(err, domain.ErrClientSettingNotFound) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("reading legacy content-type exclusion: %w", err)
-	}
-	if _, err := repo.SetClientSetting(appClient, ledgerExclusionKey, legacy.Value); err != nil {
-		return fmt.Errorf("copying legacy content-type exclusion: %w", err)
-	}
-	if err := repo.DeleteClientSetting(domain.ReservedClient, legacyExclusionKey); err != nil {
-		return fmt.Errorf("deleting legacy content-type exclusion: %w", err)
-	}
 	return nil
 }
