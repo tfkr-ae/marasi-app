@@ -18,14 +18,21 @@ var readBuildInfo = debug.ReadBuildInfo
 // or after a tag, v1.2.4-0.20261105093000-abcdefabcdef.
 var pseudoVersionTime = regexp.MustCompile(`[-.](\d{4})(\d{2})(\d{2})\d{6}-[0-9a-f]{12}$`)
 
-// pseudoVersionDate returns a pseudo-version's commit date as DD.MM.YYYY,
-// the format of Marasi's version dates, or "" when the version has none.
-func pseudoVersionDate(version string) string {
-	m := pseudoVersionTime.FindStringSubmatch(version)
-	if m == nil {
-		return ""
+// A Marasi release tag, DD.MM.YYYY with an optional same-day -N, as Go
+// records it (v30.10.2026, v23.06.2026-2, v30.10.2026+incompatible) or raw.
+var releaseTagDate = regexp.MustCompile(`^v?(0[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2])\.(\d{4})(?:-\d+)?(?:\+incompatible)?$`)
+
+// marasiVersionDate returns the date of a Marasi module version as
+// DD.MM.YYYY, the format of Marasi's version dates: a pseudo-version's
+// commit date or a release tag's date. It is "" when the version has none.
+func marasiVersionDate(version string) string {
+	if m := pseudoVersionTime.FindStringSubmatch(version); m != nil {
+		return m[3] + "." + m[2] + "." + m[1]
 	}
-	return m[3] + "." + m[2] + "." + m[1]
+	if m := releaseTagDate.FindStringSubmatch(version); m != nil {
+		return m[1] + "." + m[2] + "." + m[3]
+	}
+	return ""
 }
 
 // MarasiPin returns the date (DD.MM.YYYY) of the Marasi version the app was
@@ -38,7 +45,7 @@ func (a *App) MarasiPin() string {
 	}
 	for _, dep := range info.Deps {
 		if dep.Path == marasiModule {
-			return pseudoVersionDate(dep.Version)
+			return marasiVersionDate(dep.Version)
 		}
 	}
 	return ""
