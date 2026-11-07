@@ -14,11 +14,20 @@ const projectEvents = [
 
 export function createProjectApi(client, { confirmSwitch, loadProject, recentProjects = async () => [] }) {
   return {
-    /** The ids of the items Checkpoint holds; the service would wait for them. */
-    heldCheckpointIDs: async () => ((await client.get("/checkpoint")).items ?? []).map((item) => item.id),
+    /** The client bound to the connection it points at now (client.js). */
+    bind: () => client.bind(),
+    /**
+     * The ids of the items Checkpoint holds; the service would wait for
+     * them. Through `link`, a bind(), when given.
+     */
+    heldCheckpointIDs: async (link = client) => ((await link.get("/checkpoint")).items ?? []).map((item) => item.id),
     confirmSwitch,
-    /** Opens `{name}` or `{path}` on the service; resolves to its canonical path. */
-    open: async (target) => (await client.post("/project/open", target)).project,
+    /**
+     * Opens `{name}` or `{path}` on the service; resolves to its canonical
+     * path. Through `link`, a bind(), when given: superseded once the client
+     * moved to another connection.
+     */
+    open: async (target, link = client) => (await link.post("/project/open", target)).project,
     /**
      * The projects to offer, `[{name, path, modifiedAt}]`: those opened on
      * this connection, latest first, then the service's other named

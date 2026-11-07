@@ -15,7 +15,12 @@
 //                                                    another client opened (Go)
 //   loadDeclined()                                   the prompt kept the pages
 //   use({url, password})                             point the service client
-//   readStatus({timeout}) -> GET /service/status, giving up after `timeout` ms
+//   bind() -> link                                   the client bound to where it
+//                                                    points now (client.js);
+//                                                    reads and writes below take it
+//   sessionBegan()                                   a new session began: cut the
+//                                                    last one's in-flight work off
+//   readStatus({timeout}, link) -> GET /service/status, giving up after `timeout` ms
 //   openEvents({onDrop, onReset, resume})             open GET /events; resume: from
 //                                                    the last event id (no replay when false)
 //   closeEvents()
@@ -24,8 +29,8 @@
 //                                                    another attempt began
 //   reloadProject(status, {current})                  the same, as after a switch
 //                                                    (the pages remount)
-//   readControl() -> GET /service/control-listener/status
-//   updateControl(body) -> POST /service/control-listener/update
+//   readControl(link) -> GET /service/control-listener/status
+//   updateControl(body, link) -> POST /service/control-listener/update
 //   forgetPassword(id, origins)                       a remote's password is off (Go)
 //   appOrigin() -> the app's own Origin
 //   holdWrites(on)                                    refuse project writes while
@@ -47,7 +52,10 @@
 // step, stream handler and wait with the session that made it, and after
 // each await a step whose session has ended does nothing: an older
 // attempt's answer never points the client, touches /events or the stores,
-// or dispatches.
+// or dispatches. A new session also calls sessionBegan() before its steps,
+// which detaches the service client and supersedes the project store's runs,
+// so nothing the last session started reaches the next connection. Its
+// service calls go through a link bound after its own use().
 //
 // A dropped stream reconnects and resumes from the last event id, so the
 // service replays what was missed and nothing resyncs. The status's run ID
@@ -610,6 +618,7 @@ export function createConnectionStore(api, timers = globalThis) {
     // their writes would land in it: hold them until the full load.
     const held = next.state.phase === "project-changed";
     if (held !== (previous.phase === "project-changed")) api.holdWrites?.(held);
+    if (next.state.session !== previous.session) api.sessionBegan?.();
     for (const step of next.steps) perform(step, next.state.session);
     return null;
   }
@@ -641,7 +650,7 @@ export function createConnectionStore(api, timers = globalThis) {
           const password = await api.connectionPassword(step.id);
           if (!current(session)) return;
           api.use({ url: step.url, password });
-          status = await api.readStatus(statusWait);
+          status = await api.readStatus(statusWait, api.bind?.());
         } catch (err) {
           settle(
             session,
@@ -695,7 +704,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "read-status": {
         let status;
         try {
-          status = await api.readStatus(statusWait);
+          status = await api.readStatus(statusWait, api.bind?.());
         } catch (err) {
           settle(session, isAuthRefusal(err) ? { type: "AUTH_REJECTED" } : { type: "CONNECT_FAILED", error: message(err) });
           return;
@@ -713,7 +722,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "refresh-status": {
         let status;
         try {
-          status = await api.readStatus(statusWait);
+          status = await api.readStatus(statusWait, api.bind?.());
         } catch (err) {
           console.error("Reading the service status failed:", err);
           return;
@@ -746,7 +755,7 @@ export function createConnectionStore(api, timers = globalThis) {
           }
           if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });
-          status = await api.readStatus(statusWait);
+          status = await api.readStatus(statusWait, api.bind?.());
         } catch (err) {
           if (!current(session)) return;
           if (isAuthRefusal(err)) {
@@ -782,7 +791,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "check-switch": {
         let status;
         try {
-          status = await api.readStatus(statusWait);
+          status = await api.readStatus(statusWait, api.bind?.());
         } catch (err) {
           console.error("Reading the service status failed:", err);
           return;
@@ -803,7 +812,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "read-control": {
         let control;
         try {
-          control = await api.readControl();
+          control = await api.readControl(api.bind?.());
         } catch (err) {
           console.error("Reading the control listener failed:", err);
           return;
@@ -814,7 +823,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "update-control": {
         let control;
         try {
-          control = await api.updateControl(step.body);
+          control = await api.updateControl(step.body, api.bind?.());
         } catch (err) {
           settle(session, { type: "CONTROL_FAILED", error: message(err) });
           return;
@@ -853,8 +862,9 @@ export function createConnectionStore(api, timers = globalThis) {
               : { url: connection.url, password: step.password ?? "", startedByApp: false };
           if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });
-          status = await api.readStatus(statusWait);
-          control = await api.readControl().catch(() => null);
+          const link = api.bind?.();
+          status = await api.readStatus(statusWait, link);
+          control = await api.readControl(link).catch(() => null);
         } catch (err) {
           settle(session, { type: "REJOIN_FAILED", auth: isAuthRefusal(err), error: message(err) });
           return;

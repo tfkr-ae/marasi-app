@@ -4,6 +4,7 @@
 // file knows the API's shapes.
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
 import { httpParseError } from "../lib/checkpoint/httpParse.js";
+import { isSuperseded } from "../lib/service/errors.js";
 
 /** The text's UTF-8 bytes in base64, as the API takes a Go []byte. */
 export function encodeText(text) {
@@ -51,8 +52,8 @@ const counts = (result) => ({ Done: result?.done ?? 0, Gone: result?.gone ?? 0, 
 
 export function createCheckpointApi(client) {
   const read = () => client.get("/checkpoint");
-  const forward = (id, body, interceptResponse, type) =>
-    client.post(`/checkpoint/${id}/forward`, forwardBody(type, body, interceptResponse));
+  const forward = (id, body, interceptResponse, type, link = client) =>
+    link.post(`/checkpoint/${id}/forward`, forwardBody(type, body, interceptResponse));
 
   return {
     getItems: async () => ((await read()).items ?? []).map(toCheckpointItem),
@@ -61,14 +62,17 @@ export function createCheckpointApi(client) {
     drop: (id) => client.post(`/checkpoint/${id}/drop`, {}),
     // The bulk route forwards the bytes as held, so each edited item goes
     // on its own; an item gone by then counts as gone, any other refusal as
-    // failed (it stays held).
+    // failed (it stays held). The calls are bound to the connection the
+    // first went to: once the app leaves it, the rest go nowhere.
     async forwardMany(items) {
+      const link = client.bind?.() ?? client;
       const total = { Done: 0, Gone: 0, Failed: 0 };
       for (const item of items.filter((i) => i.Body)) {
         try {
-          await forward(item.ID, item.Body, false, item.Type);
+          await forward(item.ID, item.Body, false, item.Type, link);
           total.Done++;
         } catch (err) {
+          if (isSuperseded(err)) return total;
           if (isCheckpointGone(err)) total.Gone++;
           else {
             console.error(`Forwarding Checkpoint item ${item.ID} failed:`, err);
@@ -78,7 +82,13 @@ export function createCheckpointApi(client) {
       }
       const ids = items.filter((i) => !i.Body).map((i) => i.ID);
       if (ids.length) {
-        const result = counts(await client.post("/checkpoint/forward", { ids }));
+        let result;
+        try {
+          result = counts(await link.post("/checkpoint/forward", { ids }));
+        } catch (err) {
+          if (isSuperseded(err)) return total;
+          throw err;
+        }
         for (const key of Object.keys(total)) total[key] += result[key];
       }
       return total;

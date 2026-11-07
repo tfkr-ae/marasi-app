@@ -21,10 +21,14 @@ function fakeClient(routes = {}) {
     if (!route) throw new Error(`no route for ${method} ${path}`);
     return route(body);
   };
+  const get = (path) => answer("GET", path);
+  const post = (path, body) => answer("POST", path, body);
   return {
     calls,
-    get: (path) => answer("GET", path),
-    post: (path, body) => answer("POST", path, body),
+    get,
+    post,
+    // One connection all along: a bound call is always live.
+    bind: () => ({ live: () => true, get, post }),
     on(name, handler) {
       handlers.set(name, [...(handlers.get(name) ?? []), handler]);
       return () => handlers.set(name, (handlers.get(name) ?? []).filter((h) => h !== handler));

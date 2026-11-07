@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get, writable } from "svelte/store";
-import { serviceError } from "../lib/service/errors.js";
+import { serviceError, superseded } from "../lib/service/errors.js";
 import { createCheckpointApi, toCheckpointItem, toSettled } from "./checkpointApi.js";
 import { createCheckpointStore, isDirty, parseErrorOf, textOf } from "./createCheckpointStore.js";
 
@@ -78,6 +78,26 @@ function fakeCheckpoint(held = []) {
       }
       refuse("POST", path, 404, "not_found");
     },
+  };
+  // bind() as the service client's: bound calls made after leave() are
+  // superseded, unsent. `afterPost(path)` runs after each answered POST.
+  state.generation = 0;
+  state.leave = () => state.generation++;
+  state.afterPost = () => {};
+  const post = state.client.post;
+  state.client.post = async (path, body) => {
+    const answer = await post(path, body);
+    state.afterPost(path);
+    return answer;
+  };
+  state.client.bind = () => {
+    const at = state.generation;
+    const live = () => at === state.generation;
+    return {
+      live,
+      get: (path, query) => (live() ? state.client.get(path, query) : Promise.reject(superseded("GET", path))),
+      post: (path, body) => (live() ? state.client.post(path, body) : Promise.reject(superseded("POST", path))),
+    };
   };
   return state;
 }
@@ -252,4 +272,20 @@ test("resync replaces the held items in place, keeping edits and the selection",
   assert.equal(get(store).selectedId, "b");
   assert.equal(textOf(get(store), "b"), edited);
   assert.equal(get(interceptFlag), true);
+});
+
+test("bulk forward stops at the item a connection switch overtook, sending the rest nowhere", async () => {
+  const { marasi, store } = await loaded([httpItem("a"), httpItem("b"), httpItem("c")]);
+  await store.edit("a", "GET /a2 HTTP/1.1\nHost: x\n\n");
+  await store.edit("b", "GET /b2 HTTP/1.1\nHost: x\n\n");
+  marasi.afterPost = (path) => path === "/checkpoint/a/forward" && marasi.leave();
+
+  const result = await store.bulk("forward", ["a", "b", "c"]);
+
+  assert.deepEqual(
+    posts(marasi).map(([path]) => path),
+    ["/checkpoint/a/forward"],
+  );
+  assert.equal(result.done, 1);
+  assert.equal(result.failed, 0);
 });

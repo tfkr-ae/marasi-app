@@ -3,9 +3,11 @@
 // It takes its api as an argument (projectApi.js builds it), so node --test
 // runs it with a fake service client:
 //
-//   heldCheckpointIDs() -> [id]      GET /checkpoint
+//   bind() -> link                   the service client bound to its
+//                                    connection now (client.js)
+//   heldCheckpointIDs(link) -> [id]  GET /checkpoint
 //   confirmSwitch() -> bool          the native unsaved-work prompt (Go)
-//   open({name} | {path}) -> path    POST /project/open
+//   open({name} | {path}, link) -> path  POST /project/open
 //   listProjects() -> [{name, path, modifiedAt}]
 //   loadProject(path, part, live)    the app's full load; part(signal);
 //                                    it stops once live() is false
@@ -15,8 +17,11 @@
 // store refuses first, as the app always has. A failed open leaves the
 // service's project as it was, so the loaded project stays.
 //
-// Each open, reload and loadService is a run. A newer run supersedes it, and
-// so does the caller's `current()` turning false (a connection switch).
+// Each open, reload and loadService is a run, bound to the service client's
+// connection when it begins. A newer run supersedes it, and so do the
+// caller's `current()` turning false and the client moving to another
+// connection (a switch; leave() too). Its service calls go through its
+// link, so a call it outlived is superseded unsent.
 // After each await a superseded run changes nothing (the opening screen,
 // `loaded`, `generation`, a failure) and resolves to `{status:
 // "superseded"}`; its load stops before the next store. Its opening screen
@@ -26,6 +31,7 @@
 // (the Marasi CLI, another app) starts: it shows the opening screen and
 // hands the opened project on, since loading it asks first.
 import { get, writable } from "svelte/store";
+import { isSuperseded } from "../lib/service/errors.js";
 import {
   openingFor,
   openingScreen,
@@ -71,11 +77,13 @@ export function createProjectStore(api, timers = globalThis) {
   let screenOf = 0;
   const superseded = { status: "superseded" };
 
-  // Begins a run: `live()` holds while no newer run has begun and the
-  // caller's `current()` holds.
+  // Begins a run: `live()` holds while no newer run has begun, the
+  // caller's `current()` holds, and the client is on the connection it was
+  // on (`link`).
   function claim(current = () => true) {
     const run = ++latest;
-    return { run, live: () => run === latest && current() };
+    const link = api.bind?.();
+    return { run, link, live: () => run === latest && current() && (link?.live() ?? true) };
   }
 
   function fail(error) {
@@ -97,8 +105,14 @@ export function createProjectStore(api, timers = globalThis) {
    */
   async function open(target) {
     lastTarget = target;
-    const { run, live } = claim();
-    const held = await api.heldCheckpointIDs();
+    const { run, link, live } = claim();
+    let held;
+    try {
+      held = await api.heldCheckpointIDs(link);
+    } catch (error) {
+      if (!live() || isSuperseded(error)) return superseded;
+      throw error;
+    }
     if (!live()) return superseded;
     if (held.length) return { status: "held", ids: held };
     const agreed = await api.confirmSwitch();
@@ -110,9 +124,9 @@ export function createProjectStore(api, timers = globalThis) {
     try {
       let path;
       try {
-        path = await api.open(target);
+        path = await api.open(target, link);
       } catch (error) {
-        return live() ? fail(error) : superseded;
+        return live() && !isSuperseded(error) ? fail(error) : superseded;
       }
       if (!live()) return superseded;
       return await load(path, live);
@@ -271,6 +285,18 @@ export function createProjectStore(api, timers = globalThis) {
     reload,
     loadService,
     follow,
+    /**
+     * Leaves the connection (a new connection session began): every run
+     * is superseded, the opening screen and a followed open close, and
+     * Try again has nothing to re-run.
+     */
+    leave() {
+      latest++;
+      lastTarget = null;
+      endFollowed();
+      screenOf = 0;
+      patch({ opening: null, shown: false });
+    },
     /** Re-runs the last open, for the opening screen's Try again. */
     retry: () => (lastTarget ? open(lastTarget) : Promise.resolve(null)),
     /**

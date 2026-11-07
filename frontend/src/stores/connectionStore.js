@@ -16,6 +16,7 @@ import {
 import { service } from "../lib/service/index.js";
 import { get } from "svelte/store";
 import { createConnectionStore } from "./createConnectionStore.js";
+import { connectionServiceApi } from "./connectionServiceApi.js";
 import { loadedProject, projectStore, resyncProject } from "./projectStore.js";
 import { activeConnectionId } from "./activeConnection.js";
 import { trackRecents } from "./recentProjects.js";
@@ -23,26 +24,17 @@ import { projectData } from "./projectData.js";
 import { projectName } from "../lib/openProgress.js";
 
 export const connectionStore = createConnectionStore({
+  ...connectionServiceApi(service, projectStore),
   listConnections: () => ListConnections(),
   connectLocal: () => ConnectLocal(),
   connectionPassword: (id) => ConnectionPassword(id),
   savePassword: (id, password) => SetConnectionPassword(id, password),
   forgetPassword: (id, origins) => SetConnectionNoPassword(id, origins),
-  // The control listener: sharing, the password and the allowed origins.
-  readControl: () => service.get("/service/control-listener/status"),
-  updateControl: (body) => service.post("/service/control-listener/update", body),
   // What the service sees as this app's Origin when the password is off.
   appOrigin: () => globalThis.location?.origin ?? null,
   setActive: (id) => SetActiveConnection(id),
   // Leaving a connection: the last service's data goes before the next loads.
   clearStores: () => projectData.clear(),
-  use: (connection) => service.use(connection),
-  readStatus: (options) => service.request("GET", "/service/status", options),
-  openEvents: (handlers) => service.openEvents(handlers),
-  closeEvents: () => service.closeEvents(),
-  // The project the service has open, whichever it is: the scratchpad on a
-  // fresh instance, or what it had open when the app attached.
-  loadProject: (status, options) => projectStore.loadService(status.project, options),
   // After a stream reset (expired or invalid) or a service without a run ID.
   resync: () => resyncProject(),
   // After a reconnect that found another project or a restarted service:
@@ -50,9 +42,6 @@ export const connectionStore = createConnectionStore({
   confirmSwitch: () => ConfirmProjectSwitch(),
   // Another client opened `project`: the same prompt, naming it.
   confirmFollow: (project) => ConfirmFollowProject(projectName(project)),
-  loadDeclined: () => projectStore.closeFollowed(),
-  reloadProject: (status, options) => projectStore.reload(status.project, options),
-  holdWrites: (on) => service.holdWrites(on),
 });
 
 // Reconnects compare the service's project with the one loaded last, which

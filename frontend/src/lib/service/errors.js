@@ -43,6 +43,17 @@ function bodyIDs(code, body) {
 }
 
 /**
+ * `method path` was bound to a connection the client has since left
+ * (client.js, bind()). Its caller treats it as a no-op, never a failure.
+ */
+export function superseded(method, path) {
+  return new ServiceError(`${method} ${path}: superseded: the connection changed`, { code: "superseded", ids: [] });
+}
+
+/** Whether `err` is a bound request the connection change superseded. */
+export const isSuperseded = (err) => err?.code === "superseded";
+
+/**
  * The request to `url` never got an answer: fetch rejected (a refused or
  * blocked connection, such as macOS ATS, reads only "Load failed") or the
  * wait ran out. Its text names the address alone, since it shows as is in

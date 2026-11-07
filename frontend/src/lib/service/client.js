@@ -23,6 +23,13 @@
 // carried no event, can't replay either: onReset gets "none" once the new
 // stream is open. A fresh openEvents() forgets the id.
 //
+// Each use() begins a new connection generation. bind() captures the
+// current one: its calls reject with a `superseded` ServiceError
+// (isSuperseded in errors.js) instead of being sent once use() has moved
+// on, and so does an answer that lands after it moved. A caller that awaits
+// before a write binds first, so its write never reaches the next
+// connection; it treats superseded as a no-op.
+//
 // holdWrites(true) refuses every call but GETs and /service/ routes with a
 // project_changed ServiceError, before it reaches the service: the
 // connection store holds them while the service has another project open
@@ -33,10 +40,12 @@
 // addEventListener(name, listener) whose event has `data` as text and
 // `lastEventId`, a `lastEventId` of its own, and close(). The app passes the fetch-based reader in sse.js, since a native
 // EventSource can't send the password.
-import { ServiceError, serviceError, unreachable } from "./errors.js";
+import { ServiceError, serviceError, superseded, unreachable } from "./errors.js";
 
 export function createServiceClient({ fetch, EventSource }) {
   let connection = null;
+  // Bumped by every use(): which connection a bound call belongs to.
+  let generation = 0;
   // event name -> Set of handlers
   const handlers = new Map();
   let stream = null;
@@ -68,7 +77,9 @@ export function createServiceClient({ fetch, EventSource }) {
    * call that gets no answer rejects with a ServiceError coded
    * `unreachable` or `timeout` whose text names the address.
    */
-  async function request(method, path, { query, body, raw, contentType, as, timeout } = {}) {
+  async function request(method, path, { query, body, raw, contentType, as, timeout, bound } = {}) {
+    const stale = () => bound !== undefined && bound !== generation;
+    if (stale()) throw superseded(method, path);
     if (writesHeld && method !== "GET" && !path.startsWith("/service/")) {
       throw new ServiceError(`${method} ${path}: project_changed: load the service's project first`, {
         code: "project_changed",
@@ -100,10 +111,12 @@ export function createServiceClient({ fetch, EventSource }) {
     try {
       response = await fetch(url, init);
     } catch (err) {
+      if (stale()) throw superseded(method, path);
       throw unreachable(url, err, { timedOut });
     } finally {
       if (timer !== null) clearTimeout(timer);
     }
+    if (stale()) throw superseded(method, path);
     if (as === "bytes" && response.ok) return new Uint8Array(await response.arrayBuffer());
     const text = await response.text();
     const isJSON = (response.headers.get("content-type") ?? "").includes("application/json");
@@ -153,6 +166,24 @@ export function createServiceClient({ fetch, EventSource }) {
     /** Points the client at `{url, password}`, or at nothing with null. */
     use(next) {
       connection = next ? { url: next.url, password: next.password ?? "" } : null;
+      generation++;
+    },
+    /**
+     * The client's calls bound to the connection it points at now:
+     * `{live(), request, get, post, put, del}`. Once use() moves on,
+     * live() is false and each call rejects as superseded, unsent.
+     */
+    bind() {
+      const bound = generation;
+      const call = (method, path, options = {}) => request(method, path, { ...options, bound });
+      return {
+        live: () => bound === generation,
+        request: call,
+        get: (path, query) => call("GET", path, { query }),
+        post: (path, body, query) => call("POST", path, { body, query }),
+        put: (path, body, query) => call("PUT", path, { body, query }),
+        del: (path, body, query) => call("DELETE", path, { body, query }),
+      };
     },
     /** Refuses project writes (true) or lets them through again (false). */
     holdWrites(on) {
