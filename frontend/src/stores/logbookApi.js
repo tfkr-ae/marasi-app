@@ -4,16 +4,12 @@
 // createLogbookStore keeps (what the bindings gave before), so the store and
 // the components read the same fields.
 //
-// The service lists findings and test cases as summaries only, so a full
-// list reads each record (GET /finding/{id}) until Marasi adds a route that
-// lists them in full (Todo Board). Files reach the disk through `saveFile`,
+// Findings and test cases list in full (`?full=1`), each item as its per-id
+// read gives it. Files reach the disk through `saveFile`,
 // the Go SaveFileAs binding: (title, defaultName, filterName, filterPattern,
 // contentBase64) -> saved path, or "" when cancelled.
 
 import { toDetails } from "./trafficApi.js";
-
-/** How many records a full list reads at once. */
-const READ_AT_ONCE = 8;
 
 /** An artifact's metadata, from the service's artifact. */
 export function toArtifact(a) {
@@ -73,24 +69,10 @@ export function bytesBase64(bytes) {
 // The route each kind lives under.
 const ROUTE = { finding: "/finding", testCase: "/test-case" };
 
-// Reads every record of `kind` in full, a few at a time. A record deleted
-// since the list is left out.
-async function readAll(client, kind, map) {
-  const list = await client.get(ROUTE[kind]);
-  const ids = (list?.items ?? []).map((item) => item.id);
-  const records = new Array(ids.length).fill(null);
-  let next = 0;
-  async function worker() {
-    while (next < ids.length) {
-      const at = next++;
-      records[at] = await client
-        .get(`${ROUTE[kind]}/${ids[at]}`)
-        .then(map)
-        .catch(() => null);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(READ_AT_ONCE, ids.length) }, worker));
-  return records.filter(Boolean);
+// Every record of `kind` in full, in one call.
+async function listFull(client, kind, map) {
+  const list = await client.get(ROUTE[kind], { full: 1 });
+  return (list?.items ?? []).map(map);
 }
 
 const findingFields = (f) => ({
@@ -162,8 +144,8 @@ export function createLogbookApi(client, { saveFile }) {
   };
 
   return {
-    listFindings: () => readAll(client, "finding", toFinding),
-    listTestCases: () => readAll(client, "testCase", toTestCase),
+    listFindings: () => listFull(client, "finding", toFinding),
+    listTestCases: () => listFull(client, "testCase", toTestCase),
     getFinding: async (id) => toFinding(await client.get(`/finding/${id}`)),
     getTestCase: async (id) => toTestCase(await client.get(`/test-case/${id}`)),
     getPair: async (id) => toDetails(await client.get(`/traffic/${id}`)),

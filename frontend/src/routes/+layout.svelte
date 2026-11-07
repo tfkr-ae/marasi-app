@@ -64,12 +64,14 @@
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
-	import WebUITile from "../lib/extensions/WebUITile.svelte";
+	import WebComponent from "../lib/extensions/WebComponent.svelte";
 	import {
 		checkpointItemContext,
 		checkpointStore,
 	} from "../stores/checkpointStore";
 	import { checkpointBadge } from "../lib/checkpointBadge.js";
+	import { armoryBadge } from "../lib/armory/armoryBadge.js";
+	import { activeCountsOf, armoryStore } from "../stores/armoryStore";
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
@@ -85,6 +87,7 @@
 		ChefHat,
 		Brush,
 		BookOpenCheckIcon,
+		PuzzleIcon,
 		Swords,
 	} from "lucide-svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
@@ -167,6 +170,8 @@
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// The Armory icon's runs-in-progress badge (see armoryBadge).
+	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -460,13 +465,20 @@
 					bind:group={currentTile}
 					name="Armory"
 					value={appRailIndex++}
-					title="Armory"
+					title={runningBadge.title}
 				>
 					<svelte:fragment slot="lead">
 						<div
-							class="flex justify-center items-center w-full"
+							class="relative flex justify-center items-center w-full"
 						>
 							<Swords size="20" />
+							{#if runningBadge.label}
+								<span
+									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+									data-testid="armory-badge"
+									aria-label="{runningBadge.label} running"
+								>{runningBadge.label}</span>
+							{/if}
 						</div>
 					</svelte:fragment>
 					<span>Armory</span>
@@ -619,8 +631,34 @@
 								>{extension.Name}</span
 							>
 						</AppRailAnchor>
-					{:else if extension.WebUI}
-						<WebUITile name={extension.Name} />
+					{:else if extension.UICode}
+						<AppRailAnchor
+							regionLabel="!text-2xs !font-semibold leading-tight"
+							selected={$page.url.pathname ===
+								"/extension/" + extension.Name}
+							on:click={() => goto("/extension/" + extension.Name)}
+							bind:group={currentTile}
+							name={extension.Name}
+							value={appRailIndex++}
+							title={extension.Name}
+						>
+							<svelte:fragment slot="lead">
+								<div
+									class="flex justify-center items-center w-full"
+									data-testid="extension-web-ui-tile"
+								>
+									<WebComponent
+										name={extension.Name}
+										target="icon"
+										code={extension.UICode}
+										version={extension.Version}
+									>
+										<PuzzleIcon size="20" />
+									</WebComponent>
+								</div>
+							</svelte:fragment>
+							<span>{extension.Name}</span>
+						</AppRailAnchor>
 					{/if}
 				{/each}
 				<svelte:fragment slot="trail">

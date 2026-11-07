@@ -28,6 +28,8 @@
 	/** The templates that match the filter. */
 	export let templates = [];
 	export let runsByTemplate = {};
+	// Runs in progress per template id, from the store's active set.
+	export let runningByTemplate = {};
 	export let selectedTemplateId = null;
 	export let selectedRunId = null;
 	export let search = "";
@@ -158,6 +160,13 @@
 					</button>
 					<FileText size={12} class="flex-none opacity-60" />
 					<span class="min-w-0 flex-1 truncate font-semibold">{template.Name}</span>
+					{#if runningByTemplate[template.ID]}
+						<span
+							class="badge variant-filled-primary flex-none px-1 py-px text-3xs leading-none"
+							data-testid="armory-template-running"
+							title="{runningByTemplate[template.ID]} running">{runningByTemplate[template.ID]}</span
+						>
+					{/if}
 					{#if runs}<span class="flex-none text-3xs opacity-60">{runs.length}</span>{/if}
 				</div>
 				{#if open}
