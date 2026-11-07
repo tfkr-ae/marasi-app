@@ -76,7 +76,30 @@ The frontend can only match error text, so an error it must act on carries a cod
 
 ## Events
 
-- **Service to frontend.** The service's events reach the frontend over `/events` through the service client (`service.on(name, handler)`), never through Go.
+- **Service to frontend.** The service's events reach the frontend over `/events` through the service client (`service.on(name, handler)`), never through Go. Each store subscribes in its `xStore.js` and applies the event in place, keeping what only the app holds (drafts, selection, scroll, the open drawer), so another client's change (the CLI, a phone, another app) shows without a resync. Bursts (bulk changes, rebuilds) are debounced (`EVENT_SETTLE_MS`, `SITEMAP_SETTLE_MS`, `LAUNCHPAD_SETTLE_MS`, `DASHBOARD_SETTLE_MS`). Apply the payload; read again only when it lacks the new values.
+- **The event list.** `lib/service/events.js`'s `SERVICE_EVENTS` names every event Marasi publishes (its `service` package's `events.publish` calls). `events.test.js` scans `src/stores` and `src/lib` and fails when a name has no `.on(name` subscription, either `.on("name"` or a name in an array a file subscribes through a variable. Use full names, never a template string. When Marasi adds an event, add it to the list and subscribe to it. `PENDING_SVC_EVENTS_B` lists names svc/events-b subscribes to, and merging that branch empties it. `stream.reset` and `stream.dropped` are the client's own (`STREAM_EVENTS`).
+
+| Events | Store (`stores/`) | What changes |
+|---|---|---|
+| `traffic.request`, `traffic.response` | ledger, sitemap, launchpad, armory, savedQueries | New rows, sitemap counts, launched entries, Armory results, saved-query counts |
+| `traffic.changed` | ledger (`onTrafficChanged`), launchpad (`launchpadsChangedBy`), home | Ledger rows read again in place. A link or unlink rereads its launchpad, and a delete, highlight, note or metadata change rereads loaded entry lists. A delete or note change rereads Home's counts. |
+| `traffic.index_complete` | ledger (`onIndexComplete`) | Results read while the index was building are read again |
+| `sitemap.changed` | sitemap (`onChanged`) | Open levels read again |
+| `metadata.updated`, `note.updated`, `note.deleted` | ledger, home | The pair's row (`Metadata`, `has_note`), so the drawer rereads its note and metadata pane. Home's note count. |
+| `websocket.*` | ledger, webSocket | Upgrade rows, the WebSocket modal |
+| `launchpad.created`, `.updated`, `.deleted` | launchpad, home | The tree. A deleted launchpad's dirty draft goes to `orphanedDrafts` (see `launchpad.md`). Home's launchpad count. |
+| `launchpad.linked`, `.unlinked`, `.entries_moved` | launchpad (`onEntriesChanged`) | The touched entry lists, or the list's summaries for unloaded ones |
+| `launch.started`, `launch.completed`, `.cancelled`, `.failed` | launchpad | Launch state. Marasi publishes `launch.<status>` for terminal statuses only. |
+| `checkpoint.*` | checkpoint, webSocket | Held items, the rail badge, interception flags |
+| `scope.updated` | home (`onScope`), `lib/components/ScopeTester.svelte` | Home's rule counts from the payload. The scope tester checks its last URL again. |
+| `extension.enabled`, `.updated`, `.settings.updated`, `.log`, `.gui.*` | extensions | The list (`Settings` from `onSettings`), drawings, logs |
+| `upstream_proxy.added`, `.updated`, `.removed`, `.selected` | upstreamProxy (`onListChanged`, `onSelected`) | Settings → Upstream Proxy once it has read the list |
+| `waypoint.*` | waypoint | Settings → Waypoints |
+| `armory.*`, `wordlist.*` | armory | Templates, runs, wordlists |
+| `project.*` | project (`projectApi.js`) | The opening screen, following another client's switch (`project-open.md`) |
+| `listener.*`, `log.added`, `job.complete` | home, jobs | Listener status, the live log, jobs |
+| `control_listener.*` | connection | `state.control` |
+| `finding.*`, `test-case.*`, `artifact.*`, `report.template.*`, `chrome.*`, `job.progress`, `service.*`, `update.*` | svc/events-b | Pending (`PENDING_SVC_EVENTS_B`) |
 - **Go to frontend.** Go's own events (`update-available`, `update-progress`, `update-installed`, `update-failed`, `cli-install-progress`, `armory-cancel-runs`) go through `a.emitEvent`, which tests replace (`recordedEvents` in `app_test.go`).
 - **The frontend's runtime module.** `frontend/src/lib/runtime.js` is the only frontend file that calls the Wails runtime (`@wailsio/runtime`, pinned to the Go module's version) for anything that isn't a binding: `on`, `once`, `off`, `emit`, `setWindowTitle` and `openURL`. Wails hands a listener a `{name, data}` event; a subscriber's callback receives `data`, the payload: the value Go emitted, or `null` when it sent none. `on` and `once` return a function that removes that one listener, and `off` removes every listener for a name. Import from it, never from `@wailsio/runtime`. `runtime.test.js` runs it against a fake runtime.
 - **Frontend subscriptions** are in `onMount` in `frontend/src/routes/+layout.svelte`, which forwards each event to a store's `on*` method. Add the matching `off` to its cleanup.
@@ -88,6 +111,6 @@ The frontend can only match error text, so an error it must act on carries a cod
 - **Per-project settings** are client settings in the open project on the service, under the client `marasi-app` (`stores/clientSettingsApi.js`'s `createClientSettings`, over `/client-settings/marasi-app`). Stores use it with their own key prefixes.
 - **App default with a project override.** `content_type_exclusion.go` is the pattern, from [Ledger settings are app defaults with project overrides, stored by the app](../../adr/2026-10-16-app-defaults-with-project-overrides.md).
 - `marasi_config.yaml` is Marasi's own config, which service instances share. The app neither reads nor writes it.
-- **Upstream proxies** (`stores/upstreamProxyApi.js`). The list is the service host's (its `marasi_config.yaml`) and the selection the open project's, both through the `/upstream-proxy` routes and `PUT /upstream-proxy-selection`. Writes answer with the items alone, so the adapter reads the list again for the selection. It builds an update itself (`upstreamProxyUpdate`: a URL, a new CA, or `ca: null` to remove it) and refuses one that changes nothing. Once Settings has read the list, `upstream_proxy.*` events and a reconnect read it again. Choosing a CA file stays Go (`ReadUpstreamProxyCAFile`). A selection the service host doesn't list fails the project's traffic closed, and `configured` reports it.
+- **Upstream proxies** (`stores/upstreamProxyApi.js`). The list is the service host's (its `marasi_config.yaml`) and the selection the open project's, both through the `/upstream-proxy` routes and `PUT /upstream-proxy-selection`. Writes answer with the items alone, so the adapter reads the list again for the selection. It builds an update itself (`upstreamProxyUpdate`: a URL, a new CA, or `ca: null` to remove it) and refuses one that changes nothing. Once Settings has read the list, `upstream_proxy.added`/`.updated`/`.removed` apply their whole-list payload (`onListChanged`, which forgets the check of an entry that changed and works out `configured`), `upstream_proxy.selected` applies `{name}` (`onSelected`), and a project load or reconnect reads it again. Choosing a CA file stays Go (`ReadUpstreamProxyCAFile`). A selection the service host doesn't list fails the project's traffic closed, and `configured` reports it.
 - **Jobs** (`stores/jobsApi.js`): `GET /jobs` and `POST /jobs/{name}/rebuild`; the rebuildable set (`REBUILDABLE_JOBS`) is the app's, since the service doesn't report it.
 - **Certificate** (`lib/certificate.js`): Download and Copy Certificate read `GET /certificate` and hand the PEM to Go: `SaveFileAs` (`save_file.go`, the native save dialog for any bytes the frontend fetched, shared with the Logbook) or `CopyCertToClipboard(pem)`.
