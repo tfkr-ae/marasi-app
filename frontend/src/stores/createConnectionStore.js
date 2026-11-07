@@ -5,7 +5,8 @@
 // next action. Tests run the reducer alone, and the store with a fake api:
 //
 //   listConnections() -> {connections, activeId}     the saved connections (Go)
-//   connectLocal() -> {url, password, startedByApp}  start or attach (Go)
+//   connectLocal() -> {url, password, startedByApp, wasStopped}  start or attach (Go);
+//                                                    wasStopped: it was not running as the call looked
 //   connectionPassword(id) -> password               a remote's saved password (Go)
 //   savePassword(id, password)                       replace it (Go)
 //   setActive(id)                                    save the active connection (Go)
@@ -64,6 +65,9 @@ export function initialConnection() {
     trying: false,
     // The service said it is restarting before the stream dropped.
     restartSeen: false,
+    // A reconnect attempt got no answer from the service: its process may
+    // have gone, so the next reconnect counts as a restart.
+    serviceGone: false,
     // The project a reconnect found open instead, waiting for the
     // unsaved-work guard before it loads.
     pendingProject: null,
@@ -158,6 +162,7 @@ function begin(state) {
     attempt: 0,
     trying: false,
     restartSeen: false,
+    serviceGone: false,
     pendingProject: null,
     authFrom: null,
     control: null,
@@ -430,7 +435,8 @@ export function reduce(state, action) {
       // or a failed reconnect attempt. The pages stay; only the stream goes.
       if (state.phase !== "connected" && state.phase !== "reconnecting") return refuse(state, "Not connected.");
       const attempt = state.attempt + 1;
-      return go(state, { phase: "reconnecting", attempt, trying: false }, [
+      const serviceGone = state.serviceGone || Boolean(action.unreachable);
+      return go(state, { phase: "reconnecting", attempt, trying: false, serviceGone }, [
         ...(state.phase === "connected" ? [{ type: "close-events" }] : []),
         { type: "wait", ms: backoff(attempt) },
       ]);
@@ -448,13 +454,18 @@ export function reduce(state, action) {
     case "RECONNECTED": {
       if (state.phase !== "reconnecting") return refuse(state, "Not reconnecting.");
       const { status } = action;
-      // /service/status has no boot id: a restart is a service.restarting
-      // seen before the drop, or a new version (decisions.md, ruling 2).
-      const restarted = state.restartSeen || status.version !== state.version;
+      // /service/status names nothing that changes per process, so a
+      // restart is a service.restarting seen before the drop, a new version
+      // (decisions.md, ruling 2), or the service gone meanwhile: the local
+      // reconnect had to start the instance, or an attempt got no answer. A
+      // restart quicker than the backoff, at the same version and without
+      // the event, still resyncs in place.
+      const restarted = state.restartSeen || status.version !== state.version || state.serviceGone || Boolean(action.wasStopped);
       const patch = {
         attempt: 0,
         trying: false,
         restartSeen: false,
+        serviceGone: false,
         url: action.url ?? state.url,
         owned: state.owned || Boolean(action.startedByApp),
         version: status.version,
@@ -630,10 +641,12 @@ export function createConnectionStore(api, timers = globalThis) {
             return;
           }
           console.error("Reconnecting to Marasi failed:", err);
-          dispatch({ type: "STREAM_DROPPED" });
+          // No HTTP status: the service didn't answer at all (or the CLI
+          // couldn't reach the local instance), not just the stream.
+          dispatch({ type: "STREAM_DROPPED", unreachable: typeof err?.status !== "number" });
           return;
         }
-        dispatch({ type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, status });
+        dispatch({ type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, wasStopped: Boolean(reached.wasStopped), status });
         return;
       }
       case "resync":
