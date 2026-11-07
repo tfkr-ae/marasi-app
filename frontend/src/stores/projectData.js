@@ -30,10 +30,16 @@ export function createProjectData() {
       for (const entry of entries.values()) entry.clear();
     },
 
-    /** Clears every store, then loads each; `part(signal)` before each. */
-    async load(part = () => {}) {
+    /**
+     * Clears every store, then loads each; `part(signal)` before each. Stops
+     * before the clear and before each store once `live()` is false (a newer
+     * load superseded this one).
+     */
+    async load(part = () => {}, live = () => true) {
+      if (!live()) return;
       for (const entry of entries.values()) entry.clear();
       for (const entry of entries.values()) {
+        if (!live()) return;
         if (entry.signal) part(entry.signal);
         await entry.load();
       }

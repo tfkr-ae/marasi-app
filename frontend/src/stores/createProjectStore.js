@@ -7,12 +7,20 @@
 //   confirmSwitch() -> bool          the native unsaved-work prompt (Go)
 //   open({name} | {path}) -> path    POST /project/open
 //   listProjects() -> [{name, path, modifiedAt}]
-//   loadProject(path, part)          the app's full load; part(signal)
+//   loadProject(path, part, live)    the app's full load; part(signal);
+//                                    it stops once live() is false
 //   onProjectEvent(handler) -> stop  the service's project.* events
 //
 // The service waits for held Checkpoint items instead of refusing, so the
 // store refuses first, as the app always has. A failed open leaves the
 // service's project as it was, so the loaded project stays.
+//
+// Each open, reload and loadService is a run. A newer run supersedes it, and
+// so does the caller's `current()` turning false (a connection switch).
+// After each await a superseded run changes nothing (the opening screen,
+// `loaded`, `generation`, a failure) and resolves to `{status:
+// "superseded"}`; its load stops before the next store. Its opening screen
+// closes when it ends, unless a newer run's screen has taken over.
 //
 // `follow` keeps a standing project.* listener for opens another client
 // (the Marasi CLI, another app) starts: it shows the opening screen and
@@ -58,6 +66,17 @@ export function createProjectStore(api, timers = globalThis) {
   // Another client's open the screen follows: {path, timer, due (the
   // delay passed), held (the service waits for Checkpoint items)}.
   let followed = null;
+  // The latest run, and the run whose opening screen shows (0: none).
+  let latest = 0;
+  let screenOf = 0;
+  const superseded = { status: "superseded" };
+
+  // Begins a run: `live()` holds while no newer run has begun and the
+  // caller's `current()` holds.
+  function claim(current = () => true) {
+    const run = ++latest;
+    return { run, live: () => run === latest && current() };
+  }
 
   function fail(error) {
     const failed = get(store).opening && withFailed(get(store).opening, error);
@@ -72,46 +91,61 @@ export function createProjectStore(api, timers = globalThis) {
   /**
    * Opens `target`, `{name}` or `{path}`, and loads it. Resolves to
    * `{status: "opened", project}`, `{status: "held", ids}` (refused over held
-   * Checkpoint items), `{status: "cancelled"}` (at the prompt) or
-   * `{status: "failed", error}` (the opening screen shows why).
+   * Checkpoint items), `{status: "cancelled"}` (at the prompt),
+   * `{status: "failed", error}` (the opening screen shows why) or
+   * `{status: "superseded"}`.
    */
   async function open(target) {
     lastTarget = target;
+    const { run, live } = claim();
     const held = await api.heldCheckpointIDs();
+    if (!live()) return superseded;
     if (held.length) return { status: "held", ids: held };
-    if (!(await api.confirmSwitch())) return { status: "cancelled" };
+    const agreed = await api.confirmSwitch();
+    if (!live()) return superseded;
+    if (!agreed) return { status: "cancelled" };
 
     const name = target.name ?? projectName(target.path);
-    const finish = begin(name, target.path ?? null);
+    const finish = begin(name, target.path ?? null, run, live);
     try {
       let path;
       try {
         path = await api.open(target);
       } catch (error) {
-        return fail(error);
+        return live() ? fail(error) : superseded;
       }
-      return await load(path);
+      if (!live()) return superseded;
+      return await load(path, live);
     } finally {
       finish();
     }
   }
 
-  // Shows the opening state for `name` (the screen waits openingDelay), and
-  // follows the service's project events. Returns the function that stops.
-  function begin(name, path) {
+  // Shows run `run`'s opening state for `name` (the screen waits
+  // openingDelay), and follows the service's project events while `live()`.
+  // Returns the function that stops, which closes the screen when the run
+  // was superseded and the screen is still its own.
+  function begin(name, path, run, live) {
     own++;
     endFollowed();
     const current = get(store).loaded;
+    screenOf = run;
     patch({
       opening: openingFor({ name, path, current, scratchpad: name === "scratchpad" }),
       shown: current === null,
     });
-    const timer = timers.setTimeout(() => patch({ shown: true }), openingDelay);
-    const stopEvents = api.onProjectEvent((event, data) => updateOpening((state) => withProjectEvent(state, event, data)));
+    const timer = timers.setTimeout(() => live() && patch({ shown: true }), openingDelay);
+    const stopEvents = api.onProjectEvent(
+      (event, data) => live() && updateOpening((state) => withProjectEvent(state, event, data)),
+    );
     return () => {
       own--;
       stopEvents();
       timers.clearTimeout(timer);
+      if (!live() && screenOf === run) {
+        screenOf = 0;
+        patch({ opening: null, shown: false });
+      }
     };
   }
 
@@ -151,6 +185,7 @@ export function createProjectStore(api, timers = globalThis) {
       }
       if (followed?.path !== path) {
         endFollowed();
+        screenOf = 0;
         patch({ opening: openingFor({ name: projectName(path), path, current: loaded }), shown: false });
         const entry = { path, held: false, due: false, timer: null };
         entry.timer = timers.setTimeout(() => {
@@ -172,17 +207,22 @@ export function createProjectStore(api, timers = globalThis) {
   }
 
   // Loads the project the service switched to, at `path`, and remounts the
-  // pages.
-  async function load(path) {
+  // pages, while `live()`.
+  async function load(path, live) {
+    const remount = () => store.update((state) => ({ ...state, generation: state.generation + 1 }));
     updateOpening((state) => withSwitched({ ...state, path }));
     try {
-      await api.loadProject(path, (signal) => updateOpening((state) => withLoadPart(state, signal)));
+      await api.loadProject(path, (signal) => live() && updateOpening((state) => withLoadPart(state, signal)), live);
     } catch (error) {
+      if (!live()) return superseded;
+      remount();
       return fail(error);
-    } finally {
-      store.update((state) => ({ ...state, generation: state.generation + 1 }));
     }
-    const project = openingScreen(withOpened(get(store).opening)).opened ?? projectAt(path);
+    if (!live()) return superseded;
+    remount();
+    const { opening } = get(store);
+    const project = (opening && openingScreen(withOpened(opening)).opened) ?? projectAt(path);
+    screenOf = 0;
     patch({ opening: null, shown: false, loaded: project });
     return { status: "opened", project };
   }
@@ -191,15 +231,32 @@ export function createProjectStore(api, timers = globalThis) {
    * Loads afresh the project the service has open at `path`, as after a
    * switch, with no open and no prompt: the connection store's reconnect
    * found another project or a restarted service, and asked already.
+   * `current()` false supersedes it, as a newer run does.
    */
-  async function reload(path) {
+  async function reload(path, { current } = {}) {
     lastTarget = { path };
-    const finish = begin(projectName(path), path);
+    const { run, live } = claim(current);
+    const finish = begin(projectName(path), path, run, live);
     try {
-      return await load(path);
+      return await load(path, live);
     } finally {
       finish();
     }
+  }
+
+  /**
+   * Loads the service's project at `path` on connecting, with no opening
+   * screen and no remount, then records it as loaded. Resolves to the
+   * project, or `{status: "superseded"}` when a newer run began or
+   * `current()` turned false first.
+   */
+  async function loadService(path, { current } = {}) {
+    const { live } = claim(current);
+    await api.loadProject(path, () => {}, live);
+    if (!live()) return superseded;
+    const project = projectAt(path);
+    patch({ loaded: project });
+    return project;
   }
 
   return {
@@ -212,6 +269,7 @@ export function createProjectStore(api, timers = globalThis) {
     },
     open,
     reload,
+    loadService,
     follow,
     /** Re-runs the last open, for the opening screen's Try again. */
     retry: () => (lastTarget ? open(lastTarget) : Promise.resolve(null)),
@@ -221,6 +279,7 @@ export function createProjectStore(api, timers = globalThis) {
      */
     stay() {
       endFollowed();
+      screenOf = 0;
       const current = get(store).opening?.current;
       patch({ opening: null, shown: false, ...(current ? { loaded: current } : {}) });
     },

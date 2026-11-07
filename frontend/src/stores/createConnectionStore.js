@@ -22,6 +22,8 @@
 //   loadProject(status, {current})                    load the service's project;
 //                                                    current() is false once
 //                                                    another attempt began
+//   reloadProject(status, {current})                  the same, as after a switch
+//                                                    (the pages remount)
 //   readControl() -> GET /service/control-listener/status
 //   updateControl(body) -> POST /service/control-listener/update
 //   forgetPassword(id, origins)                       a remote's password is off (Go)
@@ -790,7 +792,7 @@ export function createConnectionStore(api, timers = globalThis) {
       }
       case "reload-project":
         try {
-          await api.reloadProject(step.status);
+          await api.reloadProject(step.status, { current: () => current(session) });
         } catch (err) {
           console.error("Loading the service's project failed:", err);
         }

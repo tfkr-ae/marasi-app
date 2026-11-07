@@ -16,7 +16,7 @@ import {
 import { service } from "../lib/service/index.js";
 import { get } from "svelte/store";
 import { createConnectionStore } from "./createConnectionStore.js";
-import { loadedProject, loadProject, projectStore, resyncProject } from "./projectStore.js";
+import { loadedProject, projectStore, resyncProject } from "./projectStore.js";
 import { activeConnectionId } from "./activeConnection.js";
 import { trackRecents } from "./recentProjects.js";
 import { projectData } from "./projectData.js";
@@ -42,11 +42,7 @@ export const connectionStore = createConnectionStore({
   closeEvents: () => service.closeEvents(),
   // The project the service has open, whichever it is: the scratchpad on a
   // fresh instance, or what it had open when the app attached.
-  // A switch during the load leaves the loaded project to the next one.
-  loadProject: async (status, { current }) => {
-    await loadProject(status.project);
-    if (current()) projectStore.loaded(status.project);
-  },
+  loadProject: (status, options) => projectStore.loadService(status.project, options),
   // After a stream reset (expired or invalid) or a service without a run ID.
   resync: () => resyncProject(),
   // After a reconnect that found another project or a restarted service:
@@ -55,7 +51,7 @@ export const connectionStore = createConnectionStore({
   // Another client opened `project`: the same prompt, naming it.
   confirmFollow: (project) => ConfirmFollowProject(projectName(project)),
   loadDeclined: () => projectStore.closeFollowed(),
-  reloadProject: (status) => projectStore.reload(status.project),
+  reloadProject: (status, options) => projectStore.reload(status.project, options),
   holdWrites: (on) => service.holdWrites(on),
 });
 

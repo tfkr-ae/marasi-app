@@ -17,11 +17,12 @@ import "./homeStore.js";
 /**
  * Loads the service's project at `path` into every store, on connecting and
  * after each switch. `part(signal)` tells the opening screen what loads
- * next. Stores join through projectData.register (projectData.js).
+ * next. It stops once `live()` is false (a newer load superseded it).
+ * Stores join through projectData.register (projectData.js).
  */
-export async function loadProject(path, part = () => {}) {
-  await resetProject(projectName(path));
-  await projectData.load(part);
+export async function loadProject(path, part = () => {}, live = () => true) {
+  await resetProject(projectName(path), live);
+  await projectData.load(part, live);
 }
 
 /**

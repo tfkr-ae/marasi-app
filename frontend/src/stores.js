@@ -105,16 +105,18 @@ export let activeProject = writable("Marasi");
 /**
  * Resets what the app holds for the project, before the project at `name`
  * loads (projectStore.js's loadProject, which each page's ticket gives its
- * store's populate).
+ * store's populate). It sets nothing once `live()` is false.
  */
-export async function resetProject(name) {
+export async function resetProject(name, live = () => true) {
+  const assessor = await OSUserName();
+  if (!live()) return;
   reportMetadata.set({
     title: name + " Report",
     client: "Client Name",
     type: "Assessment Type",
     is_draft: true,
     scope: "Assessment Scope",
-    assessor: await OSUserName(),
+    assessor,
     start: new Date(
       new Date().setDate(new Date().getDate() - 14),
     ).toLocaleDateString("en-CA"),
