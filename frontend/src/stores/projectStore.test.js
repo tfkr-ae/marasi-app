@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
 import { createProjectStore } from "./createProjectStore.js";
-import { createProjectApi, projectTarget } from "./projectApi.js";
+import { createProjectApi, pickedProject, projectMatches, projectTarget } from "./projectApi.js";
 import { openingScreen } from "../lib/openProgress.js";
 import { serviceError } from "../lib/service/errors.js";
 
@@ -287,6 +287,35 @@ test("what the picker gives opens by path when it names a directory, else by nam
   assert.deepEqual(projectTarget("/Users/r/client.marasi"), { path: "/Users/r/client.marasi" });
   assert.deepEqual(projectTarget("/Users/r/client"), { path: "/Users/r/client.marasi" });
   assert.deepEqual(projectTarget("C:\\Users\\r\\client.marasi"), { path: "C:\\Users\\r\\client.marasi" });
+});
+
+test("a listed project the picker gives opens its exact path, whatever its name", () => {
+  const engagement = { name: "engagement", path: "/tmp/engagement.marasi", modifiedAt: "" };
+  assert.deepEqual(projectTarget(engagement), { path: "/tmp/engagement.marasi" });
+  assert.deepEqual(projectTarget({ name: "acme", path: acme }), { path: acme });
+});
+
+test("the picker gives the highlighted listed project, else the first match, else the typed name", () => {
+  const recent = { name: "engagement", path: "/tmp/engagement.marasi" };
+  const named = { name: "engagement", path: `${projects}/engagement.marasi` };
+  const listed = [recent, named];
+
+  assert.deepEqual(projectTarget(pickedProject(listed, 0, "")), { path: "/tmp/engagement.marasi" });
+  assert.deepEqual(projectTarget(pickedProject(listed, 1, "eng")), { path: `${projects}/engagement.marasi` });
+  assert.deepEqual(projectTarget(pickedProject(listed, -1, "eng")), { path: "/tmp/engagement.marasi" });
+  assert.deepEqual(projectTarget(pickedProject([], -1, " fresh ")), { name: "fresh" });
+  assert.deepEqual(projectTarget(pickedProject([], -1, "/tmp/new")), { path: "/tmp/new.marasi" });
+  assert.equal(pickedProject([], -1, "  "), null, "nothing to open");
+});
+
+test("the picker lists the projects whose name or path holds the typed text", () => {
+  const listed = [
+    { name: "engagement", path: "/tmp/engagement.marasi" },
+    { name: "acme", path: acme },
+  ];
+  assert.deepEqual(projectMatches(listed, ""), listed);
+  assert.deepEqual(projectMatches(listed, "ENG"), [listed[0]]);
+  assert.deepEqual(projectMatches(listed, "/cfg/"), [listed[1]]);
 });
 
 test("reloading the project the service has open loads it afresh, without opening or prompting", async () => {

@@ -34,8 +34,9 @@ export function setupListener(r, toastStore) {
 }
 
 /**
- * Opens the project `r` (a path, or a name in the service's projects) on
- * the service and loads it (projectStore). The opening screen shows a slow
+ * Opens the project `r` (a listed project's `{path}`, or typed text: a
+ * path or a name in the service's projects; see projectTarget) on the
+ * service and loads it (projectStore). The opening screen shows a slow
  * or failed open; a toastStore announces the open, and a modalStore shows
  * a refusal over held Checkpoint items. Resolves to the project that
  * opened, `{name, path}`, or null.

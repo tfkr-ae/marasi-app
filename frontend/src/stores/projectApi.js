@@ -50,12 +50,32 @@ export function createProjectApi(client, { confirmSwitch, loadProject, recentPro
 }
 
 /**
- * The open the project picker's `r` asks for: a path (it names a directory)
- * opens by path, with ".marasi" added when missing, and anything else by
- * name in the service's projects.
+ * The open the project picker's `r` asks for. A listed project
+ * (`{name, path}` from `listProjects`) opens its exact path. Typed text
+ * naming a directory opens by path, with ".marasi" added when missing;
+ * other typed text opens by name in the service's projects.
  */
 export function projectTarget(r) {
+  if (typeof r === "object" && r?.path) return { path: r.path };
   const text = String(r).trim();
   if (!/[\\/]/.test(text)) return { name: text.replace(/\.marasi$/, "") };
   return { path: text.endsWith(".marasi") ? text : text + ".marasi" };
+}
+
+/** The listed projects (`listProjects`) whose name or path holds `input`. */
+export function projectMatches(projects, input) {
+  const text = String(input).trim().toLowerCase();
+  if (!text) return projects;
+  return projects.filter((p) => p.name.toLowerCase().includes(text) || p.path.toLowerCase().includes(text));
+}
+
+/**
+ * What the project picker opens: the listed project at `index` in
+ * `matches`, else the first match, else the typed `input` (null when
+ * blank). `projectTarget` turns it into the open.
+ */
+export function pickedProject(matches, index, input) {
+  const listed = matches[index] ?? matches[0];
+  if (listed) return listed;
+  return String(input).trim() || null;
 }
