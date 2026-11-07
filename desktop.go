@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	goruntime "runtime"
 	"slices"
 
@@ -58,7 +59,7 @@ func (a *App) emit(name string, data ...any) {
 func (a *App) showMessageDialog(options messageDialogOptions) (string, error) {
 	if serverBuild {
 		// The server build has no native dialogs, and no callback would come.
-		return dismissedButton(options), nil
+		return serverDialogAnswer(options, os.Getenv(dialogAnswerEnv)), nil
 	}
 	var dialog *application.MessageDialog
 	switch options.Type {

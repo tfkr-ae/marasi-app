@@ -4,6 +4,7 @@
 // client. The lifecycle is in createConnectionStore.js.
 import {
   AddRecentProject,
+  ConfirmFollowProject,
   ConfirmProjectSwitch,
   ConnectLocal,
   ConnectionPassword,
@@ -19,6 +20,9 @@ import { loadedProject, loadProject, projectStore, resyncProject } from "./proje
 import { activeConnectionId } from "./activeConnection.js";
 import { trackRecents } from "./recentProjects.js";
 import { projectData } from "./projectData.js";
+import { logbookStore } from "./logbookStore.js";
+import { hasUnsavedEdits } from "./createLogbookStore.js";
+import { projectName } from "../lib/openProgress.js";
 
 export const connectionStore = createConnectionStore({
   listConnections: () => ListConnections(),
@@ -49,6 +53,9 @@ export const connectionStore = createConnectionStore({
   // After a reconnect that found another project or a restarted service:
   // the unsaved-work prompt, then the full load (the pages remount).
   confirmSwitch: () => ConfirmProjectSwitch(),
+  // Another client opened `project`: the same prompt, naming it.
+  confirmFollow: (project) => ConfirmFollowProject(projectName(project), hasUnsavedEdits(get(logbookStore))),
+  loadDeclined: () => projectStore.closeFollowed(),
   reloadProject: (status) => projectStore.reload(status.project),
   holdWrites: (on) => service.holdWrites(on),
 });
