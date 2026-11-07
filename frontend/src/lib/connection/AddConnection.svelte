@@ -52,13 +52,12 @@
 
 <div class="text-sm" data-testid="add-connection">
 	<h3 class="text-sm font-bold">Add a connection</h3>
-	<p class="mt-3 flex items-center gap-2 text-xs opacity-70">
-		<QrCode size={14} /> Pairing payload, from <span class="font-mono">marasi service control pair --json</span> or Share
-	</p>
+	<p class="mt-3 flex items-center gap-2 text-xs opacity-70"><QrCode size={14} /> Pairing</p>
 	<div class="mt-1 flex gap-2">
 		<input
 			class="input h-8 flex-1 py-1 font-mono text-xs"
-			placeholder={'{"url":"http://10.0.0.5:9000","password":"…","instance":"default"}'}
+			placeholder="Paste from marasi service control pair --json, or another app's Share"
+			title={'{"url":"http://10.0.0.5:9000","password":"…","instance":"default"}'}
 			data-testid="pairing-payload"
 			bind:value={payload}
 		/>
