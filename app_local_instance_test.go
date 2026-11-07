@@ -124,6 +124,7 @@ func localApp(t *testing.T, cli *fakeCLI) *App {
 func TestConnectLocalStartsTheInstanceWhenItIsNotRunning(t *testing.T) {
 	cli := (&fakeCLI{}).
 		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
 		answer("service start", 0, started).
 		answer("service control pair", 0, paired)
 	app := localApp(t, cli)
@@ -133,7 +134,7 @@ func TestConnectLocalStartsTheInstanceWhenItIsNotRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := []string{"service status", "service start", "service control pair"}; !slices.Equal(cli.subcommands(), want) {
+	if want := []string{"service status", "service start", "service status", "service control pair"}; !slices.Equal(cli.subcommands(), want) {
 		t.Fatalf("CLI calls = %v, want %v", cli.subcommands(), want)
 	}
 	start := cli.lastCall("service start")
@@ -251,42 +252,122 @@ func TestConnectLocalReportsAMissingCLI(t *testing.T) {
 	}
 }
 
-func TestQuitStopsTheLocalInstanceOnlyWhenTheAppStartedIt(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		status    string
-		exit      int
-		wantStops int
-	}{
-		{name: "started by the app", status: notRunning, exit: 1, wantStops: 1},
-		{name: "attached", status: runningWithCtl, exit: 0, wantStops: 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cli := (&fakeCLI{}).
-				answer("service status", tc.exit, tc.status).
-				answer("service start", 0, started).
-				answer("service control pair", 0, paired).
-				answer("service stop", 0, stopped)
-			app := newTestApp(t)
-			app.runCLI = cli.run
-			app.findCLI = func() (string, error) { return "/bin/marasi", nil }
-			app.newPassword = func() (string, error) { return "generated", nil }
-			if _, err := app.ConnectLocal(); err != nil {
-				t.Fatal(err)
-			}
+// runOf is a running status of the instance's run runID, with a control
+// listener.
+func runOf(runID string) string {
+	return `{"status":"running","version":"dev","api":1,"instance":"default","project":"/p/scratchpad.marasi","proxy_listener":"127.0.0.1:8080","control_listener":"127.0.0.1:52001","run_id":"` + runID + `"}`
+}
 
-			app.ServiceShutdown()
+func (f *fakeCLI) stops() int {
+	stops := 0
+	for _, name := range f.subcommands() {
+		if name == "service stop" {
+			stops++
+		}
+	}
+	return stops
+}
 
-			stops := 0
-			for _, name := range cli.subcommands() {
-				if name == "service stop" {
-					stops++
-				}
-			}
-			if stops != tc.wantStops {
-				t.Fatalf("stopped the instance %d times, want %d (calls %v)", stops, tc.wantStops, cli.subcommands())
-			}
-		})
+// quittingApp is an App on cli, as main builds it, so ServiceShutdown runs
+// the quit path.
+func quittingApp(t *testing.T, cli *fakeCLI) *App {
+	t.Helper()
+	app := newTestApp(t)
+	app.runCLI = cli.run
+	app.findCLI = func() (string, error) { return "/bin/marasi", nil }
+	app.newPassword = func() (string, error) { return "generated", nil }
+	return app
+}
+
+func TestQuitStopsTheRunTheAppStarted(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	app := quittingApp(t, cli)
+	connection, err := app.ConnectLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !connection.StartedByApp {
+		t.Fatal("the instance the app started doesn't read as the app's")
+	}
+
+	app.ServiceShutdown()
+
+	if cli.stops() != 1 {
+		t.Fatalf("stopped the instance %d times, want once (calls %v)", cli.stops(), cli.subcommands())
+	}
+}
+
+func TestQuitLeavesAnInstanceTheAppAttachedToRunning(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-other")).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	app := quittingApp(t, cli)
+	connection, err := app.ConnectLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection.StartedByApp {
+		t.Fatal("an instance the app attached to reads as the app's")
+	}
+
+	app.ServiceShutdown()
+
+	if cli.stops() != 0 {
+		t.Fatalf("stopped an instance the app attached to (calls %v)", cli.subcommands())
+	}
+}
+
+func TestQuitLeavesAReplacementAnotherClientStartedRunning(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		// Another client stops the app's run and starts its own.
+		answer("service status", 0, runOf("run-other")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	app := quittingApp(t, cli)
+	if _, err := app.ConnectLocal(); err != nil {
+		t.Fatal(err)
+	}
+	connection, err := app.ConnectLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection.StartedByApp {
+		t.Fatal("another client's replacement reads as the app's")
+	}
+
+	app.ServiceShutdown()
+
+	if cli.stops() != 0 {
+		t.Fatalf("quitting stopped another client's replacement (calls %v)", cli.subcommands())
+	}
+}
+
+func TestQuitLeavesAReplacementStartedAfterTheAppLastConnected(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service status", 0, runOf("run-other")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	app := quittingApp(t, cli)
+	if _, err := app.ConnectLocal(); err != nil {
+		t.Fatal(err)
+	}
+
+	app.ServiceShutdown()
+
+	if cli.stops() != 0 {
+		t.Fatalf("quitting stopped another client's replacement (calls %v)", cli.subcommands())
 	}
 }
 
@@ -355,6 +436,7 @@ func (f *fakeCLI) startCalls() []cliCall {
 func TestConnectLocalStartsTheProxyOnAFreePortWhenTheDefaultIsTaken(t *testing.T) {
 	cli := (&fakeCLI{}).
 		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
 		answer("service start", 1, `{"error":"binding proxy listener on address 127.0.0.1 port 8080: setting up listener on address:port 127.0.0.1:8080: listen tcp 127.0.0.1:8080: bind: address already in use"}`).
 		answer("service start", 0, started).
 		answer("service control pair", 0, paired)
@@ -458,20 +540,18 @@ func TestConnectLocalReportsOtherPairingFailuresAsInstanceFailed(t *testing.T) {
 func TestRestartLocalInstanceStopsTheRunningOneAndStartsItsProjectWithTheAppsCLI(t *testing.T) {
 	cli := (&fakeCLI{}).
 		answer("service status", 0, runningOld).
+		answer("service status", 0, runOf("run-restarted")).
 		answer("service stop", 0, stopped).
 		answer("service start", 0, started).
 		answer("service control pair", 0, paired).
 		answer("service stop", 0, stopped)
-	app := newTestApp(t)
-	app.runCLI = cli.run
-	app.findCLI = func() (string, error) { return "/bin/marasi", nil }
-	app.newPassword = func() (string, error) { return "generated", nil }
+	app := quittingApp(t, cli)
 
 	if err := app.RestartLocalInstance(); err != nil {
 		t.Fatal(err)
 	}
 
-	if want := []string{"service status", "service stop", "service start"}; !slices.Equal(cli.subcommands(), want) {
+	if want := []string{"service status", "service stop", "service start", "service status"}; !slices.Equal(cli.subcommands(), want) {
 		t.Fatalf("CLI calls = %v, want %v", cli.subcommands(), want)
 	}
 	start := cli.lastCall("service start")
@@ -493,8 +573,8 @@ func TestRestartLocalInstanceStopsTheRunningOneAndStartsItsProjectWithTheAppsCLI
 		t.Fatal("the restarted instance doesn't read as the app's")
 	}
 	app.ServiceShutdown()
-	if got := cli.subcommands()[len(cli.subcommands())-1]; got != "service stop" {
-		t.Fatalf("quitting ran %q, want the restarted instance stopped", got)
+	if cli.stops() != 2 {
+		t.Fatalf("calls %v, want the restarted instance stopped on quit", cli.subcommands())
 	}
 }
 
@@ -517,13 +597,14 @@ func TestRestartLocalInstanceStartsNothingWhenStoppingFails(t *testing.T) {
 func TestRestartLocalInstanceStartsOneThatIsNoLongerRunning(t *testing.T) {
 	cli := (&fakeCLI{}).
 		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
 		answer("service start", 0, started)
 	app := localApp(t, cli)
 
 	if err := app.RestartLocalInstance(); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"service status", "service start"}; !slices.Equal(cli.subcommands(), want) {
+	if want := []string{"service status", "service start", "service status"}; !slices.Equal(cli.subcommands(), want) {
 		t.Fatalf("CLI calls = %v, want %v", cli.subcommands(), want)
 	}
 	if project := flagValue(cli.lastCall("service start").args, "--project"); project != "" {
