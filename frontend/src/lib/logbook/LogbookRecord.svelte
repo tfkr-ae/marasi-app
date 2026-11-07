@@ -8,7 +8,6 @@
 	import { ArrowLeft, ArrowRight, BookCheck, Pencil, Trash2 } from "lucide-svelte";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
-	import { refreshOtherLists } from "./recordEditor.js";
 	import EvidenceViewer from "./EvidenceViewer.svelte";
 	import LinkedRecords from "./LinkedRecords.svelte";
 	import RecordChecklist from "./RecordChecklist.svelte";
@@ -46,7 +45,6 @@
 	async function saveFix() {
 		const result = await store.saveFix();
 		if (result.ok) {
-			refreshOtherLists();
 			if (result.done) toastStore.trigger({ message: `${result.kind === "finding" ? "Finding" : "Test case"} done`, background: "variant-filled-success" });
 		} else if (result.error) toastError(toastStore, "Not saved", result.error);
 	}

@@ -5,14 +5,12 @@ import {
   GetKeybindings,
   GetExtensionCode,
   GetWaypoints,
-  GetUserName,
+  OSUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { testCaseStore } from "./stores/testCaseStore";
-import { findingStore } from "./stores/findingStore";
-import { logbookStore } from "./stores/logbookStore";
 // Each registers with projectData as it loads.
+import "./stores/logbookStore";
 import "./stores/webSocketStore";
-import { armoryStore } from "./stores/armoryStore";
+import "./stores/armoryStore";
 import { launchpadStore } from "./stores/launchpadStore";
 import "./stores/checkpointStore";
 import { readHighlights } from "./stores/highlightsStore";
@@ -116,7 +114,7 @@ export async function resetProject(name) {
     type: "Assessment Type",
     is_draft: true,
     scope: "Assessment Scope",
-    assessor: await GetUserName(),
+    assessor: await OSUserName(),
     start: new Date(
       new Date().setDate(new Date().getDate() - 14),
     ).toLocaleDateString("en-CA"),
@@ -131,10 +129,6 @@ export async function resetProject(name) {
   ledgerStore.clear();
   sitemapStore.clear();
   recentTraffic.clear();
-  testCaseStore.clear();
-  findingStore.clear();
-  logbookStore.clear();
-  armoryStore.clear();
   launchpadStore.clear();
 }
 

@@ -13,8 +13,9 @@ var writeSavedFile = func(path string, data []byte) error {
 }
 
 // SaveFileAs asks where to save bytes the frontend fetched from the service
-// (contentBase64, standard base64) and writes them there. The dialog
-// suggests defaultName in Downloads and offers filterName (filterPattern,
+// (contentBase64, standard base64) and writes them there: the CA
+// certificate, a report, an artifact. The dialog suggests defaultName's base
+// name in Downloads and offers filterName (filterPattern,
 // such as "*.crt"; none when empty) and All Files. It returns the saved
 // path, or "" when the user cancelled.
 func (a *App) SaveFileAs(title, defaultName, filterName, filterPattern, contentBase64 string) (string, error) {
@@ -30,9 +31,10 @@ func (a *App) SaveFileAs(title, defaultName, filterName, filterPattern, contentB
 	home, _ := os.UserHomeDir()
 	path, err := a.saveFileDialog(saveDialogOptions{
 		DefaultDirectory: filepath.Join(home, "Downloads"),
-		DefaultFilename:  defaultName,
-		Title:            title,
-		Filters:          filters,
+		// Only the name: an artifact's name comes from the service.
+		DefaultFilename: filepath.Base(defaultName),
+		Title:           title,
+		Filters:         filters,
 	})
 	if err != nil || path == "" {
 		return "", err

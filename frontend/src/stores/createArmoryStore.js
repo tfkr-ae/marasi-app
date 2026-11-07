@@ -1,8 +1,13 @@
-// The Armory's store. armoryStore.js binds it to the Wails backend; tests
-// load it with a fake API holding the same binding names.
-import { writable } from "svelte/store";
+// The Armory's store. armoryStore.js binds it to the service through
+// armoryApi.js, whose keys keep the old binding names; tests load it with
+// a fake service client or a fake API.
+import { get, writable } from "svelte/store";
 import { clampDrawerSplit } from "./createLedgerStore.js";
 import { createRunTrafficView } from "./createArmoryRunTraffic.js";
+import { isActiveRun, toRun, toTemplate, toWordlists } from "./armoryApi.js";
+
+/** How long cancelling the active runs waits for them to stop. */
+export const CANCEL_TIMEOUT_MS = 5000;
 
 function defaultRunSettings() {
   return {
@@ -77,19 +82,73 @@ export function createArmoryStore(api) {
     countRunTraffic: (runId, field) => CountArmoryRunTraffic(runId, field),
   });
 
-  function upsertRun(run) {
+  // Adds or replaces a run in its template's runs, when those are loaded
+  // or `always`, and keeps the active runs in step with its status.
+  function upsertRun(run, { always = true } = {}) {
     update((state) => {
-      const runs = state.runsByTemplate[run.TemplateID] || [];
+      const loaded = state.runsByTemplate[run.TemplateID];
+      const runs = loaded || [];
       const exists = runs.some((item) => item.ID === run.ID);
+      const others = state.activeRunIds.filter((id) => id !== run.ID);
+      const activeRunIds = isActiveRun(run) ? [...others, run.ID] : others;
 
       return {
         ...state,
-        runsByTemplate: {
-          ...state.runsByTemplate,
-          [run.TemplateID]: exists
-            ? runs.map((item) => (item.ID === run.ID ? run : item))
-            : [...runs, run],
-        },
+        activeRunIds,
+        runsByTemplate: !loaded && !always
+          ? state.runsByTemplate
+          : {
+              ...state.runsByTemplate,
+              [run.TemplateID]: exists
+                ? runs.map((item) => (item.ID === run.ID ? run : item))
+                : [...runs, run],
+            },
+      };
+    });
+  }
+
+  // Forgets a run, and its selection.
+  function removeRun(id) {
+    update((state) => {
+      const selectedRunByTemplate = Object.fromEntries(
+        Object.entries(state.selectedRunByTemplate).map(
+          ([templateId, runId]) => [templateId, runId === id ? null : runId],
+        ),
+      );
+      const runsByTemplate = Object.fromEntries(
+        Object.entries(state.runsByTemplate).map(([templateId, runs]) => [
+          templateId,
+          runs.filter((run) => run.ID !== id),
+        ]),
+      );
+      return {
+        ...state,
+        runsByTemplate,
+        selectedRunByTemplate,
+        activeRunIds: state.activeRunIds.filter((runId) => runId !== id),
+      };
+    });
+  }
+
+  // Forgets a template, its runs and what the page kept for it.
+  function removeTemplate(id) {
+    update((state) => {
+      const runsByTemplate = { ...state.runsByTemplate };
+      const runSettingsByTemplate = { ...state.runSettingsByTemplate };
+      const selectedRunByTemplate = { ...state.selectedRunByTemplate };
+      delete runsByTemplate[id];
+      delete runSettingsByTemplate[id];
+      delete selectedRunByTemplate[id];
+      return {
+        ...state,
+        templates: state.templates.filter((template) => template.ID !== id),
+        runsByTemplate,
+        runSettingsByTemplate,
+        selectedRunByTemplate,
+        selectedTemplateId:
+          state.selectedTemplateId === id ? null : state.selectedTemplateId,
+        templateDraft:
+          state.templateDraft?.templateId === id ? null : state.templateDraft,
       };
     });
   }
@@ -154,6 +213,69 @@ export function createArmoryStore(api) {
     return run;
   }
 
+  // Reads the service's data again in place after a reconnect: the
+  // templates, wordlists, active runs, the runs already loaded and the open
+  // run's traffic. What only the app holds stays: the selection, the
+  // template draft, run settings, search and the drawer.
+  async function resync() {
+    const version = projectStateVersion;
+    const loadedTemplateIds = Object.keys(get({ subscribe }).runsByTemplate);
+    const [templates, wordlists, activeRunIds, runs] = await Promise.all([
+      GetArmoryTemplates(),
+      GetArmoryWordlists(),
+      GetActiveArmoryRunIDs(),
+      Promise.all(loadedTemplateIds.map((id) => GetArmoryRuns(id).catch(() => null))),
+    ]);
+    if (version !== projectStateVersion) return;
+    const known = new Set((templates || []).map((template) => template.ID));
+    update((state) => {
+      const runsByTemplate = {};
+      loadedTemplateIds.forEach((id, i) => {
+        if (known.has(id)) runsByTemplate[id] = runs[i] || state.runsByTemplate[id] || [];
+      });
+      return {
+        ...state,
+        templates: sortTemplates(templates || []),
+        wordlists: wordlists || [],
+        activeRunIds: activeRunIds || [],
+        runsByTemplate,
+      };
+    });
+    for (const id of Object.keys(get({ subscribe }).runSettingsByTemplate)) {
+      if (!known.has(id)) removeTemplate(id);
+    }
+    const state = get({ subscribe });
+    if (state.selectedTemplateId && !known.has(state.selectedTemplateId)) removeTemplate(state.selectedTemplateId);
+    await runTraffic.showNew();
+  }
+
+  // Cancels every active run, read afresh from the service, and waits until
+  // none is running, or rejects after timeoutMs. A run that stopped on its
+  // own before its cancel is fine.
+  async function cancelActiveRuns({
+    timeoutMs = CANCEL_TIMEOUT_MS,
+    pollMs = 100,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now = Date.now,
+  } = {}) {
+    let running = (await refreshActiveRuns()) ?? [];
+    await Promise.all(
+      running.map((id) =>
+        CancelArmoryRun(id).catch((err) => {
+          if (err?.code !== "run_not_active") throw err;
+        }),
+      ),
+    );
+    const deadline = now() + timeoutMs;
+    while (running.length > 0) {
+      const runs = await Promise.all(running.map((id) => refreshRun(id)));
+      running = runs.filter(isActiveRun).map((run) => run.ID);
+      if (running.length === 0) break;
+      if (now() >= deadline) throw new Error("timed out cancelling active Armory runs");
+      await sleep(pollMs);
+    }
+  }
+
   async function refreshActiveRuns() {
     const version = projectStateVersion;
     const activeRunIds = (await GetActiveArmoryRunIDs()) || [];
@@ -173,6 +295,7 @@ export function createArmoryStore(api) {
       set(initialState(++projectStateVersion));
     },
     populate,
+    resync,
 
     setSearch: (search) => update((state) => ({ ...state, search })),
 
@@ -277,29 +400,18 @@ export function createArmoryStore(api) {
 
     deleteTemplate: async (id) => {
       await DeleteArmoryTemplate(id);
-      update((state) => {
-        const runsByTemplate = { ...state.runsByTemplate };
-        const runSettingsByTemplate = { ...state.runSettingsByTemplate };
-        const selectedRunByTemplate = { ...state.selectedRunByTemplate };
-        delete runsByTemplate[id];
-        delete runSettingsByTemplate[id];
-        delete selectedRunByTemplate[id];
-        return {
-          ...state,
-          templates: state.templates.filter((template) => template.ID !== id),
-          runsByTemplate,
-          runSettingsByTemplate,
-          selectedRunByTemplate,
-          selectedTemplateId:
-            state.selectedTemplateId === id ? null : state.selectedTemplateId,
-          templateDraft:
-            state.templateDraft?.templateId === id ? null : state.templateDraft,
-        };
-      });
+      removeTemplate(id);
     },
 
     loadRuns,
     refreshRun,
+
+    // The service's armory.* and wordlist.* events, in the API's shapes.
+    onTemplate: (template) => upsertTemplate(toTemplate(template)),
+    onTemplateDeleted: ({ id }) => removeTemplate(id),
+    onRun: (run) => upsertRun(toRun(run), { always: false }),
+    onRunDeleted: ({ id }) => removeRun(id),
+    onWordlists: (list) => update((state) => ({ ...state, wordlists: toWordlists(list) })),
 
     validateRun: ({ rawTemplate, attackType, wordlists, maxConcurrent }) =>
       ValidateArmoryRun(
@@ -329,8 +441,7 @@ export function createArmoryStore(api) {
 
     startRun: async (id) => {
       await StartArmoryRun(id);
-      const [run] = await Promise.all([refreshRun(id), refreshActiveRuns()]);
-      return run;
+      return refreshRun(id);
     },
 
     cancelRun: async (id) => {
@@ -339,27 +450,11 @@ export function createArmoryStore(api) {
 
     deleteRun: async (id) => {
       await DeleteArmoryRun(id);
-      update((state) => {
-        const selectedRunByTemplate = Object.fromEntries(
-          Object.entries(state.selectedRunByTemplate).map(
-            ([templateId, runId]) => [templateId, runId === id ? null : runId],
-          ),
-        );
-        const runsByTemplate = Object.fromEntries(
-          Object.entries(state.runsByTemplate).map(([templateId, runs]) => [
-            templateId,
-            runs.filter((run) => run.ID !== id),
-          ]),
-        );
-        return {
-          ...state,
-          runsByTemplate,
-          selectedRunByTemplate,
-        };
-      });
+      removeRun(id);
     },
 
     refreshActiveRuns,
+    cancelActiveRuns,
 
     loadWordlists: async () => {
       const wordlists = (await GetArmoryWordlists()) || [];

@@ -57,7 +57,6 @@
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
-	import { armoryStore } from "../stores/armoryStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
 	import WebUITile from "../lib/extensions/WebUITile.svelte";
@@ -278,7 +277,6 @@
 				sitemapStore.onRequest(newRequest);
 				recentTraffic.onRequest(newRequest);
 				launchpadStore.onRequest(newRequest);
-				armoryStore.onRequest(newRequest);
 			});
 			on("launch-started", (launch) =>
 				launchpadStore.onLaunchStarted(launch),
@@ -291,7 +289,6 @@
 				sitemapStore.onResponse(newResponse);
 				recentTraffic.onResponse(newResponse);
 				launchpadStore.onResponse(newResponse);
-				armoryStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&
