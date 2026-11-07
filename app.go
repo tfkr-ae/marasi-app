@@ -83,6 +83,8 @@ type App struct {
 	newPassword  func() (string, error)
 	cliConfigDir string
 	local        localInstance
+	// cliRuntime holds the Marasi CLI's replaceable functions (cli.go).
+	cliRuntime cliRuntime
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
 	// draft, reported by the frontend, which holds drafts in memory only.
 	unsavedDrafts atomic.Int64
