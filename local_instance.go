@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -112,13 +113,13 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 		}
 		if err := a.cli(path, []string{"MARASI_PASSWORD=" + password}, nil,
 			"service", "control", "start", "--address", "127.0.0.1", "--port", "0"); err != nil {
-			return LocalConnection{}, codedError("turning on the local instance's control listener", codeInstanceFailed, nil, err)
+			return LocalConnection{}, instanceError("turning on the local instance's control listener", status, err)
 		}
 	}
 
 	var pair Pairing
 	if err := a.cli(path, nil, &pair, "service", "control", "pair"); err != nil {
-		return LocalConnection{}, codedError("reading the local instance's address", codeInstanceFailed, nil, err)
+		return LocalConnection{}, instanceError("reading the local instance's address", status, err)
 	}
 	return LocalConnection{URL: pair.URL, Password: pair.Password, Instance: pair.Instance, StartedByApp: a.local.owned, WasStopped: wasStopped}, nil
 }
@@ -152,8 +153,57 @@ func (a *App) LocalPairing() (Pairing, error) {
 	return pairing, nil
 }
 
+// instanceError is err from a control route of the running instance: an
+// instance_outdated error naming its version when the instance is too old
+// to serve the route (it answers 404), else instance_failed.
+func instanceError(what string, status localInstanceStatus, err error) error {
+	if !strings.Contains(err.Error(), "404 Not Found") {
+		return codedError(what, codeInstanceFailed, nil, err)
+	}
+	version := status.Version
+	if version == "" {
+		version = "unknown"
+	}
+	return codedError(what, codeInstanceOutdated, nil,
+		fmt.Errorf("Marasi %s is running, older than this app needs: %w", version, err))
+}
+
+// RestartLocalInstance stops the running local instance, which another
+// program may have started, and starts it again with the app's CLI on the
+// same project, so the app owns it (and stops it on quit). The frontend
+// confirms first and connects afterwards (ConnectLocal).
+func (a *App) RestartLocalInstance() error {
+	a.local.mu.Lock()
+	defer a.local.mu.Unlock()
+	path, err := a.findCLI()
+	if err != nil {
+		return codedError("finding the Marasi CLI", codeCLIMissing, nil, err)
+	}
+	a.local.cliPath = path
+	status, running, err := a.localStatus(path)
+	if err != nil {
+		return err
+	}
+	var extra []string
+	if running {
+		if err := a.cli(path, nil, nil, "service", "stop"); err != nil {
+			return codedError("stopping the local instance", codeInstanceFailed, nil, err)
+		}
+		a.local.owned = false
+		if status.Project != "" {
+			extra = []string{"--project", status.Project}
+		}
+	}
+	if err := a.startLocal(path, extra...); err != nil {
+		return codedError("starting the local instance", codeInstanceFailed, nil, err)
+	}
+	return nil
+}
+
 // localInstanceStatus is the part of `service status` the app reads.
 type localInstanceStatus struct {
+	Version         string  `json:"version"`
+	Project         string  `json:"project"`
 	ControlListener *string `json:"control_listener"`
 	ProxyListener   *string `json:"proxy_listener"`
 }
@@ -170,21 +220,57 @@ func (a *App) localStatus(path string) (status localInstanceStatus, running bool
 	return status, true, nil
 }
 
-// startLocal starts the instance with a free proxy port, a control listener
-// on a free loopback port and a generated password, and records that the app
-// owns it.
-func (a *App) startLocal(path string) error {
+// startLocal starts the instance with the proxy on the app's default
+// listener (default_address, default_port), or on a free port of the same
+// address when that port is taken, a control listener on a free loopback
+// port and a generated password, and records that the app owns it. extra
+// are more `service start` flags, such as --project.
+func (a *App) startLocal(path string, extra ...string) error {
 	password, err := a.newPassword()
 	if err != nil {
 		return err
 	}
-	err = a.cli(path, []string{"MARASI_PASSWORD=" + password}, nil,
-		"service", "start", "--port", "0", "--control-address", "127.0.0.1:0")
+	address, port := a.listenerDefaults()
+	var started struct {
+		ProxyListener string `json:"proxy_listener"`
+	}
+	start := func(port string) error {
+		args := append([]string{"service", "start", "--address", address, "--port", port, "--control-address", "127.0.0.1:0"}, extra...)
+		return a.cli(path, []string{"MARASI_PASSWORD=" + password}, &started, args...)
+	}
+	err = start(port)
+	if err != nil && port != "0" && portTaken(err) {
+		log.Printf("[*] proxy port %s:%s is taken, starting the local instance on a free port", address, port)
+		err = start("0")
+	}
 	if err != nil {
 		return err
 	}
+	log.Printf("[*] started the local instance, proxy on %s", started.ProxyListener)
 	a.local.owned = true
 	return nil
+}
+
+// listenerDefaults is the proxy listener the app starts the local instance
+// on: default_address and default_port in app config, else 127.0.0.1:8080.
+func (a *App) listenerDefaults() (address, port string) {
+	address, port = "127.0.0.1", "8080"
+	if a.Config != nil {
+		if a.Config.DefaultAddress != "" {
+			address = a.Config.DefaultAddress
+		}
+		if a.Config.DefaultPort != "" {
+			port = a.Config.DefaultPort
+		}
+	}
+	return address, port
+}
+
+// portTaken reports whether a start failed because the proxy port is in use
+// (EADDRINUSE on Unix, WSAEADDRINUSE on Windows).
+func portTaken(err error) bool {
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "address already in use") || strings.Contains(text, "only one usage of each socket address")
 }
 
 // stopOwnedLocal stops the local instance when the app started it, and
