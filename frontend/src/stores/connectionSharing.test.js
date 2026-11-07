@@ -90,15 +90,16 @@ test("without a password, sharing refuses a hostname in the code and sends the c
   assert.deepEqual(steps[1].body, { address: "100.64.1.2", port: 9000, no_password: true });
 });
 
-test("a shared listener reconnects the app there, quietly, and keeps the host in the code", () => {
+test("a shared listener reconnects the app there, quietly, resumes the stream and keeps the host in the code", () => {
   const shared = { ...loopback, control_listener: "100.64.1.2:9000" };
-  const { state, types } = after(
+  const { state, steps, types } = after(
     onLocal,
     { type: "SHARE_LOCAL", address: "100.64.1.2", port: 9000, host: "mac.tail" },
     { type: "CONTROL_UPDATED", control: shared },
     { type: "REJOINED", url: "http://100.64.1.2:9000", status, control: shared },
   );
-  assert.deepEqual(types, ["close-events", "update-control", "rejoin", "open-events", "resync"]);
+  assert.deepEqual(types, ["close-events", "update-control", "rejoin", "open-events"]);
+  assert.equal(steps.at(-1).resume, true);
   assert.equal(state.phase, "connected");
   assert.equal(state.busy, null);
   assert.equal(state.url, "http://100.64.1.2:9000");
@@ -122,7 +123,7 @@ test("a refused change reopens the stream and says why", () => {
     { type: "SHARE_LOCAL", address: "100.64.1.2", port: 80 },
     { type: "CONTROL_FAILED", error: "listener_unavailable: address in use" },
   );
-  assert.deepEqual(types, ["close-events", "update-control", "open-events", "resync"]);
+  assert.deepEqual(types, ["close-events", "update-control", "open-events"]);
   assert.equal(state.busy, null);
   assert.equal(state.changeError, "listener_unavailable: address in use");
 });
@@ -141,7 +142,7 @@ test("Change password sets it on the instance, then the keychain, then reconnect
     { type: "KEYCHAIN_DONE", password: "new-pw" },
     { type: "REJOINED", url: lab.url, status, control: loopback },
   );
-  assert.deepEqual(types, ["close-events", "update-control", "store-password", "rejoin", "open-events", "resync"]);
+  assert.deepEqual(types, ["close-events", "update-control", "store-password", "rejoin", "open-events"]);
   assert.deepEqual(steps[1].body, { password: "new-pw" });
   assert.deepEqual(steps[2], { type: "store-password", id: "remote-1", password: "new-pw" });
   assert.deepEqual(steps[3], { type: "rejoin", password: "new-pw" });
@@ -249,7 +250,7 @@ function fakeApi() {
       calls.push(["updateControl", body]);
       return loopback;
     },
-    openEvents: () => calls.push("openEvents"),
+    openEvents: (handlers) => calls.push(handlers.resume ? "resumeEvents" : "openEvents"),
     closeEvents: () => calls.push("closeEvents"),
     loadProject: async () => {},
     resync: async () => calls.push("resync"),
@@ -278,8 +279,7 @@ test("rotating a remote's password keeps the app connected, with no refusal seen
     ["savePassword", "remote-1", "new-pw"],
     ["use", "new-pw"],
     "readStatus",
-    "openEvents",
-    "resync",
+    "resumeEvents",
   ]);
   assert.deepEqual([...new Set(phases.slice(seen))], ["connected"]);
   assert.equal(get(store).busy, null);

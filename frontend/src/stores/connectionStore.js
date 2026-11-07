@@ -8,7 +8,6 @@ import {
   ConnectLocal,
   ConnectionPassword,
   ListConnections,
-  MarasiPin,
   SetActiveConnection,
   SetConnectionNoPassword,
   SetConnectionPassword,
@@ -45,7 +44,7 @@ export const connectionStore = createConnectionStore({
     await loadProject(status.project);
     projectStore.loaded(status.project);
   },
-  // After a reconnect to the same project.
+  // After a stream reset (expired or invalid) or a service without a run ID.
   resync: () => resyncProject(),
   // After a reconnect that found another project or a restarted service:
   // the unsaved-work prompt, then the full load (the pages remount).
@@ -66,13 +65,7 @@ loadedProject.subscribe(
 );
 // The project store reads the active connection's recents.
 connectionStore.subscribe((state) => activeConnectionId.set(state.connection.id));
-// A restart announced before the stream drops means a full load afterwards.
-service.on("service.restarting", () => connectionStore.dispatch({ type: "SERVICE_RESTARTING" }));
 // A change made elsewhere (the CLI, another client) keeps the details current.
 for (const name of ["control_listener.updated", "control_listener.stopped", "control_listener.started"]) {
   service.on(name, (control) => connectionStore.dispatch({ type: "CONTROL_LOADED", control }));
 }
-// The Marasi date the app was built against: an older service warns.
-MarasiPin()
-  .then((pin) => connectionStore.dispatch({ type: "MARASI_PIN", pin }))
-  .catch((err) => console.error("Reading the pinned Marasi version failed:", err));
