@@ -91,3 +91,32 @@ test("close() stops the stream without reporting an error", async () => {
   assert.equal(http.calls[0].signal.aborted, true);
   assert.deepEqual(errors, []);
 });
+
+test("an event's id is its lastEventId, kept on the source until the next id", async () => {
+  const http = streamingFetch({
+    chunks: ["event: log.added\nid: run.41\ndata: {}\n\n", 'event: stream.dropped\ndata: {"reason":"overflow"}\n\n'],
+  });
+  const EventSource = createFetchEventSource(http.fetch);
+  const source = new EventSource("http://127.0.0.1:1/events");
+  const got = [];
+  source.addEventListener("log.added", (e) => got.push([e.type, e.lastEventId]));
+  source.addEventListener("stream.dropped", (e) => got.push([e.type, e.lastEventId]));
+  await until(() => got.length === 2);
+  assert.deepEqual(got, [
+    ["log.added", "run.41"],
+    ["stream.dropped", "run.41"],
+  ]);
+  assert.equal(source.lastEventId, "run.41");
+  source.close();
+});
+
+test("an event no listener wants still advances lastEventId", async () => {
+  const http = streamingFetch({ chunks: ["event: traffic.request\nid: run.7\ndata: {}\n\n", "event: log.added\nid: run.8\ndata: {}\n\n"] });
+  const EventSource = createFetchEventSource(http.fetch);
+  const source = new EventSource("http://127.0.0.1:1/events");
+  const got = [];
+  source.addEventListener("log.added", () => got.push(source.lastEventId));
+  await until(() => got.length === 1);
+  assert.deepEqual(got, ["run.8"]);
+  source.close();
+});

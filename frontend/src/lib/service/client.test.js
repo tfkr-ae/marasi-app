@@ -47,6 +47,7 @@ function fakeEventSource() {
       this.closed = false;
       this.onopen = null;
       this.onerror = null;
+      this.lastEventId = "";
       sources.push(this);
     }
     addEventListener(type, listener) {
@@ -58,8 +59,12 @@ function fakeEventSource() {
     open() {
       this.onopen?.({ type: "open" });
     }
-    emit(type, data) {
-      for (const listener of this.listeners.get(type) ?? []) listener({ type, data: JSON.stringify(data) });
+    // `id` is the event's SSE id; without one the last id stays, as in a
+    // real EventSource.
+    emit(type, data, id) {
+      if (id !== undefined) this.lastEventId = id;
+      const lastEventId = this.lastEventId;
+      for (const listener of this.listeners.get(type) ?? []) listener({ type, data: JSON.stringify(data), lastEventId });
     }
     drop(detail = {}) {
       this.onerror?.({ type: "error", ...detail });
@@ -312,4 +317,54 @@ test("held writes are refused before they reach the service, and reads and servi
   client.holdWrites(false);
   await client.post("/finding", { title: "x" });
   assert.equal(http.requests.at(-1).method, "POST");
+});
+
+test("a resumed stream asks for the events after the last id it saw", () => {
+  const { client, events } = setup();
+  client.use({ url: "http://127.0.0.1:52001", password: "pw" });
+  client.on("log.added", () => {});
+  client.openEvents();
+  events.sources[0].emit("log.added", {}, "run.40");
+  events.sources[0].emit("traffic.request", {}, "run.41");
+  events.sources[0].emit("stream.dropped", { reason: "overflow" });
+  events.sources[0].drop();
+  client.openEvents({ resume: true });
+  assert.equal(events.sources[1].url, "http://127.0.0.1:52001/events?last_event_id=run.41");
+});
+
+test("a fresh stream asks for no replay and forgets the last id", () => {
+  const { client, events } = setup();
+  client.use({ url: "http://127.0.0.1:52001", password: "pw" });
+  client.openEvents();
+  events.sources[0].emit("log.added", {}, "run.41");
+  events.sources[0].drop();
+  client.openEvents();
+  assert.equal(events.sources[1].url, "http://127.0.0.1:52001/events");
+  client.openEvents({ resume: true });
+  assert.equal(events.sources[2].url, "http://127.0.0.1:52001/events");
+});
+
+test("closing the stream on purpose keeps the last id for a resume", () => {
+  const { client, events } = setup();
+  client.use({ url: "http://127.0.0.1:52001", password: "pw" });
+  client.openEvents();
+  events.sources[0].emit("log.added", {}, "run.9");
+  client.closeEvents();
+  client.openEvents({ resume: true });
+  assert.equal(events.sources[1].url, "http://127.0.0.1:52001/events?last_event_id=run.9");
+});
+
+test("a stream reset reaches onReset with its reason, and its id is the one to resume from", () => {
+  const { client, events } = setup();
+  client.use({ url: "http://127.0.0.1:52001", password: "pw" });
+  const resets = [];
+  client.openEvents();
+  events.sources[0].emit("log.added", {}, "old.3");
+  events.sources[0].drop();
+  client.openEvents({ resume: true, onReset: (reason) => resets.push(reason) });
+  events.sources[1].emit("stream.reset", { reason: "expired" }, "old.9000");
+  assert.deepEqual(resets, ["expired"]);
+  events.sources[1].drop();
+  client.openEvents({ resume: true });
+  assert.equal(events.sources[2].url, "http://127.0.0.1:52001/events?last_event_id=old.9000");
 });

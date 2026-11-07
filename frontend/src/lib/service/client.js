@@ -6,11 +6,20 @@
 //   await client.get("/dashboard");          // JSON in and out
 //   const stop = client.on("log.added", (log) => …);
 //   client.openEvents({ onOpen, onDrop });   // one GET /events stream
+//   client.openEvents({ resume: true, onReset }); // after a drop: the missed events
 //
 // Every call carries `Authorization: Bearer <password>`, unless the
 // connection has no password. A refusal rejects with a ServiceError whose
 // text carries the code the frontend's error helpers read (errors.js). The
 // stream's events reach the handlers registered with on(), by event name.
+//
+// The client keeps the last event id the stream carried (`<run_id>.<seq>`,
+// opaque). openEvents({resume: true}) sends it as `?last_event_id=`, since
+// an EventSource can't set Last-Event-ID, and the service replays what was
+// missed before going live. When it can't (the id expired from its replay
+// buffer, is from another run, or isn't its own), the first event is
+// `stream.reset` and onReset gets its reason: "expired", "restarted" or
+// "invalid". A fresh openEvents() forgets the id.
 //
 // holdWrites(true) refuses every call but GETs and /service/ routes with a
 // project_changed ServiceError, before it reaches the service: the
@@ -19,8 +28,8 @@
 //
 // `fetch` and `EventSource` are passed in so tests use fakes. EventSource is
 // EventSource-like: `new EventSource(url, {headers})`, with onopen, onerror,
-// addEventListener(name, listener) whose event has `data` as text, and
-// close(). The app passes the fetch-based reader in sse.js, since a native
+// addEventListener(name, listener) whose event has `data` as text and
+// `lastEventId`, a `lastEventId` of its own, and close(). The app passes the fetch-based reader in sse.js, since a native
 // EventSource can't send the password.
 import { ServiceError, serviceError } from "./errors.js";
 
@@ -30,6 +39,8 @@ export function createServiceClient({ fetch, EventSource }) {
   const handlers = new Map();
   let stream = null;
   let writesHeld = false;
+  // The id of the last event a stream carried, to resume from.
+  let lastEventId = "";
 
   function authHeaders() {
     return connection?.password ? { Authorization: `Bearer ${connection.password}` } : {};
@@ -82,6 +93,10 @@ export function createServiceClient({ fetch, EventSource }) {
     }
     if (!response.ok) throw serviceError({ method, path, status: response.status, body: parsed, text });
     return parsed;
+  }
+
+  function keepLastEventId(source) {
+    if (source.lastEventId) lastEventId = source.lastEventId;
   }
 
   function dispatch(name, data) {
@@ -144,9 +159,11 @@ export function createServiceClient({ fetch, EventSource }) {
      * the stream ends or fails, with `{status}` when the service refused it
      * (401 for a refused password). The client never reconnects by itself.
      */
-    openEvents({ onOpen = () => {}, onDrop = () => {} } = {}) {
+    openEvents({ onOpen = () => {}, onDrop = () => {}, onReset = () => {}, resume = false } = {}) {
       this.closeEvents();
-      const source = new EventSource(urlFor("/events"), { headers: authHeaders() });
+      if (!resume) lastEventId = "";
+      const query = lastEventId ? { last_event_id: lastEventId } : undefined;
+      const source = new EventSource(urlFor("/events", query), { headers: authHeaders() });
       const current = { source, names: new Set(), dropped: false };
       stream = current;
       source.onopen = () => {
@@ -155,16 +172,27 @@ export function createServiceClient({ fetch, EventSource }) {
       source.onerror = (event) => {
         if (stream !== current || current.dropped) return;
         current.dropped = true;
+        keepLastEventId(source);
         stream = null;
         source.close();
         onDrop({ status: event?.status ?? null });
       };
+      source.addEventListener("stream.reset", (event) => {
+        if (stream !== current) return;
+        keepLastEventId(source);
+        let reason = null;
+        try {
+          reason = JSON.parse(event.data)?.reason ?? null;
+        } catch {}
+        onReset(reason);
+      });
       for (const name of handlers.keys()) listen(name);
     },
 
-    /** Closes the stream without reporting a drop. */
+    /** Closes the stream without reporting a drop; a resume continues from it. */
     closeEvents() {
       if (!stream) return;
+      keepLastEventId(stream.source);
       stream.source.close();
       stream = null;
     },
