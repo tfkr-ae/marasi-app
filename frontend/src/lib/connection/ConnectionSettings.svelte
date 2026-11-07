@@ -48,7 +48,7 @@
 	</button>
 </div>
 
-<div class="mt-4 max-w-3xl">
+<div class="mt-4">
 	{#if picked === "add"}
 		<AddConnection on:added={(e) => (picked = e.detail)} />
 	{:else}
