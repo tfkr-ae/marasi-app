@@ -1,7 +1,7 @@
 // The open project's Marasi background jobs (search index, sitemap, moving
 // prettified copies, the dashboard's intercepted count), for Settings → Maintenance and the Ledger's notices.
-// Marasi emits no in-process job events, so the store polls ListJobs while a
-// job is incomplete and stops once every job is done. Backend calls go
+// The store polls the jobs while one is incomplete and stops once every job
+// is done; jobsStore.js also reads them on the service's job.complete. Backend calls go
 // through the injected `api`, so tests run against a fake:
 //
 //   listJobs() -> [{ Name, Complete, Done, Total, Rebuildable }]
@@ -10,8 +10,9 @@
 // A view that read incomplete results calls watch(group); once the group's
 // jobs are complete, onFinished(group) tells it to read again.
 import { writable } from "svelte/store";
+import { boundAction } from "../lib/service/boundAction.js";
 
-/** How often ListJobs is read while a job runs. */
+/** How often the jobs are read while one runs. */
 export const POLL_MS = 2000;
 
 /** The jobs behind each notice and Rebuild button. */
@@ -108,14 +109,24 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
 
   /** Rebuilds a group's jobs ("index" or "sitemap") and follows them. */
   async function rebuild(group) {
+    // One action: a connection switch stops the rest (boundAction.js).
+    const action = boundAction(api.bind?.());
     store.update((s) => ({ ...s, rebuilding: group, error: "" }));
     try {
-      for (const name of JOB_GROUPS[group]) await api.rebuildJob(name);
+      for (const name of JOB_GROUPS[group]) await action.step(() => api.rebuildJob(name));
     } finally {
       store.update((s) => ({ ...s, rebuilding: null }));
     }
     watched.add(group);
     await refresh();
+  }
+
+  /** A job.progress: the running `job` replaces its row, or joins the list. */
+  function onProgress(job) {
+    store.update((s) => {
+      const listed = s.jobs.some((j) => j.Name === job.Name);
+      return { ...s, jobs: listed ? s.jobs.map((j) => (j.Name === job.Name ? job : j)) : [...s.jobs, job] };
+    });
   }
 
   /** Forgets the project's jobs, on a project switch. */
@@ -127,5 +138,5 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
     store.set(initial());
   }
 
-  return { subscribe: store.subscribe, refresh, watch, rebuild, clear };
+  return { subscribe: store.subscribe, refresh, watch, rebuild, onProgress, clear };
 }

@@ -1,27 +1,29 @@
-// The highlight palette bound to the Wails backend. The logic lives in
-// createHighlightsStore.js and lib/ledger/highlights.js, which tests load
-// without bindings.
+// The highlight palette over the service client: the app's colours and
+// labels stay in the app config (Go bindings), the project's labels are
+// client settings on the service. The logic lives in createHighlightsStore.js
+// and lib/ledger/highlights.js, which tests load without bindings.
 import {
-  DeleteClientSetting,
-  GetClientSetting,
   GetHighlights,
-  ListClientSettings,
-  MigrateOldHighlights,
   ResetHighlights,
   SaveHighlights,
-  SetClientSetting,
 } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { service } from "../lib/service/index.js";
 import { createHighlightsStore } from "./createHighlightsStore.js";
+import { createHighlightsApi } from "./highlightsApi.js";
+import { projectData } from "./projectData.js";
 
-export const highlightsStore = createHighlightsStore({
-  getHighlights: () => GetHighlights(),
-  saveHighlights: (list) => SaveHighlights(list),
-  resetHighlights: () => ResetHighlights(),
-  listClientSettings: (prefix) => ListClientSettings(prefix),
-  getClientSetting: (key) => GetClientSetting(key),
-  setClientSetting: (key, value) => SetClientSetting(key, value),
-  deleteClientSetting: (key) => DeleteClientSetting(key),
-  migrateOldHighlights: () => MigrateOldHighlights(),
+export const highlightsStore = createHighlightsStore(
+  createHighlightsApi(service, {
+    getHighlights: () => GetHighlights(),
+    saveHighlights: (list) => SaveHighlights(list),
+    resetHighlights: () => ResetHighlights(),
+  }),
+);
+
+projectData.register("highlights", {
+  clear: highlightsStore.clear,
+  load: highlightsStore.loadProject,
+  resync: highlightsStore.resync,
 });
 
 /** The app config's 8 highlights ({ color, label }); null until loaded. */
@@ -30,8 +32,6 @@ export const appHighlights = highlightsStore.appHighlights;
 export const projectHighlightLabels = highlightsStore.projectLabels;
 /** The effective palette; see effectivePalette. */
 export const highlightPalette = highlightsStore.palette;
-/** True while the open project's old highlights are being updated. */
-export const highlightMigrating = highlightsStore.migrating;
 
 export const readHighlights = highlightsStore.readApp;
 /** Saves all 8 app highlights; resolves to the saved list or rejects. */

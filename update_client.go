@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/tfkr-ae/marasi/service"
 )
 
 // updateHTTPClient is the client every update request (release checks and
@@ -50,19 +48,19 @@ func (a *App) updateProxy(systemProxy func(*http.Request) (*url.URL, error), req
 	return proxy, nil
 }
 
-// isMarasiListener reports whether proxy is the address of the running
-// listener. The listener may be bound to a wildcard address, and the proxy
+// isMarasiListener reports whether proxy is the address of the local
+// instance's running proxy listener. The listener may be bound to a wildcard address, and the proxy
 // may name it as localhost or another of this machine's addresses, so the
 // two match on port and on reaching the same machine, not as strings.
 func (a *App) isMarasiListener(proxy *url.URL) bool {
-	if a.listener == nil {
+	if a.localProxyListener == nil {
 		return false
 	}
-	status := a.listener.Status()
-	if status.Status != service.ListenerActive || status.ProxyListener == nil {
+	listener := a.localProxyListener()
+	if listener == "" {
 		return false
 	}
-	listenerHost, listenerPort, err := net.SplitHostPort(*status.ProxyListener)
+	listenerHost, listenerPort, err := net.SplitHostPort(listener)
 	if err != nil || listenerPort != proxyPort(proxy) {
 		return false
 	}

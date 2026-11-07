@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	goruntime "runtime"
 	"slices"
 
@@ -39,12 +40,6 @@ func (a *App) useDesktopRuntime() {
 		}
 		return nil
 	}
-	a.onEvent = func(name string, handle func(payload any)) {
-		a.wails.Event.Off(name)
-		a.wails.Event.On(name, func(event *application.CustomEvent) {
-			handle(event.Data)
-		})
-	}
 }
 
 // emit sends a Wails event once main has given the app its Wails
@@ -64,7 +59,7 @@ func (a *App) emit(name string, data ...any) {
 func (a *App) showMessageDialog(options messageDialogOptions) (string, error) {
 	if serverBuild {
 		// The server build has no native dialogs, and no callback would come.
-		return dismissedButton(options), nil
+		return serverDialogAnswer(options, os.Getenv(dialogAnswerEnv)), nil
 	}
 	var dialog *application.MessageDialog
 	switch options.Type {

@@ -20,9 +20,8 @@ const request = (id, path = `/${id}`) => ({
   InterceptedAt: "2026-10-23T10:00:00Z",
 });
 
-// The error the app's Go side returns for an item that has already left.
-const goneError = (id) =>
-  new Error(`settling Checkpoint item: checkpoint_gone (${id}): checkpoint item not found: ${id}`);
+// The error the service client gives for an item that has already left.
+const goneError = (id) => new Error(`POST /checkpoint/${id}/forward: checkpoint_gone (${id}): not_found`);
 
 // An in-memory Checkpoint: `held` is the queue in hold order.
 function fakeApi(held = []) {
@@ -41,12 +40,12 @@ function fakeApi(held = []) {
       calls.push(["forward", id, body, interceptResponse]);
       settle(id);
     },
-    // CheckHTTPParse: an error string, empty when the text parses.
+    // The parse check: an error string, empty when the text parses.
     checkParse: async (text, type) => {
       calls.push(["checkParse", text, type]);
       return text.startsWith("BROKEN") ? `malformed HTTP ${type}` : "";
     },
-    // ForwardCheckpoints and DropCheckpoints: an id no longer held is gone.
+    // forwardMany and dropMany: an id no longer held is gone.
     onBulk: () => {},
     forwardMany: async (items) => {
       calls.push(["forwardMany", items.map((item) => ({ ...item }))]);
@@ -81,7 +80,7 @@ async function loaded(held) {
 const ids = (state) => state.items.map((item) => item.ID);
 const callsTo = (api, name) => api.calls.filter((call) => call[0] === name);
 
-// Marasi drops the item because its client left, then sends checkpoint-abandoned.
+// Marasi drops the item because its client left, then sends checkpoint.dropped.
 function abandon(api, store, id) {
   const item = api.held.find((held) => held.ID === id);
   api.held = api.held.filter((held) => held.ID !== id);
@@ -300,7 +299,7 @@ test("bulk forward waits for pending parse checks before it sends", async () => 
   release();
 
   const result = await bulk;
-  assert.deepEqual(callsTo(api, "forwardMany"), [["forwardMany", [{ ID: "a", Body: "" }]]]);
+  assert.deepEqual(callsTo(api, "forwardMany"), [["forwardMany", [{ ID: "a", Type: "request", Body: "" }]]]);
   assert.equal(result.text, "Forwarded 1 · 1 skipped");
 });
 
@@ -353,9 +352,9 @@ test("bulk forward acts on the ids at the click, skipping parse errors and count
     [
       "forwardMany",
       [
-        { ID: "a", Body: edited },
-        { ID: "b", Body: "" },
-        { ID: "d", Body: "" },
+        { ID: "a", Type: "request", Body: edited },
+        { ID: "b", Type: "request", Body: "" },
+        { ID: "d", Type: "request", Body: "" },
       ],
     ],
   ]);

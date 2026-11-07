@@ -12,7 +12,7 @@
         modeCurrent,
     } from "@skeletonlabs/skeleton";
     import CodeMirror from "svelte-codemirror-editor";
-    import { RunExtension } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { extensionsStore } from "../../stores/extensionsStore.js";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
@@ -26,6 +26,7 @@
     import ScopeTester from "../../lib/components/ScopeTester.svelte";
     import { autocompletion } from "@codemirror/autocomplete";
     import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
+    import { isSuperseded } from "../../lib/service/errors.js";
 
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
@@ -41,7 +42,7 @@
             actionId: "compass.update-rules",
             icon: SquarePlay,
             handler: () => {
-                RunExtension("compass", $compassCode)
+                extensionsStore.run("compass", $compassCode)
                     .then(() => {
                         const toastSettings = {
                             message: "Updated Compass",
@@ -50,6 +51,8 @@
                         toastStore.trigger(toastSettings);
                     })
                     .catch((error) => {
+                        // A connection switch stopped it: nothing to report.
+                        if (isSuperseded(error)) return;
                         const toastSettings = {
                             message: "Error updating rules",
                             background: "variant-filled-error",

@@ -18,7 +18,7 @@ Maps live in `docs/agents/maps/`. Read the map there before you change or ask ab
 - `project-open.md`: startup, the scratchpad, opening or switching a project, or the opening screen.
 - `updates.md`: checking for, installing or relaunching into an update, channels, signing, or the release workflows.
 - `ui.md`: which component draws a screen, the app rail, the Marasi menu, a modal or an editor, or which text size to use.
-- `marasi-service.md`: Wails bindings, events between Go and the frontend, coded errors, app or per-project settings, or the Marasi library and its source.
+- `marasi-service.md`: the service client, the connection store, the Go shell and its Wails bindings, events, coded errors, app or per-project settings, or the Marasi CLI, the local instance and Marasi's source.
 
 ## Agent skills
 

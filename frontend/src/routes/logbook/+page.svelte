@@ -22,7 +22,7 @@
 	import LogbookSummary from "../../lib/logbook/LogbookSummary.svelte";
 	import LogbookToolbar from "../../lib/logbook/LogbookToolbar.svelte";
 	import { logbookStore, nextOf, openRecordOf } from "../../stores/logbookStore";
-	import { editRecord, newRecord } from "../../lib/logbook/recordEditor.js";
+	import { editRecord, newRecord, showMovedSession } from "../../lib/logbook/recordEditor.js";
 	import { toastError } from "../../lib/toasts.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { menuDispatcher, useMenuActions } from "../../lib/keybindings/app.js";
@@ -41,6 +41,8 @@
 	$: empty = $logbookStore.findings.length === 0 && $logbookStore.testCases.length === 0;
 
 	$: opened = openRecordOf($logbookStore);
+	// An inline fix whose record was deleted elsewhere carries on in the modal.
+	$: if ($logbookStore.session?.remote === "deleted" && !$modalStore.length) showMovedSession(modalStore);
 	$: next = nextOf($logbookStore);
 	// Next's tooltip names the live key, since N can be remapped.
 	$: nextKey = shortcutLabel($menuDispatcher, "logbook.next-record");

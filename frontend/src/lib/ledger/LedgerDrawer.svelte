@@ -60,21 +60,30 @@
 	}
 
 	// The pair's note, null while it loads. It is read again whenever the
-	// row is (a bulk note change rereads it), except while the note is open
-	// here: the editor holds it then.
+	// row is (a bulk note change or another client's note event makes a new
+	// row). While the note is open here, the editor holds it: another
+	// client's text replaces it only when nothing typed is waiting to save,
+	// and `noteVersion` then starts the editor again from it.
 	let note = null;
 	let noteFor = null;
+	let noteVersion = 0;
 	$: reloadNote(pair);
 	async function reloadNote(row) {
 		const id = row.ID;
-		if (pane === "note" && sameID(noteFor, id)) return;
+		const editing = () => pane === "note" && sameID(noteFor, id) && note !== null;
+		if (editing() && noteStatus !== "saved") return;
 		if (!sameID(noteFor, id)) note = null;
 		noteFor = id;
-		const text = await store.getNote(id).catch((error) => {
+		const text = (await store.getNote(id).catch((error) => {
 			console.error("Reading the note failed:", error);
 			return "";
-		});
-		if (sameID(noteFor, id) && !(pane === "note" && note !== null)) note = text ?? "";
+		})) ?? "";
+		if (!sameID(noteFor, id)) return;
+		if (!editing()) note = text;
+		else if (noteStatus === "saved" && text !== note) {
+			note = text;
+			noteVersion += 1;
+		}
 	}
 	// The open note's save state: "saved", "unsaved", "saving" or "failed".
 	// The rail's note button shows it; the note pane has no bar of its own.
@@ -84,20 +93,22 @@
 		if (sameID(event.detail.id, noteFor)) note = event.detail.text;
 	}
 
-	// The metadata, read when its pane opens.
+	// The metadata, read when its pane opens and again whenever the row is
+	// (another client's metadata.updated makes a new row). The last text
+	// stays while the same pair's reads again.
 	let metadata = null;
 	let metadataFor = null;
-	$: if (pane === "metadata") loadMetadata(pair.ID);
+	$: if (pane === "metadata") loadMetadata(pair);
 	else metadataFor = null;
-	async function loadMetadata(id) {
-		if (sameID(metadataFor, id)) return;
-		metadataFor = id;
-		metadata = null;
-		const value = await store.getMetadata(id).catch((error) => {
+	async function loadMetadata(row) {
+		if (metadataFor === row) return;
+		if (!sameID(metadataFor?.ID, row.ID)) metadata = null;
+		metadataFor = row;
+		const value = await store.getMetadata(row.ID).catch((error) => {
 			console.error("Reading the metadata failed:", error);
 			return {};
 		});
-		if (sameID(metadataFor, id)) metadata = metadataText(value);
+		if (metadataFor === row) metadata = metadataText(value);
 	}
 
 	$: bodies = drawerBodies(details, { prettify: $prettify, incomingResponse });
@@ -167,7 +178,7 @@
 					{#if note === null}
 						<p class={message}>Loading the note…</p>
 					{:else}
-						{#key noteFor}
+						{#key `${noteFor}:${noteVersion}`}
 							<DrawerNote
 								id={noteFor}
 								text={note}

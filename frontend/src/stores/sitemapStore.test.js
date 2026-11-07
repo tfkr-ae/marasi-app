@@ -9,6 +9,7 @@ import {
   FETCH_SIZE,
   STEP,
   WINDOW,
+  SITEMAP_SETTLE_MS,
 } from "./createSitemapStore.js";
 
 const API = "https://api.acme.test";
@@ -481,4 +482,35 @@ test("an older reload's answer arriving after a newer one's is dropped", async (
   await api.releaseAll();
   assert.deepEqual(nodeRows(get(store)), [API]);
   assert.deepEqual(sitemapRows(get(store)).filter((r) => r.stale), []);
+});
+
+test("sitemap.changed rereads the open levels once a burst settles, keeping what is open", async (t) => {
+  const api = fakeApi({
+    tree: {
+      "": [child(API, 3, { hasChildren: true })],
+      [API]: [child(V2, 3, { hasChildren: true })],
+      [V2]: [child(`${V2}/users`, 2), child(`${V2}/{int}`, 1)],
+    },
+  });
+  const store = await loadedStore(api);
+  store.toggle(API);
+  await store.settled();
+  store.toggle(V2);
+  await store.settled();
+  const reads = api.levelCalls.length;
+
+  // Another client deleted the /{int} pair, and the sitemap was rebuilt.
+  api.tree[V2] = [child(`${V2}/users`, 2)];
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onChanged({ reason: "delete" });
+  t.mock.timers.tick(SITEMAP_SETTLE_MS - 1);
+  store.onChanged({ reason: "rebuild" });
+  t.mock.timers.tick(SITEMAP_SETTLE_MS - 1);
+  assert.equal(api.levelCalls.length, reads, "nothing reads while changes keep coming");
+  t.mock.timers.tick(1);
+  t.mock.timers.reset();
+  await store.settled();
+
+  assert.equal(api.levelCalls.length, reads + 1, "one read for the burst");
+  assert.deepEqual(nodeRows(get(store)), [API, "  v2", "    users"]);
 });

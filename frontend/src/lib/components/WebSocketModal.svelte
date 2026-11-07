@@ -24,6 +24,7 @@
 		XIcon,
 	} from "lucide-svelte";
 	import { onDestroy } from "svelte";
+	import { isSuperseded } from "../service/errors.js";
 	import MarasiKeys from "./MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions, websocketTab } from "../keybindings/app.js";
 	import { stepWebSocketTab } from "../keybindings/contexts.js";
@@ -31,8 +32,7 @@
 	import WebSocketConnection from "./WebSocketConnection.svelte";
 	import WebSocketInject from "./WebSocketInject.svelte";
 	import WebSocketMessagesTable from "./WebSocketMessagesTable.svelte";
-	import { connectionStore } from "../../stores/connectionStore";
-	import { CloseWebSocket } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { webSocketStore } from "../../stores/webSocketStore";
 	import { upgradeFromRequest, upgradePresentation } from "../websocket/presentation.js";
 	import { progressChip } from "../websocket/progress.js";
 
@@ -159,36 +159,38 @@
 	$: upgrade = upgradePresentation(
 		upgradeFromRequest(
 			request,
-			$connectionStore.connectionsByRequestId[requestId]?.State,
+			$webSocketStore.connectionsByRequestId[requestId]?.State,
 		),
 	);
-	$: messageCount = ($connectionStore.messagesByRequestId[requestId] || [])
+	$: messageCount = ($webSocketStore.messagesByRequestId[requestId] || [])
 		.length;
 	$: transport =
 		request?.Metadata?.["websocket.transport"] ||
-		$connectionStore.connectionsByRequestId[requestId]?.Transport ||
+		$webSocketStore.connectionsByRequestId[requestId]?.Transport ||
 		"ws";
 	$: host =
 		request?.Request?.Host ||
-		$connectionStore.connectionsByRequestId[requestId]?.Host ||
+		$webSocketStore.connectionsByRequestId[requestId]?.Host ||
 		"";
 	$: path =
 		request?.Request?.Path ||
-		$connectionStore.connectionsByRequestId[requestId]?.Path ||
+		$webSocketStore.connectionsByRequestId[requestId]?.Path ||
 		"";
-	$: progress = $connectionStore.progressByRequestId[requestId];
+	$: progress = $webSocketStore.progressByRequestId[requestId];
 	$: chip = progress ? progressChip(progress) : null;
 
 	async function closeConnection() {
 		if (!requestId || upgrade.state !== "open" || closing) return;
 		closing = true;
 		try {
-			await CloseWebSocket(requestId, 1000, "");
+			await webSocketStore.close(requestId, 1000, "");
 			toastStore.trigger({
 				message: "WebSocket connection closed",
 				background: "variant-filled-success",
 			});
 		} catch (error) {
+			// A connection switch stopped it: nothing to report.
+			if (isSuperseded(error)) return;
 			toastStore.trigger({
 				message: `Unable to close WebSocket connection: ${error}`,
 				background: "variant-filled-error",

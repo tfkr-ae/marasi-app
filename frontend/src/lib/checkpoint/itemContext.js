@@ -1,6 +1,6 @@
 // What an intercepted item doesn't carry itself, read once per item: the
-// stored request a held response answers (GetRawDetails), and a WebSocket
-// message's connection (GetWebSocketConnection). A held request has neither:
+// stored request a held response answers (GET /traffic/{id}), and a
+// WebSocket message's connection. A held request has neither:
 // Marasi stores it only once it is forwarded.
 import { writable } from "svelte/store";
 
@@ -11,7 +11,8 @@ const RETRIES = 3;
 const RETRY_MS = 500;
 
 /**
- * `api` is { getRow(id), getConnection(id) }. The store maps
+ * `api` is { getRow(id), getConnection(requestId), getConnectionByID(id) }:
+ * a connection by its upgrade request's id, or by its own. The store maps
  * "<Type>:<ID>" to { request } or { connection }; keyOf gives the key.
  */
 export function createItemContext(api) {
@@ -29,7 +30,7 @@ export function createItemContext(api) {
         // live one by its own id.
         const connection =
           (isId(item.RequestID) && (await api.getConnection(item.RequestID))) ||
-          (isId(item.ConnectionID) && (await api.getConnection(item.ConnectionID)));
+          (isId(item.ConnectionID) && (await api.getConnectionByID(item.ConnectionID)));
         if (connection) context = { connection };
       }
     } catch (err) {

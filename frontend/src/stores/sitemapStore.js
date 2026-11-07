@@ -1,21 +1,30 @@
-// The app's sitemap store, bound to the Wails backend and following the
-// Ledger store. The logic lives in createSitemapStore.js, which tests load
-// with a fake API.
-import { ListSitemapChildren, ListSitemapLevels } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+// The app's sitemap store over the service client, following the Ledger
+// store. The logic lives in createSitemapStore.js and the API shapes in
+// sitemapApi.js.
+import { service } from "../lib/service/index.js";
 import { createSitemapStore } from "./createSitemapStore.js";
+import { createSitemapApi } from "./sitemapApi.js";
 import { FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
-import { ledgerStore } from "./ledgerStore";
+import { contentTypeExclusion, ledgerStore } from "./ledgerStore";
+import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
+import { projectData } from "./projectData.js";
 
 export { hostCountLabel, sitemapRows, sitemapScope, STEP, WINDOW } from "./createSitemapStore.js";
 
-export const sitemapStore = createSitemapStore({
-  // { Node, Cursor, Limit, Query, AsOf, Matching, Exclusion } →
-  // { Children, NextCursor, Complete, Missing, QueryError }.
-  listSitemapChildren: (request) => ListSitemapChildren(request),
-  // { Nodes, Cursors, Limit, Query, AsOf, Matching, Exclusion } →
-  // { Levels: [{ Node, Children, NextCursor, Missing }], Complete, QueryError }.
-  listSitemapLevels: (request) => ListSitemapLevels(request),
+export const sitemapStore = createSitemapStore(createSitemapApi(service, { exclusion: contentTypeExclusion }));
+
+// The sitemap reads once the Ledger's context is ready (below), so a load
+// only clears it; a resync reads the open levels again in place.
+projectData.register("sitemap", {
+  clear: sitemapStore.clear,
+  load: async () => {},
+  resync: () => sitemapStore.reload(),
 });
+
+service.on("traffic.request", (data) => sitemapStore.onRequest(toRequestEvent(data)));
+service.on("traffic.response", (data) => sitemapStore.onResponse(toResponseEvent(data)));
+// A rebuild, or a delete another client made: the open levels read again.
+service.on("sitemap.changed", sitemapStore.onChanged);
 
 // The running query, its results' as_of and the exclusion, which each read
 // passes along. The sitemap waits for the ledger's first rows, so it never

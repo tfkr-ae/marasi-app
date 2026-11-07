@@ -1,6 +1,12 @@
 <script>
 	import Logo from "../lib/components/Logo.svelte";
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
+	import ConnectionBanner from "../lib/components/ConnectionBanner.svelte";
+	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
+	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
+	import OutdatedInstance from "../lib/connection/OutdatedInstance.svelte";
+	import { filePickerShown } from "../lib/connection/status.js";
+	import { primaryVariant } from "../lib/launchpad/format.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -38,39 +44,38 @@
 	let currentTile = 0;
 	import { page } from "$app/stores";
 	import {
-		logItems,
 		activeProject,
-		listener,
 		readConfig,
-		marasiConfig,
 		extensions,
 		extensions_ui,
 		appState,
+	} from "../stores.js";
+	import {
+		projectStore,
 		opening,
 		openingShown,
 		pagesKey,
-		feedOpeningLog,
 		loadedProject,
-		stayInCurrentProject,
-	} from "../stores.js";
-	import {
-		openProjectFile,
-		openScratchpad,
-		retryOpen,
-	} from "../lib/globalActions.js";
+	} from "../stores/projectStore.js";
+	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
-	import { armoryStore } from "../stores/armoryStore";
+	import { outdatedVersion, shouldOfferCLISetup } from "../lib/connection/cli.js";
+	import { connectionsModal } from "../lib/connection/modal.js";
+	import { reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { reportLogbookEdits } from "../stores/logbookStore";
+	import { showExtensionToasts } from "../stores/extensionsStore.js";
+	import { extensionToast } from "../lib/extensions/toast.js";
+	import WebComponent from "../lib/extensions/WebComponent.svelte";
 	import {
 		checkpointItemContext,
 		checkpointStore,
 	} from "../stores/checkpointStore";
 	import { checkpointBadge } from "../lib/checkpointBadge.js";
+	import { armoryBadge } from "../lib/armory/armoryBadge.js";
+	import { activeCountsOf, armoryStore } from "../stores/armoryStore";
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
-	import { sitemapStore } from "../stores/sitemapStore";
-	import { recentTraffic } from "../stores/recentTrafficStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
@@ -78,14 +83,12 @@
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
-	import {
-		OpenFileDialog,
-		StartProxy,
-	} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import {
 		ChefHat,
 		Brush,
 		BookOpenCheckIcon,
+		PuzzleIcon,
 		Swords,
 	} from "lucide-svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
@@ -168,6 +171,8 @@
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// The Armory icon's runs-in-progress badge (see armoryBadge).
+	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -208,38 +213,37 @@
 		UpstreamProxy: { ref: UpstreamProxyModal },
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 		ExportReport: { ref: ExportReview },
+		Connections: { ref: ConnectionsModal },
 	};
 	// Text size sizes the root element, so everything in rem follows it.
 	// readConfig sets it before startup draws any text.
 	$: applyTextSize($textSize);
-	// Startup opens the scratchpad, and carries on once the first project
-	// has opened and loaded: the scratchpad, or one picked on the opening
-	// screen when the scratchpad can't open. It resolves to that project.
+	// Startup reaches the Marasi service (the local instance, started or
+	// attached to by the connection store), and carries on once the
+	// service's project has loaded. It resolves to that project.
 	let stopWaitingForProject = () => {};
 	const StartupRoutine2 = new Promise((resolve) => {
 		stopWaitingForProject = loadedProject.subscribe(
 			(project) => project && resolve(project),
 		);
-		readConfig().then(openScratchpad);
+		readConfig().then(() => connectionStore.start());
 	});
-	// Starts the listener on the configured address.
-	function startListener() {
-		return StartProxy($marasiConfig.DefaultAddress, $marasiConfig.DefaultPort)
-			.then(() => {
-				listener.set({
-					status: true,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			})
-			.catch((listenerError) => {
-				listener.set({
-					status: false,
-					address: $marasiConfig.DefaultAddress,
-					port: $marasiConfig.DefaultPort,
-				});
-			});
+	// With no Marasi CLI, the Connections modal opens by itself on its CLI
+	// setup, once per failure (lib/connection/cli.js).
+	let cliSetupOffered = false;
+	$: if ($connectionStore.phase !== "failed") cliSetupOffered = false;
+	$: if (shouldOfferCLISetup($connectionStore, cliSetupOffered)) {
+		cliSetupOffered = true;
+		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
 	}
+	// What the start screen says while the app reaches the service.
+	const startingText = {
+		idle: "Starting...",
+		starting: "Starting Marasi...",
+		connecting: "Connecting to Marasi...",
+		connected: "Loading project...",
+		failed: "Couldn't reach Marasi",
+	};
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
 		return {
@@ -261,31 +265,31 @@
 	}
 	let removeMenuShortcuts = () => {};
 	onMount(() => {
+		// Opens another client (the Marasi CLI, another app) starts while
+		// the app is connected: the opening screen follows them, and the
+		// connection store loads the opened project after the prompt.
+		const stopFollowing = projectStore.follow({
+			opened: (path) => connectionStore.followSwitch(path),
+			failed: (name) =>
+				toastStore.trigger({
+					message: `Couldn't open ${name}`,
+					background: "variant-filled-warning",
+					timeout: 3000,
+				}),
+		});
 		const stopReportingDrafts = reportUnsavedDrafts();
+		const stopReportingLogbookEdits = reportLogbookEdits();
+		const stopExtensionToasts = showExtensionToasts((schema) =>
+			toastStore.trigger(extensionToast(schema)),
+		);
 		on("update-available", onUpdateAvailable);
 		on("update-progress", onUpdateProgress);
 		on("update-installed", onUpdateInstalled);
 		on("update-failed", onUpdateFailed);
 		refreshUpdateState();
-		// The open in progress takes its steps from the backend's log events.
-		on("log", feedOpeningLog);
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
-			// The listener starts on the configured address, and the first-run
-			// setup shows only once it has started (or failed to), as it sets
-			// the listener up.
-			startListener().then(() => {
-				if (!$marasiConfig.FirstRun || $modalStore[0]) return;
-				modalStore.trigger({
-					type: "component",
-					component: "Startup",
-					title: "Setup Listener",
-					response: (r) => {
-						console.log(r);
-					},
-				});
-			});
 			// The project that opened, which may not be the scratchpad, names
 			// the window and the app's project, as a switch does.
 			setWindowTitle(project.name);
@@ -298,88 +302,8 @@
 				console.error("Preloading the Ledger failed:", err),
 			);
 
-			function handleNewLog(newLog) {
-				$logItems = [...$logItems, newLog];
-			}
-			function readCheckpointItems() {
-				checkpointStore
-					.onIntercepted()
-					.catch((err) =>
-						console.error(
-							"Reading Checkpoint items failed:",
-							err,
-						),
-					);
-			}
-			on("request", (newRequest) => {
-				ledgerStore.onRequest(newRequest);
-				sitemapStore.onRequest(newRequest);
-				recentTraffic.onRequest(newRequest);
-				launchpadStore.onRequest(newRequest);
-				armoryStore.onRequest(newRequest);
-			});
-			on("launch-started", (launch) =>
-				launchpadStore.onLaunchStarted(launch),
-			);
-			on("launch-finished", (launch) =>
-				launchpadStore.onLaunchFinished(launch),
-			);
-			on("response", (newResponse) => {
-				ledgerStore.onResponse(newResponse);
-				sitemapStore.onResponse(newResponse);
-				recentTraffic.onResponse(newResponse);
-				launchpadStore.onResponse(newResponse);
-				armoryStore.onResponse(newResponse);
-				if (
-					$drawerStore.id ===
-						"request-response" &&
-					$drawerStore.meta?.request?.ID ===
-						newResponse.ID
-				) {
-					drawerStore.update((s) => {
-						s.meta.incomingResponse =
-							newResponse;
-						return s;
-					});
-				}
-			});
-			on("ws-message", (msg) =>
-				connectionStore.upsertMessage(msg),
-			);
-			on("ws-intercepted", (msg) => {
-				connectionStore.upsertInterception(msg);
-				readCheckpointItems();
-			});
-			on("ws-open", (conn) => {
-				connectionStore.upsertConnection(conn);
-				ledgerStore.patchWebSocketMetadata(conn);
-			});
-			on("ws-close", (conn) => {
-				connectionStore.upsertConnection(conn);
-				connectionStore.clearInterceptions(
-					conn.RequestID,
-				);
-				ledgerStore.patchWebSocketMetadata(conn);
-			});
-			on("ws-progress", (progress) =>
-				connectionStore.upsertProgress(progress),
-			);
-			// An upgrade whose handshake failed or was dropped opens no
-			// connection, so only its Ledger row changes.
-			on("ws-state", ({ RequestID, State }) =>
-				ledgerStore.patchWebSocketMetadata({ RequestID, State }),
-			);
-			on("log", (newLog) => {
-				if (typeof newLog?.Level !== "string") {
-					return;
-				}
-				handleNewLog(newLog);
-			});
 			// Marasi dropped a held item because its client left. The
 			// toast shows on any page.
-			on("checkpoint-abandoned", (item) =>
-				checkpointStore.onAbandoned(item),
-			);
 			stopAbandonToasts = checkpointStore.onAbandon(
 				({ item, editLost }) => {
 					const context =
@@ -396,108 +320,18 @@
 					});
 				},
 			);
-			// A held item was forwarded or dropped, on the Checkpoint page
-			// or in the WebSocket modal; both drop it.
-			on("checkpoint-settled", (item) => {
-				readCheckpointItems();
-				connectionStore
-					.onSettled(item)
-					.catch((err) =>
-						console.error(
-							"Reading WebSocket Checkpoint failed:",
-							err,
-						),
-					);
-			});
-			// The Checkpoint rail badge shows the count; no toast.
-			on("intercepted", () => readCheckpointItems());
-			on(
-				"extension_gui_render",
-				({ extensionName, target, schema }) => {
-					if (target === "toast") {
-						const allowedVariants = [
-							"primary",
-							"secondary",
-							"tertiary",
-							"success",
-							"warning",
-							"error",
-							"surface",
-						];
-						const variant =
-							allowedVariants.includes(
-								schema.variant,
-							)
-								? "variant-filled-" +
-									schema.variant
-								: "variant-filled-primary";
-						const t = {
-							message: schema.message,
-							background: variant,
-						};
-
-						toastStore.trigger(t);
-					} else {
-						extensions_ui.update(
-							(store) => {
-								const ext =
-									store[
-										extensionName
-									] || {
-										state: {},
-									};
-								ext[target] =
-									schema;
-								return {
-									...store,
-									[extensionName]:
-										ext,
-								};
-							},
-						);
-					}
-				},
-			);
-
-			on(
-				"extension_state_update",
-				({ extensionName, key, value }) => {
-					extensions_ui.update((store) => {
-						const ext = store[
-							extensionName
-						] || { state: {} };
-						ext.state[key] = value;
-						return {
-							...store,
-							[extensionName]: ext,
-						};
-					});
-					console.log($extensions_ui);
-				},
-			);
 		});
 		return () => {
+			stopFollowing();
 			stopReportingDrafts();
+			stopReportingLogbookEdits();
 			removeMenuShortcuts();
-			off("request");
-			off("response");
-			off("ws-message");
-			off("ws-intercepted");
-			off("ws-open");
-			off("ws-close");
-			off("ws-progress");
-			off("ws-state");
-			off("intercepted");
-			off("checkpoint-abandoned");
-			off("checkpoint-settled");
 			stopAbandonToasts?.();
-			off("log");
 			off("update-available");
 			off("update-progress");
 			off("update-installed");
 			off("update-failed");
-			off("extension_gui_render");
-			off("extension_state_update");
+			stopExtensionToasts();
 		};
 	});
 </script>
@@ -647,13 +481,20 @@
 					bind:group={currentTile}
 					name="Armory"
 					value={appRailIndex++}
-					title="Armory"
+					title={runningBadge.title}
 				>
 					<svelte:fragment slot="lead">
 						<div
-							class="flex justify-center items-center w-full"
+							class="relative flex justify-center items-center w-full"
 						>
 							<Swords size="20" />
+							{#if runningBadge.label}
+								<span
+									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+									data-testid="armory-badge"
+									aria-label="{runningBadge.label} running"
+								>{runningBadge.label}</span>
+							{/if}
 						</div>
 					</svelte:fragment>
 					<span>Armory</span>
@@ -806,9 +647,38 @@
 								>{extension.Name}</span
 							>
 						</AppRailAnchor>
+					{:else if extension.UICode}
+						<AppRailAnchor
+							regionLabel="!text-2xs !font-semibold leading-tight"
+							selected={$page.url.pathname ===
+								"/extension/" + extension.Name}
+							on:click={() => goto("/extension/" + extension.Name)}
+							bind:group={currentTile}
+							name={extension.Name}
+							value={appRailIndex++}
+							title={extension.Name}
+						>
+							<svelte:fragment slot="lead">
+								<div
+									class="flex justify-center items-center w-full"
+									data-testid="extension-web-ui-tile"
+								>
+									<WebComponent
+										name={extension.Name}
+										target="icon"
+										code={extension.UICode}
+										version={extension.Version}
+									>
+										<PuzzleIcon size="20" />
+									</WebComponent>
+								</div>
+							</svelte:fragment>
+							<span>{extension.Name}</span>
+						</AppRailAnchor>
 					{/if}
 				{/each}
 				<svelte:fragment slot="trail">
+					<ConnectionRailTile />
 					<div
 						class="flex justify-center items-center w-full py-2"
 					>
@@ -907,9 +777,19 @@
 
 			<!-- Content area -->
 			<div id="content" class="flex-1 overflow-auto">
-				{#key $pagesKey}
-					<slot />
-				{/key}
+				<div class="sticky top-0 z-20"><ConnectionBanner /></div>
+				<!-- The service has another project open than the pages show:
+				     they stay visible but read-only until the banner's Load it. -->
+				<div
+					class="contents"
+					class:held-pages={$connectionStore.phase === "project-changed"}
+					inert={$connectionStore.phase === "project-changed"}
+					data-testid="pages"
+				>
+					{#key $pagesKey}
+						<slot />
+					{/key}
+				</div>
 				{#if SvelteChef && showChef}
 					<svelte:component
 						this={SvelteChef}
@@ -933,14 +813,32 @@
 			<div
 				class="flex items-center w-full h-full justify-center"
 			>
-				<div class="items-center justify-center">
+				<div class="flex flex-col items-center">
 					<Logo
 						size="128"
 						mode={$modeCurrent ? "light" : "dark"}
 					/>
-					<p class="text-xs">
-						{$appState.message}
+					<p class="text-xs text-center" data-testid="connection-status">
+						{startingText[$connectionStore.phase] ?? $appState.message}
 					</p>
+					{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) !== null}
+						<div class="mt-2 max-w-md">
+							<OutdatedInstance error={$connectionStore.error} centred />
+						</div>
+					{:else if $connectionStore.phase === "failed"}
+						<p class="mt-2 max-w-md text-xs text-center opacity-70 break-words">
+							{$connectionStore.error}
+						</p>
+						<div class="mt-3 flex justify-center">
+							<button
+								type="button"
+								class="btn btn-sm {primaryVariant($modeCurrent)}"
+								on:click={() => connectionStore.retry()}
+							>
+								Retry
+							</button>
+						</div>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -955,9 +853,10 @@
 	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
 		<OpeningScreen
 			state={$opening}
-			on:stay={stayInCurrentProject}
-			on:retry={retryOpen}
-			on:open={(event) => openProjectFile(event.detail, toastStore, modalStore)}
+			browse={filePickerShown($connectionStore.connection)}
+			on:stay={() => projectStore.stay()}
+			on:retry={() => retryOpen(toastStore, modalStore)}
+			on:open={(event) => openProjectFile({ path: event.detail }, toastStore, modalStore)}
 			on:browse={() =>
 				OpenFileDialog()
 					.then((path) => {
@@ -994,6 +893,9 @@
 />
 
 <style>
+	.held-pages > :global(*) {
+		opacity: 0.6;
+	}
 	:global(.snackbar-wrapper) {
 		z-index: 1000 !important;
 	}

@@ -7,10 +7,9 @@
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
-	import { RunExtension } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
-	import { checkpointItemContext as itemContext, checkpointStore } from "../../stores/checkpointStore";
+	import { checkpointItemContext as itemContext, checkpointRules, checkpointStore } from "../../stores/checkpointStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { checkpointCode, checkpointCodeApplied, interceptFlag } from "../../stores";
 	import { primaryVariant, UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
@@ -19,6 +18,7 @@
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
 	import { keyOf } from "../../lib/checkpoint/itemContext.js";
 	import { bulkTargets, dropTitle, groupByHost, summarize, treeOrder } from "../../lib/checkpoint/items.js";
+	import { isSuperseded } from "../../lib/service/errors.js";
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -68,7 +68,9 @@
 	function toast(message, background = "variant-filled-surface") {
 		toastStore.trigger({ message, background, timeout: 3000 });
 	}
+	// A connection switch stopped it (superseded): nothing to report.
 	function failed(what, err) {
+		if (isSuperseded(err)) return;
 		console.error(`${what} failed:`, err);
 		toast(`${what} failed`, "variant-filled-error");
 	}
@@ -130,8 +132,7 @@
 	async function updateRules() {
 		const code = $checkpointCode;
 		try {
-			await RunExtension("checkpoint", code);
-			checkpointCodeApplied.set(code);
+			await checkpointRules.apply(code);
 			toast("Rules updated", "variant-filled-success");
 		} catch (err) {
 			failed("Update rules", err);

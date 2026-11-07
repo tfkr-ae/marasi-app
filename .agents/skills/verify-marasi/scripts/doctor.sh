@@ -33,10 +33,12 @@ SERVER_PID=$(lsof -nP -t -iTCP:"$SERVER_PORT" -sTCP:LISTEN | head -n 1)
 [ "$SERVER_PID" = "$PID" ] || fail "Server port $SERVER_PORT is owned by ${SERVER_PID:-nothing}, not Marasi PID $PID."
 curl --fail --silent --output /dev/null "$APP_URL/health" || fail "$APP_URL/health does not answer."
 curl --fail --silent --output /dev/null "http://127.0.0.1:$CDP_PORT/json/version" || fail "Chrome DevTools does not answer on port $CDP_PORT."
+SERVICE_PID=$(cat "$SERVICE_PID_FILE")
+[ "$(service_state)" = running ] || fail "The Marasi service in $SERVICE_DIR is not running. See $SERVICE_DIR/instances/default.log, then run cleanup.sh and relaunch."
 LISTENER_PID=$(lsof -nP -t -iTCP:"$PORT" -sTCP:LISTEN | head -n 1)
-[ "$LISTENER_PID" = "$PID" ] || fail "Proxy port $PORT is owned by ${LISTENER_PID:-nothing}, not Marasi PID $PID."
+[ "$LISTENER_PID" = "$SERVICE_PID" ] || fail "Proxy port $PORT is owned by ${LISTENER_PID:-nothing}, not the Marasi service PID $SERVICE_PID."
 [ -f "$APP_CONFIG_DIR/marasi_appconfig.yaml" ] || fail "No isolated config at $APP_CONFIG_DIR/marasi_appconfig.yaml."
-[ -f "$APP_CONFIG_DIR/scratchpad.marasi" ] || fail "No scratch project at $APP_CONFIG_DIR/scratchpad.marasi."
+[ -f "$SERVICE_PROJECT" ] || fail "No scratch project at $SERVICE_PROJECT."
 
 node "$SCRIPT_DIR/cdp.mjs" doctor "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWPORT_WIDTH" "$VIEWPORT_HEIGHT" >/dev/null
 
@@ -49,7 +51,10 @@ node "$SCRIPT_DIR/cdp.mjs" doctor "$CDP_PORT" "$APP_URL" "$EVIDENCE_DIR" "$VIEWP
 	printf 'app_url=%s\n' "$APP_URL"
 	printf 'cdp_endpoint=http://127.0.0.1:%s\n' "$CDP_PORT"
 	printf 'proxy_listener=127.0.0.1:%s\n' "$PORT"
+	printf 'service_pid=%s\n' "$SERVICE_PID"
+	printf 'service_mode=%s\n' "$(cat "$SERVICE_MODE_FILE")"
+	printf 'control_url=%s\n' "$(cat "$CONTROL_URL_FILE")"
 	printf 'config=%s\n' "$APP_CONFIG_DIR/marasi_appconfig.yaml"
-	printf 'project=%s\n' "$APP_CONFIG_DIR/scratchpad.marasi"
+	printf 'project=%s\n' "$SERVICE_PROJECT"
 	printf 'evidence=%s\n' "$EVIDENCE_DIR"
 } | tee "$EVIDENCE_DIR/doctor.txt"

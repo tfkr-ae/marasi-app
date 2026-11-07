@@ -144,7 +144,8 @@ Then check the project: `sqlite3 -readonly <project> "select title, severity, cv
 
 ## Gotchas
 
-- Export report and artifact downloads need a native Save dialog, which the server build fails with an error toast ([native.md](native.md)). `custom_properties.include_test_cases` reaching the report is covered by `app_reporting_test.go`.
+- Export report and artifact downloads render or read on the service, then hand the bytes to `SaveFileAs`, whose native Save dialog the server build refuses (`file dialogs not available in server mode`, an error toast; [native.md](native.md)). Prove the service part in `logbook-<recipe>-network.json`: `POST /report` answers 200, and its body carries `assessor` (the OS user name) and the top-level `include_test_cases`. The body and file name are covered by `logbookApi.test.js`, the dialog and write by `app_save_file_test.go`.
+- The Logbook reads findings and test cases only on load, Edit (that one record) and a reconnect's resync: it doesn't follow `finding.*` or `test-case.*` events, so a change made through the service from outside shows after the next resync or Edit.
 - A click outside a modal needs `"edge":"top"` on `.modal-backdrop`: the modal covers the backdrop's centre. The same goes for `.logbook-pair-expanded`.
 - Escape on a dirty record modal only toggles its prompt. `reset.sh` answers `Discard` on `[data-close-prompt]`.
 - The Marasi menu's search matches a page action's keywords, not its label: `next` finds Next Record, `export` finds nothing.

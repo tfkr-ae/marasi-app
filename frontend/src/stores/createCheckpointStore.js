@@ -1,13 +1,13 @@
 // The Checkpoint store: the held Checkpoint items in hold order, the
 // selected one, and the researcher's edits, kept per item in memory until
 // the item leaves. Every backend call goes through the injected `api` (see
-// checkpointStore.js for the Wails one), so this module loads under
+// checkpointApi.js for the service's), so this module loads under
 // node --test.
 import { get, writable } from "svelte/store";
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
 
 function initialState() {
-  // items: Checkpoint items as GetCheckpointItems returns them, each with
+  // items: Checkpoint items as the api's getItems returns them, each with
   // `text`, its held raw request or response, or its WebSocket payload.
   // editsById: the edited text by item id; parseErrorsById: why an edited
   // HTTP item's text doesn't parse, by item id; checking: ids whose parse
@@ -266,7 +266,8 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
     const state = get(store);
     if (parseErrorOf(state, id)) return "unparsed";
     const body = isDirty(state, id) ? state.editsById[id] : "";
-    return settleOne(id, () => api.forward(id, body, interceptResponse), "forwarded");
+    const type = itemOf(state, id)?.Type;
+    return settleOne(id, () => api.forward(id, body, interceptResponse, type), "forwarded");
   }
 
   /** Drops the item. Resolves to "dropped", or "gone" if it had already left. */
@@ -294,7 +295,11 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
         result =
           kind === "forward"
             ? await api.forwardMany(
-                sent.map((id) => ({ ID: id, Body: isDirty(state, id) ? state.editsById[id] : "" })),
+                sent.map((id) => ({
+                  ID: id,
+                  Type: itemOf(state, id)?.Type,
+                  Body: isDirty(state, id) ? state.editsById[id] : "",
+                })),
               )
             : await api.dropMany(sent);
       } catch (err) {
@@ -324,8 +329,9 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
     return () => abandonListeners.delete(listener);
   }
 
-  // The checkpoint-abandoned event: Marasi dropped the item because its
-  // client left. Returns { item, editLost }, or null for an unknown id.
+  // checkpoint.dropped with reason "abandoned": Marasi dropped the item
+  // because its client left. Returns { item, editLost }, or null for an
+  // unknown id.
   function onAbandoned({ ID } = {}) {
     const state = get(store);
     const item = itemOf(state, ID);
@@ -342,6 +348,19 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
   async function populate() {
     const [flag] = await Promise.all([api.getInterceptFlag(), refresh()]);
     interceptFlag.set(flag);
+  }
+
+  /**
+   * checkpoint.forwarded or checkpoint.dropped: the item left, here or in
+   * another client. Removes it at once, then reads the queue again.
+   */
+  function onSettled({ ID } = {}) {
+    return settled([ID]);
+  }
+
+  /** checkpoint.updated: another client may have turned Intercept all over. */
+  function onUpdated({ intercept } = {}) {
+    if (typeof intercept === "boolean") interceptFlag.set(intercept);
   }
 
   /** Turns Intercept all on or off. Resolves to the new state. */
@@ -363,11 +382,16 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
   return {
     subscribe: store.subscribe,
     populate,
+    // The held items and the flag again after a stream reset; edits, picks
+    // and the selection stay with the items still held.
+    resync: populate,
     clear,
     toggleIntercept,
     onIntercepted: refresh,
     onAbandoned,
     onAbandon,
+    onSettled,
+    onUpdated,
     pick,
     edit,
     forward,

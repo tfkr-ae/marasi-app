@@ -5,13 +5,13 @@
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { Send } from "lucide-svelte";
-	import { InjectWebSocketMessage } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { isSuperseded } from "../service/errors.js";
 	import { marasiConfig, lineWrap } from "../../stores";
 	import { longStrings } from "../longStrings.js";
 	import {
-		connectionStore,
+		webSocketStore,
 		wsInjectDraft,
-	} from "../../stores/connectionStore";
+	} from "../../stores/webSocketStore";
 	import {
 		INJECT_OPCODES,
 		draftOpcode,
@@ -31,7 +31,7 @@
 	let error = "";
 	let neverCompress = false;
 
-	$: connection = $connectionStore.connectionsByRequestId[requestId];
+	$: connection = $webSocketStore.connectionsByRequestId[requestId];
 	$: connectionOpen = connection?.State === "open";
 	$: showSendUncompressed = offersSendUncompressed(connection, opcode);
 
@@ -59,7 +59,7 @@
 		injecting = true;
 		error = "";
 		try {
-			await InjectWebSocketMessage(
+			await webSocketStore.inject(
 				requestId,
 				direction,
 				Number(opcode),
@@ -71,6 +71,8 @@
 				background: "variant-filled-success",
 			});
 		} catch (err) {
+			// A connection switch stopped it: nothing to report.
+			if (isSuperseded(err)) return;
 			error = String(err);
 			toastStore.trigger({
 				message: "Unable to inject WebSocket message",

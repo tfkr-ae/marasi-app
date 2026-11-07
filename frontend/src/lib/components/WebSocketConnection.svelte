@@ -1,7 +1,7 @@
 <script>
 	// The WebSocket modal's read-only Connection tab: URL, state, close, the
 	// negotiated permessage-deflate parameters and the offers Marasi stripped.
-	import { connectionStore } from "../../stores/connectionStore";
+	import { webSocketStore } from "../../stores/webSocketStore";
 	import { connectionSummary } from "../websocket/presentation.js";
 
 	export let requestId;
@@ -18,9 +18,9 @@
 	};
 
 	$: summary = connectionSummary({
-		connection: $connectionStore.connectionsByRequestId[requestId] ?? null,
+		connection: $webSocketStore.connectionsByRequestId[requestId] ?? null,
 		request,
-		messages: $connectionStore.messagesByRequestId[requestId],
+		messages: $webSocketStore.messagesByRequestId[requestId],
 	});
 </script>
 

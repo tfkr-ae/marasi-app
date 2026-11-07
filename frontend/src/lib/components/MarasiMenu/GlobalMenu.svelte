@@ -37,12 +37,10 @@
 	} from "lucide-svelte";
 	import MarasiKeys from "./MarasiKeys.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
-	import {
-		StartBrowser,
-		ToggleFlag,
-		ToggleIntercept,
-	} from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { ToggleFlag } from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { checkpointStore } from "../../../stores/checkpointStore";
 	import { updatePanelModal } from "../../updates.js";
+	import { startChrome } from "../../chrome.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
 		extensions,
@@ -111,7 +109,7 @@
 		"global.go-workshop": () => closeAndGoto("/workshop"),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		"global.start-chrome": () =>
-			StartBrowser("").catch(chromeError(toastStore, "Error starting Chrome")),
+			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
 		"global.download-certificate": () => downloadCertificate(toastStore),
 		"global.copy-certificate": () => copyCertificate(toastStore),
 		"global.jump-to-toast": () => {
@@ -136,8 +134,7 @@
 		"global.decrease-text-size": () => changeTextSize(smallerTextSize),
 		"global.reset-text-size": () => changeTextSize(() => DEFAULT_TEXT_SIZE),
 		"global.check-for-updates": checkForUpdates,
-		"global.toggle-intercept": () =>
-			ToggleIntercept().then((flag) => interceptFlag.set(flag)),
+		"global.toggle-intercept": () => checkpointStore.toggleIntercept(),
 	};
 
 	// "Check for updates…": an update opens the details panel; otherwise a

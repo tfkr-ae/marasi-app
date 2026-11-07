@@ -45,7 +45,6 @@
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
     import { menuAction } from "../../lib/ledger/rowMenu.js";
-    import { GetMetadata, GetNote } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { listener } from "../../stores";
     import { findingStore } from "../../stores/findingStore";
     import { testCaseStore } from "../../stores/testCaseStore";
@@ -57,6 +56,8 @@
         pendingEntryIds,
         pendingLaunchOf,
         selectedEntryIds,
+        entryMetadata,
+        entryNote,
     } from "../../stores/launchpadStore";
     import {
         DELETE_LAUNCHPAD_PENDING_HINT,
@@ -112,6 +113,33 @@
             "This launchpad's draft has unsaved edits. Loading its newest entry replaces them.",
             () => launchpadStore.selectEntry(id, entryId, { force: true }).then(show),
         );
+    }
+
+    // Another client deleted a launchpad holding an unsaved draft: the store
+    // keeps the draft (orphanedDrafts) and this offers it back. Restore puts
+    // it in a new launchpad of the same name; closing the toast discards it.
+    const announced = new Set();
+    $: for (const orphan of $launchpadStore.orphanedDrafts) {
+        if (announced.has(orphan.launchpadId)) continue;
+        announced.add(orphan.launchpadId);
+        let restoring = false;
+        toastStore.trigger({
+            message: `Another client deleted "${orphan.name}". Restore its unsaved draft?`,
+            background: "variant-filled-warning",
+            autohide: false,
+            action: {
+                label: "Restore",
+                response: () => {
+                    restoring = true;
+                    launchpadStore
+                        .restoreOrphanedDraft(orphan.launchpadId)
+                        .catch((error) => toastError(toastStore, "Error restoring the draft", error));
+                },
+            },
+            callback: ({ status }) => {
+                if (status === "closed" && !restoring) launchpadStore.discardOrphanedDraft(orphan.launchpadId);
+            },
+        });
     }
 
     function confirm(title, body, onConfirm) {
@@ -619,12 +647,12 @@
         {
             actionId: "launchpad.view-notes",
             icon: PenIcon,
-            handler: () => toggleEntryModal("Notes", "launchpad.view-notes", GetNote, "Notes"),
+            handler: () => toggleEntryModal("Notes", "launchpad.view-notes", entryNote, "Notes"),
         },
         {
             actionId: "launchpad.view-metadata",
             icon: BracesIcon,
-            handler: () => toggleEntryModal("Metadata", "launchpad.view-metadata", GetMetadata, "Metadata"),
+            handler: () => toggleEntryModal("Metadata", "launchpad.view-metadata", entryMetadata, "Metadata"),
         },
         { actionId: "launchpad.copy-browser-view-url", icon: GlobeIcon, handler: copyOpenBrowserView },
     ];

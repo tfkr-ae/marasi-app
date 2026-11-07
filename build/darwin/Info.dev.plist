@@ -23,8 +23,17 @@
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
         <string>Copyright.........</string>
+        <!-- The web view reaches Marasi's control API over plain HTTP, and a
+             remote can be any host (a Tailscale 100.x address, a LAN IP, a
+             hostname). Without these keys ATS blocks every non-loopback
+             fetch and /events stream, and a remote never connects.
+             NSAllowsArbitraryLoadsInWebContent exempts WKWebView loads only,
+             not URLSession; NSAllowsLocalNetworking allows IP addresses and
+             .local names, which macOS 14+ otherwise refuses. -->
         <key>NSAppTransportSecurity</key>
         <dict>
+            <key>NSAllowsArbitraryLoadsInWebContent</key>
+            <true/>
             <key>NSAllowsLocalNetworking</key>
             <true/>
         </dict>

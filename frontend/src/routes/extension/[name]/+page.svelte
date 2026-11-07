@@ -3,6 +3,7 @@
     import { page } from "$app/stores";
     import { extensions, extensions_ui } from "../../../stores.js";
     import ExtensionUI from "../../../lib/extensions/ExtensionUI.svelte";
+    import WebComponent from "../../../lib/extensions/WebComponent.svelte";
     import { Accordion, AccordionItem } from "@skeletonlabs/skeleton";
     import { SettingsIcon, ToggleLeftIcon } from "lucide-svelte";
     import * as Icons from "lucide-svelte";
@@ -12,7 +13,7 @@
         extensionMenuActionId,
         extensionPageActionId,
     } from "../../../lib/keybindings/catalog.js";
-    import { emit } from "../../../lib/runtime.js";
+    import { extensionsStore } from "../../../stores/extensionsStore.js";
     let accOpened = false;
 
     $: extensionName = $page.params.name;
@@ -23,11 +24,9 @@
     $: panelSchema = $extensions_ui[extensionName]?.panel;
 
     function callExtension(action) {
-        emit("extension_call_function", {
-            extensionID: extensionData.ID,
-            function: action,
-            state: $extensions_ui[extensionData.Name],
-        });
+        extensionsStore
+            .call(extensionName, action)
+            .catch((err) => console.error(`Calling ${action} on ${extensionName} failed:`, err));
     }
 
     // Declared items keep their catalog identity (extension + action), so
@@ -108,6 +107,14 @@
         </svelte:fragment>
     </AccordionItem>
 </Accordion>
+{#if extensionData?.UICode}
+    <WebComponent
+        name={extensionName}
+        target="extension"
+        code={extensionData.UICode}
+        version={extensionData.Version}
+    />
+{/if}
 {#if mainSchema}
     <ExtensionUI
         {extensionData}
@@ -115,7 +122,7 @@
         classes="w-full"
         enableSync={true}
     />
-{:else}
+{:else if !extensionData?.UICode}
     <div class="flex items-center justify-center text-surface-400">
         <div class="text-center">
             <p class="text-base font-bold">No Interface Loaded</p>

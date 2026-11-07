@@ -4,10 +4,8 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
-		CreateWaypoint,
-		DeleteWaypoint,
 		SetFlag,
 		ToggleFlag,
 		GetChromePaths,
@@ -24,7 +22,6 @@
 		keybindingState,
 		lineWrap,
 		marasiConfig,
-		populateWaypoints,
 		waypoints,
 	} from "../../stores";
 	import {
@@ -33,7 +30,8 @@
 		SlideToggle,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
+	import { settingsSection } from "../../lib/settingsSection.js";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
 	import { setLightMode } from "../../lib/lightMode.js";
@@ -55,6 +53,14 @@
 	import { chromeError } from "../../lib/globalActions.js";
 	import { toastError } from "../../lib/toasts.js";
 	import { neutralVariant, primaryVariant } from "../../lib/launchpad/format.js";
+	import ConnectionSettings from "../../lib/connection/ConnectionSettings.svelte";
+	import CLISettings from "../../lib/connection/CLISettings.svelte";
+	import { statusHint } from "../../lib/connection/status.js";
+	import { connectionStore } from "../../stores/connectionStore.js";
+	import { followChromeConfig } from "../../lib/chromeConfigEvents.js";
+	import { service } from "../../lib/service/index.js";
+	import { isSuperseded } from "../../lib/service/errors.js";
+	import { get } from "svelte/store";
 	import {
 		highlightPalette,
 		resetHighlights,
@@ -74,7 +80,8 @@
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
 
-	const sections = [
+	$: sections = [
+		{ id: "connection", name: "Connection", hint: statusHint($connectionStore), icon: Cable },
 		{ id: "appearance", name: "Appearance", hint: "Text size and theme", icon: Palette },
 		{ id: "editing", name: "Keyboard & Editor", hint: "Shortcuts, Vim, syntax", icon: Keyboard },
 		{ id: "listener", name: "Listener", hint: "Default interface and port", icon: Globe },
@@ -84,7 +91,7 @@
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
-		{ id: "updates", name: "Updates", hint: "Channel and checks", icon: RefreshCw },
+		{ id: "updates", name: "Updates", hint: "App and Marasi CLI", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
 	];
 	const syntaxModes = [
@@ -100,8 +107,23 @@
 	// ?section=<id> opens a section, as the update panel's link to the
 	// Channel setting does. Choosing a section puts it in the URL, so that
 	// link switches section even after the researcher moved to another one.
-	$: requestedSection = $page.url.searchParams.get("section");
-	$: if (sections.some((entry) => entry.id === requestedSection)) section = requestedSection;
+	// ?section=cli (the old Marasi CLI section) and ?section=updates#cli open
+	// Updates scrolled to its Marasi CLI part (lib/settingsSection.js).
+	$: requested = settingsSection(
+		$page.url.searchParams.get("section"),
+		$page.url.hash,
+		sections.map((entry) => entry.id),
+	);
+	// Once per URL: sections changes with the connection's hint too.
+	let openedHref = null;
+	$: if (requested && $page.url.href !== openedHref) openRequested(requested, $page.url.href);
+	async function openRequested({ section: id, part }, href) {
+		openedHref = href;
+		section = id;
+		if (!part) return;
+		await tick();
+		document.getElementById(part)?.scrollIntoView({ block: "start" });
+	}
 	function selectSection(id) {
 		section = id;
 		goto(`?section=${id}`, { replaceState: true, noScroll: true, keepFocus: true });
@@ -165,27 +187,26 @@
 			lineWrap.set(wrapStartsOn(config.WrapMode));
 		});
 	}
+	// Saving adds the waypoint, or updates the one the project has for the host.
 	function saveWaypoint() {
-		CreateWaypoint(targetHost, override)
+		waypoints
+			.save(targetHost, override)
 			.then(() => {
 				targetHost = "";
 				override = "";
 				selected = "";
-				populateWaypoints();
 			})
-			.catch((waypointErr) => {
-				console.log(waypointErr);
-			});
+			.catch(waypointFailed("Waypoint not saved"));
 	}
 	function deleteWaypoint(host) {
-		DeleteWaypoint(host)
-			.then(() => {
-				populateWaypoints();
-			})
-			.catch((deleteError) => {
-				console.log(deleteError);
-			});
+		waypoints.remove(host).catch(waypointFailed("Waypoint not deleted"));
 	}
+	const waypointFailed = (message) => (err) => {
+		// A connection switch stopped it: nothing to report.
+		if (isSuperseded(err)) return;
+		console.error(`${message}:`, err);
+		toastStore.trigger({ message, background: "variant-filled-error" });
+	};
 	function addChromePath() {
 		AddChromePath(selectedPath, selectedOS)
 			.then((paths) => {
@@ -424,17 +445,31 @@
 				automaticChecks = settings.AutomaticChecks;
 			})
 			.catch((error) => toastError(toastStore, "Error reading the update settings", error));
+		readChromePaths();
+		readChromeProfiles();
+		// `marasi chrome …` on this machine changes the same file.
+		return followChromeConfig(service.on, {
+			connectionKind: () => get(connectionStore).connection.kind,
+			onPaths: readChromePaths,
+			onProfiles: readChromeProfiles,
+		});
+	});
+
+	function readChromePaths() {
 		GetChromePaths()
 			.then((paths) => {
 				chromePaths = paths;
 			})
 			.catch(chromeError(toastStore, "Error reading Chrome paths"));
+	}
+
+	function readChromeProfiles() {
 		GetChromeProfiles()
 			.then((profiles) => {
 				chromeProfiles = profiles;
 			})
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
-	});
+	}
 </script>
 
 <div class="no-select flex h-full min-h-0 flex-col p-4 text-sm text-surface-900-50-token">
@@ -477,7 +512,9 @@
 		</nav>
 
 		<section class="min-w-0 flex-1 overflow-y-auto px-6 py-4">
-			{#if section === "appearance"}
+			{#if section === "connection"}
+				<ConnectionSettings />
+			{:else if section === "appearance"}
 				<h3 class="text-sm font-bold">Appearance</h3>
 				<div class={row}>
 					<p>Text size</p>
@@ -1124,6 +1161,7 @@
 				</div>
 			{:else if section === "updates"}
 				<h3 class="text-sm font-bold">Updates</h3>
+				<h4 class="mt-3 text-xs font-semibold uppercase tracking-wide opacity-60" data-testid="updates-app">Marasi App</h4>
 				{#if updateSettings?.Channel}
 					<div class={row}>
 						<p>Channel</p>
@@ -1188,6 +1226,8 @@
 						</div>
 					</div>
 				{/if}
+				<h4 id="cli" class="mt-8 scroll-mt-4 text-xs font-semibold uppercase tracking-wide opacity-60" data-testid="updates-cli">Marasi CLI</h4>
+				<CLISettings />
 			{:else}
 				<h3 class="text-sm font-bold">About</h3>
 				<div class={row}>

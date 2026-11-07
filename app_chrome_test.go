@@ -1,121 +1,298 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	marasi "github.com/tfkr-ae/marasi"
 	"github.com/tfkr-ae/marasi/chrome"
-	"github.com/tfkr-ae/marasi/service"
+	"go.yaml.in/yaml/v3"
 )
 
+func TestAppChromeSettings(t *testing.T) {
+	t.Run("should read the paths and profiles Marasi wrote to marasi_config.yaml", func(t *testing.T) {
+		app := newTestApp(t)
+		writeMarasiConfig(t, app, "chrome_dirs:\n    - os: darwin\n      path: /Applications/Chrome.app\nchrome_profiles:\n    - work\n    - client\n")
+		paths, err := app.GetChromePaths()
+		if err != nil || !reflect.DeepEqual(paths, []chrome.PathConfig{{OS: "darwin", Path: "/Applications/Chrome.app"}}) {
+			t.Fatalf("wanted: the darwin path\ngot: %v, %v", paths, err)
+		}
+		profiles, err := app.GetChromeProfiles()
+		if err != nil || !reflect.DeepEqual(profiles, []string{"work", "client"}) {
+			t.Fatalf("wanted: [work client]\ngot: %v, %v", profiles, err)
+		}
+	})
+
+	t.Run("should start with no paths and no profiles", func(t *testing.T) {
+		app := newTestApp(t)
+		paths, err := app.GetChromePaths()
+		if err != nil || paths == nil || len(paths) != 0 {
+			t.Fatalf("wanted: no paths\ngot: %#v, %v", paths, err)
+		}
+		profiles, err := app.GetChromeProfiles()
+		if err != nil || profiles == nil || len(profiles) != 0 {
+			t.Fatalf("wanted: no profiles\ngot: %#v, %v", profiles, err)
+		}
+	})
+
+	t.Run("should write paths and profiles to marasi_config.yaml and keep its other keys", func(t *testing.T) {
+		app := newTestApp(t)
+		writeMarasiConfig(t, app, "# machine config\nupdates:\n    channel: nightly\nupstream_proxies:\n    - name: corp\n      url: http://proxy:3128\nchrome_profiles:\n    - work\n")
+		first := chrome.PathConfig{OS: "darwin", Path: "/Applications/Chrome.app"}
+		second := chrome.PathConfig{OS: "linux", Path: "/usr/bin/google-chrome"}
+		app.AddChromePath(first.Path, first.OS)
+		paths, err := app.AddChromePath(second.Path, second.OS)
+		if err != nil || !reflect.DeepEqual(paths, []chrome.PathConfig{first, second}) {
+			t.Fatalf("wanted: %v\ngot: %v, %v", []chrome.PathConfig{first, second}, paths, err)
+		}
+		profiles, err := app.AddChromeProfile(" client ")
+		if err != nil || !reflect.DeepEqual(profiles, []string{"work", "client"}) {
+			t.Fatalf("wanted: [work client]\ngot: %v, %v", profiles, err)
+		}
+
+		var written struct {
+			Updates         map[string]string   `yaml:"updates"`
+			UpstreamProxies []map[string]string `yaml:"upstream_proxies"`
+			ChromeDirs      []map[string]string `yaml:"chrome_dirs"`
+			ChromeProfiles  []string            `yaml:"chrome_profiles"`
+		}
+		text := marasiConfigText(t, app)
+		if err := yaml.Unmarshal([]byte(text), &written); err != nil {
+			t.Fatalf("parsing marasi_config.yaml: %v\n%s", err, text)
+		}
+		want := []map[string]string{{"os": "darwin", "path": "/Applications/Chrome.app"}, {"os": "linux", "path": "/usr/bin/google-chrome"}}
+		if !reflect.DeepEqual(written.ChromeDirs, want) || !reflect.DeepEqual(written.ChromeProfiles, []string{"work", "client"}) {
+			t.Fatalf("wanted: chrome_dirs %v and chrome_profiles [work client]\ngot:\n%s", want, text)
+		}
+		if written.Updates["channel"] != "nightly" || len(written.UpstreamProxies) != 1 || written.UpstreamProxies[0]["url"] != "http://proxy:3128" || !strings.Contains(text, "# machine config") {
+			t.Fatalf("wanted: the other keys kept\ngot:\n%s", text)
+		}
+		if appText := appConfigText(t, app.Config.ConfigDir); strings.Contains(appText, "chrome_paths") || strings.Contains(appText, "chrome_profiles") {
+			t.Fatalf("wanted: no Chrome settings in marasi_appconfig.yaml\ngot:\n%s", appText)
+		}
+	})
+
+	t.Run("should use the CLI's config directory override as Marasi's config directory", func(t *testing.T) {
+		override := t.TempDir()
+		t.Setenv(cliConfigDirEnv, override)
+		app := newApp(t.TempDir())
+		if app.marasiConfigDir != override {
+			t.Fatalf("wanted: %s\ngot: %s", override, app.marasiConfigDir)
+		}
+	})
+
+	t.Run("should remove a path and leave the others", func(t *testing.T) {
+		app := newTestApp(t)
+		app.AddChromePath("/a", "darwin")
+		app.AddChromePath("/b", "darwin")
+		paths, err := app.DeleteChromePath("/a", "darwin")
+		if err != nil || !reflect.DeepEqual(paths, []chrome.PathConfig{{OS: "darwin", Path: "/b"}}) {
+			t.Fatalf("wanted: only /b\ngot: %v, %v", paths, err)
+		}
+	})
+
+	t.Run("should remove a profile and its Chrome user data", func(t *testing.T) {
+		app := newTestApp(t)
+		app.AddChromeProfile("work")
+		userData := filepath.Join(app.marasiConfigDir, "chrome_profiles", "work")
+		if err := os.MkdirAll(filepath.Join(userData, "Default"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		profiles, err := app.DeleteChromeProfile("work")
+		if err != nil || len(profiles) != 0 {
+			t.Fatalf("wanted: no profiles\ngot: %v, %v", profiles, err)
+		}
+		if _, err := os.Stat(userData); !os.IsNotExist(err) {
+			t.Fatalf("wanted: %s removed\ngot: %v", userData, err)
+		}
+	})
+
+	t.Run("should refuse bad or repeated paths and profiles and change nothing", func(t *testing.T) {
+		app := newTestApp(t)
+		app.AddChromePath("/a", "darwin")
+		app.AddChromeProfile("work")
+		before := marasiConfigText(t, app)
+		refusals := map[string]func() error{
+			"a repeated path":     func() error { _, err := app.AddChromePath("/a", "darwin"); return err },
+			"an empty path":       func() error { _, err := app.AddChromePath("", "darwin"); return err },
+			"an unknown OS":       func() error { _, err := app.AddChromePath("/c", "plan9"); return err },
+			"a missing path":      func() error { _, err := app.DeleteChromePath("/c", "darwin"); return err },
+			"a repeated profile":  func() error { _, err := app.AddChromeProfile("work"); return err },
+			"an empty profile":    func() error { _, err := app.AddChromeProfile("  "); return err },
+			"a parent profile":    func() error { _, err := app.AddChromeProfile(".."); return err },
+			"a nested profile":    func() error { _, err := app.AddChromeProfile("a/b"); return err },
+			"a missing profile":   func() error { _, err := app.DeleteChromeProfile("home"); return err },
+			"an escaping removal": func() error { _, err := app.DeleteChromeProfile("../work"); return err },
+		}
+		for name, call := range refusals {
+			if err := call(); err == nil {
+				t.Errorf("%s: wanted: an error\ngot: nil", name)
+			}
+		}
+		if after := marasiConfigText(t, app); after != before {
+			t.Fatalf("wanted: marasi_config.yaml unchanged\ngot:\n%s", after)
+		}
+	})
+}
+
 func TestAppChrome(t *testing.T) {
-	t.Run("should list a path another instance added", func(t *testing.T) {
-		app := newProjectApp(t)
-		other := newSharedConfigChrome(t, app)
-		added := chrome.PathConfig{OS: "darwin", Path: "/service/chrome"}
-		if _, err := other.AddPath(context.Background(), added); err != nil {
-			t.Fatalf("adding path from another instance: %v", err)
-		}
-		if paths, _ := app.GetChromePaths(); !slices.Contains(paths, added) {
-			t.Fatalf("wanted: %v in paths\ngot: %v", added, paths)
-		}
-	})
-
-	t.Run("should keep a path another instance added when adding one", func(t *testing.T) {
-		app := newProjectApp(t)
-		app.GetChromePaths()
-		other := newSharedConfigChrome(t, app)
-		fromService := chrome.PathConfig{OS: "darwin", Path: "/service/chrome"}
-		if _, err := other.AddPath(context.Background(), fromService); err != nil {
-			t.Fatalf("adding path from another instance: %v", err)
-		}
-		fromApp := chrome.PathConfig{OS: "darwin", Path: "/app/chrome"}
-		paths, err := app.AddChromePath(fromApp.Path, fromApp.OS)
+	t.Run("should aim Chrome at the local connection's proxy listener and pin its SPKI hash", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ConnectionURL: "http://127.0.0.1:51391", ProxyListener: "127.0.0.1:51390", SPKIHash: "spki-from-service"})
 		if err != nil {
-			t.Fatalf("adding path: %v", err)
+			t.Fatalf("starting Chrome: %v", err)
 		}
-		if !slices.Contains(paths, fromService) || !slices.Contains(paths, fromApp) {
-			t.Fatalf("wanted: %v and %v in paths\ngot: %v", fromService, fromApp, paths)
-		}
-		saved, err := other.Paths(context.Background())
-		if err != nil {
-			t.Fatalf("reading saved paths: %v", err)
-		}
-		if !slices.Contains(saved, fromService) || !slices.Contains(saved, fromApp) {
-			t.Fatalf("wanted: %v and %v saved\ngot: %v", fromService, fromApp, saved)
+		want := ChromeLaunch{Address: "127.0.0.1", Port: "51390", SPKIHash: "spki-from-service", ConfigDir: app.marasiConfigDir, Profile: "default-profile", Paths: []chrome.PathConfig{}}
+		if len(*launches) != 1 || !reflect.DeepEqual((*launches)[0], want) {
+			t.Fatalf("wanted: one launch %+v\ngot: %+v", want, *launches)
 		}
 	})
-
-	t.Run("should list a profile another instance added", func(t *testing.T) {
-		app := newProjectApp(t)
-		other := newSharedConfigChrome(t, app)
-		if _, err := other.AddProfile(context.Background(), "service-profile"); err != nil {
-			t.Fatalf("adding profile from another instance: %v", err)
+	t.Run("should aim Chrome at loopback when the local listener binds every address", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		for _, listener := range []string{"0.0.0.0:8080", "[::]:8080"} {
+			if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: listener, SPKIHash: "h"}); err != nil {
+				t.Fatalf("starting Chrome on %s: %v", listener, err)
+			}
 		}
-		if profiles, _ := app.GetChromeProfiles(); !slices.Contains(profiles, "service-profile") {
-			t.Fatalf("wanted: service-profile in profiles\ngot: %v", profiles)
-		}
-	})
-
-	t.Run("should report an invalid websocket_max_message_size from every Chrome setting", func(t *testing.T) {
-		app := newProjectApp(t)
-		writeInvalidMaxMessageSize(t, app)
-		calls := map[string]func() error{
-			"GetChromePaths":      func() error { _, err := app.GetChromePaths(); return err },
-			"AddChromePath":       func() error { _, err := app.AddChromePath("/app/chrome", "darwin"); return err },
-			"DeleteChromePath":    func() error { _, err := app.DeleteChromePath("/app/chrome", "darwin"); return err },
-			"GetChromeProfiles":   func() error { _, err := app.GetChromeProfiles(); return err },
-			"AddChromeProfile":    func() error { _, err := app.AddChromeProfile("p"); return err },
-			"DeleteChromeProfile": func() error { _, err := app.DeleteChromeProfile("p"); return err },
-		}
-		for name, call := range calls {
-			err := call()
-			if err == nil || !strings.Contains(err.Error(), "invalid configuration") || !strings.Contains(err.Error(), "websocket_max_message_size") {
-				t.Errorf("%s: wanted: invalid configuration error naming websocket_max_message_size\ngot: %v", name, err)
+		for _, launch := range *launches {
+			if launch.Address != "127.0.0.1" || launch.Port != "8080" {
+				t.Fatalf("wanted: 127.0.0.1:8080\ngot: %s:%s", launch.Address, launch.Port)
 			}
 		}
 	})
-
-	t.Run("should refuse to start Chrome while the proxy is stopped", func(t *testing.T) {
-		app := newProjectApp(t)
-		if err := app.StartBrowser(""); !errors.Is(err, service.ErrListenerInactive) {
-			t.Fatalf("wanted: %v\ngot: %v", service.ErrListenerInactive, err)
+	t.Run("should aim Chrome at the remote service's host when its listener binds every address", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "remote", ConnectionURL: "http://lab.example:51391", ProxyListener: "0.0.0.0:8080", SPKIHash: "h"})
+		if err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		if got := (*launches)[0]; got.Address != "lab.example" || got.Port != "8080" {
+			t.Fatalf("wanted: lab.example:8080\ngot: %s:%s", got.Address, got.Port)
+		}
+	})
+	t.Run("should aim Chrome at a remote listener's own address", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "remote", ConnectionURL: "http://lab.example:51391", ProxyListener: "[fd00::5]:8080", SPKIHash: "h"})
+		if err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		if got := (*launches)[0]; got.Address != "fd00::5" || got.Port != "8080" {
+			t.Fatalf("wanted: fd00::5 port 8080\ngot: %s port %s", got.Address, got.Port)
+		}
+	})
+	t.Run("should refuse a remote listener that binds loopback only", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		for _, listener := range []string{"127.0.0.1:8080", "127.0.0.2:8080", "[::1]:8080", "localhost:8080"} {
+			err := app.StartBrowser(ChromeStart{ConnectionKind: "remote", ConnectionURL: "http://lab.example:51391", ProxyListener: listener, SPKIHash: "h"})
+			if err == nil || !strings.Contains(err.Error(), "listener_loopback:") {
+				t.Errorf("%s: wanted: listener_loopback error\ngot: %v", listener, err)
+			}
+		}
+		if len(*launches) != 0 {
+			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
+		}
+	})
+	t.Run("should refuse to start Chrome while the proxy listener is stopped", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", SPKIHash: "h"})
+		if err == nil || !strings.Contains(err.Error(), "listener_inactive:") {
+			t.Fatalf("wanted: listener_inactive error\ngot: %v", err)
+		}
+		if len(*launches) != 0 {
+			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
+		}
+	})
+	t.Run("should start a configured profile with the configured paths", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		if _, err := app.AddChromeProfile("work"); err != nil {
+			t.Fatalf("adding profile: %v", err)
+		}
+		path := chrome.PathConfig{OS: "darwin", Path: "/custom/chrome"}
+		if _, err := app.AddChromePath(path.Path, path.OS); err != nil {
+			t.Fatalf("adding path: %v", err)
+		}
+		if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080", SPKIHash: "h", Profile: "work"}); err != nil {
+			t.Fatalf("starting Chrome: %v", err)
+		}
+		got := (*launches)[0]
+		if got.Profile != "work" || !reflect.DeepEqual(got.Paths, []chrome.PathConfig{path}) {
+			t.Fatalf("wanted: profile work with %v\ngot: %+v", path, got)
+		}
+	})
+	t.Run("should refuse a profile that isn't configured", func(t *testing.T) {
+		app := newTestApp(t)
+		launches := recordChromeLaunches(app)
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080", SPKIHash: "h", Profile: "missing"})
+		if !errors.Is(err, errChromeNotFound) {
+			t.Fatalf("wanted: %v\ngot: %v", errChromeNotFound, err)
+		}
+		if len(*launches) != 0 {
+			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
+		}
+	})
+	t.Run("should code a launch the launcher couldn't start, keeping its cause", func(t *testing.T) {
+		app := newTestApp(t)
+		app.launchChrome = func(ChromeLaunch) error {
+			return errors.New("finding Chrome executable: not found")
+		}
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080", SPKIHash: "h"})
+		if err == nil || !strings.Contains(err.Error(), "chrome_launch_failed (): finding Chrome executable: not found") {
+			t.Fatalf("wanted: the launcher's error with the chrome_launch_failed code\ngot: %v", err)
+		}
+	})
+	t.Run("should refuse to start Chrome without the certificate's SPKI hash", func(t *testing.T) {
+		app := newTestApp(t)
+		recordChromeLaunches(app)
+		if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080"}); err == nil {
+			t.Fatal("wanted: an error\ngot: nil")
 		}
 	})
 
-	t.Run("should start Chrome through the proxy without a CDP endpoint", func(t *testing.T) {
+	t.Run("should start Chrome through the launcher without a CDP endpoint", func(t *testing.T) {
 		if goruntime.GOOS == "windows" {
 			t.Skip("test executable is a shell script")
 		}
-		app := newScratchpadApp(t)
-		if err := app.StartProxy("127.0.0.1", "0"); err != nil {
-			t.Fatalf("starting listener: %v", err)
-		}
+		app := newTestApp(t)
 		executable, argsPath := writeFakeChrome(t)
 		if _, err := app.AddChromePath(executable, goruntime.GOOS); err != nil {
 			t.Fatalf("adding fake Chrome: %v", err)
 		}
-		if err := app.StartBrowser(""); err != nil {
+		if err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:51390", SPKIHash: "spki-from-service"}); err != nil {
 			t.Fatalf("starting Chrome: %v", err)
 		}
 		args := readFakeChromeArgs(t, argsPath)
-		if !strings.Contains(args, "--proxy-server=http://"+listenerAddress(t, app)+"\n") {
-			t.Fatalf("wanted: --proxy-server for the listener among arguments\ngot:\n%s", args)
+		for _, want := range []string{"--proxy-server=http://127.0.0.1:51390\n", "--ignore-certificate-errors-spki-list=spki-from-service\n"} {
+			if !strings.Contains(args, want) {
+				t.Fatalf("wanted: %q among arguments\ngot:\n%s", want, args)
+			}
 		}
 		if strings.Contains(args, "--remote-debugging-port") {
 			t.Fatalf("wanted: no --remote-debugging-port among arguments\ngot:\n%s", args)
 		}
 	})
+}
+
+// recordChromeLaunches replaces app's Chrome launcher with one that records
+// each launch instead of starting Chrome.
+func recordChromeLaunches(app *App) *[]ChromeLaunch {
+	launches := &[]ChromeLaunch{}
+	app.launchChrome = func(launch ChromeLaunch) error {
+		*launches = append(*launches, launch)
+		return nil
+	}
+	return launches
 }
 
 // writeFakeChrome writes a Chrome stand-in that records its arguments, one
@@ -148,30 +325,21 @@ func readFakeChromeArgs(t *testing.T, argsPath string) string {
 	}
 }
 
-// writeInvalidMaxMessageSize appends a negative websocket_max_message_size
-// to the machine config that the app's Chrome settings reread.
-func writeInvalidMaxMessageSize(t *testing.T, app *App) {
+// writeMarasiConfig writes text as marasi_config.yaml in app's Marasi
+// config directory.
+func writeMarasiConfig(t *testing.T, app *App, text string) {
 	t.Helper()
-	path := filepath.Join(app.Proxy.ConfigDir, "marasi_config.yaml")
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		t.Fatalf("opening config: %v", err)
-	}
-	defer file.Close()
-	if _, err := file.WriteString("\nwebsocket_max_message_size: -1\n"); err != nil {
-		t.Fatalf("writing config: %v", err)
+	if err := os.WriteFile(filepath.Join(app.marasiConfigDir, "marasi_config.yaml"), []byte(text), 0600); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// newSharedConfigChrome stands in for a service instance using the app's config dir.
-func newSharedConfigChrome(t *testing.T, app *App) *service.Chrome {
+// marasiConfigText reads marasi_config.yaml in app's Marasi config directory.
+func marasiConfigText(t *testing.T, app *App) string {
 	t.Helper()
-	proxy, err := marasi.New(
-		marasi.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
-		marasi.WithConfigDir(app.Proxy.ConfigDir),
-	)
+	data, err := os.ReadFile(filepath.Join(app.marasiConfigDir, "marasi_config.yaml"))
 	if err != nil {
-		t.Fatalf("creating second proxy: %v", err)
+		t.Fatal(err)
 	}
-	return service.NewChrome(proxy, service.NewListenerLifecycle(proxy, io.Discard), io.Discard)
+	return string(data)
 }

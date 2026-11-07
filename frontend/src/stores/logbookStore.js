@@ -1,26 +1,15 @@
-// The app's Logbook store, bound to the Wails backend. The logic lives in
-// createLogbookStore.js, which tests load with a fake API.
-import {
-  CreateDraftFinding,
-  CreateDraftTestCase,
-  DeleteArtifact,
-  DownloadArtifact,
-  GetArtifact,
-  GetRawDetails,
-  LinkRequestToFinding,
-  LinkRequestToTestCase,
-  ListFindings,
-  ListTestCases,
-  SaveArtifactToFinding,
-  SaveArtifactToTestCase,
-  SaveFinding,
-  SaveTestCase,
-  UnlinkRequestFromFinding,
-  UnlinkRequestFromTestCase,
-} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { createLogbookStore } from "./createLogbookStore.js";
-import { findingStore } from "./findingStore";
-import { testCaseStore } from "./testCaseStore";
+// The app's Logbook store over the service client. The logic lives in
+// createLogbookStore.js and the API shapes in logbookApi.js, which tests
+// load with a fake client. It is the one list of findings and test cases;
+// findingStore and testCaseStore are views of it for the other pages.
+import { SaveFileAs, SetUnsavedLogbookEdits } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { service } from "../lib/service/index.js";
+import { loadSignals } from "../lib/openProgress.js";
+import { createLogbookApi } from "./logbookApi.js";
+import { createLogbookStore, hasUnsavedEdits } from "./createLogbookStore.js";
+import { reportUnsavedLogbookEdits } from "./draftGuards.js";
+import { logbookEvents } from "./logbookEvents.js";
+import { projectData } from "./projectData.js";
 
 export {
   ITEMS,
@@ -40,35 +29,25 @@ export {
   testCaseCountsOf,
 } from "./createLogbookStore.js";
 
-// A File's bytes as the bindings take a Go []byte.
-const bytesOf = async (file) => Array.from(new Uint8Array(await file.arrayBuffer()));
-const upload = (save) => async (id, file) => save(id, file.name, file.type || "application/octet-stream", file.size, await bytesOf(file));
+export const logbookStore = createLogbookStore(createLogbookApi(service, { saveFile: SaveFileAs }));
 
-export const logbookStore = createLogbookStore({
-  listFindings: () => ListFindings(),
-  listTestCases: () => ListTestCases(),
-  getPair: (id) => GetRawDetails(id),
-  getArtifact: (id) => GetArtifact(id),
-  downloadArtifact: (id) => DownloadArtifact(id),
-  createDraftFinding: (requestIds, testCaseId) => CreateDraftFinding(requestIds, testCaseId),
-  createDraftTestCase: (requestIds) => CreateDraftTestCase(requestIds),
-  saveFinding: (finding) => SaveFinding(finding),
-  saveTestCase: (testCase) => SaveTestCase(testCase),
-  linkRequestToFinding: (id, request) => LinkRequestToFinding(id, request),
-  unlinkRequestFromFinding: (id, request) => UnlinkRequestFromFinding(id, request),
-  linkRequestToTestCase: (id, request) => LinkRequestToTestCase(id, request),
-  unlinkRequestFromTestCase: (id, request) => UnlinkRequestFromTestCase(id, request),
-  saveArtifactToFinding: upload(SaveArtifactToFinding),
-  saveArtifactToTestCase: upload(SaveArtifactToTestCase),
-  deleteArtifact: (id) => DeleteArtifact(id),
-  // Through the older stores, which call DeleteFinding and DeleteTestCase
-  // and drop the record from the Dashboard and the Ledger too.
-  deleteFinding: (id) => findingStore.delete(id),
-  deleteTestCase: (id) => testCaseStore.delete(id),
+for (const [name, handler] of Object.entries(logbookEvents(logbookStore))) service.on(name, handler);
+
+// Keeps the Go side told whether the Logbook has unsaved edits, so quitting,
+// switching the project or following another client's switch can ask first.
+// Returns the unsubscribe function.
+export function reportLogbookEdits() {
+  return reportUnsavedLogbookEdits(
+    logbookStore,
+    (unsaved) =>
+      SetUnsavedLogbookEdits(unsaved).catch((err) => console.error("reporting unsaved Logbook edits:", err)),
+    hasUnsavedEdits,
+  );
+}
+
+projectData.register("logbook", {
+  signal: loadSignals.findings,
+  clear: logbookStore.clear,
+  load: logbookStore.populate,
+  resync: logbookStore.resync,
 });
-
-// The Ledger and the request view still write through findingStore and
-// testCaseStore; the Logbook follows them until they open the edit
-// session instead.
-findingStore.subscribe((findings) => logbookStore.setRecords("finding", findings));
-testCaseStore.subscribe((testCases) => logbookStore.setRecords("testCase", testCases));

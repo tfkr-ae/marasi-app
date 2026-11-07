@@ -1,7 +1,7 @@
 <script>
     import { getContext } from "svelte";
     import * as Icons from "lucide-svelte";
-    import { emit } from "../../runtime.js";
+    import { extensionsStore } from "../../../stores/extensionsStore.js";
     import { extensions_ui } from "../../../stores";
     import { resolveBind } from "./utils";
 
@@ -23,11 +23,9 @@
 
     function handleClick() {
         if (on_click) {
-            emit("extension_call_function", {
-                extensionID: extensionData.ID,
-                function: on_click,
-                state: $extensions_ui[extensionData.Name],
-            });
+            extensionsStore
+                .call(extensionData.Name, on_click)
+                .catch((err) => console.error(`Calling ${on_click} on ${extensionData.Name} failed:`, err));
         }
     }
 </script>

@@ -39,7 +39,7 @@
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
-	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
+	import { activeCountsOf, armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import {
 		groupSelection,
 		isColumnSortable,
@@ -54,7 +54,6 @@
 		runTrafficRows,
 		runTrafficTotal,
 	} from "../../stores/createArmoryRunTraffic.js";
-	import { activeProject, appState } from "../../stores";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
 	import { findingStore } from "../../stores/findingStore";
@@ -73,6 +72,7 @@
 	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
 	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
+	import { isSuperseded } from "../../lib/service/errors.js";
 
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
@@ -258,7 +258,9 @@
 		toastStore.trigger({ message, background });
 	}
 
+	// A connection switch stopped the action: nothing to report.
 	function reportError(error) {
+		if (isSuperseded(error)) return;
 		notify(String(error), "variant-filled-error");
 	}
 
@@ -358,18 +360,26 @@
 	async function createRun(start) {
 		if (!selectedTemplate || validating || validationError) return;
 		launching = true;
+		const templateId = selectedTemplate.ID;
 		try {
-			if (!(await saveTemplate())) return;
-			const run = await armoryStore.createRun({
-				templateId: selectedTemplate.ID,
-				attackType,
-				useHTTPS,
-				wordlists: selectedWordlists,
-				maxConcurrent: Number(maxConcurrent),
-			});
-			selectedRunId = run.ID;
-			armoryStore.selectRun(selectedTemplate.ID, run.ID);
-			if (start) await armoryStore.startRun(run.ID);
+			const run = await armoryStore.launchRun(
+				{
+					templateId,
+					attackType,
+					useHTTPS,
+					wordlists: selectedWordlists,
+					maxConcurrent: Number(maxConcurrent),
+				},
+				{
+					save: saveTemplate,
+					start,
+					created: (made) => {
+						selectedRunId = made.ID;
+						armoryStore.selectRun(templateId, made.ID);
+					},
+				},
+			);
+			if (!run) return;
 			notify(start ? "Run started" : "Draft run created");
 		} catch (error) {
 			reportError(error);
@@ -605,28 +615,6 @@
 		}
 	}
 
-	async function pollRuns() {
-		if (!$appState.isReady) return;
-		const previousActiveRunIds = $armoryStore.activeRunIds || [];
-		const activeRunIds = await armoryStore.refreshActiveRuns();
-		if (activeRunIds === null) return;
-		const inProgressIds = Object.values(
-			$armoryStore.runsByTemplate,
-		)
-			.flat()
-			.filter((run) => run.Status === "in_progress")
-			.map((run) => run.ID);
-		const idsToRefresh = [...new Set([
-			...previousActiveRunIds,
-			...activeRunIds,
-			...inProgressIds,
-		])];
-
-		await Promise.all(
-			idsToRefresh.map((id) => armoryStore.refreshRun(id)),
-		);
-	}
-
 	const armoryMenu = [
 		{
 			// The id predates the redesign; it now shows or hides Run settings.
@@ -734,21 +722,9 @@
 
 	onMount(() => {
 		validationReady = true;
-		const interval = setInterval(async () => {
-			const project = $activeProject;
-			try {
-				await pollRuns();
-			} catch (error) {
-				if (!$appState.isReady || project !== $activeProject)
-					return;
-				reportError(error);
-			}
-		}, 1500);
-
 		return () => {
 			armoryDrawer.set({ open: false });
 			modalStore.close();
-			clearInterval(interval);
 			clearTimeout(validationTimer);
 		};
 	});
@@ -761,6 +737,7 @@
 	<ArmoryDock
 		templates={filteredTemplates}
 		runsByTemplate={$armoryStore.runsByTemplate}
+		runningByTemplate={activeCountsOf($armoryStore).byTemplate}
 		{selectedTemplateId}
 		{selectedRunId}
 		{projectStateVersion}

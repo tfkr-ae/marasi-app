@@ -1,0 +1,882 @@
+[
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\r\nHost: x\r\n\r\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nHost: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST /login HTTP/1.1\nHost: x\nContent-Length: 3\n\nabc",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST /login HTTP/1.1\nHost: x\nContent-Length: 30\n\nabc",
+  "type": "request"
+ },
+ {
+  "error": "EOF",
+  "text": "",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP request \"BROKEN /admin\"",
+  "text": "BROKEN /admin",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP request \"GET /\"",
+  "text": "GET /\r\n\r\n",
+  "type": "request"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "GET / HTTP/1.1",
+  "type": "request"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "GET / HTTP/1.1\nHost: x",
+  "type": "request"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "GET / HTTP/1.1\n",
+  "type": "request"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "GET / HTTP/1.1\r\nHost: x\r\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"/ HTTP/1.1\"",
+  "text": "GE T / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "invalid method \"G(T\"",
+  "text": "G(T / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "invalid method \"GÉT\"",
+  "text": "GÉT / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP request \"GET\\t/ HTTP/1.1\"",
+  "text": "GET\t/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/2.0\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"HTTP/1.10\"",
+  "text": "GET / HTTP/1.10\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"HTTP/x.1\"",
+  "text": "GET / HTTP/x.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"http/1.1\"",
+  "text": "GET / http/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"HTTP/1.1 \"",
+  "text": "GET / HTTP/1.1 \n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"/ HTTP/1.1\"",
+  "text": "GET  / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"foo\": invalid URI for request",
+  "text": "GET foo HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET * HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"/%zz\": invalid URL escape \"%zz\"",
+  "text": "GET /%zz HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"/a%2\": invalid URL escape \"%2\"",
+  "text": "GET /a%2 HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"/a%\": invalid URL escape \"%\"",
+  "text": "GET /a% HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET /a%41b HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET /?q=%zz HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET /a? HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET /a#frag HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET /café HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"/\\x01\": net/url: invalid control character in URL",
+  "text": "GET /\u0001 HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"/\\x7f\": net/url: invalid control character in URL",
+  "text": "GET / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \":foo\": missing protocol scheme",
+  "text": "GET :foo HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET mailto:x HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://example.com/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET HTTP://Example.com/a?b HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://ex{ample.com/\": invalid character \"{\" in host name",
+  "text": "GET http://ex{ample.com/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://ex%41mple.com/\": invalid URL escape \"%41\"",
+  "text": "GET http://ex%41mple.com/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://ex%C3%A9.com/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://ex%zz.com/\": invalid URL escape \"%zz\"",
+  "text": "GET http://ex%zz.com/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://example.com:abc/\": invalid port \":abc\" after host",
+  "text": "GET http://example.com:abc/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://example.com:/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://example.com:80:90/\": invalid port \":80:90\" after host",
+  "text": "GET http://example.com:80:90/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[::1]:8080/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::1]x/\": invalid port \"x\" after host",
+  "text": "GET http://[::1]x/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::1/\": missing ']' in host",
+  "text": "GET http://[::1/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1.2.3.4]/\": invalid IP-literal",
+  "text": "GET http://[1.2.3.4]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[::ffff:1.2.3.4]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[fe80::1%25en0]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://u@ser@h/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://us{er@h/\": net/url: invalid userinfo",
+  "text": "GET http://us{er@h/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://user:p%zz@h/\": invalid URL escape \"%zz\"",
+  "text": "GET http://user:p%zz@h/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://h?x HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http:/a HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http: HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"1http://h/\": invalid URI for request",
+  "text": "GET 1http://h/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "CONNECT example.com:443 HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://example.com:abc\": invalid port \":abc\" after host",
+  "text": "CONNECT example.com:abc HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "CONNECT /rpc HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header: missing colon: \"Host x\"",
+  "text": "GET / HTTP/1.1\nHost x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header initial line:  Host: x",
+  "text": "GET / HTTP/1.1\n Host: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header initial line: \tHost: x",
+  "text": "GET / HTTP/1.1\n\tHost: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "message too large",
+  "text": "GET / HTTP/1.1\n aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nHo st: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header line: Ho(st: x",
+  "text": "GET / HTTP/1.1\nHo(st: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header line: : x",
+  "text": "GET / HTTP/1.1\n: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header line: X: a\u0001b",
+  "text": "GET / HTTP/1.1\nX: a\u0001b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header line: X: a\rb",
+  "text": "GET / HTTP/1.1\nX: a\rb\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header line: X: ab",
+  "text": "GET / HTTP/1.1\nX: ab\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX: café\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header line: Café: x",
+  "text": "GET / HTTP/1.1\nCafé: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX: a\n  b\nHost: y\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX: a\n\tb\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX: a\n   \n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX: a\n 1: b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX:\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX:a\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed MIME header: missing colon: \"Y b\"",
+  "text": "GET / HTTP/1.1\nX: a\nY b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "too many Host headers",
+  "text": "GET / HTTP/1.1\nHost: a\nHost: b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "too many Host headers",
+  "text": "GET / HTTP/1.1\nhost: a\nHOST: b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nHost : a\nHost: b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "too many Host headers",
+  "text": "GET http://h/ HTTP/1.1\nHost: a\nHost: b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad Content-Length \"abc\"",
+  "text": "POST / HTTP/1.1\nContent-Length: abc\n\n",
+  "type": "request"
+ },
+ {
+  "error": "invalid empty Content-Length \"\"",
+  "text": "POST / HTTP/1.1\nContent-Length:\n\n",
+  "type": "request"
+ },
+ {
+  "error": "invalid empty Content-Length \"\"",
+  "text": "POST / HTTP/1.1\nContent-Length:   \n\n",
+  "type": "request"
+ },
+ {
+  "error": "http: message cannot contain multiple Content-Length headers; got [\"1\" \"2\"]",
+  "text": "POST / HTTP/1.1\nContent-Length: 1\nContent-Length: 2\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nContent-Length: 5\ncontent-length: 5\n\nhello",
+  "type": "request"
+ },
+ {
+  "error": "bad Content-Length \"-1\"",
+  "text": "POST / HTTP/1.1\nContent-Length: -1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad Content-Length \"+5\"",
+  "text": "POST / HTTP/1.1\nContent-Length: +5\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad Content-Length \"1_0\"",
+  "text": "POST / HTTP/1.1\nContent-Length: 1_0\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nContent-Length: 9223372036854775807\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad Content-Length \"9223372036854775808\"",
+  "text": "POST / HTTP/1.1\nContent-Length: 9223372036854775808\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nContent-Length: 5 \n\n",
+  "type": "request"
+ },
+ {
+  "error": "unsupported transfer encoding: \"gzip\"",
+  "text": "POST / HTTP/1.1\nContent-Length: abc\nTransfer-Encoding: gzip\n\n",
+  "type": "request"
+ },
+ {
+  "error": "unsupported transfer encoding: \"gzip\"",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: gzip\n\n",
+  "type": "request"
+ },
+ {
+  "error": "too many transfer encodings: [\"chunked\" \"chunked\"]",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTransfer-Encoding: chunked\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: Chunked\n\n",
+  "type": "request"
+ },
+ {
+  "error": "unsupported transfer encoding: \"chunked, gzip\"",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked, gzip\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.0\nTransfer-Encoding: gzip\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad Content-Length \"abc\"",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nContent-Length: abc\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad trailer key \"Content-Length\"",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: Content-Length\n\n",
+  "type": "request"
+ },
+ {
+  "error": "bad trailer key \"Transfer-Encoding\"",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: x-a, transfer-encoding\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: X-Sum\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nTrailer: Content-Length\n\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP request \"\"",
+  "text": "\r\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP request \"\"",
+  "text": "\n",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"HTTP/1.1\\r\"",
+  "text": "GET / HTTP/1.1\r",
+  "type": "request"
+ },
+ {
+  "error": "malformed HTTP version \"HTTP/1.1\\rHost: x\"",
+  "text": "GET / HTTP/1.1\rHost: x\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html>",
+  "type": "response"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP response \"BROKEN\"",
+  "text": "BROKEN",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP response \"HTTP/1.1\"",
+  "text": "HTTP/1.1",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP status code \"20\"",
+  "text": "HTTP/1.1 20 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP status code \"abc\"",
+  "text": "HTTP/1.1 abc OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP status code \"-12\"",
+  "text": "HTTP/1.1 -12 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 +12 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP status code \"0x1\"",
+  "text": "HTTP/1.1 0x1 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1  200 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 200\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP status code \"\"",
+  "text": "HTTP/1.1 \n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP version \"HTTP/9\"",
+  "text": "HTTP/9 200 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP version \"http/1.1\"",
+  "text": "http/1.1 200 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed MIME header: missing colon: \"X y\"",
+  "text": "HTTP/1.1 200 OK\nX y\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed MIME header initial line:  X: y",
+  "text": "HTTP/1.1 200 OK\n X: y\n\n",
+  "type": "response"
+ },
+ {
+  "error": "bad Content-Length \"x\"",
+  "text": "HTTP/1.1 200 OK\nContent-Length: x\n\n",
+  "type": "response"
+ },
+ {
+  "error": "bad Content-Length \"x\"",
+  "text": "HTTP/1.1 204 No Content\nContent-Length: x\n\n",
+  "type": "response"
+ },
+ {
+  "error": "http: message cannot contain multiple Content-Length headers; got [\"1\" \"2\"]",
+  "text": "HTTP/1.1 200 OK\nContent-Length: 1\nContent-Length: 2\n\n",
+  "type": "response"
+ },
+ {
+  "error": "unsupported transfer encoding: \"br\"",
+  "text": "HTTP/1.1 200 OK\nTransfer-Encoding: br\n\n",
+  "type": "response"
+ },
+ {
+  "error": "bad trailer key \"Trailer\"",
+  "text": "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\nTrailer: Trailer\n\n",
+  "type": "response"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "HTTP/1.1 200 OK\nContent-Type: text/html\n",
+  "type": "response"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "HTTP/1.1 200 OK\r\n",
+  "type": "response"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "HTTP/1.1 200 OK",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 999 Custom\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 100 Continue\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 200 OK\nHost: a\nHost: b\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "BROKEN",
+  "type": "websocket"
+ },
+ {
+  "error": "parse \"http://[zz]/\": invalid host: ParseAddr(\"zz\"): unable to parse IP",
+  "text": "GET http://[zz]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::g]/\": invalid host: ParseAddr(\"::g\"): each colon-separated field must have at least one digit (at \"g\")",
+  "text": "GET http://[::g]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1::2::3]/\": invalid host: ParseAddr(\"1::2::3\"): multiple :: in address (at \":3\")",
+  "text": "GET http://[1::2::3]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[]/\": invalid host: ParseAddr(\"\"): unable to parse IP",
+  "text": "GET http://[]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1:2:3:4:5:6:7:8:9]/\": invalid host: ParseAddr(\"1:2:3:4:5:6:7:8:9\"): trailing garbage after address (at \"9\")",
+  "text": "GET http://[1:2:3:4:5:6:7:8:9]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::1%en0]/\": invalid URL escape \"%en\"",
+  "text": "GET http://[::1%en0]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[fe80::1%25]/\": invalid host: ParseAddr(\"fe80::1%\"): zone must be a non-empty string",
+  "text": "GET http://[fe80::1%25]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[12345::1]/\": invalid host: ParseAddr(\"12345::1\"): each group must have 4 or less digits (at \"12345::1\")",
+  "text": "GET http://[12345::1]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::ffff:1.2.3]/\": invalid host: ParseAddr(\"::ffff:1.2.3\"): IPv4 address too short",
+  "text": "GET http://[::ffff:1.2.3]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1.2.3.4%25x]/\": invalid host: ParseAddr(\"1.2.3.4%x\"): unexpected character (at \"%x\")",
+  "text": "GET http://[1.2.3.4%25x]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[::1%25%41]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[::1%25%20x]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::1%25%zz]/\": invalid URL escape \"%zz\"",
+  "text": "GET http://[::1%25%zz]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::1%25a{b]/\": invalid character \"{\" in host name",
+  "text": "GET http://[::1%25a{b]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[%25x]/\": invalid host: ParseAddr(\"%x\"): missing IPv6 address",
+  "text": "GET http://[%25x]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[1::]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::1:2:3:4:5:6:7:8]/\": invalid host: ParseAddr(\"::1:2:3:4:5:6:7:8\"): the :: must expand to at least one field of zeros",
+  "text": "GET http://[::1:2:3:4:5:6:7:8]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[1:2:3:4:5:6:7::]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::ffff:1.2.3.04]/\": invalid host: ParseAddr(\"::ffff:1.2.3.04\"): IPv4 field has octet with leading zero",
+  "text": "GET http://[::ffff:1.2.3.04]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[::ffff:1.2.3.256]/\": invalid host: ParseAddr(\"::ffff:1.2.3.256\"): IPv4 field has value >255",
+  "text": "GET http://[::ffff:1.2.3.256]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://[1:2:3:4:5:6:1.2.3.4]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1:2::3:4:5:6:7:1.2.3.4]/\": invalid host: ParseAddr(\"1:2::3:4:5:6:7:1.2.3.4\"): too many hex fields to fit an embedded IPv4 at the end of the address (at \"1.2.3.4\")",
+  "text": "GET http://[1:2::3:4:5:6:7:1.2.3.4]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[fffff::]/\": invalid host: ParseAddr(\"fffff::\"): each group must have 4 or less digits (at \"fffff::\")",
+  "text": "GET http://[fffff::]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1:2:3:4:5:6:7]/\": invalid host: ParseAddr(\"1:2:3:4:5:6:7\"): address string too short",
+  "text": "GET http://[1:2:3:4:5:6:7]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[1:]/\": invalid host: ParseAddr(\"1:\"): colon must be followed by more characters (at \":\")",
+  "text": "GET http://[1:]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "parse \"http://[ex%C3]/\": invalid host: ParseAddr(\"ex\\xc3\"): unable to parse IP",
+  "text": "GET http://[ex%C3]/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://ex%C3.com/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "unsupported transfer encoding: \"gzip\"",
+  "text": "GET / HTTP/0.0\nTransfer-Encoding: gzip\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "HTTP/1.1 -00 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "malformed HTTP status code \"é1\"",
+  "text": "HTTP/1.1 é1 OK\n\n",
+  "type": "response"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nX: a b\n\n",
+  "type": "request"
+ },
+ {
+  "error": "invalid method \"\"",
+  "text": " / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET http://hé/ HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "invalid method \"G\\u00a0T\"",
+  "text": "G T / HTTP/1.1\n\n",
+  "type": "request"
+ },
+ {
+  "error": "unexpected EOF",
+  "text": "GET / HTTP/1.1\nX: a\n   ",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: ,, x-y ,\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: content length\n\n",
+  "type": "request"
+ },
+ {
+  "error": "",
+  "text": "GET / HTTP/1.1\nHost: x\n\nbbbbbbbbbb",
+  "type": "request"
+ }
+]

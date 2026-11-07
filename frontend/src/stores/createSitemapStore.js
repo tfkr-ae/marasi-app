@@ -17,6 +17,11 @@ export const FETCH_SIZE = 500;
 export const WINDOW = 10;
 /** Children each "Show more" adds. */
 export const STEP = 50;
+/**
+ * How long the sitemap waits after a sitemap.changed (a rebuild, or another
+ * client's delete) before reading the open levels again, so a burst reads once.
+ */
+export const SITEMAP_SETTLE_MS = 400;
 /** Levels per ListSitemapLevels call: Marasi's MaxSitemapLevels. */
 const MAX_LEVELS = 64;
 /** Pairs whose response is still awaited, kept to count their 5xx. */
@@ -360,7 +365,19 @@ export function createSitemapStore(api) {
     update((state) => ({ ...state, open: {} }));
   }
 
+  // sitemap.changed: the stored sitemap changed under the loaded levels.
+  let changedTimer = null;
+  function onChanged() {
+    clearTimeout(changedTimer);
+    changedTimer = setTimeout(() => {
+      changedTimer = null;
+      reload();
+    }, SITEMAP_SETTLE_MS);
+  }
+
   function clear() {
+    clearTimeout(changedTimer);
+    changedTimer = null;
     generation++;
     requestBuffer = [];
     responseBuffer = [];
@@ -445,6 +462,7 @@ export function createSitemapStore(api) {
     clear,
     onRequest: (req) => requestBuffer.push(req),
     onResponse: (res) => responseBuffer.push(res),
+    onChanged,
     flush,
     async settled() {
       while (inflight.size > 0) await Promise.allSettled([...inflight]);

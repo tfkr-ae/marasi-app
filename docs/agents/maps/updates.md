@@ -9,11 +9,13 @@ How the app checks for, downloads, verifies, installs and relaunches into an upd
 3. **Install.** The `platformInstaller` from `defaultInstaller` stages the build beside the running one and swaps it in. Each OS has its own `update_platform_<goos>.go`. On macOS, a Marasi.app that Gatekeeper translocated (opened straight from Downloads) installs into the bundle it was translocated from (`bundleInstaller.locate`, `translocationOriginal`). `finishInstall` sends `update-installed` or `update-failed`.
 4. **Relaunch.** `RestartToUpdate` sets `App.restarting` and quits, which `shouldQuit` lets through without asking. `ServiceShutdown` calls `relaunchIfRestarting` last. The next start removes the leftovers (`removeUpdateLeftovers`).
 
-The updater uses its own HTTP client (`updateHTTPClient`), which honours the system proxy but never sends through Marasi's own listener. `App.UpdateProxy` is unrelated: it changes the proxy listener.
+**Not this updater.** The connected Marasi service updating its own binary (`marasi update`) arrives as the service's `update.available`, `.progress`, `.installed` and `.failed` events, not as these Wails events. `stores/serviceUpdateStore.js` keeps them apart, and Settings → Updates shows them in its Marasi CLI part (see `marasi-service.md`, Events).
+
+The updater uses its own HTTP client (`updateHTTPClient`), which honours the system proxy but never sends through the local instance's proxy listener (`isMarasiListener` reads it from `service status` through `localProxyListener`).
 
 ## Frontend
 
-`frontend/src/stores/updateStore.js` calls the bindings and holds `updateState`. `frontend/src/lib/updates.js` holds the logic and the text, and `UpdateModal.svelte` draws the panel. `+layout.svelte` subscribes to the four events by name. Remove each one in the same cleanup. The menu action is `global.check-for-updates` in the keybinding catalog (see `keybindings-and-menus.md`). The Settings page has an `updates` section.
+`frontend/src/stores/updateStore.js` calls the bindings and holds `updateState`. `frontend/src/lib/updates.js` holds the logic and the text, and `UpdateModal.svelte` draws the panel. `+layout.svelte` subscribes to the four events by name. Remove each one in the same cleanup. The menu action is `global.check-for-updates` in the keybinding catalog (see `keybindings-and-menus.md`). The Settings page has an `updates` section: its Marasi App part is this updater, its Marasi CLI part is `CLISettings.svelte` (`marasi-service.md`).
 
 ## Strings that must match
 

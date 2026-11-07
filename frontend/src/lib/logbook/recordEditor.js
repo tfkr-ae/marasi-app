@@ -2,12 +2,20 @@
 // "LogbookRecord") on an edit session in the Logbook store.
 import { get } from "svelte/store";
 import { logbookStore } from "../../stores/logbookStore.js";
-import { findingStore } from "../../stores/findingStore.js";
-import { testCaseStore } from "../../stores/testCaseStore.js";
 
 export const RECORD_MODAL = "LogbookRecord";
 
 const show = (modalStore) => modalStore.trigger({ type: "component", component: RECORD_MODAL });
+
+/**
+ * Opens the modal on a session the store started by itself: an inline
+ * fix's input whose record was deleted elsewhere. Does nothing while a
+ * modal is open or without such a session.
+ */
+export function showMovedSession(modalStore) {
+  if (get(modalStore).length || get(logbookStore).session?.remote !== "deleted") return;
+  show(modalStore);
+}
 
 /**
  * Opens a new "finding" or "testCase", pre-filled with `requestIds` and,
@@ -27,17 +35,8 @@ export function newRecord(modalStore, kind, preset = {}) {
  */
 export async function editRecord(modalStore, kind, id) {
   if (get(modalStore).length) return;
-  await logbookStore.populate();
+  await logbookStore.reload(kind, id).catch((err) => console.error("Rereading the record failed:", err));
   if (get(modalStore).length) return;
   logbookStore.edit(kind, id);
   if (get(logbookStore).session) show(modalStore);
-}
-
-/**
- * Keeps the older finding and test case stores, which the Ledger and the
- * Dashboard still read, in step after a save.
- */
-export function refreshOtherLists() {
-  findingStore.populate();
-  testCaseStore.populate();
 }

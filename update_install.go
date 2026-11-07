@@ -630,13 +630,6 @@ type leftoverRemover interface {
 	removeLeftovers(location string) error
 }
 
-// Removing a leftover is retried for a while: right after "Restart now" the
-// previous build may still be exiting and hold its file open.
-const (
-	leftoverAttempts   = 10
-	leftoverRetryDelay = time.Second
-)
-
 // removeUpdateLeftovers deletes what the last install left beside the
 // install location. startup runs it in the background on every launch.
 func (a *App) removeUpdateLeftovers() {
@@ -644,14 +637,8 @@ func (a *App) removeUpdateLeftovers() {
 	if !ok || a.installLocation == "" {
 		return
 	}
-	var err error
-	for attempt := 1; attempt <= leftoverAttempts; attempt++ {
-		if err = remover.removeLeftovers(a.installLocation); err == nil {
-			return
-		}
-		if attempt < leftoverAttempts {
-			time.Sleep(leftoverRetryDelay)
-		}
+	err := retryRemoval(func() error { return remover.removeLeftovers(a.installLocation) }, time.Sleep)
+	if err != nil {
+		log.Printf("removing the previous version left by an update: %v", err)
 	}
-	log.Printf("removing the previous version left by an update: %v", err)
 }

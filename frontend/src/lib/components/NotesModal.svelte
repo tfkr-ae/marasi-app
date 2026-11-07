@@ -1,6 +1,5 @@
 <script>
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
-    import { UpdateNote } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { onDestroy, onMount } from "svelte";
     import { ledgerStore } from "../../stores/ledgerStore";
     import { X } from "lucide-svelte";
@@ -17,12 +16,11 @@
     const cForm = "space-y-3";
 
     function saveNote() {
-        UpdateNote($modalStore[0].requestID.toString(), content)
+        // Saves through the service and marks whether the pair has a note.
+        ledgerStore
+            .saveNote($modalStore[0].requestID.toString(), content)
             .then(() => {
                 isSaved = true;
-                ledgerStore.patchMetadata(requestId, {
-                    has_note: content.length > 0 ? 1 : 0,
-                });
                 modalStore.close();
             })
             .catch((noteError) => {

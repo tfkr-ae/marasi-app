@@ -11,7 +11,6 @@
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import { toastError } from "../toasts.js";
-	import { refreshOtherLists } from "./recordEditor.js";
 	import RecordForm from "./RecordForm.svelte";
 	import RecordEvidence from "./RecordEvidence.svelte";
 
@@ -60,7 +59,6 @@
 			// Done says more than saved, as the inline fix's toast does.
 			const message = result.done ? `${Noun} done` : result.created ? `${Noun} created` : `${Noun} saved`;
 			toastStore.trigger({ message, background: "variant-filled-success" });
-			refreshOtherLists();
 		} else if (result.reason === "title") {
 			logbookStore.keepEditing();
 			toastStore.trigger({ message: "Add a title first", background: "variant-filled-warning" });
@@ -158,6 +156,10 @@
 			<div class="min-w-0 flex-1 truncate text-2xs" data-unsaved-list>
 				{#if session.error}
 					<span class="text-error-500" title={String(session.error)}>Not saved: {String(session.error)}</span>
+				{:else if session.remote === "deleted"}
+					<span class="text-warning-800 dark:text-warning-500" data-remote-notice>Deleted elsewhere. Save creates it again.</span>
+				{:else if session.remote === "changed"}
+					<span class="text-warning-800 dark:text-warning-500" data-remote-notice title={changes.join(", ")}>Changed elsewhere. Save keeps yours: {changes.join(", ")}</span>
 				{:else if dirty}
 					<span class="text-warning-800 dark:text-warning-500">●</span>
 					<span class="opacity-80" title={changes.join(", ")}>Unsaved: {changes.join(", ")}</span>

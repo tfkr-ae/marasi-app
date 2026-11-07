@@ -1,8 +1,6 @@
 <script>
-	import {
-		StartBrowser,
-		GetChromeProfiles,
-	} from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { GetChromeProfiles } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { startChrome as startChromeOn } from "../lib/chrome.js";
 	import { ChromeIcon } from "svelte-feather-icons";
 	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";
@@ -13,7 +11,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	import { ChevronDown, Download, FolderOpen } from "lucide-svelte";
-	import { listener } from "../stores";
+	import { homeStore } from "../stores/homeStore";
 	import {
 		chromeError,
 		downloadCertificate,
@@ -22,6 +20,10 @@
 	} from "../lib/globalActions.js";
 	import { neutralVariant } from "../lib/launchpad/format.js";
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
+	import { followChromeConfig } from "../lib/chromeConfigEvents.js";
+	import { service } from "../lib/service/index.js";
+	import { connectionStore } from "../stores/connectionStore.js";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -31,15 +33,23 @@
 		placement: "bottom-end",
 	};
 
-	onMount(() => {
+	const readChromeProfiles = () =>
 		GetChromeProfiles()
 			.then((profiles) => {
 				chromeProfiles = profiles;
 			})
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
+
+	onMount(() => {
+		readChromeProfiles();
+		return followChromeConfig(service.on, {
+			connectionKind: () => get(connectionStore).connection.kind,
+			onPaths: () => {},
+			onProfiles: readChromeProfiles,
+		});
 	});
 	const startChrome = (profile) =>
-		StartBrowser(profile).catch(chromeError(toastStore, "Error starting Chrome"));
+		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));
 </script>
 
 <div class="content">
@@ -56,14 +66,16 @@
 							if (!$modalStore[0]) modalStore.trigger(listenerModal(toastStore));
 						}}
 					>
-						<span
-							>{$listener.address +
-								":" +
-								$listener.port}</span
+						<span data-testid="home-listener"
+							>{$homeStore.listener.status
+								? $homeStore.listener.address +
+									":" +
+									$homeStore.listener.port
+								: "Listener off"}</span
 						>
 						<span
 							class={"flex w-3 h-3 me-3 rounded-full " +
-								($listener.status
+								($homeStore.listener.status
 									? "bg-success-500"
 									: "bg-primary-500")}
 						></span>

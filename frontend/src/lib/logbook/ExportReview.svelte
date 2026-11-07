@@ -1,18 +1,20 @@
 <script>
 	// The export modal. On the left, the template (Restore default asks once
 	// inline), the report details and the options as switch rows; on the
-	// right, the review of what the report holds. Export calls ExportReport
-	// with reportMetadata, whose custom_properties.include_test_cases
-	// marasi-app's report payload honours. Clicking a gap closes the modal
-	// and opens that record at the missing item.
+	// right, the review of what the report holds. Export renders the report
+	// on the service with reportMetadata (custom_properties.include_test_cases
+	// decides whether test cases are listed) and saves it through the native
+	// Save dialog. Clicking a gap closes the modal and opens that record at
+	// the missing item.
 	import { getModalStore, getToastStore, modeCurrent, SlideToggle } from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { FileText, RotateCcw, SquareArrowRight, X } from "lucide-svelte";
-	import { ExportReport, ListTemplates, RestoreDefaultReportTemplate } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
 	import { reportMetadata } from "../../stores";
 	import { logbookStore } from "../../stores/logbookStore";
+	import { keptTemplate, reportTemplateEvents } from "../../stores/logbookEvents.js";
+	import { service } from "../service/index.js";
 	import ReportReview from "./ReportReview.svelte";
 
 	export let parent = undefined;
@@ -33,9 +35,21 @@
 	$: includeTestCases = $reportMetadata.custom_properties?.include_test_cases !== false;
 	$: truncating = $reportMetadata.truncate_length > 0;
 
+	// Templates added, removed or restored anywhere (the CLI, another app)
+	// show while the review is open.
+	onMount(() => {
+		const stops = Object.entries(
+			reportTemplateEvents((names) => {
+				templates = names;
+				template = keptTemplate(names, template);
+			}),
+		).map(([name, handler]) => service.on(name, handler));
+		return () => stops.forEach((stop) => stop());
+	});
+
 	onMount(async () => {
 		try {
-			templates = (await ListTemplates()) ?? [];
+			templates = (await logbookStore.listTemplates()) ?? [];
 			template = templates[0];
 		} catch (error) {
 			toastError(toastStore, "Failed to load report templates", error);
@@ -51,7 +65,7 @@
 		confirmRestore = false;
 		restoring = true;
 		try {
-			await RestoreDefaultReportTemplate();
+			await logbookStore.restoreDefaultTemplate();
 			toastStore.trigger({ message: "Default template restored", background: "variant-filled-success" });
 		} catch (error) {
 			toastError(toastStore, "Failed to restore the default template", error);
@@ -74,15 +88,13 @@
 	async function exportReport() {
 		if (exporting || !template) return;
 		exporting = true;
-		const payload = {
+		const metadata = {
 			...$reportMetadata,
 			custom_properties: { ...$reportMetadata.custom_properties, include_test_cases: includeTestCases },
-			start: `${$reportMetadata.start}T00:00:00Z`,
-			end: `${$reportMetadata.end}T00:00:00Z`,
 			created_at: new Date().toISOString(),
 		};
 		try {
-			if (await ExportReport(template, payload)) {
+			if (await logbookStore.exportReport(template, metadata)) {
 				toastStore.trigger({ message: "Report saved", background: "variant-filled-success" });
 				modalStore.close();
 			}
