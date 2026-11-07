@@ -62,9 +62,32 @@ function fakeService() {
   };
 }
 
+// The latest /events stream, whose `emit(name, data)` delivers an event.
+function fakeStreams() {
+  const streams = [];
+  class EventSource {
+    constructor(url) {
+      this.url = String(url);
+      this.listeners = new Map();
+      streams.push(this);
+    }
+    addEventListener(name, listener) {
+      if (!this.listeners.has(name)) this.listeners.set(name, []);
+      this.listeners.get(name).push(listener);
+    }
+    close() {}
+  }
+  const emit = (name, data) => {
+    const stream = streams.at(-1);
+    for (const listener of stream.listeners.get(name) ?? []) listener({ data: JSON.stringify(data), lastEventId: "" });
+  };
+  return { EventSource, emit, streams };
+}
+
 function setup({ confirmOpen = async () => true, password = async (id) => `pw-${id}` } = {}) {
   const service = fakeService();
-  const client = createServiceClient({ fetch: service.fetch, EventSource: class { addEventListener() {} close() {} } });
+  const streams = fakeStreams();
+  const client = createServiceClient({ fetch: service.fetch, EventSource: streams.EventSource });
   const loads = [];
   const projectStore = createProjectStore(
     createProjectApi(client, {
@@ -73,20 +96,24 @@ function setup({ confirmOpen = async () => true, password = async (id) => `pw-${
     }),
     { setTimeout: () => 0, clearTimeout: () => {} },
   );
+  const follows = [];
   const connectionStore = createConnectionStore(
     {
       ...connectionServiceApi(client, projectStore),
       listConnections: async () => ({ connections: [alpha, beta], activeId: "alpha" }),
       connectionPassword: async (id) => password(id),
       confirmSwitch: async () => true,
-      confirmFollow: async () => true,
+      confirmFollow: async (project) => (follows.push(project), true),
       setActive: async () => {},
       clearStores: () => {},
       resync: async () => {},
     },
     { setTimeout: () => 1, clearTimeout: () => {} },
   );
-  return { service, client, projectStore, connectionStore, loads };
+  // As +layout.svelte wires it: another client's opened project goes to
+  // the connection store, which asks, then loads it.
+  projectStore.follow({ opened: (path) => connectionStore.followSwitch(path) });
+  return { service, client, projectStore, connectionStore, loads, follows, emit: streams.emit };
 }
 
 // Connects to Alpha with /a-current.marasi loaded.
@@ -215,4 +242,59 @@ it("a failed open's screen closes on a switch, and its Try again opens nothing o
   await settle();
   assert.equal(get(fake.projectStore).loaded.path, "/b.marasi");
   assert.deepEqual(opensOn(fake, "b"), []);
+});
+
+it("an open abandoned by a switch never keeps B from following another client's switch", async () => {
+  const fake = setup();
+  await onAlpha(fake);
+
+  const opening = fake.projectStore.open({ path: "/a-next.marasi" });
+  await settle();
+  fake.service.reply("GET", "http://a:9000/checkpoint", { items: [] });
+  await settle();
+  assert.ok(fake.service.has("POST", "http://a:9000/project/open"), "A's open waits for its answer");
+
+  fake.connectionStore.switchTo("beta");
+  await settle();
+  fake.service.reply("GET", "http://b:9000/service/status", statusOf("/b.marasi"));
+  await settle();
+  assert.equal(get(fake.projectStore).loaded.path, "/b.marasi");
+
+  fake.emit("project.opened", { project: "/b-next.marasi" });
+  await settle();
+  fake.service.reply("GET", "http://b:9000/service/status", statusOf("/b-next.marasi"));
+  await settle();
+  assert.deepEqual(fake.follows, ["/b-next.marasi"], "the unsaved-work prompt asks about B's switch");
+  assert.equal(get(fake.projectStore).loaded.path, "/b-next.marasi");
+  assert.equal(fake.loads.at(-1).path, "/b-next.marasi");
+
+  const loads = fake.loads.length;
+  fake.service.reply("POST", "http://a:9000/project/open", { project: "/a-next.marasi" });
+  assert.deepEqual(await opening, { status: "superseded" });
+  await settle();
+  assert.equal(get(fake.projectStore).loaded.path, "/b-next.marasi");
+  assert.equal(fake.loads.length, loads);
+
+  fake.emit("project.opened", { project: "/b-later.marasi" });
+  await settle();
+  assert.ok(fake.service.has("GET", "http://b:9000/service/status"), "B still follows after A's open ends");
+});
+
+it("the app's own open in progress isn't followed as another client's", async () => {
+  const fake = setup();
+  await onAlpha(fake);
+
+  const opening = fake.projectStore.open({ path: "/a-next.marasi" });
+  await settle();
+  fake.service.reply("GET", "http://a:9000/checkpoint", { items: [] });
+  await settle();
+  fake.emit("project.opened", { project: "/a-next.marasi" });
+  await settle();
+  assert.equal(fake.service.has("GET", "http://a:9000/service/status"), false);
+
+  fake.service.reply("POST", "http://a:9000/project/open", { project: "/a-next.marasi" });
+  assert.equal((await opening).status, "opened");
+  await settle();
+  assert.deepEqual(fake.follows, []);
+  assert.equal(get(fake.projectStore).loaded.path, "/a-next.marasi");
 });

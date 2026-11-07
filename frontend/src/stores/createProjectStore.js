@@ -66,9 +66,9 @@ export function createProjectStore(api, timers = globalThis) {
   const updateOpening = (change) =>
     store.update((state) => (state.opening ? { ...state, opening: change(state.opening) } : state));
   let lastTarget = null;
-  // An open or reload of the app's own is under way: its events aren't
-  // another client's.
-  let own = 0;
+  // The live() of the run whose open or reload is under way, or null: its
+  // events aren't another client's. A superseded run's events are.
+  let own = null;
   // Another client's open the screen follows: {path, timer, due (the
   // delay passed), held (the service waits for Checkpoint items)}.
   let followed = null;
@@ -140,7 +140,7 @@ export function createProjectStore(api, timers = globalThis) {
   // Returns the function that stops, which closes the screen when the run
   // was superseded and the screen is still its own.
   function begin(name, path, run, live) {
-    own++;
+    own = live;
     endFollowed();
     const current = get(store).loaded;
     screenOf = run;
@@ -153,7 +153,7 @@ export function createProjectStore(api, timers = globalThis) {
       (event, data) => live() && updateOpening((state) => withProjectEvent(state, event, data)),
     );
     return () => {
-      own--;
+      if (own === live) own = null;
       stopEvents();
       timers.clearTimeout(timer);
       if (!live() && screenOf === run) {
@@ -183,7 +183,7 @@ export function createProjectStore(api, timers = globalThis) {
     return api.onProjectEvent((event, data) => {
       const path = typeof data?.project === "string" ? data.project : null;
       const { loaded, opening } = get(store);
-      if (own || !path || !loaded) return;
+      if (own?.() || !path || !loaded) return;
       // A late event of the app's own failed open, whose screen still
       // shows. A failed open never sends project.opened.
       const ours = opening && (opening.path ? opening.path === path : opening.name === projectName(path));
