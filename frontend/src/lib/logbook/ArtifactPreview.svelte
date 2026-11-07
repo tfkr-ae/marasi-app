@@ -2,7 +2,7 @@
 	// One artifact, previewed by its content type: an image to fit or at
 	// actual size, video in a player, a PDF in a frame, text-like files as
 	// text (JSON pretty-printed), and anything else as a Download card.
-	// Bytes come from GetArtifact, saving from DownloadArtifact.
+	// Bytes come from the store's readArtifact, saving from downloadArtifact.
 	import { onDestroy } from "svelte";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Download, FileIcon, Maximize2, Minimize2 } from "lucide-svelte";

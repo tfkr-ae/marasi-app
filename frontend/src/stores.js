@@ -5,10 +5,8 @@ import {
   GetKeybindings,
   GetExtensionCode,
   GetWaypoints,
-  GetUserName,
+  OSUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-import { testCaseStore } from "./stores/testCaseStore";
-import { findingStore } from "./stores/findingStore";
 import { logbookStore } from "./stores/logbookStore";
 import { webSocketStore } from "./stores/webSocketStore";
 // Registers the Armory with projectData before the first load.
@@ -118,7 +116,7 @@ export async function resetProject(name) {
     type: "Assessment Type",
     is_draft: true,
     scope: "Assessment Scope",
-    assessor: await GetUserName(),
+    assessor: await OSUserName(),
     start: new Date(
       new Date().setDate(new Date().getDate() - 14),
     ).toLocaleDateString("en-CA"),
@@ -136,9 +134,6 @@ export async function resetProject(name) {
   ledgerStore.clear();
   sitemapStore.clear();
   recentTraffic.clear();
-  testCaseStore.clear();
-  findingStore.clear();
-  logbookStore.clear();
   webSocketStore.clear();
   launchpadStore.clear();
   checkpointStore.clear();
