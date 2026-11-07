@@ -15,13 +15,17 @@
 		UseCLIPath,
 	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
+	import { on } from "../runtime.js";
 	import { cliResultText, cliSourceLabel } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
+	import CLIProgress from "./CLIProgress.svelte";
 
 	const toastStore = getToastStore();
 	let cli = null;
 	let channel = null;
 	let checking = false;
+	// The check found a newer CLI and is installing it (its first progress).
+	let installingUpdate = false;
 	let changing = false;
 
 	$: primary = primaryButton($modeCurrent);
@@ -48,13 +52,22 @@
 
 	function check() {
 		checking = true;
+		installingUpdate = false;
+		const stop = on("cli-install-progress", () => {
+			installingUpdate = true;
+			stop();
+		});
 		CheckForCLIUpdate()
 			.then((result) => {
 				cli = result.cli;
 				toast(cliResultText(result));
 			})
 			.catch(failure)
-			.finally(() => (checking = false));
+			.finally(() => {
+				stop();
+				checking = false;
+				installingUpdate = false;
+			});
 	}
 
 	function change() {
@@ -80,7 +93,7 @@
 		<p>Location</p>
 		<div class="{control} items-center justify-end gap-2">
 			<p class="min-w-0 truncate font-mono text-xs" title={cli.path} data-testid="cli-location">{cli.path}</p>
-			<button type="button" class={neutral} disabled={changing} on:click={change}>Change</button>
+			<button type="button" class={neutral} disabled={changing || checking} on:click={change}>Change</button>
 		</div>
 	</div>
 	<div class={row}>
@@ -88,7 +101,7 @@
 		<div class="{control} items-center justify-end gap-2">
 			<p class="text-sm" data-testid="cli-source">{cliSourceLabel(cli.source)}</p>
 			{#if cli.source === "custom"}
-				<button type="button" class={neutral} on:click={reset}>Use PATH</button>
+				<button type="button" class={neutral} disabled={checking} on:click={reset}>Use PATH</button>
 			{/if}
 		</div>
 	</div>
@@ -104,6 +117,9 @@
 			>
 		</div>
 	</div>
+	{#if checking && installingUpdate}
+		<div class="py-3"><CLIProgress /></div>
+	{/if}
 {/if}
 {#if channel}
 	<div class={row}>
@@ -120,6 +136,7 @@
 					class="flex-1 px-3 py-1 {channel.setting === value
 						? primary
 						: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+					disabled={checking}
 					on:click={() => chooseChannel(value)}>{label}</button
 				>
 			{/each}
