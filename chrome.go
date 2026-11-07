@@ -92,7 +92,7 @@ func (a *App) StartBrowser(start ChromeStart) error {
 		Paths:     paths,
 	}
 	if err := a.launchChrome(launch); err != nil {
-		return fmt.Errorf("starting Chrome: %w", err)
+		return codedError("starting Chrome", codeChromeLaunchFailed, nil, err)
 	}
 	return nil
 }

@@ -88,7 +88,10 @@ test("a refusal's text says why Chrome didn't start", () => {
     chromeErrorText("starting Chrome: listener_loopback: the remote proxy listener binds loopback only", fallback),
     "Can't reach the proxy: it listens on the service's loopback only",
   );
-  const config = "starting Chrome: invalid configuration: websocket_max_message_size";
-  assert.equal(chromeErrorText(config, fallback), config);
+  assert.equal(
+    chromeErrorText(new Error("starting Chrome: chrome_launch_failed (): finding Chrome executable: not found"), fallback),
+    "finding Chrome executable: not found",
+  );
+  assert.equal(chromeErrorText("starting Chrome: invalid configuration: x", fallback), fallback);
   assert.equal(chromeErrorText(new Error("disk full"), fallback), fallback);
 });

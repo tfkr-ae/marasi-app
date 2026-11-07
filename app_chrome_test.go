@@ -215,6 +215,16 @@ func TestAppChrome(t *testing.T) {
 			t.Fatalf("wanted: no launch\ngot: %+v", *launches)
 		}
 	})
+	t.Run("should code a launch the launcher couldn't start, keeping its cause", func(t *testing.T) {
+		app := newTestApp(t)
+		app.launchChrome = func(ChromeLaunch) error {
+			return errors.New("finding Chrome executable: not found")
+		}
+		err := app.StartBrowser(ChromeStart{ConnectionKind: "local", ProxyListener: "127.0.0.1:8080", SPKIHash: "h"})
+		if err == nil || !strings.Contains(err.Error(), "chrome_launch_failed (): finding Chrome executable: not found") {
+			t.Fatalf("wanted: the launcher's error with the chrome_launch_failed code\ngot: %v", err)
+		}
+	})
 	t.Run("should refuse to start Chrome without the certificate's SPKI hash", func(t *testing.T) {
 		app := newTestApp(t)
 		recordChromeLaunches(app)

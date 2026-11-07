@@ -20,3 +20,12 @@ export function codeIDs(error, code) {
     .map((id) => id.trim())
     .filter(Boolean);
 }
+
+/**
+ * The cause after `code` in `error`'s text ("<what>: <code>[ (<ids>)]:
+ * <cause>"), or null when the error does not carry `code`.
+ */
+export function codeCause(error, code) {
+  const match = new RegExp(`\\b${escape(code)}(?: \\([^)]*\\))?: ([\\s\\S]*)$`).exec(String(error ?? ""));
+  return match ? match[1] : null;
+}
