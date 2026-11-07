@@ -11,9 +11,23 @@ import (
 	"time"
 
 	"github.com/tfkr-ae/marasi/chrome"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestAppChromeSettings(t *testing.T) {
+	t.Run("should read the paths and profiles Marasi wrote to marasi_config.yaml", func(t *testing.T) {
+		app := newTestApp(t)
+		writeMarasiConfig(t, app, "chrome_dirs:\n    - os: darwin\n      path: /Applications/Chrome.app\nchrome_profiles:\n    - work\n    - client\n")
+		paths, err := app.GetChromePaths()
+		if err != nil || !reflect.DeepEqual(paths, []chrome.PathConfig{{OS: "darwin", Path: "/Applications/Chrome.app"}}) {
+			t.Fatalf("wanted: the darwin path\ngot: %v, %v", paths, err)
+		}
+		profiles, err := app.GetChromeProfiles()
+		if err != nil || !reflect.DeepEqual(profiles, []string{"work", "client"}) {
+			t.Fatalf("wanted: [work client]\ngot: %v, %v", profiles, err)
+		}
+	})
+
 	t.Run("should start with no paths and no profiles", func(t *testing.T) {
 		app := newTestApp(t)
 		paths, err := app.GetChromePaths()
@@ -26,8 +40,9 @@ func TestAppChromeSettings(t *testing.T) {
 		}
 	})
 
-	t.Run("should keep paths and profiles in the app config across a reload", func(t *testing.T) {
+	t.Run("should write paths and profiles to marasi_config.yaml and keep its other keys", func(t *testing.T) {
 		app := newTestApp(t)
+		writeMarasiConfig(t, app, "# machine config\nupdates:\n    channel: nightly\nupstream_proxies:\n    - name: corp\n      url: http://proxy:3128\nchrome_profiles:\n    - work\n")
 		first := chrome.PathConfig{OS: "darwin", Path: "/Applications/Chrome.app"}
 		second := chrome.PathConfig{OS: "linux", Path: "/usr/bin/google-chrome"}
 		app.AddChromePath(first.Path, first.OS)
@@ -35,27 +50,39 @@ func TestAppChromeSettings(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(paths, []chrome.PathConfig{first, second}) {
 			t.Fatalf("wanted: %v\ngot: %v, %v", []chrome.PathConfig{first, second}, paths, err)
 		}
-		app.AddChromeProfile("work")
 		profiles, err := app.AddChromeProfile(" client ")
 		if err != nil || !reflect.DeepEqual(profiles, []string{"work", "client"}) {
 			t.Fatalf("wanted: [work client]\ngot: %v, %v", profiles, err)
 		}
 
-		reloaded := newApp(app.Config.ConfigDir)
-		if reloaded.Config, err = LoadConfig(app.Config.ConfigDir); err != nil {
-			t.Fatalf("reloading: %v", err)
+		var written struct {
+			Updates         map[string]string   `yaml:"updates"`
+			UpstreamProxies []map[string]string `yaml:"upstream_proxies"`
+			ChromeDirs      []map[string]string `yaml:"chrome_dirs"`
+			ChromeProfiles  []string            `yaml:"chrome_profiles"`
 		}
-		if got, _ := reloaded.GetChromePaths(); !reflect.DeepEqual(got, []chrome.PathConfig{first, second}) {
-			t.Fatalf("wanted: %v after a reload\ngot: %v", []chrome.PathConfig{first, second}, got)
+		text := marasiConfigText(t, app)
+		if err := yaml.Unmarshal([]byte(text), &written); err != nil {
+			t.Fatalf("parsing marasi_config.yaml: %v\n%s", err, text)
 		}
-		if got, _ := reloaded.GetChromeProfiles(); !reflect.DeepEqual(got, []string{"work", "client"}) {
-			t.Fatalf("wanted: [work client] after a reload\ngot: %v", got)
+		want := []map[string]string{{"os": "darwin", "path": "/Applications/Chrome.app"}, {"os": "linux", "path": "/usr/bin/google-chrome"}}
+		if !reflect.DeepEqual(written.ChromeDirs, want) || !reflect.DeepEqual(written.ChromeProfiles, []string{"work", "client"}) {
+			t.Fatalf("wanted: chrome_dirs %v and chrome_profiles [work client]\ngot:\n%s", want, text)
 		}
-		text := appConfigText(t, app.Config.ConfigDir)
-		for _, want := range []string{"chrome_paths:", "/usr/bin/google-chrome", "chrome_profiles:", "client"} {
-			if !strings.Contains(text, want) {
-				t.Fatalf("wanted: %q in marasi_appconfig.yaml\ngot:\n%s", want, text)
-			}
+		if written.Updates["channel"] != "nightly" || len(written.UpstreamProxies) != 1 || written.UpstreamProxies[0]["url"] != "http://proxy:3128" || !strings.Contains(text, "# machine config") {
+			t.Fatalf("wanted: the other keys kept\ngot:\n%s", text)
+		}
+		if appText := appConfigText(t, app.Config.ConfigDir); strings.Contains(appText, "chrome_paths") || strings.Contains(appText, "chrome_profiles") {
+			t.Fatalf("wanted: no Chrome settings in marasi_appconfig.yaml\ngot:\n%s", appText)
+		}
+	})
+
+	t.Run("should use the CLI's config directory override as Marasi's config directory", func(t *testing.T) {
+		override := t.TempDir()
+		t.Setenv(cliConfigDirEnv, override)
+		app := newApp(t.TempDir())
+		if app.marasiConfigDir != override {
+			t.Fatalf("wanted: %s\ngot: %s", override, app.marasiConfigDir)
 		}
 	})
 
@@ -72,7 +99,7 @@ func TestAppChromeSettings(t *testing.T) {
 	t.Run("should remove a profile and its Chrome user data", func(t *testing.T) {
 		app := newTestApp(t)
 		app.AddChromeProfile("work")
-		userData := filepath.Join(app.chromeConfigDir, "chrome_profiles", "work")
+		userData := filepath.Join(app.marasiConfigDir, "chrome_profiles", "work")
 		if err := os.MkdirAll(filepath.Join(userData, "Default"), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -89,7 +116,7 @@ func TestAppChromeSettings(t *testing.T) {
 		app := newTestApp(t)
 		app.AddChromePath("/a", "darwin")
 		app.AddChromeProfile("work")
-		before := appConfigText(t, app.Config.ConfigDir)
+		before := marasiConfigText(t, app)
 		refusals := map[string]func() error{
 			"a repeated path":     func() error { _, err := app.AddChromePath("/a", "darwin"); return err },
 			"an empty path":       func() error { _, err := app.AddChromePath("", "darwin"); return err },
@@ -107,8 +134,8 @@ func TestAppChromeSettings(t *testing.T) {
 				t.Errorf("%s: wanted: an error\ngot: nil", name)
 			}
 		}
-		if after := appConfigText(t, app.Config.ConfigDir); after != before {
-			t.Fatalf("wanted: the app config unchanged\ngot:\n%s", after)
+		if after := marasiConfigText(t, app); after != before {
+			t.Fatalf("wanted: marasi_config.yaml unchanged\ngot:\n%s", after)
 		}
 	})
 }
@@ -121,7 +148,7 @@ func TestAppChrome(t *testing.T) {
 		if err != nil {
 			t.Fatalf("starting Chrome: %v", err)
 		}
-		want := ChromeLaunch{Address: "127.0.0.1", Port: "51390", SPKIHash: "spki-from-service", ConfigDir: app.chromeConfigDir, Profile: "default-profile", Paths: []chrome.PathConfig{}}
+		want := ChromeLaunch{Address: "127.0.0.1", Port: "51390", SPKIHash: "spki-from-service", ConfigDir: app.marasiConfigDir, Profile: "default-profile", Paths: []chrome.PathConfig{}}
 		if len(*launches) != 1 || !reflect.DeepEqual((*launches)[0], want) {
 			t.Fatalf("wanted: one launch %+v\ngot: %+v", want, *launches)
 		}
@@ -296,4 +323,23 @@ func readFakeChromeArgs(t *testing.T, argsPath string) string {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// writeMarasiConfig writes text as marasi_config.yaml in app's Marasi
+// config directory.
+func writeMarasiConfig(t *testing.T, app *App, text string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(app.marasiConfigDir, "marasi_config.yaml"), []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// marasiConfigText reads marasi_config.yaml in app's Marasi config directory.
+func marasiConfigText(t *testing.T, app *App) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(app.marasiConfigDir, "marasi_config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

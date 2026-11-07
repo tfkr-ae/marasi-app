@@ -27,11 +27,12 @@ type App struct {
 	// ctx is the context Wails starts the app with, cancelled at shutdown.
 	ctx       context.Context
 	emitEvent emitFunc
-	// launchChrome starts Chrome with the paths and profiles in the app
-	// config (chrome.go). Tests replace it. chromeConfigDir holds the Chrome
-	// profiles' user-data directories.
+	// launchChrome starts Chrome with the paths and profiles in Marasi's
+	// config (chrome.go). Tests replace it. marasiConfigDir is Marasi's config
+	// directory: marasi_config.yaml with those paths and profiles
+	// (chrome_config.go), and the profiles' user-data directories.
 	launchChrome    func(ChromeLaunch) error
-	chromeConfigDir string
+	marasiConfigDir string
 	Config          *Config
 	// messageDialog shows a native message dialog and returns the pressed
 	// button. Tests replace it.
@@ -157,7 +158,12 @@ func newApp(configDir string) *App {
 		return app.installer.relaunch(location)
 	}
 	app.launchChrome = launchWithMarasi
-	app.chromeConfigDir = configDir
+	// Marasi's config directory is the local instance's: the CLI's override,
+	// else the app config directory, which is Marasi's default.
+	app.marasiConfigDir = configDir
+	if app.cliConfigDir != "" {
+		app.marasiConfigDir = app.cliConfigDir
+	}
 	return app
 }
 
