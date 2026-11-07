@@ -9,7 +9,7 @@ import { createConnectionStore } from "./createConnectionStore.js";
 import { createServiceClient } from "../lib/service/client.js";
 
 const local = { id: "local", kind: "local", name: "Local", url: "" };
-const lab = { id: "remote-1", kind: "remote", name: "Lab", url: "http://100.109.251.70:8888", noPassword: false };
+const lab = { id: "remote-1", kind: "remote", name: "Lab", url: "http://192.0.2.10:8888", noPassword: false };
 
 function storeOver(fetch) {
   const client = createServiceClient({ fetch, EventSource: class {} });
@@ -34,7 +34,7 @@ test("a remote the network refuses fails with the address it couldn't reach", as
   await settle();
   const state = get(store);
   assert.equal(state.phase, "failed");
-  assert.equal(state.error, "Couldn't reach 100.109.251.70:8888");
+  assert.equal(state.error, "Couldn't reach 192.0.2.10:8888");
 });
 
 test("a remote that never answers fails after 10 s instead of connecting forever", async (t) => {
@@ -52,5 +52,5 @@ test("a remote that never answers fails after 10 s instead of connecting forever
   await settle();
   const state = get(store);
   assert.equal(state.phase, "failed");
-  assert.equal(state.error, "No answer from 100.109.251.70:8888");
+  assert.equal(state.error, "No answer from 192.0.2.10:8888");
 });

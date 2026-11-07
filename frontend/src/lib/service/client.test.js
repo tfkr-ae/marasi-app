@@ -389,10 +389,10 @@ test("a service the network can't reach is an unreachable error naming its addre
     },
     EventSource: fakeEventSource().EventSource,
   });
-  client.use({ url: "http://100.109.251.70:8888", password: "pw" });
+  client.use({ url: "http://192.0.2.10:8888", password: "pw" });
   await assert.rejects(client.get("/service/status"), (err) => {
     assert.equal(err.code, "unreachable");
-    assert.equal(err.message, "Couldn't reach 100.109.251.70:8888");
+    assert.equal(err.message, "Couldn't reach 192.0.2.10:8888");
     return true;
   });
 });
