@@ -503,15 +503,65 @@ const TARGET_KINDS = { finding: "finding", test_case: "testCase" };
 
 export function createLogbookStore(api, timers = globalThis) {
   const store = writable(initialState());
-  // Each read of the lists gets a number; an older reply is ignored.
-  let readSeq = 0;
 
-  /** Reads the project's findings and test cases. */
+  // Reads race the changes applied here, so one clock orders both. Each
+  // local change to a record (an event, a bulk delete, this app's own
+  // write) stamps it in `changed`; each read takes a tick as it starts
+  // (`lastRead` per record, `listRead` for the lists). A read's snapshot of
+  // a record applies only when nothing changed the record and no newer read
+  // of it started since. `clear` starts a new `epoch`, dropping every read.
+  let clock = 0;
+  let epoch = 0;
+  let listRead = 0;
+  const changed = new Map();
+  const lastRead = new Map();
+  const keyOf = (kind, id) => `${kind} ${id}`;
+  const touch = (kind, id) => changed.set(keyOf(kind, id), ++clock);
+  const changedSince = (kind, id, at) => (changed.get(keyOf(kind, id)) ?? 0) > at;
+  const newerRead = (kind, id, at) => Math.max(listRead, lastRead.get(keyOf(kind, id)) ?? 0) > at;
+
+  /**
+   * Reads the project's findings and test cases. A record changed here
+   * while the lists were on their way keeps its change and is read again.
+   */
   async function populate() {
-    const seq = ++readSeq;
+    const at = (listRead = ++clock);
+    const started = epoch;
     const [findings, testCases] = await Promise.all([api.listFindings(), api.listTestCases()]);
-    if (seq !== readSeq) return;
-    store.update((state) => refreshFix({ ...state, findings: findings ?? [], testCases: testCases ?? [] }));
+    if (started !== epoch || listRead !== at) return;
+    store.update((state) =>
+      refreshFix({
+        ...state,
+        findings: mergedRead("finding", at, findings ?? [], state.findings),
+        testCases: mergedRead("testCase", at, testCases ?? [], state.testCases),
+      }),
+    );
+  }
+
+  // The list read at `at` over the `local` one: the read's record where
+  // nothing changed it since, else the local record (or its absence, when
+  // deleted here), which is read again.
+  function mergedRead(kind, at, read, local) {
+    const fresh = (id) => !changedSince(kind, id, at) && !newerRead(kind, id, at);
+    const localOf = new Map(local.map((r) => [String(r.ID), r]));
+    const readIds = new Set(read.map((r) => String(r.ID)));
+    const next = read.flatMap((r) => (fresh(r.ID) ? [r] : localOf.has(String(r.ID)) ? [localOf.get(String(r.ID))] : []));
+    const added = local.filter((r) => !readIds.has(String(r.ID)) && !fresh(r.ID));
+    for (const r of [...next, ...added]) if (changedSince(kind, r.ID, at)) markStale(kind, r.ID);
+    return [...added, ...next];
+  }
+
+  // Reads the "finding" or "testCase" with `id` again and applies it by
+  // `apply(record)` under the clock's rule. A read a local change overtook
+  // asks again once traffic settles; one a newer read overtook is dropped.
+  async function reread(kind, id, apply) {
+    const at = ++clock;
+    const started = epoch;
+    lastRead.set(keyOf(kind, id), at);
+    const record = await (kind === "finding" ? api.getFinding(id) : api.getTestCase(id));
+    if (started !== epoch || newerRead(kind, id, at)) return;
+    if (changedSince(kind, id, at)) markStale(kind, id);
+    else apply(record);
   }
 
   /**
@@ -523,13 +573,13 @@ export function createLogbookStore(api, timers = globalThis) {
 
   /** Reads the "finding" or "testCase" with `id` again, such as before Edit. */
   async function reload(kind, id) {
-    const record = await (kind === "finding" ? api.getFinding(id) : api.getTestCase(id));
-    keep(kind, record);
+    await reread(kind, id, (record) => keep(kind, record, { read: true }));
   }
 
   // Changes one record's linked requests in its list.
   const relink = (kind, id, change) =>
     store.update((state) => {
+      touch(kind, id);
       const list = kind === "finding" ? "findings" : "testCases";
       return refreshFix({
         ...state,
@@ -567,7 +617,10 @@ export function createLogbookStore(api, timers = globalThis) {
   // Forgets the project's records and the Logbook's filters, and ignores
   // lists still on their way, before another project opens.
   function clear() {
-    readSeq++;
+    epoch++;
+    listRead = 0;
+    changed.clear();
+    lastRead.clear();
     pending = null;
     stale.clear();
     timers.clearTimeout(staleTimer);
@@ -845,9 +898,11 @@ export function createLogbookStore(api, timers = globalThis) {
   /** Dismisses the close prompt, back to the draft. */
   const keepEditing = () => patchSession({ confirming: false });
 
-  // Puts the saved record in its list, replacing the old copy.
-  const keep = (kind, record) =>
+  // Puts the saved (or, with `read`, the reread) record in its list,
+  // replacing the old copy.
+  const keep = (kind, record, { read = false } = {}) =>
     store.update((state) => {
+      if (!read) touch(kind, record.ID);
       const list = kind === "finding" ? "findings" : "testCases";
       const others = state[list].filter((r) => r.ID !== record.ID);
       const exists = others.length < state[list].length;
@@ -897,16 +952,19 @@ export function createLogbookStore(api, timers = globalThis) {
     const state = get(store);
     const before = recordsOf(state, kind).find((r) => sameID(r.ID, id));
     if (state.fix?.kind === kind && state.fix?.id === id) pending = null;
+    touch(kind, id);
     store.update((s) => removed(before ? followed(s, kind, id, before, null) : s, kind, id));
   }
 
   // Changes the record of `kind` with `id` in its list by `change(record)`,
-  // or with `create` adds `change(undefined)` when it is not listed.
-  const patchRecord = (kind, id, change, { create = false } = {}) =>
+  // or with `create` adds `change(undefined)` when it is not listed. A
+  // change stamps the record, unless it is a reread's snapshot (`read`).
+  const patchRecord = (kind, id, change, { create = false, read = false } = {}) =>
     store.update((state) => {
       const list = listOf(kind);
       const before = state[list].find((r) => sameID(r.ID, id));
       if (!before && !create) return state;
+      if (!read) touch(kind, id);
       const after = change(before);
       const next = before ? state[list].map((r) => (r === before ? after : r)) : [after, ...state[list]];
       const moved = { ...state, [list]: next };
@@ -933,13 +991,12 @@ export function createLogbookStore(api, timers = globalThis) {
 
   function readStale() {
     staleTimer = null;
-    const seq = readSeq;
     const records = [...stale.values()];
     stale.clear();
     for (const [kind, id] of records)
-      (kind === "finding" ? api.getFinding(id) : api.getTestCase(id))
-        .then((record) => seq === readSeq && patchRecord(kind, id, () => record))
-        .catch((err) => console.error(`Rereading ${kind} ${id} failed:`, err));
+      reread(kind, id, (record) => patchRecord(kind, id, () => record, { read: true })).catch((err) =>
+        console.error(`Rereading ${kind} ${id} failed:`, err),
+      );
   }
 
   /**
@@ -1021,6 +1078,7 @@ export function createLogbookStore(api, timers = globalThis) {
       deleting.delete(id);
     }
     if (get(store).fix?.kind === kind && get(store).fix?.id === id) pending = null;
+    touch(kind, id);
     store.update((state) => removed(state, kind, id));
     return { ok: true };
   }
