@@ -65,18 +65,29 @@ const artifactBody = (id, extra = {}) => ({
   ...extra,
 });
 
+// GET /finding?full=1 and GET /test-case?full=1 list each record as its
+// per-id read does; without full=1 they list summaries.
+const fullList = (records) => ({ query } = {}) =>
+  query?.full === 1 ? { items: records() } : { items: records().map(({ id, title }) => ({ id, title })) };
+
 function projectRoutes() {
-  return {
-    "GET /finding": { items: [{ id: "f1" }, { id: "f2" }] },
+  const routes = {
     "GET /finding/f1": {
       ...findingBody("f1", { writeup: "XSS in search", test_case_id: "t1", cvss_vector: "CVSS:3.1/AV:N", cvss_score: 6.1 }),
       items: [{ id: "r1" }, { id: "r2" }],
       artifacts: [artifactBody("a1")],
     },
     "GET /finding/f2": { ...findingBody("f2"), items: [], artifacts: [] },
-    "GET /test-case": { items: [{ id: "t1" }] },
     "GET /test-case/t1": { ...testCaseBody("t1", { note: "Checked" }), items: [{ id: "r1" }], artifacts: [] },
   };
+  const byPrefix = (prefix) => () =>
+    Object.keys(routes)
+      .filter((key) => key.startsWith(prefix))
+      .sort()
+      .map((key) => routes[key]);
+  routes["GET /finding"] = fullList(byPrefix("GET /finding/"));
+  routes["GET /test-case"] = fullList(byPrefix("GET /test-case/"));
+  return routes;
 }
 
 function setup({ routes = projectRoutes(), saved = "/Users/me/Downloads/file" } = {}) {
@@ -121,22 +132,25 @@ test("populate reads each finding and test case in full, in the store's shape", 
   ]);
 });
 
-test("a record deleted between the list and its read is left out", async () => {
-  const routes = projectRoutes();
-  delete routes["GET /finding/f2"];
-  const { store } = setup({ routes });
+test("populate reads findings and test cases with one full list each", async () => {
+  const { client, store } = setup();
   await store.populate();
-  assert.deepEqual(get(store).findings.map((f) => f.ID), ["f1"]);
+  assert.deepEqual(
+    client.calls.map((c) => [c.method, c.path, c.query]).sort(),
+    [
+      ["GET", "/finding", { full: 1 }],
+      ["GET", "/test-case", { full: 1 }],
+    ],
+  );
 });
 
 test("saving a new finding drafts it, links its requests, writes its fields and uploads its files", async () => {
-  const routes = {
-    ...projectRoutes(),
+  const routes = Object.assign(projectRoutes(), {
     "POST /finding": ({ body }) => findingBody("f9", { title: body.title, test_case_id: body.test_case_id ?? null }),
     "POST /finding/f9/traffic": ({ body }) => ({ finding_id: "f9", id: body.id }),
     "POST /finding/f9": ({ body }) => findingBody("f9", body),
     "POST /finding/f9/artifact": ({ query }) => artifactBody("a9", { filename: query.filename, finding_id: "f9" }),
-  };
+  });
   const { client, store } = setup({ routes });
   await store.populate();
   store.startNew("finding", { requestIds: ["r1"], testCaseId: "t1" });
@@ -184,13 +198,12 @@ test("a new finding without a test case sends none", async () => {
 });
 
 test("saving a test case writes its fields, unlinks a request and deletes an artifact", async () => {
-  const routes = {
-    ...projectRoutes(),
+  const routes = Object.assign(projectRoutes(), {
     "GET /test-case/t1": { ...testCaseBody("t1"), items: [{ id: "r1" }], artifacts: [artifactBody("a3", { finding_id: null, test_case_id: "t1" })] },
     "POST /test-case/t1": ({ body }) => testCaseBody("t1", body),
     "DELETE /test-case/t1/traffic/r1": { test_case_id: "t1", id: "r1" },
     "DELETE /artifact/a3": { id: "a3" },
-  };
+  });
   const { client, store } = setup({ routes });
   await store.populate();
   store.edit("testCase", "t1");
@@ -360,11 +373,10 @@ test("an export names the file once with the template's extension, and a cancel 
 });
 
 test("a request linked or unlinked at once updates the record", async () => {
-  const routes = {
-    ...projectRoutes(),
+  const routes = Object.assign(projectRoutes(), {
     "POST /finding/f2/traffic": ({ body }) => ({ finding_id: "f2", id: body.id }),
     "DELETE /test-case/t1/traffic/r1": { test_case_id: "t1", id: "r1" },
-  };
+  });
   const { store } = setup({ routes });
   await store.populate();
   await store.linkNow("finding", "f2", "r5");
@@ -396,7 +408,6 @@ test("resync replaces the records and keeps the open edit session and fix", asyn
   store.updateFix({ WriteUp: "half typed" });
   store.edit("finding", "f1");
   store.updateDraft({ Title: "Edited title" });
-  routes["GET /finding"] = { items: [{ id: "f1" }, { id: "f2" }, { id: "f3" }] };
   routes["GET /finding/f3"] = { ...findingBody("f3"), items: [], artifacts: [] };
 
   await store.resync();
