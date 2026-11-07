@@ -4,17 +4,10 @@
 // reads every traffic view shares: a page of traffic and a count, each
 // minus the project's content-type exclusion.
 
+import { decodeBase64Text } from "../lib/service/bytes.js";
+
 /** The service's largest GET /traffic page. */
 export const SERVICE_PAGE_ROWS = 500;
-
-/** Base64 bytes as text, as the bindings gave raw bodies ("" for none). */
-export function decodeRaw(base64) {
-  if (!base64) return "";
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
-}
 
 /** A route snapshot ({name, address}), or null. */
 export function toRoute(route) {
@@ -78,25 +71,27 @@ export function toResponseEvent(data) {
  */
 export function toDetails(pair) {
   const route = toRoute(pair.upstream_proxy);
+  const request = pair.request ?? {};
+  const response = pair.response ?? {};
   return {
     Request: {
       ID: pair.id,
       Number: pair.number,
-      Scheme: pair.request.scheme,
-      Method: pair.request.method,
-      Host: pair.request.host,
-      Path: pair.request.path,
-      Raw: decodeRaw(pair.request.raw),
-      RequestedAt: pair.request.requested_at,
+      Scheme: request.scheme,
+      Method: request.method,
+      Host: request.host,
+      Path: request.path,
+      Raw: decodeBase64Text(request.raw),
+      RequestedAt: request.requested_at,
     },
     Response: {
       ID: pair.id,
-      Status: pair.response.status,
-      StatusCode: pair.response.status_code,
-      ContentType: pair.response.content_type,
-      Length: pair.response.length,
-      Raw: decodeRaw(pair.response.raw),
-      RespondedAt: pair.response.responded_at ?? null,
+      Status: response.status,
+      StatusCode: response.status_code,
+      ContentType: response.content_type,
+      Length: response.length,
+      Raw: decodeBase64Text(response.raw),
+      RespondedAt: response.responded_at ?? null,
       Route: route,
     },
     Metadata: pair.metadata ?? {},

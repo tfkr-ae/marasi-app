@@ -5,7 +5,8 @@ import { SetUnsavedDraftCount } from "../lib/bindings/github.com/tfkr-ae/marasi-
 import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
 import { createLaunchpadStore } from "./createLaunchpadStore.js";
-import { createLaunchpadApi, toLaunch, toRequest, toResponse } from "./launchpadApi.js";
+import { createLaunchpadApi, toLaunch } from "./launchpadApi.js";
+import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { reportUnsavedDraftCount } from "./draftGuards.js";
 import { projectData } from "./projectData.js";
 import { relinked } from "./relinked.js";
@@ -47,8 +48,8 @@ projectData.register("launchpad", {
 const logged = (what) => (promise) =>
   Promise.resolve(promise).catch((err) => console.error(`Launchpad ${what} failed:`, err));
 
-service.on("traffic.request", (request) => logged("request arrival")(launchpadStore.onRequest(toRequest(request))));
-service.on("traffic.response", (response) => logged("response arrival")(launchpadStore.onResponse(toResponse(response))));
+service.on("traffic.request", (request) => logged("request arrival")(launchpadStore.onRequest(toRequestEvent(request))));
+service.on("traffic.response", (response) => logged("response arrival")(launchpadStore.onResponse(toResponseEvent(response))));
 service.on("launch.started", (launch) => launchpadStore.onLaunchStarted(toLaunch(launch)));
 for (const ended of ["launch.completed", "launch.failed", "launch.cancelled"]) {
   service.on(ended, (launch) => logged("launch end")(launchpadStore.onLaunchFinished(toLaunch(launch))));

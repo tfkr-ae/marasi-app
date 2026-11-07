@@ -79,7 +79,8 @@ export const toHeldMessage = (item) => ({
   Metadata: item.metadata ?? {},
 });
 
-const isNotFound = (err) => err?.status === 404;
+// A 404 for the connection of an upgrade means none is stored yet.
+const isHTTP404 = (err) => err?.status === 404;
 
 export function createWebSocketApi(client) {
   // The stored connection of the upgrade, or null while none is stored:
@@ -88,7 +89,7 @@ export function createWebSocketApi(client) {
     try {
       return await client.get(`/traffic/${requestId}/websocket`);
     } catch (err) {
-      if (isNotFound(err)) return null;
+      if (isHTTP404(err)) return null;
       throw err;
     }
   }
@@ -128,7 +129,7 @@ export function createWebSocketApi(client) {
       try {
         return toConnection(await client.get(`/websocket/${connectionId}`));
       } catch (err) {
-        if (isNotFound(err)) return null;
+        if (isHTTP404(err)) return null;
         throw err;
       }
     },

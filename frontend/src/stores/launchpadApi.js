@@ -4,9 +4,11 @@
 // What the Go bindings did on top of Marasi lives here too: search across
 // launchpads (one filtered query per launchpad until Marasi has a route),
 // and a cancel that lost the race to the launch's end, which is no error.
-// The mappers for stream events (toLaunch, toRequest, toResponse) are
+// The mapper for launch stream events (toLaunch; traffic events use
+// trafficApi.js's toRequestEvent and toResponseEvent) is
 // exported for launchpadStore.js.
-import { decodeBase64Text, encodeBase64Text } from "../lib/service/bytes.js";
+import { encodeBase64Text } from "../lib/service/bytes.js";
+import { toDetails } from "./trafficApi.js";
 
 /** A launchpad from GET /launchpad, in the store's fields. */
 export function toLaunchpad(launchpad) {
@@ -50,68 +52,14 @@ export function toEntry(item) {
   };
 }
 
-/** A traffic.request event as the request the store keeps (no Raw: the event has none). */
-export function toRequest(request) {
-  return {
-    ID: request.id,
-    Number: request.number,
-    Scheme: request.scheme,
-    Method: request.method,
-    Host: request.host,
-    Path: request.path,
-    Metadata: request.metadata ?? {},
-    RequestedAt: request.requested_at,
-  };
-}
-
-/** A traffic.response event as the response the store keeps (no Raw). */
-export function toResponse(response) {
-  return {
-    ID: response.id,
-    Status: response.status,
-    StatusCode: response.status_code,
-    ContentType: response.content_type,
-    Length: response.length,
-    Metadata: response.metadata ?? {},
-    RespondedAt: response.responded_at,
-  };
-}
-
 /**
- * GET /traffic/{id} as the details the store keeps: raw bytes as text,
- * as Go's RawField gave them. Response is null until one arrives.
+ * GET /traffic/{id} as the details the store keeps (trafficApi's
+ * toDetails), with Response null until one arrives.
  */
-export function toDetails(pair) {
-  const request = pair.request ?? {};
-  const response = pair.response;
-  const answered = response && response.status_code !== -1;
-  return {
-    Request: {
-      ID: pair.id,
-      Number: pair.number,
-      Scheme: request.scheme,
-      Method: request.method,
-      Host: request.host,
-      Path: request.path,
-      Raw: decodeBase64Text(request.raw),
-      RequestedAt: request.requested_at,
-    },
-    Response: answered
-      ? {
-          ID: pair.id,
-          Status: response.status,
-          StatusCode: response.status_code,
-          ContentType: response.content_type,
-          Length: response.length,
-          Raw: decodeBase64Text(response.raw),
-          RespondedAt: response.responded_at,
-        }
-      : null,
-    Metadata: pair.metadata ?? {},
-    Note: pair.note ?? "",
-    Highlight: pair.highlight ?? null,
-    Prettified: { Request: pair.prettified?.request ?? "", Response: pair.prettified?.response ?? "" },
-  };
+function toLaunchpadDetails(pair) {
+  const details = toDetails(pair);
+  const answered = pair.response && pair.response.status_code !== -1;
+  return answered ? details : { ...details, Response: null };
 }
 
 // The search's pre-check over every launchpad member wraps the text.
@@ -144,7 +92,7 @@ export function createLaunchpadApi(client) {
     // Null for a pair the service can't find, as the binding gave.
     async getRawDetails(id) {
       try {
-        return toDetails(await client.get(`/traffic/${id}`));
+        return toLaunchpadDetails(await client.get(`/traffic/${id}`));
       } catch (err) {
         if (isNotFound(err)) return null;
         throw err;

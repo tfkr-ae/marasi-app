@@ -6,7 +6,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createLaunchpadApi, toLaunch as toLaunchEvent, toRequest as toRequestEvent, toResponse as toResponseEvent } from "./launchpadApi.js";
+import { createLaunchpadApi, toLaunch as toLaunchEvent } from "./launchpadApi.js";
+import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { createLaunchpadStore, isDraftDirty } from "./createLaunchpadStore.js";
 import { serviceError } from "../lib/service/errors.js";
 import { entrySearchQuery } from "../lib/launchpad/entrySearch.js";
