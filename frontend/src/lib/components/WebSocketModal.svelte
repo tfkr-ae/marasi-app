@@ -24,6 +24,7 @@
 		XIcon,
 	} from "lucide-svelte";
 	import { onDestroy } from "svelte";
+	import { isSuperseded } from "../service/errors.js";
 	import MarasiKeys from "./MarasiMenu/MarasiKeys.svelte";
 	import { useMenuActions, websocketTab } from "../keybindings/app.js";
 	import { stepWebSocketTab } from "../keybindings/contexts.js";
@@ -188,6 +189,8 @@
 				background: "variant-filled-success",
 			});
 		} catch (error) {
+			// A connection switch stopped it: nothing to report.
+			if (isSuperseded(error)) return;
 			toastStore.trigger({
 				message: `Unable to close WebSocket connection: ${error}`,
 				background: "variant-filled-error",

@@ -268,3 +268,37 @@ test("Saved query move to the app: a switch while the app copy saves removes not
   // The app copy is taken back: the query stays the project's, on A.
   assert.deepEqual(appQueries, []);
 });
+
+const upgrade = { "GET /traffic/r1/websocket": { id: "c1", request_id: "r1", state: "open" } };
+
+test("WebSocket inject: a switch while finding the connection injects nothing on B", async () => {
+  const service = switchingService(upgrade);
+  const api = createWebSocketApi(service.client);
+  service.switchWhen("GET /traffic/r1/websocket");
+
+  await assert.rejects(api.InjectWebSocketMessage("r1", "client", 1, "hello", false), isSuperseded);
+
+  assert.deepEqual(service.onA(), ["GET /traffic/r1/websocket"]);
+  assert.deepEqual(service.onB(), []);
+});
+
+test("WebSocket close: a switch while finding the connection closes nothing on B", async () => {
+  const service = switchingService(upgrade);
+  const api = createWebSocketApi(service.client);
+  service.switchWhen("GET /traffic/r1/websocket");
+
+  await assert.rejects(api.CloseWebSocket("r1", 1000, "done"), isSuperseded);
+
+  assert.deepEqual(service.onA(), ["GET /traffic/r1/websocket"]);
+  assert.deepEqual(service.onB(), []);
+});
+
+test("WebSocket inject and close still reach the connection they began on", async () => {
+  const service = switchingService({ ...upgrade, "POST /websocket/c1/inject": { id: "m1" }, "POST /websocket/c1/close": { id: "c1" } });
+  const api = createWebSocketApi(service.client);
+
+  await api.InjectWebSocketMessage("r1", "client", 1, "hello", false);
+  await api.CloseWebSocket("r1", 1000, "done");
+
+  assert.deepEqual(service.onA(), ["GET /traffic/r1/websocket", "POST /websocket/c1/inject", "GET /traffic/r1/websocket", "POST /websocket/c1/close"]);
+});

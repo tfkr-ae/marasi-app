@@ -84,18 +84,19 @@ const isHTTP404 = (err) => err?.status === 404;
 
 export function createWebSocketApi(client) {
   // The stored connection of the upgrade, or null while none is stored:
-  // the record lands just after the upgrade.
-  async function connectionOf(requestId) {
+  // the record lands just after the upgrade. `link` is a client.bind() when
+  // a write follows the lookup.
+  async function connectionOf(requestId, link = client) {
     try {
-      return await client.get(`/traffic/${requestId}/websocket`);
+      return await link.get(`/traffic/${requestId}/websocket`);
     } catch (err) {
       if (isHTTP404(err)) return null;
       throw err;
     }
   }
 
-  async function connectionIdOf(requestId) {
-    const conn = await connectionOf(requestId);
+  async function connectionIdOf(requestId, link = client) {
+    const conn = await connectionOf(requestId, link);
     if (!conn) throw new Error("The WebSocket connection isn't stored yet.");
     return conn.id;
   }
@@ -150,10 +151,14 @@ export function createWebSocketApi(client) {
     ForwardWSIntercepted: (id, opcode, payload) =>
       client.post(`/checkpoint/${id}/forward`, { payload: encodeText(payload), opcode }),
     DropWSIntercepted: (id) => client.post(`/checkpoint/${id}/drop`, {}),
+    // Inject and close look the connection up, then write: both requests
+    // go through one binding, so a switch in between sends nothing to the
+    // next connection.
     async InjectWebSocketMessage(requestId, direction, opcode, payload, neverCompress) {
-      const id = await connectionIdOf(requestId);
+      const link = client.bind?.() ?? client;
+      const id = await connectionIdOf(requestId, link);
       return toMessage(
-        await client.post(`/websocket/${id}/inject`, {
+        await link.post(`/websocket/${id}/inject`, {
           direction,
           opcode,
           payload: encodeText(payload),
@@ -162,8 +167,9 @@ export function createWebSocketApi(client) {
       );
     },
     async CloseWebSocket(requestId, code, reason) {
-      const id = await connectionIdOf(requestId);
-      return toConnection(await client.post(`/websocket/${id}/close`, { code, reason }));
+      const link = client.bind?.() ?? client;
+      const id = await connectionIdOf(requestId, link);
+      return toConnection(await link.post(`/websocket/${id}/close`, { code, reason }));
     },
   };
 }
