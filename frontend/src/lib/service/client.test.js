@@ -29,6 +29,7 @@ function fakeFetch(respond = () => ({ status: 200, body: {} })) {
       status: answer.status,
       headers: { get: (name) => (name.toLowerCase() === "content-type" ? contentType : null) },
       text: async () => text,
+      arrayBuffer: async () => (answer.bytes ?? new TextEncoder().encode(text)).buffer,
     };
   };
   return { fetch, requests };
@@ -255,4 +256,42 @@ test("closing the stream on purpose reports no drop", () => {
   events.sources[0].drop();
   assert.deepEqual(drops, []);
   assert.equal(events.sources[0].closed, true);
+});
+
+test("raw bytes go as the body with their own content type", async () => {
+  const { client, http } = setup(() => ({ status: 200, body: { id: "a1" } }));
+  client.use({ url: "http://127.0.0.1:9", password: "pw" });
+  const bytes = new Uint8Array([1, 2, 3]);
+
+  const answer = await client.request("POST", "/finding/f1/artifact", {
+    query: { filename: "shot.png" },
+    raw: bytes,
+    contentType: "image/png",
+  });
+
+  assert.deepEqual(answer, { id: "a1" });
+  const sent = http.requests[0];
+  assert.equal(sent.url, "http://127.0.0.1:9/finding/f1/artifact?filename=shot.png");
+  assert.equal(sent.body, bytes);
+  assert.equal(sent.headers["Content-Type"], "image/png");
+  assert.equal(sent.headers.Authorization, "Bearer pw");
+});
+
+test("an answer read as bytes resolves to the raw bytes", async () => {
+  const { client } = setup(() => ({ status: 200, contentType: "application/octet-stream", body: "", bytes: new Uint8Array([0, 255, 7]) }));
+  client.use({ url: "http://127.0.0.1:9" });
+
+  const bytes = await client.request("GET", "/artifact/a1/content", { as: "bytes" });
+
+  assert.deepEqual([...bytes], [0, 255, 7]);
+});
+
+test("a refusal of a bytes call is still a coded error", async () => {
+  const { client } = setup(() => ({ status: 400, body: { error: "invalid_report_request", message: "bad template" } }));
+  client.use({ url: "http://127.0.0.1:9" });
+
+  await assert.rejects(client.request("POST", "/report", { body: {}, as: "bytes" }), (err) => {
+    assert.match(String(err), /invalid_report_request/);
+    return true;
+  });
 });

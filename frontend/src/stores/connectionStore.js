@@ -1,7 +1,7 @@
 // The connection store bound to the app: the local instance through Go's
 // ConnectLocal, and the service through the app's service client. The
 // lifecycle is in createConnectionStore.js.
-import { ConnectLocal, ConfirmProjectSwitch } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { ConnectLocal, ConfirmProjectSwitch, MarasiPin } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
 import { createConnectionStore } from "./createConnectionStore.js";
 import { loadedProject, loadProject, projectStore, resyncProject } from "./projectStore.js";
@@ -31,3 +31,7 @@ export const connectionStore = createConnectionStore({
 loadedProject.subscribe((project) => project && connectionStore.dispatch({ type: "PROJECT_LOADED", path: project.path }));
 // A restart announced before the stream drops means a full load afterwards.
 service.on("service.restarting", () => connectionStore.dispatch({ type: "SERVICE_RESTARTING" }));
+// The Marasi date the app was built against: an older service warns.
+MarasiPin()
+  .then((pin) => connectionStore.dispatch({ type: "MARASI_PIN", pin }))
+  .catch((err) => console.error("Reading the pinned Marasi version failed:", err));

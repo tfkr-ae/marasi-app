@@ -1,19 +1,18 @@
-// The app's background-jobs store, bound to the Wails backend. The logic
-// lives in createJobsStore.js, which tests load with a fake API. When the
+// The app's background-jobs store over the service client. The logic lives
+// in createJobsStore.js and the API shapes in jobsApi.js. When the
 // Ledger or the sitemap reads incomplete results, the store polls the jobs
 // and reloads that view once they finish, so its notice goes away.
-import { ListJobs, RebuildJob } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+import { service } from "../lib/service/index.js";
+import { createJobsApi } from "./jobsApi.js";
 import { createJobsStore } from "./createJobsStore.js";
+import { projectData } from "./projectData.js";
 import { ledgerStore } from "./ledgerStore";
 import { sitemapStore } from "./sitemapStore";
 
 export { groupBuilding, jobLabel, jobStatus } from "./createJobsStore.js";
 
 export const jobsStore = createJobsStore(
-  {
-    listJobs: () => ListJobs(),
-    rebuildJob: (name) => RebuildJob(name),
-  },
+  createJobsApi(service),
   {
     onFinished: (group) => {
       // refresh() keeps the view where it is.
@@ -22,6 +21,10 @@ export const jobsStore = createJobsStore(
     },
   },
 );
+
+projectData.register("jobs", { clear: jobsStore.clear, load: jobsStore.refresh });
+// A finished job shows at once, without waiting for the next poll.
+service.on("job.complete", () => jobsStore.refresh());
 
 ledgerStore.subscribe((state) => {
   if (!state.results.loading && state.results.indexComplete === false) jobsStore.watch("index");

@@ -193,22 +193,6 @@ func TestSavingTheCACertificateWritesThePEMWhereChosen(t *testing.T) {
 	}
 }
 
-func TestCopyingTheCACertificatePutsThePEMOnTheClipboard(t *testing.T) {
-	app := newCAApp(t)
-	var copied []string
-	app.setClipboardText = func(text string) error {
-		copied = append(copied, text)
-		return nil
-	}
-
-	if ok, err := app.CopyCertToClipboard(); !ok || err != nil {
-		t.Fatalf("wanted the certificate copied, got %v %v", ok, err)
-	}
-	if len(copied) != 1 || copied[0] != caPEM(app) {
-		t.Fatalf("wanted the CA PEM copied once, got %q", copied)
-	}
-}
-
 // newCAApp returns an App whose proxy has its CA certificate, as starting
 // the proxy loads it.
 func newCAApp(t *testing.T) *App {

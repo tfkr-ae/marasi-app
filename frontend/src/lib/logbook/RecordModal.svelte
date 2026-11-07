@@ -11,7 +11,6 @@
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import { toastError } from "../toasts.js";
-	import { refreshOtherLists } from "./recordEditor.js";
 	import RecordForm from "./RecordForm.svelte";
 	import RecordEvidence from "./RecordEvidence.svelte";
 
@@ -60,7 +59,6 @@
 			// Done says more than saved, as the inline fix's toast does.
 			const message = result.done ? `${Noun} done` : result.created ? `${Noun} created` : `${Noun} saved`;
 			toastStore.trigger({ message, background: "variant-filled-success" });
-			refreshOtherLists();
 		} else if (result.reason === "title") {
 			logbookStore.keepEditing();
 			toastStore.trigger({ message: "Add a title first", background: "variant-filled-warning" });
