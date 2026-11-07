@@ -578,3 +578,8 @@ test("the details name the service's instance", () => {
   const { state } = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: { ...status, instance: "default" } });
   assert.equal(state.instance, "default");
 });
+
+test("a resume with no event id to send resyncs every store in place", () => {
+  const { types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected(), { type: "STREAM_RESET", reason: "none" });
+  assert.equal(types.at(-1), "resync");
+});

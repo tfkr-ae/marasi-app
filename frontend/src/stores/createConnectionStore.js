@@ -480,8 +480,9 @@ export function reduce(state, action) {
           { type: "confirm-load", status: { project: state.project } },
         ]);
       }
-      // "expired" (older than the replay buffer) or "invalid": nothing was
-      // replayed, so read every store again.
+      // "expired" (older than the replay buffer), "invalid", or "none" (the
+      // client had no id to resume from): nothing was replayed, so read
+      // every store again.
       return go(state, {}, [{ type: "resync" }]);
 
     case "STATUS_REFRESHED":
