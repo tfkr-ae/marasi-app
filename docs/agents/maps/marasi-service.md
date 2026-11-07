@@ -81,7 +81,8 @@ The frontend can only match error text, so an error it must act on carries a cod
 
 | Events | Store (`stores/`) | What changes |
 |---|---|---|
-| `traffic.request`, `traffic.response` | ledger, sitemap, launchpad, armory, savedQueries | New rows, sitemap counts, launched entries, Armory results, saved-query counts |
+| `traffic.request`, `traffic.response` | ledger, sitemap, launchpad, armory | New rows, sitemap counts, launched entries, Armory results |
+| `COUNT_CHANGE_EVENTS` (`countChanges.js`): `traffic.request`, `.response`, `.changed`, `metadata.updated`, `note.*`, `finding.linked`, `.unlinked`, `.deleted`, `launchpad.linked`, `.unlinked`, `.deleted` | savedQueries, ledgerMenuCounts | A recount of the Saved queries, Highlights and Marks menu counts, 1.5 s after the last event in a burst (`createMatchCounts.js`) |
 | `traffic.changed` | ledger (`onTrafficChanged`), launchpad (`launchpadsChangedBy`), home | Ledger rows read again in place. A link or unlink rereads its launchpad, and a delete, highlight, note or metadata change rereads loaded entry lists. A delete or note change rereads Home's counts. |
 | `traffic.index_complete` | ledger (`onIndexComplete`) | Results read while the index was building are read again |
 | `sitemap.changed` | sitemap (`onChanged`) | Open levels read again |

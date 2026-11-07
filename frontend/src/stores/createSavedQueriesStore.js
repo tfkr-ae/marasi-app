@@ -15,6 +15,7 @@
 // entries live in state.queries[source]. Writes are optimistic: the state
 // changes first, and goes back if the write fails.
 import { writable } from "svelte/store";
+import { COUNT_DELAY_MS, createMatchCounts } from "./createMatchCounts.js";
 
 /** The client-setting key prefix of the project's saved queries. */
 export const PROJECT_QUERY_PREFIX = "ledger.saved_query.";
@@ -39,12 +40,6 @@ export const BUILTIN_QUERIES = [
   { id: "cookies-set", name: "Cookies set", query: 'response_head:"set-cookie"' },
   { id: "jwts-anywhere", name: "JWTs anywhere", query: '"eyJhbGci"' },
 ].map((q, order) => ({ ...q, order, source: "builtin" }));
-
-// How many saved queries count at once: enough that the menu fills fast,
-// few enough that the Ledger's own reads aren't held up.
-const COUNT_CONCURRENCY = 4;
-// How long scheduleCounts waits, so a burst of traffic counts once.
-export const COUNT_DELAY_MS = 1500;
 
 // How much of a query names a query saved without a name.
 const UNNAMED_LENGTH = 32;
@@ -318,66 +313,23 @@ export function createSavedQueriesStore(
     }
   }
 
-  let countRun = 0;
-  /**
-   * Counts every saved query's matches, COUNT_CONCURRENCY at a time so the
-   * table's own reads aren't held up, filling state.counts as each returns.
-   * The last run's counts stay, marked `stale`, until their new ones arrive,
-   * so a refresh never blanks a number or shows a wrong one; a query no
-   * longer saved loses its count, and one that fails to count gets null. A
-   * newer run, or clearCounts, stops this one.
-   */
-  async function loadCounts() {
-    const run = ++countRun;
-    const queries = [
-      ...new Set(savedQueryGroups(current, { showHidden: true }).flatMap((g) => g.items.map((q) => q.query))),
-    ];
-    update((state) => ({
-      ...state,
-      counts: Object.fromEntries(
-        queries.filter((q) => state.counts[q]).map((q) => [q, { ...state.counts[q], stale: true }]),
-      ),
-    }));
-    let next = 0;
-    async function worker() {
-      while (next < queries.length && run === countRun) {
-        const query = queries[next++];
-        let count = null;
-        try {
-          const result = await api.countMatches(query);
-          count = result.QueryError
-            ? { error: result.QueryError.Message }
-            : { count: result.Count, capped: result.Capped };
-        } catch (error) {
-          console.error(`counting ${query}:`, error);
-        }
-        if (run !== countRun) return;
-        update((state) => ({ ...state, counts: { ...state.counts, [query]: count } }));
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(COUNT_CONCURRENCY, queries.length) }, worker));
-  }
-
-  let pending = null;
-  /**
-   * Refreshes the counts after `countDelay`, once for a burst of calls: new
-   * traffic, a project load or a resync, so the menu opens with numbers.
-   */
-  function scheduleCounts() {
-    if (pending !== null) return;
-    pending = timers.setTimeout(() => {
-      pending = null;
-      loadCounts();
-    }, countDelay);
-  }
-
-  /** Forgets every count and stops counting, as a project switch does. */
-  function clearCounts() {
-    countRun++;
-    if (pending !== null) timers.clearTimeout(pending);
-    pending = null;
-    update((state) => ({ ...state, counts: {} }));
-  }
+  // Match counts, mirrored into state.counts: four at a time, the last
+  // run's kept (stale) until each new one arrives; see createMatchCounts.
+  const counts = createMatchCounts({
+    queries: () => savedQueryGroups(current, { showHidden: true }).flatMap((g) => g.items.map((q) => q.query)),
+    count: async (query) => {
+      const result = await api.countMatches(query);
+      return result.QueryError ? { error: result.QueryError.Message } : { count: result.Count, capped: result.Capped };
+    },
+    timers,
+    delay: countDelay,
+  });
+  counts.subscribe((value) => update((state) => ({ ...state, counts: value })));
+  const loadCounts = counts.load;
+  // Counts after a project load, a resync or new traffic, once for a burst.
+  const scheduleCounts = counts.schedule;
+  // Forgets every count and stops counting, as a project switch does.
+  const clearCounts = counts.clear;
 
   return {
     subscribe,

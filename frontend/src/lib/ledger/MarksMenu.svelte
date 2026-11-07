@@ -10,7 +10,10 @@
 
 	/** The text in the query box. */
 	export let queryText = "";
-	/** { [term]: { count, capped } | null }; a missing term is still loading. */
+	/**
+	 * { [term]: { count, capped, stale? } | null }; a missing term is still
+	 * loading, a stale one shows dimmed until its recount arrives.
+	 */
 	export let counts = {};
 
 	const dispatch = createEventDispatcher();
@@ -33,7 +36,7 @@
 		>
 			<svelte:component this={icons[mark.id]} size={12} class="flex-none opacity-60" />
 			<span class="flex-1 text-left">{mark.label}</span>
-			<span class="ledger-mark-count min-w-[3rem] text-right tabular-nums opacity-60"
+			<span class="ledger-mark-count min-w-[3rem] text-right tabular-nums {counts[mark.term]?.stale ? 'opacity-30' : 'opacity-60'}"
 				>{matchCountText(counts[mark.term])}</span
 			>
 		</button>
