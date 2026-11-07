@@ -1,8 +1,10 @@
-// The app's Go side puts a code in the text of an error Marasi refused, since
-// the text is all Wails passes on: "<what>: <code> (<id>, <id>): <cause>"
-// when the refusal names ids (launch_pending, selection_incomplete), and
-// "<what>: <code>: <cause>" when it does not (launchpad_move.go,
-// traffic_bulk.go, and app.go's project_locked).
+// An error the frontend acts on carries a code in its text, since the text
+// is all Wails passes on: "<what>: <code> (<id>, <id>): <cause>" when it
+// names ids, "<what>: <code>: <cause>" when it does not. The Go side builds
+// them with codedError (coded_error.go: cli_missing, instance_failed,
+// chrome_launch_failed) and by hand (chrome.go: listener_inactive,
+// listener_loopback); the service client's ServiceError uses the same text
+// for the service's refusals (lib/service/errors.js).
 
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

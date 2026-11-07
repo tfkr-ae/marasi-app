@@ -80,7 +80,7 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 	defer a.local.mu.Unlock()
 	path, err := a.findCLI()
 	if err != nil {
-		return LocalConnection{}, codedError("finding the Marasi CLI", "cli_missing", nil, err)
+		return LocalConnection{}, codedError("finding the Marasi CLI", codeCLIMissing, nil, err)
 	}
 	a.local.cliPath = path
 
@@ -91,7 +91,7 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 	if !running {
 		startErr := a.startLocal(path)
 		if startErr != nil && !strings.Contains(startErr.Error(), "already running") {
-			return LocalConnection{}, codedError("starting the local instance", "instance_failed", nil, startErr)
+			return LocalConnection{}, codedError("starting the local instance", codeInstanceFailed, nil, startErr)
 		}
 		if startErr != nil {
 			// Someone else started it since the status: attach to theirs.
@@ -107,13 +107,13 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 		}
 		if err := a.cli(path, []string{"MARASI_PASSWORD=" + password}, nil,
 			"service", "control", "start", "--address", "127.0.0.1", "--port", "0"); err != nil {
-			return LocalConnection{}, codedError("turning on the local instance's control listener", "instance_failed", nil, err)
+			return LocalConnection{}, codedError("turning on the local instance's control listener", codeInstanceFailed, nil, err)
 		}
 	}
 
 	var pair Pairing
 	if err := a.cli(path, nil, &pair, "service", "control", "pair"); err != nil {
-		return LocalConnection{}, codedError("reading the local instance's address", "instance_failed", nil, err)
+		return LocalConnection{}, codedError("reading the local instance's address", codeInstanceFailed, nil, err)
 	}
 	return LocalConnection{URL: pair.URL, Password: pair.Password, Instance: pair.Instance, StartedByApp: a.local.owned}, nil
 }
@@ -136,7 +136,7 @@ func (a *App) LocalPairing() (Pairing, error) {
 	if path == "" {
 		found, err := a.findCLI()
 		if err != nil {
-			return Pairing{}, codedError("finding the Marasi CLI", "cli_missing", nil, err)
+			return Pairing{}, codedError("finding the Marasi CLI", codeCLIMissing, nil, err)
 		}
 		path = found
 	}
@@ -160,7 +160,7 @@ func (a *App) localStatus(path string) (status localInstanceStatus, running bool
 		if strings.Contains(err.Error(), "is not running") {
 			return status, false, nil
 		}
-		return status, false, codedError("reading the local instance", "instance_failed", nil, err)
+		return status, false, codedError("reading the local instance", codeInstanceFailed, nil, err)
 	}
 	return status, true, nil
 }
@@ -274,12 +274,6 @@ func generatePassword() (string, error) {
 		return "", fmt.Errorf("generating the control password: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-// codedError wraps err with what, code and the ids the refusal names:
-// "<what>: <code> (<id>, <id>): <err>". The frontend's codeIDs reads it.
-func codedError(what, code string, ids []string, err error) error {
-	return fmt.Errorf("%s: %s (%s): %w", what, code, strings.Join(ids, ", "), err)
 }
 
 // readLocalProxyListener returns the local instance's proxy listener
