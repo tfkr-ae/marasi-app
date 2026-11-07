@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -170,21 +171,57 @@ func (a *App) localStatus(path string) (status localInstanceStatus, running bool
 	return status, true, nil
 }
 
-// startLocal starts the instance with a free proxy port, a control listener
-// on a free loopback port and a generated password, and records that the app
-// owns it.
-func (a *App) startLocal(path string) error {
+// startLocal starts the instance with the proxy on the app's default
+// listener (default_address, default_port), or on a free port of the same
+// address when that port is taken, a control listener on a free loopback
+// port and a generated password, and records that the app owns it. extra
+// are more `service start` flags, such as --project.
+func (a *App) startLocal(path string, extra ...string) error {
 	password, err := a.newPassword()
 	if err != nil {
 		return err
 	}
-	err = a.cli(path, []string{"MARASI_PASSWORD=" + password}, nil,
-		"service", "start", "--port", "0", "--control-address", "127.0.0.1:0")
+	address, port := a.listenerDefaults()
+	var started struct {
+		ProxyListener string `json:"proxy_listener"`
+	}
+	start := func(port string) error {
+		args := append([]string{"service", "start", "--address", address, "--port", port, "--control-address", "127.0.0.1:0"}, extra...)
+		return a.cli(path, []string{"MARASI_PASSWORD=" + password}, &started, args...)
+	}
+	err = start(port)
+	if err != nil && port != "0" && portTaken(err) {
+		log.Printf("[*] proxy port %s:%s is taken, starting the local instance on a free port", address, port)
+		err = start("0")
+	}
 	if err != nil {
 		return err
 	}
+	log.Printf("[*] started the local instance, proxy on %s", started.ProxyListener)
 	a.local.owned = true
 	return nil
+}
+
+// listenerDefaults is the proxy listener the app starts the local instance
+// on: default_address and default_port in app config, else 127.0.0.1:8080.
+func (a *App) listenerDefaults() (address, port string) {
+	address, port = "127.0.0.1", "8080"
+	if a.Config != nil {
+		if a.Config.DefaultAddress != "" {
+			address = a.Config.DefaultAddress
+		}
+		if a.Config.DefaultPort != "" {
+			port = a.Config.DefaultPort
+		}
+	}
+	return address, port
+}
+
+// portTaken reports whether a start failed because the proxy port is in use
+// (EADDRINUSE on Unix, WSAEADDRINUSE on Windows).
+func portTaken(err error) bool {
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "address already in use") || strings.Contains(text, "only one usage of each socket address")
 }
 
 // stopOwnedLocal stops the local instance when the app started it, and
