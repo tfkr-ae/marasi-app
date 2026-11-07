@@ -11,8 +11,9 @@
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
 	import { errorText, removeConnection, setAddress } from "./manage.js";
-	import { cliMissing } from "./cli.js";
+	import { cliMissing, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
+	import OutdatedInstance from "./OutdatedInstance.svelte";
 	import ConnectionAccess from "./ConnectionAccess.svelte";
 
 	export let connection;
@@ -88,6 +89,10 @@
 	{/if}
 	{#if isActive && phase === "failed" && connection.kind === "local" && cliMissing(state.error)}
 		<CLISetup />
+	{:else if isActive && phase === "failed" && connection.kind === "local" && outdatedVersion(state.error) !== null}
+		<div class="mt-3 bg-warning-500/15 p-3">
+			<OutdatedInstance error={state.error} />
+		</div>
 	{:else if isActive && phase === "failed"}
 		<div class="mt-3 flex items-center gap-3 bg-error-500/10 p-3">
 			<p class="min-w-0 flex-1 break-words text-xs">{state.error}</p>

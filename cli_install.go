@@ -74,6 +74,23 @@ type CLIInstall struct {
 	Failure *CLIFailure `json:"failure"`
 }
 
+// cliInstallProgressEvent reports a running CLI install or update to the
+// frontend, with a CLIInstallProgress.
+const cliInstallProgressEvent = "cli-install-progress"
+
+// CLIInstallProgress is the step a CLI install is on: download (with the
+// bytes received and the total, 0 when the server didn't say), verify or
+// install.
+type CLIInstallProgress struct {
+	Step     string `json:"step"`
+	Received int64  `json:"received"`
+	Total    int64  `json:"total"`
+}
+
+func (a *App) reportCLIProgress(progress CLIInstallProgress) {
+	a.emitEvent(cliInstallProgressEvent, progress)
+}
+
 // CLIChannel is the CLI's channel: Setting is "app" (follow the app),
 // "release" or "nightly"; Effective is the channel installs use.
 type CLIChannel struct {
@@ -284,6 +301,7 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	}
 	build, _ := release.asset(asset)
 
+	a.reportCLIProgress(CLIInstallProgress{Step: "download"})
 	checksums, err := a.downloadCLISmall(ctx, checksumsURL.URL)
 	if err != nil {
 		return err
@@ -313,9 +331,11 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if err != nil {
 		return err
 	}
+	a.reportCLIProgress(CLIInstallProgress{Step: "verify"})
 	if got != want {
 		return failed(UpdateFailureChecksum, "Checksum mismatch, nothing installed")
 	}
+	a.reportCLIProgress(CLIInstallProgress{Step: "install"})
 	return a.placeCLI(download, target)
 }
 
@@ -352,7 +372,7 @@ func (a *App) placeCLI(download, target string) error {
 }
 
 func (a *App) downloadCLISmall(ctx context.Context, url string) ([]byte, error) {
-	body, err := a.cliRuntime.download(ctx, url)
+	body, _, err := a.cliRuntime.download(ctx, url)
 	if err != nil {
 		return nil, failed(UpdateFailureNetwork, "Download failed: %v", err)
 	}
@@ -364,17 +384,23 @@ func (a *App) downloadCLISmall(ctx context.Context, url string) ([]byte, error) 
 	return data, nil
 }
 
-// downloadCLIBuild downloads url to path and returns its SHA-256 in hex.
+// downloadCLIBuild downloads url to path, reporting progress, and returns
+// its SHA-256 in hex.
 func (a *App) downloadCLIBuild(ctx context.Context, url, path string) (string, error) {
-	body, err := a.cliRuntime.download(ctx, url)
+	body, size, err := a.cliRuntime.download(ctx, url)
 	if err != nil {
 		return "", failed(UpdateFailureNetwork, "Download failed: %v", err)
 	}
 	defer body.Close()
+	total := max(size, 0)
+	progress := newProgressReporter(total, func(p UpdateProgress) {
+		a.reportCLIProgress(CLIInstallProgress{Step: "download", Received: p.Received, Total: p.Total})
+	})
 	hash := sha256.New()
-	if err := a.cliRuntime.writeFile(path, io.TeeReader(body, hash)); err != nil {
+	if err := a.cliRuntime.writeFile(path, io.TeeReader(body, io.MultiWriter(hash, progress))); err != nil {
 		return "", failed(UpdateFailureNetwork, "Download failed: %v", err)
 	}
+	progress.done()
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 

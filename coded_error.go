@@ -15,6 +15,11 @@ const (
 	// codeInstanceFailed: the CLI ran but couldn't start, attach to or read
 	// the local instance.
 	codeInstanceFailed = "instance_failed"
+	// codeInstanceOutdated: the running local instance is an older Marasi
+	// than the app needs (it lacks a control route, such as pairing), so
+	// the frontend offers to restart it with the app's CLI
+	// (RestartLocalInstance). The cause names its version.
+	codeInstanceOutdated = "instance_outdated"
 	// codeChromeLaunchFailed: the Chrome launcher couldn't start Chrome,
 	// such as when no Chrome executable is found; the frontend shows why.
 	codeChromeLaunchFailed = "chrome_launch_failed"

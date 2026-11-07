@@ -7,18 +7,20 @@ import { createCertificateActions } from "./certificate.js";
 import { service } from "./service/index.js";
 import { setWindowTitle } from "./runtime.js";
 import { checkpointHeldModal } from "./checkpointHeld.js";
-import { appState } from "../stores.js";
+import { appState, marasiConfig } from "../stores.js";
 import { homeStore } from "../stores/homeStore.js";
 import { projectStore } from "../stores/projectStore.js";
 import { projectTarget } from "../stores/projectApi.js";
 
-// Starts or moves the service's proxy listener.
+// Starts or moves the service's proxy listener. The app's default port falls
+// back to a free one when it is taken, as the app's instance does.
 export function setupListener(r, toastStore) {
+	const fallback = String(r.port) === String(get(marasiConfig).DefaultPort || "8080");
 	homeStore
-		.setListener(r.addr, r.port)
-		.then(() => {
+		.setListener(r.addr, r.port, { fallback })
+		.then((listener) => {
 			toastStore.trigger({
-				message: "Listening on " + r.addr + ":" + r.port,
+				message: "Listening on " + listener.address + ":" + listener.port,
 				background: "variant-filled-success",
 			});
 		})

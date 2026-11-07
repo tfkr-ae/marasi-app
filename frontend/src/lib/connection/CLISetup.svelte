@@ -14,6 +14,7 @@
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { cliResultText } from "./cli.js";
+	import CLIProgress from "./CLIProgress.svelte";
 
 	const toastStore = getToastStore();
 	// found: the CLI now in use (CLIInfo), after an install or Use.
@@ -21,6 +22,7 @@
 	let dir = "";
 	let path = "";
 	let busy = false;
+	let installing = false;
 	let problem = "";
 
 	onMount(() => DefaultCLIInstallDir().then((d) => (dir = d || dir)));
@@ -43,7 +45,8 @@
 
 	const install = () =>
 		run(async () => {
-			const result = await InstallCLI(dir);
+			installing = true;
+			const result = await InstallCLI(dir).finally(() => (installing = false));
 			if (result.outcome !== "installed") {
 				problem = cliResultText(result);
 				return;
@@ -77,16 +80,19 @@
 	<div>
 		<p class="mb-1 text-xs">Install to</p>
 		<div class="flex gap-2">
-			<input class={field} bind:value={dir} aria-label="Install folder" data-testid="cli-install-dir" />
+			<input class={field} bind:value={dir} disabled={busy} aria-label="Install folder" data-testid="cli-install-dir" />
 			<button type="button" class={primary} disabled={busy || !dir.trim()} on:click={install} data-testid="cli-install"
-				>{busy ? "Installing…" : "Install"}</button
+				>Install</button
 			>
 		</div>
 	</div>
+	{#if installing}
+		<CLIProgress />
+	{/if}
 	<div>
 		<p class="mb-1 text-xs">Or use one you have</p>
 		<div class="flex gap-2">
-			<input class={field} bind:value={path} placeholder="/path/to/marasi" aria-label="Marasi CLI path" data-testid="cli-path" />
+			<input class={field} bind:value={path} disabled={busy} placeholder="/path/to/marasi" aria-label="Marasi CLI path" data-testid="cli-path" />
 			<button type="button" class={neutral} disabled={busy} on:click={browse}>Browse</button>
 			<button type="button" class={primary} disabled={busy || !path.trim()} on:click={use} data-testid="cli-use">Use</button>
 		</div>
