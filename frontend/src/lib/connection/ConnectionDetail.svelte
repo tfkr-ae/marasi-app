@@ -55,7 +55,7 @@
 </script>
 
 <div class="text-sm" data-testid="connection-detail">
-	<div class="flex items-start gap-3">
+	<div class="flex items-center gap-3">
 		<div class="min-w-0 flex-1">
 			<h3 class="text-sm font-bold">{connection.name}</h3>
 			<p class="font-mono text-2xs opacity-60">{whereText(connection, isActive ? state.instance : null)}</p>
