@@ -4,6 +4,7 @@
 	import ConnectionBanner from "../lib/components/ConnectionBanner.svelte";
 	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
+	import OutdatedInstance from "../lib/connection/OutdatedInstance.svelte";
 	import { filePickerShown } from "../lib/connection/status.js";
 	import { primaryVariant } from "../lib/launchpad/format.js";
 	import {
@@ -58,7 +59,7 @@
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { shouldOfferCLISetup } from "../lib/connection/cli.js";
+	import { outdatedVersion, shouldOfferCLISetup } from "../lib/connection/cli.js";
 	import { connectionsModal } from "../lib/connection/modal.js";
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
@@ -758,7 +759,7 @@
 			<div
 				class="flex items-center w-full h-full justify-center"
 			>
-				<div class="items-center justify-center">
+				<div class="flex flex-col items-center">
 					<Logo
 						size="128"
 						mode={$modeCurrent ? "light" : "dark"}
@@ -766,7 +767,11 @@
 					<p class="text-xs text-center" data-testid="connection-status">
 						{startingText[$connectionStore.phase] ?? $appState.message}
 					</p>
-					{#if $connectionStore.phase === "failed"}
+					{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) !== null}
+						<div class="mt-2 max-w-md">
+							<OutdatedInstance error={$connectionStore.error} centred />
+						</div>
+					{:else if $connectionStore.phase === "failed"}
 						<p class="mt-2 max-w-md text-xs text-center opacity-70 break-words">
 							{$connectionStore.error}
 						</p>
