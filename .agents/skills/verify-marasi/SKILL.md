@@ -126,7 +126,7 @@ For behavioral actions beyond navigation, use a named sequence of real UI inputs
 .agents/skills/verify-marasi/scripts/drive.sh settings steps '{"name":"vim-toggle","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"click":"section [role=switch]"}]}'
 ```
 
-`steps` requires the feature route to already be visible. Use one action per step.
+`steps` first goes to the feature's page through its rail icon when another page is open, then runs the steps. Use one action per step.
 
 | Step | Meaning |
 | --- | --- |

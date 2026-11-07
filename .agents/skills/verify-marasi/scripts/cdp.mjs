@@ -27,7 +27,8 @@ const routes = {
 	armory: { selector: '[title="Armory"], [title^="Armory · "]', path: "/armory", expected: "Templates" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "In progress" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
-	settings: { selector: '[title="Settings"]', path: "/settings", expected: "Marasi Settings" },
+	// The icon's title gains " · <update state>" while an update waits.
+	settings: { selector: '[title="Settings"], [title^="Settings · "]', path: "/settings", expected: "Marasi Settings" },
 };
 
 // Drawers an earlier drive can leave open: Skeleton's, and the Armory
@@ -609,6 +610,8 @@ async function runStep(step) {
 async function driveSteps(route) {
 	const recipe = JSON.parse(label);
 	if (!recipe.name || !Array.isArray(recipe.steps) || !recipe.steps.length) throw new Error("steps requires {name, steps: [...]}");
+	// Go to the feature's page first when a drive left another one open.
+	if (!(await evaluate(onRoute(route)))) await clickTarget({ selector: route.selector });
 	await waitFor(onRoute(route), `${feature} route`);
 	const prefix = `${feature}-${slug(recipe.name)}`;
 	fs.writeFileSync(`${evidenceDir}/${prefix}-action.json`, `${JSON.stringify(recipe, null, 2)}\n`);
