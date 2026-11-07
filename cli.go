@@ -53,8 +53,9 @@ type cliRuntime struct {
 	releaseSource string
 	// key verifies checksums.txt.minisig.
 	key minisign.PublicKey
-	// download fetches url. The caller closes the body.
-	download func(ctx context.Context, url string) (io.ReadCloser, error)
+	// download fetches url and returns its body and size (-1 when the
+	// server doesn't say). The caller closes the body.
+	download func(ctx context.Context, url string) (io.ReadCloser, int64, error)
 	// tempDir makes a directory for downloads, outside the install folder.
 	tempDir func() (string, error)
 	// writeFile creates path, which must not exist, with the contents of r.
@@ -106,21 +107,21 @@ func parseMinisignKey(text string) (minisign.PublicKey, error) {
 
 // downloadURL fetches url with the updater's HTTP client, which honours the
 // system proxy but never goes through Marasi's own listener.
-func (a *App) downloadURL(ctx context.Context, url string) (io.ReadCloser, error) {
+func (a *App) downloadURL(ctx context.Context, url string) (io.ReadCloser, int64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("User-Agent", "marasi-app")
 	res, err := a.updateHTTPClient().Do(req)
 	if err != nil {
-		return nil, unwrapURLError(err)
+		return nil, 0, unwrapURLError(err)
 	}
 	if res.StatusCode != http.StatusOK {
 		res.Body.Close()
-		return nil, fmt.Errorf("GitHub answered %s", res.Status)
+		return nil, 0, fmt.Errorf("GitHub answered %s", res.Status)
 	}
-	return res.Body, nil
+	return res.Body, res.ContentLength, nil
 }
 
 // writeNewFile creates path, refusing one that exists, and fills it from r.

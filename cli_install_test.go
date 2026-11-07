@@ -87,6 +87,7 @@ type cliInstall struct {
 	probes   *cliProbes
 	chmods   map[string]os.FileMode
 	builds   map[string]cliBuild // by path; installed files read as their binary's version
+	events   *recordedEvents
 }
 
 // newCLIInstall returns an App on goos/goarch with no CLI, reading Marasi
@@ -100,8 +101,10 @@ func newCLIInstall(t *testing.T, goos, goarch string) *cliInstall {
 		probes:   &cliProbes{answers: map[string]cliAnswer{}},
 		chmods:   map[string]os.FileMode{},
 		builds:   map[string]cliBuild{},
+		events:   &recordedEvents{},
 	}
 	c.app = cliTestApp(t, c.probes, "")
+	c.app.emitEvent = c.events.emit
 	c.app.runCLI = func(ctx context.Context, path string, args, env []string) ([]byte, int, error) {
 		if _, err := os.Stat(path); err == nil {
 			c.probes.answers[path] = cliAnswer{exit: 1, stdout: notRunning}
@@ -664,5 +667,76 @@ func TestParseCLILdflags(t *testing.T) {
 		if got := parseCLILdflags(ldflags); got != want {
 			t.Errorf("parseCLILdflags(%q) = %+v, want %+v", ldflags, got, want)
 		}
+	}
+}
+
+// cliProgress is every cli-install-progress event's payload, in order.
+func (c *cliInstall) cliProgress() []CLIInstallProgress {
+	c.events.mu.Lock()
+	defer c.events.mu.Unlock()
+	var progress []CLIInstallProgress
+	for i, name := range c.events.names {
+		if name == "cli-install-progress" {
+			progress = append(progress, c.events.data[i][0].(CLIInstallProgress))
+		}
+	}
+	return progress
+}
+
+func TestInstallCLIReportsDownloadVerifyAndInstallProgress(t *testing.T) {
+	c := newCLIInstall(t, "linux", "amd64")
+	build := bytes.Repeat([]byte("x"), 3<<20)
+	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": build}))
+
+	result, err := c.app.InstallCLI(t.TempDir())
+	if err != nil || result.Outcome != "installed" {
+		t.Fatalf("result = %+v, %v, want installed", result, err)
+	}
+
+	progress := c.cliProgress()
+	if len(progress) < 4 {
+		t.Fatalf("progress = %+v, want download steps, verify and install", progress)
+	}
+	var steps []string
+	for _, p := range progress {
+		if len(steps) == 0 || steps[len(steps)-1] != p.Step {
+			steps = append(steps, p.Step)
+		}
+	}
+	if want := []string{"download", "verify", "install"}; !slices.Equal(steps, want) {
+		t.Fatalf("steps = %v, want %v", steps, want)
+	}
+	last := progress[0]
+	for _, p := range progress {
+		if p.Step != "download" {
+			break
+		}
+		if p.Total != int64(len(build)) && p.Received > 0 {
+			t.Fatalf("download total = %d, want the build's size %d", p.Total, len(build))
+		}
+		last = p
+	}
+	if last.Received != int64(len(build)) {
+		t.Fatalf("last download progress = %+v, want all %d bytes", last, len(build))
+	}
+}
+
+func TestCheckForCLIUpdateReportsProgressOnlyWhenItInstalls(t *testing.T) {
+	c := newCLIInstall(t, "linux", "amd64")
+	path := filepath.Join(t.TempDir(), "marasi")
+	if err := os.WriteFile(path, cliBinaryNew, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.app.UseCLIPath(path); err != nil {
+		t.Fatal(err)
+	}
+	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": cliBinaryNew}))
+
+	result, err := c.app.CheckForCLIUpdate()
+	if err != nil || result.Outcome != "up-to-date" {
+		t.Fatalf("result = %+v, %v, want up to date", result, err)
+	}
+	if progress := c.cliProgress(); len(progress) != 0 {
+		t.Fatalf("progress = %+v, want none for an up-to-date CLI", progress)
 	}
 }
