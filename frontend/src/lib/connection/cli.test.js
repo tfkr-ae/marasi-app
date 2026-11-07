@@ -1,4 +1,4 @@
-// How the Marasi CLI setup and Settings → Marasi CLI read Go's results.
+// How the Marasi CLI setup and Settings → Updates read Go's results.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {

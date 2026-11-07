@@ -2,7 +2,7 @@
 // checking for and installing a newer build of itself (`marasi update`,
 // another client, or its own check), as its update.* events report. This
 // is not the app's update (updateStore.js) nor the app installing the CLI
-// (cli_install.go). Settings → Marasi CLI shows it; available, installed
+// (cli_install.go). Settings → Updates shows it; available, installed
 // and failed also toast. It follows the active connection: a switch clears it.
 import { writable } from "svelte/store";
 

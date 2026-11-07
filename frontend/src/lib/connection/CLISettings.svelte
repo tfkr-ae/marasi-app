@@ -1,7 +1,8 @@
 <script>
-	// Settings → Marasi CLI, before Updates: where the CLI is, where it came
-	// from, its version, Check for CLI update, and its channel (follow the
-	// app, Release or Nightly). Go: cli_locate.go and cli_install.go.
+	// Settings → Updates, its Marasi CLI part (the page draws the heading,
+	// id "cli"): where the CLI is, where it came from, its version, Check for
+	// CLI update, and its channel (follow the app, Release or Nightly). Go:
+	// cli_locate.go and cli_install.go.
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { RefreshCw } from "lucide-svelte";
 	import { onMount } from "svelte";
@@ -87,7 +88,6 @@
 	}
 </script>
 
-<h3 class="text-sm font-bold">Marasi CLI</h3>
 <p class="text-xs opacity-70">Runs the local Marasi service.</p>
 
 {#if cli && !cli.found}
