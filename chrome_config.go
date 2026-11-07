@@ -3,21 +3,31 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/tfkr-ae/marasi/chrome"
 	"go.yaml.in/yaml/v3"
 )
 
-// The Chrome paths and profiles Start Chrome uses live in the app config,
-// whatever the connection: Chrome runs on this machine.
+// The Chrome paths and profiles Start Chrome uses are this machine's, in
+// Marasi's own config (marasi_config.yaml in Marasi's config directory),
+// shared with the Marasi CLI and every service instance, whatever the
+// connection: Chrome runs on this machine. Like Marasi's service.Chrome,
+// every call takes marasi_config.lock, rereads the file and changes only
+// chrome_dirs or chrome_profiles.
 const (
-	chromePathsKey    = "chrome_paths"
-	chromeProfilesKey = "chrome_profiles"
+	marasiConfigFile     = "marasi_config.yaml"
+	marasiConfigLockFile = "marasi_config.lock"
+	chromeDirsKey        = "chrome_dirs"
+	chromeProfilesKey    = "chrome_profiles"
+	// marasiConfigLockPoll and marasiConfigLockWait bound how the app waits
+	// for another holder of marasi_config.lock.
+	marasiConfigLockPoll = 10 * time.Millisecond
+	marasiConfigLockWait = 10 * time.Second
 )
 
 var (
@@ -26,16 +36,22 @@ var (
 	errChromeInvalid       = errors.New("invalid")
 )
 
-// chromePathEntry is a Chrome path as the app config stores it.
+// chromePathEntry is a Chrome path as marasi_config.yaml stores it.
 type chromePathEntry struct {
 	OS   string `yaml:"os"`
 	Path string `yaml:"path"`
 }
 
+// chromeSettings is the Chrome part of marasi_config.yaml.
+type chromeSettings struct {
+	paths    []chrome.PathConfig
+	profiles []string
+}
+
 // validChromePath reports whether path names an executable for an OS the
 // launcher knows.
 func validChromePath(path chrome.PathConfig) bool {
-	if strings.TrimSpace(path.Path) == "" {
+	if path.Path == "" {
 		return false
 	}
 	switch path.OS {
@@ -56,152 +72,178 @@ func validProfileName(name string) (string, error) {
 	return name, nil
 }
 
-func parseChromePaths(node *yaml.Node) []chrome.PathConfig {
-	out := []chrome.PathConfig{}
-	if node == nil {
-		return out
+// withChromeSettings takes marasi_config.lock in Marasi's config directory,
+// rereads marasi_config.yaml and hands its Chrome settings to change. When
+// change returns a key, that key alone is written back with the settings'
+// new value; every other key stays as it was. It returns the settings as
+// they stand after the call.
+func (a *App) withChromeSettings(change func(*chromeSettings) (string, error)) (settings chromeSettings, resultErr error) {
+	settings = chromeSettings{paths: []chrome.PathConfig{}, profiles: []string{}}
+	unlock, err := lockMarasiConfig(a.marasiConfigDir)
+	if err != nil {
+		return settings, err
 	}
-	var entries []chromePathEntry
-	if err := node.Decode(&entries); err != nil {
-		log.Printf("[!] %s section unusable, ignoring it: %v", chromePathsKey, err)
-		return out
+	defer func() { resultErr = errors.Join(resultErr, unlock()) }()
+
+	path := filepath.Join(a.marasiConfigDir, marasiConfigFile)
+	doc, err := readConfigDocument(path)
+	if err != nil {
+		return settings, fmt.Errorf("reading %s: %w", path, err)
 	}
-	for _, entry := range entries {
-		path := chrome.PathConfig{OS: entry.OS, Path: entry.Path}
-		if validChromePath(path) && !slices.Contains(out, path) {
-			out = append(out, path)
+	read, err := parseChromeSettings(doc)
+	if err != nil {
+		return settings, fmt.Errorf("reading %s: %w", path, err)
+	}
+	settings = read
+	if change == nil {
+		return settings, nil
+	}
+	next := chromeSettings{paths: slices.Clone(read.paths), profiles: slices.Clone(read.profiles)}
+	key, err := change(&next)
+	if err != nil || key == "" {
+		return settings, err
+	}
+	var value any = next.profiles
+	if key == chromeDirsKey {
+		entries := make([]chromePathEntry, len(next.paths))
+		for i, p := range next.paths {
+			entries[i] = chromePathEntry{OS: p.OS, Path: p.Path}
+		}
+		value = entries
+	}
+	if err := writeConfigKeys(path, map[string]any{key: value}); err != nil {
+		return settings, fmt.Errorf("saving %s: %w", key, err)
+	}
+	return next, nil
+}
+
+// parseChromeSettings reads chrome_dirs and chrome_profiles from a
+// marasi_config.yaml document. A section Marasi couldn't read either is an
+// error, so the app never writes over it.
+func parseChromeSettings(doc *yaml.Node) (chromeSettings, error) {
+	settings := chromeSettings{paths: []chrome.PathConfig{}, profiles: []string{}}
+	if node := documentValue(doc, chromeDirsKey); node != nil {
+		var entries []chromePathEntry
+		if err := node.Decode(&entries); err != nil {
+			return settings, fmt.Errorf("%s: %w", chromeDirsKey, err)
+		}
+		for _, entry := range entries {
+			settings.paths = append(settings.paths, chrome.PathConfig{OS: entry.OS, Path: entry.Path})
 		}
 	}
-	return out
-}
-
-func parseChromeProfiles(node *yaml.Node) []string {
-	out := []string{}
-	if node == nil {
-		return out
-	}
-	var names []string
-	if err := node.Decode(&names); err != nil {
-		log.Printf("[!] %s section unusable, ignoring it: %v", chromeProfilesKey, err)
-		return out
-	}
-	for _, name := range names {
-		if valid, err := validProfileName(name); err == nil && !slices.Contains(out, valid) {
-			out = append(out, valid)
+	if node := documentValue(doc, chromeProfilesKey); node != nil {
+		var names []string
+		if err := node.Decode(&names); err != nil {
+			return settings, fmt.Errorf("%s: %w", chromeProfilesKey, err)
 		}
+		settings.profiles = append(settings.profiles, names...)
 	}
-	return out
+	return settings, nil
 }
 
-// writeChromePaths saves paths and makes them the live list. Callers hold mu.
-func (cfg *Config) writeChromePaths(paths []chrome.PathConfig) error {
-	entries := make([]chromePathEntry, len(paths))
-	for i, path := range paths {
-		entries[i] = chromePathEntry{OS: path.OS, Path: path.Path}
+// lockMarasiConfig polls for an exclusive lock on marasi_config.lock in dir,
+// the lock Marasi's CLI and service instances hold while they reread and
+// write marasi_config.yaml.
+func lockMarasiConfig(dir string) (unlock func() error, err error) {
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, fmt.Errorf("creating Marasi's config directory: %w", err)
 	}
-	if err := writeConfigKeys(cfg.path(), map[string]any{chromePathsKey: entries}); err != nil {
-		return fmt.Errorf("saving chrome paths: %w", err)
+	path := filepath.Join(dir, marasiConfigLockFile)
+	lock, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
-	cfg.chromePaths = paths
-	return nil
-}
-
-// writeChromeProfiles saves profiles and makes them the live list. Callers
-// hold mu.
-func (cfg *Config) writeChromeProfiles(profiles []string) error {
-	if err := writeConfigKeys(cfg.path(), map[string]any{chromeProfilesKey: profiles}); err != nil {
-		return fmt.Errorf("saving chrome profiles: %w", err)
+	deadline := time.Now().Add(marasiConfigLockWait)
+	for {
+		err := tryLockFile(lock)
+		if err == nil {
+			return func() error { return errors.Join(unlockFile(lock), lock.Close()) }, nil
+		}
+		if !lockUnavailable(err) {
+			return nil, errors.Join(fmt.Errorf("locking %s: %w", path, err), lock.Close())
+		}
+		if !time.Now().Before(deadline) {
+			return nil, errors.Join(fmt.Errorf("locking %s: another Marasi process holds it", path), lock.Close())
+		}
+		time.Sleep(marasiConfigLockPoll)
 	}
-	cfg.chromeProfiles = profiles
-	return nil
 }
 
 // GetChromePaths returns the Chrome executables Start Chrome tries first.
 func (a *App) GetChromePaths() ([]chrome.PathConfig, error) {
-	a.Config.mu.Lock()
-	defer a.Config.mu.Unlock()
-	return slices.Clone(a.Config.chromePaths), nil
+	settings, err := a.withChromeSettings(nil)
+	return settings.paths, err
 }
 
 // AddChromePath adds a Chrome executable for os and returns the paths.
 func (a *App) AddChromePath(path, os string) ([]chrome.PathConfig, error) {
-	cfg := a.Config
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
 	entry := chrome.PathConfig{OS: os, Path: strings.TrimSpace(path)}
-	switch {
-	case !validChromePath(entry):
-		return slices.Clone(cfg.chromePaths), fmt.Errorf("adding chrome path: %w path or OS", errChromeInvalid)
-	case slices.Contains(cfg.chromePaths, entry):
-		return slices.Clone(cfg.chromePaths), fmt.Errorf("adding chrome path %s: %w", entry.Path, errChromeAlreadyExists)
-	}
-	if err := cfg.writeChromePaths(append(slices.Clone(cfg.chromePaths), entry)); err != nil {
-		return slices.Clone(cfg.chromePaths), err
-	}
-	return slices.Clone(cfg.chromePaths), nil
+	settings, err := a.withChromeSettings(func(s *chromeSettings) (string, error) {
+		switch {
+		case !validChromePath(entry):
+			return "", fmt.Errorf("adding chrome path: %w path or OS", errChromeInvalid)
+		case slices.Contains(s.paths, entry):
+			return "", fmt.Errorf("adding chrome path %s: %w", entry.Path, errChromeAlreadyExists)
+		}
+		s.paths = append(s.paths, entry)
+		return chromeDirsKey, nil
+	})
+	return settings.paths, err
 }
 
 // DeleteChromePath removes a Chrome executable and returns the paths.
 func (a *App) DeleteChromePath(path, os string) ([]chrome.PathConfig, error) {
-	cfg := a.Config
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
 	entry := chrome.PathConfig{OS: os, Path: path}
-	if !slices.Contains(cfg.chromePaths, entry) {
-		return slices.Clone(cfg.chromePaths), fmt.Errorf("deleting chrome path %s: %w", path, errChromeNotFound)
-	}
-	next := slices.DeleteFunc(slices.Clone(cfg.chromePaths), func(p chrome.PathConfig) bool { return p == entry })
-	if err := cfg.writeChromePaths(next); err != nil {
-		return slices.Clone(cfg.chromePaths), err
-	}
-	return slices.Clone(cfg.chromePaths), nil
+	settings, err := a.withChromeSettings(func(s *chromeSettings) (string, error) {
+		if !slices.Contains(s.paths, entry) {
+			return "", fmt.Errorf("deleting chrome path %s: %w", path, errChromeNotFound)
+		}
+		s.paths = slices.DeleteFunc(s.paths, func(p chrome.PathConfig) bool { return p == entry })
+		return chromeDirsKey, nil
+	})
+	return settings.paths, err
 }
 
 // GetChromeProfiles returns the Chrome profiles besides the default one.
 func (a *App) GetChromeProfiles() ([]string, error) {
-	a.Config.mu.Lock()
-	defer a.Config.mu.Unlock()
-	return slices.Clone(a.Config.chromeProfiles), nil
+	settings, err := a.withChromeSettings(nil)
+	return settings.profiles, err
 }
 
 // AddChromeProfile adds a Chrome profile and returns the profiles. Chrome
 // creates its user-data directory on first start.
 func (a *App) AddChromeProfile(name string) ([]string, error) {
-	cfg := a.Config
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
-	profile, err := validProfileName(name)
-	if err != nil {
-		return slices.Clone(cfg.chromeProfiles), fmt.Errorf("adding %w", err)
-	}
-	if slices.Contains(cfg.chromeProfiles, profile) {
-		return slices.Clone(cfg.chromeProfiles), fmt.Errorf("adding chrome profile %s: %w", profile, errChromeAlreadyExists)
-	}
-	if err := cfg.writeChromeProfiles(append(slices.Clone(cfg.chromeProfiles), profile)); err != nil {
-		return slices.Clone(cfg.chromeProfiles), err
-	}
-	return slices.Clone(cfg.chromeProfiles), nil
+	settings, err := a.withChromeSettings(func(s *chromeSettings) (string, error) {
+		profile, err := validProfileName(name)
+		if err != nil {
+			return "", fmt.Errorf("adding %w", err)
+		}
+		if slices.Contains(s.profiles, profile) {
+			return "", fmt.Errorf("adding chrome profile %s: %w", profile, errChromeAlreadyExists)
+		}
+		s.profiles = append(s.profiles, profile)
+		return chromeProfilesKey, nil
+	})
+	return settings.profiles, err
 }
 
-// DeleteChromeProfile removes a Chrome profile and its user-data directory,
-// and returns the profiles.
+// DeleteChromeProfile removes a Chrome profile and its user-data directory
+// under chrome_profiles in Marasi's config directory, and returns the
+// profiles.
 func (a *App) DeleteChromeProfile(name string) ([]string, error) {
-	cfg := a.Config
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
-	profile, err := validProfileName(name)
-	if err != nil {
-		return slices.Clone(cfg.chromeProfiles), fmt.Errorf("deleting %w", err)
-	}
-	if !slices.Contains(cfg.chromeProfiles, profile) {
-		return slices.Clone(cfg.chromeProfiles), fmt.Errorf("deleting chrome profile %s: %w", profile, errChromeNotFound)
-	}
-	if err := os.RemoveAll(filepath.Join(a.chromeConfigDir, "chrome_profiles", profile)); err != nil {
-		return slices.Clone(cfg.chromeProfiles), fmt.Errorf("deleting chrome profile %s: %w", profile, err)
-	}
-	next := slices.DeleteFunc(slices.Clone(cfg.chromeProfiles), func(p string) bool { return p == profile })
-	if err := cfg.writeChromeProfiles(next); err != nil {
-		return slices.Clone(cfg.chromeProfiles), err
-	}
-	return slices.Clone(cfg.chromeProfiles), nil
+	settings, err := a.withChromeSettings(func(s *chromeSettings) (string, error) {
+		profile, err := validProfileName(name)
+		if err != nil {
+			return "", fmt.Errorf("deleting %w", err)
+		}
+		if !slices.Contains(s.profiles, profile) {
+			return "", fmt.Errorf("deleting chrome profile %s: %w", profile, errChromeNotFound)
+		}
+		if err := os.RemoveAll(filepath.Join(a.marasiConfigDir, "chrome_profiles", profile)); err != nil {
+			return "", fmt.Errorf("deleting chrome profile %s: %w", profile, err)
+		}
+		s.profiles = slices.DeleteFunc(s.profiles, func(p string) bool { return p == profile })
+		return chromeProfilesKey, nil
+	})
+	return settings.profiles, err
 }

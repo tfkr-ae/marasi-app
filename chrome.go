@@ -62,8 +62,9 @@ func launchWithMarasi(launch ChromeLaunch) error {
 
 // StartBrowser starts Chrome on this machine aimed at the connection's
 // proxy listener and pinned to its certificate's SPKI hash. Chrome's paths
-// and profiles stay in the app config, whatever the
-// connection. It never calls the service's POST /chrome/start.
+// and profiles are this machine's, in Marasi's marasi_config.yaml
+// (chrome_config.go), whatever the connection. It never calls the service's
+// POST /chrome/start.
 func (a *App) StartBrowser(start ChromeStart) error {
 	address, port, err := chromeProxy(start)
 	if err != nil {
@@ -76,20 +77,20 @@ func (a *App) StartBrowser(start ChromeStart) error {
 	if profile == "" {
 		profile = "default-profile"
 	}
-	if profile != "default-profile" {
-		profiles, _ := a.GetChromeProfiles()
-		if !slices.Contains(profiles, profile) {
-			return fmt.Errorf("starting Chrome: profile %s: %w", profile, errChromeNotFound)
-		}
+	settings, err := a.withChromeSettings(nil)
+	if err != nil {
+		return fmt.Errorf("starting Chrome: %w", err)
 	}
-	paths, _ := a.GetChromePaths()
+	if profile != "default-profile" && !slices.Contains(settings.profiles, profile) {
+		return fmt.Errorf("starting Chrome: profile %s: %w", profile, errChromeNotFound)
+	}
 	launch := ChromeLaunch{
 		Address:   address,
 		Port:      port,
 		SPKIHash:  start.SPKIHash,
-		ConfigDir: a.chromeConfigDir,
+		ConfigDir: a.marasiConfigDir,
 		Profile:   profile,
-		Paths:     paths,
+		Paths:     settings.paths,
 	}
 	if err := a.launchChrome(launch); err != nil {
 		return codedError("starting Chrome", codeChromeLaunchFailed, nil, err)
