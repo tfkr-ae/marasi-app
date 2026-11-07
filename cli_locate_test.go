@@ -247,3 +247,24 @@ func TestLocateCLIProbesWithTheIsolatedConfigDir(t *testing.T) {
 		t.Fatalf("probe args = %q, want service status --json with the isolated config dir", joined)
 	}
 }
+
+func TestBrowseCLIPathAsksForAFileAndSavesNothing(t *testing.T) {
+	app := cliTestApp(t, &cliProbes{answers: map[string]cliAnswer{}}, "")
+	var asked openDialogOptions
+	app.openFileDialog = func(options openDialogOptions) (string, error) {
+		asked = options
+		return "/opt/marasi", nil
+	}
+
+	path, err := app.BrowseCLIPath()
+
+	if err != nil || path != "/opt/marasi" {
+		t.Fatalf("BrowseCLIPath = %q, %v, want /opt/marasi", path, err)
+	}
+	if asked.Title != "Choose the Marasi CLI" {
+		t.Fatalf("dialog title = %q", asked.Title)
+	}
+	if saved := app.Config.cliPath(); saved.Path != "" {
+		t.Fatalf("saved %+v, want nothing", saved)
+	}
+}

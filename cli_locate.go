@@ -158,3 +158,9 @@ func unwrapExecError(err error) error {
 	}
 	return err
 }
+
+// BrowseCLIPath asks for the Marasi CLI with the file dialog and returns
+// the chosen path, "" when cancelled. UseCLIPath checks and saves it.
+func (a *App) BrowseCLIPath() (string, error) {
+	return a.openFileDialog(openDialogOptions{Title: "Choose the Marasi CLI"})
+}
