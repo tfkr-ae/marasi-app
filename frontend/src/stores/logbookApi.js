@@ -10,6 +10,8 @@
 // the Go SaveFileAs binding: (title, defaultName, filterName, filterPattern,
 // contentBase64) -> saved path, or "" when cancelled.
 
+import { toDetails } from "./trafficApi.js";
+
 /** How many records a full list reads at once. */
 const READ_AT_ONCE = 8;
 
@@ -61,48 +63,11 @@ export function toTestCase(t) {
   };
 }
 
-/** Base64 bytes as text (UTF-8). */
-export function base64Text(data) {
-  if (!data) return "";
-  return new TextDecoder().decode(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)));
-}
-
 /** Bytes as standard base64. */
 export function bytesBase64(bytes) {
   let binary = "";
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(binary);
-}
-
-/** A pair from GET /traffic/{id}, in the full-pair shape the Ledger drawer reads. */
-export function toPair(p) {
-  const request = p.request ?? {};
-  const response = p.response ?? {};
-  return {
-    Request: {
-      ID: p.id,
-      Number: p.number,
-      Scheme: request.scheme,
-      Method: request.method,
-      Host: request.host,
-      Path: request.path,
-      Raw: base64Text(request.raw),
-      RequestedAt: request.requested_at,
-    },
-    Response: {
-      ID: p.id,
-      Status: response.status,
-      StatusCode: response.status_code,
-      ContentType: response.content_type,
-      Length: response.length,
-      Raw: base64Text(response.raw),
-      RespondedAt: response.responded_at,
-    },
-    Metadata: p.metadata ?? {},
-    Note: p.note ?? "",
-    Highlight: p.highlight ?? null,
-    Prettified: { Request: p.prettified?.request ?? "", Response: p.prettified?.response ?? "" },
-  };
 }
 
 // The route each kind lives under.
@@ -201,7 +166,7 @@ export function createLogbookApi(client, { saveFile }) {
     listTestCases: () => readAll(client, "testCase", toTestCase),
     getFinding: async (id) => toFinding(await client.get(`/finding/${id}`)),
     getTestCase: async (id) => toTestCase(await client.get(`/test-case/${id}`)),
-    getPair: async (id) => toPair(await client.get(`/traffic/${id}`)),
+    getPair: async (id) => toDetails(await client.get(`/traffic/${id}`)),
     getArtifact: artifactWithBytes,
     async downloadArtifact(id) {
       const artifact = await artifactWithBytes(id);

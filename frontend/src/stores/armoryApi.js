@@ -2,13 +2,15 @@
 // route and maps its snake_case answer to the shapes createArmoryStore and
 // the Armory's components read (the old bindings' PascalCase). The keys keep
 // the old binding names, so the store's logic is unchanged. The mappers for
-// stream events (toTemplate, toRun, toWordlists, toRequestEvent,
-// toResponseEvent) live here too.
+// stream events (toTemplate, toRun, toWordlists) live here too; traffic
+// events use trafficApi.js's toRequestEvent and toResponseEvent.
 //
 // Calls with no single route are composed: a template from a pair (GET
 // /traffic/{id}, then POST /armory/template), the active runs (each
 // template's runs; Marasi has no project-wide list yet), and the run's
 // traffic and group counts (GET /traffic narrowed to the run's metadata).
+
+import { decodeBase64Text } from "../lib/service/bytes.js";
 
 /** The most pairs one GET /traffic page holds. */
 export const TRAFFIC_PAGE_LIMIT = 500;
@@ -69,44 +71,10 @@ export function toPairSummary(pair) {
   };
 }
 
-/** A traffic.request event, as the run's rows take a new pair. */
-export function toRequestEvent(req) {
-  return {
-    ID: req.id,
-    Number: req.number,
-    Scheme: req.scheme,
-    Method: req.method,
-    Host: req.host,
-    Path: req.path,
-    Metadata: req.metadata ?? {},
-    RequestedAt: req.requested_at,
-  };
-}
-
-/** A traffic.response event, as the run's rows fill a pair's response. */
-export function toResponseEvent(res) {
-  return {
-    ID: res.id,
-    Status: res.status,
-    StatusCode: res.status_code,
-    ContentType: res.content_type,
-    Length: res.length,
-    Metadata: res.metadata ?? {},
-    RespondedAt: res.responded_at,
-    UpstreamProxy: res.upstream_proxy ?? null,
-  };
-}
-
 /** The traffic query for the pairs the run `runId` sent. */
 export function runQuery(runId, narrowing = "") {
   const query = `metadata.armory_run_id = ${JSON.stringify(String(runId))}`;
   return narrowing ? `${query} AND (${narrowing})` : query;
-}
-
-/** Base64 to text, as UTF-8. */
-function decodeBase64(raw) {
-  const bytes = Uint8Array.from(atob(raw ?? ""), (c) => c.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
 }
 
 const templatePath = (id) => `/armory/template/${encodeURIComponent(id)}`;
@@ -166,7 +134,7 @@ export function createArmoryApi(client) {
     async CreateArmoryTemplateFromRequest(requestId) {
       const pair = await client.get(`/traffic/${encodeURIComponent(requestId)}`);
       const { method, host, path, raw } = pair.request;
-      return createTemplate(`${method} ${host}${path}`, "Imported from request history", decodeBase64(raw));
+      return createTemplate(`${method} ${host}${path}`, "Imported from request history", decodeBase64Text(raw));
     },
     async UpdateArmoryTemplate(id, name, description, rawTemplate) {
       return toTemplate(await client.post(templatePath(id), { name, description, raw_template: rawTemplate }));

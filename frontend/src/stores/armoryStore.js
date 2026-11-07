@@ -9,7 +9,8 @@ import {
 import { on } from "../lib/runtime.js";
 import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
-import { createArmoryApi, toRequestEvent, toResponseEvent } from "./armoryApi.js";
+import { createArmoryApi } from "./armoryApi.js";
+import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { createArmoryStore } from "./createArmoryStore.js";
 import { projectData } from "./projectData.js";
 
