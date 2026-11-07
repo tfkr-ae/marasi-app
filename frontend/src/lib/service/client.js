@@ -19,7 +19,9 @@
 // missed before going live. When it can't (the id expired from its replay
 // buffer, is from another run, or isn't its own), the first event is
 // `stream.reset` and onReset gets its reason: "expired", "restarted" or
-// "invalid". A fresh openEvents() forgets the id.
+// "invalid". A resume with no id to send, because the stream it follows
+// carried no event, can't replay either: onReset gets "none" once the new
+// stream is open. A fresh openEvents() forgets the id.
 //
 // holdWrites(true) refuses every call but GETs and /service/ routes with a
 // project_changed ServiceError, before it reaches the service: the
@@ -163,11 +165,14 @@ export function createServiceClient({ fetch, EventSource }) {
       this.closeEvents();
       if (!resume) lastEventId = "";
       const query = lastEventId ? { last_event_id: lastEventId } : undefined;
+      const unresumable = resume && !lastEventId;
       const source = new EventSource(urlFor("/events", query), { headers: authHeaders() });
       const current = { source, names: new Set(), dropped: false };
       stream = current;
       source.onopen = () => {
-        if (stream === current) onOpen();
+        if (stream !== current) return;
+        onOpen();
+        if (unresumable) onReset("none");
       };
       source.onerror = (event) => {
         if (stream !== current || current.dropped) return;

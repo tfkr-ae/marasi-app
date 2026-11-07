@@ -368,3 +368,16 @@ test("a stream reset reaches onReset with its reason, and its id is the one to r
   client.openEvents({ resume: true });
   assert.equal(events.sources[2].url, "http://127.0.0.1:52001/events?last_event_id=old.9000");
 });
+
+test("a resume with no id to resume from (no event came yet) reports a reset once open", () => {
+  const { client, events } = setup();
+  client.use({ url: "http://127.0.0.1:52001", password: "pw" });
+  const resets = [];
+  client.openEvents();
+  events.sources[0].drop();
+  client.openEvents({ resume: true, onReset: (reason) => resets.push(reason) });
+  assert.equal(events.sources[1].url, "http://127.0.0.1:52001/events");
+  assert.deepEqual(resets, []);
+  events.sources[1].open();
+  assert.deepEqual(resets, ["none"]);
+});
