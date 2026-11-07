@@ -382,7 +382,7 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
   return {
     subscribe: store.subscribe,
     populate,
-    // The held items and the flag again after a reconnect; edits, picks
+    // The held items and the flag again after a stream reset; edits, picks
     // and the selection stay with the items still held.
     resync: populate,
     clear,

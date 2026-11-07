@@ -227,7 +227,7 @@ export function createArmoryStore(api) {
     return run;
   }
 
-  // Reads the service's data again in place after a reconnect: the
+  // Reads the service's data again in place after a stream reset: the
   // templates, wordlists, active runs, the runs already loaded and the open
   // run's traffic. What only the app holds stays: the selection, the
   // template draft, run settings, search and the drawer.

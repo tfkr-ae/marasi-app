@@ -59,7 +59,7 @@ export function createExtensionsStore(
   }
 
   /**
-   * Reads every extension again in place after a reconnect, keeping the
+   * Reads every extension again in place after a stream reset, keeping the
    * editors' code and the UI inputs not yet sent.
    */
   async function resync() {

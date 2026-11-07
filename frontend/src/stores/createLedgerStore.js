@@ -956,7 +956,7 @@ export function createLedgerStore(api) {
   }
 
   /**
-   * Brings the Ledger up to date after a reconnect to the same project, in
+   * Brings the Ledger up to date after a stream reset (expired or invalid), in
    * place: the project's exclusion is read again (another client may have
    * changed it), the rows are read again where they are, as after a bulk
    * change, and the matches captured meanwhile are counted. The scroll,
