@@ -509,15 +509,24 @@ export function createLogbookStore(api, timers = globalThis) {
   // write) stamps it in `changed`; each read takes a tick as it starts
   // (`lastRead` per record, `listRead` for the lists). A read's snapshot of
   // a record applies only when nothing changed the record and no newer read
-  // of it started since. `clear` starts a new `epoch`, dropping every read.
+  // of it started since. A deletion also stamps `deleted`: a record missing
+  // here is gone only when deleted after the read started, else not loaded
+  // yet, and the read adds it. `clear` starts a new `epoch`, dropping every
+  // read.
   let clock = 0;
   let epoch = 0;
   let listRead = 0;
   const changed = new Map();
+  const deleted = new Map();
   const lastRead = new Map();
   const keyOf = (kind, id) => `${kind} ${id}`;
   const touch = (kind, id) => changed.set(keyOf(kind, id), ++clock);
+  const tombstone = (kind, id) => {
+    touch(kind, id);
+    deleted.set(keyOf(kind, id), clock);
+  };
   const changedSince = (kind, id, at) => (changed.get(keyOf(kind, id)) ?? 0) > at;
+  const deletedSince = (kind, id, at) => (deleted.get(keyOf(kind, id)) ?? 0) > at;
   const newerRead = (kind, id, at) => Math.max(listRead, lastRead.get(keyOf(kind, id)) ?? 0) > at;
 
   /**
@@ -539,13 +548,15 @@ export function createLogbookStore(api, timers = globalThis) {
   }
 
   // The list read at `at` over the `local` one: the read's record where
-  // nothing changed it since, else the local record (or its absence, when
-  // deleted here), which is read again.
+  // nothing changed it since, else the local record, or the read's when
+  // none is listed and no deletion followed the read. A record changed
+  // since is read again.
   function mergedRead(kind, at, read, local) {
     const fresh = (id) => !changedSince(kind, id, at) && !newerRead(kind, id, at);
     const localOf = new Map(local.map((r) => [String(r.ID), r]));
     const readIds = new Set(read.map((r) => String(r.ID)));
-    const next = read.flatMap((r) => (fresh(r.ID) ? [r] : localOf.has(String(r.ID)) ? [localOf.get(String(r.ID))] : []));
+    const kept = (r) => (fresh(r.ID) ? r : (localOf.get(String(r.ID)) ?? (deletedSince(kind, r.ID, at) ? null : r)));
+    const next = read.flatMap((r) => kept(r) ?? []);
     const added = local.filter((r) => !readIds.has(String(r.ID)) && !fresh(r.ID));
     for (const r of [...next, ...added]) if (changedSince(kind, r.ID, at)) markStale(kind, r.ID);
     return [...added, ...next];
@@ -553,13 +564,14 @@ export function createLogbookStore(api, timers = globalThis) {
 
   // Reads the "finding" or "testCase" with `id` again and applies it by
   // `apply(record)` under the clock's rule. A read a local change overtook
-  // asks again once traffic settles; one a newer read overtook is dropped.
+  // asks again once traffic settles; one a newer read or a deletion
+  // overtook is dropped.
   async function reread(kind, id, apply) {
     const at = ++clock;
     const started = epoch;
     lastRead.set(keyOf(kind, id), at);
     const record = await (kind === "finding" ? api.getFinding(id) : api.getTestCase(id));
-    if (started !== epoch || newerRead(kind, id, at)) return;
+    if (started !== epoch || newerRead(kind, id, at) || deletedSince(kind, id, at)) return;
     if (changedSince(kind, id, at)) markStale(kind, id);
     else apply(record);
   }
@@ -620,6 +632,7 @@ export function createLogbookStore(api, timers = globalThis) {
     epoch++;
     listRead = 0;
     changed.clear();
+    deleted.clear();
     lastRead.clear();
     pending = null;
     stale.clear();
@@ -952,7 +965,7 @@ export function createLogbookStore(api, timers = globalThis) {
     const state = get(store);
     const before = recordsOf(state, kind).find((r) => sameID(r.ID, id));
     if (state.fix?.kind === kind && state.fix?.id === id) pending = null;
-    touch(kind, id);
+    tombstone(kind, id);
     store.update((s) => removed(before ? followed(s, kind, id, before, null) : s, kind, id));
   }
 
@@ -994,7 +1007,7 @@ export function createLogbookStore(api, timers = globalThis) {
     const records = [...stale.values()];
     stale.clear();
     for (const [kind, id] of records)
-      reread(kind, id, (record) => patchRecord(kind, id, () => record, { read: true })).catch((err) =>
+      reread(kind, id, (record) => patchRecord(kind, id, () => record, { create: true, read: true })).catch((err) =>
         console.error(`Rereading ${kind} ${id} failed:`, err),
       );
   }
@@ -1078,7 +1091,7 @@ export function createLogbookStore(api, timers = globalThis) {
       deleting.delete(id);
     }
     if (get(store).fix?.kind === kind && get(store).fix?.id === id) pending = null;
-    touch(kind, id);
+    tombstone(kind, id);
     store.update((state) => removed(state, kind, id));
     return { ok: true };
   }
