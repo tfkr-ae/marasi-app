@@ -196,6 +196,42 @@ test("a restart seen before an earlier reconnect doesn't count again", () => {
   assert.equal(types.at(-1), "resync");
 });
 
+// /service/status names nothing that changes per process, so a restart at
+// the same version shows as the service being gone: the local reconnect
+// had to start the instance, or an attempt got no answer from the service.
+test("a reconnect that had to start the local instance loads the project in full", () => {
+  const { state, types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, { ...reconnected(), wasStopped: true });
+  assert.equal(state.phase, "project-changed");
+  assert.equal(types.at(-1), "confirm-load");
+});
+
+test("a reconnect after an attempt the service didn't answer loads the project in full", () => {
+  const { state, types } = after(
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    { type: "STREAM_DROPPED", unreachable: true },
+    { type: "RECONNECT_NOW" },
+    reconnected(),
+  );
+  assert.equal(state.phase, "project-changed");
+  assert.equal(types.at(-1), "confirm-load");
+});
+
+test("a service gone during an earlier reconnect doesn't count again", () => {
+  const { types } = after(
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    { type: "STREAM_DROPPED", unreachable: true },
+    { type: "RECONNECT_NOW" },
+    reconnected(),
+    { type: "LOAD_CONFIRMED" },
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected(),
+  );
+  assert.equal(types.at(-1), "resync");
+});
+
 test("an action out of turn is refused and changes nothing", () => {
   const { state, refusals } = run({ type: "APP_STARTED" }, { type: "CONNECTED", status }, { type: "RETRY" });
   assert.equal(state.phase, "starting");
@@ -317,6 +353,7 @@ async function connectedStore(options = {}) {
   let connectedYet = false;
   const later = (name) => (...args) => (connectedYet && options[name] ? options[name](...args) : undefined);
   const fake = fakeApi({
+    connectLocal: () => later("connectLocal")() ?? { url: "http://127.0.0.1:51391", password: "pw", startedByApp: true },
     readStatus: () => later("readStatus")() ?? status,
     confirmSwitch: () => later("confirmSwitch")() ?? true,
   });
@@ -355,7 +392,7 @@ test("a failed attempt backs off, and Retry now skips the wait", async () => {
   let down = true;
   const { store, calls, timers, drop } = await connectedStore({
     readStatus: () => {
-      if (down) throw new Error("GET /service/status: fetch failed");
+      if (down) throw Object.assign(new Error("GET /service/status: http_error: HTTP 503"), { status: 503 });
       return status;
     },
   });
@@ -400,6 +437,35 @@ test("a restart announced before the drop loads the project in full", async () =
   store.dispatch({ type: "SERVICE_RESTARTING" });
   drop();
   timers.fire();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+});
+
+test("a service killed and started again by the reconnect loads the project in full", async () => {
+  const { store, calls, timers, drop } = await connectedStore({
+    connectLocal: () => ({ url: "http://127.0.0.1:51391", password: "pw", startedByApp: true, wasStopped: true }),
+  });
+  drop();
+  timers.fire();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+});
+
+test("a service that didn't answer an attempt loads the project in full once back", async () => {
+  let down = true;
+  const { store, calls, timers, drop } = await connectedStore({
+    readStatus: () => {
+      if (down) throw new TypeError("fetch failed");
+      return status;
+    },
+  });
+  drop();
+  timers.fire();
+  await settle();
+  down = false;
+  store.retryNow();
   await reached(store, "connected");
   await settle();
   assert.deepEqual(calls.slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
