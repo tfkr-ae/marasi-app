@@ -103,6 +103,22 @@ func dialogButtons(options messageDialogOptions) []string {
 	return []string{"OK"}
 }
 
+// dialogAnswerEnv, when set in a -tags server build, names the button every
+// message dialog answers instead of its cancel button, so the headless
+// verification (verify-marasi) can go ahead where a researcher would.
+const dialogAnswerEnv = "MARASI_DIALOG_ANSWER"
+
+// serverDialogAnswer is a server build's answer to a dialog nobody sees:
+// answer when it names one of its buttons, else dismissedButton.
+func serverDialogAnswer(options messageDialogOptions, answer string) string {
+	for _, button := range options.Buttons {
+		if answer != "" && button == answer {
+			return answer
+		}
+	}
+	return dismissedButton(options)
+}
+
 // dismissedButton is the answer of a dialog nobody can see: its cancel
 // button, or else its default.
 func dismissedButton(options messageDialogOptions) string {

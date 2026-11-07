@@ -4,7 +4,7 @@ The `-tags server` build has no window, application menu, native dialog or syste
 
 What the server build does, from the v3.1.0 source (`pkg/application/application_server.go`, `browser_window.go`, `messageprocessor_browser.go`):
 
-- **Message dialogs** never show and never call back. `showMessageDialog` answers at once with the dialog's cancel button (else its default), so every question is declined.
+- **Message dialogs** never show and never call back. `showMessageDialog` answers at once with the dialog's cancel button (else its default), so every question is declined. Launch with `MARASI_DIALOG_ANSWER=<button label>` (for example `Load other`) and every dialog that has that button answers it instead, to drive the path that goes ahead.
 - **Open and save dialogs** fail with `file dialogs not available in server mode`; the binding rejects with that message.
 - **Clipboard** `SetText` reports failure, which `CopyCertToClipboard` returns as `copying to the clipboard failed`. In-page copies (`Copy request`, `Copy URL`, `Copy vector`, …) use Chrome's own clipboard and work in the browser.
 - **`Window.SetTitle`** succeeds and does nothing; `document.title` stays empty, also after opening a project.
@@ -14,6 +14,7 @@ What the server build does, from the v3.1.0 source (`pkg/application/application
 | Flow | Native call | Server build | How to check it |
 | --- | --- | --- | --- |
 | Switching projects with dirty Launchpad drafts or active Armory runs (`confirmLosingWork("Switch Project")`) | Warning dialog | Declined at once with no prompt: the picker closes, the project and the draft stay. Proven: `other06b.marasi` was never created. | Go: `app_draft_guard_test.go`. Native: the dialog's text and buttons, and that `Switch Project` switches. |
+| Another client (`marasi --config-dir … project open --name <p>`) opens a project while there are dirty Launchpad drafts, unsaved Logbook edits or active Armory runs (`ConfirmFollowProject`) | Warning dialog, `Stay` or `Load <p>` | Declined at once: the declined-load state (pages dimmed, `Load it` banner), the draft kept. With `MARASI_DIALOG_ANSWER="Load <p>"`, the project loads and the draft goes. Proven both ways. | Go: `app_follow_project_test.go`. Native: the dialog's text and buttons. |
 | Quitting (⌘Q, the macOS app menu's Quit) and the window's close button, with unsaved work | `ShouldQuit` and `WindowClosing`, then a warning dialog | No menu or window exists. | Go: `TestQuittingWithUnsavedWorkAsksBeforeQuitting`, `TestClosingTheWindow*`. Native: ⌘Q and the close button ask, Cancel keeps Marasi open, the action quits once. |
 | Restart to update (`RestartToUpdate`, `confirmLosingWork("Restart Marasi")`) | Warning dialog, quit, relaunch | A development build never offers an update; a release build would only stop the server. | Go: the `app_update_*` tests. Native: a release or nightly build installs and relaunches. |
 | Open Project › `Browse Files...` (`OpenFileDialog`) | Open dialog | The modal stays open; the console logs `Error opening file dialog: … file dialogs not available in server mode`. No toast. | Type the project's absolute path in `Search or enter new project name...` and press Enter: it opens by path on the service, as the picker's path would. Native: the dialog opens `.marasi` files and Cancel does nothing. |

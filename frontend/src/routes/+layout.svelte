@@ -264,6 +264,18 @@
 	}
 	let removeMenuShortcuts = () => {};
 	onMount(() => {
+		// Opens another client (the Marasi CLI, another app) starts while
+		// the app is connected: the opening screen follows them, and the
+		// connection store loads the opened project after the prompt.
+		const stopFollowing = projectStore.follow({
+			opened: (path) => connectionStore.followSwitch(path),
+			failed: (name) =>
+				toastStore.trigger({
+					message: `Couldn't open ${name}`,
+					background: "variant-filled-warning",
+					timeout: 3000,
+				}),
+		});
 		const stopReportingDrafts = reportUnsavedDrafts();
 		const stopExtensionToasts = showExtensionToasts((schema) =>
 			toastStore.trigger(extensionToast(schema)),
@@ -308,6 +320,7 @@
 			);
 		});
 		return () => {
+			stopFollowing();
 			stopReportingDrafts();
 			removeMenuShortcuts();
 			stopAbandonToasts?.();
