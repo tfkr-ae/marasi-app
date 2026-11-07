@@ -30,7 +30,7 @@ For a shortcut, also follow `keybindings-and-menus.md`.
 
 ## Bulk changes
 
-A bulk change acts on a selection in Marasi's shape: `selectionSpec` gives a list of ids, or a query with its `as_of` after ⌘A. `ledgerApi.js` sends it to the service's bulk endpoints. Marasi sends no event for bulk changes, so the store reads the rows again (`changed`) or patches them in place (`setHighlight`). Refusals come back as coded errors (see `marasi-service.md`):
+A bulk change acts on a selection in Marasi's shape: `selectionSpec` gives a list of ids, or a query with its `as_of` after ⌘A. `ledgerApi.js` sends it to the service's bulk endpoints. The store reads the rows again (`changed`) or patches them in place (`setHighlight`). Every bulk route also publishes `traffic.changed`, which names the selection but not the new values. Its handler (`onTrafficChanged`) reads the rows again in place once `EVENT_SETTLE_MS` passes without another, so another client's bulk change shows too, and the app's own runs one extra read. Refusals come back as coded errors (see `marasi-service.md`):
 - `selection_incomplete`, read by `incompleteJobs` in `selectionIncomplete.js`;
 - `launch_pending`, read by `pendingLaunchIDs` in `launchPending.js`.
 
@@ -38,7 +38,13 @@ A count of zero is reported by `unchanged`, with its text from `unchangedText` i
 
 ## Live traffic and project switches
 
-`ledgerStore.js` and `sitemapStore.js` follow the service's `traffic.request` and `traffic.response` events (`toRequestEvent`, `toResponseEvent` in `trafficApi.js`). The Ledger shows new rows when it next flushes (`flush`). `websocket.opened`, `websocket.closed` and `websocket.handshake_ended` patch rows through `patchWebSocketMetadata`. Both stores register with `projectData`: a project switch clears and loads them; a reconnect to the same project runs `resync`, which rereads rows and the exclusion in place and keeps scroll, selection and the open drawer. The sitemap reads once the Ledger's first rows and the exclusion are in (`setContext`).
+`ledgerStore.js` and `sitemapStore.js` follow the service's `traffic.request` and `traffic.response` events (`toRequestEvent`, `toResponseEvent` in `trafficApi.js`). The Ledger shows new rows when it next flushes (`flush`). `websocket.opened`, `websocket.closed` and `websocket.handshake_ended` patch rows through `patchWebSocketMetadata`.
+
+Another client's changes show without a resync:
+- `metadata.updated` replaces the pair's `Metadata` (`onMetadataUpdated`), and `note.updated` and `note.deleted` set `has_note` (`onNoteUpdated`, `onNoteDeleted`). Each makes a new row object. `LedgerDrawer.svelte` reads the note and an open metadata pane again whenever its row changes. While the note pane is open, the new text replaces it only when nothing typed waits to save, and `noteVersion` restarts the editor.
+- `traffic.changed` reads the rows again in place, debounced (see Bulk changes).
+- `traffic.index_complete` reads the results again when they were read while the index was building (`onIndexComplete`).
+- `sitemap.changed` (a rebuild, or another client's delete) reads the sitemap's open levels again after `SITEMAP_SETTLE_MS` (`onChanged` in `createSitemapStore.js`). Both stores register with `projectData`: a project switch clears and loads them; a reconnect to the same project runs `resync`, which rereads rows and the exclusion in place and keeps scroll, selection and the open drawer. The sitemap reads once the Ledger's first rows and the exclusion are in (`setContext`).
 
 ## Decisions
 

@@ -17,10 +17,19 @@ Which files work together on the Launchpad page, how a launch travels through Go
 ## A launch
 
 1. `launch` on the page calls the store's `launch`, which posts `/launchpad/{id}/launch` (`launchpadApi.js`). Its launch id is also the new entry's pair id.
-2. `configureLaunchHandlers` in `app.go` sends `launch-started` and `launch-finished`. `+layout.svelte` passes them to `onLaunchStarted` and `onLaunchFinished`.
+2. The service publishes `launch.started` and then `launch.completed`, `launch.cancelled` or `launch.failed`. `launchpadStore.js` passes them to `onLaunchStarted` and `onLaunchFinished`.
 3. The new entry arrives as a `request` event (`onRequest` in the store).
 
 While a launch is pending, Marasi refuses to move or remove its pair, or to delete its launchpad. Go reports that as `launch_pending` through `launchpadError`. The store then reads the pending launches again (`PendingLaunches`), and the page explains the refusal with the helpers in `frontend/src/lib/launchPending.js`, which the Ledger shares. `entryMove.js` handles the codes for stale views.
+
+## Another client's changes
+
+`launchpadStore.js` routes the stream's launchpad events to the store, so a change from the CLI or another app shows without a resync. Drafts, the open launchpad and the Entry selection stay where they can.
+
+- `launchpad.created` and `launchpad.updated` add or rename a launchpad from the payload (`onLaunchpadCreated`, `onLaunchpadUpdated`; `toLaunchpadSummary` in `launchpadApi.js`). `createLaunchpad` adds through the same `addLaunchpad`, so the app's own create, which the service may announce first, is listed once.
+- `launchpad.linked`, `launchpad.unlinked`, `launchpad.entries_moved`, and `traffic.changed` (through `launchpadsChangedBy`) call `onEntriesChanged(ids)`. After `LAUNCHPAD_SETTLE_MS`, it reads the touched launchpads' loaded entry lists, and the list's summaries for those not loaded (`readSummaries`). It drops entries that left from the Entry selection, and leaves drafts alone. `null` means any launchpad: a delete, highlight, note or metadata change.
+- `launchpad.deleted` (`onLaunchpadDeleted`) drops the launchpad as the app's own delete does (`forgetLaunchpad`), opening a neighbour. A dirty draft moves, in the same change, to `orphanedDrafts` (`{launchpadId, name, raw, useHttps}`). `unsavedDraftCount` counts it, so `reportUnsavedDrafts` still asks before quitting. The page announces each one with a toast, "Another client deleted "<name>". Restore its unsaved draft?". Restore (`restoreOrphanedDraft`) creates a launchpad of that name holding the draft, and closing the toast discards it (`discardOrphanedDraft`).
+- `launch.started` and `launch.completed`, `.cancelled` or `.failed` (Marasi's terminal statuses) record a launch from any client, so its entry arrives as one.
 
 ## Adding an entry action
 
