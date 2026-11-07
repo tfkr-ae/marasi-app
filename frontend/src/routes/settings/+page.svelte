@@ -56,6 +56,9 @@
 	import CLISettings from "../../lib/connection/CLISettings.svelte";
 	import { statusHint } from "../../lib/connection/status.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { followChromeConfig } from "../../lib/chromeConfigEvents.js";
+	import { service } from "../../lib/service/index.js";
+	import { get } from "svelte/store";
 	import {
 		highlightPalette,
 		resetHighlights,
@@ -424,17 +427,31 @@
 				automaticChecks = settings.AutomaticChecks;
 			})
 			.catch((error) => toastError(toastStore, "Error reading the update settings", error));
+		readChromePaths();
+		readChromeProfiles();
+		// `marasi chrome …` on this machine changes the same file.
+		return followChromeConfig(service.on, {
+			connectionKind: () => get(connectionStore).connection.kind,
+			onPaths: readChromePaths,
+			onProfiles: readChromeProfiles,
+		});
+	});
+
+	function readChromePaths() {
 		GetChromePaths()
 			.then((paths) => {
 				chromePaths = paths;
 			})
 			.catch(chromeError(toastStore, "Error reading Chrome paths"));
+	}
+
+	function readChromeProfiles() {
 		GetChromeProfiles()
 			.then((profiles) => {
 				chromeProfiles = profiles;
 			})
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
-	});
+	}
 </script>
 
 <div class="no-select flex h-full min-h-0 flex-col p-4 text-sm text-surface-900-50-token">

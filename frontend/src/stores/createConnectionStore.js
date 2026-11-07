@@ -98,6 +98,11 @@ export function initialConnection() {
     shareHost: "",
     // The app's own origin, which turning the password off always allows.
     appOrigin: null,
+    // The service announced a restart (service.restarting) and hasn't
+    // answered as the new run yet; why the last restart failed
+    // (service.restart_failed).
+    restarting: false,
+    restartError: null,
   };
 }
 
@@ -465,6 +470,7 @@ export function reduce(state, action) {
       const patch = {
         attempt: 0,
         trying: false,
+        restarting: false,
         url: action.url ?? state.url,
         owned: state.owned || Boolean(action.startedByApp),
         ...fromStatus(status),
@@ -494,6 +500,15 @@ export function reduce(state, action) {
       // client had no id to resume from): nothing was replayed, so read
       // every store again.
       return go(state, {}, [{ type: "resync" }]);
+
+    case "SERVICE_RESTARTING":
+      // `marasi service restart` (or another client) restarts the service:
+      // the stream drops next, and the new run ID loads in full.
+      return go(state, { restarting: true, restartError: null });
+
+    case "SERVICE_RESTART_FAILED":
+      // The service kept or rolled back to its old run.
+      return go(state, { restarting: false, restartError: action.failure?.error || "Restart failed" });
 
     case "FOLLOW_SWITCH":
       // Another client opened `path` on the service: read which project it

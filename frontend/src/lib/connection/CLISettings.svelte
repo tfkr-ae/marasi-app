@@ -19,6 +19,8 @@
 	import { cliResultText, cliSourceLabel } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import CLIProgress from "./CLIProgress.svelte";
+	import { serviceUpdateLine, serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
+	import { connectionStore } from "../../stores/connectionStore.js";
 
 	const toastStore = getToastStore();
 	let cli = null;
@@ -28,6 +30,8 @@
 	let installingUpdate = false;
 	let changing = false;
 
+	// The connected service updating its own binary (update.* events).
+	$: serviceUpdate = serviceUpdateLine($serviceUpdateStore);
 	$: primary = primaryButton($modeCurrent);
 	$: neutral = neutralButton($modeCurrent);
 	const row = "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
@@ -120,6 +124,17 @@
 	{#if checking && installingUpdate}
 		<div class="py-3"><CLIProgress /></div>
 	{/if}
+{/if}
+{#if serviceUpdate}
+	<div class={row} data-testid="service-update">
+		<div>
+			<p>Service update</p>
+			<p class="text-xs opacity-70">The Marasi that {$connectionStore.connection.name} runs</p>
+		</div>
+		<div class="{control} justify-end">
+			<p class="text-right text-xs break-words" data-testid="service-update-line">{serviceUpdate}</p>
+		</div>
+	</div>
 {/if}
 {#if channel}
 	<div class={row}>

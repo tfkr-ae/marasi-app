@@ -4,27 +4,50 @@
 	// blocks; the local connection offers Update CLI), and the
 	// drop and reconnect toasts (lib/connectionToasts.js). Pages stay
 	// mounted underneath.
-	import { onDestroy } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralVariant } from "../launchpad/format.js";
 	import { createConnectionToasts } from "../connectionToasts.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import UpdateCLI from "../connection/UpdateCLI.svelte";
+	import { service } from "../service/index.js";
+	import { SERVICE_UPDATE_EVENTS, serviceUpdateToast } from "../../stores/serviceUpdateStore.js";
 
 	$: neutral = `btn btn-sm rounded-none py-0.5 ${neutralVariant($modeCurrent)}`;
 	$: name = $connectionStore.connection.name;
 
-	onDestroy(connectionStore.subscribe(createConnectionToasts(getToastStore())));
+	const toastStore = getToastStore();
+	onDestroy(connectionStore.subscribe(createConnectionToasts(toastStore)));
+	// The connected service's own update: a short toast for found, installed
+	// and failed (Settings → Marasi CLI shows the rest).
+	onMount(() => {
+		const stops = SERVICE_UPDATE_EVENTS.map((event) =>
+			service.on(event, (data) => {
+				const toast = serviceUpdateToast(event, data ?? {}, $connectionStore.connection.name);
+				if (toast) toastStore.trigger({ ...toast, timeout: 5000 });
+			}),
+		);
+		return () => stops.forEach((stop) => stop());
+	});
 </script>
 
 {#if $connectionStore.phase === "reconnecting"}
 	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">
 		<span class="h-2 w-2 animate-pulse rounded-full bg-warning-500"></span>
-		<span class="flex-1">Reconnecting to {name} (attempt {$connectionStore.attempt}). Your work stays where it is.</span>
+		{#if $connectionStore.restarting}
+			<span class="flex-1">Restarting {name}. Your work stays where it is.</span>
+		{:else}
+			<span class="flex-1">Reconnecting to {name} (attempt {$connectionStore.attempt}). Your work stays where it is.</span>
+		{/if}
 		<button type="button" class={neutral} disabled={$connectionStore.trying} on:click={() => connectionStore.retryNow()}>
 			Retry now
 		</button>
+	</div>
+{:else if $connectionStore.phase === "connected" && $connectionStore.restarting}
+	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">
+		<span class="h-2 w-2 animate-pulse rounded-full bg-warning-500"></span>
+		<span class="flex-1">Restarting {name}…</span>
 	</div>
 {:else if $connectionStore.phase === "project-changed"}
 	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">

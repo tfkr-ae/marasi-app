@@ -13,6 +13,8 @@
 	import { toastError } from "../toasts.js";
 	import { reportMetadata } from "../../stores";
 	import { logbookStore } from "../../stores/logbookStore";
+	import { keptTemplate, reportTemplateEvents } from "../../stores/logbookEvents.js";
+	import { service } from "../service/index.js";
 	import ReportReview from "./ReportReview.svelte";
 
 	export let parent = undefined;
@@ -32,6 +34,18 @@
 	$: neutral = neutralVariant($modeCurrent);
 	$: includeTestCases = $reportMetadata.custom_properties?.include_test_cases !== false;
 	$: truncating = $reportMetadata.truncate_length > 0;
+
+	// Templates added, removed or restored anywhere (the CLI, another app)
+	// show while the review is open.
+	onMount(() => {
+		const stops = Object.entries(
+			reportTemplateEvents((names) => {
+				templates = names;
+				template = keptTemplate(names, template);
+			}),
+		).map(([name, handler]) => service.on(name, handler));
+		return () => stops.forEach((stop) => stop());
+	});
 
 	onMount(async () => {
 		try {

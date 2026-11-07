@@ -76,3 +76,7 @@ connectionStore.subscribe((state) => activeConnectionId.set(state.connection.id)
 for (const name of ["control_listener.updated", "control_listener.stopped", "control_listener.started"]) {
   service.on(name, (control) => connectionStore.dispatch({ type: "CONTROL_LOADED", control }));
 }
+// A restart another client (or `marasi service restart`) asks for shows in
+// the banner until the new run answers; a failed one says why.
+service.on("service.restarting", (restart) => connectionStore.dispatch({ type: "SERVICE_RESTARTING", restart }));
+service.on("service.restart_failed", (failure) => connectionStore.dispatch({ type: "SERVICE_RESTART_FAILED", failure }));

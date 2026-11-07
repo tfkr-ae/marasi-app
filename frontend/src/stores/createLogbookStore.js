@@ -228,6 +228,7 @@ export function groupsOf(state) {
 }
 
 const recordsOf = (state, kind) => (kind === "finding" ? state.findings : state.testCases);
+const listOf = (kind) => (kind === "finding" ? "findings" : "testCases");
 
 /**
  * The open record as { kind, record, focus }, focus the key of the item it
@@ -425,6 +426,70 @@ const copyOf = (kind, record) => ({
   Artifacts: [...(record.Artifacts ?? [])],
   ...(kind === "testCase" ? { Tags: [...(record.Tags ?? [])] } : {}),
 });
+
+// A list `mine` once `theirs` moved from `base`: what left `base` leaves,
+// what joined it joins, by `idOf`. Also whether that touched `mine`.
+function followList(base, theirs, mine, idOf = (x) => x) {
+  const ids = (list) => list.map(idOf);
+  const gone = missingFrom(ids(base), ids(theirs));
+  const added = theirs.filter((x) => !ids(base).includes(idOf(x)) && !ids(mine).includes(idOf(x)));
+  const next = [...mine.filter((x) => !gone.includes(idOf(x))), ...added];
+  return { next, touched: added.length > 0 || next.length - added.length < mine.length };
+}
+
+// The modal's session on a record that changed elsewhere to `after`: the
+// original becomes `after`, every field and link the draft left as it was
+// follows, and the input stays. `remote` turns "changed" when the change
+// touched the input.
+function rebased(session, after) {
+  const { kind, original, draft } = session;
+  const theirs = copyOf(kind, after);
+  const next = { ...draft };
+  for (const key of Object.keys(theirs))
+    if (key !== "Requests" && key !== "Artifacts" && same(draft[key], original[key])) next[key] = theirs[key];
+  const fieldTouched = FIELDS[kind].some(([key]) => !same(theirs[key], original[key]) && !same(theirs[key], draft[key]));
+  const requests = followList(original.Requests ?? [], theirs.Requests, draft.Requests ?? []);
+  const artifacts = followList(original.Artifacts ?? [], theirs.Artifacts, draft.Artifacts ?? [], (a) => a.ID);
+  next.Requests = requests.next;
+  next.Artifacts = artifacts.next;
+  const touched = isDirty(session) && (fieldTouched || requests.touched || artifacts.touched);
+  return { ...session, original: theirs, draft: next, remote: touched ? "changed" : session.remote ?? null };
+}
+
+// A session that creates `draft` again, its record deleted elsewhere: a
+// new record with the draft's fields and links; uploaded artifacts went
+// with the record, staged ones stay.
+function recreated(kind, draft) {
+  const { ID, CreatedAt, ...fields } = draft;
+  return {
+    kind,
+    isNew: true,
+    original: blankOf(kind),
+    draft: { ...fields, Artifacts: (draft.Artifacts ?? []).filter((a) => a.File) },
+    confirming: false,
+    saving: false,
+    error: null,
+    remote: "deleted",
+  };
+}
+
+// The state without the record of `kind` with `id`: out of its list, out
+// of the workspace and its fix, and a test case out of the findings that
+// named it.
+function removed(state, kind, id) {
+  const list = listOf(kind);
+  const wasOpen = state.open?.kind === kind && state.open?.id === id;
+  const fixed = state.fix?.kind === kind && state.fix?.id === id;
+  return {
+    ...state,
+    [list]: state[list].filter((r) => r.ID !== id),
+    ...(kind === "testCase"
+      ? { findings: state.findings.map((f) => (sameID(f.TestCaseID, id) ? { ...f, TestCaseID: null } : f)) }
+      : {}),
+    open: wasOpen ? null : state.open,
+    fix: fixed ? null : state.fix,
+  };
+}
 
 export function createLogbookStore(api) {
   const store = writable(initialState());
@@ -777,6 +842,88 @@ export function createLogbookStore(api) {
       return refreshFix({ ...state, [list]: next });
     });
 
+  // Changes written elsewhere (logbookEvents.js). Each updates the lists,
+  // then the edit session and inline fix on that record follow it.
+
+  // Records this app is deleting: their deleted events are its own.
+  const deleting = new Set();
+
+  // The modal's session and an inline fix with input, once the record of
+  // `kind` with `id` went from `before` to `after` (null when deleted)
+  // elsewhere. The researcher's input stays; what they left follows the
+  // change. `remote` says what happened: "changed" when the change touched
+  // input, "deleted" when the record went (Save then creates it again).
+  function followed(state, kind, id, before, after) {
+    let { session, fix } = state;
+    const mine = (slot) => slot && slot.kind === kind && sameID(slot.original?.ID ?? slot.id, id);
+    if (mine(session) && !session.isNew && !session.saving && !deleting.has(id))
+      session = after ? rebased(session, after) : recreated(kind, session.draft);
+    if (mine(fix) && isDirty(fix) && !fix.saving && !deleting.has(id)) {
+      if (after) {
+        const touched = FIX_FIELDS[fix.item].some((key) => !same(after[key], fix.original[key]) && !same(after[key], fix.draft[key]));
+        if (touched) fix = { ...fix, remote: "changed" };
+      } else if (!session) {
+        // The record view closes with it, so its input moves to the modal.
+        const picked = Object.fromEntries(FIX_FIELDS[fix.item].map((key) => [key, fix.draft[key]]));
+        session = recreated(kind, { ...copyOf(kind, before), ...picked, Requests: [...fix.draft.Requests] });
+      }
+    }
+    return { ...state, session, fix };
+  }
+
+  /**
+   * A "finding" or "testCase" another client (or this one) created or
+   * changed: `fields` over the listed record, keeping its links and
+   * artifacts, or a new record with none.
+   */
+  const applyRecord = (kind, fields) =>
+    patchRecord(kind, fields.ID, (old) => ({ Requests: [], Artifacts: [], ...old, ...fields }), { create: true });
+
+  /** A "finding" or "testCase" deleted elsewhere leaves the lists, as Delete does. */
+  function applyDeleted(kind, id) {
+    const state = get(store);
+    const before = recordsOf(state, kind).find((r) => sameID(r.ID, id));
+    if (state.fix?.kind === kind && state.fix?.id === id) pending = null;
+    store.update((s) => removed(before ? followed(s, kind, id, before, null) : s, kind, id));
+  }
+
+  // Changes the record of `kind` with `id` in its list by `change(record)`,
+  // or with `create` adds `change(undefined)` when it is not listed.
+  const patchRecord = (kind, id, change, { create = false } = {}) =>
+    store.update((state) => {
+      const list = listOf(kind);
+      const before = state[list].find((r) => sameID(r.ID, id));
+      if (!before && !create) return state;
+      const after = change(before);
+      const next = before ? state[list].map((r) => (r === before ? after : r)) : [after, ...state[list]];
+      const moved = { ...state, [list]: next };
+      return refreshFix(before ? followed(moved, kind, id, before, after) : moved);
+    });
+
+  /** A request linked to (`linked` true) or unlinked from a record elsewhere. */
+  const applyLink = (kind, id, request, isLinked) =>
+    patchRecord(kind, id, (r) => {
+      const requests = (r.Requests ?? []).filter((x) => x !== request);
+      return { ...r, Requests: isLinked ? [...requests, request] : requests };
+    });
+
+  /** An artifact uploaded elsewhere joins its finding or test case. */
+  function applyArtifact(artifact) {
+    const [kind, owner] = artifact.FindingID ? ["finding", artifact.FindingID] : ["testCase", artifact.TestCaseID];
+    patchRecord(kind, owner, (r) => {
+      const others = (r.Artifacts ?? []).filter((a) => a.ID !== artifact.ID);
+      return { ...r, Artifacts: [...others, artifact] };
+    });
+  }
+
+  /** An artifact deleted elsewhere leaves whichever record held it. */
+  function applyArtifactRemoved(id) {
+    for (const kind of ["finding", "testCase"])
+      for (const r of recordsOf(get(store), kind))
+        if ((r.Artifacts ?? []).some((a) => a.ID === id))
+          patchRecord(kind, r.ID, (rec) => ({ ...rec, Artifacts: rec.Artifacts.filter((a) => a.ID !== id) }));
+  }
+
   const BINDINGS = {
     finding: {
       create: (draft) => api.createDraftFinding(draft.Requests, draft.TestCaseID ?? null),
@@ -804,27 +951,16 @@ export function createLogbookStore(api) {
    * list: { ok: true }. A failed call changes nothing: { ok: false, error }.
    */
   async function deleteRecord(kind, id) {
+    deleting.add(id);
     try {
       await BINDINGS[kind].delete(id);
     } catch (error) {
       return { ok: false, error };
+    } finally {
+      deleting.delete(id);
     }
-    const fixed = get(store).fix?.kind === kind && get(store).fix?.id === id;
-    if (fixed) pending = null;
-    store.update((state) => {
-      const list = kind === "finding" ? "findings" : "testCases";
-      const wasOpen = state.open?.kind === kind && state.open?.id === id;
-      return {
-        ...state,
-        [list]: state[list].filter((r) => r.ID !== id),
-        // A deleted test case leaves the findings that named it.
-        ...(kind === "testCase"
-          ? { findings: state.findings.map((f) => (sameID(f.TestCaseID, id) ? { ...f, TestCaseID: null } : f)) }
-          : {}),
-        open: wasOpen ? null : state.open,
-        fix: fixed ? null : state.fix,
-      };
-    });
+    if (get(store).fix?.kind === kind && get(store).fix?.id === id) pending = null;
+    store.update((state) => removed(state, kind, id));
     return { ok: true };
   }
 
@@ -1020,6 +1156,11 @@ export function createLogbookStore(api) {
     exportReport: (template, metadata) => api.exportReport(template, metadata),
     linkNow,
     unlinkNow,
+    applyRecord,
+    applyDeleted,
+    applyLink,
+    applyArtifact,
+    applyArtifactRemoved,
     reload,
     resync,
     populate,
