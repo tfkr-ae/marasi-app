@@ -12,6 +12,7 @@ import (
 	"regexp"
 	goruntime "runtime"
 	"sync"
+	"time"
 
 	"aead.dev/minisign"
 )
@@ -71,6 +72,8 @@ type cliRuntime struct {
 	// homeDir and getenv find the default install folder.
 	homeDir func() (string, error)
 	getenv  func(name string) string
+	// sleep waits between attempts to remove a CLI an update moved aside.
+	sleep func(d time.Duration)
 
 	// mu makes installs and updates run one at a time.
 	mu sync.Mutex
@@ -97,6 +100,7 @@ func (a *App) useCLIRuntime() {
 	r.mkdirAll = func(path string) error { return os.MkdirAll(path, 0o755) }
 	r.homeDir = os.UserHomeDir
 	r.getenv = os.Getenv
+	r.sleep = time.Sleep
 }
 
 func parseMinisignKey(text string) (minisign.PublicKey, error) {

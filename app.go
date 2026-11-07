@@ -176,6 +176,7 @@ func newApp(configDir string) *App {
 func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
 	go a.removeUpdateLeftovers()
+	go a.removeCLILeftovers()
 	a.startUpdateChecks(ctx)
 	return nil
 }

@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -341,7 +343,8 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 
 // placeCLI copies the verified build next to target, marks the copy
 // executable on Unix, then renames it over target, so a failure at any step
-// leaves target as it was.
+// leaves target as it was. On Windows target may be running (the local
+// instance's service), so swapAside moves it aside first.
 func (a *App) placeCLI(download, target string) error {
 	r := &a.cliRuntime
 	dir := filepath.Dir(target)
@@ -364,7 +367,11 @@ func (a *App) placeCLI(download, target string) error {
 			return failed(UpdateFailureInstall, "Could not make %s executable: %v", target, err)
 		}
 	}
-	if err := r.rename(staged, target); err != nil {
+	place := r.rename
+	if r.goos == "windows" {
+		place = func(staged, target string) error { return swapAside(r.rename, r.remove, staged, target) }
+	}
+	if err := place(staged, target); err != nil {
 		r.remove(staged)
 		return failed(UpdateFailureInstall, "Could not install to %s: %v", target, err)
 	}
@@ -413,4 +420,31 @@ func trustedComment(signature []byte) string {
 		}
 	}
 	return ""
+}
+
+// removeCLILeftovers deletes the CLI a Windows install moved aside, beside
+// the saved CLI and the CLI on PATH, retrying while its process may still be
+// exiting. ServiceStartup runs it in the background.
+func (a *App) removeCLILeftovers() {
+	r := &a.cliRuntime
+	if r.goos != "windows" {
+		return
+	}
+	var paths []string
+	if saved := a.savedCLIPath(); saved.Path != "" {
+		paths = append(paths, saved.Path)
+	}
+	if path, err := r.lookPath("marasi"); err == nil && !slices.Contains(paths, path) {
+		paths = append(paths, path)
+	}
+	for _, path := range paths {
+		err := retryRemoval(func() error {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			return removeAside(r.remove, path)
+		}, r.sleep)
+		if err != nil {
+			log.Printf("removing the previous Marasi CLI left by an update: %v", err)
+		}
+	}
 }
