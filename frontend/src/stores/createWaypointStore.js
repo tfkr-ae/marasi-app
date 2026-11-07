@@ -19,14 +19,17 @@ export function createWaypointStore(client) {
     load: async () => apply(await client.get("/waypoint")),
 
     // Adds the waypoint, or updates the one the service already has for
-    // `hostname` (it refuses to add that one twice).
+    // `hostname` (it refuses to add that one twice). Both requests go
+    // through one binding, so a switch before the refusal lands updates
+    // nothing on the next connection.
     async save(hostname, override) {
+      const link = client.bind?.() ?? client;
       const waypoint = { hostname, override };
       try {
-        apply(await client.post("/waypoint", waypoint));
+        apply(await link.post("/waypoint", waypoint));
       } catch (err) {
         if (err?.code !== "waypoint_already_exists") throw err;
-        apply(await client.post("/waypoint/update", waypoint));
+        apply(await link.post("/waypoint/update", waypoint));
       }
     },
     remove: async (hostname) => apply(await client.del("/waypoint", { hostname })),

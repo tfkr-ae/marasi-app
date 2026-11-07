@@ -59,6 +59,7 @@
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { followChromeConfig } from "../../lib/chromeConfigEvents.js";
 	import { service } from "../../lib/service/index.js";
+	import { isSuperseded } from "../../lib/service/errors.js";
 	import { get } from "svelte/store";
 	import {
 		highlightPalette,
@@ -201,6 +202,8 @@
 		waypoints.remove(host).catch(waypointFailed("Waypoint not deleted"));
 	}
 	const waypointFailed = (message) => (err) => {
+		// A connection switch stopped it: nothing to report.
+		if (isSuperseded(err)) return;
 		console.error(`${message}:`, err);
 		toastStore.trigger({ message, background: "variant-filled-error" });
 	};

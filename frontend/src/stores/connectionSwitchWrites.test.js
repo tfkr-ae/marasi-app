@@ -5,7 +5,8 @@
 // action stops with a superseded error the UI shows nothing for.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { switchingService } from "./switchingService.js";
+import { switchingService, refusal } from "./switchingService.js";
+import { createWaypointStore } from "./createWaypointStore.js";
 import { isSuperseded } from "../lib/service/errors.js";
 import { createLedgerApi } from "./ledgerApi.js";
 import { createLedgerStore } from "./createLedgerStore.js";
@@ -301,4 +302,30 @@ test("WebSocket inject and close still reach the connection they began on", asyn
   await api.CloseWebSocket("r1", 1000, "done");
 
   assert.deepEqual(service.onA(), ["GET /traffic/r1/websocket", "POST /websocket/c1/inject", "GET /traffic/r1/websocket", "POST /websocket/c1/close"]);
+});
+
+const waypointTaken = { "POST /waypoint": refusal(409, { error: "waypoint_already_exists", message: "exists" }) };
+
+test("Waypoint save: a switch while the add is refused updates nothing on B", async () => {
+  const service = switchingService(waypointTaken);
+  const waypoints = createWaypointStore(service.client);
+  service.switchWhen("POST /waypoint");
+
+  await assert.rejects(waypoints.save("x.test", "127.0.0.1"), superseded);
+
+  assert.deepEqual(service.onA(), ["POST /waypoint"]);
+  assert.deepEqual(service.onB(), []);
+});
+
+test("Waypoint save still updates the one the connection already has", async () => {
+  const service = switchingService({
+    ...waypointTaken,
+    "POST /waypoint/update": { items: [{ hostname: "x.test", override: "127.0.0.1" }] },
+  });
+  const waypoints = createWaypointStore(service.client);
+
+  await waypoints.save("x.test", "127.0.0.1");
+
+  assert.deepEqual(service.onA(), ["POST /waypoint", "POST /waypoint/update"]);
+  assert.deepEqual(get(waypoints), { "x.test": "127.0.0.1" });
 });

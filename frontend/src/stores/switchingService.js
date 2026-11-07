@@ -2,6 +2,7 @@
 // for the switch suites (not used by the app). The client starts on A
 // (http://a:9000). `routes` maps "METHOD /path" to an answer body, or to a
 // function of (body, request) returning one; a missing route answers {}.
+// An answer made by `refusal(status, body)` fails with that status.
 // `switchWhen("METHOD /path")` moves the client to B (http://b:9000) as that
 // request's answer comes back, so the answer lands after the switch, as
 // when the user switches while it is on its way. `switchNow()` moves it at
@@ -10,6 +11,10 @@ import { createServiceClient } from "../lib/service/client.js";
 
 export const A = { url: "http://a:9000", password: "pw-a" };
 export const B = { url: "http://b:9000", password: "pw-b" };
+
+/** A route answer the fake service fails with, as the service refuses. */
+export const refusal = (status, body) => ({ [REFUSAL]: { status, body } });
+const REFUSAL = Symbol("refusal");
 
 export function switchingService(routes = {}) {
   const requests = [];
@@ -27,9 +32,11 @@ export function switchingService(routes = {}) {
       trigger = null;
       client.use(B);
     }
+    const refused = answer?.[REFUSAL];
+    if (refused) answer = refused.body;
     return {
-      ok: true,
-      status: 200,
+      ok: !refused,
+      status: refused?.status ?? 200,
       headers: { get: () => "application/json" },
       text: async () => JSON.stringify(answer ?? {}),
       arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(answer ?? {})).buffer,
