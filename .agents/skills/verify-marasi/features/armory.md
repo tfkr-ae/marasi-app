@@ -146,7 +146,7 @@ Esc closes the drawer even with focus in the template editor or a field. The det
 
 ## Gotchas
 
-- Until the Ledger moves to the service (ticket 05), the drawer's request and response stay empty (`ledgerStore.getDetails` still calls the `GetRawDetails` binding), and the Ledger lists no pairs, so `Send to Armory` can't be driven from it.
+- From the Ledger: open a pair's drawer and press `⌘⇧A` (toast `Request N sent to Armory`). The template is named `<METHOD> <host><path>`, described `Imported from request history`, and holds the pair's raw request as captured: a request sent through the proxy with curl keeps its absolute-form line and has no `Host` header, and `Use HTTPS` starts on. Replace it with a payload line and `Host` header, turn HTTPS off for an `http` origin, then Launch. The run's badge sits under the template, so expand it with `[role=tree] button[aria-label=Expand]` before waiting for `complete`.
 - Active runs reach Go's switch and quit guard through `SetActiveArmoryRunCount`. Proven: with a run started over the API (`POST /armory/run`, then `/start`, concurrency 1, a 20 000-line wordlist), `⌘O` › `second` › Enter is declined (the server build answers the dialog's Cancel) and `second.marasi` isn't created; once the run stops, the same switch opens `second`.
 
 - Wordlists live on the service (`POST /wordlist`), not in the `.marasi` file. A list uploaded after startup appears through the `wordlist.added` event, or `Refresh wordlists` in the Add wordlist modal.
