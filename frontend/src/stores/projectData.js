@@ -10,7 +10,8 @@
 //
 // load() runs after a switch, or a reconnect that found another project or a
 // restarted service: every store clears, then loads; the pages remount.
-// resync() runs after a reconnect to the same project: every store reloads
+// resync() runs when a reconnect to the same project can't replay the missed
+// events (a stream reset; an ordinary drop resumes instead): every store reloads
 // server data in place and keeps what only the app holds (drafts,
 // selection, scroll, an open drawer); nothing clears, nothing remounts.
 // A store that holds nothing local can leave resync out.
