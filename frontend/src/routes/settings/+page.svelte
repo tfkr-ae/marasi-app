@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Terminal, Wrench, X } from "lucide-svelte";
 	import {
 		CreateWaypoint,
 		DeleteWaypoint,
@@ -56,6 +56,7 @@
 	import { toastError } from "../../lib/toasts.js";
 	import { neutralVariant, primaryVariant } from "../../lib/launchpad/format.js";
 	import ConnectionSettings from "../../lib/connection/ConnectionSettings.svelte";
+	import CLISettings from "../../lib/connection/CLISettings.svelte";
 	import { statusHint } from "../../lib/connection/status.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import {
@@ -88,6 +89,7 @@
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
+		{ id: "cli", name: "Marasi CLI", hint: "Location, version, channel", icon: Terminal },
 		{ id: "updates", name: "Updates", hint: "Channel and checks", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
 	];
@@ -1128,6 +1130,8 @@
 						</tbody>
 					</table>
 				</div>
+			{:else if section === "cli"}
+				<CLISettings />
 			{:else if section === "updates"}
 				<h3 class="text-sm font-bold">Updates</h3>
 				{#if updateSettings?.Channel}

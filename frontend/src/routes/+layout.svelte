@@ -56,6 +56,8 @@
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
+	import { shouldOfferCLISetup } from "../lib/connection/cli.js";
+	import { connectionsModal } from "../lib/connection/modal.js";
 	import { webSocketStore } from "../stores/webSocketStore";
 	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
@@ -220,6 +222,14 @@
 		);
 		readConfig().then(() => connectionStore.start());
 	});
+	// With no Marasi CLI, the Connections modal opens by itself on its CLI
+	// setup, once per failure (lib/connection/cli.js).
+	let cliSetupOffered = false;
+	$: if ($connectionStore.phase !== "failed") cliSetupOffered = false;
+	$: if (shouldOfferCLISetup($connectionStore, cliSetupOffered)) {
+		cliSetupOffered = true;
+		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
+	}
 	// What the start screen says while the app reaches the service.
 	const startingText = {
 		idle: "Starting...",

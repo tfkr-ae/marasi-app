@@ -8,6 +8,8 @@
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
+	import { cliMissing } from "./cli.js";
+	import CLISetup from "./CLISetup.svelte";
 
 	export let connection;
 	/** Settings rows instead of the compact layout. */
@@ -40,7 +42,9 @@
 			{state.versionWarning}. Some features may not work.
 		</p>
 	{/if}
-	{#if isActive && phase === "failed"}
+	{#if isActive && phase === "failed" && connection.kind === "local" && cliMissing(state.error)}
+		<CLISetup />
+	{:else if isActive && phase === "failed"}
 		<div class="mt-3 flex items-center gap-3 bg-error-500/10 p-3">
 			<p class="min-w-0 flex-1 break-words text-xs">{state.error}</p>
 			<button type="button" class={neutral} on:click={() => connectionStore.retry()}>Retry</button>
