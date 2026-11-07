@@ -64,7 +64,7 @@
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
-	import WebUITile from "../lib/extensions/WebUITile.svelte";
+	import WebComponent from "../lib/extensions/WebComponent.svelte";
 	import {
 		checkpointItemContext,
 		checkpointStore,
@@ -87,6 +87,7 @@
 		ChefHat,
 		Brush,
 		BookOpenCheckIcon,
+		PuzzleIcon,
 		Swords,
 	} from "lucide-svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
@@ -630,8 +631,34 @@
 								>{extension.Name}</span
 							>
 						</AppRailAnchor>
-					{:else if extension.WebUI}
-						<WebUITile name={extension.Name} />
+					{:else if extension.UICode}
+						<AppRailAnchor
+							regionLabel="!text-2xs !font-semibold leading-tight"
+							selected={$page.url.pathname ===
+								"/extension/" + extension.Name}
+							on:click={() => goto("/extension/" + extension.Name)}
+							bind:group={currentTile}
+							name={extension.Name}
+							value={appRailIndex++}
+							title={extension.Name}
+						>
+							<svelte:fragment slot="lead">
+								<div
+									class="flex justify-center items-center w-full"
+									data-testid="extension-web-ui-tile"
+								>
+									<WebComponent
+										name={extension.Name}
+										target="icon"
+										code={extension.UICode}
+										version={extension.Version}
+									>
+										<PuzzleIcon size="20" />
+									</WebComponent>
+								</div>
+							</svelte:fragment>
+							<span>{extension.Name}</span>
+						</AppRailAnchor>
 					{/if}
 				{/each}
 				<svelte:fragment slot="trail">

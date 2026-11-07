@@ -5,14 +5,18 @@
 //
 // `list`, `ui` and `workshop` are the writables the pages read (stores.js
 // `extensions`, `extensions_ui` and `workshopCode`): list items are
-// `{ID, Name, Enabled, …, WebUI}`, and `ui[name]` is
+// `{ID, Name, Enabled, …, UICode, Version}` (the web component, "" when
+// none; extension.updated rereads it), and `ui[name]` is
 // `{<target>: schema, state: {key: value}}`. `toast(schema)` shows a toast
 // an extension rendered. `editors` maps an extension's name to the writable
 // its code editor reads (Compass's rules); `workshop` is Workshop's.
 import { get, writable } from "svelte/store";
-import { definesWebUI, toExtension, toExtensionLog } from "./extensionsApi.js";
+import { toExtension, toExtensionLog } from "./extensionsApi.js";
 
 export const WORKSHOP = "workshop";
+
+// The list item: the summary with the web component from its detail.
+const withWebComponent = (ext, { UICode, Version }) => ({ ...ext, UICode, Version });
 
 export function createExtensionsStore(
   api,
@@ -27,7 +31,7 @@ export function createExtensionsStore(
 
   async function readExtension(ext) {
     const [detail, drawn] = await Promise.all([api.detail(ext.ID), ext.Enabled ? api.ui(ext.ID) : null]);
-    return { ext: { ...ext, WebUI: definesWebUI(detail.LuaContent) }, detail, drawn };
+    return { ext: withWebComponent(ext, detail), detail, drawn };
   }
 
   // The researcher's unsent edits over the extension's drawing.
@@ -152,8 +156,7 @@ export function createExtensionsStore(
   // enabled and wasn't drawn, and forgetting its drawing when disabled.
   async function changed(ext) {
     const before = get(list).find((e) => e.ID === ext.ID);
-    const { LuaContent } = await api.detail(ext.ID);
-    const next = { ...ext, WebUI: definesWebUI(LuaContent) };
+    const next = withWebComponent(ext, await api.detail(ext.ID));
     list.update((all) => (before ? all.map((e) => (e.ID === ext.ID ? next : e)) : [...all, next]));
     if (!ext.Enabled) forgetDrawing(ext.Name);
     else if (!get(ui)[ext.Name]) {
