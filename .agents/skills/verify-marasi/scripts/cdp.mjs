@@ -24,7 +24,7 @@ const routes = {
 	checkpoint: { selector: '[title="Checkpoint"], [title^="Checkpoint · "]', path: "/checkpoint", expected: "Intercepted" },
 	launchpad: { selector: '[title="Launchpad"]', path: "/launchpad", expected: "Group by status" },
 	// "Templates" is the dock's header, or its strip label when collapsed.
-	armory: { selector: '[title="Armory"]', path: "/armory", expected: "Templates" },
+	armory: { selector: '[title="Armory"], [title^="Armory · "]', path: "/armory", expected: "Templates" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "In progress" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
 	settings: { selector: '[title="Settings"]', path: "/settings", expected: "Marasi Settings" },
