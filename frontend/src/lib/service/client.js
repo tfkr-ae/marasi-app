@@ -42,16 +42,22 @@ export function createServiceClient({ fetch, EventSource }) {
   /**
    * Calls `method path` and resolves to the parsed JSON answer, or null for
    * an empty one. `body` is sent as JSON; `query` values may be arrays,
-   * which repeat the parameter.
+   * which repeat the parameter. For the routes that aren't JSON, `raw`
+   * (bytes, such as an artifact) is sent as the body with `contentType`,
+   * and `as: "bytes"` resolves to the answer's bytes (a Uint8Array).
    */
-  async function request(method, path, { query, body } = {}) {
+  async function request(method, path, { query, body, raw, contentType, as } = {}) {
     const headers = { ...authHeaders() };
     const init = { method, headers };
-    if (body !== undefined) {
+    if (raw !== undefined) {
+      headers["Content-Type"] = contentType || "application/octet-stream";
+      init.body = raw;
+    } else if (body !== undefined) {
       headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
     const response = await fetch(urlFor(path, query), init);
+    if (as === "bytes" && response.ok) return new Uint8Array(await response.arrayBuffer());
     const text = await response.text();
     const isJSON = (response.headers.get("content-type") ?? "").includes("application/json");
     let parsed = null;

@@ -2,8 +2,6 @@
 // "LogbookRecord") on an edit session in the Logbook store.
 import { get } from "svelte/store";
 import { logbookStore } from "../../stores/logbookStore.js";
-import { findingStore } from "../../stores/findingStore.js";
-import { testCaseStore } from "../../stores/testCaseStore.js";
 
 export const RECORD_MODAL = "LogbookRecord";
 
@@ -27,17 +25,8 @@ export function newRecord(modalStore, kind, preset = {}) {
  */
 export async function editRecord(modalStore, kind, id) {
   if (get(modalStore).length) return;
-  await logbookStore.populate();
+  await logbookStore.reload(kind, id).catch((err) => console.error("Rereading the record failed:", err));
   if (get(modalStore).length) return;
   logbookStore.edit(kind, id);
   if (get(logbookStore).session) show(modalStore);
-}
-
-/**
- * Keeps the older finding and test case stores, which the Ledger and the
- * Dashboard still read, in step after a save.
- */
-export function refreshOtherLists() {
-  findingStore.populate();
-  testCaseStore.populate();
 }

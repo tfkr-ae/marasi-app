@@ -1,7 +1,7 @@
 // The Logbook store: the project's findings and test cases, what each still
 // needs before the report, and how the Logbook lists them. Every backend
-// call goes through the injected `api` (see logbookStore.js for the Wails
-// one), so this module loads under node --test.
+// call goes through the injected `api` (logbookApi.js maps the service's),
+// so this module loads under node --test.
 import { get, writable } from "svelte/store";
 import { severityFromScore } from "../lib/severity.js";
 
@@ -289,7 +289,7 @@ export function nextOf(state) {
 
 /**
  * What an export of the whole Logbook holds, in report order: findings by
- * severity then score, test cases as ListTestCases gives them (none when
+ * severity then score, test cases as the service lists them (none when
  * `includeTestCases` is false). Also the findings per severity, the linked
  * requests and artifacts as `evidence`, and the `gaps`, each missing
  * required item as { kind, record, key, label }, item by item, with
@@ -437,9 +437,46 @@ export function createLogbookStore(api) {
   }
 
   /**
+   * Reads the lists again after a reconnect to the same project: the
+   * records are replaced, while the filters, the open record, the modal's
+   * edit session and an inline fix with input stay.
+   */
+  const resync = populate;
+
+  /** Reads the "finding" or "testCase" with `id` again, such as before Edit. */
+  async function reload(kind, id) {
+    const record = await (kind === "finding" ? api.getFinding(id) : api.getTestCase(id));
+    keep(kind, record);
+  }
+
+  // Changes one record's linked requests in its list.
+  const relink = (kind, id, change) =>
+    store.update((state) => {
+      const list = kind === "finding" ? "findings" : "testCases";
+      return refreshFix({
+        ...state,
+        [list]: state[list].map((r) => (r.ID === id ? { ...r, Requests: change(r.Requests ?? []) } : r)),
+      });
+    });
+
+  /**
+   * Links the request to the "finding" or "testCase" at once, outside an
+   * edit session, as the Ledger's finding and test case menus do.
+   */
+  async function linkNow(kind, id, request) {
+    await BINDINGS[kind].link(id, request);
+    relink(kind, id, (requests) => (requests.includes(request) ? requests : [...requests, request]));
+  }
+
+  /** Unlinks the request from the "finding" or "testCase" at once. */
+  async function unlinkNow(kind, id, request) {
+    await BINDINGS[kind].unlink(id, request);
+    relink(kind, id, (requests) => requests.filter((r) => r !== request));
+  }
+
+  /**
    * Replaces the findings ("finding") or test cases ("testCase") with a
-   * list written elsewhere, such as by today's finding and test case
-   * modals, keeping the filters.
+   * list written elsewhere, keeping the filters.
    */
   const setRecords = (kind, records) =>
     store.update((state) =>
@@ -777,6 +814,10 @@ export function createLogbookStore(api) {
       return {
         ...state,
         [list]: state[list].filter((r) => r.ID !== id),
+        // A deleted test case leaves the findings that named it.
+        ...(kind === "testCase"
+          ? { findings: state.findings.map((f) => (sameID(f.TestCaseID, id) ? { ...f, TestCaseID: null } : f)) }
+          : {}),
         open: wasOpen ? null : state.open,
         fix: fixed ? null : state.fix,
       };
@@ -963,12 +1004,21 @@ export function createLogbookStore(api) {
     // whether it ran.
     guard: guarded,
     deleteRecord,
-    // Evidence reads: a linked pair in full (GetRawDetails), an artifact
-    // with its bytes (GetArtifact), and saving an artifact through the
-    // native Save dialog (DownloadArtifact, false when cancelled).
+    // Evidence reads: a linked pair in full, an artifact with its bytes
+    // (Data), and saving an artifact through the native Save dialog (false
+    // when cancelled).
     readPair: (id) => api.getPair(id),
     readArtifact: (id) => api.getArtifact(id),
     downloadArtifact: (id) => api.downloadArtifact(id),
+    // Report export: the template names, restoring the default template,
+    // and rendering a report and saving it (false when cancelled).
+    listTemplates: () => api.listTemplates(),
+    restoreDefaultTemplate: () => api.restoreDefaultTemplate(),
+    exportReport: (template, metadata) => api.exportReport(template, metadata),
+    linkNow,
+    unlinkNow,
+    reload,
+    resync,
     populate,
     clear,
     setRecords,
