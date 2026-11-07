@@ -3,7 +3,7 @@
 // Chrome on this machine with them (chrome.go). The service's own
 // POST /chrome/start is never called. createStartChrome takes its
 // collaborators so tests pass fakes; chrome.js binds the app's.
-import { codeIDs } from "./errorCodes.js";
+import { codeCause, codeIDs } from "./errorCodes.js";
 
 /**
  * Returns `startChrome(profile)`. `client` is the service client,
@@ -25,13 +25,12 @@ export function createStartChrome({ client, connection, launch }) {
 }
 
 /**
- * The toast text for a failed Chrome call: why Go refused it, Marasi's
- * "invalid configuration" error as is (the Chrome settings reread the
- * machine config), and otherwise `fallback`.
+ * The toast text for a failed Chrome call: why Go refused it, why the
+ * launcher couldn't start Chrome (chrome_launch_failed), and otherwise
+ * `fallback`.
  */
 export function chromeErrorText(error, fallback) {
   if (codeIDs(error, "listener_inactive")) return "Start the proxy listener first";
   if (codeIDs(error, "listener_loopback")) return "Can't reach the proxy: it listens on the service's loopback only";
-  const text = String(error);
-  return text.includes("invalid configuration") ? text : fallback;
+  return codeCause(error, "chrome_launch_failed") || fallback;
 }

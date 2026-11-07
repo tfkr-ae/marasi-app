@@ -364,11 +364,6 @@ func (a *App) GetMarasiConfig() *Config {
 	return a.Config
 }
 
-// Chrome settings live in the machine config shared with service instances,
-// so each call rereads it under the shared config lock. A config the reread
-// refuses, such as a negative websocket_max_message_size, comes back as
-// Marasi's "invalid configuration" error, which the frontend shows.
-
 // CopyCertToClipboard puts the proxy certificate's PEM, which the frontend
 // read from the service's GET /certificate, on the clipboard.
 func (a *App) CopyCertToClipboard(certPEM string) (bool, error) {
