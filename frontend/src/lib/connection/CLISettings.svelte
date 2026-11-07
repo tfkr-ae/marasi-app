@@ -14,7 +14,7 @@
 		SetCLIChannel,
 		UseCLIPath,
 	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
+	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { cliResultText, cliSourceLabel } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 
@@ -24,8 +24,8 @@
 	let checking = false;
 	let changing = false;
 
-	$: primary = `btn btn-sm rounded-none ${primaryVariant($modeCurrent)}`;
-	$: neutral = `btn btn-sm rounded-none ${neutralVariant($modeCurrent)}`;
+	$: primary = primaryButton($modeCurrent);
+	$: neutral = neutralButton($modeCurrent);
 	const row = "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
 	const control = "flex w-80 shrink-0";
 	const channels = [

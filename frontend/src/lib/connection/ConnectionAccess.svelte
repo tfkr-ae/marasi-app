@@ -8,7 +8,7 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { Copy, Eye, EyeOff } from "lucide-svelte";
 	import { ConnectionPassword, LocalPairing } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
+	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { service } from "../service/index.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { defaultInterface, interfaceOptions, isShared, pairingWithHost, qrPath } from "./sharing.js";
@@ -18,8 +18,8 @@
 	/** The Settings row class, or the modal's. */
 	export let row;
 
-	$: neutral = `btn btn-sm rounded-none ${neutralVariant($modeCurrent)}`;
-	$: primary = `btn btn-sm rounded-none ${primaryVariant($modeCurrent)}`;
+	$: neutral = neutralButton($modeCurrent);
+	$: primary = primaryButton($modeCurrent);
 	$: state = $connectionStore;
 	$: isActive = connection.id === state.connection.id;
 	$: live = isActive && state.phase === "connected";

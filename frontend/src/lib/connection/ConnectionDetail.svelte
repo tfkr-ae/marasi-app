@@ -6,7 +6,7 @@
 	// remote has its address and Remove. The password and sharing rows
 	// (ConnectionAccess) go after the service rows.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
+	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
@@ -19,8 +19,8 @@
 	/** Settings rows instead of the compact layout. */
 	export let rows = false;
 
-	$: neutral = `btn btn-sm rounded-none ${neutralVariant($modeCurrent)}`;
-	$: primary = `btn btn-sm rounded-none ${primaryVariant($modeCurrent)}`;
+	$: neutral = neutralButton($modeCurrent);
+	$: primary = primaryButton($modeCurrent);
 	let password = "";
 	let passwordError = "";
 	let address = connection.url ?? "";
