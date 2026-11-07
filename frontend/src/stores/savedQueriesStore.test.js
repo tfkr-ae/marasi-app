@@ -313,7 +313,7 @@ test("only a valid query that isn't saved yet can be saved", async () => {
   assert.equal(canSaveQuery(state, "status_code >= 500", true), false, "a built-in");
 });
 
-test("loadCounts fills in each query's count one at a time, keyed by query", async () => {
+test("loadCounts fills in each query's count, keyed by query", async () => {
   const counts = {
     [noise.query]: { Count: 12, Capped: false, QueryError: null },
     "status_code >= 500": { Count: 100000, Capped: true, QueryError: null },
@@ -323,7 +323,7 @@ test("loadCounts fills in each query's count one at a time, keyed by query", asy
   const store = await loadedStore(api);
 
   const loading = store.loadCounts();
-  assert.deepEqual(get(store).counts, {}, "nothing before the first count returns");
+  assert.deepEqual(get(store).counts, {}, "nothing is known before the first count returns");
   await loading;
 
   const state = get(store);
@@ -337,28 +337,114 @@ test("loadCounts fills in each query's count one at a time, keyed by query", asy
   );
 });
 
-test("a newer loadCounts stops the older one", async () => {
-  let release;
-  const gate = new Promise((resolve) => (release = resolve));
+// A count that answers only when `gates[query]` is released, with `value`.
+function gatedCounts(queries) {
+  const gates = {};
+  const counts = {};
+  for (const [query, value] of Object.entries(queries)) {
+    let release;
+    const gate = new Promise((resolve) => (release = resolve));
+    gates[query] = release;
+    counts[query] = () => gate.then(() => value);
+  }
+  return { gates, counts };
+}
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("a refresh keeps the last counts, marked stale, until each new one arrives", async () => {
+  let errors = 3;
   const api = fakeApi({
     queries: [noise],
-    counts: { [noise.query]: () => gate.then(() => ({ Count: 1, Capped: false, QueryError: null })) },
+    counts: {
+      [noise.query]: () => ({ Count: errors, Capped: false, QueryError: null }),
+    },
   });
+  const store = await loadedStore(api);
+  await store.loadCounts();
+  assert.deepEqual(get(store).counts[noise.query], { count: 3, capped: false });
+
+  errors = 5;
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  api.countMatches = async (query) => {
+    await gate;
+    return { Count: query === noise.query ? errors : 0, Capped: false, QueryError: null };
+  };
+  const refreshing = store.loadCounts();
+  assert.deepEqual(get(store).counts[noise.query], { count: 3, capped: false, stale: true }, "never blank, never 0");
+  release();
+  await refreshing;
+  assert.deepEqual(get(store).counts[noise.query], { count: 5, capped: false });
+});
+
+test("a refresh drops the counts of queries no longer saved", async () => {
+  const api = fakeApi({ queries: [noise], counts: { [noise.query]: { Count: 2, Capped: false, QueryError: null } } });
+  const store = await loadedStore(api);
+  await store.loadCounts();
+  await store.remove(group(store, "app").items[0]);
+  await store.loadCounts();
+  assert.equal(get(store).counts[noise.query], undefined);
+});
+
+test("counts run four at a time", async () => {
+  const queries = Object.fromEntries(
+    [noise, ...BUILTIN_QUERIES].map((q, i) => [q.query, { Count: i, Capped: false, QueryError: null }]),
+  );
+  const { gates, counts } = gatedCounts(queries);
+  const api = fakeApi({ queries: [noise], counts });
+  const store = await loadedStore(api);
+  const countCalls = () => api.calls.filter(([name]) => name === "countMatches").length;
+
+  const loading = store.loadCounts();
+  await settle();
+  assert.equal(countCalls(), 4, "four counts start at once");
+
+  gates[noise.query]();
+  await settle();
+  assert.equal(countCalls(), 5, "the next starts as one returns");
+  assert.deepEqual(get(store).counts[noise.query], { count: 0, capped: false });
+
+  Object.values(gates).forEach((release) => release());
+  await loading;
+  assert.equal(countCalls(), 7);
+  assert.deepEqual(get(store).counts["status_code >= 500"], { count: 1, capped: false });
+});
+
+test("a newer loadCounts stops the older one", async () => {
+  const { gates, counts } = gatedCounts({ [noise.query]: { Count: 1, Capped: false, QueryError: null } });
+  const api = fakeApi({ queries: [noise], counts });
   const store = await loadedStore(api);
 
   const first = store.loadCounts();
-  await Promise.resolve();
-  const callsAfterFirst = api.calls.filter(([name]) => name === "countMatches").length;
+  await settle();
+  api.countMatches = async () => ({ Count: 9, Capped: false, QueryError: null });
   const second = store.loadCounts();
-  release();
-  await Promise.all([first, second]);
+  await second;
+  gates[noise.query]();
+  await first;
 
-  // The first run counted only its first query before the second took over.
-  assert.equal(callsAfterFirst, 1);
-  assert.equal(api.calls.filter(([name]) => name === "countMatches").length, 1 + 7);
+  assert.deepEqual(get(store).counts[noise.query], { count: 9, capped: false }, "the older answer is dropped");
 });
 
-test("a failed count shows no count and the others still load", async () => {
+test("clearing the counts, on a project switch, leaves every count unknown and drops the run in flight", async () => {
+  const api = fakeApi({ queries: [noise], counts: { [noise.query]: { Count: 3, Capped: false, QueryError: null } } });
+  const store = await loadedStore(api);
+  await store.loadCounts();
+
+  const { gates, counts } = gatedCounts({ [noise.query]: { Count: 4, Capped: false, QueryError: null } });
+  const plain = api.countMatches;
+  api.countMatches = (query) => (counts[query] ? counts[query]() : plain(query));
+  const running = store.loadCounts();
+  await settle();
+  store.clearCounts();
+  assert.deepEqual(get(store).counts, {});
+  gates[noise.query]();
+  await running;
+  assert.deepEqual(get(store).counts, {}, "the last project's count never shows");
+});
+
+test("a failed count shows as not counted and the others still load", async () => {
   const api = fakeApi({
     queries: [noise],
     counts: {
@@ -369,8 +455,39 @@ test("a failed count shows no count and the others still load", async () => {
   const store = await loadedStore(api);
   await store.loadCounts();
 
-  assert.equal(get(store).counts[noise.query], undefined);
+  assert.equal(get(store).counts[noise.query], null);
   assert.deepEqual(get(store).counts["status_code >= 500"], { count: 3, capped: false });
+});
+
+test("scheduleCounts runs one refresh for a burst of calls, after the delay", async () => {
+  const timers = [];
+  const fakeTimers = {
+    setTimeout: (fn, ms) => timers.push({ fn, ms }) - 1,
+    clearTimeout: (id) => (timers[id] = null),
+  };
+  const api = fakeApi({ queries: [noise] });
+  const store = createSavedQueriesStore(api, { newId, timers: fakeTimers, countDelay: 1500 });
+  await store.load();
+  const countCalls = () => api.calls.filter(([name]) => name === "countMatches").length;
+
+  store.scheduleCounts();
+  store.scheduleCounts();
+  store.scheduleCounts();
+  assert.equal(countCalls(), 0, "nothing counts before the delay");
+  assert.equal(timers.filter(Boolean).length, 1, "one refresh pending");
+  assert.equal(timers.find(Boolean).ms, 1500);
+
+  const fired = timers.findIndex(Boolean);
+  timers[fired].fn();
+  timers[fired] = null;
+  await settle();
+  await settle();
+  assert.equal(countCalls(), 7);
+
+  store.clearCounts();
+  store.scheduleCounts();
+  store.clearCounts();
+  assert.equal(timers.filter(Boolean).length, 0, "a project switch cancels a pending refresh");
 });
 
 test("load reads the config once; a failed read leaves the built-ins", async () => {

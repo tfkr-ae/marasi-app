@@ -40,6 +40,12 @@ export const BUILTIN_QUERIES = [
   { id: "jwts-anywhere", name: "JWTs anywhere", query: '"eyJhbGci"' },
 ].map((q, order) => ({ ...q, order, source: "builtin" }));
 
+// How many saved queries count at once: enough that the menu fills fast,
+// few enough that the Ledger's own reads aren't held up.
+const COUNT_CONCURRENCY = 4;
+// How long scheduleCounts waits, so a burst of traffic counts once.
+export const COUNT_DELAY_MS = 1500;
+
 // How much of a query names a query saved without a name.
 const UNNAMED_LENGTH = 32;
 
@@ -49,8 +55,10 @@ function initialState() {
     queries: { project: [], app: [] },
     // Ids of the hidden built-ins.
     hiddenBuiltins: [],
-    // Match counts by query text: { count, capped }, or { error } for a
-    // query Marasi rejects. A query without an entry is still counting.
+    // Match counts by query text: { count, capped }, { error } for a query
+    // Marasi rejects, or null when it couldn't be counted. `stale: true`
+    // marks the last run's count while a refresh recounts it. A query
+    // without an entry hasn't been counted yet.
     counts: {},
   };
 }
@@ -126,7 +134,10 @@ function defaultName(query) {
   return query.length > UNNAMED_LENGTH ? `${query.slice(0, UNNAMED_LENGTH).trimEnd()}…` : query;
 }
 
-export function createSavedQueriesStore(api, { newId = () => crypto.randomUUID() } = {}) {
+export function createSavedQueriesStore(
+  api,
+  { newId = () => crypto.randomUUID(), timers = globalThis, countDelay = COUNT_DELAY_MS } = {},
+) {
   const { subscribe, update } = writable(initialState());
   let current = initialState();
   subscribe((state) => (current = state));
@@ -309,30 +320,76 @@ export function createSavedQueriesStore(api, { newId = () => crypto.randomUUID()
 
   let countRun = 0;
   /**
-   * Counts every saved query's matches, one query at a time so the table's
-   * own reads aren't held up, filling state.counts as each returns. Counts
-   * from earlier runs are dropped; a newer run stops this one.
+   * Counts every saved query's matches, COUNT_CONCURRENCY at a time so the
+   * table's own reads aren't held up, filling state.counts as each returns.
+   * The last run's counts stay, marked `stale`, until their new ones arrive,
+   * so a refresh never blanks a number or shows a wrong one; a query no
+   * longer saved loses its count, and one that fails to count gets null. A
+   * newer run, or clearCounts, stops this one.
    */
   async function loadCounts() {
     const run = ++countRun;
-    update((state) => ({ ...state, counts: {} }));
     const queries = [
       ...new Set(savedQueryGroups(current, { showHidden: true }).flatMap((g) => g.items.map((q) => q.query))),
     ];
-    for (const query of queries) {
-      let count;
-      try {
-        const result = await api.countMatches(query);
-        count = result.QueryError
-          ? { error: result.QueryError.Message }
-          : { count: result.Count, capped: result.Capped };
-      } catch (error) {
-        console.error(`counting ${query}:`, error);
+    update((state) => ({
+      ...state,
+      counts: Object.fromEntries(
+        queries.filter((q) => state.counts[q]).map((q) => [q, { ...state.counts[q], stale: true }]),
+      ),
+    }));
+    let next = 0;
+    async function worker() {
+      while (next < queries.length && run === countRun) {
+        const query = queries[next++];
+        let count = null;
+        try {
+          const result = await api.countMatches(query);
+          count = result.QueryError
+            ? { error: result.QueryError.Message }
+            : { count: result.Count, capped: result.Capped };
+        } catch (error) {
+          console.error(`counting ${query}:`, error);
+        }
+        if (run !== countRun) return;
+        update((state) => ({ ...state, counts: { ...state.counts, [query]: count } }));
       }
-      if (run !== countRun) return;
-      if (count) update((state) => ({ ...state, counts: { ...state.counts, [query]: count } }));
     }
+    await Promise.all(Array.from({ length: Math.min(COUNT_CONCURRENCY, queries.length) }, worker));
   }
 
-  return { subscribe, load, loadProject, save, rename, remove, move, setBuiltinHidden, loadCounts };
+  let pending = null;
+  /**
+   * Refreshes the counts after `countDelay`, once for a burst of calls: new
+   * traffic, a project load or a resync, so the menu opens with numbers.
+   */
+  function scheduleCounts() {
+    if (pending !== null) return;
+    pending = timers.setTimeout(() => {
+      pending = null;
+      loadCounts();
+    }, countDelay);
+  }
+
+  /** Forgets every count and stops counting, as a project switch does. */
+  function clearCounts() {
+    countRun++;
+    if (pending !== null) timers.clearTimeout(pending);
+    pending = null;
+    update((state) => ({ ...state, counts: {} }));
+  }
+
+  return {
+    subscribe,
+    load,
+    loadProject,
+    save,
+    rename,
+    remove,
+    move,
+    setBuiltinHidden,
+    loadCounts,
+    scheduleCounts,
+    clearCounts,
+  };
 }

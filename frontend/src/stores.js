@@ -16,6 +16,7 @@ import { readHighlights } from "./stores/highlightsStore";
 // The Ledger's stores register with projectData as they load.
 import "./stores/ledgerStore";
 import "./stores/sitemapStore";
+import "./stores/savedQueriesStore";
 import "./stores/jobsStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
