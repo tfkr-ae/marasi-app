@@ -856,7 +856,7 @@
 			browse={filePickerShown($connectionStore.connection)}
 			on:stay={() => projectStore.stay()}
 			on:retry={() => retryOpen(toastStore, modalStore)}
-			on:open={(event) => openProjectFile(event.detail, toastStore, modalStore)}
+			on:open={(event) => openProjectFile({ path: event.detail }, toastStore, modalStore)}
 			on:browse={() =>
 				OpenFileDialog()
 					.then((path) => {

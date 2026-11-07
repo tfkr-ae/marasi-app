@@ -1,6 +1,7 @@
 // The service events that change the Logbook, as handlers for
-// `service.on(name, handler)`: findings, test cases, their links and
-// artifacts, written by any client (this app, the CLI, another device).
+// `service.on(name, handler)`: findings, test cases, their links (one by
+// one, or in bulk through traffic.changed) and artifacts, written by any
+// client (this app, the CLI, another device).
 // Each maps the event's snake_case data and hands it to the Logbook store,
 // which updates its lists in place and keeps an open edit session's input.
 import { toArtifact, toFinding, toTestCase } from "./logbookApi.js";
@@ -27,6 +28,8 @@ export function logbookEvents(store) {
     "test-case.unlinked": ({ test_case_id, id }) => store.applyLink("testCase", test_case_id, id, false),
     "artifact.created": (a) => store.applyArtifact(toArtifact(a)),
     "artifact.deleted": ({ id }) => store.applyArtifactRemoved(id),
+    // Bulk link, unlink and delete publish only this.
+    "traffic.changed": (event) => store.applyTrafficChanged(event),
   };
 }
 

@@ -2,6 +2,7 @@
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
     import { projectStore } from "../../stores/projectStore.js";
+    import { pickedProject, projectMatches } from "../../stores/projectApi.js";
     import { connectionStore } from "../../stores/connectionStore.js";
     import { filePickerShown } from "../connection/status.js";
     import { OpenFileDialog } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
@@ -17,29 +18,13 @@
     const cHeader = 'text-2xl font-bold';
     const cForm = 'space-y-3';
     
-    function onInput(selected) {
-        if (selected && selected.detail) {
-            $modalStore[0].response(selected.detail.value);
-            modalStore.close();
-        }
-    }
-
-    function createNewProject() {
-        if (input.trim()) {
-            $modalStore[0].response(input.trim());
-            modalStore.close();
-        }
-    }
-    
+    // A listed project opens its exact path; typed text opens by name
+    // (projectTarget).
     function openSelected() {
-        if (selectedIndex >= 0 && selectedIndex < filteredList.length) {
-            $modalStore[0].response(filteredList[selectedIndex].value);
+        const picked = pickedProject(filteredList, selectedIndex, input);
+        if (picked) {
+            $modalStore[0].response(picked);
             modalStore.close();
-        } else if (filteredList.length > 0) {
-            $modalStore[0].response(filteredList[0].value);
-            modalStore.close();
-        } else {
-            createNewProject();
         }
     }
     
@@ -61,16 +46,8 @@
     }
     
     function filterProjects() {
-        if (!input.trim()) {
-            filteredList = recent;
-            return;
-        }
-        
-        filteredList = recent.filter(option => 
-            option.label.toLowerCase().includes(input.toLowerCase()) || 
-            option.value.toLowerCase().includes(input.toLowerCase())
-        );
-        
+        filteredList = projectMatches(recent, input);
+        if (!input.trim()) return;
         // Reset selected index when filter changes
         selectedIndex = filteredList.length > 0 ? 0 : -1;
     }
@@ -112,17 +89,10 @@
     }
     
     onMount(() => {
-        // The service's named projects, most recent first; picking one
-        // opens it by name.
+        // The recent projects, then the service's other named projects.
         projectStore.list().then((projects) => {
-            const placeholder = projects.map((project) => ({
-                label: project.name,
-                value: project.name,
-                path: project.path,
-            }));
-            
-            recent = placeholder;
-            filteredList = placeholder;
+            recent = projects;
+            filteredList = projects;
             if (filteredList.length > 0) {
                 selectedIndex = 0;
             }
@@ -179,7 +149,7 @@
                                     selectProject(i);
                                     openSelected();
                                 }}>
-                                <div class="project-name">{project.label}</div>
+                                <div class="project-name">{project.name}</div>
                                 <div class="project-path">{project.path}</div>
                             </li>
                         {/each}
