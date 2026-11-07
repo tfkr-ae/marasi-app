@@ -13,6 +13,10 @@
 // The service waits for held Checkpoint items instead of refusing, so the
 // store refuses first, as the app always has. A failed open leaves the
 // service's project as it was, so the loaded project stays.
+//
+// `follow` keeps a standing project.* listener for opens another client
+// (the Marasi CLI, another app) starts: it shows the opening screen and
+// hands the opened project on, since loading it asks first.
 import { get, writable } from "svelte/store";
 import {
   openingFor,
@@ -48,6 +52,12 @@ export function createProjectStore(api, timers = globalThis) {
   const updateOpening = (change) =>
     store.update((state) => (state.opening ? { ...state, opening: change(state.opening) } : state));
   let lastTarget = null;
+  // An open or reload of the app's own is under way: its events aren't
+  // another client's.
+  let own = 0;
+  // Another client's open the screen follows: {path, timer, due (the
+  // delay passed), held (the service waits for Checkpoint items)}.
+  let followed = null;
 
   function fail(error) {
     const failed = get(store).opening && withFailed(get(store).opening, error);
@@ -89,6 +99,8 @@ export function createProjectStore(api, timers = globalThis) {
   // Shows the opening state for `name` (the screen waits openingDelay), and
   // follows the service's project events. Returns the function that stops.
   function begin(name, path) {
+    own++;
+    endFollowed();
     const current = get(store).loaded;
     patch({
       opening: openingFor({ name, path, current, scratchpad: name === "scratchpad" }),
@@ -97,9 +109,66 @@ export function createProjectStore(api, timers = globalThis) {
     const timer = timers.setTimeout(() => patch({ shown: true }), openingDelay);
     const stopEvents = api.onProjectEvent((event, data) => updateOpening((state) => withProjectEvent(state, event, data)));
     return () => {
+      own--;
       stopEvents();
       timers.clearTimeout(timer);
     };
+  }
+
+  // Stops following another client's open; `close` takes its screen down.
+  function endFollowed({ close = false } = {}) {
+    if (!followed) return;
+    timers.clearTimeout(followed.timer);
+    followed = null;
+    if (close) patch({ opening: null, shown: false });
+  }
+
+  /**
+   * Follows the service's project events for opens the app didn't start,
+   * until the returned function is called. The opening screen shows as for
+   * the app's own opens; `opened(path)` hands on a project the service
+   * opened instead of the loaded one, whose load (after the unsaved-work
+   * prompt) is the connection store's, and `failed(name, error)` reports an
+   * open that failed, after which the service keeps the loaded project.
+   */
+  function follow({ opened = () => {}, failed = () => {} } = {}) {
+    return api.onProjectEvent((event, data) => {
+      const path = typeof data?.project === "string" ? data.project : null;
+      const { loaded, opening } = get(store);
+      if (own || !path || !loaded) return;
+      // A late event of the app's own failed open, whose screen still
+      // shows. A failed open never sends project.opened.
+      const ours = opening && (opening.path ? opening.path === path : opening.name === projectName(path));
+      if (!followed && ours && event !== "project.opened") return;
+      if (path === loaded.path) {
+        if (event === "project.opened") endFollowed({ close: true });
+        return;
+      }
+      if (event === "project.opening_failed") {
+        if (followed?.path === path) endFollowed({ close: true });
+        failed(projectName(path), data.error ?? "");
+        return;
+      }
+      if (followed?.path !== path) {
+        endFollowed();
+        patch({ opening: openingFor({ name: projectName(path), path, current: loaded }), shown: false });
+        const entry = { path, held: false, due: false, timer: null };
+        entry.timer = timers.setTimeout(() => {
+          entry.due = true;
+          if (followed === entry && !entry.held) patch({ shown: true });
+        }, openingDelay);
+        followed = entry;
+      }
+      if (event === "project.waiting") {
+        // The service waits for items the app holds in Checkpoint, which
+        // the screen would cover: it stays down until they're released.
+        followed.held = (data.waiting_for ?? []).some((wait) => wait.kind === "checkpoint");
+        if (followed.held) patch({ shown: false });
+        else if (followed.due) patch({ shown: true });
+      }
+      updateOpening((state) => withProjectEvent(state, event, data));
+      if (event === "project.opened") opened(path);
+    });
   }
 
   // Loads the project the service switched to, at `path`, and remounts the
@@ -143,6 +212,7 @@ export function createProjectStore(api, timers = globalThis) {
     },
     open,
     reload,
+    follow,
     /** Re-runs the last open, for the opening screen's Try again. */
     retry: () => (lastTarget ? open(lastTarget) : Promise.resolve(null)),
     /**
@@ -150,9 +220,15 @@ export function createProjectStore(api, timers = globalThis) {
      * screen. When the target opened but didn't load, that's the target.
      */
     stay() {
+      endFollowed();
       const current = get(store).opening?.current;
       patch({ opening: null, shown: false, ...(current ? { loaded: current } : {}) });
     },
+    /**
+     * Closes the screen following another client's open, when the
+     * unsaved-work prompt kept the pages on the loaded project.
+     */
+    closeFollowed: () => endFollowed({ close: true }),
     /** The ids of the items Checkpoint holds, which refuse a switch. */
     held: () => api.heldCheckpointIDs(),
     /** The service's projects, most recent first. */

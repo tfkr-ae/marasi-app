@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { changesOf, createLogbookStore, isDirty } from "./createLogbookStore.js";
+import { changesOf, createLogbookStore, hasUnsavedEdits, isDirty } from "./createLogbookStore.js";
 
 const finding = (id, fields = {}) => ({
   ID: id,
@@ -396,4 +396,13 @@ test("a failed Delete keeps the record and keeps it open", async () => {
   assert.deepEqual(state.open, { kind: "finding", id: "f1", focus: null });
   assert.equal(state.fix.item, "WriteUp");
   assert.deepEqual(state.findings.map((f) => f.ID), ["f1"]);
+});
+
+test("a changed draft counts as unsaved Logbook edits, which another client's switch would discard", async () => {
+  const { store } = await loaded({ testCases: [testCase("t1")] });
+  assert.equal(hasUnsavedEdits(get(store)), false);
+  store.edit("testCase", "t1");
+  assert.equal(hasUnsavedEdits(get(store)), false, "an open, unchanged record loses nothing");
+  store.updateDraft({ Tags: ["auth"] });
+  assert.equal(hasUnsavedEdits(get(store)), true);
 });
