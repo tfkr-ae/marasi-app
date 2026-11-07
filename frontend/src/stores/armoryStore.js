@@ -11,10 +11,10 @@ import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
 import { createArmoryApi } from "./armoryApi.js";
 import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
-import { createArmoryStore } from "./createArmoryStore.js";
+import { activeRunIdsOf, createArmoryStore } from "./createArmoryStore.js";
 import { projectData } from "./projectData.js";
 
-export { drawerShareOf } from "./createArmoryStore.js";
+export { activeCountsOf, drawerShareOf } from "./createArmoryStore.js";
 
 /** How often buffered request and response events reach the run's rows. */
 const RUN_TRAFFIC_FLUSH_MS = 200;
@@ -45,7 +45,7 @@ service.on("traffic.response", (res) => armoryStore.onResponse(toResponseEvent(r
 // for them to be cancelled (armory_guard.go).
 let reportedRuns;
 armoryStore.subscribe((state) => {
-  const count = state.activeRunIds.length;
+  const count = activeRunIdsOf(state).length;
   if (count === reportedRuns) return;
   reportedRuns = count;
   SetActiveArmoryRunCount(count).catch((err) => console.error("Reporting active Armory runs failed:", err));

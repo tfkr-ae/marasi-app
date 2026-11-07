@@ -70,6 +70,8 @@
 		checkpointStore,
 	} from "../stores/checkpointStore";
 	import { checkpointBadge } from "../lib/checkpointBadge.js";
+	import { armoryBadge } from "../lib/armory/armoryBadge.js";
+	import { activeCountsOf, armoryStore } from "../stores/armoryStore";
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
@@ -167,6 +169,8 @@
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
+	// The Armory icon's runs-in-progress badge (see armoryBadge).
+	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -460,13 +464,20 @@
 					bind:group={currentTile}
 					name="Armory"
 					value={appRailIndex++}
-					title="Armory"
+					title={runningBadge.title}
 				>
 					<svelte:fragment slot="lead">
 						<div
-							class="flex justify-center items-center w-full"
+							class="relative flex justify-center items-center w-full"
 						>
 							<Swords size="20" />
+							{#if runningBadge.label}
+								<span
+									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+									data-testid="armory-badge"
+									aria-label="{runningBadge.label} running"
+								>{runningBadge.label}</span>
+							{/if}
 						</div>
 					</svelte:fragment>
 					<span>Armory</span>
