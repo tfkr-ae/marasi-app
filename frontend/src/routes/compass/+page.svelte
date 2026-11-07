@@ -12,7 +12,7 @@
         modeCurrent,
     } from "@skeletonlabs/skeleton";
     import CodeMirror from "svelte-codemirror-editor";
-    import { RunExtension } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+    import { extensionsStore } from "../../stores/extensionsStore.js";
     import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
     import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
@@ -41,7 +41,7 @@
             actionId: "compass.update-rules",
             icon: SquarePlay,
             handler: () => {
-                RunExtension("compass", $compassCode)
+                extensionsStore.run("compass", $compassCode)
                     .then(() => {
                         const toastSettings = {
                             message: "Updated Compass",

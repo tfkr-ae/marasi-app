@@ -31,6 +31,8 @@ const renames = [
   // The entry was no longer in the launchpad (the service can't tell it
   // apart from a launchpad that's gone).
   { method: "DELETE", path: /^\/launchpad\/[^/]+\/link\/[^/]+$/, status: 404, to: "not_linked" },
+  // A moved entry was no longer in the source launchpad (likewise).
+  { method: "POST", path: /^\/launchpad\/[^/]+\/move$/, status: 404, to: "not_linked" },
 ];
 
 // The ids a refusal's body names, by code.

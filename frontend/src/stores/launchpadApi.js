@@ -1,0 +1,264 @@
+// Launchpad's api over the service client: each call reads or writes a
+// control API route and maps its snake_case answer to the PascalCase shape
+// createLaunchpadStore keeps, which the Launchpad page and its helpers read.
+// What the Go bindings did on top of Marasi lives here too: search across
+// launchpads (one filtered query per launchpad until Marasi has a route),
+// and a cancel that lost the race to the launch's end, which is no error.
+// The mappers for stream events (toLaunch, toRequest, toResponse) are
+// exported for launchpadStore.js.
+import { decodeBase64Text, encodeBase64Text } from "../lib/service/bytes.js";
+
+/** A launchpad from GET /launchpad, in the store's fields. */
+export function toLaunchpad(launchpad) {
+  return {
+    ID: launchpad.id,
+    Name: launchpad.name,
+    Description: launchpad.description ?? "",
+    EntryCount: launchpad.entry_count,
+    LastStatusCode: launchpad.last_status_code ?? null,
+  };
+}
+
+/** A launch record, from GET /launch… or a launch.* event. */
+export function toLaunch(launch) {
+  return {
+    ID: launch.launch_id,
+    LaunchpadID: launch.launchpad_id,
+    Status: launch.status,
+    Reason: launch.reason ?? "",
+  };
+}
+
+/** A TrafficSummary as an entry-list row. */
+export function toEntry(item) {
+  return {
+    ID: item.id,
+    Number: item.number,
+    Scheme: item.scheme,
+    Method: item.method,
+    Host: item.host,
+    Path: item.path,
+    Status: item.status ?? "",
+    StatusCode: item.status_code ?? 0,
+    ContentType: item.content_type ?? "",
+    Length: item.length ?? "",
+    Metadata: item.metadata ?? {},
+    RequestedAt: item.requested_at,
+    RespondedAt: item.responded_at ?? null,
+    Highlight: item.highlight ?? null,
+    Note: item.note ?? "",
+  };
+}
+
+/** A traffic.request event as the request the store keeps (no Raw: the event has none). */
+export function toRequest(request) {
+  return {
+    ID: request.id,
+    Number: request.number,
+    Scheme: request.scheme,
+    Method: request.method,
+    Host: request.host,
+    Path: request.path,
+    Metadata: request.metadata ?? {},
+    RequestedAt: request.requested_at,
+  };
+}
+
+/** A traffic.response event as the response the store keeps (no Raw). */
+export function toResponse(response) {
+  return {
+    ID: response.id,
+    Status: response.status,
+    StatusCode: response.status_code,
+    ContentType: response.content_type,
+    Length: response.length,
+    Metadata: response.metadata ?? {},
+    RespondedAt: response.responded_at,
+  };
+}
+
+/**
+ * GET /traffic/{id} as the details the store keeps: raw bytes as text,
+ * as Go's RawField gave them. Response is null until one arrives.
+ */
+export function toDetails(pair) {
+  const request = pair.request ?? {};
+  const response = pair.response;
+  const answered = response && response.status_code !== -1;
+  return {
+    Request: {
+      ID: pair.id,
+      Number: pair.number,
+      Scheme: request.scheme,
+      Method: request.method,
+      Host: request.host,
+      Path: request.path,
+      Raw: decodeBase64Text(request.raw),
+      RequestedAt: request.requested_at,
+    },
+    Response: answered
+      ? {
+          ID: pair.id,
+          Status: response.status,
+          StatusCode: response.status_code,
+          ContentType: response.content_type,
+          Length: response.length,
+          Raw: decodeBase64Text(response.raw),
+          RespondedAt: response.responded_at,
+        }
+      : null,
+    Metadata: pair.metadata ?? {},
+    Note: pair.note ?? "",
+    Highlight: pair.highlight ?? null,
+    Prettified: { Request: pair.prettified?.request ?? "", Response: pair.prettified?.response ?? "" },
+  };
+}
+
+// The search's pre-check over every launchpad member wraps the text.
+const SEARCH_WRAPPER = "launchpad:* AND (";
+
+// An invalid_query refusal as the QueryError data the store reads, with
+// its position moved back by `offset` characters of wrapping, or null for
+// any other error.
+function queryErrorOf(err, offset = 0) {
+  if (err?.code !== "invalid_query") return null;
+  const position = err.body?.position ?? 0;
+  return { Message: err.body?.message ?? String(err), Position: position > offset ? position - offset : 0 };
+}
+
+const isNotFound = (err) => err?.code === "not_found";
+
+// The target of a bulk link or unlink to a finding or test case.
+const recordTarget = ({ Kind, ID }) => (Kind === "test_case" ? { test_case_id: ID } : { finding_id: ID });
+
+export function createLaunchpadApi(client) {
+  return {
+    async getLaunchpads() {
+      const list = await client.get("/launchpad");
+      return (list.items ?? []).map(toLaunchpad);
+    },
+    async getEntries(id) {
+      const launchpad = await client.get(`/launchpad/${id}`);
+      return (launchpad.items ?? []).map(toEntry);
+    },
+    // Null for a pair the service can't find, as the binding gave.
+    async getRawDetails(id) {
+      try {
+        return toDetails(await client.get(`/traffic/${id}`));
+      } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+    },
+    // An entry's note, "" when it has none.
+    async getNote(id) {
+      try {
+        return (await client.get(`/notes/${id}`)).note ?? "";
+      } catch (err) {
+        if (isNotFound(err)) return "";
+        throw err;
+      }
+    },
+    getMetadata: (id) => client.get(`/traffic/${id}/metadata`),
+    async createLaunchpad(name, description) {
+      const created = await client.post("/launchpad", { name, description });
+      return created.id;
+    },
+    updateLaunchpad: (id, name, description) => client.post(`/launchpad/${id}`, { name, description }),
+    deleteLaunchpad: (id) => client.del(`/launchpad/${id}`),
+
+    // Returns the launch id, which is also the new entry's id.
+    async launch(raw, launchpadId, useHttps) {
+      const started = await client.post(`/launchpad/${launchpadId}/launch`, {
+        raw: encodeBase64Text(raw),
+        scheme: useHttps ? "https" : "http",
+      });
+      return started.launch_id;
+    },
+    // A launch that ended before the cancel reached it comes back in its
+    // final state, with no error.
+    async cancelLaunch(id) {
+      try {
+        return toLaunch(await client.post(`/launch/${id}/cancel`));
+      } catch (err) {
+        if (err?.code === "launch_finished" && err.body) return toLaunch(err.body);
+        throw err;
+      }
+    },
+    getLaunch: async (id) => toLaunch(await client.get(`/launch/${id}`)),
+    async pendingLaunches() {
+      const list = await client.get("/launch");
+      return (list.items ?? []).map(toLaunch);
+    },
+
+    // Runs a traffic query over every launchpad's entries:
+    // { EntriesByLaunchpad: { [launchpadId]: [entry ids in entry order] },
+    //   QueryError: { Message, Position } | null }. The text is validated on
+    // its own first, so error positions refer to what the researcher typed.
+    // One query over all launchpad members (launchpad:*) answers the usual
+    // keystroke that matches nothing; otherwise each launchpad runs the
+    // query over its own entries, so a pair maps to every launchpad that
+    // holds it, linked originals included. Marasi has no route for this yet.
+    async searchEntries(query) {
+      const result = { EntriesByLaunchpad: {}, QueryError: null };
+      const asData = (err, offset = 0) => {
+        result.QueryError = queryErrorOf(err, offset);
+        if (!result.QueryError) throw err;
+        return result;
+      };
+      try {
+        await client.get("/traffic/query", { q: query });
+      } catch (err) {
+        return asData(err);
+      }
+      let page;
+      try {
+        page = await client.get("/traffic", { q: `${SEARCH_WRAPPER}${query})`, limit: 1 });
+      } catch (err) {
+        return asData(err, SEARCH_WRAPPER.length);
+      }
+      if (!page.items?.length) return result;
+      const list = await client.get("/launchpad");
+      const found = await Promise.all(
+        (list.items ?? []).map(async ({ id }) => {
+          try {
+            const launchpad = await client.get(`/launchpad/${id}`, { q: query });
+            return { id, ids: (launchpad.items ?? []).map((item) => item.id) };
+          } catch (err) {
+            // A launchpad deleted while the search ran has no matches.
+            if (isNotFound(err)) return { id, ids: [] };
+            const queryError = queryErrorOf(err);
+            if (queryError) return { id, ids: [], queryError };
+            throw err;
+          }
+        }),
+      );
+      const refused = found.find((launchpad) => launchpad.queryError);
+      if (refused) return { EntriesByLaunchpad: {}, QueryError: refused.queryError };
+      for (const { id, ids } of found) if (ids.length) result.EntriesByLaunchpad[id] = ids;
+      return result;
+    },
+
+    // Returns the moved ids in their new entry order.
+    async moveEntries(sourceId, targetId, ids, before) {
+      const body = { request_ids: ids, target_launchpad_id: targetId };
+      if (before) body.before_request_id = before;
+      const moved = await client.post(`/launchpad/${sourceId}/move`, body);
+      return moved.request_ids ?? [];
+    },
+    // Returns how many entries the service removed.
+    async unlinkEntries(launchpadId, ids) {
+      const done = await client.post("/traffic/bulk/unlink", { selection: { ids }, launchpad_id: launchpadId });
+      return done.count;
+    },
+    // `target` is { Kind: "finding" | "test_case", ID }. Return the count.
+    async linkEntriesToRecord(selection, target) {
+      const done = await client.post("/traffic/bulk/link", { selection, ...recordTarget(target) });
+      return done.count;
+    },
+    async unlinkEntriesFromRecord(selection, target) {
+      const done = await client.post("/traffic/bulk/unlink", { selection, ...recordTarget(target) });
+      return done.count;
+    },
+  };
+}

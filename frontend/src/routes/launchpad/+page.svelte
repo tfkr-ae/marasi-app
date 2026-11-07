@@ -45,7 +45,6 @@
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
     import { menuAction } from "../../lib/ledger/rowMenu.js";
-    import { GetMetadata, GetNote } from "../../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
     import { listener } from "../../stores";
     import { findingStore } from "../../stores/findingStore";
     import { testCaseStore } from "../../stores/testCaseStore";
@@ -57,6 +56,8 @@
         pendingEntryIds,
         pendingLaunchOf,
         selectedEntryIds,
+        entryMetadata,
+        entryNote,
     } from "../../stores/launchpadStore";
     import {
         DELETE_LAUNCHPAD_PENDING_HINT,
@@ -619,12 +620,12 @@
         {
             actionId: "launchpad.view-notes",
             icon: PenIcon,
-            handler: () => toggleEntryModal("Notes", "launchpad.view-notes", GetNote, "Notes"),
+            handler: () => toggleEntryModal("Notes", "launchpad.view-notes", entryNote, "Notes"),
         },
         {
             actionId: "launchpad.view-metadata",
             icon: BracesIcon,
-            handler: () => toggleEntryModal("Metadata", "launchpad.view-metadata", GetMetadata, "Metadata"),
+            handler: () => toggleEntryModal("Metadata", "launchpad.view-metadata", entryMetadata, "Metadata"),
         },
         { actionId: "launchpad.copy-browser-view-url", icon: GlobeIcon, handler: copyOpenBrowserView },
     ];

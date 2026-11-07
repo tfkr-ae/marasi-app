@@ -57,7 +57,7 @@
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { webSocketStore } from "../stores/webSocketStore";
-	import { launchpadStore, reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
 	import WebUITile from "../lib/extensions/WebUITile.svelte";
@@ -284,17 +284,9 @@
 			}
 			on("request", (newRequest) => {
 				recentTraffic.onRequest(newRequest);
-				launchpadStore.onRequest(newRequest);
 			});
-			on("launch-started", (launch) =>
-				launchpadStore.onLaunchStarted(launch),
-			);
-			on("launch-finished", (launch) =>
-				launchpadStore.onLaunchFinished(launch),
-			);
 			on("response", (newResponse) => {
 				recentTraffic.onResponse(newResponse);
-				launchpadStore.onResponse(newResponse);
 				if (
 					$drawerStore.id ===
 						"request-response" &&

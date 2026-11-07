@@ -6,8 +6,6 @@
 	// row underneath.
 	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
-		CreateWaypoint,
-		DeleteWaypoint,
 		SetFlag,
 		ToggleFlag,
 		GetChromePaths,
@@ -24,7 +22,6 @@
 		keybindingState,
 		lineWrap,
 		marasiConfig,
-		populateWaypoints,
 		waypoints,
 	} from "../../stores";
 	import {
@@ -169,27 +166,24 @@
 			lineWrap.set(wrapStartsOn(config.WrapMode));
 		});
 	}
+	// Saving adds the waypoint, or updates the one the project has for the host.
 	function saveWaypoint() {
-		CreateWaypoint(targetHost, override)
+		waypoints
+			.save(targetHost, override)
 			.then(() => {
 				targetHost = "";
 				override = "";
 				selected = "";
-				populateWaypoints();
 			})
-			.catch((waypointErr) => {
-				console.log(waypointErr);
-			});
+			.catch(waypointFailed("Waypoint not saved"));
 	}
 	function deleteWaypoint(host) {
-		DeleteWaypoint(host)
-			.then(() => {
-				populateWaypoints();
-			})
-			.catch((deleteError) => {
-				console.log(deleteError);
-			});
+		waypoints.remove(host).catch(waypointFailed("Waypoint not deleted"));
 	}
+	const waypointFailed = (message) => (err) => {
+		console.error(`${message}:`, err);
+		toastStore.trigger({ message, background: "variant-filled-error" });
+	};
 	function addChromePath() {
 		AddChromePath(selectedPath, selectedOS)
 			.then((paths) => {

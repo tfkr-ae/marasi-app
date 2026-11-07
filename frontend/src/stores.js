@@ -4,14 +4,14 @@ import {
   GetMarasiConfig,
   GetKeybindings,
   GetExtensionCode,
-  GetWaypoints,
   OSUserName,
 } from "./lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { logbookStore } from "./stores/logbookStore";
 import { webSocketStore } from "./stores/webSocketStore";
 // Registers the Armory with projectData before the first load.
 import "./stores/armoryStore";
-import { launchpadStore } from "./stores/launchpadStore";
+// Registers the Launchpad with projectData before the first load.
+import "./stores/launchpadStore";
 import { checkpointStore } from "./stores/checkpointStore";
 import { interceptFlag } from "./stores/interceptFlag.js";
 import { readHighlights } from "./stores/highlightsStore";
@@ -62,7 +62,7 @@ export const compassCode = writable("");
 export const testerInput = writable("");
 
 // Waypoint
-export const waypoints = writable({});
+export { waypoints } from "./stores/waypointStore.js";
 
 // Checkpont
 export const checkpointCode = writable("");
@@ -131,23 +131,11 @@ export async function resetProject(name) {
   checkpointCode.set("");
   checkpointCodeApplied.set("");
   interceptFlag.set(false);
-  waypoints.set({});
   recentTraffic.clear();
   webSocketStore.clear();
-  launchpadStore.clear();
   checkpointStore.clear();
 }
 
-export async function populateWaypoints() {
-  GetWaypoints()
-    .then((points) => {
-      console.log(points);
-      waypoints.set(points);
-    })
-    .catch((waypointErr) => {
-      console.log(waypointErr);
-    });
-}
 export async function populateCheckpoint() {
   GetExtensionCode("checkpoint")
     .then((code) => {
@@ -161,15 +149,6 @@ export async function populateCheckpoint() {
   checkpointStore
     .populate()
     .catch((err) => console.error("Failed to read Checkpoint items:", err));
-}
-export async function populateScope() {
-  GetExtensionCode("compass")
-    .then((code) => {
-      compassCode.set(code);
-    })
-    .catch((error) => {
-      console.log(error);
-    });
 }
 export async function populateLogs() {
   GetLogs().then((items) => {

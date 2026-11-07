@@ -7,7 +7,8 @@
 // `extensions`, `extensions_ui` and `workshopCode`): list items are
 // `{ID, Name, Enabled, …, WebUI}`, and `ui[name]` is
 // `{<target>: schema, state: {key: value}}`. `toast(schema)` shows a toast
-// an extension rendered.
+// an extension rendered. `editors` maps an extension's name to the writable
+// its code editor reads (Compass's rules); `workshop` is Workshop's.
 import { get, writable } from "svelte/store";
 import { definesWebUI, toExtension, toExtensionLog } from "./extensionsApi.js";
 
@@ -15,8 +16,9 @@ export const WORKSHOP = "workshop";
 
 export function createExtensionsStore(
   api,
-  { list = writable([]), ui = writable({}), workshop = writable(""), toast = () => {} } = {},
+  { list = writable([]), ui = writable({}), workshop = writable(""), editors = {}, toast = () => {} } = {},
 ) {
+  const codeEditors = { ...editors, [WORKSHOP]: workshop };
   // The keys of each extension's state the researcher changed and the
   // extension hasn't been sent yet: name -> Set of keys. A resync keeps them.
   const edited = new Map();
@@ -43,16 +45,18 @@ export function createExtensionsStore(
     return read;
   }
 
-  /** Reads every extension afresh, and Workshop's stored code. */
+  /** Reads every extension afresh, and the editors' stored code. */
   async function populate() {
     edited.clear();
     const read_ = await read();
-    workshop.set(read_.find((r) => r.ext.Name === WORKSHOP)?.detail.LuaContent ?? "");
+    for (const [name, editor] of Object.entries(codeEditors)) {
+      editor.set(read_.find((r) => r.ext.Name === name)?.detail.LuaContent ?? "");
+    }
   }
 
   /**
    * Reads every extension again in place after a reconnect, keeping the
-   * Workshop editor's code and the UI inputs not yet sent.
+   * editors' code and the UI inputs not yet sent.
    */
   async function resync() {
     await read();
@@ -62,7 +66,7 @@ export function createExtensionsStore(
     edited.clear();
     list.set([]);
     ui.set({});
-    workshop.set("");
+    for (const editor of Object.values(codeEditors)) editor.set("");
   }
 
   // The extension called `name`: from the list, or (before the first load)
@@ -173,7 +177,8 @@ export function createExtensionsStore(
   }
 
   /**
-   * Runs `code` as the extension's Lua (Workshop's Run and Update); the
+   * Runs `code` as the extension's Lua (Workshop's Run and Update,
+   * Compass's Update); the
    * service stores it only when the run succeeds. Rejects with its
    * lua_error.
    */
