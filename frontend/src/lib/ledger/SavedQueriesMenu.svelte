@@ -2,8 +2,9 @@
 	// The Ledger toolbar's Saved queries menu: a ToolbarMenu, badged with
 	// the active saved query's name, that opens the saved queries grouped by
 	// source. Choosing a row applies its query, or clears it when it is the
-	// active one ("apply" with the new query text). Counts load after the
-	// menu opens.
+	// active one ("apply" with the new query text). The store counts in the
+	// background; opening the menu recounts, keeping the last numbers, dimmed,
+	// until the new ones arrive.
 	import { createEventDispatcher, onMount } from "svelte";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Bookmark, BookmarkPlus, Check, Eye, EyeOff, Folder, Globe, Package, Pencil, Trash2 } from "lucide-svelte";
@@ -206,7 +207,7 @@
 								on:click={() => choose(q)}>{q.name}</button
 							>
 							<span
-								class="flex-none tabular-nums opacity-60 group-hover:hidden"
+								class="flex-none tabular-nums group-hover:hidden {count?.stale ? 'opacity-30' : 'opacity-60'}"
 								title={count?.error ?? ""}>{matchCountText(count)}</span
 							>
 							<span class="hidden flex-none items-center gap-1.5 group-hover:flex">
