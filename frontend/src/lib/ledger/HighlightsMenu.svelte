@@ -12,7 +12,10 @@
 
 	/** The text in the query box. */
 	export let queryText = "";
-	/** { [term]: { count, capped } | null }; a missing term is still loading. */
+	/**
+	 * { [term]: { count, capped, stale? } | null }; a missing term is still
+	 * loading, a stale one shows dimmed until its recount arrives.
+	 */
 	export let counts = {};
 	/** The effective highlight palette (stores/highlightsStore.js). */
 	export let palette = [];
@@ -82,7 +85,7 @@
 				{#each palette.slice(0, 4) as h}<span class="h-full flex-1" style="background: {h.color}"></span>{/each}
 			</span>
 			<span class="flex-1 text-left">Any highlight</span>
-			<span class="ledger-highlight-count min-w-[3rem] text-right tabular-nums opacity-60"
+			<span class="ledger-highlight-count min-w-[3rem] text-right tabular-nums {counts[term]?.stale ? 'opacity-30' : 'opacity-60'}"
 				>{matchCountText(counts[term])}</span
 			>
 		</button>
@@ -147,7 +150,7 @@
 					aria-label="Rename {h.label}"
 					on:click={() => startRename(h)}><Pencil size={11} /></button
 				>
-				<span class="ledger-highlight-count min-w-[3rem] text-right tabular-nums opacity-60"
+				<span class="ledger-highlight-count min-w-[3rem] text-right tabular-nums {counts[term]?.stale ? 'opacity-30' : 'opacity-60'}"
 					>{matchCountText(counts[term])}</span
 				>
 			</div>

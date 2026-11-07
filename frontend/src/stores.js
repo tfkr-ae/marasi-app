@@ -17,6 +17,7 @@ import { readHighlights } from "./stores/highlightsStore";
 import "./stores/ledgerStore";
 import "./stores/sitemapStore";
 import "./stores/savedQueriesStore";
+import "./stores/ledgerMenuCounts";
 import "./stores/jobsStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";

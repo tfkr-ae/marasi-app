@@ -1854,23 +1854,18 @@ export function createLedgerStore(api) {
     },
 
     /**
-     * Counts the pairs each query matches, minus the content-type exclusion:
-     * { [query]: { count, capped } }, or null for a query that failed. Counts
-     * stop at marasi's cap, 100,000; `capped` means more matched.
+     * Counts the pairs `query` matches, minus the content-type exclusion:
+     * { count, capped }, or null when it failed. Counts stop at marasi's
+     * cap, 100,000; `capped` means more matched.
      */
-    countQueries: async (queries) => {
-      const counts = await Promise.all(
-        queries.map(async (query) => {
-          try {
-            const result = await api.countTraffic(query, "");
-            return result.QueryError ? null : { count: result.Count, capped: result.Capped };
-          } catch (err) {
-            console.error(`Counting matches for ${query} failed:`, err);
-            return null;
-          }
-        }),
-      );
-      return Object.fromEntries(queries.map((query, i) => [query, counts[i]]));
+    countQuery: async (query) => {
+      try {
+        const result = await api.countTraffic(query, "");
+        return result.QueryError ? null : { count: result.Count, capped: result.Capped };
+      } catch (err) {
+        console.error(`Counting matches for ${query} failed:`, err);
+        return null;
+      }
     },
 
     // Gives the project its own content-type exclusion, normalised as Marasi
