@@ -5,12 +5,12 @@
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent, SlideToggle } from "@skeletonlabs/skeleton";
 	import { QrCode } from "lucide-svelte";
-	import { primaryVariant } from "../launchpad/format.js";
+	import { primaryButton } from "../launchpad/format.js";
 	import { addConnection, errorText } from "./manage.js";
 	import { parsePairing } from "./pairing.js";
 
 	const dispatch = createEventDispatcher();
-	$: primary = `btn btn-sm rounded-none ${primaryVariant($modeCurrent)}`;
+	$: primary = primaryButton($modeCurrent);
 	let payload = "";
 	let name = "";
 	let url = "";

@@ -16,6 +16,7 @@
 		RotateCw,
 	} from "lucide-svelte";
 	import Logo from "./Logo.svelte";
+	import { primaryButton } from "../launchpad/format.js";
 	import { openingScreen } from "../openProgress.js";
 
 	/** The open in progress (openProgress.js state). */
@@ -39,9 +40,7 @@
 	$: neutral =
 		"btn btn-sm rounded-none " +
 		($modeCurrent ? "variant-ghost-surface border-0 ring-0" : "variant-ghost-surface");
-	$: positive =
-		"btn btn-sm rounded-none " +
-		($modeCurrent ? "variant-ghost-primary border-0 ring-0" : "variant-filled-primary");
+	$: positive = primaryButton($modeCurrent);
 
 	const bar = {
 		height: "h-2",

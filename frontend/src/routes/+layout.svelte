@@ -5,6 +5,7 @@
 	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
 	import { filePickerShown } from "../lib/connection/status.js";
+	import { primaryVariant } from "../lib/launchpad/format.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -763,7 +764,7 @@
 						<div class="mt-3 flex justify-center">
 							<button
 								type="button"
-								class="btn btn-sm {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
+								class="btn btn-sm {primaryVariant($modeCurrent)}"
 								on:click={() => connectionStore.retry()}
 							>
 								Retry

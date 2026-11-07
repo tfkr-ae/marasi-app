@@ -11,7 +11,7 @@
 		InstallCLI,
 		UseCLIPath,
 	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
+	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { cliResultText } from "./cli.js";
 
@@ -25,8 +25,8 @@
 
 	onMount(() => DefaultCLIInstallDir().then((d) => (dir = d || dir)));
 
-	$: primary = `btn btn-sm rounded-none ${primaryVariant($modeCurrent)}`;
-	$: neutral = `btn btn-sm rounded-none ${neutralVariant($modeCurrent)}`;
+	$: primary = primaryButton($modeCurrent);
+	$: neutral = neutralButton($modeCurrent);
 	const field = "input h-8 min-w-0 flex-1 rounded-none border-0 bg-white py-1 font-mono text-xs ring-0 dark:bg-surface-700";
 
 	async function run(action) {
