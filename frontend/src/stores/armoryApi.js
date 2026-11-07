@@ -6,9 +6,8 @@
 // events use trafficApi.js's toRequestEvent and toResponseEvent.
 //
 // Calls with no single route are composed: a template from a pair (GET
-// /traffic/{id}, then POST /armory/template), the active runs (each
-// template's runs; Marasi has no project-wide list yet), and the run's
-// traffic and group counts (GET /traffic narrowed to the run's metadata).
+// /traffic/{id}, then POST /armory/template), and the run's traffic and
+// group counts (GET /traffic narrowed to the run's metadata).
 
 import { decodeBase64Text } from "../lib/service/bytes.js";
 
@@ -143,11 +142,10 @@ export function createArmoryApi(client) {
 
     GetArmoryRuns: runsOf,
     GetArmoryRun: async (id) => toRun(await client.get(runPath(id))),
-    // Gathered from every template's runs (no project-wide route yet).
-    async GetActiveArmoryRunIDs() {
-      const summaries = await templateSummaries();
-      const runs = (await Promise.all(summaries.map((t) => runsOf(t.id)))).flat();
-      return runs.filter(isActiveRun).map((r) => r.ID);
+    // Every template's runs in progress, in one call.
+    async GetActiveArmoryRuns() {
+      const list = await client.get("/armory/run", { status: "in_progress" });
+      return (list?.items ?? []).map(toRun);
     },
     ValidateArmoryRun: (rawTemplate, attackType, wordlists, maxConcurrent) =>
       client.post("/armory/run/validate", {

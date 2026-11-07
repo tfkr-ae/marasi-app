@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
 import { createArmoryApi } from "./armoryApi.js";
-import { createArmoryStore } from "./createArmoryStore.js";
+import { activeCountsOf, activeRunIdsOf, createArmoryStore } from "./createArmoryStore.js";
 
 // A fake service client answering from `routes` ("METHOD path" → body, or a
 // function of (query or body, path)), recording each call. A thrown
@@ -46,7 +46,10 @@ function run(id, templateId, status, extra = {}) {
   };
 }
 
-const serviceRoutes = () => ({
+// GET /armory/run lists every template's runs, narrowed by ?status=; here
+// it reads the per-template run routes, so a test changing those changes it.
+function serviceRoutes() {
+  const routes = {
   "GET /armory/template": {
     items: [
       { id: T2, name: "Second", description: "" },
@@ -58,7 +61,15 @@ const serviceRoutes = () => ({
   [`GET /armory/template/${T1}/run`]: { items: [run("r1", T1, "complete"), run("r2", T1, "in_progress")] },
   [`GET /armory/template/${T2}/run`]: { items: [run("r3", T2, "in_progress"), run("r4", T2, "draft")] },
   "GET /wordlist": { items: [{ name: "words.txt", size: 120 }] },
-});
+  };
+  routes["GET /armory/run"] = (query = {}) => {
+    const runs = Object.entries(routes)
+      .filter(([key]) => /^GET \/armory\/template\/[^/]+\/run$/.test(key))
+      .flatMap(([, list]) => list.items);
+    return { items: query.status ? runs.filter((r) => r.status === query.status) : runs };
+  };
+  return routes;
+}
 
 function setup(routes = serviceRoutes()) {
   const client = fakeClient(routes);
@@ -75,10 +86,20 @@ test("populate reads every template with its raw text, sorted by id", async () =
   ]);
 });
 
-test("populate gathers the active runs from every template's runs", async () => {
-  const { store } = setup();
+test("populate reads the active runs across templates with one GET /armory/run?status=in_progress", async () => {
+  const { store, client } = setup();
   await store.populate();
-  assert.deepEqual([...get(store).activeRunIds].sort(), ["r2", "r3"]);
+  assert.deepEqual(activeRunIdsOf(get(store)).sort(), ["r2", "r3"]);
+  const runReads = client.calls.filter(([m, p]) => m === "GET" && /\/run$/.test(p));
+  assert.deepEqual(runReads, [["GET", "/armory/run", { status: "in_progress" }]]);
+});
+
+test("the active runs count per template, for the rail and the template list", async () => {
+  const routes = serviceRoutes();
+  routes[`GET /armory/template/${T1}/run`].items.push(run("r5", T1, "in_progress"));
+  const { store } = setup(routes);
+  await store.populate();
+  assert.deepEqual(activeCountsOf(get(store)), { total: 3, byTemplate: { [T1]: 2, [T2]: 1 } });
 });
 
 test("populate reads the wordlists with their names and sizes", async () => {
@@ -205,10 +226,10 @@ test("a run event keeps its template's runs and the active runs current", async 
   await store.loadRuns(T1);
   store.onRun(run("r2", T1, "complete"));
   assert.equal(get(store).runsByTemplate[T1].find((r) => r.ID === "r2").Status, "complete");
-  assert.deepEqual(get(store).activeRunIds, ["r3"]);
+  assert.deepEqual(activeRunIdsOf(get(store)), ["r3"]);
   store.onRun(run("r5", T1, "in_progress"));
   assert.deepEqual(get(store).runsByTemplate[T1].map((r) => r.ID), ["r1", "r2", "r5"]);
-  assert.deepEqual([...get(store).activeRunIds].sort(), ["r3", "r5"]);
+  assert.deepEqual(activeRunIdsOf(get(store)).sort(), ["r3", "r5"]);
 });
 
 test("a deleted run leaves its template's runs and the selection", async () => {
@@ -250,7 +271,7 @@ test("starting a run marks it running without polling", async () => {
   const started = await store.startRun("r4");
   assert.equal(started.Status, "in_progress");
   assert.equal(get(store).runsByTemplate[T2].find((r) => r.ID === "r4").Status, "in_progress");
-  assert.ok(get(store).activeRunIds.includes("r4"));
+  assert.ok(activeRunIdsOf(get(store)).includes("r4"));
 });
 
 test("resync reads the runs again, so a run started while away shows as running", async () => {
@@ -265,7 +286,7 @@ test("resync reads the runs again, so a run started while away shows as running"
     ["r3", "complete"],
     ["r4", "in_progress"],
   ]);
-  assert.deepEqual([...get(store).activeRunIds].sort(), ["r2", "r4"]);
+  assert.deepEqual(activeRunIdsOf(get(store)).sort(), ["r2", "r4"]);
 });
 
 test("resync keeps the selection, drafts, run settings and search", async () => {
@@ -328,7 +349,7 @@ test("cancelling the active runs cancels each and waits until none is running", 
   const cancels = client.calls.filter(([m, p]) => m === "POST" && p.endsWith("/cancel")).map(([, p]) => p);
   assert.deepEqual(cancels.sort(), ["/armory/run/r2/cancel", "/armory/run/r3/cancel"]);
   assert.deepEqual(reads, { r2: 3, r3: 3 });
-  assert.deepEqual(get(store).activeRunIds, []);
+  assert.deepEqual(activeRunIdsOf(get(store)), []);
 });
 
 test("a run that stopped on its own before the cancel isn't an error", async () => {
@@ -342,7 +363,7 @@ test("a run that stopped on its own before the cancel isn't an error", async () 
   const { store } = setup(routes);
   await store.populate();
   await store.cancelActiveRuns({ sleep: async () => {} });
-  assert.deepEqual(get(store).activeRunIds, []);
+  assert.deepEqual(activeRunIdsOf(get(store)), []);
 });
 
 test("cancelling gives up when a run keeps running", async () => {

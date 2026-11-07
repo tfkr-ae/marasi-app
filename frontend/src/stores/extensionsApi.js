@@ -4,14 +4,6 @@
 // name, so callers pass the extension's id; createExtensionsStore finds it
 // in the list.
 
-/**
- * Whether Lua defines a web component UI (the global `ui_code`), which the
- * service doesn't serve yet.
- */
-export function definesWebUI(lua = "") {
-  return /^\s*ui_code\s*=/m.test(lua);
-}
-
 /** An extension summary, from GET /extension or extension.* events. */
 export function toExtension(ext) {
   return {
@@ -38,10 +30,17 @@ export function createExtensionsApi(client) {
       const list = await client.get("/extension");
       return (list.items ?? []).map(toExtension);
     },
-    // The summary with its Lua and settings.
+    // The summary with its Lua, settings and web component (`ui_code` and
+    // `version`, "" when the extension sets none).
     async detail(id) {
       const ext = await client.get(path(id));
-      return { ...toExtension(ext), LuaContent: ext.lua_content ?? "", Settings: ext.settings ?? {} };
+      return {
+        ...toExtension(ext),
+        LuaContent: ext.lua_content ?? "",
+        Settings: ext.settings ?? {},
+        UICode: ext.ui_code ?? "",
+        Version: ext.version ?? "",
+      };
     },
     // What the extension last drew: `{renders: {target: schema}, state}`.
     async ui(id) {

@@ -48,12 +48,20 @@ const serviceRoutes = () => ({
   "GET /extension": {
     items: [summary(CHECKPOINT, "checkpoint"), summary(WORKSHOP, "workshop"), summary(PANEL, "panel")],
   },
-  [`GET /extension/${CHECKPOINT}`]: { ...summary(CHECKPOINT, "checkpoint"), lua_content: "-- rules", settings: {} },
+  [`GET /extension/${CHECKPOINT}`]: {
+    ...summary(CHECKPOINT, "checkpoint"),
+    lua_content: "-- rules",
+    settings: {},
+    ui_code: "",
+    version: "",
+  },
   [`GET /extension/${WORKSHOP}`]: { ...summary(WORKSHOP, "workshop"), lua_content: "print('hi')", settings: {} },
   [`GET /extension/${PANEL}`]: {
     ...summary(PANEL, "panel"),
-    lua_content: 'ui_code = [[customElements.define("panel-extension-1", X)]]\nversion = "1"',
+    lua_content: "-- draws its own web component",
     settings: { depth: 2 },
+    ui_code: 'customElements.define("panel-extension-1", class extends HTMLElement {})',
+    version: "1",
   },
   [`GET /extension/${CHECKPOINT}/ui`]: { id: CHECKPOINT, name: "checkpoint", renders: {}, state: {} },
   [`GET /extension/${WORKSHOP}/ui`]: { id: WORKSHOP, name: "workshop", renders: {}, state: {} },
@@ -87,9 +95,26 @@ test("populate lists the extensions in the fields the pages read", async () => {
     Description: "panel extension",
     SourceURL: "",
     UpdatedAt: "2026-11-06T22:07:49.626213+04:00",
-    WebUI: true,
+    UICode: 'customElements.define("panel-extension-1", class extends HTMLElement {})',
+    Version: "1",
   });
-  assert.equal(get(list)[0].WebUI, false);
+  // The web component comes from the service's ui_code, never the Lua text.
+  assert.equal(get(list)[0].UICode, "");
+  assert.equal(get(list)[1].UICode, "");
+});
+
+test("extension.updated rereads the extension, so a new web component replaces the old", async () => {
+  const routes = serviceRoutes();
+  const { store, list } = setup(routes);
+  await store.populate();
+  routes[`GET /extension/${PANEL}`] = {
+    ...routes[`GET /extension/${PANEL}`],
+    ui_code: 'customElements.define("panel-extension-2", class extends HTMLElement {})',
+    version: "2",
+  };
+  await store.onChanged(summary(PANEL, "panel"));
+  const panel = get(list).find((e) => e.ID === PANEL);
+  assert.deepEqual([panel.UICode, panel.Version], ['customElements.define("panel-extension-2", class extends HTMLElement {})', "2"]);
 });
 
 test("populate draws what each extension last rendered, with its state", async () => {

@@ -39,7 +39,7 @@
 	import { page } from "$app/stores";
 	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
-	import { armoryStore, drawerShareOf } from "../../stores/armoryStore";
+	import { activeCountsOf, armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import {
 		groupSelection,
 		isColumnSortable,
@@ -726,6 +726,7 @@
 	<ArmoryDock
 		templates={filteredTemplates}
 		runsByTemplate={$armoryStore.runsByTemplate}
+		runningByTemplate={activeCountsOf($armoryStore).byTemplate}
 		{selectedTemplateId}
 		{selectedRunId}
 		{projectStateVersion}

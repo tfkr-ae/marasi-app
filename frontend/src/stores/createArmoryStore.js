@@ -24,7 +24,8 @@ function initialState(projectStateVersion = 0) {
     templates: [],
     runsByTemplate: {},
     wordlists: [],
-    activeRunIds: [],
+    // The runs in progress, run id → template id.
+    activeRuns: {},
     search: "",
     selectedTemplateId: null,
     templateDraft: null,
@@ -52,6 +53,19 @@ function sortTemplates(templates) {
   });
 }
 
+// The active set from GET /armory/run?status=in_progress: run id → template id.
+const activeRunsMap = (runs) => Object.fromEntries((runs || []).map((run) => [run.ID, run.TemplateID]));
+
+/** The ids of the runs in progress. */
+export const activeRunIdsOf = (state) => Object.keys(state.activeRuns);
+
+/** How many runs are in progress, in all and per template (the rail and the template list). */
+export function activeCountsOf(state) {
+  const byTemplate = {};
+  for (const templateId of Object.values(state.activeRuns)) byTemplate[templateId] = (byTemplate[templateId] ?? 0) + 1;
+  return { total: Object.keys(state.activeRuns).length, byTemplate };
+}
+
 export function createArmoryStore(api) {
   const {
     CancelArmoryRun,
@@ -60,7 +74,7 @@ export function createArmoryStore(api) {
     CreateArmoryTemplateFromRequest,
     DeleteArmoryRun,
     DeleteArmoryTemplate,
-    GetActiveArmoryRunIDs,
+    GetActiveArmoryRuns,
     GetArmoryRun,
     GetArmoryRuns,
     GetArmoryTemplates,
@@ -89,12 +103,12 @@ export function createArmoryStore(api) {
       const loaded = state.runsByTemplate[run.TemplateID];
       const runs = loaded || [];
       const exists = runs.some((item) => item.ID === run.ID);
-      const others = state.activeRunIds.filter((id) => id !== run.ID);
-      const activeRunIds = isActiveRun(run) ? [...others, run.ID] : others;
+      const { [run.ID]: _, ...activeRuns } = state.activeRuns;
+      if (isActiveRun(run)) activeRuns[run.ID] = run.TemplateID;
 
       return {
         ...state,
-        activeRunIds,
+        activeRuns,
         runsByTemplate: !loaded && !always
           ? state.runsByTemplate
           : {
@@ -125,7 +139,7 @@ export function createArmoryStore(api) {
         ...state,
         runsByTemplate,
         selectedRunByTemplate,
-        activeRunIds: state.activeRunIds.filter((runId) => runId !== id),
+        activeRuns: Object.fromEntries(Object.entries(state.activeRuns).filter(([runId]) => runId !== id)),
       };
     });
   }
@@ -178,16 +192,16 @@ export function createArmoryStore(api) {
       templates: sortTemplates(templates),
     });
 
-    const [wordlists, activeRunIds] = await Promise.all([
+    const [wordlists, activeRuns] = await Promise.all([
       GetArmoryWordlists(),
-      GetActiveArmoryRunIDs(),
+      GetActiveArmoryRuns(),
     ]);
     if (version !== projectStateVersion) return;
 
     update((state) => ({
       ...state,
       wordlists: wordlists || [],
-      activeRunIds: activeRunIds || [],
+      activeRuns: activeRunsMap(activeRuns),
     }));
   }
 
@@ -220,10 +234,10 @@ export function createArmoryStore(api) {
   async function resync() {
     const version = projectStateVersion;
     const loadedTemplateIds = Object.keys(get({ subscribe }).runsByTemplate);
-    const [templates, wordlists, activeRunIds, runs] = await Promise.all([
+    const [templates, wordlists, activeRuns, runs] = await Promise.all([
       GetArmoryTemplates(),
       GetArmoryWordlists(),
-      GetActiveArmoryRunIDs(),
+      GetActiveArmoryRuns(),
       Promise.all(loadedTemplateIds.map((id) => GetArmoryRuns(id).catch(() => null))),
     ]);
     if (version !== projectStateVersion) return;
@@ -237,7 +251,7 @@ export function createArmoryStore(api) {
         ...state,
         templates: sortTemplates(templates || []),
         wordlists: wordlists || [],
-        activeRunIds: activeRunIds || [],
+        activeRuns: activeRunsMap(activeRuns),
         runsByTemplate,
       };
     });
@@ -278,10 +292,10 @@ export function createArmoryStore(api) {
 
   async function refreshActiveRuns() {
     const version = projectStateVersion;
-    const activeRunIds = (await GetActiveArmoryRunIDs()) || [];
+    const activeRuns = activeRunsMap(await GetActiveArmoryRuns());
     if (version !== projectStateVersion) return null;
-    update((state) => ({ ...state, activeRunIds }));
-    return activeRunIds;
+    update((state) => ({ ...state, activeRuns }));
+    return Object.keys(activeRuns);
   }
 
   return {
