@@ -68,6 +68,7 @@ func (a *App) useLocalInstanceRuntime() {
 	a.findCLI = a.locatedCLIPath
 	a.newPassword = generatePassword
 	a.cliConfigDir = os.Getenv(cliConfigDirEnv)
+	a.localProxyListener = a.readLocalProxyListener
 }
 
 // ConnectLocal reaches the local `default` instance and returns its control
@@ -149,6 +150,7 @@ func (a *App) LocalPairing() (Pairing, error) {
 // localInstanceStatus is the part of `service status` the app reads.
 type localInstanceStatus struct {
 	ControlListener *string `json:"control_listener"`
+	ProxyListener   *string `json:"proxy_listener"`
 }
 
 // localStatus reads the instance's status; running is false when the CLI
@@ -272,4 +274,25 @@ func generatePassword() (string, error) {
 		return "", fmt.Errorf("generating the control password: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// codedError wraps err with what, code and the ids the refusal names:
+// "<what>: <code> (<id>, <id>): <err>". The frontend's codeIDs reads it.
+func codedError(what, code string, ids []string, err error) error {
+	return fmt.Errorf("%s: %s (%s): %w", what, code, strings.Join(ids, ", "), err)
+}
+
+// readLocalProxyListener returns the local instance's proxy listener
+// ("host:port"), or "" when the CLI, the instance or its listener isn't
+// there. It never starts anything.
+func (a *App) readLocalProxyListener() string {
+	path, err := a.findCLI()
+	if err != nil {
+		return ""
+	}
+	status, running, err := a.localStatus(path)
+	if err != nil || !running || status.ProxyListener == nil {
+		return ""
+	}
+	return *status.ProxyListener
 }

@@ -267,7 +267,7 @@ func TestQuitStopsTheLocalInstanceOnlyWhenTheAppStartedIt(t *testing.T) {
 				answer("service start", 0, started).
 				answer("service control pair", 0, paired).
 				answer("service stop", 0, stopped)
-			app := newProjectApp(t)
+			app := newTestApp(t)
 			app.runCLI = cli.run
 			app.findCLI = func() (string, error) { return "/bin/marasi", nil }
 			app.newPassword = func() (string, error) { return "generated", nil }

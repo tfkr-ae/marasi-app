@@ -39,12 +39,6 @@ func (a *App) useDesktopRuntime() {
 		}
 		return nil
 	}
-	a.onEvent = func(name string, handle func(payload any)) {
-		a.wails.Event.Off(name)
-		a.wails.Event.On(name, func(event *application.CustomEvent) {
-			handle(event.Data)
-		})
-	}
 }
 
 // emit sends a Wails event once main has given the app its Wails

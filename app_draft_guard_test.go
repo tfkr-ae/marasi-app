@@ -24,7 +24,7 @@ func withDialog(app *App, answer string) *fakeDialog {
 }
 
 func TestQuitWithoutUnsavedDraftsDoesNotAsk(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	dialog := withDialog(app, "Cancel")
 
 	if prevent := app.beforeClose(); prevent {
@@ -36,7 +36,7 @@ func TestQuitWithoutUnsavedDraftsDoesNotAsk(t *testing.T) {
 }
 
 func TestQuitWithUnsavedDraftsAsksOnceWithTheCount(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	app.SetUnsavedDraftCount(3)
 	dialog := withDialog(app, "Cancel")
 
@@ -52,7 +52,7 @@ func TestQuitWithUnsavedDraftsAsksOnceWithTheCount(t *testing.T) {
 }
 
 func TestQuitWithOneUnsavedDraftUsesTheSingular(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	app.SetUnsavedDraftCount(1)
 	dialog := withDialog(app, "Cancel")
 
@@ -63,7 +63,7 @@ func TestQuitWithOneUnsavedDraftUsesTheSingular(t *testing.T) {
 }
 
 func TestQuitConfirmedOverUnsavedDraftsCloses(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	app.SetUnsavedDraftCount(2)
 	withDialog(app, "Close Marasi")
 
@@ -73,7 +73,7 @@ func TestQuitConfirmedOverUnsavedDraftsCloses(t *testing.T) {
 }
 
 func TestSwitchProjectOverUnsavedDraftsCanBeCancelled(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	app.SetUnsavedDraftCount(2)
 	dialog := withDialog(app, "Cancel")
 
@@ -87,7 +87,7 @@ func TestSwitchProjectOverUnsavedDraftsCanBeCancelled(t *testing.T) {
 }
 
 func TestSwitchProjectConfirmedOverUnsavedDrafts(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	app.SetUnsavedDraftCount(2)
 	withDialog(app, "Switch Project")
 
@@ -98,7 +98,7 @@ func TestSwitchProjectConfirmedOverUnsavedDrafts(t *testing.T) {
 }
 
 func TestSwitchProjectWithNothingToLoseNeverAsks(t *testing.T) {
-	app := newScratchpadApp(t)
+	app := newTestApp(t)
 	dialog := withDialog(app, "Cancel")
 
 	confirmed, err := app.ConfirmProjectSwitch()

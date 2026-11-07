@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/spf13/viper"
+	"github.com/tfkr-ae/marasi/chrome"
 )
 
 //go:embed resources/default_test_cases.yml
@@ -83,6 +84,10 @@ type Config struct {
 	connections      []SavedConnection
 	activeConnection string
 	recentProjects   map[string][]RecentProject
+	// chromePaths and chromeProfiles are what Start Chrome uses
+	// (chrome_config.go).
+	chromePaths    []chrome.PathConfig
+	chromeProfiles []string
 }
 
 const appConfigName = "marasi_appconfig"
@@ -232,6 +237,8 @@ func LoadConfig(appConfigDir string) (*Config, error) {
 	config.connections = parseConnections(documentValue(doc, connectionsKey))
 	config.activeConnection = parseActiveConnection(documentValue(doc, activeConnectionKey))
 	config.recentProjects = parseRecentProjects(documentValue(doc, recentProjectsKey))
+	config.chromePaths = parseChromePaths(documentValue(doc, chromePathsKey))
+	config.chromeProfiles = parseChromeProfiles(documentValue(doc, chromeProfilesKey))
 
 	if err := loadTestCases(appConfigDir, config); err != nil {
 		return nil, fmt.Errorf("loading test cases: %w", err)

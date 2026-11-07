@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -11,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/tfkr-ae/marasi/chrome"
-	"github.com/tfkr-ae/marasi/service"
 )
 
 // Codes the frontend reads from a refused Start Chrome ("<what>: <code>: <cause>").
@@ -23,7 +21,10 @@ const (
 	listenerLoopback = "listener_loopback"
 )
 
-var errListenerLoopback = errors.New("the remote proxy listener binds loopback only")
+var (
+	errListenerInactive = errors.New("the proxy listener is stopped")
+	errListenerLoopback = errors.New("the remote proxy listener binds loopback only")
+)
 
 // ChromeStart is what Start Chrome needs from the frontend: the profile, the
 // active connection, and what the frontend read through its service client,
@@ -61,7 +62,7 @@ func launchWithMarasi(launch ChromeLaunch) error {
 
 // StartBrowser starts Chrome on this machine aimed at the connection's
 // proxy listener and pinned to its certificate's SPKI hash. Chrome's paths
-// and profiles stay in this machine's Marasi config, whatever the
+// and profiles stay in the app config, whatever the
 // connection. It never calls the service's POST /chrome/start.
 func (a *App) StartBrowser(start ChromeStart) error {
 	address, port, err := chromeProxy(start)
@@ -75,20 +76,13 @@ func (a *App) StartBrowser(start ChromeStart) error {
 	if profile == "" {
 		profile = "default-profile"
 	}
-	ctx := context.Background()
 	if profile != "default-profile" {
-		profiles, err := a.chrome.Profiles(ctx)
-		if err != nil {
-			return fmt.Errorf("starting Chrome: %w", err)
-		}
+		profiles, _ := a.GetChromeProfiles()
 		if !slices.Contains(profiles, profile) {
-			return fmt.Errorf("starting Chrome: profile %s: %w", profile, service.ErrChromeNotFound)
+			return fmt.Errorf("starting Chrome: profile %s: %w", profile, errChromeNotFound)
 		}
 	}
-	paths, err := a.chrome.Paths(ctx)
-	if err != nil {
-		return fmt.Errorf("starting Chrome: %w", err)
-	}
+	paths, _ := a.GetChromePaths()
 	launch := ChromeLaunch{
 		Address:   address,
 		Port:      port,
@@ -109,7 +103,7 @@ func (a *App) StartBrowser(start ChromeStart) error {
 // listener on loopback only is refused.
 func chromeProxy(start ChromeStart) (address, port string, err error) {
 	if start.ProxyListener == "" {
-		return "", "", fmt.Errorf("starting Chrome: %s: %w", listenerInactive, service.ErrListenerInactive)
+		return "", "", fmt.Errorf("starting Chrome: %s: %w", listenerInactive, errListenerInactive)
 	}
 	host, port, err := net.SplitHostPort(start.ProxyListener)
 	if err != nil {

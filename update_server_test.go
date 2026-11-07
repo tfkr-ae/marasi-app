@@ -200,7 +200,7 @@ func (f *fakeReleaseServer) writeRelease(w http.ResponseWriter, release *fakeRel
 // reading releases from releases and recording the events it emits.
 func newUpdateApp(t *testing.T, channel, runningVersion string, releases *fakeReleaseServer) (*App, *recordedEvents) {
 	t.Helper()
-	app := newProjectApp(t)
+	app := newTestApp(t)
 	events := &recordedEvents{}
 	app.emitEvent = events.emit
 	app.build = BuildInfo{Channel: channel, Version: runningVersion}
