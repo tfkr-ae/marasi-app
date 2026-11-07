@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Terminal, Wrench, X } from "lucide-svelte";
+	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		SetFlag,
 		ToggleFlag,
@@ -30,7 +30,8 @@
 		SlideToggle,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
+	import { settingsSection } from "../../lib/settingsSection.js";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
 	import { setLightMode } from "../../lib/lightMode.js";
@@ -89,8 +90,7 @@
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
-		{ id: "cli", name: "Marasi CLI", hint: "Location, version, channel", icon: Terminal },
-		{ id: "updates", name: "Updates", hint: "Channel and checks", icon: RefreshCw },
+		{ id: "updates", name: "Updates", hint: "App and Marasi CLI", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
 	];
 	const syntaxModes = [
@@ -106,8 +106,23 @@
 	// ?section=<id> opens a section, as the update panel's link to the
 	// Channel setting does. Choosing a section puts it in the URL, so that
 	// link switches section even after the researcher moved to another one.
-	$: requestedSection = $page.url.searchParams.get("section");
-	$: if (sections.some((entry) => entry.id === requestedSection)) section = requestedSection;
+	// ?section=cli (the old Marasi CLI section) and ?section=updates#cli open
+	// Updates scrolled to its Marasi CLI part (lib/settingsSection.js).
+	$: requested = settingsSection(
+		$page.url.searchParams.get("section"),
+		$page.url.hash,
+		sections.map((entry) => entry.id),
+	);
+	// Once per URL: sections changes with the connection's hint too.
+	let openedHref = null;
+	$: if (requested && $page.url.href !== openedHref) openRequested(requested, $page.url.href);
+	async function openRequested({ section: id, part }, href) {
+		openedHref = href;
+		section = id;
+		if (!part) return;
+		await tick();
+		document.getElementById(part)?.scrollIntoView({ block: "start" });
+	}
 	function selectSection(id) {
 		section = id;
 		goto(`?section=${id}`, { replaceState: true, noScroll: true, keepFocus: true });
@@ -1141,10 +1156,9 @@
 						</tbody>
 					</table>
 				</div>
-			{:else if section === "cli"}
-				<CLISettings />
 			{:else if section === "updates"}
 				<h3 class="text-sm font-bold">Updates</h3>
+				<h4 class="mt-3 text-xs font-semibold uppercase tracking-wide opacity-60" data-testid="updates-app">Marasi App</h4>
 				{#if updateSettings?.Channel}
 					<div class={row}>
 						<p>Channel</p>
@@ -1209,6 +1223,8 @@
 						</div>
 					</div>
 				{/if}
+				<h4 id="cli" class="mt-8 scroll-mt-4 text-xs font-semibold uppercase tracking-wide opacity-60" data-testid="updates-cli">Marasi CLI</h4>
+				<CLISettings />
 			{:else}
 				<h3 class="text-sm font-bold">About</h3>
 				<div class={row}>
