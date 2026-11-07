@@ -6,7 +6,7 @@
 /** Marasi's trigram index cannot find shorter terms; it rejects them. */
 export const MIN_ENTRY_SEARCH = 3;
 
-// Marasi rejects queries longer than this many bytes. The search binding
+// Marasi rejects queries longer than this many bytes. GET /launchpad/search
 // wraps the query in `launchpad:* AND (…)`.
 const MAX_QUERY_BYTES = 8192;
 const WRAPPER_BYTES = "launchpad:* AND ()".length;
