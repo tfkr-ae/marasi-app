@@ -9,6 +9,7 @@ import {
   cliSourceLabel,
   outdatedVersion,
   shouldOfferCLISetup,
+  updateCLI,
 } from "./cli.js";
 
 test("a connection that failed for want of the CLI asks for the CLI setup", () => {
@@ -63,4 +64,37 @@ test("an outdated local instance names the version it runs", () => {
   assert.equal(outdatedVersion(error), "v2-backlog-3a55b06 (dev)");
   assert.equal(outdatedVersion("reading the local instance's address: instance_failed (): reading pairing: refused"), null);
   assert.equal(outdatedVersion(null), null);
+});
+
+test("Update CLI installs the channel's CLI, then restarts the local instance with it", async () => {
+  const calls = [];
+  const outcome = await updateCLI({
+    checkForUpdate: async () => {
+      calls.push("check");
+      return { outcome: "installed", version: "07.11.2026" };
+    },
+    restart: async () => calls.push("restart"),
+  });
+  assert.deepEqual(calls, ["check", "restart"]);
+  assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 07.11.2026 installed" });
+});
+
+test("Update CLI still restarts when the CLI is current, since the instance may run another", async () => {
+  const calls = [];
+  const outcome = await updateCLI({
+    checkForUpdate: async () => ({ outcome: "up-to-date" }),
+    restart: async () => calls.push("restart"),
+  });
+  assert.deepEqual(calls, ["restart"]);
+  assert.equal(outcome.ok, true);
+});
+
+test("a failed install says why and restarts nothing", async () => {
+  const calls = [];
+  const outcome = await updateCLI({
+    checkForUpdate: async () => ({ outcome: "failed", failure: { reason: "checksum mismatch" } }),
+    restart: async () => calls.push("restart"),
+  });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(outcome, { ok: false, text: "checksum mismatch" });
 });

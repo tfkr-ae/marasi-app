@@ -1,6 +1,7 @@
 <script>
-	// One connection's details: its status, the service's project and
-	// version, and the version warning. The Connections modal shows it
+	// One connection's details: its status, the service's project, version
+	// and API level, and the API level warning (with Update CLI on the local
+	// connection). The Connections modal shows it
 	// compact; Settings → Connection in the Settings row layout (`rows`).
 	// Another connection offers Switch; a refused password asks for it; a
 	// remote has its address and Remove. The password and sharing rows
@@ -14,6 +15,7 @@
 	import { cliMissing, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import OutdatedInstance from "./OutdatedInstance.svelte";
+	import UpdateCLI from "./UpdateCLI.svelte";
 	import ConnectionAccess from "./ConnectionAccess.svelte";
 
 	export let connection;
@@ -67,10 +69,11 @@
 		</span>
 	</div>
 
-	{#if isActive && state.versionWarning}
-		<p class="mt-2 bg-warning-500/15 px-2 py-1 text-xs" data-testid="connection-version-warning">
-			{state.versionWarning}. Some features may not work.
-		</p>
+	{#if isActive && state.apiWarning}
+		<div class="mt-2 space-y-2 bg-warning-500/15 px-2 py-1 text-xs" data-testid="connection-api-warning">
+			<p>{state.apiWarning}. Some features may not work.</p>
+			{#if connection.kind === "local" && phase === "connected"}<UpdateCLI />{/if}
+		</div>
 	{/if}
 	{#if !isActive}
 		<div class="mt-3 flex justify-end">
@@ -118,6 +121,13 @@
 					<p class="text-xs opacity-70">The Marasi the service runs</p>
 				</div>
 				<p class="font-mono text-xs" data-testid="connection-version">{state.version}</p>
+			</div>
+			<div class={row}>
+				<div>
+					<p>API level</p>
+					<p class="text-xs opacity-70">The control API the service speaks</p>
+				</div>
+				<p class="font-mono text-xs" data-testid="connection-api">{state.api ?? "none"}</p>
 			</div>
 		</div>
 	{/if}

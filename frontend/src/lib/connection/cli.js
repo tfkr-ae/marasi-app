@@ -58,3 +58,19 @@ export function outdatedVersion(error) {
   if (cause === null) return null;
   return /^Marasi (.+) is running, older than/.exec(cause)?.[1] ?? "";
 }
+
+/**
+ * Update CLI, for a local instance at an API level the app doesn't support:
+ * installs the CLI channel's release (`checkForUpdate`, Go's
+ * CheckForCLIUpdate) and restarts the local instance with it (`restart`, Go's
+ * RestartLocalInstance). A current CLI still restarts, since the instance may
+ * run another build. Resolves to `{ok, text}` for the toast or the problem.
+ * Marasi doesn't publish its releases' API levels, so the install takes the
+ * channel's latest.
+ */
+export async function updateCLI({ checkForUpdate, restart }) {
+  const result = await checkForUpdate();
+  if (result.outcome === "failed") return { ok: false, text: cliResultText(result) };
+  await restart();
+  return { ok: true, text: cliResultText(result) };
+}
