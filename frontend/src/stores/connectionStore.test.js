@@ -692,3 +692,19 @@ test("the next restart forgets the last one's error", () => {
   assert.equal(state.restartError, null);
   assert.equal(state.restarting, true);
 });
+
+test("an instance another client replaced while the app was away stops being the app's", () => {
+  const started = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status }).state;
+  assert.equal(started.owned, true);
+  const dropped = reduce(started, { type: "STREAM_DROPPED" }).state;
+  const replaced = { ...status, run_id: "run-2" };
+  const { state } = reduce(dropped, { type: "RECONNECTED", url: "http://127.0.0.1:51391", startedByApp: false, status: replaced });
+  assert.equal(state.owned, false);
+});
+
+test("the app's own instance stays the app's across a reconnect", () => {
+  const started = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status }).state;
+  const dropped = reduce(started, { type: "STREAM_DROPPED" }).state;
+  const { state } = reduce(dropped, { type: "RECONNECTED", url: "http://127.0.0.1:51391", startedByApp: true, status });
+  assert.equal(state.owned, true);
+});

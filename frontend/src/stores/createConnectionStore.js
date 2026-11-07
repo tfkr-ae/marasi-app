@@ -229,6 +229,14 @@ function change(state, busy, body, patch = {}) {
 const stale = (state, action) => action.id !== undefined && action.id !== state.connection.id;
 
 /** The next state for `action`, the steps to perform, and any refusal. */
+// Whether the local instance is the app's after a start, attach or
+// reconnect: Go's latest answer (it matches the instance's run ID against the
+// one the app started), so an instance another client replaced stops being
+// the app's. A remote's answer says nothing about the local instance.
+function ownedAfter(state, action) {
+  return state.connection.kind === "local" ? Boolean(action.startedByApp) : state.owned;
+}
+
 export function reduce(state, action) {
   switch (action.type) {
     case "APP_STARTED":
@@ -237,7 +245,7 @@ export function reduce(state, action) {
 
     case "INSTANCE_UP":
       if (state.phase !== "starting") return refuse(state, "The app isn't starting the local instance.");
-      return go(state, { phase: "connecting", owned: state.owned || action.startedByApp, url: action.url }, [
+      return go(state, { phase: "connecting", owned: ownedAfter(state, action), url: action.url }, [
         { type: "use", url: action.url, password: action.password },
         { type: "read-status" },
       ]);
@@ -428,7 +436,7 @@ export function reduce(state, action) {
           busy: null,
           url: action.url ?? state.url,
           control: action.control ? controlFrom(action.control) : state.control,
-          owned: state.owned || Boolean(action.startedByApp),
+          owned: ownedAfter(state, action),
         },
         // The stream closed for the change: resume it from the last event.
         [{ type: "open-events", resume: true }],
@@ -484,7 +492,7 @@ export function reduce(state, action) {
         trying: false,
         restarting: false,
         url: action.url ?? state.url,
-        owned: state.owned || Boolean(action.startedByApp),
+        owned: ownedAfter(state, action),
         ...fromStatus(status),
       };
       if (status.project === state.project && !status.run_id && !state.runId) {
