@@ -151,7 +151,7 @@ func TestConnectLocalStartsTheInstanceWhenItIsNotRunning(t *testing.T) {
 	if slices.ContainsFunc(start.args, func(arg string) bool { return strings.Contains(arg, "generated") }) {
 		t.Fatalf("the password is in the arguments, where ps shows it: %v", start.args)
 	}
-	want := LocalConnection{URL: "http://127.0.0.1:52001", Password: "from-pair", Instance: "default", StartedByApp: true, WasStopped: true}
+	want := LocalConnection{URL: "http://127.0.0.1:52001", Password: "from-pair", Instance: "default", StartedByApp: true}
 	if connection != want {
 		t.Fatalf("connection = %+v, want %+v", connection, want)
 	}
@@ -173,9 +173,6 @@ func TestConnectLocalAttachesToARunningInstanceWithoutStartingAnother(t *testing
 	}
 	if connection.StartedByApp {
 		t.Fatal("an instance the app attached to reads as started by the app")
-	}
-	if connection.WasStopped {
-		t.Fatal("a running instance reads as stopped before the call")
 	}
 	if connection.URL != "http://127.0.0.1:52001" || connection.Password != "from-pair" {
 		t.Fatalf("connection = %+v, want the pairing's address and password", connection)
@@ -225,9 +222,6 @@ func TestConnectLocalAttachesWhenTheInstanceStartedMeanwhile(t *testing.T) {
 	}
 	if connection.StartedByApp {
 		t.Fatal("an instance someone else started reads as started by the app")
-	}
-	if !connection.WasStopped {
-		t.Fatal("an instance that wasn't running when the call looked doesn't read as stopped before it")
 	}
 }
 

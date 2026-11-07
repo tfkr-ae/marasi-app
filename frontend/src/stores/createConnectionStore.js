@@ -5,8 +5,7 @@
 // next action. Tests run the reducer alone, and the store with a fake api:
 //
 //   listConnections() -> {connections, activeId}     the saved connections (Go)
-//   connectLocal() -> {url, password, startedByApp, wasStopped}  start or attach (Go);
-//                                                    wasStopped: it was not running as the call looked
+//   connectLocal() -> {url, password, startedByApp}  start or attach (Go)
 //   connectionPassword(id) -> password               a remote's saved password (Go)
 //   savePassword(id, password)                       replace it (Go)
 //   setActive(id)                                    save the active connection (Go)
@@ -14,7 +13,8 @@
 //   confirmSwitch() -> bool                          the unsaved-work prompt (Go)
 //   use({url, password})                             point the service client
 //   readStatus() -> GET /service/status
-//   openEvents({onDrop})                              open GET /events
+//   openEvents({onDrop, onReset, resume})             open GET /events; resume: from
+//                                                    the last event id (no replay when false)
 //   closeEvents()
 //   loadProject(status)                               load the service's project
 //   readControl() -> GET /service/control-listener/status
@@ -34,7 +34,14 @@
 // event (reconnecting, a refused password, switching connections): add its
 // phase or action to `reduce`, its step to `perform`, and a scenario test.
 // The password passes through steps and never lands in the state.
+//
+// A dropped stream reconnects and resumes from the last event id, so the
+// service replays what was missed and nothing resyncs. The status's run ID
+// tells a restart apart: a new one loads the project in full. A resume the
+// service can't serve starts with a stream reset: "expired" or "invalid"
+// resyncs every store in place, "restarted" loads in full.
 import { get, writable } from "svelte/store";
+import { apiWarning } from "../lib/service/apiLevel.js";
 
 /** The state before the app starts reaching a service. */
 export function initialConnection() {
@@ -54,22 +61,19 @@ export function initialConnection() {
     project: null,
     // The instance the service runs as ("default" for the local one).
     instance: null,
-    // The service's version, and the warning when it is older than the
-    // Marasi the app pins (`pin`, its date, from MARASI_PIN).
+    // The service's version, its API level, and the warning when the app
+    // doesn't support that level (lib/service/apiLevel.js).
     version: null,
-    pin: null,
-    versionWarning: null,
+    api: null,
+    apiWarning: null,
+    // The service process's run ID: a new one on a reconnect is a restart.
+    runId: null,
     proxyListener: null,
     error: null,
     // Reconnect attempts since the stream dropped, and whether one is
     // reaching the service now.
     attempt: 0,
     trying: false,
-    // The service said it is restarting before the stream dropped.
-    restartSeen: false,
-    // A reconnect attempt got no answer from the service: its process may
-    // have gone, so the next reconnect counts as a restart.
-    serviceGone: false,
     // The project a reconnect found open instead, waiting for the
     // unsaved-work guard before it loads.
     pendingProject: null,
@@ -97,23 +101,14 @@ export function backoff(attempt) {
   return Math.min(2 ** (attempt - 1), 30) * 1000;
 }
 
-// A version's date as YYYYMMDD, for comparing: "29.10.2026",
-// "29.10.2026-rc1" and "29.10.2026 (nightly abc1234)" all date 20261029.
-function versionDate(version) {
-  const m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(version ?? "");
-  return m ? `${m[3]}${m[2]}${m[1]}` : null;
-}
-
-/**
- * The warning for a service `version` older than the app's `pin` date, or
- * null. A dev service, or a version or pin without a date, never warns.
- */
-export function versionWarning(version, pin) {
-  const service = versionDate(version);
-  const needed = versionDate(pin);
-  if (!service || !needed || service >= needed) return null;
-  return `Service is ${version}, the app needs ${pin} or later`;
-}
+// What the store keeps of a service status.
+const fromStatus = (status) => ({
+  version: status.version ?? null,
+  api: status.api ?? null,
+  apiWarning: apiWarning(status.api),
+  runId: status.run_id ?? null,
+  proxyListener: status.proxy_listener ?? null,
+});
 
 /** Whether `text` is an IPv4 or IPv6 address (no port, no brackets). */
 export function isIP(text) {
@@ -158,13 +153,13 @@ function begin(state) {
     url: null,
     project: null,
     version: null,
-    versionWarning: null,
+    api: null,
+    apiWarning: null,
+    runId: null,
     proxyListener: null,
     instance: null,
     attempt: 0,
     trying: false,
-    restartSeen: false,
-    serviceGone: false,
     pendingProject: null,
     authFrom: null,
     control: null,
@@ -235,14 +230,12 @@ export function reduce(state, action) {
           url: action.url ?? state.url,
           switching: false,
           project: status.project,
-          version: status.version,
-          versionWarning: versionWarning(status.version, state.pin),
+          ...fromStatus(status),
           instance: status.instance ?? null,
-          proxyListener: status.proxy_listener ?? null,
           error: null,
         },
         // After a switch the pages remount on the other service's project.
-        [{ type: "open-events" }, { type: state.switching ? "reload-project" : "load-project", status }],
+        [{ type: "open-events", resume: false }, { type: state.switching ? "reload-project" : "load-project", status }],
       );
     }
 
@@ -392,7 +385,7 @@ export function reduce(state, action) {
 
     case "CONTROL_FAILED":
       if (!state.busy) return refuse(state, "No change is under way.");
-      return go(state, { busy: null, changeError: action.error }, [{ type: "open-events" }, { type: "resync" }]);
+      return go(state, { busy: null, changeError: action.error }, [{ type: "open-events", resume: true }]);
 
     case "KEYCHAIN_DONE":
       if (!state.busy) return refuse(state, "No change is under way.");
@@ -410,7 +403,8 @@ export function reduce(state, action) {
           control: action.control ? controlFrom(action.control) : state.control,
           owned: state.owned || Boolean(action.startedByApp),
         },
-        [{ type: "open-events" }, { type: "resync" }],
+        // The stream closed for the change: resume it from the last event.
+        [{ type: "open-events", resume: true }],
       );
 
     case "REJOIN_FAILED":
@@ -433,12 +427,12 @@ export function reduce(state, action) {
       // A change closed the stream on purpose and rejoins by itself.
       if (state.busy) return go(state, {});
       // A drop of the stream (whatever the reason: a network failure, a
-      // restart, the service dropping a subscriber whose queue overflowed),
-      // or a failed reconnect attempt. The pages stay; only the stream goes.
+      // restart, the service dropping a subscriber whose queue overflowed
+      // after `stream.dropped`), or a failed reconnect attempt. The pages
+      // stay; only the stream goes.
       if (state.phase !== "connected" && state.phase !== "reconnecting") return refuse(state, "Not connected.");
       const attempt = state.attempt + 1;
-      const serviceGone = state.serviceGone || Boolean(action.unreachable);
-      return go(state, { phase: "reconnecting", attempt, trying: false, serviceGone }, [
+      return go(state, { phase: "reconnecting", attempt, trying: false }, [
         ...(state.phase === "connected" ? [{ type: "close-events" }] : []),
         { type: "wait", ms: backoff(attempt) },
       ]);
@@ -450,37 +444,49 @@ export function reduce(state, action) {
       if (state.trying) return refuse(state, "Already reconnecting.");
       return go(state, { trying: true }, [{ type: "cancel-wait" }, { type: "reconnect" }]);
 
-    case "SERVICE_RESTARTING":
-      return go(state, { restartSeen: true });
-
     case "RECONNECTED": {
       if (state.phase !== "reconnecting") return refuse(state, "Not reconnecting.");
       const { status } = action;
-      // /service/status names nothing that changes per process, so a
-      // restart is a service.restarting seen before the drop, a new version
-      // (decisions.md, ruling 2), or the service gone meanwhile: the local
-      // reconnect had to start the instance, or an attempt got no answer. A
-      // restart quicker than the backoff, at the same version and without
-      // the event, still resyncs in place.
-      const restarted = state.restartSeen || status.version !== state.version || state.serviceGone || Boolean(action.wasStopped);
+      // The run ID changes on every start of the service process, so a new
+      // one is a restart: its replay buffer and every id the app holds are
+      // gone. The same run resumes the stream, and the service replays what
+      // was missed. A service without a run ID can't resume: resync.
+      const restarted = (status.run_id ?? null) !== state.runId;
       const patch = {
         attempt: 0,
         trying: false,
-        restartSeen: false,
-        serviceGone: false,
         url: action.url ?? state.url,
         owned: state.owned || Boolean(action.startedByApp),
-        version: status.version,
-        versionWarning: versionWarning(status.version, state.pin),
-        proxyListener: status.proxy_listener ?? null,
+        ...fromStatus(status),
       };
+      if (status.project === state.project && !status.run_id && !state.runId) {
+        return go(state, { ...patch, phase: "connected" }, [{ type: "open-events", resume: false }, { type: "resync" }]);
+      }
       if (status.project === state.project && !restarted) {
-        return go(state, { ...patch, phase: "connected" }, [{ type: "open-events" }, { type: "resync" }]);
+        return go(state, { ...patch, phase: "connected" }, [{ type: "open-events", resume: true }]);
       }
       return go(state, { ...patch, phase: "project-changed", pendingProject: status.project }, [
         { type: "confirm-load", status },
       ]);
     }
+
+    case "STREAM_RESET":
+      // The first event of a resume the service couldn't serve.
+      if (state.phase !== "connected" || state.busy) return refuse(state, "Not connected.");
+      if (action.reason === "restarted") {
+        // Another run answered: load in full, then read its run ID.
+        return go(state, { phase: "project-changed", pendingProject: state.project, runId: null }, [
+          { type: "close-events" },
+          { type: "confirm-load", status: { project: state.project } },
+        ]);
+      }
+      // "expired" (older than the replay buffer) or "invalid": nothing was
+      // replayed, so read every store again.
+      return go(state, {}, [{ type: "resync" }]);
+
+    case "STATUS_REFRESHED":
+      if (state.phase !== "connected") return refuse(state, "Not connected.");
+      return go(state, fromStatus(action.status));
 
     case "LOAD_PROJECT":
       // Load the project a reconnect found, after declining it once.
@@ -491,8 +497,10 @@ export function reduce(state, action) {
       if (state.phase !== "project-changed") return refuse(state, "No project waits to load.");
       const status = { project: state.pendingProject, version: state.version, proxy_listener: state.proxyListener };
       return go(state, { phase: "connected", project: state.pendingProject, pendingProject: null }, [
-        { type: "open-events" },
+        { type: "open-events", resume: false },
         { type: "reload-project", status },
+        // A stream reset said it restarted without naming the new run.
+        ...(state.runId === null ? [{ type: "refresh-status" }] : []),
       ]);
     }
 
@@ -503,10 +511,6 @@ export function reduce(state, action) {
     case "PROJECT_LOADED":
       // A switch loaded another project: reconnects compare against it.
       return go(state, { project: action.path });
-
-    case "MARASI_PIN":
-      // The app's pinned Marasi date (Go's MarasiPin), read once at start.
-      return go(state, { pin: action.pin || null, versionWarning: versionWarning(state.version, action.pin) });
 
     case "RETRY":
       if (state.phase !== "failed" && state.phase !== "auth-failed") return refuse(state, "Nothing to retry.");
@@ -615,7 +619,18 @@ export function createConnectionStore(api, timers = globalThis) {
         return;
       }
       case "open-events":
-        api.openEvents({ onDrop: (drop) => dispatch({ type: "STREAM_DROPPED", status: drop?.status ?? null }) });
+        api.openEvents({
+          resume: Boolean(step.resume),
+          onDrop: (drop) => dispatch({ type: "STREAM_DROPPED", status: drop?.status ?? null }),
+          onReset: (reason) => dispatch({ type: "STREAM_RESET", reason }),
+        });
+        return;
+      case "refresh-status":
+        try {
+          dispatch({ type: "STATUS_REFRESHED", status: await api.readStatus() });
+        } catch (err) {
+          console.error("Reading the service status failed:", err);
+        }
         return;
       case "wait":
         timers.clearTimeout(waiting);
@@ -648,12 +663,10 @@ export function createConnectionStore(api, timers = globalThis) {
             return;
           }
           console.error("Reconnecting to Marasi failed:", err);
-          // No HTTP status: the service didn't answer at all (or the CLI
-          // couldn't reach the local instance), not just the stream.
-          dispatch({ type: "STREAM_DROPPED", unreachable: typeof err?.status !== "number" });
+          dispatch({ type: "STREAM_DROPPED" });
           return;
         }
-        dispatch({ type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, wasStopped: Boolean(reached.wasStopped), status });
+        dispatch({ type: "RECONNECTED", url: reached.url, startedByApp: reached.startedByApp, status });
         return;
       }
       case "resync":

@@ -20,7 +20,7 @@ function run(...actions) {
   return { state, steps, refusals };
 }
 
-const status = { version: "dev", project: "/p/scratchpad.marasi", proxy_listener: "127.0.0.1:8080" };
+const status = { version: "dev", api: 1, run_id: "run-1", project: "/p/scratchpad.marasi", proxy_listener: "127.0.0.1:8080" };
 const up = (startedByApp) => ({
   type: "INSTANCE_UP",
   url: "http://127.0.0.1:51391",
@@ -127,11 +127,79 @@ const reconnected = (patch = {}) => ({
   status: { ...status, ...patch },
 });
 
-test("reconnecting to the same project resyncs every store in place", () => {
-  const { state, types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected());
+test("reconnecting to the same run resumes the stream from the last event, with no resync", () => {
+  const { state, steps, types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected());
   assert.equal(state.phase, "connected");
   assert.equal(state.attempt, 0);
-  assert.deepEqual(types.slice(-2), ["open-events", "resync"]);
+  assert.equal(types.at(-1), "open-events");
+  assert.equal(steps.at(-1).resume, true);
+  assert.equal(types.includes("resync"), false);
+});
+
+test("the first connect opens a fresh stream", () => {
+  const { steps } = reduce(run(connected[0], connected[1]).state, connected[2]);
+  assert.deepEqual(steps[0], { type: "open-events", resume: false });
+});
+
+for (const reason of ["expired", "invalid"]) {
+  test(`a resume the service answers with a ${reason} stream reset resyncs every store in place`, () => {
+    const { state, types } = after(
+      { type: "STREAM_DROPPED" },
+      { type: "RECONNECT_NOW" },
+      reconnected(),
+      { type: "STREAM_RESET", reason },
+    );
+    assert.equal(state.phase, "connected");
+    assert.equal(types.at(-1), "resync");
+  });
+}
+
+test("a restarted stream reset asks about unsaved work, then loads the project in full", () => {
+  const asked = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected(), { type: "STREAM_RESET", reason: "restarted" });
+  assert.equal(asked.state.phase, "project-changed");
+  assert.equal(asked.state.pendingProject, status.project);
+  assert.deepEqual(asked.types.slice(-2), ["close-events", "confirm-load"]);
+
+  const loaded = after(
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected(),
+    { type: "STREAM_RESET", reason: "restarted" },
+    { type: "LOAD_CONFIRMED" },
+  );
+  assert.equal(loaded.state.phase, "connected");
+  assert.deepEqual(loaded.types.slice(-3), ["open-events", "reload-project", "refresh-status"]);
+  assert.equal(loaded.steps.at(-3).resume, false);
+});
+
+test("the run a refreshed status reports is the one the next reconnect compares against", () => {
+  const { types } = after(
+    { type: "STREAM_RESET", reason: "restarted" },
+    { type: "LOAD_CONFIRMED" },
+    { type: "STATUS_REFRESHED", status: { ...status, run_id: "run-2" } },
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected({ run_id: "run-2" }),
+  );
+  assert.equal(types.at(-1), "open-events");
+});
+
+test("a stream reset only counts while connected", () => {
+  const { refusals } = after({ type: "STREAM_DROPPED" }, { type: "STREAM_RESET", reason: "expired" });
+  assert.equal(refusals.length, 1);
+});
+
+test("a service without a run id resyncs in place on a reconnect", () => {
+  const noRun = { ...status, run_id: undefined };
+  const { steps } = run(
+    { type: "APP_STARTED" },
+    up(true),
+    { type: "CONNECTED", status: noRun },
+    { type: "STREAM_DROPPED" },
+    { type: "RECONNECT_NOW" },
+    reconnected({ run_id: undefined }),
+  );
+  assert.deepEqual(steps.slice(-2), ["open-events", "resync"]);
 });
 
 test("the project a switch loaded is the one a reconnect compares against", () => {
@@ -141,13 +209,12 @@ test("the project a switch loaded is the one a reconnect compares against", () =
     { type: "RECONNECT_NOW" },
     reconnected({ project: "/p/acme.marasi" }),
   );
-  assert.deepEqual(types.slice(-2), ["open-events", "resync"]);
+  assert.equal(types.at(-1), "open-events");
 });
 
 for (const [why, actions, patch] of [
   ["the service opened another project", [], { project: "/p/other.marasi" }],
-  ["the service announced a restart", [{ type: "SERVICE_RESTARTING" }], {}],
-  ["the service's version changed", [], { version: "06.11.2026" }],
+  ["the service restarted (a new run id)", [], { run_id: "run-2" }],
 ]) {
   test(`when ${why}, a reconnect asks about unsaved work before the full load`, () => {
     const asked = after(...actions, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected(patch));
@@ -182,54 +249,17 @@ test("declining the load keeps the pages and offers the load again", () => {
   assert.deepEqual(types.slice(-2), ["confirm-load", "confirm-load"]);
 });
 
-test("a restart seen before an earlier reconnect doesn't count again", () => {
-  const { types } = after(
-    { type: "SERVICE_RESTARTING" },
-    { type: "STREAM_DROPPED" },
-    { type: "RECONNECT_NOW" },
-    reconnected(),
-    { type: "LOAD_CONFIRMED" },
-    { type: "STREAM_DROPPED" },
-    { type: "RECONNECT_NOW" },
-    reconnected(),
-  );
-  assert.equal(types.at(-1), "resync");
-});
-
-// /service/status names nothing that changes per process, so a restart at
-// the same version shows as the service being gone: the local reconnect
-// had to start the instance, or an attempt got no answer from the service.
-test("a reconnect that had to start the local instance loads the project in full", () => {
-  const { state, types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, { ...reconnected(), wasStopped: true });
-  assert.equal(state.phase, "project-changed");
-  assert.equal(types.at(-1), "confirm-load");
-});
-
-test("a reconnect after an attempt the service didn't answer loads the project in full", () => {
-  const { state, types } = after(
-    { type: "STREAM_DROPPED" },
-    { type: "RECONNECT_NOW" },
-    { type: "STREAM_DROPPED", unreachable: true },
-    { type: "RECONNECT_NOW" },
-    reconnected(),
-  );
-  assert.equal(state.phase, "project-changed");
-  assert.equal(types.at(-1), "confirm-load");
-});
-
-test("a service gone during an earlier reconnect doesn't count again", () => {
+test("a restart's run id is the one the next reconnect compares against", () => {
   const { types } = after(
     { type: "STREAM_DROPPED" },
     { type: "RECONNECT_NOW" },
-    { type: "STREAM_DROPPED", unreachable: true },
-    { type: "RECONNECT_NOW" },
-    reconnected(),
+    reconnected({ run_id: "run-2" }),
     { type: "LOAD_CONFIRMED" },
     { type: "STREAM_DROPPED" },
     { type: "RECONNECT_NOW" },
-    reconnected(),
+    reconnected({ run_id: "run-2" }),
   );
-  assert.equal(types.at(-1), "resync");
+  assert.equal(types.at(-1), "open-events");
 });
 
 test("an action out of turn is refused and changes nothing", () => {
@@ -243,6 +273,7 @@ test("an action out of turn is refused and changes nothing", () => {
 function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
   const calls = [];
   let onDrop = null;
+  let onReset = null;
   const api = {
     connectLocal: async () => {
       calls.push("connectLocal");
@@ -254,8 +285,9 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
       return readStatus ? readStatus() : status;
     },
     openEvents: (handlers) => {
-      calls.push("openEvents");
+      calls.push(handlers.resume ? "resumeEvents" : "openEvents");
       onDrop = handlers.onDrop;
+      onReset = handlers.onReset;
     },
     closeEvents: () => calls.push("closeEvents"),
     loadProject: async (loaded) => calls.push(["loadProject", loaded.project]),
@@ -282,7 +314,7 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
       timer.fn();
     },
   };
-  return { api, calls, timers, drop: () => onDrop?.({ status: null }) };
+  return { api, calls, timers, drop: () => onDrop?.({ status: null }), reset: (reason) => onReset?.(reason) };
 }
 
 // The calls minus the write holds around a project change.
@@ -370,7 +402,7 @@ async function connectedStore(options = {}) {
   return { store, ...fake };
 }
 
-test("a dropped stream waits, reaches the local instance again and resyncs in place", async () => {
+test("a dropped stream waits, reaches the local instance again and resumes the stream, with no resync", async () => {
   const { store, calls, timers, drop } = await connectedStore();
 
   drop();
@@ -386,8 +418,7 @@ test("a dropped stream waits, reaches the local instance again and resyncs in pl
     "connectLocal",
     ["use", { url: "http://127.0.0.1:51391", password: "pw" }],
     "readStatus",
-    "openEvents",
-    "resync",
+    "resumeEvents",
   ]);
   assert.equal(get(store).attempt, 0);
 });
@@ -411,16 +442,45 @@ test("a failed attempt backs off, and Retry now skips the wait", async () => {
   await reached(store, "connected");
   await settle();
   assert.deepEqual(timers.waits(), []);
-  assert.equal(calls.at(-1), "resync");
+  assert.equal(calls.at(-1), "resumeEvents");
 });
 
-test("an overflow drop (the stream simply ends) reconnects the same way", async () => {
+test("an overflow drop (the stream simply ends) resumes the same way", async () => {
   const { store, calls, timers, drop } = await connectedStore();
   drop();
   timers.fire();
   await reached(store, "connected");
   await settle();
-  assert.equal(calls.at(-1), "resync");
+  assert.equal(calls.at(-1), "resumeEvents");
+  assert.equal(calls.includes("resync"), false);
+});
+
+for (const reason of ["expired", "invalid"]) {
+  test(`a ${reason} stream reset after a resume resyncs every store in place`, async () => {
+    const { store, calls, timers, drop, reset } = await connectedStore();
+    drop();
+    timers.fire();
+    await reached(store, "connected");
+    await settle();
+    reset(reason);
+    await settle();
+    assert.deepEqual(calls.slice(-2), ["resumeEvents", "resync"]);
+  });
+}
+
+test("a restarted stream reset loads the project in full once the guard agrees, and reads the new run id", async () => {
+  let runID = "run-1";
+  const { store, calls, timers, drop, reset } = await connectedStore({ readStatus: () => ({ ...status, run_id: runID }) });
+  drop();
+  timers.fire();
+  await reached(store, "connected");
+  await settle();
+  runID = "run-2";
+  reset("restarted");
+  await settle();
+  await settle();
+  assert.deepEqual(withoutHolds(calls).slice(-5), ["closeEvents", "confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"], "readStatus"]);
+  assert.equal(get(store).runId, "run-2");
 });
 
 test("a project the service opened meanwhile loads in full once the guard agrees", async () => {
@@ -436,43 +496,14 @@ test("a project the service opened meanwhile loads in full once the guard agrees
   assert.equal(calls.includes("resync"), false);
 });
 
-test("a restart announced before the drop loads the project in full", async () => {
-  const { store, calls, timers, drop } = await connectedStore();
-  store.dispatch({ type: "SERVICE_RESTARTING" });
+test("a service restarted meanwhile (a new run id) loads the project in full", async () => {
+  const { store, calls, timers, drop } = await connectedStore({ readStatus: () => ({ ...status, run_id: "run-2" }) });
   drop();
   timers.fire();
   await reached(store, "connected");
   await settle();
   assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
-});
-
-test("a service killed and started again by the reconnect loads the project in full", async () => {
-  const { store, calls, timers, drop } = await connectedStore({
-    connectLocal: () => ({ url: "http://127.0.0.1:51391", password: "pw", startedByApp: true, wasStopped: true }),
-  });
-  drop();
-  timers.fire();
-  await reached(store, "connected");
-  await settle();
-  assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
-});
-
-test("a service that didn't answer an attempt loads the project in full once back", async () => {
-  let down = true;
-  const { store, calls, timers, drop } = await connectedStore({
-    readStatus: () => {
-      if (down) throw new TypeError("fetch failed");
-      return status;
-    },
-  });
-  drop();
-  timers.fire();
-  await settle();
-  down = false;
-  store.retryNow();
-  await reached(store, "connected");
-  await settle();
-  assert.deepEqual(withoutHolds(calls).slice(-3), ["confirmSwitch", "openEvents", ["reloadProject", "/p/scratchpad.marasi"]]);
+  assert.equal(calls.includes("resync"), false);
 });
 
 test("declining the guard holds writes and keeps the stream closed until Load is chosen", async () => {
@@ -515,52 +546,32 @@ test("declining the guard keeps the pages until Load is chosen", async () => {
   assert.deepEqual(calls.at(-1), ["reloadProject", "/p/other.marasi"]);
 });
 
-// The version warning: a service older than the Marasi the app pins in
-// go.mod (MARASI_PIN, the pin's date) warns without blocking.
-const pinned = { type: "MARASI_PIN", pin: "30.10.2026" };
-const connectedTo = (version) => [pinned, { type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: { ...status, version } }];
+// The API level warning: a service outside the API levels the app supports
+// (SUPPORTED_API, 1..1) warns without blocking.
+const connectedTo = (api) => [{ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: { ...status, api } }];
 
-test("a service older than the pinned Marasi connects with a warning", () => {
-  const { state } = run(...connectedTo("29.10.2026"));
+test("a service in the supported API range doesn't warn", () => {
+  const { state } = run(...connectedTo(1));
+  assert.equal(state.api, 1);
+  assert.equal(state.apiWarning, null);
+});
+
+test("a service with no API level is too old, and connects with a warning", () => {
+  const { state } = run(...connectedTo(undefined));
   assert.equal(state.phase, "connected");
-  assert.equal(state.versionWarning, "Service is 29.10.2026, the app needs 30.10.2026 or later");
+  assert.equal(state.apiWarning, "Service is too old for this app");
 });
 
-test("a service as new as the pin or newer, or a dev build, doesn't warn", () => {
-  for (const version of ["30.10.2026", "01.11.2026", "02.01.2027-rc1", "dev"]) {
-    assert.equal(run(...connectedTo(version)).state.versionWarning, null, version);
-  }
-});
-
-test("a nightly is dated by its date, whatever its commit", () => {
-  assert.equal(
-    run(...connectedTo("12.10.2026 (nightly abc1234)")).state.versionWarning,
-    "Service is 12.10.2026 (nightly abc1234), the app needs 30.10.2026 or later",
-  );
-  assert.equal(run(...connectedTo("31.10.2026 (nightly abc1234)")).state.versionWarning, null);
-});
-
-test("dates compare by year first, not as written", () => {
-  assert.equal(run(...connectedTo("01.12.2025")).state.versionWarning !== null, true);
-  assert.equal(run(...connectedTo("01.01.2027")).state.versionWarning, null);
-});
-
-test("a build without a pin never warns", () => {
-  const { state } = run({ type: "MARASI_PIN", pin: "" }, ...connectedTo("01.01.2020").slice(1));
-  assert.equal(state.versionWarning, null);
-});
-
-test("a pin read after connecting still warns", () => {
-  const { state } = run(...connectedTo("29.10.2026").slice(1), pinned);
-  assert.equal(state.versionWarning, "Service is 29.10.2026, the app needs 30.10.2026 or later");
+test("a service above the supported API range warns that it is newer", () => {
+  assert.equal(run(...connectedTo(2)).state.apiWarning, "Service is newer than this app (API level 2)");
 });
 
 test("a reconnect to an updated service clears the warning", () => {
-  const old = connectedTo("29.10.2026");
+  const old = connectedTo(undefined);
   const before = run(...old, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" });
-  const { state } = run(...old, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected({ version: "05.11.2026" }));
-  assert.equal(before.state.versionWarning !== null, true);
-  assert.equal(state.versionWarning, null);
+  const { state } = run(...old, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected({ api: 1, run_id: "run-2" }));
+  assert.equal(before.state.apiWarning !== null, true);
+  assert.equal(state.apiWarning, null);
 });
 
 test("the details name the service's instance", () => {

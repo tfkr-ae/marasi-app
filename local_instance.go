@@ -49,10 +49,6 @@ type LocalConnection struct {
 	// StartedByApp is true when the app started the instance, so it stops it
 	// on quit.
 	StartedByApp bool `json:"startedByApp"`
-	// WasStopped is true when the instance wasn't running as the call
-	// looked, so this connection reaches a new process: a reconnect that
-	// finds it so treats the service as restarted.
-	WasStopped bool `json:"wasStopped"`
 }
 
 // localInstance is the app's record of the local instance.
@@ -93,7 +89,6 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 	if err != nil {
 		return LocalConnection{}, err
 	}
-	wasStopped := !running
 	if !running {
 		startErr := a.startLocal(path)
 		if startErr != nil && !strings.Contains(startErr.Error(), "already running") {
@@ -121,7 +116,7 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 	if err := a.cli(path, nil, &pair, "service", "control", "pair"); err != nil {
 		return LocalConnection{}, instanceError("reading the local instance's address", status, err)
 	}
-	return LocalConnection{URL: pair.URL, Password: pair.Password, Instance: pair.Instance, StartedByApp: a.local.owned, WasStopped: wasStopped}, nil
+	return LocalConnection{URL: pair.URL, Password: pair.Password, Instance: pair.Instance, StartedByApp: a.local.owned}, nil
 }
 
 // Pairing is what another client needs to reach the local instance's control
