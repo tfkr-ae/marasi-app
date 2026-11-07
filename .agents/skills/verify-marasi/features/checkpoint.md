@@ -163,3 +163,5 @@ Then on the Checkpoint page, send another and forward it with `{"waitSelector":"
 - Wait for an item's own text (`item 1 of 2`, its path) before acting: items arrive through the service's `checkpoint.held` event, after the sender starts.
 - A request left intercepted keeps its client waiting during cleanup.
 - WebSocket interception has its own `Intercept On`/`Intercept Off` toggle, independent of `Intercept all`; both need the checkpoint extension enabled. The toggle is process-global and holds every message on every connection; the modal's queues are per connection. With it off, `interceptWebSocketMessage` in the Lua rules decides.
+- It holds both directions. Behind an upstream that echoes, forwarding a client message queues the echo (`Server to client`) at once, so the modal reads `1 message queued` again, not `Queue empty`. Use a logging-only upstream for the recipe above, or drop the echo next.
+- The modal's Inject and `Close Connection` go through the service by the connection's id. An injected message shows in Stream in the accent colour, an echo of it arrives live, and Close sends `1000` to both peers; the Inject tab then reads `Connection Closed`.
