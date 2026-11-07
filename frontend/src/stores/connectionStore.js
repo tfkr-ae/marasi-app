@@ -42,9 +42,10 @@ export const connectionStore = createConnectionStore({
   closeEvents: () => service.closeEvents(),
   // The project the service has open, whichever it is: the scratchpad on a
   // fresh instance, or what it had open when the app attached.
-  loadProject: async (status) => {
+  // A switch during the load leaves the loaded project to the next one.
+  loadProject: async (status, { current }) => {
     await loadProject(status.project);
-    projectStore.loaded(status.project);
+    if (current()) projectStore.loaded(status.project);
   },
   // After a stream reset (expired or invalid) or a service without a run ID.
   resync: () => resyncProject(),
