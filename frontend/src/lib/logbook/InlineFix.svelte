@@ -156,7 +156,8 @@
 	{/if}
 	<div class="flex items-center gap-2">
 		<span class="min-w-0 flex-1 truncate text-2xs">
-			{#if fix.error}<span class="text-error-500" title={String(fix.error)}>Not saved: {String(fix.error)}</span>{/if}
+			{#if fix.error}<span class="text-error-500" title={String(fix.error)}>Not saved: {String(fix.error)}</span>
+			{:else if fix.remote === "changed"}<span class="text-warning-800 dark:text-warning-500" data-remote-notice>Changed elsewhere. Save keeps yours.</span>{/if}
 		</span>
 		<button type="button" class="btn btn-sm flex-none {neutral}" data-fix-cancel disabled={fix.saving} on:click={() => store.cancelFix()}>Cancel</button>
 		<button type="button" class="btn btn-sm flex-none {primary}" data-fix-save disabled={!dirty || fix.saving} title="Save (⌘↵)" on:click={save}>
