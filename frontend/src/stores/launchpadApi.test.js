@@ -1,7 +1,6 @@
 // Launchpad over the service: createLaunchpadApi (over a fake service client)
 // maps the control API's routes and shapes to what createLaunchpadStore
-// reads, and composes what has no single route (search across launchpads,
-// a cancel that lost the race). The store's own logic has its fake-api
+// reads, including a cancel that lost the race. The store's own logic has its fake-api
 // suites in launchpadStore.test.js and the rest.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -56,86 +55,41 @@ const summary = (id, number, fields = {}) => ({
   ...fields,
 });
 
-// ---- Search across launchpads (was launchpad_search.go) ----
+// ---- Search across launchpads (GET /launchpad/search) ----
 
 const needle = entrySearchQuery("needle-7f").query;
 
-// Two launchpads: "first" holds orig, quiet and shared; "second" holds
-// shared. `matching` lists the ids whose text has the needle.
-function searchRoutes({ matching = ["orig", "shared"], queryError = null, wrappedError = null } = {}) {
-  const members = { lp1: ["orig", "quiet", "shared"], lp2: ["shared"] };
-  const all = new Set(Object.values(members).flat());
-  return {
-    "GET /traffic/query": (query) => {
-      if (queryError) refusal("GET", "/traffic/query", 400, { error: "invalid_query", ...queryError });
+test("search is one GET /launchpad/search, mapping each launchpad to its matching entries", async () => {
+  const client = fakeClient({
+    "GET /launchpad/search": (query) => {
       assert.equal(query.q, needle);
-      return null; // 204
+      return { lp1: ["orig", "shared"], lp2: ["shared"] };
     },
-    "GET /traffic": (query) => {
-      if (wrappedError) refusal("GET", "/traffic", 400, { error: "invalid_query", ...wrappedError });
-      assert.equal(query.q, `launchpad:* AND (${needle})`);
-      assert.equal(query.limit, 1);
-      const hits = matching.filter((id) => all.has(id));
-      return { items: hits.slice(0, 1).map((id, i) => summary(id, i + 1)), next_cursor: null };
-    },
-    "GET /launchpad": {
-      items: [
-        { id: "lp1", name: "first", description: "", entry_count: 3, last_status_code: 200 },
-        { id: "lp2", name: "second", description: "", entry_count: 1, last_status_code: 200 },
-      ],
-    },
-    "GET /launchpad/lp1": (query) => ({
-      id: "lp1",
-      items: members.lp1.filter((id) => matching.includes(id) && query.q === needle).map((id, i) => summary(id, i + 1)),
-    }),
-    "GET /launchpad/lp2": (query) => ({
-      id: "lp2",
-      items: members.lp2.filter((id) => matching.includes(id) && query.q === needle).map((id, i) => summary(id, i + 1)),
-    }),
-  };
-}
-
-test("search maps matches to every launchpad holding them, in entry order", async () => {
-  const api = createLaunchpadApi(fakeClient(searchRoutes()));
-  const result = await api.searchEntries(needle);
+  });
+  const result = await createLaunchpadApi(client).searchEntries(needle);
   assert.deepEqual(result, { EntriesByLaunchpad: { lp1: ["orig", "shared"], lp2: ["shared"] }, QueryError: null });
+  assert.deepEqual(client.calls.map(([method, path]) => `${method} ${path}`), ["GET /launchpad/search"]);
 });
 
-test("search with no launchpad match stops after the pre-check", async () => {
-  const client = fakeClient(searchRoutes({ matching: [] }));
-  const result = await createLaunchpadApi(client).searchEntries(needle);
-  assert.deepEqual(result, { EntriesByLaunchpad: {}, QueryError: null });
-  assert.deepEqual(
-    client.calls.map(([method, path]) => `${method} ${path}`),
-    ["GET /traffic/query", "GET /traffic"],
-  );
+test("search with no match is an empty map", async () => {
+  const client = fakeClient({ "GET /launchpad/search": {} });
+  assert.deepEqual(await createLaunchpadApi(client).searchEntries(needle), { EntriesByLaunchpad: {}, QueryError: null });
 });
 
 test("search reports an invalid query as data, positioned in the researcher's text", async () => {
-  const client = fakeClient(searchRoutes({ queryError: { message: "unbalanced parenthesis", position: 4 } }));
+  const client = fakeClient({
+    "GET /launchpad/search": () =>
+      refusal("GET", "/launchpad/search", 400, { error: "invalid_query", message: "unbalanced parenthesis", position: 4 }),
+  });
   const result = await createLaunchpadApi(client).searchEntries(needle);
   assert.deepEqual(result, { EntriesByLaunchpad: {}, QueryError: { Message: "unbalanced parenthesis", Position: 4 } });
-  assert.equal(client.calls.length, 1);
-});
-
-test("search positions an error in the wrapped query inside the researcher's text", async () => {
-  const wrapper = "launchpad:* AND (".length;
-  const client = fakeClient(searchRoutes({ wrappedError: { message: "term too short", position: wrapper + 7 } }));
-  const result = await createLaunchpadApi(client).searchEntries(needle);
-  assert.deepEqual(result.QueryError, { Message: "term too short", Position: 7 });
-});
-
-test("search skips a launchpad deleted while it ran", async () => {
-  const routes = searchRoutes();
-  routes["GET /launchpad/lp2"] = () => refusal("GET", "/launchpad/lp2", 404, { error: "not_found" });
-  const result = await createLaunchpadApi(fakeClient(routes)).searchEntries(needle);
-  assert.deepEqual(result.EntriesByLaunchpad, { lp1: ["orig", "shared"] });
 });
 
 test("search passes on a failure that isn't a query error", async () => {
-  const routes = searchRoutes();
-  routes["GET /launchpad"] = () => refusal("GET", "/launchpad", 500, { error: "internal_server_error" });
-  await assert.rejects(createLaunchpadApi(fakeClient(routes)).searchEntries(needle), /internal_server_error/);
+  const client = fakeClient({
+    "GET /launchpad/search": () => refusal("GET", "/launchpad/search", 500, { error: "internal_server_error" }),
+  });
+  await assert.rejects(createLaunchpadApi(client).searchEntries(needle), /internal_server_error/);
 });
 
 // ---- The store over the adapter ----

@@ -1,9 +1,8 @@
 // Launchpad's api over the service client: each call reads or writes a
 // control API route and maps its snake_case answer to the PascalCase shape
 // createLaunchpadStore keeps, which the Launchpad page and its helpers read.
-// What the Go bindings did on top of Marasi lives here too: search across
-// launchpads (one filtered query per launchpad until Marasi has a route),
-// and a cancel that lost the race to the launch's end, which is no error.
+// What the Go bindings did on top of Marasi lives here too: a cancel that
+// lost the race to the launch's end, which is no error.
 // The mapper for launch stream events (toLaunch; traffic events use
 // trafficApi.js's toRequestEvent and toResponseEvent) is
 // exported for launchpadStore.js.
@@ -62,16 +61,11 @@ function toLaunchpadDetails(pair) {
   return answered ? details : { ...details, Response: null };
 }
 
-// The search's pre-check over every launchpad member wraps the text.
-const SEARCH_WRAPPER = "launchpad:* AND (";
-
-// An invalid_query refusal as the QueryError data the store reads, with
-// its position moved back by `offset` characters of wrapping, or null for
-// any other error.
-function queryErrorOf(err, offset = 0) {
+// An invalid_query refusal as the QueryError data the store reads, or null
+// for any other error. The position is in the researcher's text.
+function queryErrorOf(err) {
   if (err?.code !== "invalid_query") return null;
-  const position = err.body?.position ?? 0;
-  return { Message: err.body?.message ?? String(err), Position: position > offset ? position - offset : 0 };
+  return { Message: err.body?.message ?? String(err), Position: err.body?.position ?? 0 };
 }
 
 const isNotFound = (err) => err?.code === "not_found";
@@ -141,50 +135,17 @@ export function createLaunchpadApi(client) {
 
     // Runs a traffic query over every launchpad's entries:
     // { EntriesByLaunchpad: { [launchpadId]: [entry ids in entry order] },
-    //   QueryError: { Message, Position } | null }. The text is validated on
-    // its own first, so error positions refer to what the researcher typed.
-    // One query over all launchpad members (launchpad:*) answers the usual
-    // keystroke that matches nothing; otherwise each launchpad runs the
-    // query over its own entries, so a pair maps to every launchpad that
-    // holds it, linked originals included. Marasi has no route for this yet.
+    //   QueryError: { Message, Position } | null }. A pair maps to every
+    // launchpad that holds it, linked originals included.
     async searchEntries(query) {
-      const result = { EntriesByLaunchpad: {}, QueryError: null };
-      const asData = (err, offset = 0) => {
-        result.QueryError = queryErrorOf(err, offset);
-        if (!result.QueryError) throw err;
-        return result;
-      };
       try {
-        await client.get("/traffic/query", { q: query });
+        const matches = await client.get("/launchpad/search", { q: query });
+        return { EntriesByLaunchpad: matches ?? {}, QueryError: null };
       } catch (err) {
-        return asData(err);
+        const queryError = queryErrorOf(err);
+        if (!queryError) throw err;
+        return { EntriesByLaunchpad: {}, QueryError: queryError };
       }
-      let page;
-      try {
-        page = await client.get("/traffic", { q: `${SEARCH_WRAPPER}${query})`, limit: 1 });
-      } catch (err) {
-        return asData(err, SEARCH_WRAPPER.length);
-      }
-      if (!page.items?.length) return result;
-      const list = await client.get("/launchpad");
-      const found = await Promise.all(
-        (list.items ?? []).map(async ({ id }) => {
-          try {
-            const launchpad = await client.get(`/launchpad/${id}`, { q: query });
-            return { id, ids: (launchpad.items ?? []).map((item) => item.id) };
-          } catch (err) {
-            // A launchpad deleted while the search ran has no matches.
-            if (isNotFound(err)) return { id, ids: [] };
-            const queryError = queryErrorOf(err);
-            if (queryError) return { id, ids: [], queryError };
-            throw err;
-          }
-        }),
-      );
-      const refused = found.find((launchpad) => launchpad.queryError);
-      if (refused) return { EntriesByLaunchpad: {}, QueryError: refused.queryError };
-      for (const { id, ids } of found) if (ids.length) result.EntriesByLaunchpad[id] = ids;
-      return result;
     },
 
     // Returns the moved ids in their new entry order.
