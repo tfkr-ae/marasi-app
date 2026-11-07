@@ -115,6 +115,33 @@
         );
     }
 
+    // Another client deleted a launchpad holding an unsaved draft: the store
+    // keeps the draft (orphanedDrafts) and this offers it back. Restore puts
+    // it in a new launchpad of the same name; closing the toast discards it.
+    const announced = new Set();
+    $: for (const orphan of $launchpadStore.orphanedDrafts) {
+        if (announced.has(orphan.launchpadId)) continue;
+        announced.add(orphan.launchpadId);
+        let restoring = false;
+        toastStore.trigger({
+            message: `Another client deleted "${orphan.name}". Restore its unsaved draft?`,
+            background: "variant-filled-warning",
+            autohide: false,
+            action: {
+                label: "Restore",
+                response: () => {
+                    restoring = true;
+                    launchpadStore
+                        .restoreOrphanedDraft(orphan.launchpadId)
+                        .catch((error) => toastError(toastStore, "Error restoring the draft", error));
+                },
+            },
+            callback: ({ status }) => {
+                if (status === "closed" && !restoring) launchpadStore.discardOrphanedDraft(orphan.launchpadId);
+            },
+        });
+    }
+
     function confirm(title, body, onConfirm) {
         modalStore.trigger({
             type: "confirm",

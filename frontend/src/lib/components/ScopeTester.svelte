@@ -1,5 +1,5 @@
 <script>
-    import { onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
     import { modeCurrent } from "@skeletonlabs/skeleton";
     import { testerInput } from "../../stores";
     import { service } from "../service/index.js";
@@ -75,6 +75,12 @@
             await testMatch();
         }
     })
+
+    // The rules changed (a Lua run here or by another client): the URL
+    // last tested is checked again against them.
+    onDestroy(service.on("scope.updated", () => {
+        if (lastResult && $testerInput.trim() && !loading) testMatch();
+    }));
   </script>
   
   <div class="w-full text-sm">

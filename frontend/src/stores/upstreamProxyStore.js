@@ -16,13 +16,17 @@ export {
 
 export const upstreamProxyStore = createUpstreamProxyStore(createUpstreamProxyApi(service));
 
-// Once Settings has read the list, keep it current: another client's edit,
-// a project's selection, or a reconnect reads it again.
+// Once Settings has read the list, keep it current: another client's edit
+// or selection applies its event, and a project load or reconnect reads it
+// again.
 function reloadShown() {
   if (!get(upstreamProxyStore).loaded) return;
   return upstreamProxyStore.load().catch((error) => console.error("Reading upstream proxies failed:", error));
 }
-for (const name of ["added", "updated", "removed", "selected"]) service.on(`upstream_proxy.${name}`, reloadShown);
+for (const name of ["upstream_proxy.added", "upstream_proxy.updated", "upstream_proxy.removed"]) {
+  service.on(name, upstreamProxyStore.onListChanged);
+}
+service.on("upstream_proxy.selected", upstreamProxyStore.onSelected);
 projectData.register("upstreamProxies", { load: reloadShown });
 
 /** Asks for a CA file and resolves to its text, or "" when cancelled. */

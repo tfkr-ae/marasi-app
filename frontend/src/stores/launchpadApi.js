@@ -20,6 +20,21 @@ export function toLaunchpad(launchpad) {
   };
 }
 
+/** A launchpad.created or launchpad.updated event: { ID, Name, Description }. */
+export function toLaunchpadSummary(launchpad) {
+  return { ID: launchpad.id, Name: launchpad.name, Description: launchpad.description ?? "" };
+}
+
+/**
+ * The launchpads whose entries a traffic.changed event may have changed:
+ * the link or unlink's launchpad, null (any) for a delete, highlight, note
+ * or metadata change, and none for a finding or test case link.
+ */
+export function launchpadsChangedBy(event) {
+  if (event?.target) return event.target.kind === "launchpad" ? [event.target.id] : [];
+  return ["delete", "highlight", "note", "metadata"].includes(event?.change) ? null : [];
+}
+
 /** A launch record, from GET /launch… or a launch.* event. */
 export function toLaunch(launch) {
   return {

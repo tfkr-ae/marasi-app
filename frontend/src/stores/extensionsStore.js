@@ -42,3 +42,4 @@ const changed = (summary) =>
   extensionsStore.onChanged(summary).catch((err) => console.error("Reading an extension failed:", err));
 service.on("extension.enabled", changed);
 service.on("extension.updated", changed);
+service.on("extension.settings.updated", extensionsStore.onSettings);

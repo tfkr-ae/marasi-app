@@ -97,6 +97,7 @@ test("populate lists the extensions in the fields the pages read", async () => {
     UpdatedAt: "2026-11-06T22:07:49.626213+04:00",
     UICode: 'customElements.define("panel-extension-1", class extends HTMLElement {})',
     Version: "1",
+    Settings: { depth: 2 },
   });
   // The web component comes from the service's ui_code, never the Lua text.
   assert.equal(get(list)[0].UICode, "");
@@ -325,4 +326,21 @@ test("Compass's editor opens on its stored rules, keeps a draft over a resync an
   assert.equal(get(compass), "-- my rules");
   store.clear();
   assert.equal(get(compass), "");
+});
+
+test("extension.settings.updated replaces that extension's settings in the list, without a read", async () => {
+  const routes = serviceRoutes();
+  routes[`POST /extension/${PANEL}/settings`] = ({ settings }) => ({ id: PANEL, name: "panel", settings });
+  const { store, list, client } = setup(routes);
+  await store.populate();
+  assert.deepEqual(get(list)[2].Settings, { depth: 2 });
+  const reads = client.calls.length;
+
+  store.onSettings({ id: PANEL, name: "panel", settings: { depth: 5 } });
+  assert.deepEqual(get(list)[2].Settings, { depth: 5 });
+  assert.deepEqual(get(list)[0].Settings, {});
+  assert.equal(client.calls.length, reads);
+
+  await store.saveSettings("panel", { depth: 1 });
+  assert.deepEqual(get(list)[2].Settings, { depth: 1 }, "the app's own save shows too");
 });

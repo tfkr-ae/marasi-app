@@ -135,3 +135,46 @@ test("upstreamAddress shows scheme://host:port, or nothing for a broken URL", ()
     "",
   );
 });
+
+// Another client's edits arrive as upstream_proxy.* events, applied without
+// reading the list again.
+test("another client's list edit replaces the list, keeping unchanged entries' checks", async () => {
+  const { store, calls } = setup();
+  await store.load();
+  await store.check("corp", "https://example.com");
+  const burp = { ...corp, name: "burp", host: "127.0.0.1", port: 8080 };
+
+  store.onListChanged({ items: [corp, burp] });
+  let state = get(store);
+  assert.deepEqual(state.items, [corp, burp]);
+  assert.equal(state.checks.corp.outcome, "ok", "corp didn't change");
+  assert.equal(state.configured, true);
+
+  store.onListChanged({ items: [{ ...corp, port: 3129 }, burp] });
+  assert.equal(get(store).checks.corp, undefined, "a changed entry's check says nothing about it");
+
+  store.onListChanged({ items: [burp] });
+  state = get(store);
+  assert.equal(state.configured, false, "the selection is no longer listed");
+  assert.match(selectionWarning(state), /"corp" isn't set up/);
+  assert.deepEqual(calls.filter(([name]) => name === "list"), [["list"]], "no read again");
+});
+
+test("another client's selection shows, and is checked against the list", async () => {
+  const { store } = setup();
+  await store.load();
+  store.onSelected({ name: "" });
+  assert.equal(get(store).selected, "");
+  assert.equal(get(store).configured, true);
+  store.onSelected({ name: "missing" });
+  assert.equal(get(store).selected, "missing");
+  assert.equal(get(store).configured, false);
+});
+
+test("events before Settings reads the list leave it unread", () => {
+  const { store } = setup();
+  store.onListChanged({ items: [corp] });
+  store.onSelected({ name: "corp" });
+  assert.equal(get(store).loaded, false);
+  assert.deepEqual(get(store).items, []);
+});

@@ -8,6 +8,8 @@ import {
   launchOf,
   newestEntryOf,
   pendingLaunchOf,
+  unsavedDraftCount,
+  LAUNCHPAD_SETTLE_MS,
 } from "./createLaunchpadStore.js";
 import { entrySearchQuery } from "../lib/launchpad/entrySearch.js";
 
@@ -1036,4 +1038,145 @@ test("text too long to search is an error without a query", async (t) => {
   timers.tick(1000);
   assert.equal(api.searches.length, 0);
   assert.equal(get(store).entrySearch.status, "error");
+});
+
+// Another client's launchpad changes (launchpad.* and traffic.changed
+// events, routed by launchpadStore.js) show without a resync, and never cost
+// the researcher a draft.
+
+test("another client's new launchpad joins the tree, and the app's own create lists it once", async () => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+
+  store.onLaunchpadCreated({ ID: "lp3", Name: "Upload", Description: "" });
+  let state = get(store);
+  assert.deepEqual(state.launchpads.map((l) => l.ID), ["lp1", "lp2", "lp3"]);
+  assert.equal(state.launchpads[2].EntryCount, 0);
+  assert.equal(state.selectedLaunchpadId, "lp1", "the open launchpad stays");
+
+  // The service announces the app's own create before answering it.
+  const create = api.createLaunchpad;
+  api.createLaunchpad = async (name, description) => {
+    const id = await create(name, description);
+    store.onLaunchpadCreated({ ID: id, Name: name, Description: description });
+    return id;
+  };
+  const id = await store.createLaunchpad({ name: "Mine" });
+  state = get(store);
+  assert.equal(state.launchpads.filter((l) => l.ID === id).length, 1);
+});
+
+test("another client's rename shows in the tree, keeping the draft", async () => {
+  const store = createLaunchpadStore(twoLaunchpads());
+  await store.populate();
+  store.updateDraft("lp1", "edited");
+
+  store.onLaunchpadUpdated({ ID: "lp1", Name: "Sign in", Description: "renamed" });
+  const state = get(store);
+  assert.deepEqual(
+    state.launchpads.map((l) => [l.Name, l.Description]),
+    [["Sign in", "renamed"], ["Search", ""]],
+  );
+  assert.equal(state.draftsByLaunchpad.lp1.raw, "edited");
+  store.onLaunchpadUpdated({ ID: "gone", Name: "x", Description: "" });
+  assert.equal(get(store).launchpads.length, 2);
+});
+
+test("another client's delete opens a neighbour, and a dirty draft is kept to restore", async () => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "GET /unsaved HTTP/1.1\nHost: x\n\n");
+  await api.deleteLaunchpad("lp1");
+
+  await store.onLaunchpadDeleted({ ID: "lp1" });
+  let state = get(store);
+  assert.deepEqual(state.launchpads.map((l) => l.ID), ["lp2"]);
+  assert.equal(state.selectedLaunchpadId, "lp2");
+  assert.equal(state.draftsByLaunchpad.lp1, undefined);
+  assert.deepEqual(state.orphanedDrafts, [
+    { launchpadId: "lp1", name: "Login", raw: "GET /unsaved HTTP/1.1\nHost: x\n\n", useHttps: true },
+  ]);
+  assert.equal(unsavedDraftCount(state), 1, "quitting still asks about it");
+
+  const id = await store.restoreOrphanedDraft("lp1");
+  state = get(store);
+  assert.deepEqual(api.calls.at(-1), ["createLaunchpad", "Login", ""]);
+  assert.equal(state.selectedLaunchpadId, id);
+  assert.equal(state.draftsByLaunchpad[id].raw, "GET /unsaved HTTP/1.1\nHost: x\n\n");
+  assert.equal(isDraftDirty(state, id), true);
+  assert.deepEqual(state.orphanedDrafts, []);
+});
+
+test("a deleted launchpad with a clean draft leaves nothing behind, and a discarded orphan goes", async () => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await store.selectLaunchpad("lp2");
+  await store.onLaunchpadDeleted({ ID: "lp1" });
+  assert.deepEqual(get(store).orphanedDrafts, []);
+  assert.equal(get(store).selectedLaunchpadId, "lp2");
+
+  store.updateDraft("lp2", "edited");
+  await store.onLaunchpadDeleted({ ID: "lp2" });
+  assert.equal(get(store).orphanedDrafts.length, 1);
+  store.discardOrphanedDraft("lp2");
+  assert.deepEqual(get(store).orphanedDrafts, []);
+  assert.equal(unsavedDraftCount(get(store)), 0);
+});
+
+test("links, unlinks and moves elsewhere reread the launchpads they touch once, keeping the draft", async (t) => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await store.loadEntries("lp2");
+  store.updateDraft("lp1", "edited");
+  store.selectOnlyEntry("lp1", "a");
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let entries = 0;
+  const getEntries = api.getEntries;
+  api.getEntries = async (id) => {
+    entries += 1;
+    return getEntries(id);
+  };
+  // Another client moved "a" from Login to Search, then linked "d" to Search.
+  const source = await getEntries("lp1");
+  api.getEntries = async (id) => {
+    entries += 1;
+    if (id === "lp1") return source.filter((e) => e.ID !== "a");
+    if (id === "lp2") return [entry("c"), entry("a"), entry("d")];
+    return [];
+  };
+  store.onEntriesChanged(["lp1", "lp2"]);
+  store.onEntriesChanged(["lp2"]);
+  t.mock.timers.tick(LAUNCHPAD_SETTLE_MS);
+  t.mock.timers.reset();
+  await store.settled();
+
+  const state = get(store);
+  assert.equal(entries, 2, "each launchpad reads once");
+  assert.deepEqual(state.entriesByLaunchpad.lp1.map((e) => e.ID), ["b"]);
+  assert.deepEqual(state.entriesByLaunchpad.lp2.map((e) => e.ID), ["c", "a", "d"]);
+  assert.equal(state.launchpads.find((l) => l.ID === "lp2").EntryCount, 3);
+  assert.equal(state.draftsByLaunchpad.lp1.raw, "edited", "the draft stays");
+  assert.deepEqual(state.entrySelection.ids, [], "an entry that left drops out of the selection");
+});
+
+test("a change to launchpads whose entries aren't loaded rereads their summaries", async (t) => {
+  const api = twoLaunchpads();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  assert.equal(get(store).entriesByLaunchpad.lp2, undefined);
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const list = api.getLaunchpads;
+  api.getLaunchpads = async () => (await list()).map((l) => (l.ID === "lp2" ? { ...l, EntryCount: 4 } : l));
+  store.onEntriesChanged(null);
+  t.mock.timers.tick(LAUNCHPAD_SETTLE_MS);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(get(store).launchpads.find((l) => l.ID === "lp2").EntryCount, 4);
+  assert.equal(get(store).selectedLaunchpadId, "lp1");
 });
