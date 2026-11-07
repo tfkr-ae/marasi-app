@@ -664,3 +664,31 @@ test("a followed switch counts only while connected, so a reconnect's own load i
   assert.deepEqual(pending.types, ["close-events", "confirm-load"]);
   assert.equal(pending.refusals.length, 2);
 });
+
+const restarting = { type: "SERVICE_RESTARTING", restart: { instance: "default", project: status.project } };
+
+test("a restart announced by the service shows until the restarted service answers", () => {
+  const announced = after(restarting);
+  assert.equal(announced.state.restarting, true);
+  assert.deepEqual(announced.types, []);
+
+  const dropped = after(restarting, { type: "STREAM_DROPPED" });
+  assert.equal(dropped.state.phase, "reconnecting");
+  assert.equal(dropped.state.restarting, true);
+
+  const back = after(restarting, { type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected({ run_id: "run-2" }));
+  assert.equal(back.state.restarting, false);
+  assert.equal(back.state.phase, "project-changed", "the new run loads the project in full");
+});
+
+test("a failed restart ends the restart with its error", () => {
+  const { state } = after(restarting, { type: "SERVICE_RESTART_FAILED", failure: { instance: "default", error: "checkpoint has held items" } });
+  assert.equal(state.restarting, false);
+  assert.equal(state.restartError, "checkpoint has held items");
+});
+
+test("the next restart forgets the last one's error", () => {
+  const { state } = after(restarting, { type: "SERVICE_RESTART_FAILED", failure: { error: "boom" } }, restarting);
+  assert.equal(state.restartError, null);
+  assert.equal(state.restarting, true);
+});

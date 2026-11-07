@@ -9,6 +9,8 @@ How the app checks for, downloads, verifies, installs and relaunches into an upd
 3. **Install.** The `platformInstaller` from `defaultInstaller` stages the build beside the running one and swaps it in. Each OS has its own `update_platform_<goos>.go`. On macOS, a Marasi.app that Gatekeeper translocated (opened straight from Downloads) installs into the bundle it was translocated from (`bundleInstaller.locate`, `translocationOriginal`). `finishInstall` sends `update-installed` or `update-failed`.
 4. **Relaunch.** `RestartToUpdate` sets `App.restarting` and quits, which `shouldQuit` lets through without asking. `ServiceShutdown` calls `relaunchIfRestarting` last. The next start removes the leftovers (`removeUpdateLeftovers`).
 
+**Not this updater.** The connected Marasi service updating its own binary (`marasi update`) arrives as the service's `update.available`, `.progress`, `.installed` and `.failed` events, not as these Wails events. `stores/serviceUpdateStore.js` keeps them apart, and Settings → Marasi CLI shows them (see `marasi-service.md`, Events).
+
 The updater uses its own HTTP client (`updateHTTPClient`), which honours the system proxy but never sends through the local instance's proxy listener (`isMarasiListener` reads it from `service status` through `localProxyListener`).
 
 ## Frontend

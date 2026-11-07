@@ -65,3 +65,21 @@ test("starting up shows no connection toasts", () => {
   for (const phase of ["idle", "starting", "connecting", "connected"]) update(at(phase));
   assert.equal(toasts.showing.size, 0);
 });
+
+test("a restart's drop says the service is restarting", () => {
+  const toasts = fakeToasts();
+  const update = createConnectionToasts(toasts);
+  update({ ...at("connected"), restarting: true });
+  update({ ...at("reconnecting"), restarting: true });
+  assert.deepEqual([...toasts.showing.values()].map((t) => t.message), ["Restarting Local…"]);
+});
+
+test("a failed restart shows its error once", () => {
+  const toasts = fakeToasts();
+  const update = createConnectionToasts(toasts);
+  update({ ...at("connected"), restarting: true });
+  update({ ...at("connected"), restartError: "checkpoint has held items" });
+  update({ ...at("connected"), restartError: "checkpoint has held items" });
+  const shown = [...toasts.showing.values()];
+  assert.deepEqual(shown.map((t) => [t.message, t.background]), [["Restart failed: checkpoint has held items", "variant-filled-error"]]);
+});

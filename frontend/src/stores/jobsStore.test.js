@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
 import { createJobsStore, jobLabel, jobStatus, groupBuilding } from "./createJobsStore.js";
+import { progressJob } from "./jobsApi.js";
 
 const job = (Name, Complete, Done = 0, Total = 0, Rebuildable = Name !== "prettified_move") => ({
   Name,
@@ -217,4 +218,20 @@ test("the dashboard's intercepted count is counting while the intercepted_count 
   assert.equal(groupBuilding({ jobs: [job("intercepted_count", false)] }, "intercepted"), true);
   assert.equal(groupBuilding({ jobs: [job("intercepted_count", true)] }, "intercepted"), false);
   assert.equal(jobLabel("intercepted_count"), "Intercepted count");
+});
+
+test("job.progress shows the running job's progress at once, without a read", async () => {
+  const { store, calls } = setup([allComplete()]);
+  await store.refresh();
+  store.onProgress(progressJob({ name: "sitemap", project: "/p/x.marasi", done: 40, total: 200 }));
+  const sitemap = get(store).jobs.find((j) => j.Name === "sitemap");
+  assert.equal(jobStatus(sitemap), `Building · 40 of 200`);
+  assert.equal(groupBuilding(get(store), "sitemap"), true);
+  assert.deepEqual(calls, ["listJobs"]);
+});
+
+test("job.progress for a job not listed yet adds it", () => {
+  const { store } = setup([allComplete()]);
+  store.onProgress(progressJob({ name: "traffic_index", project: "/p/x.marasi", done: 1, total: 3 }));
+  assert.deepEqual(get(store).jobs, [job("traffic_index", false, 1, 3, true)]);
 });

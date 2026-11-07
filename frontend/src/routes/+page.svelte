@@ -20,6 +20,10 @@
 	} from "../lib/globalActions.js";
 	import { neutralVariant } from "../lib/launchpad/format.js";
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
+	import { followChromeConfig } from "../lib/chromeConfigEvents.js";
+	import { service } from "../lib/service/index.js";
+	import { connectionStore } from "../stores/connectionStore.js";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -29,12 +33,20 @@
 		placement: "bottom-end",
 	};
 
-	onMount(() => {
+	const readChromeProfiles = () =>
 		GetChromeProfiles()
 			.then((profiles) => {
 				chromeProfiles = profiles;
 			})
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
+
+	onMount(() => {
+		readChromeProfiles();
+		return followChromeConfig(service.on, {
+			connectionKind: () => get(connectionStore).connection.kind,
+			onPaths: () => {},
+			onProfiles: readChromeProfiles,
+		});
 	});
 	const startChrome = (profile) =>
 		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));

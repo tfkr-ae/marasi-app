@@ -8,6 +8,16 @@ export const RECORD_MODAL = "LogbookRecord";
 const show = (modalStore) => modalStore.trigger({ type: "component", component: RECORD_MODAL });
 
 /**
+ * Opens the modal on a session the store started by itself: an inline
+ * fix's input whose record was deleted elsewhere. Does nothing while a
+ * modal is open or without such a session.
+ */
+export function showMovedSession(modalStore) {
+  if (get(modalStore).length || get(logbookStore).session?.remote !== "deleted") return;
+  show(modalStore);
+}
+
+/**
  * Opens a new "finding" or "testCase", pre-filled with `requestIds` and,
  * for a finding, `testCaseId`. Every entry point (the Logbook, the Ledger,
  * the Armory, the request view, a test case's + Finding) starts here, so

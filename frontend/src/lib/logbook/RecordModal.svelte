@@ -156,6 +156,10 @@
 			<div class="min-w-0 flex-1 truncate text-2xs" data-unsaved-list>
 				{#if session.error}
 					<span class="text-error-500" title={String(session.error)}>Not saved: {String(session.error)}</span>
+				{:else if session.remote === "deleted"}
+					<span class="text-warning-800 dark:text-warning-500" data-remote-notice>Deleted elsewhere. Save creates it again.</span>
+				{:else if session.remote === "changed"}
+					<span class="text-warning-800 dark:text-warning-500" data-remote-notice title={changes.join(", ")}>Changed elsewhere. Save keeps yours: {changes.join(", ")}</span>
 				{:else if dirty}
 					<span class="text-warning-800 dark:text-warning-500">●</span>
 					<span class="opacity-80" title={changes.join(", ")}>Unsaved: {changes.join(", ")}</span>
