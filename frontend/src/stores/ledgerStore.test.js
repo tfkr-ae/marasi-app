@@ -989,7 +989,7 @@ test("toggling the query's only term off returns to the live view", async () => 
   assert.ok(!isQueryActive(state.query));
 });
 
-test("counting queries reads each count, capped, and marks a failed one null", async () => {
+test("counting a query reads its count, capped, and a failed one is null", async () => {
   const api = fakeApi({
     counts: {
       "note:*": { Count: 3, Capped: false, IndexComplete: true },
@@ -999,7 +999,8 @@ test("counting queries reads each count, capped, and marks a failed one null", a
     },
   });
   const store = createLedgerStore(api);
-  const counts = await store.countQueries(["note:*", "finding:*", "test_case:*", "launchpad:*"]);
+  const queries = ["note:*", "finding:*", "test_case:*", "launchpad:*"];
+  const counts = Object.fromEntries(await Promise.all(queries.map(async (q) => [q, await store.countQuery(q)])));
   assert.deepEqual(counts, {
     "note:*": { count: 3, capped: false },
     "finding:*": { count: 100000, capped: true },
