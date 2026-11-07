@@ -25,7 +25,7 @@ export async function loadProject(path, part = () => {}) {
 }
 
 /**
- * Brings every store up to date in place after a reconnect to the same
+ * Brings every store up to date in place after a stream reset (expired or invalid) on the same
  * project: drafts, selection, scroll and open drawers stay.
  */
 export const resyncProject = () => projectData.resync();

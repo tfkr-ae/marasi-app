@@ -437,7 +437,7 @@ export function createLogbookStore(api) {
   }
 
   /**
-   * Reads the lists again after a reconnect to the same project: the
+   * Reads the lists again after a stream reset (expired or invalid): the
    * records are replaced, while the filters, the open record, the modal's
    * edit session and an inline fix with input stay.
    */
