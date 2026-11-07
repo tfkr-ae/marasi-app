@@ -110,15 +110,40 @@ func (a *App) ConnectLocal() (LocalConnection, error) {
 		}
 	}
 
-	var pair struct {
-		URL      string `json:"url"`
-		Password string `json:"password"`
-		Instance string `json:"instance"`
-	}
+	var pair Pairing
 	if err := a.cli(path, nil, &pair, "service", "control", "pair"); err != nil {
 		return LocalConnection{}, codedError("reading the local instance's address", "instance_failed", nil, err)
 	}
 	return LocalConnection{URL: pair.URL, Password: pair.Password, Instance: pair.Instance, StartedByApp: a.local.owned}, nil
+}
+
+// Pairing is what another client needs to reach the local instance's control
+// listener: its URL, the control password ("" when none) and the instance.
+type Pairing struct {
+	URL      string `json:"url"`
+	Password string `json:"password"`
+	Instance string `json:"instance"`
+}
+
+// LocalPairing reads the local instance's pairing payload, which the service
+// hands out only on its socket (`service control pair`). The frontend puts
+// a host override into it itself, as the CLI's --host does.
+func (a *App) LocalPairing() (Pairing, error) {
+	a.local.mu.Lock()
+	defer a.local.mu.Unlock()
+	path := a.local.cliPath
+	if path == "" {
+		found, err := a.findCLI()
+		if err != nil {
+			return Pairing{}, codedError("finding the Marasi CLI", "cli_missing", nil, err)
+		}
+		path = found
+	}
+	var pairing Pairing
+	if err := a.cli(path, nil, &pairing, "service", "control", "pair"); err != nil {
+		return Pairing{}, fmt.Errorf("reading the pairing payload: %w", err)
+	}
+	return pairing, nil
 }
 
 // localInstanceStatus is the part of `service status` the app reads.
