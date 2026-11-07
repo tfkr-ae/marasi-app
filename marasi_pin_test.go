@@ -37,11 +37,26 @@ func TestMarasiPinReadsPseudoVersionsAfterATag(t *testing.T) {
 	}
 }
 
+func TestMarasiPinReadsMarasisDatedReleaseTags(t *testing.T) {
+	for version, want := range map[string]string{
+		"v30.10.2026":              "30.10.2026",
+		"v30.10.2026+incompatible": "30.10.2026",
+		"v23.06.2026-2":            "23.06.2026",
+		"30.08.2026":               "30.08.2026",
+	} {
+		withBuildInfo(t, &debug.BuildInfo{Deps: []*debug.Module{{Path: "github.com/tfkr-ae/marasi", Version: version}}})
+		if got := (&App{}).MarasiPin(); got != want {
+			t.Errorf("MarasiPin() for %s = %q, want %s", version, got, want)
+		}
+	}
+}
+
 func TestMarasiPinIsEmptyWithoutADate(t *testing.T) {
 	cases := map[string]*debug.BuildInfo{
 		"no build info":   nil,
 		"no marasi":       {Deps: []*debug.Module{{Path: "golang.org/x/mod", Version: "v0.20.0"}}},
 		"a plain tag":     {Deps: []*debug.Module{{Path: "github.com/tfkr-ae/marasi", Version: "v1.2.3"}}},
+		"not a date":      {Deps: []*debug.Module{{Path: "github.com/tfkr-ae/marasi", Version: "v31.13.2026"}}},
 		"a local replace": {Deps: []*debug.Module{{Path: "github.com/tfkr-ae/marasi", Version: "(devel)"}}},
 	}
 	for name, info := range cases {
@@ -68,9 +83,9 @@ func TestMarasiPinFollowsGoMod(t *testing.T) {
 	if pinned == "" {
 		t.Fatal("go.mod pins no github.com/tfkr-ae/marasi")
 	}
-	want := pseudoVersionDate(pinned)
+	want := marasiVersionDate(pinned)
 	if want == "" {
-		t.Skipf("go.mod pins %s, which carries no date", pinned)
+		t.Fatalf("go.mod pins %s, which carries no date: the version warning would be off", pinned)
 	}
 	if got := (&App{}).MarasiPin(); got != want {
 		t.Fatalf("MarasiPin() = %q, want %q from go.mod's %s", got, want, pinned)
