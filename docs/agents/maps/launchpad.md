@@ -16,7 +16,7 @@ Which files work together on the Launchpad page, how a launch travels through Go
 
 ## A launch
 
-1. `launch` on the page calls the store's `launch`, which calls the `Launch` binding. Its launch id is also the new entry's pair id.
+1. `launch` on the page calls the store's `launch`, which posts `/launchpad/{id}/launch` (`launchpadApi.js`). Its launch id is also the new entry's pair id.
 2. `configureLaunchHandlers` in `app.go` sends `launch-started` and `launch-finished`. `+layout.svelte` passes them to `onLaunchStarted` and `onLaunchFinished`.
 3. The new entry arrives as a `request` event (`onRequest` in the store).
 

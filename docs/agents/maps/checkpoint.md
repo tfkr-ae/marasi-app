@@ -15,7 +15,7 @@ Which files work together on the Checkpoint page, how a held item reaches the pa
   - `items.js` holds the pure helpers (`summarize`, `groupByHost`, `treeOrder`, `bulkTargets`, `itemTitle`, `abandonLabel`, `abandonText`, and `KIND_LABELS`, which `KindTag.svelte` shows), tested in `items.test.js`.
 - `frontend/src/stores/checkpointRules.js`: the rules. `checkpointCode` is the rules in the editor, `checkpointCodeApplied` the rules Checkpoint runs (both live in `checkpointStore.js`; `stores.js` re-exports them). `checkpointStore.js` binds the rules to `extensionsStore`'s `code` and `run`. Tests: `checkpointRules.test.js`.
 - `frontend/src/lib/checkpointBadge.js` gives the rail icon's count badge and title (`Checkpoint · N intercepted`), drawn in `+layout.svelte`.
-- Go: `checkpoint.go` and the Checkpoint bindings in `app.go` are the in-process path. The frontend no longer calls them; ticket 17 removes them.
+- Go has no Checkpoint code: every hold, edit, forward and drop is a service call.
 
 ## An item's life
 

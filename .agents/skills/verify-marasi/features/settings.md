@@ -46,7 +46,7 @@ Keybindings: in Keyboard & Editor, `{"text":"Configure Keybindings"}` opens the 
 
 ## Gotchas
 
-- General settings persist to `marasi_appconfig.yaml`, Chrome settings to `marasi_config.yaml`, and waypoints to the project database.
+- General and Chrome settings persist to `marasi_appconfig.yaml` (Chrome as `chrome_paths` and `chrome_profiles`), and waypoints to the project database through the service.
 - Address and port edits do not visibly restart the current listener.
 - Chrome Paths and Chrome Profiles are both in the Browser section; the profiles table can sit below the fold with many paths, and the driver scrolls a unique match into view.
 - Default interface and Default port (Listener section) persist on `change` (blur or Enter), not per keystroke. Both share `placeholder="Listener"`; use `aria-label="Default interface"` / `"Default port"`.

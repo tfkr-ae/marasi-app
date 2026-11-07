@@ -102,7 +102,6 @@ Run `retrynow` straight after restoring the CLI, inside the wait, or the schedul
 ## Gotchas
 
 - Each verification launch picks its own free proxy port (`<proxy port>`, in `$MARASI_VERIFY_STATE_DIR/proxy-port`); an instance the app starts picks one with `--port 0`. The proxy belongs to the service process, never the app.
-- Switching projects (below) still goes through the app's old in-process path until the projects ticket moves it to the service; don't treat a failure there as a regression of startup.
 - The proxy itself answers the host `marasi`: `curl -x 127.0.0.1:<proxy port> http://marasi/cert` returns the CA certificate (`application/x-x509-ca-cert`), the URL the first-run setup shows. Download Certificate needs a native save dialog ([native.md](native.md)). Start Chrome opens an external process. Record and clean up anything those actions create.
 - The Marasi menu (MarasiKeys) keeps a closed `<dialog>` of the same labels. The driver's hit-test skips those copies; never target a label by `textContent`.
 - `Project Dashboard` paints before the cards, log table, and listener status finish loading. Counts and scope refresh when Home mounts; the log and the listener update live from the stream. Wait for the specific value.
