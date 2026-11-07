@@ -16,7 +16,8 @@ import { toExtension, toExtensionLog } from "./extensionsApi.js";
 export const WORKSHOP = "workshop";
 
 // The list item: the summary with the web component from its detail.
-const withWebComponent = (ext, { UICode, Version }) => ({ ...ext, UICode, Version });
+// A summary with what its detail adds: the web component and the settings.
+const withWebComponent = (ext, { UICode, Version, Settings = {} }) => ({ ...ext, UICode, Version, Settings });
 
 export function createExtensionsStore(
   api,
@@ -173,11 +174,21 @@ export function createExtensionsStore(
     await changed(await api.setEnabled(ext.ID, enabled));
   }
 
+  // Puts an extension's stored settings in its list entry.
+  function setSettings(id, settings) {
+    list.update((all) => all.map((e) => (e.ID === id ? { ...e, Settings: settings ?? {} } : e)));
+  }
+
   /** Saves the extension's settings; resolves to them as stored. */
   async function saveSettings(name, settings) {
     const ext = await byName(name);
-    return api.saveSettings(ext.ID, settings);
+    const saved = await api.saveSettings(ext.ID, settings);
+    setSettings(ext.ID, saved);
+    return saved;
   }
+
+  /** extension.settings.updated: { id, name, settings }, as stored. */
+  const onSettings = ({ id, settings }) => setSettings(id, settings);
 
   /** The extension's stored Lua (Checkpoint's rules read theirs). */
   async function code(name) {
@@ -243,6 +254,7 @@ export function createExtensionsStore(
     onRendered,
     onUpdated,
     onChanged,
+    onSettings,
     onLog,
   };
 }

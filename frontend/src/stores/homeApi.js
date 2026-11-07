@@ -34,6 +34,11 @@ export function toListener(proxyListener) {
   };
 }
 
+/** GET /scope, or a scope.updated event, as Home's rule counts. */
+export function toScope(s) {
+  return { defaultAllow: s.default_allow, includeCount: s.include?.length ?? 0, excludeCount: s.exclude?.length ?? 0 };
+}
+
 export function createHomeApi(client) {
   return {
     async dashboard() {
@@ -47,8 +52,7 @@ export function createHomeApi(client) {
       };
     },
     async scope() {
-      const s = await client.get("/scope");
-      return { defaultAllow: s.default_allow, includeCount: s.include.length, excludeCount: s.exclude.length };
+      return toScope(await client.get("/scope"));
     },
     // Newest first from the service; oldest first for the table.
     async logs() {

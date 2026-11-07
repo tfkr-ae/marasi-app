@@ -32,3 +32,18 @@ test("the unsaved draft count is reported each time it changes, and only then", 
 
   assert.deepEqual(reported, [0, 1, 2, 1, 0]);
 });
+
+test("a draft kept from a launchpad another client deleted still counts until discarded", async () => {
+  const store = createLaunchpadStore(fakeApi());
+  const reported = [];
+  const stop = reportUnsavedDraftCount(store, (count) => reported.push(count));
+
+  await store.populate();
+  store.updateDraft("a", "GET /edited");
+  await store.onLaunchpadDeleted({ ID: "a" });
+  assert.deepEqual(reported, [0, 1], "the kept draft still counts, and never twice");
+  store.discardOrphanedDraft("a");
+  stop();
+
+  assert.deepEqual(reported, [0, 1, 0]);
+});

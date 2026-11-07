@@ -55,6 +55,12 @@ export const NEW_MATCHES_MAX_WAIT_MS = 3000;
 /** How often buffered request and response events reach the table. */
 export const FLUSH_INTERVAL_MS = 200;
 
+/**
+ * How long the Ledger waits after another client's bulk change
+ * (traffic.changed) before reading the rows again, so a burst reads once.
+ */
+export const EVENT_SETTLE_MS = 300;
+
 /** Rows per ListTraffic page. */
 export const PAGE_SIZE = 200;
 
@@ -1124,6 +1130,39 @@ export function createLedgerStore(api) {
     });
   }
 
+  // Another client's bulk change (traffic.changed: a highlight, note,
+  // metadata, link, unlink or delete) names its selection but not the new
+  // values, so the rows are read again in place once the burst settles,
+  // keeping the scroll, selection and drawer.
+  let changedTimer = null;
+  function onTrafficChanged() {
+    clearTimeout(changedTimer);
+    changedTimer = setTimeout(() => {
+      changedTimer = null;
+      refresh();
+    }, EVENT_SETTLE_MS);
+  }
+
+  // metadata.updated carries the pair's whole stored metadata. The table
+  // never holds prettified copies, which the drawer reads itself.
+  function onMetadataUpdated({ id, metadata }) {
+    const { prettified, ...shown } = metadata ?? {};
+    patchPairs([String(id)], (item) => ({ ...item, Metadata: shown }));
+  }
+
+  // A note event makes a new row even when has_note stays, so an open
+  // drawer reads the new text (unless its note editor holds an edit).
+  const onNoteUpdated = ({ id, note }) => patchMetadata(id, { has_note: note ? 1 : 0 });
+  const onNoteDeleted = ({ id }) => patchMetadata(id, { has_note: 0 });
+
+  // The search index finished: results read while it was building may miss
+  // older pairs, so those are read again.
+  function onIndexComplete() {
+    const r = current.results;
+    if (r.indexComplete || r.loading) return;
+    track(refresh());
+  }
+
   /**
    * Saves `text` as the pair's note, and marks whether the pair has one.
    * Rejects, leaving the mark as it was, when Marasi fails to save it.
@@ -1727,6 +1766,8 @@ export function createLedgerStore(api) {
     clear: () => {
       generation++;
       projectVersion++;
+      clearTimeout(changedTimer);
+      changedTimer = null;
       reading = false;
       exclusionLoaded = Promise.resolve();
       // The next project has its own exclusion.
@@ -1749,6 +1790,13 @@ export function createLedgerStore(api) {
     resync,
     reload,
     settled,
+
+    // Another client's changes, from the stream (ledgerStore.js).
+    onTrafficChanged,
+    onMetadataUpdated,
+    onNoteUpdated,
+    onNoteDeleted,
+    onIndexComplete,
 
     /**
      * The table reports the rows in view (window indexes) and whether it is

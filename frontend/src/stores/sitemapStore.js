@@ -23,6 +23,8 @@ projectData.register("sitemap", {
 
 service.on("traffic.request", (data) => sitemapStore.onRequest(toRequestEvent(data)));
 service.on("traffic.response", (data) => sitemapStore.onResponse(toResponseEvent(data)));
+// A rebuild, or a delete another client made: the open levels read again.
+service.on("sitemap.changed", sitemapStore.onChanged);
 
 // The running query, its results' as_of and the exclusion, which each read
 // passes along. The sitemap waits for the ledger's first rows, so it never

@@ -22,6 +22,14 @@ service.on("listener.started", homeStore.onListener);
 service.on("listener.updated", homeStore.onListener);
 service.on("listener.stopped", homeStore.onListener);
 service.on("job.complete", homeStore.onJobComplete);
+service.on("scope.updated", homeStore.onScope);
+// Another client's notes, launchpads and deletes change the dashboard counts.
+for (const name of ["note.updated", "note.deleted", "launchpad.created", "launchpad.deleted"]) {
+  service.on(name, homeStore.onCountsChanged);
+}
+service.on("traffic.changed", (event) => {
+  if (event?.change === "delete" || event?.change === "note") homeStore.onCountsChanged();
+});
 
 // The listener modal still reads the shared `listener` store.
 homeStore.subscribe((state) => listener.set(state.listener));

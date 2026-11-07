@@ -16,6 +16,7 @@ import {
   PAGE_SIZE,
   MAX_WINDOW_ROWS,
   tableRows,
+  EVENT_SETTLE_MS,
 } from "./createLedgerStore.js";
 
 // Pair IDs sort by capture time, as Marasi's UUIDv7 ids do.
@@ -1234,4 +1235,89 @@ test("resync reads the project's exclusion again, and reloads when another clien
   assert.deepEqual(state.exclusion, ["text/css"]);
   assert.equal(state.ownExclusion, true);
   assert.ok(!ids(state).includes(idOf(5)));
+});
+
+// Changes another client makes reach the Ledger as events (ledgerStore.js
+// routes them here) and show without a resync.
+
+test("a bulk change elsewhere rereads the rows once, in place, after the burst settles", async (t) => {
+  const api = fakeApi({ traffic: pairs(50) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await scrollTo(store, 10);
+  store.clickRow(idOf(30));
+  const before = get(store);
+  const reads = pageCalls(api).length;
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  api.db.find((p) => p.ID === idOf(30)).Highlight = 2;
+  api.db.splice(api.db.findIndex((p) => p.ID === idOf(40)), 1);
+  for (const change of ["highlight", "delete", "note"]) {
+    store.onTrafficChanged({ change, count: 1, selection: { ids: [idOf(30)] } });
+    t.mock.timers.tick(EVENT_SETTLE_MS - 1);
+  }
+  assert.equal(pageCalls(api).length, reads, "nothing reads while changes keep coming");
+  t.mock.timers.tick(1);
+  t.mock.timers.reset();
+  await store.settled();
+
+  const state = get(store);
+  assert.equal(pageCalls(api).length, reads + 1, "one read for the burst");
+  assert.equal(state.results.reset, before.results.reset, "the table keeps its scroll");
+  assert.equal(focusedPair(state).Highlight, 2, "the row and drawer show the highlight");
+  assert.ok(!ids(state).includes(idOf(40)), "the deleted pair goes");
+  assert.equal(state.selection.focus, idOf(30));
+});
+
+test("metadata.updated replaces the pair's metadata in its row and the drawer", async () => {
+  const api = fakeApi({ traffic: pairs(3, () => ({ Metadata: { tag: "old", has_note: 0 } })) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  store.clickRow(idOf(2));
+
+  store.onMetadataUpdated({ id: idOf(2), metadata: { tag: "new", has_note: 0 } });
+  const state = get(store);
+  assert.deepEqual(focusedPair(state).Metadata, { tag: "new", has_note: 0 });
+  assert.deepEqual(tableRows(state).find((row) => row.ID === idOf(1)).Metadata, { tag: "old", has_note: 0 });
+});
+
+test("note events mark whether the pair has a note, as a new row the drawer reads again", async () => {
+  const api = fakeApi({ traffic: pairs(2, () => ({ Metadata: {} })) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  store.clickRow(idOf(1));
+  const row = focusedPair(get(store));
+
+  store.onNoteUpdated({ id: idOf(1), note: "seen in prod" });
+  const noted = focusedPair(get(store));
+  assert.equal(noted.Metadata.has_note, 1);
+  assert.notEqual(noted, row, "a new row, so the drawer reads the note again");
+
+  store.onNoteUpdated({ id: idOf(1), note: "edited elsewhere" });
+  assert.notEqual(focusedPair(get(store)), noted, "a new text is a new row too");
+
+  store.onNoteDeleted({ id: idOf(1) });
+  assert.equal(focusedPair(get(store)).Metadata.has_note, 0);
+});
+
+test("traffic.index_complete rereads results the index left incomplete, and only those", async () => {
+  const api = fakeApi({ traffic: pairs(5), queries: { odd: (p) => p.Number % 2 === 1 } });
+  const incomplete = api.queryTraffic;
+  let complete = false;
+  api.queryTraffic = async (req) => ({ ...(await incomplete(req)), IndexComplete: complete });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await store.runQuery("odd");
+  assert.equal(indexWarning(get(store)), "Search index still building");
+
+  complete = true;
+  const reads = pageCalls(api).length;
+  store.onIndexComplete();
+  await store.settled();
+  assert.equal(indexWarning(get(store)), "");
+  assert.equal(pageCalls(api).length, reads + 1);
+
+  store.onIndexComplete();
+  await store.settled();
+  assert.equal(pageCalls(api).length, reads + 1, "complete results aren't read again");
 });

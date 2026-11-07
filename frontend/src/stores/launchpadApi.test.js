@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createLaunchpadApi, toLaunch as toLaunchEvent } from "./launchpadApi.js";
+import { createLaunchpadApi, launchpadsChangedBy, toLaunch as toLaunchEvent, toLaunchpadSummary } from "./launchpadApi.js";
 import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { createLaunchpadStore, isDraftDirty } from "./createLaunchpadStore.js";
 import { serviceError } from "../lib/service/errors.js";
@@ -340,4 +340,17 @@ test("a launch ending while its request's details are still being read seeds the
   assert.equal(state.selectedEntryByLaunchpad.lp1, "c");
   assert.equal(state.draftsByLaunchpad.lp1.raw, stored);
   assert.equal(isDraftDirty(state, "lp1"), false);
+});
+
+test("launchpad events map to the store's summary, and traffic.changed names the launchpads it touches", () => {
+  assert.deepEqual(toLaunchpadSummary({ id: "lp1", name: "Login", description: "auth" }), {
+    ID: "lp1",
+    Name: "Login",
+    Description: "auth",
+  });
+  const selection = { ids: ["p1"] };
+  assert.deepEqual(launchpadsChangedBy({ change: "link", selection, target: { kind: "launchpad", id: "lp1" } }), ["lp1"]);
+  assert.deepEqual(launchpadsChangedBy({ change: "link", selection, target: { kind: "finding", id: "f1" } }), []);
+  assert.equal(launchpadsChangedBy({ change: "delete", selection }), null);
+  assert.equal(launchpadsChangedBy({ change: "highlight", selection }), null);
 });

@@ -74,6 +74,12 @@ service.on("traffic.response", (data) => ledgerStore.onResponse(toResponseEvent(
 service.on("websocket.opened", (conn) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(conn)));
 service.on("websocket.closed", (conn) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(conn)));
 service.on("websocket.handshake_ended", (event) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(event)));
+// Changes another client makes (the CLI, another app) show without a resync.
+service.on("traffic.changed", ledgerStore.onTrafficChanged);
+service.on("metadata.updated", ledgerStore.onMetadataUpdated);
+service.on("note.updated", ledgerStore.onNoteUpdated);
+service.on("note.deleted", ledgerStore.onNoteDeleted);
+service.on("traffic.index_complete", ledgerStore.onIndexComplete);
 
 if (typeof window !== "undefined") {
   setInterval(ledgerStore.flush, FLUSH_INTERVAL_MS);

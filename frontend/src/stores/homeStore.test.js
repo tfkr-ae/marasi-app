@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
 import { createHomeApi } from "./homeApi.js";
-import { createHomeStore } from "./createHomeStore.js";
+import { createHomeStore, DASHBOARD_SETTLE_MS } from "./createHomeStore.js";
 
 // A fake service client answering GETs from `routes` (path → body or a
 // function of the query), recording each call.
@@ -279,4 +279,32 @@ test("resync replaces the counts and log in place, keeping the old ones until th
   await resynced;
   assert.equal(get(store).dashboard.requests, 1300);
   assert.deepEqual(get(store).logs.map((log) => log.ID), ["l1", "l2", "l3"]);
+});
+
+test("scope.updated counts the new rules from the event, without reading the scope", async () => {
+  const { store, client } = setup();
+  await store.populate();
+  const reads = client.calls.length;
+  store.onScope({ default_allow: true, include: [], exclude: [{ pattern: "/admin", match_type: "url" }] });
+  assert.deepEqual(get(store).scope, { defaultAllow: true, includeCount: 0, excludeCount: 1 });
+  assert.equal(client.calls.length, reads);
+});
+
+test("another client's notes, launchpads and deletes read the dashboard counts again, once per burst", async (t) => {
+  const routes = serviceRoutes();
+  const { store, client } = setup(routes);
+  await store.populate();
+  routes["/dashboard"] = { ...routes["/dashboard"], notes: 4, launchpads: 3 };
+  const dashboardReads = () => client.calls.filter(([path]) => path === "/dashboard").length;
+  const before = dashboardReads();
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onCountsChanged();
+  store.onCountsChanged();
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(dashboardReads(), before + 1);
+  assert.equal(get(store).dashboard.notes, 4);
+  assert.equal(get(store).dashboard.launchpads, 3);
 });

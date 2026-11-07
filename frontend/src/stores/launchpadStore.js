@@ -5,7 +5,7 @@ import { SetUnsavedDraftCount } from "../lib/bindings/github.com/tfkr-ae/marasi-
 import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
 import { createLaunchpadStore } from "./createLaunchpadStore.js";
-import { createLaunchpadApi, toLaunch } from "./launchpadApi.js";
+import { createLaunchpadApi, launchpadsChangedBy, toLaunch, toLaunchpadSummary } from "./launchpadApi.js";
 import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { reportUnsavedDraftCount } from "./draftGuards.js";
 import { projectData } from "./projectData.js";
@@ -22,6 +22,7 @@ export {
   pendingLaunchOf,
   seededRaw,
   selectedEntryIds,
+  unsavedDraftCount,
 } from "./createLaunchpadStore.js";
 
 const api = createLaunchpadApi(service);
@@ -54,6 +55,21 @@ service.on("launch.started", (launch) => launchpadStore.onLaunchStarted(toLaunch
 for (const ended of ["launch.completed", "launch.failed", "launch.cancelled"]) {
   service.on(ended, (launch) => logged("launch end")(launchpadStore.onLaunchFinished(toLaunch(launch))));
 }
+
+// Another client's launchpad changes (the CLI, another app) show without a
+// resync. A deleted launchpad's dirty draft is kept (orphanedDrafts).
+service.on("launchpad.created", (launchpad) => launchpadStore.onLaunchpadCreated(toLaunchpadSummary(launchpad)));
+service.on("launchpad.updated", (launchpad) => launchpadStore.onLaunchpadUpdated(toLaunchpadSummary(launchpad)));
+service.on("launchpad.deleted", ({ id }) => logged("delete")(launchpadStore.onLaunchpadDeleted({ ID: id })));
+service.on("launchpad.linked", ({ launchpad_id }) => launchpadStore.onEntriesChanged([launchpad_id]));
+service.on("launchpad.unlinked", ({ launchpad_id }) => launchpadStore.onEntriesChanged([launchpad_id]));
+service.on("launchpad.entries_moved", ({ source_launchpad_id, target_launchpad_id }) =>
+  launchpadStore.onEntriesChanged([source_launchpad_id, target_launchpad_id]),
+);
+service.on("traffic.changed", (event) => {
+  const ids = launchpadsChangedBy(event);
+  if (ids === null || ids.length) launchpadStore.onEntriesChanged(ids);
+});
 
 // Keeps the Go side told how many launchpads have unsaved drafts, so quitting
 // can ask first. Returns the unsubscribe function.

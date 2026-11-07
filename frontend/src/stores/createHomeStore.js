@@ -13,8 +13,15 @@
 // onLog, onListener and onJobComplete.
 // A part that fails to read stays null (or as it was) and the rest load.
 import { get, writable } from "svelte/store";
-import { toListener, toLog } from "./homeApi.js";
+import { toListener, toLog, toScope } from "./homeApi.js";
 import { codeIDs } from "../lib/errorCodes.js";
+
+/**
+ * How long Home waits after another client changes what the dashboard
+ * counts (notes, launchpads, deleted pairs) before reading the counts again,
+ * so a burst reads once.
+ */
+export const DASHBOARD_SETTLE_MS = 500;
 
 const empty = () => ({
   dashboard: null,
@@ -57,16 +64,35 @@ export function createHomeStore(api) {
     if (run === generation) store.update((s) => ({ ...s, loading: false }));
   }
 
+  let countsTimer = null;
+  let counting = Promise.resolve();
+
   return {
     subscribe: store.subscribe,
     populate,
     resync: populate,
+    /** A scope.updated event: the scope list, as GET /scope answers it. */
+    onScope(scope) {
+      store.update((s) => ({ ...s, scope: toScope(scope) }));
+    },
+    /** Another client changed what the dashboard counts; reads it once the burst settles. */
+    onCountsChanged() {
+      clearTimeout(countsTimer);
+      countsTimer = setTimeout(() => {
+        countsTimer = null;
+        counting = readDashboard();
+      }, DASHBOARD_SETTLE_MS);
+    },
+    /** Waits for a dashboard read onCountsChanged started. */
+    settled: () => counting,
     /** Reads the counts and scope again, as Home does each time it shows. */
     async refreshDashboard() {
       const run = generation;
       await Promise.all([readDashboard(run), read("scope", run, api.scope)]);
     },
     clear() {
+      clearTimeout(countsTimer);
+      countsTimer = null;
       generation++;
       store.set(empty());
     },
