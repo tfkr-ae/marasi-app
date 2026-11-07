@@ -399,6 +399,9 @@ export function changesOf(session) {
 /** Whether the session's draft differs from what was opened. */
 export const isDirty = (session) => changesOf(session).length > 0;
 
+/** Whether the record modal or an inline fix holds changes not yet saved. */
+export const hasUnsavedEdits = (state) => Boolean((state.fix && isDirty(state.fix)) || (state.session && isDirty(state.session)));
+
 // The fields an inline fix on each item may change. A CVSS fix carries the
 // score and the severity the score sets; a requests fix only the links.
 const FIX_FIELDS = {

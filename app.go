@@ -309,18 +309,52 @@ func (a *App) SetUnsavedDraftCount(count int) {
 // true when there is nothing to lose, or the user goes ahead and any active
 // Armory runs were cancelled.
 func (a *App) confirmLosingWork(action string) (bool, error) {
+	return a.askLosingWork(lossPrompt{action: action, cancel: "Cancel", end: " Continue?"})
+}
+
+// ConfirmFollowProject asks before loading project, which another client
+// (the Marasi CLI, another app) opened on the service, discards unsaved
+// Launchpad drafts or Logbook edits (logbookEdits) or cancels active Armory
+// runs. Stay keeps the pages on the project they show. It returns true when
+// there is nothing to lose or the user chose to load it.
+func (a *App) ConfirmFollowProject(project string, logbookEdits bool) (bool, error) {
+	action := "Load " + project
+	return a.askLosingWork(lossPrompt{
+		lead:         "Another client opened " + project + ".",
+		action:       action,
+		cancel:       "Stay",
+		logbookEdits: logbookEdits,
+	})
+}
+
+// lossPrompt is what askLosingWork asks: lead opens the message, action is
+// the title and the button that goes ahead, cancel the one that doesn't, and
+// end closes the message.
+type lossPrompt struct {
+	lead, action, cancel, end string
+	logbookEdits              bool
+}
+
+func (a *App) askLosingWork(prompt lossPrompt) (bool, error) {
 	var losses []string
+	if prompt.lead != "" {
+		losses = append(losses, prompt.lead)
+	}
+	lead := len(losses)
 	if drafts := a.draftsMessage(); drafts != "" {
-		losses = append(losses, drafts+" "+action+" will discard them.")
+		losses = append(losses, drafts+" "+prompt.action+" will discard them.")
+	}
+	if prompt.logbookEdits {
+		losses = append(losses, "The Logbook has unsaved edits. "+prompt.action+" will discard them.")
 	}
 	hasRuns := a.hasActiveArmoryRuns()
 	if hasRuns {
-		losses = append(losses, action+" will cancel all active Armory runs.")
+		losses = append(losses, prompt.action+" will cancel all active Armory runs.")
 	}
-	if len(losses) == 0 {
+	if len(losses) == lead {
 		return true, nil
 	}
-	if !a.confirm(action, strings.Join(losses, " ")+" Continue?") {
+	if !a.confirmWith(prompt.action, strings.Join(losses, " ")+prompt.end, prompt.cancel) {
 		return false, nil
 	}
 	if !hasRuns {
@@ -351,13 +385,18 @@ func (a *App) draftsMessage() string {
 // confirm shows a warning dialog with Cancel and action buttons and reports
 // whether the user pressed action.
 func (a *App) confirm(action, message string) bool {
+	return a.confirmWith(action, message, "Cancel")
+}
+
+// confirmWith is confirm with cancel naming the button that doesn't go ahead.
+func (a *App) confirmWith(action, message, cancel string) bool {
 	result, err := a.messageDialog(messageDialogOptions{
 		Type:          warningDialog,
 		Title:         action,
 		Message:       message,
-		Buttons:       []string{"Cancel", action},
-		DefaultButton: "Cancel",
-		CancelButton:  "Cancel",
+		Buttons:       []string{cancel, action},
+		DefaultButton: cancel,
+		CancelButton:  cancel,
 	})
 	if err != nil {
 		log.Printf("confirming %s: %v", action, err)

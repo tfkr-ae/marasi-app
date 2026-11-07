@@ -270,7 +270,7 @@ test("an action out of turn is refused and changes nothing", () => {
 
 // The store performs each step through `api`, recorded in `calls`. Timers
 // are fake: `timers.fire()` ends the pending wait.
-function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
+function fakeApi({ connectLocal, readStatus, confirmSwitch, confirmFollow } = {}) {
   const calls = [];
   let onDrop = null;
   let onReset = null;
@@ -296,6 +296,11 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch } = {}) {
       calls.push("confirmSwitch");
       return confirmSwitch ? confirmSwitch() : true;
     },
+    confirmFollow: async (project) => {
+      calls.push(["confirmFollow", project]);
+      return confirmFollow ? confirmFollow() : true;
+    },
+    loadDeclined: () => calls.push("loadDeclined"),
     reloadProject: async (loaded) => calls.push(["reloadProject", loaded.project]),
     holdWrites: (on) => calls.push(["holdWrites", on]),
   };
@@ -392,6 +397,7 @@ async function connectedStore(options = {}) {
     connectLocal: () => later("connectLocal")() ?? { url: "http://127.0.0.1:51391", password: "pw", startedByApp: true },
     readStatus: () => later("readStatus")() ?? status,
     confirmSwitch: () => later("confirmSwitch")() ?? true,
+    confirmFollow: () => later("confirmFollow")() ?? true,
   });
   const store = createConnectionStore(fake.api, fake.timers);
   store.start();
@@ -582,4 +588,79 @@ test("the details name the service's instance", () => {
 test("a resume with no event id to send resyncs every store in place", () => {
   const { types } = after({ type: "STREAM_DROPPED" }, { type: "RECONNECT_NOW" }, reconnected(), { type: "STREAM_RESET", reason: "none" });
   assert.equal(types.at(-1), "resync");
+});
+
+// Another client (the Marasi CLI, another app) switches the service's
+// project while the app is connected: the project store's standing listener
+// hands the opened path on (followSwitch).
+const other = "/p/other.marasi";
+
+test("a project another client opened loads in full once the guard agrees", async () => {
+  const { store, calls } = await connectedStore({ readStatus: () => ({ ...status, project: other }) });
+
+  store.followSwitch(other);
+  await reached(store, "connected");
+  await settle();
+
+  assert.deepEqual(withoutHolds(calls), [
+    "readStatus",
+    "closeEvents",
+    ["confirmFollow", other],
+    "openEvents",
+    ["reloadProject", other],
+  ]);
+  assert.equal(get(store).project, other);
+});
+
+test("staying on a project another client replaced keeps the declined-load state until Load it", async () => {
+  let agree = false;
+  const { store, calls } = await connectedStore({
+    readStatus: () => ({ ...status, project: other }),
+    confirmFollow: () => agree,
+  });
+
+  store.followSwitch(other);
+  await reached(store, "project-changed");
+  await settle();
+
+  assert.deepEqual(calls, [
+    "readStatus",
+    ["holdWrites", true],
+    "closeEvents",
+    ["confirmFollow", other],
+    "loadDeclined",
+  ]);
+  assert.equal(get(store).project, "/p/scratchpad.marasi");
+  assert.equal(get(store).pendingProject, other);
+
+  agree = true;
+  store.loadPending();
+  await reached(store, "connected");
+  await settle();
+  assert.deepEqual(calls.at(-1), ["reloadProject", other]);
+});
+
+test("a replayed switch the service has since undone changes nothing", async () => {
+  const { store, calls } = await connectedStore();
+
+  store.followSwitch(other);
+  await settle();
+
+  assert.deepEqual(calls, ["readStatus"]);
+  assert.equal(get(store).phase, "connected");
+});
+
+test("a followed switch counts only while connected, so a reconnect's own load isn't doubled", () => {
+  const status2 = { ...status, project: other };
+  const reconnecting = after({ type: "STREAM_DROPPED" }, { type: "FOLLOW_SWITCH", path: other });
+  assert.deepEqual(reconnecting.types, ["close-events", "wait"]);
+  assert.equal(reconnecting.refusals.length, 1);
+
+  const pending = after(
+    { type: "STREAM_RESET", reason: "restarted" },
+    { type: "FOLLOW_SWITCH", path: other },
+    { type: "SWITCH_CHECKED", status: status2 },
+  );
+  assert.deepEqual(pending.types, ["close-events", "confirm-load"]);
+  assert.equal(pending.refusals.length, 2);
 });

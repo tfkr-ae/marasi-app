@@ -11,6 +11,9 @@
 //   setActive(id)                                    save the active connection (Go)
 //   clearStores()                                    forget the last service's data
 //   confirmSwitch() -> bool                          the unsaved-work prompt (Go)
+//   confirmFollow(project) -> bool                   the same prompt, for a project
+//                                                    another client opened (Go)
+//   loadDeclined()                                   the prompt kept the pages
 //   use({url, password})                             point the service client
 //   readStatus() -> GET /service/status
 //   openEvents({onDrop, onReset, resume})             open GET /events; resume: from
@@ -40,6 +43,13 @@
 // tells a restart apart: a new one loads the project in full. A resume the
 // service can't serve starts with a stream reset: "expired" or "invalid"
 // resyncs every store in place, "restarted" loads in full.
+//
+// Another client (the Marasi CLI, another app) can switch the service's
+// project while the app is connected: the project store's standing
+// project.* listener hands the opened path to followSwitch. The status says
+// whether the service still has it (a replayed switch may since be undone);
+// if so, it goes the way of a reconnect that found another project. Only a
+// connected store follows, so a reconnect's own load is never doubled.
 import { get, writable } from "svelte/store";
 import { apiWarning } from "../lib/service/apiLevel.js";
 
@@ -485,6 +495,25 @@ export function reduce(state, action) {
       // every store again.
       return go(state, {}, [{ type: "resync" }]);
 
+    case "FOLLOW_SWITCH":
+      // Another client opened `path` on the service: read which project it
+      // has open now before acting on it.
+      if (state.phase !== "connected" || state.busy) return refuse(state, "Not connected.");
+      if (action.path === state.project) return go(state, {});
+      return go(state, {}, [{ type: "check-switch" }]);
+
+    case "SWITCH_CHECKED": {
+      if (state.phase !== "connected" || state.busy) return refuse(state, "Not connected.");
+      const project = action.status?.project;
+      if (!project || project === state.project) return go(state, {});
+      // The service already switched: the old pages can't take its events,
+      // so the stream closes until the full load, or Load it.
+      return go(state, { phase: "project-changed", pendingProject: project }, [
+        { type: "close-events" },
+        { type: "confirm-load", status: { project }, follow: true },
+      ]);
+    }
+
     case "STATUS_REFRESHED":
       if (state.phase !== "connected") return refuse(state, "Not connected.");
       return go(state, fromStatus(action.status));
@@ -680,11 +709,23 @@ export function createConnectionStore(api, timers = globalThis) {
       case "confirm-load": {
         let agreed = false;
         try {
-          agreed = await api.confirmSwitch();
+          agreed = step.follow ? await api.confirmFollow(step.status.project) : await api.confirmSwitch();
         } catch (err) {
           console.error("Asking about unsaved work failed:", err);
         }
         dispatch({ type: agreed ? "LOAD_CONFIRMED" : "LOAD_DECLINED" });
+        if (!agreed) api.loadDeclined?.();
+        return;
+      }
+      case "check-switch": {
+        let status;
+        try {
+          status = await api.readStatus();
+        } catch (err) {
+          console.error("Reading the service status failed:", err);
+          return;
+        }
+        dispatch({ type: "SWITCH_CHECKED", status });
         return;
       }
       case "reload-project":
@@ -792,6 +833,12 @@ export function createConnectionStore(api, timers = globalThis) {
     retry: () => dispatch({ type: "RETRY" }),
     /** Reconnects now instead of waiting (the banner's Retry now). */
     retryNow: () => dispatch({ type: "RECONNECT_NOW" }),
+    /**
+     * Follows the service to `path`, which another client opened (the
+     * project store's standing listener): loads it in full after the
+     * unsaved-work prompt, or holds the pages as a declined reconnect does.
+     */
+    followSwitch: (path) => dispatch({ type: "FOLLOW_SWITCH", path }),
     /** Loads the project a reconnect found, asking about unsaved work again. */
     loadPending: () => dispatch({ type: "LOAD_PROJECT" }),
     /** Reads the control listener (sharing, password, origins). */

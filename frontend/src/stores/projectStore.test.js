@@ -314,3 +314,148 @@ test("a reload that fails shows the opening screen's failure", async () => {
   assert.equal(result.status, "failed");
   assert.equal(get(store).shown, true);
 });
+
+// Following opens another client (the CLI, another app) starts.
+function following(options) {
+  const env = setup(options);
+  const opened = [];
+  const failed = [];
+  const stop = env.store.follow({
+    opened: (path) => opened.push(path),
+    failed: (name, error) => failed.push([name, error]),
+  });
+  return { ...env, opened, failed, stop };
+}
+
+test("an open another client starts shows the opening screen, following the service's steps", () => {
+  const { client, store, timers } = following();
+
+  client.emit("project.opening", { project: acme });
+  client.emit("project.upgrading", { project: acme, migration: "00022_pair_number.sql", applied: 1, total: 2 });
+
+  const state = get(store);
+  assert.equal(state.shown, false, "a quick open never shows it");
+  timers.at(-1)();
+  assert.equal(get(store).shown, true);
+  assert.deepEqual(steps(get(store)), ["Lock:done", "Open:done", "Upgrading:current", "Wait:todo", "Load:todo"]);
+  assert.deepEqual(openingScreen(state.opening).project, { name: "acme", path: acme });
+  assert.deepEqual(get(store).loaded, { name: "scratchpad", path: scratchpad }, "the pages stay until the load");
+});
+
+test("another client's opened project is handed on to load, once", () => {
+  const { client, opened, loads } = following();
+
+  client.emit("project.opening", { project: acme });
+  client.emit("project.opened", { project: acme });
+
+  assert.deepEqual(opened, [acme]);
+  assert.deepEqual(loads, [], "the connection store loads it, after asking");
+});
+
+test("another client's open that fails closes the screen, keeps the pages and reports it", () => {
+  const { client, store, failed } = following();
+
+  client.emit("project.opening", { project: acme });
+  client.emit("project.opening_failed", { project: acme, error: `project already open: ${acme}` });
+
+  assert.equal(get(store).opening, null);
+  assert.equal(get(store).shown, false);
+  assert.deepEqual(get(store).loaded, { name: "scratchpad", path: scratchpad });
+  assert.deepEqual(failed, [["acme", `project already open: ${acme}`]]);
+});
+
+test("the app's own open isn't followed as another client's", async () => {
+  const { store, opened, failed } = following({
+    events: [
+      ["project.opening", {}],
+      ["project.opened", {}],
+    ],
+  });
+
+  await store.open({ name: "acme" });
+
+  assert.deepEqual(opened, []);
+  assert.deepEqual(failed, []);
+  assert.deepEqual(get(store).loaded, { name: "acme", path: acme });
+});
+
+test("events for the loaded project aren't a switch, and close a followed screen", () => {
+  const { client, store, opened } = following();
+
+  client.emit("project.opened", { project: scratchpad });
+  assert.deepEqual(opened, []);
+
+  client.emit("project.opening", { project: acme });
+  client.emit("project.opened", { project: scratchpad });
+  assert.equal(get(store).opening, null, "the service went back to the loaded project");
+});
+
+test("following stops when asked", () => {
+  const { client, opened, stop } = following();
+
+  stop();
+  client.emit("project.opened", { project: acme });
+
+  assert.deepEqual(opened, []);
+  assert.equal(client.listening("project.opened"), 0);
+});
+
+test("staying at the prompt closes the followed screen, and the full load replaces it", async () => {
+  const { client, store, loads } = following();
+  client.emit("project.opening", { project: acme });
+  client.emit("project.opened", { project: acme });
+
+  store.closeFollowed();
+  assert.equal(get(store).opening, null);
+  assert.deepEqual(get(store).loaded, { name: "scratchpad", path: scratchpad });
+
+  client.emit("project.opening", { project: acme });
+  await store.reload(acme);
+  assert.deepEqual(loads, [acme]);
+  assert.deepEqual(get(store).loaded, { name: "acme", path: acme });
+  assert.equal(get(store).opening, null);
+});
+
+test("closing the followed screen leaves a failed open of the app's own alone", async () => {
+  const refuse = serviceError({ method: "POST", path: "/project/open", status: 409, body: { error: "project_already_open" } });
+  const { store } = following({ refuse });
+  await store.open({ name: "acme" });
+
+  store.closeFollowed();
+
+  assert.equal(get(store).opening?.failure?.kind, "locked");
+});
+
+test("a late event of the app's own failed open isn't another client's", async () => {
+  const refuse = serviceError({ method: "POST", path: "/project/open", status: 409, body: { error: "project_already_open" } });
+  const { client, store, failed } = following({ refuse });
+  await store.open({ name: "acme" });
+
+  client.emit("project.opening", { project: acme });
+  client.emit("project.opening_failed", { project: acme, error: "project already open" });
+
+  assert.deepEqual(failed, []);
+  assert.equal(get(store).opening?.failure?.kind, "locked", "the app's failure screen stays");
+});
+
+test("another client's open waiting on held Checkpoint items leaves the pages reachable", () => {
+  const { client, store, timers } = following();
+  client.emit("project.opening", { project: acme });
+  client.emit("project.waiting", { project: acme, waiting_for: [{ kind: "checkpoint", id: "c1", type: "request", summary: "GET /a" }] });
+
+  timers.forEach((fire) => fire());
+
+  assert.equal(get(store).shown, false, "the screen would cover the items the service waits for");
+  client.emit("project.waiting", { project: acme, waiting_for: [{ kind: "work", count: 1 }] });
+  assert.equal(get(store).shown, true, "other waits show it");
+});
+
+test("another client opening the project the app's own open failed on is still followed", async () => {
+  const refuse = serviceError({ method: "POST", path: "/project/open", status: 409, body: { error: "project_already_open" } });
+  const { client, store, opened } = following({ refuse });
+  await store.open({ name: "acme" });
+
+  client.emit("project.opened", { project: acme });
+
+  assert.deepEqual(opened, [acme]);
+});
