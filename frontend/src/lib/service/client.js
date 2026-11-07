@@ -79,7 +79,7 @@ export function createServiceClient({ fetch, EventSource }) {
    */
   async function request(method, path, { query, body, raw, contentType, as, timeout, bound } = {}) {
     const stale = () => bound !== undefined && bound !== generation;
-    if (stale()) throw superseded(method, path);
+    if (stale()) throw superseded(`${method} ${path}`);
     if (writesHeld && method !== "GET" && !path.startsWith("/service/")) {
       throw new ServiceError(`${method} ${path}: project_changed: load the service's project first`, {
         code: "project_changed",
@@ -111,12 +111,12 @@ export function createServiceClient({ fetch, EventSource }) {
     try {
       response = await fetch(url, init);
     } catch (err) {
-      if (stale()) throw superseded(method, path);
+      if (stale()) throw superseded(`${method} ${path}`);
       throw unreachable(url, err, { timedOut });
     } finally {
       if (timer !== null) clearTimeout(timer);
     }
-    if (stale()) throw superseded(method, path);
+    if (stale()) throw superseded(`${method} ${path}`);
     if (as === "bytes" && response.ok) return new Uint8Array(await response.arrayBuffer());
     const text = await response.text();
     const isJSON = (response.headers.get("content-type") ?? "").includes("application/json");

@@ -42,6 +42,8 @@ export function createLedgerApi(client, { exclusion }) {
   const bulk = async (route, body) => (await client.post(`/traffic/bulk/${route}`, body)).count;
 
   return {
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
     // A page of the live view or of a query's results:
     // { Query, OrderBy, Cursor, Direction, AsOf, Limit, IgnoreExclusion }.
     queryTraffic: async (request) => readTraffic(client, request, await excluded(request.IgnoreExclusion)),

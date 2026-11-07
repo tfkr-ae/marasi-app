@@ -4,6 +4,7 @@
 // so this module loads under node --test.
 import { get, writable } from "svelte/store";
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
+import { isSuperseded } from "../lib/service/errors.js";
 import {
 	applyProgress,
 	clearProgress,
@@ -262,7 +263,8 @@ export function createWebSocketStore(api) {
 					wsInterceptEnabled: enabled,
 				}));
 			} catch (err) {
-				console.error("Toggling WebSocket intercept", err);
+				// A connection switch stopped it: nothing to report.
+				if (!isSuperseded(err)) console.error("Toggling WebSocket intercept", err);
 			}
 		},
 

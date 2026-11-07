@@ -72,6 +72,7 @@
 	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
 	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
+	import { isSuperseded } from "../../lib/service/errors.js";
 
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
@@ -257,7 +258,9 @@
 		toastStore.trigger({ message, background });
 	}
 
+	// A connection switch stopped the action: nothing to report.
 	function reportError(error) {
+		if (isSuperseded(error)) return;
 		notify(String(error), "variant-filled-error");
 	}
 
@@ -357,18 +360,26 @@
 	async function createRun(start) {
 		if (!selectedTemplate || validating || validationError) return;
 		launching = true;
+		const templateId = selectedTemplate.ID;
 		try {
-			if (!(await saveTemplate())) return;
-			const run = await armoryStore.createRun({
-				templateId: selectedTemplate.ID,
-				attackType,
-				useHTTPS,
-				wordlists: selectedWordlists,
-				maxConcurrent: Number(maxConcurrent),
-			});
-			selectedRunId = run.ID;
-			armoryStore.selectRun(selectedTemplate.ID, run.ID);
-			if (start) await armoryStore.startRun(run.ID);
+			const run = await armoryStore.launchRun(
+				{
+					templateId,
+					attackType,
+					useHTTPS,
+					wordlists: selectedWordlists,
+					maxConcurrent: Number(maxConcurrent),
+				},
+				{
+					save: saveTemplate,
+					start,
+					created: (made) => {
+						selectedRunId = made.ID;
+						armoryStore.selectRun(templateId, made.ID);
+					},
+				},
+			);
+			if (!run) return;
 			notify(start ? "Run started" : "Draft run created");
 		} catch (error) {
 			reportError(error);

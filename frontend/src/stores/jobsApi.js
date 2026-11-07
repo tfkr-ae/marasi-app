@@ -21,6 +21,8 @@ export const progressJob = (progress) => toJob({ ...progress, complete: false })
 
 export function createJobsApi(client) {
   return {
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
     async listJobs() {
       const answer = await client.get("/jobs");
       return (answer?.items ?? []).map(toJob);

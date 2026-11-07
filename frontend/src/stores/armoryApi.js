@@ -90,8 +90,8 @@ export function createArmoryApi(client) {
     return (list?.items ?? []).map(toRun);
   }
 
-  async function createTemplate(name, description, rawTemplate) {
-    return toTemplate(await client.post("/armory/template", { name, description, raw_template: rawTemplate }));
+  async function createTemplate(name, description, rawTemplate, link = client) {
+    return toTemplate(await link.post("/armory/template", { name, description, raw_template: rawTemplate }));
   }
 
   // One GET /traffic page; Limit over the service's cap reads several.
@@ -128,12 +128,16 @@ export function createArmoryApi(client) {
       const summaries = await templateSummaries();
       return Promise.all(summaries.map(async (t) => toTemplate(await client.get(templatePath(t.id)))));
     },
-    CreateArmoryTemplate: createTemplate,
-    // A template from the pair's request, named after it.
+    /** The client bound to its connection now, for a multi-step action (boundAction.js). */
+    bind: () => client.bind?.(),
+    CreateArmoryTemplate: (name, description, rawTemplate) => createTemplate(name, description, rawTemplate),
+    // A template from the pair's request, named after it, made on the
+    // connection the pair was read from.
     async CreateArmoryTemplateFromRequest(requestId) {
-      const pair = await client.get(`/traffic/${encodeURIComponent(requestId)}`);
+      const link = client.bind?.() ?? client;
+      const pair = await link.get(`/traffic/${encodeURIComponent(requestId)}`);
       const { method, host, path, raw } = pair.request;
-      return createTemplate(`${method} ${host}${path}`, "Imported from request history", decodeBase64Text(raw));
+      return createTemplate(`${method} ${host}${path}`, "Imported from request history", decodeBase64Text(raw), link);
     },
     async UpdateArmoryTemplate(id, name, description, rawTemplate) {
       return toTemplate(await client.post(templatePath(id), { name, description, raw_template: rawTemplate }));

@@ -43,11 +43,12 @@ function bodyIDs(code, body) {
 }
 
 /**
- * `method path` was bound to a connection the client has since left
- * (client.js, bind()). Its caller treats it as a no-op, never a failure.
+ * `what` (a call or a step) was bound to a connection the client has since
+ * left (client.js's bind(), boundAction.js). Its caller stops there, quietly:
+ * never a failure the user sees.
  */
-export function superseded(method, path) {
-  return new ServiceError(`${method} ${path}: superseded: the connection changed`, { code: "superseded", ids: [] });
+export function superseded(what) {
+  return new ServiceError(`${what}: superseded: the connection changed`, { code: "superseded", ids: [] });
 }
 
 /** Whether `err` is a bound request the connection change superseded. */

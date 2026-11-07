@@ -26,6 +26,7 @@
     import ScopeTester from "../../lib/components/ScopeTester.svelte";
     import { autocompletion } from "@codemirror/autocomplete";
     import { marasiCompletionSource } from "../../lib/autocomplete/autocomplete";
+    import { isSuperseded } from "../../lib/service/errors.js";
 
     const toastStore = getToastStore();
     const drawerStore = getDrawerStore();
@@ -50,6 +51,8 @@
                         toastStore.trigger(toastSettings);
                     })
                     .catch((error) => {
+                        // A connection switch stopped it: nothing to report.
+                        if (isSuperseded(error)) return;
                         const toastSettings = {
                             message: "Error updating rules",
                             background: "variant-filled-error",

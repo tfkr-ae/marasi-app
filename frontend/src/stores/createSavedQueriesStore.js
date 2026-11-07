@@ -16,6 +16,7 @@
 // changes first, and goes back if the write fails.
 import { writable } from "svelte/store";
 import { COUNT_DELAY_MS, createMatchCounts } from "./createMatchCounts.js";
+import { boundAction } from "../lib/service/boundAction.js";
 
 /** The client-setting key prefix of the project's saved queries. */
 export const PROJECT_QUERY_PREFIX = "ledger.saved_query.";
@@ -268,19 +269,27 @@ export function createSavedQueriesStore(
     const { hidden, ...stored } = entry;
     const from = stored.source;
     const moved = { ...stored, order: nextOrder(target), source: target };
-    const putBack = () => setSource(from, byOrder([...without(current.queries[from], stored), stored]));
+    // The project's queries are the connection's: each write to them is a
+    // step of one action (boundAction.js), and once a switch stops it the
+    // project's list is the next connection's, so it stays as it is.
+    const action = boundAction(api.bind?.());
+    const step = (source, write) => (source === "project" ? action.step(write) : write());
+    const putBack = () => {
+      if (from === "project" && !action.live()) return;
+      setSource(from, byOrder([...without(current.queries[from], stored), stored]));
+    };
     setSource(from, without(current.queries[from], stored));
     try {
-      await addEntry(moved);
+      await step(target, () => addEntry(moved));
     } catch (error) {
       putBack();
       throw error;
     }
     try {
-      await backends[from].remove(stored, current.queries[from]);
+      await step(from, () => backends[from].remove(stored, current.queries[from]));
     } catch (error) {
       putBack();
-      await removeEntry(moved).catch((undo) => console.error("taking back a moved query:", undo));
+      await step(target, () => removeEntry(moved)).catch((undo) => console.error("taking back a moved query:", undo));
       throw error;
     }
   }

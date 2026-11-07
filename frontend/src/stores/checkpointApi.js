@@ -95,9 +95,11 @@ export function createCheckpointApi(client) {
     },
     dropMany: async (ids) => counts(await client.post("/checkpoint/drop", { ids })),
     getInterceptFlag: async () => (await read()).intercept === true,
+    // The flag is turned over on the connection it was read from.
     async toggleIntercept() {
-      const { intercept } = await read();
-      return (await client.post("/checkpoint/intercept", { intercept: !intercept })).intercept === true;
+      const link = client.bind?.() ?? client;
+      const { intercept } = await link.get("/checkpoint");
+      return (await link.post("/checkpoint/intercept", { intercept: !intercept })).intercept === true;
     },
   };
 }

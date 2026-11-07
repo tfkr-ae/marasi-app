@@ -10,6 +10,7 @@
 // A view that read incomplete results calls watch(group); once the group's
 // jobs are complete, onFinished(group) tells it to read again.
 import { writable } from "svelte/store";
+import { boundAction } from "../lib/service/boundAction.js";
 
 /** How often the jobs are read while one runs. */
 export const POLL_MS = 2000;
@@ -108,9 +109,11 @@ export function createJobsStore(api, { timer = realTimer, onFinished = () => {} 
 
   /** Rebuilds a group's jobs ("index" or "sitemap") and follows them. */
   async function rebuild(group) {
+    // One action: a connection switch stops the rest (boundAction.js).
+    const action = boundAction(api.bind?.());
     store.update((s) => ({ ...s, rebuilding: group, error: "" }));
     try {
-      for (const name of JOB_GROUPS[group]) await api.rebuildJob(name);
+      for (const name of JOB_GROUPS[group]) await action.step(() => api.rebuildJob(name));
     } finally {
       store.update((s) => ({ ...s, rebuilding: null }));
     }

@@ -4,6 +4,8 @@
 // so this module loads under node --test.
 import { get, writable } from "svelte/store";
 import { severityFromScore } from "../lib/severity.js";
+import { boundAction } from "../lib/service/boundAction.js";
+import { isSuperseded } from "../lib/service/errors.js";
 
 const filled = (text) => !!text?.trim();
 const linked = (record) => (record.Requests ?? []).length > 0;
@@ -1111,38 +1113,45 @@ export function createLogbookStore(api, timers = globalThis) {
       patchIn(slot, { original, draft });
     };
     patchIn(slot, { saving: true, error: null, confirming: false });
+    // Every call goes to the connection the save began on (boundAction.js).
+    const action = boundAction(api.bind?.());
     try {
       if (!original.ID) {
-        const created = await calls.create(draft);
+        const created = await action.step(() => calls.create(draft));
         const placed = { ID: created.ID, CreatedAt: created.CreatedAt };
         advance({ ...placed, Requests: [...draft.Requests], TestCaseID: draft.TestCaseID }, placed);
       }
       if (FIELDS[kind].some(([key]) => !same(original[key], draft[key]))) {
-        await calls.save({ ...draft, Requests: original.Requests, Artifacts: undefined });
+        await action.step(() => calls.save({ ...draft, Requests: original.Requests, Artifacts: undefined }));
         // Every field went, the score with the vector among them.
         const { Requests, Artifacts, ...fields } = draft;
         advance(fields);
       }
       for (const request of missingFrom(draft.Requests, original.Requests)) {
-        await calls.link(original.ID, request);
+        await action.step(() => calls.link(original.ID, request));
         advance({ Requests: [...original.Requests, request] });
       }
       for (const request of missingFrom(original.Requests, draft.Requests)) {
-        await calls.unlink(original.ID, request);
+        await action.step(() => calls.unlink(original.ID, request));
         advance({ Requests: original.Requests.filter((r) => r !== request) });
       }
       for (const staged of draft.Artifacts.filter((a) => a.File)) {
-        const uploaded = await calls.upload(original.ID, staged.File);
+        const uploaded = await action.step(() => calls.upload(original.ID, staged.File));
         advance(
           { Artifacts: [...original.Artifacts, uploaded] },
           { Artifacts: draft.Artifacts.map((a) => (a.ID === staged.ID ? uploaded : a)) },
         );
       }
       for (const id of missingFrom(artifactIds(original), artifactIds(draft))) {
-        await calls.deleteArtifact(id);
+        await action.step(() => calls.deleteArtifact(id));
         advance({ Artifacts: original.Artifacts.filter((a) => a.ID !== id) });
       }
     } catch (error) {
+      // A connection switch stopped the save: nothing to report.
+      if (isSuperseded(error)) {
+        patchIn(slot, { saving: false });
+        return { ok: false, reason: "superseded" };
+      }
       patchIn(slot, { saving: false, error });
       return { ok: false, error };
     }

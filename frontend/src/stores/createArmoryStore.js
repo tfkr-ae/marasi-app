@@ -4,6 +4,7 @@
 import { get, writable } from "svelte/store";
 import { clampDrawerSplit } from "./createLedgerStore.js";
 import { createRunTrafficView } from "./createArmoryRunTraffic.js";
+import { boundAction } from "../lib/service/boundAction.js";
 import { isActiveRun, toRun, toTemplate, toWordlists } from "./armoryApi.js";
 
 /** How long cancelling the active runs waits for them to stop. */
@@ -87,6 +88,17 @@ export function createArmoryStore(api) {
     ValidateArmoryRun,
   } = api;
   let projectStateVersion = 0;
+
+  async function createRun({ templateId, attackType, useHTTPS = false, wordlists = [], maxConcurrent = 1 }) {
+    const run = await CreateArmoryRun(templateId, attackType, useHTTPS, wordlists, maxConcurrent);
+    upsertRun(run);
+    return run;
+  }
+
+  async function startRun(id) {
+    await StartArmoryRun(id);
+    return refreshRun(id);
+  }
   const { subscribe, set, update } = writable(initialState());
   // The selected run's traffic: its sorted rows, read a page at a time, and
   // the pair open in the drawer (createArmoryRunTraffic.js). armoryStore.js
@@ -435,27 +447,23 @@ export function createArmoryStore(api) {
         maxConcurrent,
       ),
 
-    createRun: async ({
-      templateId,
-      attackType,
-      useHTTPS = false,
-      wordlists = [],
-      maxConcurrent = 1,
-    }) => {
-      const run = await CreateArmoryRun(
-        templateId,
-        attackType,
-        useHTTPS,
-        wordlists,
-        maxConcurrent,
-      );
-      upsertRun(run);
-      return run;
-    },
+    createRun,
+    startRun,
 
-    startRun: async (id) => {
-      await StartArmoryRun(id);
-      return refreshRun(id);
+    /**
+     * Saves the template (`save()`, resolving false to stop), creates the
+     * run, tells `created(run)`, and with `start` starts it: one action on
+     * the connection it began on (boundAction.js), so a switch on the way
+     * stops it with a superseded error. Resolves to the run, or null when
+     * `save` stopped it.
+     */
+    launchRun: async (run, { save = async () => true, start = false, created = () => {} } = {}) => {
+      const action = boundAction(api.bind?.());
+      if (!(await action.step(save))) return null;
+      const made = await action.step(() => createRun(run));
+      created(made);
+      if (start) await action.step(() => startRun(made.ID));
+      return made;
     },
 
     cancelRun: async (id) => {
