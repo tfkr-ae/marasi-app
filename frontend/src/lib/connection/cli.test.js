@@ -1,7 +1,15 @@
 // How the Marasi CLI setup and Settings → Marasi CLI read Go's results.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cliMissing, cliResultText, cliSourceLabel, shouldOfferCLISetup } from "./cli.js";
+import {
+  cliMissing,
+  cliProgressPercent,
+  cliProgressText,
+  cliResultText,
+  cliSourceLabel,
+  outdatedVersion,
+  shouldOfferCLISetup,
+} from "./cli.js";
 
 test("a connection that failed for want of the CLI asks for the CLI setup", () => {
   const error = "finding the Marasi CLI: cli_missing (): the Marasi CLI isn't installed";
@@ -32,4 +40,27 @@ test("where the CLI came from", () => {
   assert.equal(cliSourceLabel("custom"), "Custom path");
   assert.equal(cliSourceLabel("installed"), "Installed by Marasi");
   assert.equal(cliSourceLabel("path"), "PATH");
+});
+
+test("an install reads as its step while it runs", () => {
+  assert.equal(cliProgressText(null), "Downloading…");
+  assert.equal(cliProgressText({ step: "download", received: 10, total: 100 }), "Downloading…");
+  assert.equal(cliProgressText({ step: "verify", received: 0, total: 0 }), "Verifying…");
+  assert.equal(cliProgressText({ step: "install", received: 0, total: 0 }), "Installing…");
+});
+
+test("the download's bar fills by bytes, and is indeterminate without a size", () => {
+  assert.equal(cliProgressPercent({ step: "download", received: 25, total: 100 }), 25);
+  assert.equal(cliProgressPercent({ step: "download", received: 100, total: 100 }), 100);
+  assert.equal(cliProgressPercent({ step: "download", received: 5, total: 0 }), undefined);
+  assert.equal(cliProgressPercent(null), undefined);
+  assert.equal(cliProgressPercent({ step: "verify", received: 0, total: 0 }), undefined);
+});
+
+test("an outdated local instance names the version it runs", () => {
+  const error =
+    "reading the local instance's address: instance_outdated (): Marasi v2-backlog-3a55b06 (dev) is running, older than this app needs: reading pairing: 404 Not Found";
+  assert.equal(outdatedVersion(error), "v2-backlog-3a55b06 (dev)");
+  assert.equal(outdatedVersion("reading the local instance's address: instance_failed (): reading pairing: refused"), null);
+  assert.equal(outdatedVersion(null), null);
 });
