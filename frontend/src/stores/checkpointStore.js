@@ -8,7 +8,7 @@ import { createItemContext } from "../lib/checkpoint/itemContext.js";
 import { loadSignals } from "../lib/openProgress.js";
 import { createCheckpointApi, toSettled } from "./checkpointApi.js";
 import { createCheckpointStore } from "./createCheckpointStore.js";
-import { createCheckpointRules, createRulesApi } from "./checkpointRules.js";
+import { createCheckpointRules, RULES_EXTENSION } from "./checkpointRules.js";
 import { interceptFlag } from "./interceptFlag.js";
 import { projectData } from "./projectData.js";
 import { createWebSocketApi } from "./webSocketApi.js";
@@ -26,10 +26,16 @@ export const checkpointStore = createCheckpointStore(createCheckpointApi(service
 // The interception rules: in the editor, and as Checkpoint runs them.
 export const checkpointCode = writable("");
 export const checkpointCodeApplied = writable("");
-export const checkpointRules = createCheckpointRules(createRulesApi(service), {
-  code: checkpointCode,
-  applied: checkpointCodeApplied,
-});
+// extensionsStore.js imports stores.js, which imports this file, so it is
+// loaded when the rules are first read rather than with this module.
+const extensionsStore = () => import("./extensionsStore.js").then((m) => m.extensionsStore);
+export const checkpointRules = createCheckpointRules(
+  {
+    read: async () => (await extensionsStore()).code(RULES_EXTENSION),
+    run: async (code) => (await extensionsStore()).run(RULES_EXTENSION, code),
+  },
+  { code: checkpointCode, applied: checkpointCodeApplied },
+);
 
 const webSocketApi = createWebSocketApi(service);
 

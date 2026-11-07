@@ -1,28 +1,25 @@
 <script>
     import { onMount } from "svelte";
-    import { GetExtensionLogs } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-    import { off, on } from "../runtime.js";
+    import { extensionsStore } from "../../stores/extensionsStore.js";
 
     export let extensionName = "";
     let logs = [];
+    // The extension's stored lines, then each extension.log as it prints.
     onMount(() => {
-        GetExtensionLogs(extensionName).then((extensionLogs) => {
-            logs = extensionLogs;
-            on(extensionName + "-log", (log) => {
-                console.log("new log ", log);
-                if (logs?.length > 0) {
-                    logs = [...logs, log];
-                } else {
-                    logs = [log];
-                }
-            });
-        }).catch((err) => {
-            console.log(err);
-        })
+        let stop = () => {};
+        let gone = false;
+        extensionsStore
+            .watchLogs(extensionName, (lines) => (logs = lines))
+            .then((stopWatching) => {
+                stop = stopWatching;
+                if (gone) stop();
+            })
+            .catch((err) => console.error(`Reading ${extensionName} logs failed:`, err));
         return () => {
-            off(extensionName + "-log");
-        }
-    })
+            gone = true;
+            stop();
+        };
+    });
 </script>
 <div class="text-center p-1 text-sm font-bold">
     {extensionName} Logs

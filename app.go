@@ -1114,21 +1114,15 @@ func (a *App) DownloadCert() (bool, error) {
 	return true, nil
 }
 
-func (a *App) CopyCertToClipboard() (bool, error) {
-	if a.Proxy.Cert == nil {
+// CopyCertToClipboard puts the proxy certificate's PEM, which the frontend
+// read from the service's GET /certificate, on the clipboard.
+func (a *App) CopyCertToClipboard(certPEM string) (bool, error) {
+	if certPEM == "" {
 		return false, fmt.Errorf("certificate is not available")
 	}
-
-	certPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: a.Proxy.Cert.Raw,
-	})
-
-	err := a.setClipboardText(string(certPEM))
-	if err != nil {
+	if err := a.setClipboardText(certPEM); err != nil {
 		return false, err
 	}
-
 	return true, nil
 }
 
