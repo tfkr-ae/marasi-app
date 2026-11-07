@@ -15,7 +15,7 @@
 //                                                    another client opened (Go)
 //   loadDeclined()                                   the prompt kept the pages
 //   use({url, password})                             point the service client
-//   readStatus() -> GET /service/status
+//   readStatus({timeout}) -> GET /service/status, giving up after `timeout` ms
 //   openEvents({onDrop, onReset, resume})             open GET /events; resume: from
 //                                                    the last event id (no replay when false)
 //   closeEvents()
@@ -568,6 +568,12 @@ export function reduce(state, action) {
 
 const message = (err) => String(err?.message ?? err);
 
+// How long a status read waits for the service: a host that drops packets
+// (a blackhole, a sleeping VPN peer) fails the connect instead of keeping
+// it Connecting.
+export const STATUS_TIMEOUT_MS = 10_000;
+const statusWait = { timeout: STATUS_TIMEOUT_MS };
+
 export function createConnectionStore(api, timers = globalThis) {
   const store = writable(initialConnection());
   // The pending wait before the next reconnect attempt.
@@ -604,7 +610,7 @@ export function createConnectionStore(api, timers = globalThis) {
         try {
           const password = await api.connectionPassword(step.id);
           api.use({ url: step.url, password });
-          status = await api.readStatus();
+          status = await api.readStatus(statusWait);
         } catch (err) {
           dispatch(
             isAuthRefusal(err)
@@ -655,7 +661,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "read-status": {
         let status;
         try {
-          status = await api.readStatus();
+          status = await api.readStatus(statusWait);
         } catch (err) {
           dispatch(isAuthRefusal(err) ? { type: "AUTH_REJECTED" } : { type: "CONNECT_FAILED", error: message(err) });
           return;
@@ -672,7 +678,7 @@ export function createConnectionStore(api, timers = globalThis) {
         return;
       case "refresh-status":
         try {
-          dispatch({ type: "STATUS_REFRESHED", status: await api.readStatus() });
+          dispatch({ type: "STATUS_REFRESHED", status: await api.readStatus(statusWait) });
         } catch (err) {
           console.error("Reading the service status failed:", err);
         }
@@ -701,7 +707,7 @@ export function createConnectionStore(api, timers = globalThis) {
             reached = { url: connection.url, password: await api.connectionPassword(connection.id), startedByApp: false };
           }
           api.use({ url: reached.url, password: reached.password });
-          status = await api.readStatus();
+          status = await api.readStatus(statusWait);
         } catch (err) {
           if (isAuthRefusal(err)) {
             dispatch({ type: "AUTH_REJECTED", id: connection.id });
@@ -735,7 +741,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "check-switch": {
         let status;
         try {
-          status = await api.readStatus();
+          status = await api.readStatus(statusWait);
         } catch (err) {
           console.error("Reading the service status failed:", err);
           return;
@@ -801,7 +807,7 @@ export function createConnectionStore(api, timers = globalThis) {
               ? await api.connectLocal()
               : { url: connection.url, password: step.password ?? "", startedByApp: false };
           api.use({ url: reached.url, password: reached.password });
-          status = await api.readStatus();
+          status = await api.readStatus(statusWait);
           control = await api.readControl().catch(() => null);
         } catch (err) {
           dispatch({ type: "REJOIN_FAILED", auth: isAuthRefusal(err), error: message(err) });
