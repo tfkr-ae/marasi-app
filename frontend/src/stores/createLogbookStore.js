@@ -491,7 +491,17 @@ function removed(state, kind, id) {
   };
 }
 
-export function createLogbookStore(api) {
+/**
+ * How long the Logbook waits after another client's bulk change
+ * (traffic.changed) before reading the records it touched, so a burst reads
+ * each once.
+ */
+export const TRAFFIC_SETTLE_MS = 300;
+
+// The service's link target kinds as the store names them.
+const TARGET_KINDS = { finding: "finding", test_case: "testCase" };
+
+export function createLogbookStore(api, timers = globalThis) {
   const store = writable(initialState());
   // Each read of the lists gets a number; an older reply is ignored.
   let readSeq = 0;
@@ -559,6 +569,9 @@ export function createLogbookStore(api) {
   function clear() {
     readSeq++;
     pending = null;
+    stale.clear();
+    timers.clearTimeout(staleTimer);
+    staleTimer = null;
     store.set(initialState());
   }
 
@@ -907,6 +920,54 @@ export function createLogbookStore(api) {
       return { ...r, Requests: isLinked ? [...requests, request] : requests };
     });
 
+  // The records a bulk change touched, read again once the burst settles:
+  // "kind id" -> [kind, id].
+  const stale = new Map();
+  let staleTimer = null;
+
+  function markStale(kind, id) {
+    stale.set(`${kind} ${id}`, [kind, id]);
+    timers.clearTimeout(staleTimer);
+    staleTimer = timers.setTimeout(readStale, TRAFFIC_SETTLE_MS);
+  }
+
+  function readStale() {
+    staleTimer = null;
+    const seq = readSeq;
+    const records = [...stale.values()];
+    stale.clear();
+    for (const [kind, id] of records)
+      (kind === "finding" ? api.getFinding(id) : api.getTestCase(id))
+        .then((record) => seq === readSeq && patchRecord(kind, id, () => record))
+        .catch((err) => console.error(`Rereading ${kind} ${id} failed:`, err));
+  }
+
+  /**
+   * A bulk change to traffic (traffic.changed), from any client. A link or
+   * unlink rereads its finding or test case. A delete drops the selection's
+   * ids from the records' links, or, for a query, rereads every linked
+   * record. The reads follow through `followed`, so an open edit keeps its
+   * input.
+   */
+  function applyTrafficChanged({ change, selection, target } = {}) {
+    if (change === "link" || change === "unlink") {
+      const kind = TARGET_KINDS[target?.kind];
+      if (kind) markStale(kind, target.id);
+      return;
+    }
+    if (change !== "delete") return;
+    const ids = Array.isArray(selection?.ids) ? selection.ids.map(String) : null;
+    for (const kind of ["finding", "testCase"])
+      for (const r of recordsOf(get(store), kind)) {
+        const requests = r.Requests ?? [];
+        if (!ids) {
+          if (requests.length) markStale(kind, r.ID);
+        } else if (requests.some((x) => ids.includes(String(x)))) {
+          patchRecord(kind, r.ID, (rec) => ({ ...rec, Requests: requests.filter((x) => !ids.includes(String(x))) }));
+        }
+      }
+  }
+
   /** An artifact uploaded elsewhere joins its finding or test case. */
   function applyArtifact(artifact) {
     const [kind, owner] = artifact.FindingID ? ["finding", artifact.FindingID] : ["testCase", artifact.TestCaseID];
@@ -1161,6 +1222,7 @@ export function createLogbookStore(api) {
     applyLink,
     applyArtifact,
     applyArtifactRemoved,
+    applyTrafficChanged,
     reload,
     resync,
     populate,
