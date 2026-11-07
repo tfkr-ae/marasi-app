@@ -212,7 +212,35 @@ func (a *App) SetConnectionPassword(id, password string) error {
 	}
 	next[i].PasswordRef = ref
 	next[i].NoPassword = false
+	next[i].AllowedOrigins = nil
 	return a.writeConnections(next)
+}
+
+// SetConnectionNoPassword records that a remote's service no longer has a
+// password, after the app removed it there: the saved secret goes, and the
+// connection keeps the origins the service now allows. Never the default.
+func (a *App) SetConnectionNoPassword(id string, origins []string) error {
+	if len(origins) == 0 {
+		return errors.New("add at least one origin")
+	}
+	a.Config.mu.Lock()
+	defer a.Config.mu.Unlock()
+	i := a.findConnection(id)
+	if i < 0 {
+		return fmt.Errorf("no remote connection %s", id)
+	}
+	next := slices.Clone(a.Config.connections)
+	old := next[i].PasswordRef
+	next[i].PasswordRef = ""
+	next[i].NoPassword = true
+	next[i].AllowedOrigins = slices.Clone(origins)
+	if err := a.writeConnections(next); err != nil {
+		return err
+	}
+	if err := a.forgetPassword(old); err != nil {
+		log.Printf("[!] forgetting the password for %s: %v", id, err)
+	}
+	return nil
 }
 
 // ConnectionPassword is a remote's saved password; "" when it has none.

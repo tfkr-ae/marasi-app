@@ -10,6 +10,7 @@ import {
   ListConnections,
   MarasiPin,
   SetActiveConnection,
+  SetConnectionNoPassword,
   SetConnectionPassword,
 } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
@@ -25,6 +26,12 @@ export const connectionStore = createConnectionStore({
   connectLocal: () => ConnectLocal(),
   connectionPassword: (id) => ConnectionPassword(id),
   savePassword: (id, password) => SetConnectionPassword(id, password),
+  forgetPassword: (id, origins) => SetConnectionNoPassword(id, origins),
+  // The control listener: sharing, the password and the allowed origins.
+  readControl: () => service.get("/service/control-listener/status"),
+  updateControl: (body) => service.post("/service/control-listener/update", body),
+  // What the service sees as this app's Origin when the password is off.
+  appOrigin: () => globalThis.location?.origin ?? null,
   setActive: (id) => SetActiveConnection(id),
   // Leaving a connection: the last service's data goes before the next loads.
   clearStores: () => projectData.clear(),
@@ -60,6 +67,10 @@ loadedProject.subscribe(
 connectionStore.subscribe((state) => activeConnectionId.set(state.connection.id));
 // A restart announced before the stream drops means a full load afterwards.
 service.on("service.restarting", () => connectionStore.dispatch({ type: "SERVICE_RESTARTING" }));
+// A change made elsewhere (the CLI, another client) keeps the details current.
+for (const name of ["control_listener.updated", "control_listener.stopped", "control_listener.started"]) {
+  service.on(name, (control) => connectionStore.dispatch({ type: "CONTROL_LOADED", control }));
+}
 // The Marasi date the app was built against: an older service warns.
 MarasiPin()
   .then((pin) => connectionStore.dispatch({ type: "MARASI_PIN", pin }))

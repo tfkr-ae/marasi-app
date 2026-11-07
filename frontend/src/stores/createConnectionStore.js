@@ -16,6 +16,15 @@
 //   openEvents({onDrop})                              open GET /events
 //   closeEvents()
 //   loadProject(status)                               load the service's project
+//   readControl() -> GET /service/control-listener/status
+//   updateControl(body) -> POST /service/control-listener/update
+//   forgetPassword(id, origins)                       a remote's password is off (Go)
+//   appOrigin() -> the app's own Origin
+//
+// Sharing and password changes (SHARE_LOCAL, STOP_SHARING, ROTATE_PASSWORD,
+// SET_NO_PASSWORD) set `busy`, close /events, change the control listener,
+// save a remote's new password (instance first, then the keychain), then
+// `rejoin` quietly and resync; a drop while busy is expected, not a reconnect.
 //
 // Phases so far: idle → starting (the local instance) → connecting (its
 // status) → connected, or failed with `error` (Retry begins again). To add an
@@ -58,6 +67,17 @@ export function initialConnection() {
     // The project a reconnect found open instead, waiting for the
     // unsaved-work guard before it loads.
     pendingProject: null,
+    // The control listener as the service reports it: {address,
+    // passwordSet, allowedOrigins}, or null before it is read.
+    control: null,
+    // A change under way ("share", "rotate" or "password-off"); /events is
+    // closed until it rejoins, and why the last one failed.
+    busy: null,
+    changeError: null,
+    // The host the pairing code names instead of the listener's own.
+    shareHost: "",
+    // The app's own origin, which turning the password off always allows.
+    appOrigin: null,
   };
 }
 
@@ -89,6 +109,39 @@ export function versionWarning(version, pin) {
   return `Service is ${version}, the app needs ${pin} or later`;
 }
 
+/** Whether `text` is an IPv4 or IPv6 address (no port, no brackets). */
+export function isIP(text) {
+  const value = String(text ?? "");
+  if (/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(value)) {
+    return value.split(".").every((part) => Number(part) <= 255);
+  }
+  if (!value.includes(":") || !/^[0-9a-fA-F:.%a-zA-Z0-9]+$/.test(value)) return false;
+  try {
+    return new URL(`http://[${value}]/`).hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether `text` is an origin a browser sends: null, or SCHEME://HOST[:PORT]
+ * with no path, query, credentials or wildcard (as Marasi checks it).
+ */
+export function isOrigin(text) {
+  return text === "null" || /^[a-z][a-z0-9+.-]*:\/\/(\[[0-9a-f:.]+\]|[^/?#@*\s:[\]]+)(:\d{1,5})?$/i.test(text);
+}
+
+// Without a password the service accepts only an IP (or localhost) as the
+// Host, so a remote reached by hostname would lock the app out.
+function reachableWithoutPassword(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+    return isIP(host) || host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
 const go = (state, patch, steps = []) => ({ state: { ...state, ...patch }, steps, refusal: null });
 const refuse = (state, refusal) => ({ state, steps: [], refusal });
 
@@ -107,6 +160,10 @@ function begin(state) {
     restartSeen: false,
     pendingProject: null,
     authFrom: null,
+    control: null,
+    busy: null,
+    changeError: null,
+    shareHost: "",
   };
   const { connection } = state;
   if (connection.kind === "local") {
@@ -114,6 +171,28 @@ function begin(state) {
   }
   return go(state, { phase: "connecting", error: null, ...reset }, [
     { type: "connect-remote", id: connection.id, url: connection.url },
+  ]);
+}
+
+// The control listener status the service answers, in the store's shape.
+export function controlFrom(status) {
+  return {
+    address: status?.control_listener ?? null,
+    passwordSet: Boolean(status?.password_set),
+    allowedOrigins: status?.allowed_origins ?? [],
+  };
+}
+
+const passwordOff = (state) => state.control !== null && !state.control.passwordSet;
+
+// A change of the control listener (share, password): only on a connected
+// service, one at a time. The stream closes until it rejoins.
+function change(state, busy, body, patch = {}) {
+  if (state.phase !== "connected") return refuse(state, "Connect first.");
+  if (state.busy) return refuse(state, "Another change is under way.");
+  return go(state, { ...patch, busy, changeError: null }, [
+    { type: "close-events" },
+    { type: "update-control", body },
   ]);
 }
 
@@ -235,7 +314,117 @@ export function reduce(state, action) {
       };
     }
 
+    case "APP_ORIGIN":
+      return go(state, { appOrigin: action.origin || null });
+
+    case "READ_CONTROL":
+      if (state.phase !== "connected") return refuse(state, "Connect first.");
+      return go(state, {}, [{ type: "read-control" }]);
+
+    case "CONTROL_LOADED":
+      return go(state, { control: controlFrom(action.control) });
+
+    case "SHARE_LOCAL": {
+      if (state.connection.kind !== "local") return refuse(state, "Only the local instance can be shared.");
+      if (state.phase !== "connected") return refuse(state, "Connect first.");
+      if (!isIP(action.address)) return refuse(state, "Pick an interface.");
+      const port = Number(action.port);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) return refuse(state, "Enter a port from 0 to 65535.");
+      const host = String(action.host ?? "").trim();
+      if (host && !isIP(host) && passwordOff(state)) return refuse(state, "Without a password, share by IP.");
+      // Beyond loopback with no password, the service wants the consent.
+      const body = { address: action.address, port, ...(passwordOff(state) ? { no_password: true } : {}) };
+      return change(state, "share", body, { shareHost: host });
+    }
+
+    case "STOP_SHARING":
+      if (state.connection.kind !== "local") return refuse(state, "Only the local instance can be shared.");
+      return change(state, "share", { address: "127.0.0.1", port: 0 }, { shareHost: "" });
+
+    case "SET_SHARE_HOST": {
+      const host = String(action.host ?? "").trim();
+      if (host && !isIP(host) && passwordOff(state)) return refuse(state, "Without a password, share by IP.");
+      return go(state, { shareHost: host });
+    }
+
+    case "ROTATE_PASSWORD":
+      if (!action.password) return refuse(state, "Enter a password.");
+      return change(state, "rotate", { password: action.password });
+
+    case "SET_NO_PASSWORD": {
+      const origins = (action.origins ?? []).map((o) => String(o).trim().toLowerCase()).filter(Boolean);
+      if (!origins.length) return refuse(state, "Add at least one origin.");
+      const bad = origins.find((o) => !isOrigin(o));
+      if (bad) return refuse(state, `${bad} isn't an origin such as http://localhost:5173.`);
+      // The service accepts only an IP host without a password, so a code
+      // or an address naming a hostname could never connect.
+      if (state.connection.kind === "local" && state.shareHost && !isIP(state.shareHost)) {
+        return refuse(state, "Share by IP before turning the password off.");
+      }
+      if (state.connection.kind === "remote" && !reachableWithoutPassword(state.connection.url)) {
+        return refuse(state, "Reach it by IP before turning the password off.");
+      }
+      const allowed = [...new Set([...origins, ...(state.appOrigin ? [state.appOrigin.toLowerCase()] : [])])];
+      return change(state, "password-off", { no_password: true, allowed_origins: allowed });
+    }
+
+    case "CONTROL_UPDATED": {
+      if (!state.busy) return refuse(state, "No change is under way.");
+      const next = { ...state, control: controlFrom(action.control) };
+      const remote = state.connection.kind === "remote";
+      if (state.busy === "rotate" && remote) {
+        return go(next, {}, [{ type: "store-password", id: state.connection.id, password: action.password }]);
+      }
+      if (state.busy === "password-off" && remote) {
+        // The saved connection keeps the origins the service now allows.
+        return go(next, {}, [{ type: "forget-password", id: state.connection.id, origins: next.control.allowedOrigins }]);
+      }
+      // The local instance's address and password are read back from it.
+      return go(next, {}, [{ type: "rejoin" }]);
+    }
+
+    case "CONTROL_FAILED":
+      if (!state.busy) return refuse(state, "No change is under way.");
+      return go(state, { busy: null, changeError: action.error }, [{ type: "open-events" }, { type: "resync" }]);
+
+    case "KEYCHAIN_DONE":
+      if (!state.busy) return refuse(state, "No change is under way.");
+      return go(state, { changeError: action.error ? `Saving the password failed: ${action.error}` : null }, [
+        { type: "rejoin", password: action.password ?? "" },
+      ]);
+
+    case "REJOINED":
+      if (!state.busy) return refuse(state, "No change is under way.");
+      return go(
+        state,
+        {
+          busy: null,
+          url: action.url ?? state.url,
+          control: action.control ? controlFrom(action.control) : state.control,
+          owned: state.owned || Boolean(action.startedByApp),
+        },
+        [{ type: "open-events" }, { type: "resync" }],
+      );
+
+    case "REJOIN_FAILED":
+      // The change landed but the app couldn't reach the service after it:
+      // reconnect as after any drop, or ask for a refused password.
+      if (!state.busy) return refuse(state, "No change is under way.");
+      if (action.auth) {
+        return go(state, {
+          busy: null,
+          phase: "auth-failed",
+          authFrom: "reconnecting",
+          error: `${state.connection.name} refused the password`,
+        });
+      }
+      return go(state, { busy: null, phase: "reconnecting", attempt: 1, trying: false, changeError: action.error ?? null }, [
+        { type: "wait", ms: backoff(1) },
+      ]);
+
     case "STREAM_DROPPED": {
+      // A change closed the stream on purpose and rejoins by itself.
+      if (state.busy) return go(state, {});
       // A drop of the stream (whatever the reason: a network failure, a
       // restart, the service dropping a subscriber whose queue overflowed),
       // or a failed reconnect attempt. The pages stay; only the stream goes.
@@ -474,6 +663,63 @@ export function createConnectionStore(api, timers = globalThis) {
       case "close-events":
         api.closeEvents();
         return;
+      case "read-control":
+        try {
+          dispatch({ type: "CONTROL_LOADED", control: await api.readControl() });
+        } catch (err) {
+          console.error("Reading the control listener failed:", err);
+        }
+        return;
+      case "update-control": {
+        let control;
+        try {
+          control = await api.updateControl(step.body);
+        } catch (err) {
+          dispatch({ type: "CONTROL_FAILED", error: message(err) });
+          return;
+        }
+        dispatch({ type: "CONTROL_UPDATED", control, password: step.body.password });
+        return;
+      }
+      case "store-password":
+        try {
+          await api.savePassword(step.id, step.password);
+        } catch (err) {
+          dispatch({ type: "KEYCHAIN_DONE", password: step.password, error: message(err) });
+          return;
+        }
+        dispatch({ type: "KEYCHAIN_DONE", password: step.password });
+        return;
+      case "forget-password":
+        try {
+          await api.forgetPassword(step.id, step.origins);
+        } catch (err) {
+          dispatch({ type: "KEYCHAIN_DONE", password: "", error: message(err) });
+          return;
+        }
+        dispatch({ type: "KEYCHAIN_DONE", password: "" });
+        return;
+      case "rejoin": {
+        // After a change the app reaches the service again on purpose: the
+        // local instance through Go (its address or password moved), a
+        // remote with the password the change set.
+        const { connection } = get(store);
+        let reached, status, control;
+        try {
+          reached =
+            connection.kind === "local"
+              ? await api.connectLocal()
+              : { url: connection.url, password: step.password ?? "", startedByApp: false };
+          api.use({ url: reached.url, password: reached.password });
+          status = await api.readStatus();
+          control = await api.readControl().catch(() => null);
+        } catch (err) {
+          dispatch({ type: "REJOIN_FAILED", auth: isAuthRefusal(err), error: message(err) });
+          return;
+        }
+        dispatch({ type: "REJOINED", url: reached.url, startedByApp: reached.startedByApp, status, control });
+        return;
+      }
       case "load-project":
         try {
           await api.loadProject(step.status);
@@ -502,6 +748,7 @@ export function createConnectionStore(api, timers = globalThis) {
      * once, when the app opens. Without them it reaches the local one.
      */
     async start() {
+      if (api.appOrigin) dispatch({ type: "APP_ORIGIN", origin: api.appOrigin() });
       if (api.listConnections) {
         await load().catch((err) => console.error("Reading the saved connections failed:", err));
       }
@@ -513,6 +760,25 @@ export function createConnectionStore(api, timers = globalThis) {
     retryNow: () => dispatch({ type: "RECONNECT_NOW" }),
     /** Loads the project a reconnect found, asking about unsaved work again. */
     loadPending: () => dispatch({ type: "LOAD_PROJECT" }),
+    /** Reads the control listener (sharing, password, origins). */
+    readControl: () => dispatch({ type: "READ_CONTROL" }),
+    /** Shares the local instance on `address:port`; `host` names it in the code. */
+    share: (address, port, host = "") => dispatch({ type: "SHARE_LOCAL", address, port, host }),
+    /** Rebinds the local instance's control listener to loopback. */
+    stopSharing: () => dispatch({ type: "STOP_SHARING" }),
+    /** The host the pairing code names instead of the listener's own. */
+    setShareHost: (host) => dispatch({ type: "SET_SHARE_HOST", host }),
+    /** Sets a new password (generated when none is given) and stays connected. */
+    changePassword: (password = newPassword()) => dispatch({ type: "ROTATE_PASSWORD", password }),
+    /** Removes the password, allowing `origins` plus the app's own. */
+    turnOffPassword: (origins) => dispatch({ type: "SET_NO_PASSWORD", origins }),
     dispatch,
   };
+}
+
+/** A random control password, URL-safe base64 as the Go side makes them. */
+export function newPassword() {
+  const bytes = new Uint8Array(24);
+  globalThis.crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

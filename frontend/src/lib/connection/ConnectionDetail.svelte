@@ -4,7 +4,7 @@
 	// compact; Settings → Connection in the Settings row layout (`rows`).
 	// Another connection offers Switch; a refused password asks for it; a
 	// remote has its address and Remove. The password and sharing rows
-	// (ticket 15) go after the service rows.
+	// (ConnectionAccess) go after the service rows.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
@@ -13,6 +13,7 @@
 	import { errorText, removeConnection, setAddress } from "./manage.js";
 	import { cliMissing } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
+	import ConnectionAccess from "./ConnectionAccess.svelte";
 
 	export let connection;
 	/** Settings rows instead of the compact layout. */
@@ -114,6 +115,10 @@
 				<p class="font-mono text-xs" data-testid="connection-version">{state.version}</p>
 			</div>
 		</div>
+	{/if}
+
+	{#if reached || !isActive}
+		<ConnectionAccess {connection} {row} />
 	{/if}
 
 	{#if connection.kind === "remote"}
