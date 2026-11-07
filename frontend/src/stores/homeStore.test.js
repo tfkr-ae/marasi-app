@@ -219,6 +219,40 @@ test("setListener starts a listener that is off", async () => {
   assert.equal(get(store).listener.status, true);
 });
 
+// A start the service refuses because the port is taken.
+const portTaken = (body) => {
+  if (body.port !== 0) throw new Error("POST /listener/start: listener_unavailable: listener_unavailable");
+  return { status: "active", proxy_listener: `${body.address}:61234` };
+};
+
+test("starting on the default port falls back to a free port when it is taken", async () => {
+  const routes = serviceRoutes();
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  routes["POST /listener/start"] = portTaken;
+  const { store, client } = setup(routes);
+  await store.populate();
+
+  const listener = await store.setListener("127.0.0.1", "8080", { fallback: true });
+
+  assert.deepEqual(client.calls.slice(-2), [
+    ["/listener/start", { address: "127.0.0.1", port: 8080 }],
+    ["/listener/start", { address: "127.0.0.1", port: 0 }],
+  ]);
+  assert.deepEqual(listener, { status: true, address: "127.0.0.1", port: "61234" });
+  assert.deepEqual(get(store).listener, listener);
+});
+
+test("a port the researcher chose that is taken is refused, not moved", async () => {
+  const routes = serviceRoutes();
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  routes["POST /listener/start"] = portTaken;
+  const { store, client } = setup(routes);
+  await store.populate();
+
+  await assert.rejects(store.setListener("127.0.0.1", "9090"), /listener_unavailable/);
+  assert.equal(client.calls.filter(([path]) => path === "/listener/start").length, 1);
+});
+
 test("a refused listener change rejects and leaves the listener as it was", async () => {
   const { store } = setup();
   await store.populate();
