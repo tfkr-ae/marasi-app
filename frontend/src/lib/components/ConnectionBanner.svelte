@@ -26,7 +26,7 @@
 	</div>
 {:else if $connectionStore.phase === "project-changed"}
 	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">
-		<span class="flex-1">{name} has {projectName($connectionStore.pendingProject)} open now.</span>
+		<span class="flex-1">{name} has {projectName($connectionStore.pendingProject)} open now. Load it to keep working.</span>
 		<button type="button" class={neutral} on:click={() => connectionStore.loadPending()}>Load it</button>
 	</div>
 {:else if $connectionStore.phase === "connected" && $connectionStore.versionWarning}

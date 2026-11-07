@@ -12,18 +12,24 @@
 // text carries the code the frontend's error helpers read (errors.js). The
 // stream's events reach the handlers registered with on(), by event name.
 //
+// holdWrites(true) refuses every call but GETs and /service/ routes with a
+// project_changed ServiceError, before it reaches the service: the
+// connection store holds them while the service has another project open
+// than the one the pages show.
+//
 // `fetch` and `EventSource` are passed in so tests use fakes. EventSource is
 // EventSource-like: `new EventSource(url, {headers})`, with onopen, onerror,
 // addEventListener(name, listener) whose event has `data` as text, and
 // close(). The app passes the fetch-based reader in sse.js, since a native
 // EventSource can't send the password.
-import { serviceError } from "./errors.js";
+import { ServiceError, serviceError } from "./errors.js";
 
 export function createServiceClient({ fetch, EventSource }) {
   let connection = null;
   // event name -> Set of handlers
   const handlers = new Map();
   let stream = null;
+  let writesHeld = false;
 
   function authHeaders() {
     return connection?.password ? { Authorization: `Bearer ${connection.password}` } : {};
@@ -47,6 +53,12 @@ export function createServiceClient({ fetch, EventSource }) {
    * and `as: "bytes"` resolves to the answer's bytes (a Uint8Array).
    */
   async function request(method, path, { query, body, raw, contentType, as } = {}) {
+    if (writesHeld && method !== "GET" && !path.startsWith("/service/")) {
+      throw new ServiceError(`${method} ${path}: project_changed: load the service's project first`, {
+        code: "project_changed",
+        ids: [],
+      });
+    }
     const headers = { ...authHeaders() };
     const init = { method, headers };
     if (raw !== undefined) {
@@ -102,6 +114,10 @@ export function createServiceClient({ fetch, EventSource }) {
     /** Points the client at `{url, password}`, or at nothing with null. */
     use(next) {
       connection = next ? { url: next.url, password: next.password ?? "" } : null;
+    },
+    /** Refuses project writes (true) or lets them through again (false). */
+    holdWrites(on) {
+      writesHeld = Boolean(on);
     },
     /** The active connection's `{url, password}`, or null. */
     connection: () => connection,

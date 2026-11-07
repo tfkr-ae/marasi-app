@@ -51,6 +51,7 @@ export const connectionStore = createConnectionStore({
   // the unsaved-work prompt, then the full load (the pages remount).
   confirmSwitch: () => ConfirmProjectSwitch(),
   reloadProject: (status) => projectStore.reload(status.project),
+  holdWrites: (on) => service.holdWrites(on),
 });
 
 // Reconnects compare the service's project with the one loaded last, which
