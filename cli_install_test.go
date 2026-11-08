@@ -143,6 +143,8 @@ func newCLIInstall(t *testing.T, goos, goarch string) *cliInstall {
 	r.mkdirAll = func(path string) error { return os.MkdirAll(path, 0o755) }
 	r.homeDir = func() (string, error) { return "/home/researcher", nil }
 	r.getenv = func(string) string { return "" }
+	// Whatever the build carries, these tests install from releases.
+	r.carried = nil
 	c.app.updateClient = c.releases.server.Client()
 	c.app.build = BuildInfo{Channel: "release", Version: "30.10.2026"}
 	if err := c.app.Config.setCLIChannel(""); err != nil {

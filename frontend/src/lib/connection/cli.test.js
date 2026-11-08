@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   cliMissing,
+  cliUpdateCheckedNotice,
   cliProgressPercent,
   cliProgressText,
   cliResultText,
@@ -47,6 +48,7 @@ test("an install reads as its step while it runs", () => {
   assert.equal(cliProgressText(null), "Downloading…");
   assert.equal(cliProgressText({ step: "download", received: 10, total: 100 }), "Downloading…");
   assert.equal(cliProgressText({ step: "verify", received: 0, total: 0 }), "Verifying…");
+  assert.equal(cliProgressText({ step: "extract", received: 0, total: 0 }), "Extracting…");
   assert.equal(cliProgressText({ step: "install", received: 0, total: 0 }), "Installing…");
 });
 
@@ -56,6 +58,7 @@ test("the download's bar fills by bytes, and is indeterminate without a size", (
   assert.equal(cliProgressPercent({ step: "download", received: 5, total: 0 }), undefined);
   assert.equal(cliProgressPercent(null), undefined);
   assert.equal(cliProgressPercent({ step: "verify", received: 0, total: 0 }), undefined);
+  assert.equal(cliProgressPercent({ step: "extract", received: 0, total: 0 }), undefined);
 });
 
 test("an outdated local instance names the version it runs", () => {
@@ -97,4 +100,12 @@ test("a failed install says why and restarts nothing", async () => {
   });
   assert.deepEqual(calls, []);
   assert.deepEqual(outcome, { ok: false, text: "checksum mismatch" });
+});
+
+test("the update check after placing the carried CLI speaks only when it installed a newer one", () => {
+  const cli = { found: true, version: "06.11.2026" };
+  assert.equal(cliUpdateCheckedNotice({ outcome: "installed", version: "06.11.2026", cli }), "Marasi CLI 06.11.2026 installed");
+  assert.equal(cliUpdateCheckedNotice({ outcome: "up-to-date", version: "30.10.2026", cli }), null);
+  assert.equal(cliUpdateCheckedNotice({ outcome: "failed", failure: { reason: "Couldn't reach GitHub" }, cli }), null);
+  assert.equal(cliUpdateCheckedNotice(null), null);
 });

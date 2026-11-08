@@ -110,7 +110,7 @@ func chromeProxy(start ChromeStart) (address, port string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("starting Chrome: reading the proxy listener %q: %w", start.ProxyListener, err)
 	}
-	remote := start.ConnectionKind == "remote"
+	remote := start.ConnectionKind == connectionKindRemote
 	ip, parseErr := netip.ParseAddr(host)
 	switch {
 	case host == "" || (parseErr == nil && ip.IsUnspecified()):

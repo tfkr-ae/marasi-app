@@ -5,11 +5,20 @@
 // next action. Tests run the reducer alone, and the store with a fake api:
 //
 //   listConnections() -> {connections, activeId}     the saved connections (Go)
-//   connectLocal() -> {url, password, startedByApp}  start or attach (Go)
+//   connectLocal(id) -> {url, password, startedByApp}  start or attach local
+//                                                    connection id's instance (Go);
+//                                                    startedByApp: the run is the
+//                                                    app's (saved ownership)
+//   startLocal(id, project)                          start local connection id's
+//                                                    instance on project (Go)
+//   stopLocal(id)                                    stop its instance (Go)
+//   stopService(link) -> POST /service/stop           stop a remote service
 //   connectionPassword(id) -> password               a remote's saved password (Go)
 //   savePassword(id, password)                       replace it (Go)
 //   setActive(id)                                    save the active connection (Go)
 //   clearStores()                                    forget the last service's data
+//   serviceStopped()                                 the stop took the proxy
+//                                                    listener with it
 //   confirmSwitch() -> bool                          the unsaved-work prompt (Go)
 //   confirmFollow(project) -> bool                   the same prompt, for a project
 //                                                    another client opened (Go)
@@ -42,7 +51,10 @@
 // `rejoin` quietly and resync; a drop while busy is expected, not a reconnect.
 //
 // Phases so far: idle → starting (the local instance) → connecting (its
-// status) → connected, or failed with `error` (Retry begins again). To add an
+// status) → connected, or failed with `error` (Retry begins again). Stop
+// (asking first when the run isn't the app's) reaches `stopped`, which only
+// Start (a local connection: a new session that starts the instance on its
+// project and loads it in full) or Retry leaves. To add an
 // event (reconnecting, a refused password, switching connections): add its
 // phase or action to `reduce`, its step to `perform`, and a scenario test.
 // The password passes through steps and never lands in the state.
@@ -82,7 +94,7 @@ export function initialConnection() {
     // active one.
     connections: [localConnection],
     connection: localConnection,
-    // A switch is under way: the next connect remounts the pages.
+    // The next connect remounts the pages: a switch, or Start after a stop.
     switching: false,
     // Where a refused password came from, to resume it once entered.
     authFrom: null,
@@ -124,6 +136,10 @@ export function initialConnection() {
     // (service.restart_failed).
     restarting: false,
     restartError: null,
+    // Stop waits for the researcher's yes, since the run isn't the app's;
+    // why the last Stop failed.
+    stopAsk: false,
+    stopError: null,
   };
 }
 
@@ -202,11 +218,13 @@ function begin(state) {
     busy: null,
     changeError: null,
     shareHost: "",
+    stopAsk: false,
+    stopError: null,
   };
   const { connection } = state;
   reset.session = state.session + 1;
   if (connection.kind === "local") {
-    return go(state, { phase: "starting", error: null, ...reset }, [{ type: "connect-local" }]);
+    return go(state, { phase: "starting", error: null, ...reset }, [{ type: "connect-local", id: connection.id }]);
   }
   return go(state, { phase: "connecting", error: null, ...reset }, [
     { type: "connect-remote", id: connection.id, url: connection.url },
@@ -588,8 +606,50 @@ export function reduce(state, action) {
       return go(state, { project: action.path });
 
     case "RETRY":
-      if (state.phase !== "failed" && state.phase !== "auth-failed") return refuse(state, "Nothing to retry.");
+      if (!["failed", "auth-failed", "stopped"].includes(state.phase)) return refuse(state, "Nothing to retry.");
       return begin(state);
+
+    case "STOP": {
+      // Stop the active connection's instance. A run the app doesn't own
+      // asks first (as Restart does), and so does every remote, which the
+      // app can't start again; a remote stops through the service's own
+      // stop route. The stream closes, so its drop is expected while `busy`.
+      if (state.phase !== "connected") return refuse(state, "Connect first.");
+      if (state.busy) return refuse(state, "Another change is under way.");
+      const remote = state.connection.kind === "remote";
+      if ((remote || !state.owned) && !action.confirmed) return go(state, { stopAsk: true, stopError: null });
+      return go(state, { busy: "stop", stopAsk: false, stopError: null }, [
+        { type: "close-events" },
+        remote ? { type: "stop-service" } : { type: "stop-instance", id: state.connection.id },
+      ]);
+    }
+
+    case "CANCEL_STOP":
+      return go(state, { stopAsk: false });
+
+    case "INSTANCE_STOPPED":
+      // `stopped` names no connection kind: a remote's stop reaches it too.
+      // The pages stay, dimmed and inert, on the project Start opens again.
+      // The proxy listener stopped with it, though no listener.stopped event
+      // came over the closed stream (`service-stopped`).
+      if (state.busy !== "stop") return refuse(state, "No stop is under way.");
+      return go(state, { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false }, [
+        { type: "service-stopped" },
+      ]);
+
+    case "STOP_FAILED":
+      if (state.busy !== "stop") return refuse(state, "No stop is under way.");
+      return go(state, { busy: null, stopError: action.error }, [{ type: "open-events", resume: true }]);
+
+    case "START": {
+      // A new session that starts the stopped instance on the project the
+      // pages showed, then connects and loads it in full.
+      if (state.phase !== "stopped") return refuse(state, "Marasi isn't stopped.");
+      if (state.connection.kind !== "local") return refuse(state, "The app can't start a remote.");
+      const { project } = state;
+      const next = begin({ ...state, switching: true });
+      return { ...next, steps: [{ type: "start-local", id: state.connection.id, project }] };
+    }
 
     default:
       return refuse(state, `Unknown action ${action.type}`);
@@ -633,10 +693,15 @@ export function createConnectionStore(api, timers = globalThis) {
 
   async function perform(step, session) {
     switch (step.type) {
+      case "start-local":
       case "connect-local": {
         let local;
         try {
-          local = await api.connectLocal();
+          if (step.type === "start-local") {
+            await api.startLocal(step.id, step.project ?? "");
+            if (!current(session)) return;
+          }
+          local = await api.connectLocal(step.id);
         } catch (err) {
           settle(session, { type: "INSTANCE_FAILED", error: message(err) });
           return;
@@ -689,6 +754,13 @@ export function createConnectionStore(api, timers = globalThis) {
           await api.setActive(step.id);
         } catch (err) {
           console.error("Saving the active connection failed:", err);
+        }
+        return;
+      case "service-stopped":
+        try {
+          await api.serviceStopped();
+        } catch (err) {
+          console.error("Showing the stopped listener failed:", err);
         }
         return;
       case "clear-stores":
@@ -749,7 +821,7 @@ export function createConnectionStore(api, timers = globalThis) {
         let reached, status;
         try {
           if (connection.kind === "local") {
-            reached = await api.connectLocal();
+            reached = await api.connectLocal(connection.id);
           } else {
             reached = { url: connection.url, password: await api.connectionPassword(connection.id), startedByApp: false };
           }
@@ -858,7 +930,7 @@ export function createConnectionStore(api, timers = globalThis) {
         try {
           reached =
             connection.kind === "local"
-              ? await api.connectLocal()
+              ? await api.connectLocal(connection.id)
               : { url: connection.url, password: step.password ?? "", startedByApp: false };
           if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });
@@ -872,6 +944,26 @@ export function createConnectionStore(api, timers = globalThis) {
         settle(session, { type: "REJOINED", url: reached.url, startedByApp: reached.startedByApp, status, control });
         return;
       }
+      case "stop-instance":
+        try {
+          await api.stopLocal(step.id);
+        } catch (err) {
+          settle(session, { type: "STOP_FAILED", error: message(err) });
+          return;
+        }
+        settle(session, { type: "INSTANCE_STOPPED" });
+        return;
+      case "stop-service":
+        // A remote: POST /service/stop. A refusal shows as the service's
+        // other refusals do, and the connection stays.
+        try {
+          await api.stopService(api.bind());
+        } catch (err) {
+          settle(session, { type: "STOP_FAILED", error: message(err) });
+          return;
+        }
+        settle(session, { type: "INSTANCE_STOPPED" });
+        return;
       case "load-project":
         try {
           await api.loadProject(step.status, { current: () => current(session) });
@@ -906,8 +998,15 @@ export function createConnectionStore(api, timers = globalThis) {
       }
       return dispatch({ type: "APP_STARTED" });
     },
-    /** Begins again after a failure. */
+    /** Begins again after a failure, or reaches a stopped remote again. */
     retry: () => dispatch({ type: "RETRY" }),
+    /** Stops the active connection's instance, asking first for a remote or a run that isn't the app's. */
+    stop: () => dispatch({ type: "STOP" }),
+    /** Stops it after the researcher said yes. */
+    confirmStop: () => dispatch({ type: "STOP", confirmed: true }),
+    cancelStop: () => dispatch({ type: "CANCEL_STOP" }),
+    /** Starts the stopped local instance on its project and loads it in full. */
+    startInstance: () => dispatch({ type: "START" }),
     /** Reconnects now instead of waiting (the banner's Retry now). */
     retryNow: () => dispatch({ type: "RECONNECT_NOW" }),
     /**

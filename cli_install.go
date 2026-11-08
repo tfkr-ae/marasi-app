@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +15,8 @@ import (
 	"time"
 
 	"aead.dev/minisign"
+
+	"github.com/tfkr-ae/marasi-app/internal/marasicli"
 )
 
 // Installing and updating the Marasi CLI from Marasi's GitHub releases
@@ -33,12 +33,8 @@ const cliInstallTimeout = 10 * time.Minute
 const cliSmallAssetLimit = 64 << 10
 
 // cliAssets is the release asset of the CLI for each GOOS/GOARCH Marasi
-// publishes (Marasi's release.yml and nightly.yml).
-var cliAssets = map[string]string{
-	"darwin/arm64":  "marasi-darwin-arm64",
-	"linux/amd64":   "marasi-linux-amd64",
-	"windows/amd64": "marasi-windows-amd64.exe",
-}
+// publishes.
+var cliAssets = marasicli.Assets
 
 // Outcomes of InstallCLI and CheckForCLIUpdate.
 const (
@@ -81,8 +77,8 @@ type CLIInstall struct {
 const cliInstallProgressEvent = "cli-install-progress"
 
 // CLIInstallProgress is the step a CLI install is on: download (with the
-// bytes received and the total, 0 when the server didn't say), verify or
-// install.
+// bytes received and the total, 0 when the server didn't say), verify,
+// extract (an archive build) or install.
 type CLIInstallProgress struct {
 	Step     string `json:"step"`
 	Received int64  `json:"received"`
@@ -141,8 +137,10 @@ func (a *App) cliChannel() Channel {
 	return channelRelease
 }
 
-// InstallCLI installs the Marasi CLI for this platform from the release on
-// the CLI's channel into dir, and saves it as the app's CLI. It returns an
+// InstallCLI installs the Marasi CLI for this platform into dir and saves it
+// as the app's CLI: the copy this build carries, when it carries one and no
+// CLI is found, without the network and followed by the CLI update check;
+// otherwise the release on the CLI's channel. It returns an
 // error, rather than a failed install, only when dir is empty.
 func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	dir, err := a.expandCLIDir(dir)
@@ -155,9 +153,12 @@ func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cliInstallTimeout)
 	defer cancel()
 
+	target := filepath.Join(dir, cliFileName(r.goos))
+	if carried, ok := a.usableCarriedCLI(); ok {
+		return a.installCarried(carried, target), nil
+	}
 	channel := a.cliChannel()
 	result := CLIInstall{Channel: string(channel)}
-	target := filepath.Join(dir, cliFileName(r.goos))
 	release, version, err := a.findCLIRelease(ctx, channel)
 	if err == nil {
 		result.Version = version
@@ -172,6 +173,23 @@ func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	result.Outcome = cliOutcomeInstalled
 	result.CLI, _ = a.LocateCLI()
 	return result, nil
+}
+
+// installCarried places the carried CLI at target without the network and
+// saves it as the app's CLI, then starts the CLI update check.
+func (a *App) installCarried(carried *carriedCLI, target string) CLIInstall {
+	result := CLIInstall{Version: carried.Version, Channel: carried.Channel}
+	err := a.installCarriedCLI(carried, target)
+	if err == nil {
+		err = a.Config.setCLIPath(savedCLIPath{Path: target, Source: cliSourceInstalled})
+	}
+	if err != nil {
+		return a.cliFailed(result, err)
+	}
+	result.Outcome = cliOutcomeInstalled
+	result.CLI, _ = a.LocateCLI()
+	a.cliRuntime.background(a.checkForCLIUpdateAfterInstall)
+	return result
 }
 
 // CheckForCLIUpdate replaces the CLI the app uses with the release on the
@@ -272,7 +290,9 @@ func (a *App) findCLIRelease(ctx context.Context, channel Channel) (githubReleas
 	case err != nil:
 		return githubRelease{}, "", failed(UpdateFailureNetwork, "%v", err)
 	}
-	if _, ok := release.asset(asset); !ok {
+	_, bare := release.asset(asset)
+	archiveAsset, archived := a.cliArchive()
+	if _, ok := release.asset(archiveAsset); !bare && !(archived && ok) {
 		if nightly {
 			// The nightly is recreated on each run; its assets may still be
 			// uploading.
@@ -288,11 +308,11 @@ func (a *App) findCLIRelease(ctx context.Context, channel Channel) (githubReleas
 }
 
 // installCLIRelease downloads this platform's CLI from release, verifies it
-// and moves it to target. Nothing touches target's folder until the build
-// is verified.
+// and moves it to target. It takes the platform's archive when the signed
+// checksums list it and the bare executable otherwise. Nothing touches
+// target's folder until the build is verified and extracted.
 func (a *App) installCLIRelease(ctx context.Context, release githubRelease, channel Channel, version, target string) error {
 	r := &a.cliRuntime
-	asset, _ := a.cliAsset()
 	checksumsURL, ok := release.asset(checksumsAsset)
 	if !ok {
 		return failed(UpdateFailureSignature, "The release has no %s", checksumsAsset)
@@ -301,7 +321,6 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if !ok {
 		return failed(UpdateFailureSignature, "The release isn't signed")
 	}
-	build, _ := release.asset(asset)
 
 	a.reportCLIProgress(CLIInstallProgress{Step: "download"})
 	checksums, err := a.downloadCLISmall(ctx, checksumsURL.URL)
@@ -315,12 +334,24 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if !minisign.Verify(r.key, checksums, signature) {
 		return failed(UpdateFailureSignature, "Signature check failed, nothing installed")
 	}
-	if trustedComment(signature) != "marasi "+string(channel)+" "+version {
+	if marasicli.SignatureComment(signature) != marasicli.TrustedComment(string(channel), version) {
 		return failed(UpdateFailureSignature, "Signature is for another release, nothing installed")
 	}
-	want, ok := parseChecksums(checksums)[asset]
-	if !ok {
+	sums := marasicli.ParseChecksums(checksums)
+	asset, archived := a.cliArchive()
+	want, listed := sums[asset]
+	build, published := release.asset(asset)
+	if !archived || !listed || !published {
+		asset, _ = a.cliAsset()
+		archived = false
+		want, listed = sums[asset]
+		build, published = release.asset(asset)
+	}
+	if !listed {
 		return failed(UpdateFailureChecksum, "Signed checksums don't list %s, nothing installed", asset)
+	}
+	if !published {
+		return failed(UpdateFailureNoBuild, cliNoBuildReason)
 	}
 
 	tmp, err := r.tempDir()
@@ -337,27 +368,36 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if got != want {
 		return failed(UpdateFailureChecksum, "Checksum mismatch, nothing installed")
 	}
-	a.reportCLIProgress(CLIInstallProgress{Step: "install"})
-	return a.placeCLI(download, target)
-}
-
-// placeCLI copies the verified build next to target, marks the copy
-// executable on Unix, then renames it over target, so a failure at any step
-// leaves target as it was. On Windows target may be running (the local
-// instance's service), so swapAside moves it aside first.
-func (a *App) placeCLI(download, target string) error {
-	r := &a.cliRuntime
-	dir := filepath.Dir(target)
-	if err := r.mkdirAll(dir); err != nil {
-		return failed(UpdateFailureInstall, "Could not create %s: %v", dir, err)
+	if archived {
+		a.reportCLIProgress(CLIInstallProgress{Step: "extract"})
+		extracted := filepath.Join(tmp, cliFileName(r.goos))
+		if err := a.extractCLI(download, cliFileName(r.goos), extracted); err != nil {
+			return err
+		}
+		download = extracted
 	}
 	file, err := os.Open(download)
 	if err != nil {
 		return failed(UpdateFailureInstall, "Could not read the download: %v", err)
 	}
 	defer file.Close()
+	a.reportCLIProgress(CLIInstallProgress{Step: "install"})
+	return a.placeCLI(file, target)
+}
+
+// placeCLI writes the verified CLI read from src next to target, marks the
+// copy executable on Unix, then renames it over target, so a failure at any
+// step leaves target as it was. On Windows target may be running (the local
+// instance's service), so swapAside moves it aside first. src is the
+// downloaded or extracted build.
+func (a *App) placeCLI(src io.Reader, target string) error {
+	r := &a.cliRuntime
+	dir := filepath.Dir(target)
+	if err := r.mkdirAll(dir); err != nil {
+		return failed(UpdateFailureInstall, "Could not create %s: %v", dir, err)
+	}
 	staged := filepath.Join(dir, fmt.Sprintf(".%s.%d.new", filepath.Base(target), time.Now().UnixNano()))
-	if err := r.writeFile(staged, file); err != nil {
+	if err := r.writeFile(staged, src); err != nil {
 		r.remove(staged)
 		return failed(UpdateFailureInstall, "Could not write to %s: %v", dir, err)
 	}
@@ -409,17 +449,6 @@ func (a *App) downloadCLIBuild(ctx context.Context, url, path string) (string, e
 	}
 	progress.done()
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-// trustedComment is the trusted comment of a minisign signature file.
-func trustedComment(signature []byte) string {
-	scanner := bufio.NewScanner(bytes.NewReader(signature))
-	for scanner.Scan() {
-		if comment, ok := strings.CutPrefix(scanner.Text(), "trusted comment: "); ok {
-			return strings.TrimSpace(comment)
-		}
-	}
-	return ""
 }
 
 // removeCLILeftovers deletes the CLI a Windows install moved aside, beside

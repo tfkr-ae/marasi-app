@@ -1,6 +1,7 @@
 // The connection store bound to the app: the saved connections and their
-// passwords through Go (connections.go, keychain.go), the local instance
-// through Go's ConnectLocal, and the service through the app's service
+// passwords through Go (connections.go, keychain.go), a local connection's
+// instance through Go's ConnectLocal (Start and Stop through
+// StartLocalInstance and StopLocalInstance), and the service through the app's service
 // client. The lifecycle is in createConnectionStore.js.
 import {
   AddRecentProject,
@@ -12,6 +13,8 @@ import {
   SetActiveConnection,
   SetConnectionNoPassword,
   SetConnectionPassword,
+  StartLocalInstance,
+  StopLocalInstance,
 } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
 import { get } from "svelte/store";
@@ -21,12 +24,15 @@ import { loadedProject, projectStore, resyncProject } from "./projectStore.js";
 import { activeConnectionId } from "./activeConnection.js";
 import { trackRecents } from "./recentProjects.js";
 import { projectData } from "./projectData.js";
+import { homeStore } from "./homeStore.js";
 import { projectName } from "../lib/openProgress.js";
 
 export const connectionStore = createConnectionStore({
   ...connectionServiceApi(service, projectStore),
   listConnections: () => ListConnections(),
-  connectLocal: () => ConnectLocal(),
+  connectLocal: (id) => ConnectLocal(id),
+  startLocal: (id, project) => StartLocalInstance(id, project),
+  stopLocal: (id) => StopLocalInstance(id),
   connectionPassword: (id) => ConnectionPassword(id),
   savePassword: (id, password) => SetConnectionPassword(id, password),
   forgetPassword: (id, origins) => SetConnectionNoPassword(id, origins),
@@ -35,6 +41,9 @@ export const connectionStore = createConnectionStore({
   setActive: (id) => SetActiveConnection(id),
   // Leaving a connection: the last service's data goes before the next loads.
   clearStores: () => projectData.clear(),
+  // A stop takes the proxy listener with it; Home shows it off, as a
+  // listener.stopped event would, until Start loads the project again.
+  serviceStopped: () => homeStore.onListener({ status: "stopped" }),
   // After a stream reset (expired or invalid) or a service without a run ID.
   resync: () => resyncProject(),
   // After a reconnect that found another project or a restarted service:

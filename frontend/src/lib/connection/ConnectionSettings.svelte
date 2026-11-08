@@ -1,7 +1,14 @@
 <script>
 	// Settings → Connection: the Connections modal's list and details, laid
-	// out as a Settings section, with Add connection under the list.
+	// out as a Settings section, with Add connection under the list, and
+	// When quitting under the details.
 	import { Laptop, Plus, Server } from "lucide-svelte";
+	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { primaryButton } from "../launchpad/format.js";
+	import { SetFlag } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { marasiConfig } from "../../stores";
+	import { toastError } from "../toasts.js";
+	import { WHEN_QUITTING } from "./quitQuestion.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import AddConnection from "./AddConnection.svelte";
 	import ConnectionDetail from "./ConnectionDetail.svelte";
@@ -12,6 +19,18 @@
 	let picked = $connectionStore.connection.id;
 	$: pickedConnection = connections.find((c) => c.id === picked) ?? connections[0];
 	$: activeId = $connectionStore.connection.id;
+	const toastStore = getToastStore();
+	$: primary = primaryButton($modeCurrent);
+	// Go reads anything but keep or stop as ask.
+	$: whenQuitting = WHEN_QUITTING.some(([value]) => value === $marasiConfig?.WhenQuitting)
+		? $marasiConfig.WhenQuitting
+		: "ask";
+
+	function setWhenQuitting(value) {
+		SetFlag("when_quitting", value)
+			.then((config) => marasiConfig.set(config))
+			.catch((error) => toastError(toastStore, "When quitting not saved", error));
+	}
 </script>
 
 <h3 class="text-sm font-bold">Connection</h3>
@@ -54,4 +73,24 @@
 	{:else}
 		{#key pickedConnection.id}<ConnectionDetail connection={pickedConnection} rows />{/key}
 	{/if}
+</div>
+
+<div
+	class="flex items-center justify-between gap-8 border-b border-surface-300 py-3 dark:border-surface-600"
+	data-testid="when-quitting"
+>
+	<p>When quitting</p>
+	<div class="flex w-80 shrink-0 text-sm" role="radiogroup" aria-label="When quitting">
+		{#each WHEN_QUITTING as [value, label]}
+			<button
+				type="button"
+				role="radio"
+				aria-checked={whenQuitting === value}
+				class="flex-1 px-3 py-1 {whenQuitting === value
+					? primary
+					: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+				on:click={() => setWhenQuitting(value)}>{label}</button
+			>
+		{/each}
+	</div>
 </div>

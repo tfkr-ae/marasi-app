@@ -27,7 +27,7 @@ for (const name of ["upstream_proxy.added", "upstream_proxy.updated", "upstream_
   service.on(name, upstreamProxyStore.onListChanged);
 }
 service.on("upstream_proxy.selected", upstreamProxyStore.onSelected);
-projectData.register("upstreamProxies", { load: reloadShown });
+projectData.register("upstreamProxies", { clear: upstreamProxyStore.clear, load: reloadShown });
 
 /** Asks for a CA file and resolves to its text, or "" when cancelled. */
 export const readUpstreamProxyCAFile = () => ReadUpstreamProxyCAFile();

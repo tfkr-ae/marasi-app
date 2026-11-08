@@ -12,11 +12,20 @@ export const toWaypointMap = (list) =>
 export function createWaypointStore(client) {
   const { subscribe, set } = writable({});
   const apply = (list) => set(toWaypointMap(list));
+  // Bumped by clear, so a load a project switch superseded drops its answer.
+  let run = 0;
 
   return {
     subscribe,
-    clear: () => set({}),
-    load: async () => apply(await client.get("/waypoint")),
+    clear: () => {
+      run++;
+      set({});
+    },
+    async load() {
+      const thisRun = run;
+      const list = await client.get("/waypoint");
+      if (thisRun === run) apply(list);
+    },
 
     // Adds the waypoint, or updates the one the service already has for
     // `hostname` (it refuses to add that one twice). Both requests go

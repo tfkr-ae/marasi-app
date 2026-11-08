@@ -178,3 +178,18 @@ test("events before Settings reads the list leave it unread", () => {
   assert.equal(get(store).loaded, false);
   assert.deepEqual(get(store).items, []);
 });
+
+test("a load the project switch superseded changes nothing when its answer comes late", async () => {
+  let answer;
+  const answers = [
+    new Promise((resolve) => (answer = resolve)),
+    Promise.resolve({ items: [corp], selected: "", configured: true }),
+  ];
+  const { store } = setup({ list: () => answers.shift() });
+  const superseded = store.load();
+  store.clear();
+  await store.load();
+  answer({ items: [corp], selected: "corp", configured: true });
+  await superseded;
+  assert.equal(get(store).selected, "");
+});

@@ -70,6 +70,9 @@ export const FACTORY_ACTIONS = [
   action("global.decrease-text-size", "Decrease Text Size", "Make all text one size smaller", "text, font, size, smaller, zoom out", primary("-")),
   action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0")),
   action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u")),
+  // Keyless: no factory key, so it takes no key a researcher already uses;
+  // a profile can bind one. Keybinding settings don't flag it as unbound.
+  { ...action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", { [MACOS]: [], [WINDOWS_LINUX]: [] }), keyless: true },
   action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i")),
   ...pageActions("ledger.drawer-closed", [
     ["toggle-settings", "Toggle Query Fields", "Show or hide the query fields and examples", "settings, toggle, query, fields, help", primary("p")],

@@ -27,12 +27,30 @@ export function cliResultText(result) {
   }
 }
 
+/**
+ * Go's event with the result of the CLI update check that runs after Install
+ * placed the carried CLI (a CLIInstall, as CheckForCLIUpdate returns).
+ */
+export const CLI_UPDATE_CHECKED_EVENT = "cli-update-checked";
+
+/**
+ * The toast for that check: the newer CLI it installed, or null when it left
+ * the carried CLI (up to date, or a failure, which Go logs).
+ */
+export const cliUpdateCheckedNotice = (result) =>
+  result?.outcome === "installed" ? cliResultText(result) : null;
+
 const sources = { custom: "Custom path", installed: "Installed by Marasi", path: "PATH" };
 
 /** Where the CLI was found. */
 export const cliSourceLabel = (source) => sources[source] ?? source;
 
-const progressSteps = { download: "Downloading…", verify: "Verifying…", install: "Installing…" };
+const progressSteps = {
+  download: "Downloading…",
+  verify: "Verifying…",
+  extract: "Extracting…",
+  install: "Installing…",
+};
 
 /**
  * What a running install says, from Go's latest cli-install-progress

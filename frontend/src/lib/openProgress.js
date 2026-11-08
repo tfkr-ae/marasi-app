@@ -23,8 +23,8 @@ const stepIndex = Object.fromEntries(openSteps.map(({ id }, i) => [id, i]));
 const succeededStep = openSteps.length;
 
 /**
- * The load sequence's signals (openProject in stores.js), one as each
- * thing it loads starts loading, in the order it loads them.
+ * The load's signals (projectData.load), one per store in registration
+ * order, each reported once every store before it has loaded.
  */
 export const loadSignals = Object.freeze({
   traffic: "traffic",

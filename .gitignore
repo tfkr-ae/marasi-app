@@ -11,3 +11,6 @@ build/linux/marasi-app.desktop
 
 # A Go build in the repo root (go build -o marasi-app .)
 /marasi-app
+
+# The Marasi CLI a release or nightly build carries (cmd/carry-cli)
+/carried_cli/

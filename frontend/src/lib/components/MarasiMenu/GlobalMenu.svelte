@@ -29,6 +29,7 @@
 		FlagIcon,
 		FolderOpen,
 		PartyPopper,
+		Network,
 		SendIcon,
 		Settings,
 		Swords,
@@ -40,6 +41,7 @@
 	import { ToggleFlag } from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { checkpointStore } from "../../../stores/checkpointStore";
 	import { updatePanelModal } from "../../updates.js";
+	import { connectionsModal } from "../../connection/modal.js";
 	import { startChrome } from "../../chrome.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
@@ -135,6 +137,7 @@
 		"global.reset-text-size": () => changeTextSize(() => DEFAULT_TEXT_SIZE),
 		"global.check-for-updates": checkForUpdates,
 		"global.toggle-intercept": () => checkpointStore.toggleIntercept(),
+		"global.connections": () => toggleModal(connectionsModal()),
 	};
 
 	// "Check for updates…": an update opens the details panel; otherwise a
@@ -168,6 +171,7 @@
 		"global.reset-text-size": ALargeSmall,
 		"global.check-for-updates": ArrowUpCircle,
 		"global.toggle-intercept": ToggleLeft,
+		"global.connections": Network,
 	};
 
 	$: menuDispatcher.configure({

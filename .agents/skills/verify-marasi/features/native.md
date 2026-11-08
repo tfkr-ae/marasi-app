@@ -9,7 +9,7 @@ What the server build does, from the v3.1.0 source (`pkg/application/application
 - **Clipboard** `SetText` reports failure, which `CopyCertToClipboard` returns as `copying to the clipboard failed`. In-page copies (`Copy request`, `Copy URL`, `Copy vector`, …) use Chrome's own clipboard and work in the browser.
 - **`Window.SetTitle`** succeeds and does nothing; `document.title` stays empty, also after opening a project.
 - **`Browser.OpenURL`** opens the URL in the host machine's default browser, outside headless Chrome. Do not trigger it while verifying.
-- **Quit** stops the HTTP server. `TERM` (what `cleanup.sh` sends) shuts down without asking about unsaved work.
+- **Quit** stops the HTTP server. `TERM` (what `cleanup.sh` sends) shuts down without asking about unsaved work or the quit question, so an owned run keeps running unless When quitting is Stop Marasi. `kill -USR1 "$(cat "$MARASI_VERIFY_STATE_DIR/app.pid")"` quits as ⌘Q does (`server_quit_signal.go`): the unsaved-work prompt (answered by `MARASI_DIALOG_ANSWER`), then, in app mode with When quitting at Ask, the in-app "Stop Marasi too?" modal. Doctor refuses an open modal, so send the signal after the drive's first step: poll in the background for `<evidence>/<feature>-<recipe>-step-1.json`, then signal, and `waitText` "Stop Marasi too?" with a long `timeoutMs`. Keep running and Stop exit the app; check the instance with `"$MARASI_VERIFY_STATE_DIR"/bin/marasi --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi service status --json`, then `restart.sh`.
 
 | Flow | Native call | Server build | How to check it |
 | --- | --- | --- | --- |

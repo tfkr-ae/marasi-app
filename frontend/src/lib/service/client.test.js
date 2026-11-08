@@ -101,6 +101,24 @@ test("a connection with no password sends no Authorization header", async () => 
   assert.equal("Authorization" in http.requests[0].headers, false);
 });
 
+// Marasi answers a preflight with Access-Control-Allow-Headers
+// "Authorization, Content-Type" and caches it per URL for 10 minutes. A
+// call that sends any other header would miss that cached answer.
+test("calls send no header beyond Authorization and Content-Type", async () => {
+  const { client, http, events } = setup();
+  client.use({ url: "http://127.0.0.1:51391", password: "pw" });
+
+  await client.get("/dashboard", { query: { a: 1 } });
+  await client.request("POST", "/note", { body: { text: "n" } });
+  await client.request("POST", "/finding/f1/artifact", { raw: new Uint8Array([1]), contentType: "image/png" });
+  client.openEvents();
+
+  const sent = [...http.requests.map((r) => r.headers), events.sources[0].headers];
+  for (const headers of sent) {
+    for (const name of Object.keys(headers)) assert.ok(["Authorization", "Content-Type"].includes(name), `sent ${name}`);
+  }
+});
+
 // Each refusal rejects with the error the frontend's helpers already read.
 async function refusal(method, path, answer) {
   const { client } = setup(() => answer);

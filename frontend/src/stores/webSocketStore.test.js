@@ -57,3 +57,15 @@ test("forwarding a message that already left clears it without an error", async 
   assert.deepEqual(queued(), []);
   assert.equal(get(store).interceptionErrorsByRequestId.conn, "");
 });
+
+test("a load the project switch superseded changes nothing when its answer comes late", async () => {
+  let answer;
+  const answers = [new Promise((resolve) => (answer = resolve)), Promise.resolve(false)];
+  const store = createWebSocketStore({ GetWSInterceptFlag: () => answers.shift() });
+  const superseded = store.populateInterceptFlag();
+  store.clear();
+  await store.populateInterceptFlag();
+  answer(true);
+  await superseded;
+  assert.equal(get(store).wsInterceptEnabled, false);
+});

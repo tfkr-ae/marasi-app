@@ -4,14 +4,22 @@
 	// connection). The Connections modal shows it
 	// compact; Settings → Connection in the Settings row layout (`rows`).
 	// Another connection offers Switch; a refused password asks for it; a
-	// remote has its address and Remove. The password and sharing rows
-	// (ConnectionAccess) go after the service rows.
+	// remote has its address and Remove. Every connection offers Stop, which
+	// asks first for a remote ("Stop <name>?": the app can't start it again)
+	// or a run the app doesn't own; once stopped, "Marasi stopped" with Start
+	// for a local connection and Retry for a remote. A local connection that
+	// isn't active offers Stop while its instance runs and Start while it
+	// doesn't (instanceControl.js), leaving the active connection as it is.
+	// The password and sharing rows
+	// (ConnectionAccess) go after the service rows. A local connection the
+	// researcher added (not Local) has its proxy port and Remove.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
-	import { phaseLabel, phaseTone, whereText } from "./status.js";
-	import { errorText, removeConnection, setAddress } from "./manage.js";
+	import { phaseLabel, phaseTone, removeBlock, whereText } from "./status.js";
+	import { errorText, localInstanceControl, removeConnection, setAddress, setPort } from "./manage.js";
+	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
 	import { cliMissing, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import OutdatedInstance from "./OutdatedInstance.svelte";
@@ -40,6 +48,20 @@
 			manageError = errorText(err);
 		}
 	}
+	let port = portText(connection.port);
+	async function savePort() {
+		manageError = "";
+		const value = parsePort(port);
+		if (value === null) {
+			manageError = PORT_RANGE_MESSAGE;
+			return;
+		}
+		try {
+			await setPort(connection.id, value);
+		} catch (err) {
+			manageError = errorText(err);
+		}
+	}
 	async function remove() {
 		manageError = "";
 		try {
@@ -48,10 +70,18 @@
 			manageError = errorText(err);
 		}
 	}
+	$: added = connection.kind === "local" && connection.id !== "local";
 	$: state = $connectionStore;
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
-	$: reached = isActive && state.version !== null;
+	$: reached = isActive && state.version !== null && phase !== "stopped";
+	// A local connection's instance: whether it runs and whether the app owns
+	// the run, read again as the active connection or its phase changes (a
+	// switch away, a stop), with Stop and Start while it isn't active.
+	const local = connection.kind === "local" ? localInstanceControl(connection) : null;
+	$: instance = local ? $local : null;
+	$: if (local) local.refresh(isActive, state.phase);
+	$: removeHint = removeBlock({ isActive, ownedRun: added && Boolean(instance?.owned) });
 	const row = rows
 		? "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
 		: "flex items-center justify-between gap-4 py-2 border-b border-surface-200 dark:border-surface-700";
@@ -82,6 +112,33 @@
 			</button>
 		</div>
 	{/if}
+	{#if !isActive && local && instance.running !== null}
+		<div class="mt-3 border-t border-surface-200 dark:border-surface-700" data-testid="connection-instance">
+			<div class={row}>
+				<div>
+					<p>Instance</p>
+					<p class="text-xs opacity-70" data-testid="connection-stop-hint">
+						{#if instance.stopAsk}Another program started it.{:else if instance.running}Stop Marasi and its proxy{:else}Not running{/if}
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if instance.stopAsk}
+						<button type="button" class={primary} data-testid="connection-stop-confirm" on:click={() => local.confirmStop()}>Stop</button>
+						<button type="button" class={neutral} on:click={() => local.cancelStop()}>Cancel</button>
+					{:else if instance.running}
+						<button type="button" class={neutral} disabled={instance.busy !== null} data-testid="connection-stop" on:click={() => local.stop()}
+							>{instance.busy === "stop" ? "Stopping…" : "Stop"}</button
+						>
+					{:else}
+						<button type="button" class={primary} disabled={instance.busy !== null} data-testid="connection-detail-start" on:click={() => local.start()}
+							>{instance.busy === "start" ? "Starting…" : "Start"}</button
+						>
+					{/if}
+				</div>
+			</div>
+			{#if instance.error}<p class="mt-2 text-xs text-error-600 dark:text-error-400" role="alert">{instance.error}</p>{/if}
+		</div>
+	{/if}
 	{#if isActive && phase === "auth-failed"}
 		<form class="mt-3 flex items-center gap-3 bg-error-500/10 p-3" data-testid="connection-password-prompt" on:submit|preventDefault={enterPassword}>
 			<p class="text-xs">{state.error}</p>
@@ -95,6 +152,15 @@
 	{:else if isActive && phase === "failed" && connection.kind === "local" && outdatedVersion(state.error) !== null}
 		<div class="mt-3 bg-warning-500/15 p-3">
 			<OutdatedInstance error={state.error} />
+		</div>
+	{:else if isActive && phase === "stopped"}
+		<div class="mt-3 flex items-center gap-3 bg-surface-500/10 p-3" data-testid="connection-stopped">
+			<p class="min-w-0 flex-1 text-xs">Marasi stopped</p>
+			{#if connection.kind === "local"}
+				<button type="button" class={primary} data-testid="connection-detail-start" on:click={() => connectionStore.startInstance()}>Start</button>
+			{:else}
+				<button type="button" class={neutral} on:click={() => connectionStore.retry()}>Retry</button>
+			{/if}
 		</div>
 	{:else if isActive && phase === "failed"}
 		<div class="mt-3 flex items-center gap-3 bg-error-500/10 p-3">
@@ -129,6 +195,32 @@
 				</div>
 				<p class="font-mono text-xs" data-testid="connection-api">{state.api ?? "none"}</p>
 			</div>
+			{#if phase === "connected"}
+				<div class={row}>
+					<div>
+						{#if state.stopAsk && connection.kind === "remote"}
+							<p data-testid="connection-stop-title">Stop {connection.name}?</p>
+							<p class="text-xs opacity-70" data-testid="connection-stop-hint">The app can't start it again.</p>
+						{:else}
+							<p>Instance</p>
+							<p class="text-xs opacity-70" data-testid="connection-stop-hint">
+								{state.stopAsk ? "Another program started it." : "Stop Marasi and its proxy"}
+							</p>
+						{/if}
+					</div>
+					<div class="flex items-center gap-2">
+						{#if state.stopAsk}
+							<button type="button" class={primary} data-testid="connection-stop-confirm" on:click={() => connectionStore.confirmStop()}>Stop</button>
+							<button type="button" class={neutral} on:click={() => connectionStore.cancelStop()}>Cancel</button>
+						{:else}
+							<button type="button" class={neutral} disabled={state.busy !== null} data-testid="connection-stop" on:click={() => connectionStore.stop()}
+								>{state.busy === "stop" ? "Stopping…" : "Stop"}</button
+							>
+						{/if}
+					</div>
+				</div>
+				{#if state.stopError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" role="alert">{state.stopError}</p>{/if}
+			{/if}
 		</div>
 	{/if}
 
@@ -151,11 +243,33 @@
 			<div class={row}>
 				<div>
 					<p>Remove</p>
-					<p class="text-xs opacity-70">{isActive ? "Switch away first" : "Forget it and its password"}</p>
+					<p class="text-xs opacity-70">{removeHint ?? "Forget it and its password"}</p>
 				</div>
-				<button type="button" class={neutral} disabled={isActive} data-testid="connection-remove" on:click={remove}>Remove</button>
+				<button type="button" class={neutral} disabled={removeHint !== null} data-testid="connection-remove" on:click={remove}>Remove</button>
 			</div>
 		</div>
-		{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
 	{/if}
+
+	{#if added}
+		<div class="mt-3 border-t border-surface-200 dark:border-surface-700" data-testid="connection-local-manage">
+			<div class={row}>
+				<div>
+					<p>Proxy port</p>
+					<p class="text-xs opacity-70">From the next Start; blank for any</p>
+				</div>
+				<form class="flex min-w-0 items-center gap-2" on:submit|preventDefault={savePort}>
+					<input class="input h-8 w-24 py-1 font-mono text-xs" inputmode="numeric" placeholder="Any" data-testid="connection-port" bind:value={port} />
+					<button type="submit" class={neutral} disabled={port.trim() === portText(connection.port)}>Save</button>
+				</form>
+			</div>
+			<div class={row}>
+				<div>
+					<p>Remove</p>
+					<p class="text-xs opacity-70" data-testid="connection-remove-hint">{removeHint ?? "Forget it; the instance keeps running"}</p>
+				</div>
+				<button type="button" class={neutral} disabled={removeHint !== null} data-testid="connection-remove" on:click={remove}>Remove</button>
+			</div>
+		</div>
+	{/if}
+	{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
 </div>

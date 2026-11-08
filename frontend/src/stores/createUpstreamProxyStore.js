@@ -54,6 +54,15 @@ export function createUpstreamProxyStore(api) {
 
   const isListed = (items, name) => !name || items.some((item) => item.name === name);
 
+  // Bumped by clear, so a load a project switch superseded drops its answer
+  // instead of showing the last project's selection.
+  let run = 0;
+  async function load() {
+    const thisRun = run;
+    const answer = await api.list();
+    return thisRun === run ? apply(answer) : answer;
+  }
+
   // upstream_proxy.added, .updated and .removed carry the whole list. An
   // entry that changed loses its last check.
   function onListChanged({ items = [] } = {}) {
@@ -81,7 +90,15 @@ export function createUpstreamProxyStore(api) {
     subscribe: store.subscribe,
     onListChanged,
     onSelected,
-    load: async () => apply(await api.list()),
+    load,
+    /**
+     * Drops the answer of a load under way, as a project switch does. The
+     * list stays shown (it is this machine's) until the next load reads it
+     * with the new project's selection.
+     */
+    clear: () => {
+      run++;
+    },
     add: async (name, url, ca = "") => apply(await api.add(name, url, ca)),
     // An entry's old check no longer says anything about it.
     update: async (name, url, ca, removeCA) =>

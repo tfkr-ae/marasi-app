@@ -3,10 +3,12 @@
 	import OpeningScreen from "../lib/components/OpeningScreen.svelte";
 	import ConnectionBanner from "../lib/components/ConnectionBanner.svelte";
 	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
+	import QuitQuestionModal from "../lib/connection/QuitQuestionModal.svelte";
+	import { QUIT_QUESTION_EVENT, quitAnswerOf } from "../lib/connection/quitQuestion.js";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
 	import OutdatedInstance from "../lib/connection/OutdatedInstance.svelte";
-	import { filePickerShown } from "../lib/connection/status.js";
-	import { primaryVariant } from "../lib/launchpad/format.js";
+	import { filePickerShown, pagesHeld, startupOffersConnections, startupText } from "../lib/connection/status.js";
+	import { neutralVariant, primaryVariant } from "../lib/launchpad/format.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -59,7 +61,12 @@
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { outdatedVersion, shouldOfferCLISetup } from "../lib/connection/cli.js";
+	import {
+		CLI_UPDATE_CHECKED_EVENT,
+		cliUpdateCheckedNotice,
+		outdatedVersion,
+		shouldOfferCLISetup,
+	} from "../lib/connection/cli.js";
 	import { connectionsModal } from "../lib/connection/modal.js";
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { reportLogbookEdits } from "../stores/logbookStore";
@@ -83,7 +90,7 @@
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
-	import { OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
+	import { AnswerQuitQuestion, OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import {
 		ChefHat,
 		Brush,
@@ -167,6 +174,22 @@
 	};
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
+	// Go waits for the answer to quit, so the question goes in front of any
+	// open modal, and closing it any other way cancels the quit.
+	function onQuitQuestion(question) {
+		const modal = {
+			type: "component",
+			component: "QuitQuestion",
+			meta: { question },
+			response: (response) => {
+				const { answer, remember } = quitAnswerOf(response);
+				AnswerQuitQuestion(answer, remember).catch((err) =>
+					console.error("Answering the quit question failed:", err),
+				);
+			},
+		};
+		modalStore.update((queue) => [modal, ...queue]);
+	}
 	// The Settings icon's update indicator (see settingsIconIndicator).
 	$: settingsIndicator = settingsIconIndicator($updateState);
 	// The Checkpoint icon's intercepted-count badge (see checkpointBadge).
@@ -214,6 +237,7 @@
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 		ExportReport: { ref: ExportReview },
 		Connections: { ref: ConnectionsModal },
+		QuitQuestion: { ref: QuitQuestionModal },
 	};
 	// Text size sizes the root element, so everything in rem follows it.
 	// readConfig sets it before startup draws any text.
@@ -234,16 +258,13 @@
 	$: if ($connectionStore.phase !== "failed") cliSetupOffered = false;
 	$: if (shouldOfferCLISetup($connectionStore, cliSetupOffered)) {
 		cliSetupOffered = true;
+		openConnections();
+	}
+	// The start screen's Connections… opens the Connections modal over it,
+	// so the researcher can switch before the app has loaded.
+	function openConnections() {
 		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
 	}
-	// What the start screen says while the app reaches the service.
-	const startingText = {
-		idle: "Starting...",
-		starting: "Starting Marasi...",
-		connecting: "Connecting to Marasi...",
-		connected: "Loading project...",
-		failed: "Couldn't reach Marasi",
-	};
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
 		return {
@@ -283,9 +304,15 @@
 			toastStore.trigger(extensionToast(schema)),
 		);
 		on("update-available", onUpdateAvailable);
+		on(QUIT_QUESTION_EVENT, onQuitQuestion);
 		on("update-progress", onUpdateProgress);
 		on("update-installed", onUpdateInstalled);
 		on("update-failed", onUpdateFailed);
+		// The update check after Install placed the carried CLI found a newer one.
+		const stopCLIUpdateToasts = on(CLI_UPDATE_CHECKED_EVENT, (result) => {
+			const message = cliUpdateCheckedNotice(result);
+			if (message) toastStore.trigger({ message });
+		});
 		refreshUpdateState();
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
@@ -328,9 +355,11 @@
 			removeMenuShortcuts();
 			stopAbandonToasts?.();
 			off("update-available");
+			off(QUIT_QUESTION_EVENT);
 			off("update-progress");
 			off("update-installed");
 			off("update-failed");
+			stopCLIUpdateToasts();
 			stopExtensionToasts();
 		};
 	});
@@ -778,12 +807,13 @@
 			<!-- Content area -->
 			<div id="content" class="flex-1 overflow-auto">
 				<div class="sticky top-0 z-20"><ConnectionBanner /></div>
-				<!-- The service has another project open than the pages show:
-				     they stay visible but read-only until the banner's Load it. -->
+				<!-- The service has another project open than the pages show, or
+				     Marasi is stopped: they stay visible but read-only until the
+				     banner's Load it or Start. -->
 				<div
 					class="contents"
-					class:held-pages={$connectionStore.phase === "project-changed"}
-					inert={$connectionStore.phase === "project-changed"}
+					class:held-pages={pagesHeld($connectionStore.phase)}
+					inert={pagesHeld($connectionStore.phase)}
 					data-testid="pages"
 				>
 					{#key $pagesKey}
@@ -819,7 +849,7 @@
 						mode={$modeCurrent ? "light" : "dark"}
 					/>
 					<p class="text-xs text-center" data-testid="connection-status">
-						{startingText[$connectionStore.phase] ?? $appState.message}
+						{startupText($connectionStore) ?? $appState.message}
 					</p>
 					{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) !== null}
 						<div class="mt-2 max-w-md">
@@ -829,13 +859,25 @@
 						<p class="mt-2 max-w-md text-xs text-center opacity-70 break-words">
 							{$connectionStore.error}
 						</p>
-						<div class="mt-3 flex justify-center">
+					{/if}
+					{#if startupOffersConnections($connectionStore.phase)}
+						<div class="mt-3 flex justify-center gap-2">
+							{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) === null}
+								<button
+									type="button"
+									class="btn btn-sm {primaryVariant($modeCurrent)}"
+									on:click={() => connectionStore.retry()}
+								>
+									Retry
+								</button>
+							{/if}
 							<button
 								type="button"
-								class="btn btn-sm {primaryVariant($modeCurrent)}"
-								on:click={() => connectionStore.retry()}
+								class="btn btn-sm {neutralVariant($modeCurrent)}"
+								data-testid="startup-connections"
+								on:click={openConnections}
 							>
-								Retry
+								Connections…
 							</button>
 						</div>
 					{/if}
