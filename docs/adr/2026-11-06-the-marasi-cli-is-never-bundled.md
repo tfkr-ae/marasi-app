@@ -1,3 +1,7 @@
+---
+status: superseded by 2026-11-08-the-app-carries-a-compressed-cli-it-installs-once
+---
+
 # The Marasi CLI is never bundled with the app
 
 The app does not ship a `marasi` binary. It uses the one on PATH, or one at a path the researcher sets in app config; when there is none it offers to install the CLI's GitHub release for the app's channel, verifying `checksums.txt.minisig` against a key built into the app and failing closed. CLI updates are a separate section of Settings from app updates. Keeping them apart lets the CLI the researcher uses in a terminal and the one the app runs be the same program, updated once, and lets the app and Marasi release on their own schedules.

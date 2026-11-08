@@ -151,12 +151,20 @@ _Avoid_: update on its own, upgrade
 ### Connections
 
 **Marasi CLI**:
-The separate `marasi` program that runs service instances. The app never bundles it: it uses the one on PATH, or one at a path the researcher sets.
+The separate `marasi` program that runs service instances. The app uses the one on PATH, or one at a path the researcher sets. When it finds none, it installs the copy it carries, and it never runs that copy from inside the app.
 _Avoid_: binary, backend, marasi executable
 
 **Connection**:
-A saved way to reach one service instance: the local connection, whose instance the app starts with the Marasi CLI, or a remote address with its password. The app is attached through one connection at a time.
+A saved way to reach one service instance: a local connection, or a remote address with its password. The app is attached through one connection at a time.
 _Avoid_: server, backend, endpoint, session
+
+**Local connection**:
+A connection to a named service instance on this machine, which the app can start and stop through the Marasi CLI. "Local" is the one for the `default` instance.
+_Avoid_: local server, local backend
+
+**Owned run**:
+A run of a local instance that the app started. Quitting acts only on owned runs, and a run stops being owned once its instance stops or someone else restarts it.
+_Avoid_: owned instance, app's instance
 
 ### Projects
 
