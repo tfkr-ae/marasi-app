@@ -2,6 +2,7 @@ import { contextsConflict } from "./contexts.js";
 import { isReservedBinding, reservedBindingProblem } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
 import { createKeymap, OPEN_MENU } from "./keymap.js";
+import { RESERVED_MENU_LETTERS } from "./menuGroups.js";
 import { PLATFORMS } from "./platform.js";
 
 // Keybinding profiles (docs/adr/2026-10-10-keybinding-profiles-override-factory-defaults.md), independent of where they are stored:
@@ -9,10 +10,14 @@ import { PLATFORMS } from "./platform.js";
 // (portable.js, docs/keybinding-profile-format.md) use this same shape.
 //
 //   config  = { version, activeProfile, profiles: [profile] }
-//   profile = { id, name, overrides: { macos: [o], "windows-linux": [o] }, knownActions: [id] }
+//   profile = { id, name, overrides: { macos: [o], "windows-linux": [o] }, knownActions: [id], letters: [l] }
 //   o       = { action: <action id>, keys: [<binding>] }   // keys: [] = unbound
+//   l       = { group: <group id>, letter: "A"–"Z" }       // a menu letter override
 //
-// A missing override inherits the factory default. knownActions lists the
+// A missing override inherits the factory default; a missing letter override
+// the group's factory menu letter (menuGroups.js). A group id is
+// "<context>.<group>", the way the Marasi menu names it. Letters are the same
+// on both platforms, and `letters` may be absent (no overrides). knownActions lists the
 // catalog actions the profile was last saved against; see createKeymap for
 // the new-default rule. Overrides for ids missing from the catalog are
 // dormant: kept, never executed. Validation mirrors
@@ -43,6 +48,37 @@ export function variantOverrides(profile, platform) {
   return Object.fromEntries((profile?.overrides?.[platform] ?? []).map(({ action, keys }) => [action, keys]));
 }
 
+// A menu group's id in profiles and the menu model: "<context>.<group>".
+export const menuGroupId = (group) => `${group.context}.${group.id}`;
+
+// The profile's menu letter overrides as { [groupId]: letter }, the shape
+// the menu model takes.
+export function letterOverrides(profile) {
+  return Object.fromEntries((profile?.letters ?? []).map(({ group, letter }) => [group, letter]));
+}
+
+// Why `letter` cannot be a menu letter ("" when it can). Letters are
+// checked on every platform, so a profile moves between them.
+export function menuLetterProblem(letter) {
+  if (typeof letter !== "string" || !/^[A-Z]$/.test(letter)) return `menu letter ${JSON.stringify(letter)} is not a single letter A–Z`;
+  if (RESERVED_MENU_LETTERS.includes(letter)) {
+    return `menu letter ${letter} is reserved; ${RESERVED_MENU_LETTERS.slice(0, -1).join(", ")} and ${RESERVED_MENU_LETTERS.at(-1)} are never menu letters`;
+  }
+  return "";
+}
+
+// Each catalog group's menu letter in the profile: { [groupId]: letter }.
+// An unusable override (menuLetterProblem) leaves the factory letter.
+export function menuLetters(catalog, profile) {
+  const overrides = letterOverrides(profile);
+  return Object.fromEntries(
+    (catalog.groups ?? []).map((group) => {
+      const letter = overrides[menuGroupId(group)];
+      return [menuGroupId(group), letter !== undefined && !menuLetterProblem(letter) ? letter : group.letter];
+    }),
+  );
+}
+
 export function profileKeymap(catalog, profile, platform) {
   return createKeymap(catalog, platform, variantOverrides(profile, platform), {
     knownActions: profile?.knownActions ?? [],
@@ -61,6 +97,60 @@ function problem(profile, platform, kind, actions, binding, message) {
   };
 }
 
+function letterProblem(profile, kind, groups, letter, message) {
+  return {
+    profileId: profile.id,
+    profileName: profile.name,
+    platform: null,
+    kind,
+    actions: [],
+    groups,
+    letter,
+    message: `${profile.name}: ${message}`,
+  };
+}
+
+// The menu levels: the global groups, and each other context's groups with
+// the global ones, since every menu lists the global groups at its top.
+function menuLevels(catalog) {
+  const global = catalog.groups.filter((group) => group.context === "global");
+  const contexts = [...new Set(catalog.groups.map((group) => group.context))].filter((id) => id !== "global");
+  return [global, ...contexts.map((id) => [...global, ...catalog.groups.filter((group) => group.context === id)])];
+}
+
+// Menu letter problems in one profile, on every platform (platform null):
+//   letter-invalid    an override is not one capital letter A–Z, or is
+//                     reserved (K, Q, H); checked for dormant groups too
+//   letter-duplicate  two groups at one menu level share a letter
+// A group is named "Label (context)", or by its id when the catalog lacks
+// it. Mirrors letterProblems in keybinding_validation.go.
+export function validateLetters(catalog, profile) {
+  const problems = [];
+  const letters = menuLetters(catalog, profile);
+  const name = (group) => `${group.label} (${group.context})`;
+  const byId = new Map((catalog.groups ?? []).map((group) => [menuGroupId(group), group]));
+  for (const { group: id, letter } of profile.letters ?? []) {
+    const invalid = menuLetterProblem(letter);
+    const group = byId.get(id);
+    if (invalid) problems.push(letterProblem(profile, "letter-invalid", [id], letter, `${group ? name(group) : id}: ${invalid}`));
+  }
+  const reported = new Set();
+  for (const level of menuLevels(catalog)) {
+    level.forEach((first, i) => {
+      for (const second of level.slice(i + 1)) {
+        const letter = letters[menuGroupId(first)];
+        const pair = `${menuGroupId(first)} ${menuGroupId(second)}`;
+        if (letter !== letters[menuGroupId(second)] || reported.has(pair)) continue;
+        reported.add(pair);
+        problems.push(
+          letterProblem(profile, "letter-duplicate", [menuGroupId(first), menuGroupId(second)], letter, `${name(first)} and ${name(second)} both use menu letter ${letter}`),
+        );
+      }
+    });
+  }
+  return problems;
+}
+
 // Problems in one profile, per platform variant, in a stable order:
 //   menu-unbound   the menu opening has no binding
 //   reserved       Escape/Tab/Enter (optionally with Shift) is assigned
@@ -69,6 +159,8 @@ function problem(profile, platform, kind, actions, binding, message) {
 //   menu-shadowed  an action in another context shares a menu-opening
 //                  binding (the global context is always eligible, so it
 //                  would win wherever that context is)
+// then its menu letter problems (validateLetters), which hold on every
+// platform and have a null platform.
 export function validateProfile(catalog, profile) {
   const problems = [];
   for (const platform of PLATFORMS) {
@@ -110,7 +202,7 @@ export function validateProfile(catalog, profile) {
       }
     }
   }
-  return problems;
+  return [...problems, ...validateLetters(catalog, profile)];
 }
 
 // Records the new-default decisions against `catalog`: actions the rule left
@@ -152,28 +244,31 @@ export function catalogDescriptor(catalog) {
       positionalDefault: Boolean(action.positionalDefault),
     })),
     contexts: catalog.contexts.map((context) => ({ id: context.id, overlaps: [...(context.overlaps ?? [])] })),
+    groups: catalog.groups.map((group) => ({ id: menuGroupId(group), context: group.context, label: group.label, letter: group.letter })),
   };
 }
 
 // What the dispatcher runs for the saved state from GetKeybindings
-// ({ config, problem }): the active profile's variant for `platform`, or the
-// factory bindings with a problem when the saved section is unusable or this
-// variant would strand the menu or hold conflicts.
+// ({ config, problem }): the active profile's variant for `platform` and its
+// menu letter overrides, or the factory bindings and letters with a problem
+// when the saved section is unusable or this variant would strand the menu
+// or hold conflicts (letter problems count on every platform).
 export function liveKeybindings(state, catalog, platform) {
-  const factory = { overrides: {}, knownActions: undefined };
+  const factory = { overrides: {}, knownActions: undefined, letters: {} };
   if (!state?.config) return { ...factory, problem: "" };
   if (state.problem) return { ...factory, problem: state.problem };
   const profile = activeProfile(state.config);
   if (!profile) {
     return { ...factory, problem: `active keybinding profile ${state.config.activeProfile} does not exist` };
   }
-  const problems = validateProfile(catalog, profile).filter((p) => p.platform === platform);
+  const problems = validateProfile(catalog, profile).filter((p) => p.platform === platform || p.platform === null);
   if (problems.length) {
     return { ...factory, problem: `${problems.map((p) => p.message).join("; ")}. Using factory shortcuts.` };
   }
   return {
     overrides: variantOverrides(profile, platform),
     knownActions: profile.knownActions ?? [],
+    letters: letterOverrides(profile),
     problem: "",
   };
 }

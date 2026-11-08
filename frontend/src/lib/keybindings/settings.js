@@ -8,8 +8,12 @@ import {
   catalogDescriptor,
   factoryKeybindings,
   factoryProfile,
+  menuGroupId,
+  menuLetterProblem,
+  menuLetters,
   profileKeymap,
   settleProfile,
+  validateLetters,
   validateProfile,
 } from "./profiles.js";
 
@@ -115,6 +119,57 @@ export function isPlatformCustomized(catalog, draft, { profileId, platform }) {
 // restore them from.
 export function resetPlatform(catalog, draft, variant) {
   return updateVariant(draft, variant, (list) => list.filter((o) => !catalog.has(o.action)));
+}
+
+// Menu letters. A letter target is one menu group in one profile:
+//   { profileId, groupId }   groupId = "<context>.<group>"
+// Letters hold on both platforms, so a target names no platform.
+
+function updateLetters(draft, profileId, update) {
+  return {
+    ...draft,
+    profiles: draft.profiles.map((profile) => (profile.id === profileId ? { ...profile, letters: update(profile.letters ?? []) } : profile)),
+  };
+}
+
+// Sets the group's menu letter. The factory letter becomes inheritance
+// again, so only real customizations are stored. Validation (saveProblems)
+// judges the letter, so a refused one can still be shown and fixed.
+export function setGroupLetter(catalog, draft, { profileId, groupId }, letter) {
+  const factory = catalog.groups.find((group) => menuGroupId(group) === groupId)?.letter;
+  return updateLetters(draft, profileId, (list) => {
+    const rest = list.filter((l) => l.group !== groupId);
+    if (letter === factory) return rest;
+    const index = list.findIndex((l) => l.group === groupId);
+    const next = { group: groupId, letter };
+    return index === -1 ? [...rest, next] : list.map((l, i) => (i === index ? next : l));
+  });
+}
+
+// Returns one group to its factory letter.
+export function resetGroupLetter(draft, { profileId, groupId }) {
+  return updateLetters(draft, profileId, (list) => list.filter((l) => l.group !== groupId));
+}
+
+// Returns every catalog group of the profile to its factory letter. Letters
+// for groups the catalog lacks are kept, like dormant binding overrides.
+export function resetGroupLetters(catalog, draft, profileId) {
+  const known = new Set(catalog.groups.map(menuGroupId));
+  return updateLetters(draft, profileId, (list) => list.filter((l) => !known.has(l.group)));
+}
+
+// Whether the toolbar's Reset would change anything: the variant's
+// bindings (isPlatformCustomized) or the profile's catalog letters.
+export function isProfileCustomized(catalog, draft, variant) {
+  const known = new Set(catalog.groups.map(menuGroupId));
+  const profile = draft.profiles.find((item) => item.id === variant.profileId);
+  return isPlatformCustomized(catalog, draft, variant) || (profile?.letters ?? []).some((l) => known.has(l.group));
+}
+
+// The toolbar's Reset: the variant's bindings (resetPlatform) and the
+// profile's letters (resetGroupLetters), which hold on both platforms.
+export function resetProfile(catalog, draft, variant) {
+  return resetGroupLetters(catalog, resetPlatform(catalog, draft, variant), variant.profileId);
 }
 
 // Profile lifecycle. Profiles are created, duplicated, renamed, activated
@@ -223,6 +278,7 @@ function canonicalConfig(config) {
       id: profile.id,
       name: profile.name,
       knownActions: [...(profile.knownActions ?? [])].sort(),
+      letters: [...(profile.letters ?? [])].sort((a, b) => a.group.localeCompare(b.group)),
       overrides: Object.fromEntries(
         Object.keys(profile.overrides ?? {})
           .sort()
@@ -254,6 +310,24 @@ export function captureKey(event) {
   if (binding === "escape") return { type: "cancel" };
   if (isReservedBinding(binding)) return { type: "reserved", binding };
   return { type: "binding", binding };
+}
+
+// What a keydown means while a menu group's letter is being recorded: one
+// letter key, not a chord.
+//   null                        keep waiting (modifier-only, IME
+//                               composition, auto-repeat)
+//   { type: "cancel" }          Escape
+//   { type: "letter", letter }  the capital letter to record (Shift is
+//                               ignored); K, Q and H are recorded too, and
+//                               validation shows them as conflicts
+//   { type: "refused" }         anything else: a chord, a digit, a named key
+export function captureLetter(event) {
+  if (event.repeat) return null;
+  const binding = bindingFromEvent(event);
+  if (!binding) return null;
+  if (binding === "escape") return { type: "cancel" };
+  const key = binding.replace(/^shift\+/, "");
+  return /^[a-z]$/.test(key) ? { type: "letter", letter: key.toUpperCase() } : { type: "refused" };
 }
 
 // Persists the whole draft, and only after the write succeeded hands the
@@ -364,8 +438,17 @@ function unavailableRows(catalog, profile, platform) {
   return byGroup;
 }
 
+const queryWords = (query) => query.toLowerCase().split(/\s+/).filter(Boolean);
+
+// Whether a menu group row matches the search: its label, description,
+// letter or its entry's page and state.
+function groupMatches(row, entry, query) {
+  const text = [row.group.label, row.group.description, row.letter, entry.page, entry.state].filter(Boolean).join(" ").toLowerCase();
+  return queryWords(query).every((word) => text.includes(word));
+}
+
 function matches(row, group, query, platform) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = queryWords(query);
   if (!words.length) return true;
   const { action, bindings, display } = row;
   // Labels drop the "+", but a search for "⌘+2" still finds ⌘2.
@@ -488,11 +571,27 @@ function profileProblems(draft) {
 // one on a hidden profile or platform can still be found and shown:
 //   { profileId, platform, groupId, actionId, message }
 // `message` reads "Profile · Platform · Page · State · Action: explanation".
-// Profile-level problems have null platform, groupId and actionId. With
-// `current` ({ profileId, platform }) that variant's problems come first.
+// Profile-level problems have null platform, groupId and actionId. A menu
+// letter problem holds on both platforms (null platform, null actionId): it
+// has `menuGroupId`, the first group it names, its sidebar `groupId` is that
+// group's context (null for a group the catalog lacks), and its message reads
+// "Profile · explanation". With `current` ({ profileId, platform }) that
+// variant's problems come first.
 export function saveProblems(catalog, draft, current = {}) {
   const variant = draft.profiles.flatMap((profile) =>
     validateProfile(catalog, profile).map((problem) => {
+      if (problem.platform === null) {
+        const [first] = problem.groups;
+        const group = catalog.groups.find((g) => menuGroupId(g) === first);
+        return {
+          profileId: profile.id,
+          platform: null,
+          groupId: group?.context ?? null,
+          actionId: null,
+          menuGroupId: first,
+          message: `${profile.name} · ${problem.message.slice(`${profile.name}: `.length)}`,
+        };
+      }
       const [actionId, explanation] = explain(catalog, problem)[0];
       const action = catalog.get(actionId);
       const place = [profile.name, PLATFORM_NAMES[problem.platform], contextName(catalog, action.context), action.label];
@@ -505,8 +604,56 @@ export function saveProblems(catalog, draft, current = {}) {
       };
     }),
   );
-  const onScreen = (p) => p.profileId === current.profileId && p.platform === current.platform;
+  const onScreen = (p) => p.profileId === current.profileId && (p.platform === current.platform || p.platform === null);
   return [...profileProblems(draft), ...variant.filter(onScreen), ...variant.filter((p) => !onScreen(p))];
+}
+
+// The profile's menu letter problems (validateLetters), per group id and
+// worded for that group's row, naming the other group of a clash. A global
+// group is named as the Marasi section shows it.
+function letterRowProblems(catalog, profile) {
+  const byId = new Map(catalog.groups.map((group) => [menuGroupId(group), group]));
+  const other = (id, from) => {
+    const group = byId.get(id);
+    if (group.context === byId.get(from).context) return group.label;
+    return `${group.label} in ${group.context === "global" ? "Marasi" : contextName(catalog, group.context)}`;
+  };
+  const messages = new Map();
+  const note = (id, message) => messages.set(id, [...(messages.get(id) ?? []), message]);
+  for (const problem of validateLetters(catalog, profile)) {
+    const [first, second] = problem.groups;
+    if (problem.kind === "letter-invalid") {
+      note(first, menuLetterProblem(problem.letter).slice("menu letter ".length));
+    } else if (problem.kind === "letter-duplicate") {
+      note(first, `${problem.letter} is also used by ${other(second, first)}`);
+      note(second, `${problem.letter} is also used by ${other(first, second)}`);
+    }
+  }
+  return messages;
+}
+
+// The menu group rows of one sidebar entry: the groups of its context (for
+// the global entry, the global groups the Marasi section shows), in catalog
+// order. A row is
+//   { id, group, letter, factoryLetter, resettable, status, problem }
+// with `id` the group id ("<context>.<group>"), `letter` the profile's
+// letter, `resettable` whether the profile overrides it, and `status`
+// "conflict" (with `problem` explaining it) or "".
+function menuGroupRows(catalog, profile, entryId, problems) {
+  const letters = menuLetters(catalog, profile);
+  const overridden = new Set((profile.letters ?? []).map((l) => l.group));
+  return (catalog.groupsIn?.(entryId) ?? []).map((group) => {
+    const id = menuGroupId(group);
+    return {
+      id,
+      group,
+      letter: (profile.letters ?? []).find((l) => l.group === id)?.letter ?? letters[id],
+      factoryLetter: group.letter,
+      resettable: overridden.has(id),
+      status: problems.has(id) ? "conflict" : "",
+      problem: (problems.get(id) ?? []).join("; "),
+    };
+  });
 }
 
 const count = (rows, status) => rows.filter((row) => row.status === status).length;
@@ -524,10 +671,13 @@ function resetChanges(catalog, profile, platform, actionId, bindings) {
 
 // The modal's view of one profile's platform variant:
 //   { groups: [group], actionCount, unboundCount, conflictCount }
-//   group = { id, page, state, all: [row], items: [row], actionCount, unboundCount, conflictCount }
+//   group = { id, page, state, all: [row], items: [row], menuGroups: [groupRow],
+//             menuItems: [groupRow], actionCount, unboundCount, conflictCount }
 // `all` is every row of the entry, `items` those matching `query` and
 // `filter` ("all" | "unbound" | "conflict"), and `actionCount` the available
-// actions (the sidebar's plain count). A row is
+// actions (the sidebar's plain count). `menuGroups` are the entry's menu
+// groups (menuGroupRows) and `menuItems` those matching the search and
+// filter; a group's letter conflict counts in `conflictCount`. A row is
 //   { action, bindings, display, resettable, status, problem }
 // with `display` the palette notation of each binding, `resettable` whether
 // Reset would change its bindings, `status` "conflict"
@@ -541,6 +691,7 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
   const keymap = profileKeymap(catalog, profile, platform);
   const { conflicts, shadows } = rowProblems(catalog, profile, platform);
   const unavailable = unavailableRows(catalog, profile, platform);
+  const letterProblems = letterRowProblems(catalog, profile);
   const entries = actionGroups(catalog);
   for (const [id, { extension }] of unavailable) {
     if (entries.some((group) => group.id === id)) continue;
@@ -574,15 +725,21 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
     const items = all.filter(
       (row) => matches(row, group, query, platform) && (filter === "all" || row.status === filter),
     );
+    const menuGroups = menuGroupRows(catalog, profile, group.id, letterProblems);
+    const menuItems = menuGroups.filter(
+      (row) => groupMatches(row, group, query) && (filter === "all" || row.status === filter),
+    );
     return {
       id: group.id,
       page: group.page,
       state: group.state,
       all,
       items,
+      menuGroups,
+      menuItems,
       actionCount: all.filter((row) => row.available).length,
       unboundCount: count(all, "unbound"),
-      conflictCount: count(all, "conflict"),
+      conflictCount: count(all, "conflict") + count(menuGroups, "conflict"),
     };
   });
   const total = (field) => groups.reduce((sum, group) => sum + group[field], 0);

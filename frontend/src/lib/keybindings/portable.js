@@ -10,7 +10,10 @@ import { newProfileId, suggestProfileName } from "./settings.js";
 // docs/keybinding-profile-format.md; keep the two in step.
 //
 //   { "format": "marasi-keybinding-profile", "version": 1,
-//     "profile": { "name", "overrides": { macos: [o], "windows-linux": [o] }, "knownActions": [id] } }
+//     "profile": { "name", "overrides": { macos: [o], "windows-linux": [o] }, "knownActions": [id], "letters": [l] } }
+//
+// `letters` (menu letter overrides) is written only when the profile has
+// any, so a profile on the factory letters reads in a Marasi without them.
 //
 // The profile part is the app config's profile (profiles.js) without its id:
 // an id is local to the config it lives in, so an import always gets a new
@@ -37,6 +40,7 @@ export function exportProfile(profile) {
         ]),
       ),
       knownActions: [...(profile.knownActions ?? [])].sort(),
+      ...(profile.letters?.length ? { letters: profile.letters.map(({ group, letter }) => ({ group, letter })) } : {}),
     },
   };
   return `${JSON.stringify(file, null, 2)}\n`;
@@ -88,6 +92,23 @@ function readVariant(list, platform) {
   });
 }
 
+// The menu letter overrides, checked for shape like checkKeybindingStructure
+// in Go. The letters themselves are judged by validateProfile, so an import
+// gives the same explanation as a save.
+function readLetters(list) {
+  if (!Array.isArray(list)) throw new Error("The menu letters are not a list");
+  const seen = new Set();
+  return list.map((entry) => {
+    if (!isObject(entry)) throw new Error("A menu letter is not an object");
+    onlyFields(entry, ["group", "letter"], "A menu letter");
+    const where = `Menu group ${show(entry.group)}`;
+    if (typeof entry.group !== "string" || !ACTION_ID.test(entry.group)) throw new Error(`${where}: invalid group id`);
+    if (seen.has(entry.group)) throw new Error(`${where}: letter given twice`);
+    seen.add(entry.group);
+    return { group: entry.group, letter: entry.letter };
+  });
+}
+
 // Parses and checks a profile file without a catalog: format, version and
 // structure. Returns { name, overrides, knownActions } or throws.
 function readProfileFile(text) {
@@ -108,7 +129,7 @@ function readProfileFile(text) {
   onlyFields(file, ["format", "version", "profile"], "The file");
   const { profile } = file;
   if (!isObject(profile)) throw new Error("The file has no profile");
-  onlyFields(profile, ["name", "overrides", "knownActions"], "The profile");
+  onlyFields(profile, ["name", "overrides", "knownActions", "letters"], "The profile");
   if (typeof profile.name !== "string" || !profile.name.trim()) throw new Error("The profile has no name");
   const overrides = profile.overrides ?? {};
   if (!isObject(overrides)) throw new Error("The profile's bindings are not an object");
@@ -122,6 +143,7 @@ function readProfileFile(text) {
     name: profile.name.trim(),
     overrides: Object.fromEntries(PLATFORMS.map((platform) => [platform, readVariant(overrides[platform] ?? [], platform)])),
     knownActions: [...new Set(knownActions)],
+    letters: readLetters(profile.letters ?? []),
   };
 }
 
@@ -134,8 +156,9 @@ function readProfileFile(text) {
 export function importProfile(catalog, draft, text) {
   const file = readProfileFile(text);
   const name = suggestProfileName(draft, file.name);
-  const candidate = { id: newProfileId(draft, name), name, overrides: file.overrides, knownActions: file.knownActions };
+  const candidate = { id: newProfileId(draft, name), name, overrides: file.overrides, knownActions: file.knownActions, letters: file.letters };
   const [problem] = validateProfile(catalog, candidate);
+  if (problem?.platform === null) throw new Error(problem.message.slice(`${candidate.name}: `.length));
   if (problem) {
     const prefix = `${candidate.name} (${problem.platform}): `;
     throw new Error(`${PLATFORM_NAMES[problem.platform]}: ${problem.message.slice(prefix.length)}`);
