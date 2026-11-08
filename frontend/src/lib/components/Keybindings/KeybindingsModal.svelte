@@ -10,22 +10,27 @@
 	import { keybindingState } from "../../../stores.js";
 	import { keybindingCapture, menuDispatcher } from "../../keybindings/app.js";
 	import { reservedBindingProblem } from "../../keybindings/gate.js";
+	import { menuGroupId } from "../../keybindings/profiles.js";
 	import {
 		addBinding,
 		browse,
 		captureKey,
+		captureLetter,
 		isDirty,
 		openDraft,
 		removeBinding,
 		replaceBinding,
 		resetAction,
+		resetGroupLetter,
 		saveDraft,
 		saveProblems,
+		setGroupLetter,
 	} from "../../keybindings/settings.js";
 	import { interceptModalEscape } from "../../overlayIsolation.js";
 	import ActionRows from "./ActionRows.svelte";
 	import ContextSidebar from "./ContextSidebar.svelte";
 	import KeybindingsToolbar from "./KeybindingsToolbar.svelte";
+	import MenuGroupRows from "./MenuGroupRows.svelte";
 	import ModalCard from "./ModalCard.svelte";
 
 	const modalStore = getModalStore();
@@ -44,7 +49,7 @@
 	let query = "";
 	let filter = "all";
 	let selectedGroup = "global";
-	let capture = null; // { actionId, label, index?, message? }
+	let capture = null; // { actionId, label, index?, message? } or, for a menu letter, { groupId, label, message? }
 	let confirmation = null; // { title, body, label, run }
 	let saving = false;
 	let saveError = "";
@@ -53,7 +58,8 @@
 
 	$: profile = draft.profiles.find((p) => p.id === profileId) ?? draft.profiles[0];
 	$: view = browse({ catalog, profile, platform, query, filter });
-	$: visibleGroups = query.trim() || filter !== "all" ? view.groups.filter((g) => g.items.length) : view.groups;
+	$: visibleGroups =
+		query.trim() || filter !== "all" ? view.groups.filter((g) => g.items.length || g.menuItems.length) : view.groups;
 	$: if (visibleGroups.length && !visibleGroups.some((g) => g.id === selectedGroup)) {
 		selectedGroup = visibleGroups[0].id;
 	}
@@ -66,11 +72,11 @@
 	// Next walks the whole list, so a problem on a hidden profile or platform
 	// is always reachable.
 	let steppedTo = null; // problemKey of the problem Next brought up
-	const problemKey = (p) => [p.profileId, p.platform, p.actionId, p.message].join("\n");
+	const problemKey = (p) => [p.profileId, p.platform, p.actionId, p.menuGroupId, p.message].join("\n");
 	$: shownProblem =
 		problems.find((p) => problemKey(p) === steppedTo) ??
-		problems.find((p) => !p.platform) ??
-		problems.find((p) => p.profileId === profile.id && p.platform === platform) ??
+		problems.find((p) => !p.platform && !p.menuGroupId) ??
+		problems.find((p) => p.profileId === profile.id && (p.platform === platform || p.menuGroupId)) ??
 		problems[0];
 	$: shownAt = problems.indexOf(shownProblem);
 	$: keybindingCapture.set(Boolean(capture));
@@ -98,15 +104,24 @@
 		filter = "all";
 		if (problem.groupId) selectedGroup = problem.groupId;
 		await tick();
-		if (problem.actionId) {
-			document.querySelector(`[data-keybindings-modal] li[data-action-id="${problem.actionId}"]`)?.scrollIntoView({ block: "nearest" });
-		}
+		const row = problem.actionId
+			? `li[data-action-id="${problem.actionId}"]`
+			: problem.menuGroupId && `li[data-menu-group-id="${problem.menuGroupId}"]`;
+		if (row) document.querySelector(`[data-keybindings-modal] ${row}`)?.scrollIntoView({ block: "nearest" });
 	}
 
 	function nextProblem() {
 		const next = problems[(shownAt + 1) % problems.length];
 		steppedTo = problemKey(next);
-		if (next.platform) showProblem(next);
+		if (canShow(next)) showProblem(next);
+	}
+
+	// A problem with a row to bring on screen: an action's, or a menu group's.
+	const canShow = (p) => Boolean(p.platform || (p.menuGroupId && p.groupId));
+
+	function startLetterCapture(groupId) {
+		const group = catalog.groups.find((g) => menuGroupId(g) === groupId);
+		capture = { groupId, label: group?.label ?? groupId };
 	}
 
 	function startCapture(actionId, index) {
@@ -120,6 +135,7 @@
 		if (!capture) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
+		if (capture.groupId) return onLetterKeydown(event);
 		const result = captureKey(event);
 		if (!result) return;
 		if (result.type === "cancel") {
@@ -136,6 +152,19 @@
 					? addBinding(catalog, draft, at, result.binding)
 					: replaceBinding(catalog, draft, at, capture.index, result.binding),
 			);
+			capture = null;
+		}
+	}
+
+	function onLetterKeydown(event) {
+		const result = captureLetter(event);
+		if (!result) return;
+		if (result.type === "cancel") {
+			capture = null;
+		} else if (result.type === "refused") {
+			capture = { ...capture, message: "Press a single letter, A–Z." };
+		} else {
+			edit(setGroupLetter(catalog, draft, { profileId: profile.id, groupId: capture.groupId }, result.letter));
 			capture = null;
 		}
 	}
@@ -271,6 +300,15 @@
 			<ContextSidebar groups={visibleGroups} selected={selectedGroup} onSelect={(id) => (selectedGroup = id)} />
 			<section class="min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
 				{#if current}
+					<MenuGroupRows
+						rows={current.menuItems}
+						heading={current.id === "global" ? "Marasi" : "Menu groups"}
+						onRecord={startLetterCapture}
+						onReset={(groupId) => edit(resetGroupLetter(draft, { profileId: profile.id, groupId }))}
+					/>
+					{#if current.menuItems.length}
+						<h3 class="border-b border-surface-300 px-3 py-1.5 text-xs font-bold opacity-70 dark:border-surface-600">Actions</h3>
+					{/if}
 					<ActionRows
 						rows={current.items}
 						onRecord={startCapture}
@@ -292,7 +330,7 @@
 						<span class="min-w-0" title={problems.map((p) => p.message).join("\n")}>
 							Can't save{problems.length > 1 ? ` (${shownAt + 1} of ${problems.length} problems)` : ""}: {shownProblem.message}
 						</span>
-						{#if shownProblem.platform}
+						{#if canShow(shownProblem)}
 							<button
 								type="button"
 								class="btn btn-sm shrink-0 variant-soft-primary !border-0 !ring-0"
@@ -333,7 +371,7 @@
 
 		{#if capture}
 			<ModalCard title={capture.label} data-key-capture>
-				<p>Press the new key combination.</p>
+				<p>{capture.groupId ? "Press a letter for this menu group." : "Press the new key combination."}</p>
 				{#if capture.message}
 					<p class="text-xs text-warning-800 dark:text-warning-500">{capture.message}</p>
 				{/if}

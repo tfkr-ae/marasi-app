@@ -33,7 +33,7 @@ No test checks a handler's or a menu item's `actionId` against the catalog. A mi
 
 ## Profiles and Go
 
-- The settings UI is `frontend/src/lib/components/Keybindings/KeybindingsModal.svelte`, modelled by `settings.js`. It lists every catalog action, so a new one needs no change there.
+- The settings UI is `frontend/src/lib/components/Keybindings/KeybindingsModal.svelte`, modelled by `settings.js`. It lists every catalog action and menu group, so a new one needs no change there. Each sidebar entry's `browse()` group carries `menuGroups` (its context's groups; the Global entry's are headed Marasi), drawn by `MenuGroupRows.svelte` above the actions, with letter conflicts worded per row and counted with the binding conflicts. `captureLetter` records one letter, not a chord. The toolbar's Reset is `resetProfile`: the platform's bindings and the profile's letters.
 - `SaveKeybindings` in `keybindings.go` receives the profile with the catalog (`catalogDescriptor` in `profiles.js`: actions, contexts and menu groups with their factory letters). Go owns no list of actions or groups.
 - `keybinding_validation.go` repeats the rules of `keys.js`, `gate.js`, `keymap.js` and `profiles.js` by hand (see its header). Change a rule in both. Its letter checks: `menuLetterProblem` and the group-id checks in `checkKeybindingStructure`, and `letterProblems` for clashes; `reservedMenuLetters` repeats `RESERVED_MENU_LETTERS`.
 - A saved profile reaches the dispatcher through `readKeybindings` in `frontend/src/stores.js`, then `keybindingState`, then `menuDispatcher.configure` in `GlobalMenu.svelte`.

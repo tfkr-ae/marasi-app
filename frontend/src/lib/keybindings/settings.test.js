@@ -8,12 +8,15 @@ import {
   addBinding,
   browse,
   captureKey,
+  captureLetter,
   isDirty,
+  isProfileCustomized,
   openDraft,
   pagesOf,
   removeBinding,
   replaceBinding,
   resetAction,
+  resetProfile,
   resetGroupLetter,
   resetGroupLetters,
   saveDraft,
@@ -681,4 +684,100 @@ test("saving sends the letters with the catalog's groups, and the live menu lett
   let seen;
   live.subscribe((snapshot) => (seen = snapshot));
   assert.deepEqual(seen.letters, { "global.go": "X" });
+});
+
+// A page's groups beside the global ones, so a page group can clash with a
+// global group at its menu level.
+const pageLetterCatalog = createCatalog(actions, {
+  contexts,
+  groups: [
+    ["global", "go", "Go to", "G", "Navigation"],
+    ["global", "project", "Project", "P", "FolderOpen"],
+    ["ledger.drawer-open", "copy", "Copy", "C", "Copy"],
+    ["ledger.drawer-open", "view", "View", "V", "Eye"],
+    ["ledger.drawer-closed", "focus", "Focus", "F", "Crosshair"],
+  ].map(([context, id, label, letter, icon]) => ({ context, id, label, letter, icon, tone: "sky", description: `${label} things` })),
+});
+const copyGroup = { profileId: "default", groupId: "ledger.drawer-open.copy" };
+const menuGroupsOf = (draft, entryId) =>
+  browse({ catalog: pageLetterCatalog, profile: draft.profiles[0], platform: MACOS }).groups.find((g) => g.id === entryId).menuGroups;
+const lettersShown = (rows) => rows.map((row) => [row.id, row.group.label, row.group.icon, row.letter, row.resettable, row.status]);
+
+test("each sidebar entry lists its context's menu groups with their letters, and the global entry the global groups", () => {
+  const draft = setGroupLetter(pageLetterCatalog, factoryDraft(), copyGroup, "X");
+  assert.deepEqual(lettersShown(menuGroupsOf(draft, "global")), [
+    ["global.go", "Go to", "Navigation", "G", false, ""],
+    ["global.project", "Project", "FolderOpen", "P", false, ""],
+  ]);
+  assert.deepEqual(lettersShown(menuGroupsOf(draft, "ledger.drawer-open")), [
+    ["ledger.drawer-open.copy", "Copy", "Copy", "X", true, ""],
+    ["ledger.drawer-open.view", "View", "Eye", "V", false, ""],
+  ]);
+  assert.deepEqual(lettersShown(menuGroupsOf(draft, "ledger.drawer-closed")), [["ledger.drawer-closed.focus", "Focus", "Crosshair", "F", false, ""]]);
+  assert.equal(menuGroupsOf(draft, "ledger.drawer-open")[0].factoryLetter, "C");
+});
+
+test("recording a group letter takes one letter key, waits through modifiers, and Esc cancels", () => {
+  assert.deepEqual(captureLetter(keydown("x", "KeyX")), { type: "letter", letter: "X" });
+  assert.deepEqual(captureLetter(keydown("X", "KeyX", { shiftKey: true })), { type: "letter", letter: "X" });
+  assert.deepEqual(captureLetter(keydown("k", "KeyK")), { type: "letter", letter: "K" }, "a reserved letter is recorded, and shown as a conflict");
+  assert.deepEqual(captureLetter(keydown("Escape", "Escape")), { type: "cancel" });
+  assert.equal(captureLetter(keydown("Meta", "MetaLeft", { metaKey: true })), null);
+  assert.equal(captureLetter(keydown("x", "KeyX", { repeat: true })), null);
+  assert.equal(captureLetter(keydown("x", "KeyX", { isComposing: true })), null);
+  for (const event of [keydown("x", "KeyX", { metaKey: true }), keydown("7", "Digit7"), keydown("F5", "F5"), keydown("Enter", "Enter")]) {
+    assert.deepEqual(captureLetter(event), { type: "refused" });
+  }
+});
+
+const conflictsShown = (rows) => rows.filter((row) => row.status === "conflict").map((row) => [row.id, row.problem]);
+
+test("a duplicate letter shows on both groups, naming the other one, and blocks saving", () => {
+  const draft = setGroupLetter(pageLetterCatalog, factoryDraft(), copyGroup, "V");
+  assert.deepEqual(conflictsShown(menuGroupsOf(draft, "ledger.drawer-open")), [
+    ["ledger.drawer-open.copy", "V is also used by View"],
+    ["ledger.drawer-open.view", "V is also used by Copy"],
+  ]);
+  assert.equal(saveProblems(pageLetterCatalog, draft).length, 1);
+});
+
+test("a page group using a global group's letter names the global group in the Marasi section, and vice versa", () => {
+  const draft = setGroupLetter(pageLetterCatalog, factoryDraft(), copyGroup, "G");
+  assert.deepEqual(conflictsShown(menuGroupsOf(draft, "ledger.drawer-open")), [["ledger.drawer-open.copy", "G is also used by Go to in Marasi"]]);
+  assert.deepEqual(conflictsShown(menuGroupsOf(draft, "global")), [["global.go", "G is also used by Copy in Ledger · Drawer open"]]);
+  assert.deepEqual(conflictsShown(menuGroupsOf(draft, "ledger.drawer-closed")), []);
+});
+
+test("a reserved letter shows as a conflict on its group", () => {
+  const draft = setGroupLetter(pageLetterCatalog, factoryDraft(), copyGroup, "K");
+  assert.deepEqual(conflictsShown(menuGroupsOf(draft, "ledger.drawer-open")), [
+    ["ledger.drawer-open.copy", "K is reserved; K, Q and H are never menu letters"],
+  ]);
+  assert.equal(menuGroupsOf(draft, "ledger.drawer-open")[0].letter, "K");
+  assert.deepEqual(saveProblems(pageLetterCatalog, draft).map((p) => [p.groupId, p.menuGroupId]), [["ledger.drawer-open", "ledger.drawer-open.copy"]]);
+});
+
+test("resetting a profile's platform also returns its letters to the factory letters", () => {
+  const variant = { profileId: "default", platform: MACOS };
+  const moved = setGroupLetter(pageLetterCatalog, factoryDraft(), copyGroup, "X");
+  assert.equal(isProfileCustomized(pageLetterCatalog, moved, variant), true, "a changed letter alone makes Reset available");
+  assert.equal(isProfileCustomized(pageLetterCatalog, moved, { profileId: "other", platform: MACOS }), false);
+  const reset = resetProfile(pageLetterCatalog, moved, variant);
+  assert.equal(menuGroupsOf(reset, "ledger.drawer-open")[0].letter, "C");
+  assert.equal(isProfileCustomized(pageLetterCatalog, reset, variant), false);
+  const rebound = addBinding(pageLetterCatalog, factoryDraft(), home, "meta+j");
+  assert.equal(isProfileCustomized(pageLetterCatalog, rebound, variant), true);
+  assert.deepEqual(actionBindings(pageLetterCatalog, resetProfile(pageLetterCatalog, rebound, variant).profiles[0], MACOS, "global.go-home"), ["meta+1"]);
+});
+
+test("group rows follow the search and filters, and a letter conflict counts in its entry", () => {
+  const draft = setGroupLetter(pageLetterCatalog, factoryDraft(), copyGroup, "V");
+  const view = (query, filter) =>
+    browse({ catalog: pageLetterCatalog, profile: draft.profiles[0], platform: MACOS, query, filter }).groups.find((g) => g.id === "ledger.drawer-open");
+  assert.deepEqual(view("", "all").menuItems.map((row) => row.id), ["ledger.drawer-open.copy", "ledger.drawer-open.view"]);
+  assert.deepEqual(view("copy", "all").menuItems.map((row) => row.id), ["ledger.drawer-open.copy"]);
+  assert.deepEqual(view("", "unbound").menuItems, []);
+  assert.deepEqual(view("", "conflict").menuItems.map((row) => row.id), ["ledger.drawer-open.copy", "ledger.drawer-open.view"]);
+  assert.equal(view("", "all").conflictCount, 2);
+  assert.equal(browse({ catalog: pageLetterCatalog, profile: draft.profiles[0], platform: MACOS }).conflictCount, 2);
 });
