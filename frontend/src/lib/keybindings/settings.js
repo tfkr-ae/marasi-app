@@ -531,8 +531,7 @@ function resetChanges(catalog, profile, platform, actionId, bindings) {
 //   { action, bindings, display, resettable, status, problem }
 // with `display` the palette notation of each binding, `resettable` whether
 // Reset would change its bindings, `status` "conflict"
-// (with `problem` explaining it), "unbound" (never for a `keyless` action,
-// which has no factory key by design), "shadowing" (allowed, with
+// (with `problem` explaining it), "unbound", "shadowing" (allowed, with
 // `problem`), "unavailable" or "". An unavailable row (`available: false`,
 // `note` saying why) is a dormant extension override: its status comes
 // before any other, it is listed after its entry's available actions (or in
@@ -559,7 +558,7 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
       const shadow = shadows.get(action.id);
       let status = "";
       if (conflict) status = "conflict";
-      else if (!bindings.length && !action.keyless) status = "unbound";
+      else if (!bindings.length) status = "unbound";
       else if (shadow) status = "shadowing";
       return {
         action,

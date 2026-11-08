@@ -654,18 +654,15 @@ function everyContextState() {
   ];
 }
 
-test("Connections… is a global action with no factory key on either platform", () => {
+test("⌘9 and Ctrl+9 open Connections… from every menu context", () => {
   const catalog = buildCatalog({ extensions: [{ Name: "Repeater" }] });
-  const action = catalog.get("global.connections");
-  assert.equal(action.context, "global");
-  assert.equal(action.label, "Connections…");
-  for (const platform of [MACOS, WINDOWS_LINUX]) {
-    const dispatcher = createDispatcher({
-      catalog,
-      platform,
-      keybindings: { config: factoryKeybindings(), problem: "" },
-    });
-    assert.deepEqual(dispatcher.bindingsFor("global.connections"), [], platform);
+  const keybindings = { config: factoryKeybindings(), problem: "" };
+  const mac = createDispatcher({ catalog, platform: MACOS, keybindings });
+  const other = createDispatcher({ catalog, platform: WINDOWS_LINUX, keybindings });
+  for (const state of everyContextState()) {
+    const label = `${state.route} ${state.modal ?? ""} ${state.websocketTab ?? ""}`;
+    assert.equal(mac.resolve(cmd("9", "Digit9"), state), "global.connections", label);
+    assert.equal(other.resolve(keydown("9", "Digit9", { ctrlKey: true }), state), "global.connections", label);
   }
 });
 
