@@ -593,40 +593,49 @@ test("pagesOf groups page/state entries under one page, in order, with summed co
   );
 });
 
-// Menu letters. This catalog has the factory groups: Go to (G), Project (P),
-// Browser & proxy (B) and Appearance (A), all global.
+// Menu letters, against fixture groups so the tests hold whatever groups the
+// factory catalog has: four global groups.
+const letterCatalog = createCatalog(actions, {
+  contexts,
+  groups: [
+    ["go", "Go to", "G"],
+    ["project", "Project", "P"],
+    ["browser", "Browser & proxy", "B"],
+    ["appearance", "Appearance", "A"],
+  ].map(([id, label, letter]) => ({ context: "global", id, label, letter, icon: "Eye", tone: "sky", description: label })),
+});
 const goTo = { profileId: "default", groupId: "global.go" };
-const letterOf = (draft, groupId, profileId = "default") => menuLetters(catalog, draft.profiles.find((p) => p.id === profileId))[groupId];
+const letterOf = (draft, groupId, profileId = "default") => menuLetters(letterCatalog, draft.profiles.find((p) => p.id === profileId))[groupId];
 
 test("a group's letter is set per profile, and setting the factory letter again is no customization", () => {
   const opened = factoryDraft();
-  const moved = setGroupLetter(catalog, opened, goTo, "X");
+  const moved = setGroupLetter(letterCatalog, opened, goTo, "X");
   assert.equal(letterOf(moved, "global.go"), "X");
   assert.equal(letterOf(moved, "global.project"), "P");
   assert.deepEqual(moved.profiles[0].letters, [{ group: "global.go", letter: "X" }]);
   assert.equal(isDirty(moved, opened), true);
-  const back = setGroupLetter(catalog, moved, goTo, "G");
+  const back = setGroupLetter(letterCatalog, moved, goTo, "G");
   assert.deepEqual(back.profiles[0].letters, []);
   assert.equal(isDirty(back, opened), false);
   assert.deepEqual(opened.profiles[0].letters ?? [], [], "the draft as opened is untouched");
 });
 
 test("reset restores the factory letters: one group, or every group of the profile, keeping dormant overrides", () => {
-  let draft = setGroupLetter(catalog, factoryDraft(), goTo, "X");
-  draft = setGroupLetter(catalog, draft, { profileId: "default", groupId: "global.project" }, "Y");
-  draft = setGroupLetter(catalog, draft, { profileId: "default", groupId: "compass.filters" }, "F");
+  let draft = setGroupLetter(letterCatalog, factoryDraft(), goTo, "X");
+  draft = setGroupLetter(letterCatalog, draft, { profileId: "default", groupId: "global.project" }, "Y");
+  draft = setGroupLetter(letterCatalog, draft, { profileId: "default", groupId: "compass.filters" }, "F");
   const one = resetGroupLetter(draft, goTo);
   assert.equal(letterOf(one, "global.go"), "G");
   assert.equal(letterOf(one, "global.project"), "Y");
-  const all = resetGroupLetters(catalog, draft, "default");
+  const all = resetGroupLetters(letterCatalog, draft, "default");
   assert.equal(letterOf(all, "global.go"), "G");
   assert.equal(letterOf(all, "global.project"), "P");
   assert.deepEqual(all.profiles[0].letters, [{ group: "compass.filters", letter: "F" }]);
 });
 
 test("a letter clash blocks saving, names both groups, and points at the first one", () => {
-  const draft = setGroupLetter(catalog, factoryDraft(), goTo, "P");
-  assert.deepEqual(saveProblems(catalog, draft, { profileId: "default", platform: MACOS }), [
+  const draft = setGroupLetter(letterCatalog, factoryDraft(), goTo, "P");
+  assert.deepEqual(saveProblems(letterCatalog, draft, { profileId: "default", platform: MACOS }), [
     {
       profileId: "default",
       platform: null,
@@ -639,22 +648,22 @@ test("a letter clash blocks saving, names both groups, and points at the first o
 });
 
 test("a reserved or non-letter menu letter blocks saving", () => {
-  const reserved = setGroupLetter(catalog, factoryDraft(), goTo, "K");
+  const reserved = setGroupLetter(letterCatalog, factoryDraft(), goTo, "K");
   assert.deepEqual(
-    saveProblems(catalog, reserved).map((p) => p.message),
+    saveProblems(letterCatalog, reserved).map((p) => p.message),
     ["Default · Go to (global): menu letter K is reserved; K, Q and H are never menu letters"],
   );
-  const digit = setGroupLetter(catalog, factoryDraft(), goTo, "7");
-  assert.deepEqual(saveProblems(catalog, digit).map((p) => p.message), ['Default · Go to (global): menu letter "7" is not a single letter A–Z']);
+  const digit = setGroupLetter(letterCatalog, factoryDraft(), goTo, "7");
+  assert.deepEqual(saveProblems(letterCatalog, digit).map((p) => p.message), ['Default · Go to (global): menu letter "7" is not a single letter A–Z']);
 });
 
 test("saving sends the letters with the catalog's groups, and the live menu letters follow", async () => {
-  const draft = setGroupLetter(catalog, factoryDraft(), goTo, "X");
-  const live = createDispatcher({ catalog, platform: MACOS });
+  const draft = setGroupLetter(letterCatalog, factoryDraft(), goTo, "X");
+  const live = createDispatcher({ catalog: letterCatalog, platform: MACOS });
   let sent;
   const result = await saveDraft({
     draft,
-    catalog,
+    catalog: letterCatalog,
     save: async (config, descriptor) => {
       sent = { config, descriptor };
       return { config, problem: "" };

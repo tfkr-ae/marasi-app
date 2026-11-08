@@ -194,8 +194,17 @@ test("an import becomes a distinct profile even when the file came from this dra
   assert.equal(next.profiles.length, 2);
 });
 
-// Menu letters. This catalog has the factory groups, all global: Go to (G),
-// Project (P), Browser & proxy (B) and Appearance (A).
+// Menu letters, against fixture groups so the tests hold whatever groups the
+// factory catalog has: four global groups.
+const letterCatalog = createCatalog(actions, {
+  contexts,
+  groups: [
+    ["go", "Go to", "G"],
+    ["project", "Project", "P"],
+    ["browser", "Browser & proxy", "B"],
+    ["appearance", "Appearance", "A"],
+  ].map(([id, label, letter]) => ({ context: "global", id, label, letter, icon: "Eye", tone: "sky", description: label })),
+});
 const lettered = { ...work, letters: [{ group: "global.go", letter: "X" }, { group: "compass.filters", letter: "F" }] };
 
 function letteredFileWith(edit) {
@@ -205,15 +214,15 @@ function letteredFileWith(edit) {
 }
 
 test("export then import carries the menu letters, a dormant group's letter included", () => {
-  const { draft, profileId } = importProfile(catalog, draftOf(profile("default", "Default")), exportProfile(lettered));
+  const { draft, profileId } = importProfile(letterCatalog, draftOf(profile("default", "Default")), exportProfile(lettered));
   const imported = draft.profiles.find((p) => p.id === profileId);
   assert.deepEqual(imported.letters, lettered.letters);
-  assert.deepEqual(menuLetters(catalog, imported), { "global.go": "X", "global.project": "P", "global.browser": "B", "global.appearance": "A" });
+  assert.deepEqual(menuLetters(letterCatalog, imported), { "global.go": "X", "global.project": "P", "global.browser": "B", "global.appearance": "A" });
 });
 
 test("a profile on the factory letters exports no letters, so the file reads as before", () => {
   assert.equal("letters" in JSON.parse(exportProfile(work)).profile, false);
-  const { draft, profileId } = importProfile(catalog, draftOf(profile("default", "Default")), exportProfile(work));
+  const { draft, profileId } = importProfile(letterCatalog, draftOf(profile("default", "Default")), exportProfile(work));
   assert.deepEqual(draft.profiles.find((p) => p.id === profileId).letters, []);
 });
 
@@ -233,14 +242,14 @@ for (const [what, text, message] of rejectedLetters) {
   test(`importing ${what} is rejected without touching the draft`, () => {
     const draft = draftOf(profile("default", "Default"));
     const before = structuredClone(draft);
-    assert.throws(() => importProfile(catalog, draft, text), { message });
+    assert.throws(() => importProfile(letterCatalog, draft, text), { message });
     assert.deepEqual(draft, before);
   });
 }
 
 test("an import refuses a bad letter with the explanation a save gives", () => {
   const text = letteredFileWith((f) => (f.profile.letters[0].letter = "B"));
-  const draft = setGroupLetter(catalog, draftOf(profile("default", "Default")), { profileId: "default", groupId: "global.go" }, "B");
-  const [saveProblem] = saveProblems(catalog, draft);
-  assert.throws(() => importProfile(catalog, draftOf(profile("default", "Default")), text), { message: saveProblem.message.replace("Default · ", "") });
+  const draft = setGroupLetter(letterCatalog, draftOf(profile("default", "Default")), { profileId: "default", groupId: "global.go" }, "B");
+  const [saveProblem] = saveProblems(letterCatalog, draft);
+  assert.throws(() => importProfile(letterCatalog, draftOf(profile("default", "Default")), text), { message: saveProblem.message.replace("Default · ", "") });
 });
