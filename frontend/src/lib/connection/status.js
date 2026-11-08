@@ -11,6 +11,7 @@ const labels = {
   "project-changed": "Project changed",
   failed: "Couldn't connect",
   "auth-failed": "Password refused",
+  stopped: "Stopped",
 };
 
 /** The status text for `phase`. */
@@ -22,7 +23,7 @@ const amber = ["starting", "connecting", "reconnecting", "project-changed"];
 export function phaseTone(phase) {
   if (phase === "connected") return "bg-success-500";
   if (amber.includes(phase)) return "bg-warning-500";
-  if (phase === "idle") return "bg-surface-400";
+  if (phase === "idle" || phase === "stopped") return "bg-surface-400";
   return "bg-error-500";
 }
 
@@ -40,3 +41,9 @@ export const statusHint = (state) => `${state.connection.name} · ${phaseLabel(s
  * host, so they open from the service's list or a typed path.
  */
 export const filePickerShown = (connection) => connection.kind === "local";
+
+/**
+ * Whether the pages stay visible but dimmed and inert (+layout.svelte): the
+ * service has another project open than they show, or Marasi is stopped.
+ */
+export const pagesHeld = (phase) => phase === "project-changed" || phase === "stopped";
