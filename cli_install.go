@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"aead.dev/minisign"
+
+	"github.com/tfkr-ae/marasi-app/internal/marasicli"
 )
 
 // Installing and updating the Marasi CLI from Marasi's GitHub releases
@@ -33,12 +35,8 @@ const cliInstallTimeout = 10 * time.Minute
 const cliSmallAssetLimit = 64 << 10
 
 // cliAssets is the release asset of the CLI for each GOOS/GOARCH Marasi
-// publishes (Marasi's release.yml and nightly.yml).
-var cliAssets = map[string]string{
-	"darwin/arm64":  "marasi-darwin-arm64",
-	"linux/amd64":   "marasi-linux-amd64",
-	"windows/amd64": "marasi-windows-amd64.exe",
-}
+// publishes.
+var cliAssets = marasicli.Assets
 
 // Outcomes of InstallCLI and CheckForCLIUpdate.
 const (
@@ -141,8 +139,10 @@ func (a *App) cliChannel() Channel {
 	return channelRelease
 }
 
-// InstallCLI installs the Marasi CLI for this platform from the release on
-// the CLI's channel into dir, and saves it as the app's CLI. It returns an
+// InstallCLI installs the Marasi CLI for this platform into dir and saves it
+// as the app's CLI: the copy this build carries, when it carries one and no
+// CLI is found, without the network and followed by the CLI update check;
+// otherwise the release on the CLI's channel. It returns an
 // error, rather than a failed install, only when dir is empty.
 func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	dir, err := a.expandCLIDir(dir)
@@ -155,9 +155,12 @@ func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cliInstallTimeout)
 	defer cancel()
 
+	target := filepath.Join(dir, cliFileName(r.goos))
+	if carried, ok := a.usableCarriedCLI(); ok {
+		return a.installCarried(carried, target), nil
+	}
 	channel := a.cliChannel()
 	result := CLIInstall{Channel: string(channel)}
-	target := filepath.Join(dir, cliFileName(r.goos))
 	release, version, err := a.findCLIRelease(ctx, channel)
 	if err == nil {
 		result.Version = version
@@ -172,6 +175,23 @@ func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	result.Outcome = cliOutcomeInstalled
 	result.CLI, _ = a.LocateCLI()
 	return result, nil
+}
+
+// installCarried places the carried CLI at target without the network and
+// saves it as the app's CLI, then starts the CLI update check.
+func (a *App) installCarried(carried *carriedCLI, target string) CLIInstall {
+	result := CLIInstall{Version: carried.Version, Channel: carried.Channel}
+	err := a.installCarriedCLI(carried, target)
+	if err == nil {
+		err = a.Config.setCLIPath(savedCLIPath{Path: target, Source: cliSourceInstalled})
+	}
+	if err != nil {
+		return a.cliFailed(result, err)
+	}
+	result.Outcome = cliOutcomeInstalled
+	result.CLI, _ = a.LocateCLI()
+	a.cliRuntime.background(a.checkForCLIUpdateAfterInstall)
+	return result
 }
 
 // CheckForCLIUpdate replaces the CLI the app uses with the release on the
@@ -316,7 +336,7 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if !minisign.Verify(r.key, checksums, signature) {
 		return failed(UpdateFailureSignature, "Signature check failed, nothing installed")
 	}
-	if trustedComment(signature) != "marasi "+string(channel)+" "+version {
+	if trustedComment(signature) != marasicli.TrustedComment(string(channel), version) {
 		return failed(UpdateFailureSignature, "Signature is for another release, nothing installed")
 	}
 	sums := parseChecksums(checksums)
