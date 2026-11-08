@@ -308,3 +308,60 @@ test("another client's notes, launchpads and deletes read the dashboard counts a
   assert.equal(get(store).dashboard.notes, 4);
   assert.equal(get(store).dashboard.launchpads, 3);
 });
+
+// Advances the mocked clock in steps of `step` ms up to `total`, letting the
+// dashboard reads the steps start run between them.
+async function tickBy(t, total, step, each = () => {}) {
+  for (let at = 0; at < total; at += step) {
+    each();
+    t.mock.timers.tick(step);
+    await Promise.resolve();
+  }
+}
+
+test("a steady stream of captured requests reads the counts once per settle window while it lasts", async (t) => {
+  const routes = serviceRoutes();
+  let pairs = 1200;
+  routes["/dashboard"] = () => ({ pairs: ++pairs, notes: 3, launchpads: 2, intercepted: 7, intercepted_count: { complete: true } });
+  const { store, client } = setup(routes);
+  await store.populate();
+  const dashboardReads = () => client.calls.filter(([path]) => path === "/dashboard").length;
+  const before = dashboardReads();
+  const request = { id: "t1", number: 1, scheme: "https", method: "GET", host: "example.com", path: "/", metadata: {} };
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const step = DASHBOARD_SETTLE_MS / 5;
+  // A request every step, closer together than the settle window.
+  await tickBy(t, DASHBOARD_SETTLE_MS, step, () => store.onRequest(request));
+  assert.equal(dashboardReads(), before + 1, "the first window ends in a read, though requests keep coming");
+
+  await tickBy(t, 3 * DASHBOARD_SETTLE_MS, step, () => store.onRequest(request));
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(dashboardReads(), before + 4, "one read per window, no more");
+  assert.equal(get(store).dashboard.requests, 1205);
+});
+
+test("an intercepted response reads the counts again; one that wasn't intercepted doesn't", async (t) => {
+  const routes = serviceRoutes();
+  const { store, client } = setup(routes);
+  await store.populate();
+  routes["/dashboard"] = { ...routes["/dashboard"], intercepted: 8 };
+  const dashboardReads = () => client.calls.filter(([path]) => path === "/dashboard").length;
+  const before = dashboardReads();
+  const response = (metadata) => ({ id: "t1", status: "200 OK", status_code: 200, metadata });
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onResponse(response({}));
+  store.onResponse(response({ intercepted: false }));
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS);
+  await store.settled();
+  assert.equal(dashboardReads(), before, "a response Checkpoint didn't hold leaves the counts alone");
+
+  store.onResponse(response({ intercepted: true }));
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(dashboardReads(), before + 1);
+  assert.equal(get(store).dashboard.intercepted, 8);
+});

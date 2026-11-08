@@ -47,6 +47,7 @@ test("an install reads as its step while it runs", () => {
   assert.equal(cliProgressText(null), "Downloading…");
   assert.equal(cliProgressText({ step: "download", received: 10, total: 100 }), "Downloading…");
   assert.equal(cliProgressText({ step: "verify", received: 0, total: 0 }), "Verifying…");
+  assert.equal(cliProgressText({ step: "extract", received: 0, total: 0 }), "Extracting…");
   assert.equal(cliProgressText({ step: "install", received: 0, total: 0 }), "Installing…");
 });
 
@@ -56,6 +57,7 @@ test("the download's bar fills by bytes, and is indeterminate without a size", (
   assert.equal(cliProgressPercent({ step: "download", received: 5, total: 0 }), undefined);
   assert.equal(cliProgressPercent(null), undefined);
   assert.equal(cliProgressPercent({ step: "verify", received: 0, total: 0 }), undefined);
+  assert.equal(cliProgressPercent({ step: "extract", received: 0, total: 0 }), undefined);
 });
 
 test("an outdated local instance names the version it runs", () => {
