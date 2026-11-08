@@ -268,13 +268,17 @@ func (f *fakeCLI) stops() int {
 }
 
 // quittingApp is an App on cli, as main builds it, so ServiceShutdown runs
-// the quit path.
+// the quit path. When quitting is Stop Marasi, so a quit stops every owned
+// run without asking; the quit question has its own tests.
 func quittingApp(t *testing.T, cli *fakeCLI) *App {
 	t.Helper()
 	app := newTestApp(t)
 	app.runCLI = cli.run
 	app.findCLI = func() (string, error) { return "/bin/marasi", nil }
 	app.newPassword = func() (string, error) { return "generated", nil }
+	if err := app.Config.SetFlag(whenQuittingKey, whenQuittingStop); err != nil {
+		t.Fatal(err)
+	}
 	return app
 }
 

@@ -28,6 +28,7 @@ func main() {
 		LogLevel:     slog.LevelError,
 	})
 	app.wails = wails
+	quitOnSignal(app)
 	if menu := applicationMenu(); menu != nil {
 		wails.Menu.SetApplicationMenu(menu)
 	}

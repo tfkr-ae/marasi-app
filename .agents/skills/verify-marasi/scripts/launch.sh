@@ -9,7 +9,8 @@ SERVER_PORT=${MARASI_VERIFY_SERVER_PORT:-}
 CDP_PORT=${MARASI_VERIFY_CDP_PORT:-0}
 CHROME_BIN=${MARASI_VERIFY_CHROME_BIN:-}
 # attach: launch starts the service and the app attaches to it (the
-# default). app: the app starts it, and stops it when it quits.
+# default). app: the app starts it and owns the run, so quitting stops it
+# only as the When quitting setting or the quit question says.
 SERVICE_MODE=${MARASI_VERIFY_SERVICE:-attach}
 case $SERVICE_MODE in
 	attach | app) ;;
