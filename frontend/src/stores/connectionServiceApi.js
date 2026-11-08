@@ -8,6 +8,8 @@ export function connectionServiceApi(client, projectStore) {
     // superseded, unsent.
     readControl: (link = client) => link.get("/service/control-listener/status"),
     updateControl: (body, link = client) => link.post("/service/control-listener/update", body),
+    // A remote's own stop route; a local instance stops through Go.
+    stopService: (link = client) => link.post("/service/stop"),
     use: (connection) => client.use(connection),
     bind: () => client.bind(),
     readStatus: (options, link = client) => link.request("GET", "/service/status", options),
