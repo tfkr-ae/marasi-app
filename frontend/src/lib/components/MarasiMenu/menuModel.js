@@ -124,8 +124,9 @@ function buildSection(scope, entries, catalog, letters) {
  * - `bindingsFor(actionId)`: the live keymap's bindings (the dispatcher's).
  * - `letters`: the profile's menu-letter overrides, by group id
  *   ("<context>.<group>").
- * Returns { platform, primary, sections: [{ scope, groups, loose, rows }] },
- * with only non-empty page sections. Every row has `menuKey` (or null).
+ * Returns { platform, primary, reserved, sections: [{ scope, groups, loose,
+ * rows }] }, with only non-empty page sections. Every row has `menuKey` (or
+ * null); `reserved` is the set isReservedKey reads.
  */
 export function buildMenu({ catalog, pageEntries = [], globalEntries = [], bindingsFor, platform, letters = {} }) {
   const primary = primaryModifier(platform);
@@ -142,7 +143,14 @@ export function buildMenu({ catalog, pageEntries = [], globalEntries = [], bindi
     keys,
   );
   for (const g of sections.flatMap((s) => s.groups)) assignKeys(g.items, { ...keys, groupLabel: g.label });
-  return { platform, primary, sections };
+  return { platform, primary, reserved, sections };
+}
+
+// Whether a key is never the menu's at any level: the menu shortcut, which
+// the dispatcher handles, and primary + a reserved menu letter (⌘Q Quit and
+// ⌘H Hide on macOS), which belong to the system.
+export function isReservedKey(menu, binding) {
+  return menu.reserved.has(binding);
 }
 
 // The rows at a level, in draw order: the top (`group` empty) or the open

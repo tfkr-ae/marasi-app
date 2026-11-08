@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createCatalog } from "../../keybindings/catalog.js";
 import { createKeymap } from "../../keybindings/keymap.js";
 import { MACOS, WINDOWS_LINUX } from "../../keybindings/platform.js";
-import { buildMenu, entryForKey, searchMenu } from "./menuModel.js";
+import { buildMenu, entryForKey, isReservedKey, searchMenu } from "./menuModel.js";
 
 // A small catalog: a page with two groups and a loose action, and the global
 // menu with two groups and a loose action.
@@ -116,6 +116,15 @@ test("⌘K, ⌘Q and ⌘H are never menu keys; the fallback letter skips words t
   for (const g of menu.sections.flatMap((s) => s.groups)) {
     for (const item of g.items) assert.ok(!["meta+k", "meta+q", "meta+h"].includes(item.menuKey), item.name);
   }
+});
+
+// The menu leaves these to the system (Quit, Hide) and the dispatcher (the
+// menu shortcut), so it never claims or remarks on them.
+test("the menu shortcut, ⌘Q and ⌘H are reserved keys at every level; other ⌘ keys are not", () => {
+  const menu = menuFor({ overrides: { "global.open-menu": ["meta+j"] } });
+  for (const binding of ["meta+j", "meta+k", "meta+q", "meta+h"]) assert.ok(isReservedKey(menu, binding), binding);
+  for (const binding of ["meta+f", "meta+z", "meta+shift+q"]) assert.ok(!isReservedKey(menu, binding), binding);
+  assert.ok(isReservedKey(menuFor({ platform: WINDOWS_LINUX }), "ctrl+q"));
 });
 
 test("an action with no ⌘ binding gets a letter from its distinctive words, never from filler", () => {

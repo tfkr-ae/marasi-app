@@ -13,7 +13,7 @@
 	} from "../../keybindings/app.js";
 	import { bindingFromEvent, formatBinding } from "../../keybindings/keys.js";
 	import { MACOS } from "../../keybindings/platform.js";
-	import { buildMenu, entryForKey, searchMenu } from "./menuModel.js";
+	import { buildMenu, entryForKey, isReservedKey, searchMenu } from "./menuModel.js";
 	import { groupIcon, groupTone, NEUTRAL_TONE } from "./groupStyle.js";
 	import MenuKeys from "./MenuKeys.svelte";
 
@@ -45,7 +45,7 @@
 		groupId = null;
 		active = 0;
 		primaryHeld = false;
-		lastPointer = null;
+		lastPointer = pointer;
 		dialog.showModal();
 		await tick();
 		input?.focus();
@@ -56,11 +56,15 @@
 
 	// The menu opens under a still pointer, and the WebView reports a
 	// mousemove for it; only a pointer that has really moved since the menu
-	// opened moves the highlight.
+	// opened moves the highlight, from its first move on. `pointer` is where
+	// the pointer last was before the menu opened; when it is unknown, a
+	// move with no movement is the WebView's.
+	let pointer = null;
 	let lastPointer = null;
+	const pointerAt = (event) => `${event.screenX},${event.screenY}`;
 	function hover(event, index) {
-		const at = `${event.screenX},${event.screenY}`;
-		const moved = lastPointer !== null && lastPointer !== at;
+		const at = pointerAt(event);
+		const moved = lastPointer === null ? Boolean(event.movementX || event.movementY) : lastPointer !== at;
 		lastPointer = at;
 		if (moved) active = index;
 	}
@@ -121,8 +125,9 @@
 			platform === MACOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 		if (primaryDown && !searching && !MODIFIER_KEYS.has(key)) {
 			const binding = bindingFromEvent(event);
-			// The menu shortcut reaches the dispatcher, which closes the menu.
-			if (!binding || $menuDispatcher.bindingsFor("global.open-menu").includes(binding)) return;
+			// Reserved keys pass through untouched: the menu shortcut reaches
+			// the dispatcher, which closes the menu, and ⌘Q and ⌘H reach macOS.
+			if (!binding || isReservedKey(menu, binding)) return;
 			event.preventDefault();
 			event.stopPropagation();
 			const entry = entryForKey(menu, { group: groupId, query, binding });
@@ -183,6 +188,12 @@
 
 	onMount(() => menuPalettes.register(paletteTier, { toggle }));
 </script>
+
+<svelte:window
+	on:mousemove|capture={(event) => {
+		if (!dialog?.open) pointer = pointerAt(event);
+	}}
+/>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
