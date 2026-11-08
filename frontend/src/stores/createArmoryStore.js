@@ -195,26 +195,21 @@ export function createArmoryStore(api) {
     });
   }
 
+  // Reads the templates, wordlists and active runs together.
   async function populate() {
     const version = projectStateVersion;
-    const templates = (await GetArmoryTemplates()) || [];
-    if (version !== projectStateVersion) return;
-    set({
-      ...initialState(version),
-      templates: sortTemplates(templates),
-    });
-
-    const [wordlists, activeRuns] = await Promise.all([
+    const [templates, wordlists, activeRuns] = await Promise.all([
+      GetArmoryTemplates(),
       GetArmoryWordlists(),
       GetActiveArmoryRuns(),
     ]);
     if (version !== projectStateVersion) return;
-
-    update((state) => ({
-      ...state,
+    set({
+      ...initialState(version),
+      templates: sortTemplates(templates || []),
       wordlists: wordlists || [],
       activeRuns: activeRunsMap(activeRuns),
-    }));
+    });
   }
 
   async function loadRuns(templateId) {
