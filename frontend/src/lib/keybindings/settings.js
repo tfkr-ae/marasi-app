@@ -624,6 +624,8 @@ function letterRowProblems(catalog, profile) {
     const [first, second] = problem.groups;
     if (problem.kind === "letter-invalid") {
       note(first, menuLetterProblem(problem.letter).slice("menu letter ".length));
+    } else if (problem.kind === "letter-repeated") {
+      note(first, "given twice");
     } else if (problem.kind === "letter-duplicate") {
       note(first, `${problem.letter} is also used by ${other(second, first)}`);
       note(second, `${problem.letter} is also used by ${other(first, second)}`);

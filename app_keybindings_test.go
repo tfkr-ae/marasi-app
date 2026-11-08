@@ -680,16 +680,16 @@ func TestAppKeybindingMenuLetters(t *testing.T) {
 			"two groups of one page context":   {withLetters("ledger.drawer-open.send", "C"), `profile "Work": Copy (ledger.drawer-open) and Send (ledger.drawer-open) both use menu letter C`},
 			"two global groups":                {withLetters("global.project", "G"), `profile "Work": Go to (global) and Project (global) both use menu letter G`},
 			"groups in overlapping contexts":   {withLetters("ledger.drawer-open.websocket.frames", "S"), `profile "Work": Send (ledger.drawer-open) and Frames (ledger.drawer-open.websocket) both use menu letter S`},
-			"K":                                {withLetters("global.go", "K"), `profile "Work" menu group "global.go": menu letter K is reserved; K, Q and H are never menu letters`},
-			"Q":                                {withLetters("ledger.drawer-open.copy", "Q"), `profile "Work" menu group "ledger.drawer-open.copy": menu letter Q is reserved; K, Q and H are never menu letters`},
-			"H":                                {withLetters("global.go", "H"), `profile "Work" menu group "global.go": menu letter H is reserved; K, Q and H are never menu letters`},
-			"a digit":                          {withLetters("global.go", "1"), `profile "Work" menu group "global.go": menu letter "1" is not a single letter A–Z`},
-			"a lowercase letter":               {withLetters("global.go", "x"), `profile "Work" menu group "global.go": menu letter "x" is not a single letter A–Z`},
-			"two letters":                      {withLetters("global.go", "XY"), `profile "Work" menu group "global.go": menu letter "XY" is not a single letter A–Z`},
-			"no letter":                        {withLetters("global.go", ""), `profile "Work" menu group "global.go": menu letter "" is not a single letter A–Z`},
-			"a reserved letter, dormant group": {withLetters("compass.filters", "Q"), `profile "Work" menu group "compass.filters": menu letter Q is reserved`},
+			"K":                                {withLetters("global.go", "K"), `profile "Work": Go to (global): menu letter K is reserved; K, Q and H are never menu letters`},
+			"Q":                                {withLetters("ledger.drawer-open.copy", "Q"), `profile "Work": Copy (ledger.drawer-open): menu letter Q is reserved; K, Q and H are never menu letters`},
+			"H":                                {withLetters("global.go", "H"), `profile "Work": Go to (global): menu letter H is reserved; K, Q and H are never menu letters`},
+			"a digit":                          {withLetters("global.go", "1"), `profile "Work": Go to (global): menu letter "1" is not a single letter A–Z`},
+			"a lowercase letter":               {withLetters("global.go", "x"), `profile "Work": Go to (global): menu letter "x" is not a single letter A–Z`},
+			"two letters":                      {withLetters("global.go", "XY"), `profile "Work": Go to (global): menu letter "XY" is not a single letter A–Z`},
+			"no letter":                        {withLetters("global.go", ""), `profile "Work": Go to (global): menu letter "" is not a single letter A–Z`},
+			"a reserved letter, dormant group": {withLetters("compass.filters", "Q"), `profile "Work": compass.filters: menu letter Q is reserved; K, Q and H are never menu letters`},
 			"an invalid group id":              {withLetters("Go to", "X"), `profile "Work" menu group "Go to": invalid group id`},
-			"a group given twice":              {withLetters("global.go", "X", "global.go", "Y"), `profile "Work" menu group "global.go": letter given twice`},
+			"a group given twice":              {withLetters("global.go", "X", "global.go", "Y"), `profile "Work": Go to (global): menu letter given twice`},
 		}
 		for name, c := range cases {
 			t.Run(name, func(t *testing.T) {
@@ -724,16 +724,33 @@ func TestAppKeybindingMenuLetters(t *testing.T) {
 		}
 	})
 
-	t.Run("should report a saved section with a reserved letter and use the factory profile", func(t *testing.T) {
+	// A letter problem never drops the profile on load (the "keybinding
+	// profiles override factory defaults" ADR): the frontend ignores a letter
+	// it can't use, and only a save is refused.
+	t.Run("should keep a saved profile whose menu letters can't be used, and refuse to save it", func(t *testing.T) {
 		dir := t.TempDir()
-		writeAppConfig(t, dir, "keybindings:\n  version: 1\n  active_profile: mine\n  profiles:\n    - id: mine\n      name: Mine\n      letters:\n        - group: global.go\n          letter: K\n")
+		writeAppConfig(t, dir, "keybindings:\n  version: 1\n  active_profile: mine\n  profiles:\n    - id: mine\n      name: Mine\n"+
+			"      overrides:\n        macos:\n          - action: global.go-home\n            keys: [meta+j]\n"+
+			"      letters:\n        - group: global.go\n          letter: K\n        - group: global.project\n          letter: X\n        - group: global.project\n          letter: \"Y\"\n")
 
-		state := loadConfigApp(t, dir).GetKeybindings()
-		if !strings.Contains(state.Problem, "menu letter K is reserved") {
-			t.Fatalf("wanted a reserved letter problem\ngot: %q", state.Problem)
+		app := loadConfigApp(t, dir)
+		state := app.GetKeybindings()
+		if state.Problem != "" {
+			t.Fatalf("wanted no problem\ngot: %q", state.Problem)
 		}
-		if !reflect.DeepEqual(state.Config, factoryKeybindings()) {
-			t.Fatalf("wanted the factory profile\ngot: %+v", state.Config)
+		profile := state.Config.Profiles[0]
+		wantLetters := []KeybindingLetter{{Group: "global.go", Letter: "K"}, {Group: "global.project", Letter: "X"}, {Group: "global.project", Letter: "Y"}}
+		if profile.ID != "mine" || !reflect.DeepEqual(profile.Letters, wantLetters) || !reflect.DeepEqual(profile.Overrides[platformMacOS][0].Keys, []string{"meta+j"}) {
+			t.Fatalf("wanted the saved profile kept\ngot: %+v", profile)
+		}
+		_, err := app.SaveKeybindings(state.Config, letterKeybindingCatalog())
+		for _, want := range []string{
+			`profile "Mine": Go to (global): menu letter K is reserved; K, Q and H are never menu letters`,
+			`profile "Mine": Project (global): menu letter given twice`,
+		} {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("wanted the save refused with %q\ngot: %v", want, err)
+			}
 		}
 	})
 }

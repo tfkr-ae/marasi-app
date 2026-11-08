@@ -231,7 +231,7 @@ const rejectedLetters = [
   ["a letter that is not an object", letteredFileWith((f) => (f.profile.letters[0] = "X")), /^A menu letter is not an object$/],
   ["a letter with an extra field", letteredFileWith((f) => (f.profile.letters[0].platform = "macos")), /^A menu letter has an unknown field "platform"$/],
   ["an invalid group id", letteredFileWith((f) => (f.profile.letters[0].group = "Go to")), /^Menu group "Go to": invalid group id$/],
-  ["a group given twice", letteredFileWith((f) => f.profile.letters.push({ group: "global.go", letter: "Y" })), /^Menu group "global\.go": letter given twice$/],
+  ["a group given twice", letteredFileWith((f) => f.profile.letters.push({ group: "global.go", letter: "Y" })), /^Go to \(global\): menu letter given twice$/],
   ["a non-letter", letteredFileWith((f) => (f.profile.letters[0].letter = "1")), /^Go to \(global\): menu letter "1" is not a single letter A–Z$/],
   ["a missing letter", letteredFileWith((f) => delete f.profile.letters[0].letter), /^Go to \(global\): menu letter undefined is not a single letter A–Z$/],
   ["a reserved letter", letteredFileWith((f) => (f.profile.letters[0].letter = "Q")), /^Go to \(global\): menu letter Q is reserved; K, Q and H are never menu letters$/],

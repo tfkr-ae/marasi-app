@@ -389,6 +389,14 @@ test("K, Q and H are never menu letters, on either platform", () => {
   }
 });
 
+test("a menu group's letter may be given only once", () => {
+  const work = { ...profile("work", "Work"), letters: [{ group: "global.go", letter: "X" }, { group: "global.go", letter: "Y" }] };
+  assert.deepEqual(
+    validateKeybindings(groupedCatalog, saved([work]).config).map((p) => p.message),
+    ["Work: Go to (global): menu letter given twice"],
+  );
+});
+
 test("a letter override for a group this build lacks is kept dormant, but must still be a usable letter", () => {
   assert.deepEqual(letterMessages({ "compass.filters": "G" }), []);
   assert.deepEqual(letterMessages({ "compass.filters": "Q" }), [
@@ -408,13 +416,27 @@ test("the menu follows the active profile's letters, and changes with the saved 
   assert.deepEqual(seen.letters, {});
 });
 
-test("a saved profile with a letter clash runs the factory letters and reports why", () => {
+// The ADR's rule for a new default: the researcher's saved letter wins on
+// load, and the menu gives the clashing factory group a derived key. A save
+// that creates the clash is still refused (above).
+test("a saved letter that clashes with a factory letter keeps the profile live, bindings and letter included", () => {
   const dispatcher = createDispatcher({ catalog: groupedCatalog, platform: WINDOWS_LINUX });
   let seen;
   dispatcher.subscribe((snapshot) => (seen = snapshot));
-  dispatcher.configure({ keybindings: saved([withLetters({ "global.go": "P" })]) });
-  assert.deepEqual(seen.letters, {});
-  assert.equal(seen.problem, "Work: Go to (global) and Project (global) both use menu letter P. Using factory shortcuts.");
+  const work = { ...withLetters({ "global.go": "P" }), overrides: { [MACOS]: [], [WINDOWS_LINUX]: [{ action: "global.go-home", keys: ["ctrl+j"] }] } };
+  dispatcher.configure({ keybindings: saved([work]) });
+  assert.equal(seen.problem, "");
+  assert.deepEqual(seen.letters, { "global.go": "P" });
+  assert.deepEqual(seen.bindingsFor("global.go-home"), ["ctrl+j"]);
+});
+
+test("a saved letter that can't be a menu letter is ignored on load, and the profile stays live", () => {
+  const dispatcher = createDispatcher({ catalog: groupedCatalog, platform: MACOS });
+  let seen;
+  dispatcher.subscribe((snapshot) => (seen = snapshot));
+  dispatcher.configure({ keybindings: saved([withLetters({ "global.go": "K", "global.project": "X" })]) });
+  assert.equal(seen.problem, "");
+  assert.deepEqual(seen.letters, { "global.project": "X" });
 });
 
 test("the catalog descriptor sent with a save lists every menu group with its factory letter", () => {

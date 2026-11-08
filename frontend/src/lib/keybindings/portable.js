@@ -93,18 +93,14 @@ function readVariant(list, platform) {
 }
 
 // The menu letter overrides, checked for shape like checkKeybindingStructure
-// in Go. The letters themselves are judged by validateProfile, so an import
-// gives the same explanation as a save.
+// in Go. The letters themselves, and a group given twice, are judged by
+// validateProfile, so an import gives the same explanation as a save.
 function readLetters(list) {
   if (!Array.isArray(list)) throw new Error("The menu letters are not a list");
-  const seen = new Set();
   return list.map((entry) => {
     if (!isObject(entry)) throw new Error("A menu letter is not an object");
     onlyFields(entry, ["group", "letter"], "A menu letter");
-    const where = `Menu group ${show(entry.group)}`;
-    if (typeof entry.group !== "string" || !ACTION_ID.test(entry.group)) throw new Error(`${where}: invalid group id`);
-    if (seen.has(entry.group)) throw new Error(`${where}: letter given twice`);
-    seen.add(entry.group);
+    if (typeof entry.group !== "string" || !ACTION_ID.test(entry.group)) throw new Error(`Menu group ${show(entry.group)}: invalid group id`);
     return { group: entry.group, letter: entry.letter };
   });
 }

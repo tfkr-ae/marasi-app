@@ -128,6 +128,16 @@ test("a profile's menu letter replaces the factory letter", () => {
   assert.equal(groupNamed(menu, "Copy").menuKey, "meta+y");
 });
 
+// A later release can give a group the letter a profile already uses (the
+// "keybinding profiles override factory defaults" ADR): the profile's letter
+// wins, and the factory group falls back to a derived key.
+test("a profile's letter wins over a factory letter it clashes with, and the factory group gets a derived key", () => {
+  const menu = menuFor({ letters: { "page.copy": "F" } });
+  assert.equal(groupNamed(menu, "Copy").menuKey, "meta+f");
+  assert.equal(groupNamed(menu, "Focus").menuKey, "meta+o");
+  assert.equal(label(entryForKey(menu, { binding: "meta+f" })), "Copy");
+});
+
 test("on Windows and Linux the menu keys use Ctrl", () => {
   const menu = menuFor({ platform: WINDOWS_LINUX });
   assert.deepEqual(topLevel(menu)[1], [

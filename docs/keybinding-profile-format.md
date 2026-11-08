@@ -61,7 +61,7 @@ These are the profile semantics of [Keybinding profiles override recoverable fac
 
 In the Marasi menu, ⌘ (Ctrl on Windows and Linux) and a menu group's menu letter open that group. A group without an override in `letters` keeps its factory letter, so the factory letters are always recoverable. An override for a group that this Marasi build does not have is kept and has no effect.
 
-A menu letter is one capital letter `A` to `Z`. `K`, `Q` and `H` are never menu letters, on any platform: ⌘K opens and closes the menu, and ⌘Q and ⌘H quit and hide Marasi on macOS. Two menu groups at one menu level cannot share a letter. A level is the global groups, or one page context's groups together with the global groups, because every menu lists the global groups.
+A menu letter is one capital letter `A` to `Z`. `K`, `Q` and `H` are never menu letters, on any platform: ⌘K opens and closes the menu, and ⌘Q and ⌘H quit and hide Marasi on macOS. Two menu groups at one menu level cannot share a letter. A level is the global groups, or one page context's groups together with those of the contexts that share its menu (the Launchpad tree's beside the Launchpad's) and the global groups, because every menu lists the global groups.
 
 ### Bindings
 

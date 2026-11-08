@@ -130,6 +130,7 @@ function menuLevels(catalog) {
 // Menu letter problems in one profile, on every platform (platform null):
 //   letter-invalid    an override is not one capital letter A–Z, or is
 //                     reserved (K, Q, H); checked for dormant groups too
+//   letter-repeated   a group's letter is given more than once
 //   letter-duplicate  two groups at one menu level share a letter
 // A group is named "Label (context)", or by its id when the catalog lacks
 // it. Mirrors letterProblems in keybinding_validation.go.
@@ -138,10 +139,14 @@ export function validateLetters(catalog, profile) {
   const letters = menuLetters(catalog, profile);
   const name = (group) => `${group.label} (${group.context})`;
   const byId = new Map((catalog.groups ?? []).map((group) => [menuGroupId(group), group]));
+  const given = new Set();
   for (const { group: id, letter } of profile.letters ?? []) {
-    const invalid = menuLetterProblem(letter);
     const group = byId.get(id);
-    if (invalid) problems.push(letterProblem(profile, "letter-invalid", [id], letter, `${group ? name(group) : id}: ${invalid}`));
+    const where = group ? name(group) : id;
+    if (given.has(id)) problems.push(letterProblem(profile, "letter-repeated", [id], letter, `${where}: menu letter given twice`));
+    given.add(id);
+    const invalid = menuLetterProblem(letter);
+    if (invalid) problems.push(letterProblem(profile, "letter-invalid", [id], letter, `${where}: ${invalid}`));
   }
   const reported = new Set();
   for (const level of menuLevels(catalog)) {
@@ -259,9 +264,13 @@ export function catalogDescriptor(catalog) {
 
 // What the dispatcher runs for the saved state from GetKeybindings
 // ({ config, problem }): the active profile's variant for `platform` and its
-// menu letter overrides, or the factory bindings and letters with a problem
-// when the saved section is unusable or this variant would strand the menu
-// or hold conflicts (letter problems count on every platform).
+// usable menu letter overrides, or the factory bindings and letters with a
+// problem when the saved section is unusable or this variant would strand
+// the menu or hold binding conflicts. A letter problem never drops the
+// profile: as with a new default (docs/adr/2026-10-10-keybinding-profiles-override-factory-defaults.md),
+// the saved letter wins, and the menu gives a clashing factory group a
+// derived key (menuModel.js); a letter that can't be a menu letter is
+// ignored. Saving is still refused (validateLetters).
 export function liveKeybindings(state, catalog, platform) {
   const factory = { overrides: {}, knownActions: undefined, letters: {} };
   if (!state?.config) return { ...factory, problem: "" };
@@ -270,14 +279,15 @@ export function liveKeybindings(state, catalog, platform) {
   if (!profile) {
     return { ...factory, problem: `active keybinding profile ${state.config.activeProfile} does not exist` };
   }
-  const problems = validateProfile(catalog, profile).filter((p) => p.platform === platform || p.platform === null);
+  const problems = validateProfile(catalog, profile).filter((p) => p.platform === platform);
   if (problems.length) {
     return { ...factory, problem: `${problems.map((p) => p.message).join("; ")}. Using factory shortcuts.` };
   }
+  const letters = Object.entries(letterOverrides(profile)).filter(([, letter]) => !menuLetterProblem(letter));
   return {
     overrides: variantOverrides(profile, platform),
     knownActions: profile.knownActions ?? [],
-    letters: letterOverrides(profile),
+    letters: Object.fromEntries(letters),
     problem: "",
   };
 }

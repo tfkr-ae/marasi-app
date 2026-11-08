@@ -6,7 +6,9 @@
 // A level is the top (both sections together) or one open menu group. Menu
 // keys are binding strings in the dispatcher's form ("meta+shift+l"):
 // 1. A group's is primary + its menu letter (the factory letter or the
-//    profile's override).
+//    profile's override). Overridden groups claim theirs first, so a
+//    profile's letter wins over a factory letter a later release gives
+//    another group; that group then gets a derived letter (rule 3).
 // 2. An action's is its first binding that starts with primary, exactly
 //    (shift and alt kept), if nothing earlier at its level uses it and it
 //    isn't reserved.
@@ -52,7 +54,7 @@ function assignKeys(rows, { primary, reserved, bindingsFor, groupLabel = "" }) {
     row.menuKey = null;
   };
 
-  const groups = rows.filter((row) => row.kind === "group");
+  const groups = rows.filter((row) => row.kind === "group").sort((a, b) => Number(b.overridden) - Number(a.overridden));
   const actions = rows.filter((row) => row.kind !== "group");
   for (const row of groups) {
     const binding = `${primary}+${row.letter.toLowerCase()}`;
@@ -96,6 +98,7 @@ function buildSection(scope, entries, catalog, letters) {
           id,
           label: definition.label,
           letter: (letters?.[id] ?? definition.letter).toUpperCase(),
+          overridden: letters?.[id] !== undefined,
           icon: definition.icon,
           tone: definition.tone,
           description: definition.description,

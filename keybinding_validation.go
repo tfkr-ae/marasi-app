@@ -34,7 +34,9 @@ func menuLetterProblem(letter string) string {
 		return fmt.Sprintf("menu letter %q is not a single letter A–Z", letter)
 	}
 	if slices.Contains(reservedMenuLetters, letter) {
-		return fmt.Sprintf("menu letter %s is reserved; K, Q and H are never menu letters", letter)
+		last := len(reservedMenuLetters) - 1
+		return fmt.Sprintf("menu letter %s is reserved; %s and %s are never menu letters",
+			letter, strings.Join(reservedMenuLetters[:last], ", "), reservedMenuLetters[last])
 	}
 	return ""
 }
@@ -209,18 +211,11 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 			return fmt.Errorf("profile name %q is used twice", strings.TrimSpace(profile.Name))
 		}
 		names[name] = true
-		groups := map[string]bool{}
+		// The letters themselves are judged on save (letterProblems): a
+		// letter problem never drops the profile on load.
 		for _, letter := range profile.Letters {
-			where := fmt.Sprintf("profile %q menu group %q", profile.Name, letter.Group)
 			if !actionIDPattern.MatchString(letter.Group) {
-				return fmt.Errorf("%s: invalid group id", where)
-			}
-			if groups[letter.Group] {
-				return fmt.Errorf("%s: letter given twice", where)
-			}
-			groups[letter.Group] = true
-			if problem := menuLetterProblem(letter.Letter); problem != "" {
-				return fmt.Errorf("%s: %s", where, problem)
+				return fmt.Errorf("profile %q menu group %q: invalid group id", profile.Name, letter.Group)
 			}
 		}
 		for platform, overrides := range profile.Overrides {
@@ -486,22 +481,39 @@ func menuLevels(catalog keybindingCatalog, groups []KeybindingGroup) [][]Keybind
 	return levels
 }
 
-// letterProblems mirrors the letter-duplicate rule of validateLetters in
-// profiles.js: two groups at one menu level (menuLevels) may not share a
-// letter. The letters are already checked (checkKeybindingStructure); a
-// group with no override keeps its factory letter, and overrides for groups
-// the catalog lacks are dormant.
+// letterProblems mirrors validateLetters in profiles.js, with the same
+// explanations. An override must be a usable letter (menuLetterProblem),
+// for dormant groups too, and given once per group; then two groups at one
+// menu level (menuLevels) may not share a letter. A group is named
+// "Label (context)", or by its id when the catalog lacks it. A group with
+// no usable override keeps its factory letter, and overrides for groups the
+// catalog lacks are dormant.
 func letterProblems(catalog keybindingCatalog, groups []KeybindingGroup, profile KeybindingProfile) []string {
+	byID := map[string]KeybindingGroup{}
 	letters := map[string]string{}
 	for _, group := range groups {
+		byID[group.ID] = group
 		letters[group.ID] = group.Letter
 	}
+	name := func(id string) string {
+		if group, ok := byID[id]; ok {
+			return fmt.Sprintf("%s (%s)", group.Label, group.Context)
+		}
+		return id
+	}
+	var problems []string
+	given := map[string]bool{}
 	for _, override := range profile.Letters {
-		if _, ok := letters[override.Group]; ok {
+		if given[override.Group] {
+			problems = append(problems, fmt.Sprintf("%s: menu letter given twice", name(override.Group)))
+		}
+		given[override.Group] = true
+		if problem := menuLetterProblem(override.Letter); problem != "" {
+			problems = append(problems, fmt.Sprintf("%s: %s", name(override.Group), problem))
+		} else if _, ok := letters[override.Group]; ok {
 			letters[override.Group] = override.Letter
 		}
 	}
-	var problems []string
 	reported := map[[2]string]bool{}
 	for _, level := range menuLevels(catalog, groups) {
 		for i, first := range level {
