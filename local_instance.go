@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -295,7 +296,9 @@ func (a *App) localStatus(l *localInstance) (status localInstanceStatus, running
 // connection starts on its saved port, or any free one when it has none.
 // It gives a control listener on a free loopback port and a generated
 // password, and saves the new run as the app's owned run on its connection.
-// Starting an instance that has never run creates it. extra are more
+// Starting an instance that has never run creates it. An added local
+// connection without --project in extra opens the project named for its
+// instance (--project-name), not the scratchpad. extra are more
 // `service start` flags, such as --project.
 func (a *App) startLocal(l *localInstance, extra ...string) error {
 	password, err := a.newPassword()
@@ -306,6 +309,11 @@ func (a *App) startLocal(l *localInstance, extra ...string) error {
 	fixed := l.port != ""
 	if fixed {
 		port = l.port
+		if !slices.Contains(extra, "--project") {
+			// Marasi's own pick is the scratchpad, which Local's instance
+			// holds open; an added instance opens one named for it.
+			extra = append([]string{"--project-name", l.name}, extra...)
+		}
 	}
 	var started struct {
 		ProxyListener string `json:"proxy_listener"`

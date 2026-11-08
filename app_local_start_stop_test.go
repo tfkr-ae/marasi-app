@@ -289,3 +289,30 @@ func TestLocalInstancesReportsAMissingCLI(t *testing.T) {
 		t.Fatalf("err = %v, want cli_missing", err)
 	}
 }
+
+func TestANamedInstanceStartsOnItsOwnProjectUnlessGivenOne(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 1, `{"error":"instance work is not running"}`).
+		answer("service status", 0, runOf("run-work")).
+		answer("service status", 1, `{"error":"instance work is not running"}`).
+		answer("service status", 0, runOf("run-work-2")).
+		answer("service start", 0, started)
+	app, work := namedLocalApp(t, cli, 0)
+
+	// The scratchpad is Local's, open there already: two instances can't
+	// share a project.
+	if err := app.StartLocalInstance(work.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	first := cli.lastCall("service start")
+	if got := flagValue(first.args, "--project-name"); got != "work" {
+		t.Fatalf("started project name %q, want the instance's own, work", got)
+	}
+	if err := app.StartLocalInstance(work.ID, "/p/engagement.marasi"); err != nil {
+		t.Fatal(err)
+	}
+	second := cli.lastCall("service start")
+	if flagValue(second.args, "--project") != "/p/engagement.marasi" || slices.Contains(second.args, "--project-name") {
+		t.Fatalf("start args %v, want only the given project", second.args)
+	}
+}
