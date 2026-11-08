@@ -1,9 +1,11 @@
 <script>
 	// The Marasi menu (⌘K) with menu groups. menuModel.js builds the menu and
 	// answers which entry a key picks and what a search matches; this draws
-	// it and keeps the open group, the search text and the highlight. Keep ⌘
-	// (Ctrl on Windows/Linux) held after ⌘K: ⌘ + a menu letter opens a group,
-	// and inside it an action's own binding runs it. Typing searches.
+	// it and keeps the open group, the search text and the highlight. Every
+	// shortcut works with the menu open: the dispatcher sees it first, closes
+	// the menu and runs the action (app.js installMenuShortcuts). A ⌘ (Ctrl on
+	// Windows/Linux) key no action takes reaches this menu: ⌘ + a menu letter
+	// opens a group. Typing searches.
 	import { onMount, tick } from "svelte";
 	import { ChevronRight, CornerDownLeft, Search } from "lucide-svelte";
 	import {
