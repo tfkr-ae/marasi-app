@@ -13,7 +13,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -84,17 +83,9 @@ type record struct {
 	SHA256  string `json:"sha256"`
 }
 
-type githubRelease struct {
-	Tag    string `json:"tag_name"`
-	Name   string `json:"name"`
-	Assets []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-	} `json:"assets"`
-}
-
-func (r githubRelease) asset(name string) (string, error) {
-	for _, asset := range r.Assets {
+// releaseAsset is the download URL of the release's asset name.
+func releaseAsset(release marasicli.Release, name string) (string, error) {
+	for _, asset := range release.Assets {
 		if asset.Name == name {
 			return asset.URL, nil
 		}
@@ -124,11 +115,11 @@ func carry(ctx context.Context, opts carryOptions) error {
 	if err != nil {
 		return fmt.Errorf("reading the %s release: %w", opts.channel, err)
 	}
-	var release githubRelease
+	var release marasicli.Release
 	if err := json.Unmarshal(body, &release); err != nil {
 		return fmt.Errorf("reading the %s release: %w", opts.channel, err)
 	}
-	version := release.Tag
+	version := release.TagName
 	if opts.channel == "nightly" {
 		version = release.Name
 	}
@@ -145,10 +136,10 @@ func carry(ctx context.Context, opts carryOptions) error {
 		return errors.New("checksums.txt.minisig: signature check failed")
 	}
 	want := marasicli.TrustedComment(opts.channel, version)
-	if got := trustedComment(signature); got != want {
+	if got := marasicli.SignatureComment(signature); got != want {
 		return fmt.Errorf("checksums.txt.minisig: trusted comment %q, want %q", got, want)
 	}
-	sum, ok := parseChecksums(checksums)[asset]
+	sum, ok := marasicli.ParseChecksums(checksums)[asset]
 	if !ok {
 		return fmt.Errorf("the signed checksums don't list %s", asset)
 	}
@@ -213,8 +204,8 @@ func size(out string) int64 {
 	return info.Size()
 }
 
-func (opts carryOptions) getAsset(ctx context.Context, release githubRelease, name string, limit int64) ([]byte, error) {
-	url, err := release.asset(name)
+func (opts carryOptions) getAsset(ctx context.Context, release marasicli.Release, name string, limit int64) ([]byte, error) {
+	url, err := releaseAsset(release, name)
 	if err != nil {
 		return nil, err
 	}
@@ -251,27 +242,4 @@ func (opts carryOptions) get(ctx context.Context, url string, limit int64) ([]by
 		return nil, fmt.Errorf("larger than %d bytes", limit)
 	}
 	return data, nil
-}
-
-// trustedComment is the trusted comment of a minisign signature file.
-func trustedComment(signature []byte) string {
-	scanner := bufio.NewScanner(bytes.NewReader(signature))
-	for scanner.Scan() {
-		if comment, ok := strings.CutPrefix(scanner.Text(), "trusted comment: "); ok {
-			return strings.TrimSpace(comment)
-		}
-	}
-	return ""
-}
-
-// parseChecksums reads sha256sum output: "<hex>  <name>" per line.
-func parseChecksums(data []byte) map[string]string {
-	sums := map[string]string{}
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 {
-			sums[strings.TrimPrefix(fields[1], "*")] = strings.ToLower(fields[0])
-		}
-	}
-	return sums
 }

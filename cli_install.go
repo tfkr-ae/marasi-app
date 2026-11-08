@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -336,10 +334,10 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if !minisign.Verify(r.key, checksums, signature) {
 		return failed(UpdateFailureSignature, "Signature check failed, nothing installed")
 	}
-	if trustedComment(signature) != marasicli.TrustedComment(string(channel), version) {
+	if marasicli.SignatureComment(signature) != marasicli.TrustedComment(string(channel), version) {
 		return failed(UpdateFailureSignature, "Signature is for another release, nothing installed")
 	}
-	sums := parseChecksums(checksums)
+	sums := marasicli.ParseChecksums(checksums)
 	asset, archived := a.cliArchive()
 	want, listed := sums[asset]
 	build, published := release.asset(asset)
@@ -451,17 +449,6 @@ func (a *App) downloadCLIBuild(ctx context.Context, url, path string) (string, e
 	}
 	progress.done()
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-// trustedComment is the trusted comment of a minisign signature file.
-func trustedComment(signature []byte) string {
-	scanner := bufio.NewScanner(bytes.NewReader(signature))
-	for scanner.Scan() {
-		if comment, ok := strings.CutPrefix(scanner.Text(), "trusted comment: "); ok {
-			return strings.TrimSpace(comment)
-		}
-	}
-	return ""
 }
 
 // removeCLILeftovers deletes the CLI a Windows install moved aside, beside

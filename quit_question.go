@@ -98,23 +98,32 @@ func (a *App) ownedRunNames() []string {
 	owned := a.ownedRunConnections()
 	var names []string
 	for _, c := range a.ListConnections().Connections {
-		if c.Kind == "local" && slices.Contains(owned, c.ID) {
+		if c.Kind == connectionKindLocal && slices.Contains(owned, c.ID) {
 			names = append(names, c.Name)
 		}
 	}
 	return names
 }
 
+// quitQuestionNames is the connections quitting now would ask about: the
+// owned runs' names when When quitting is ask, else none.
+func (a *App) quitQuestionNames() []string {
+	if a.whenQuitting() != whenQuittingAsk {
+		return nil
+	}
+	return a.ownedRunNames()
+}
+
 // asksOnQuit reports whether quitting now would ask the quit question.
 func (a *App) asksOnQuit() bool {
-	return a.whenQuitting() == whenQuittingAsk && len(a.ownedRunNames()) > 0
+	return len(a.quitQuestionNames()) > 0
 }
 
 // askAboutOwnedRuns asks the quit question when asksOnQuit, and reports
 // whether to keep Marasi open (Cancel).
 func (a *App) askAboutOwnedRuns() bool {
-	names := a.ownedRunNames()
-	if a.whenQuitting() != whenQuittingAsk || len(names) == 0 {
+	names := a.quitQuestionNames()
+	if len(names) == 0 {
 		return false
 	}
 	reply := make(chan quitAnswer, 1)

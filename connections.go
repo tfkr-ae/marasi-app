@@ -30,6 +30,13 @@ const (
 	recentProjectsLimit = 10
 )
 
+// A saved connection's Kind: a local instance the app starts through the
+// Marasi CLI, or a remote service it reaches by address.
+const (
+	connectionKindLocal  = "local"
+	connectionKindRemote = "remote"
+)
+
 // SavedConnection is one connection as the frontend lists it.
 type SavedConnection struct {
 	ID             string   `json:"id" yaml:"id"`
@@ -74,7 +81,7 @@ type RecentProject struct {
 	Opened string `json:"opened" yaml:"opened"`
 }
 
-var localConnection = SavedConnection{ID: localConnectionID, Name: "Local", Kind: "local", Instance: localInstanceName}
+var localConnection = SavedConnection{ID: localConnectionID, Name: "Local", Kind: connectionKindLocal, Instance: localInstanceName}
 
 func parseConnections(node *yaml.Node) []SavedConnection {
 	var saved []SavedConnection
@@ -86,7 +93,7 @@ func parseConnections(node *yaml.Node) []SavedConnection {
 		return nil
 	}
 	return slices.DeleteFunc(saved, func(c SavedConnection) bool {
-		return c.ID == "" || c.ID == localConnectionID || (c.Kind == "local" && c.Instance == "")
+		return c.ID == "" || c.ID == localConnectionID || (c.Kind == connectionKindLocal && c.Instance == "")
 	})
 }
 
@@ -144,7 +151,7 @@ func (a *App) findConnection(id string) int {
 // remoteConnection is the index of the remote `id` in Config.connections,
 // or an error naming it when there is none. Callers hold Config.mu.
 func (a *App) remoteConnection(id string) (int, error) {
-	return a.savedConnection(id, "remote")
+	return a.savedConnection(id, connectionKindRemote)
 }
 
 // savedConnection is the index of the added connection `id` of kind in
@@ -197,7 +204,7 @@ func (a *App) AddLocalConnection(in NewLocalConnection) (SavedConnection, error)
 	if err := checkPort(in.Port); err != nil {
 		return SavedConnection{}, err
 	}
-	id, err := newConnectionID("local")
+	id, err := newConnectionID(connectionKindLocal)
 	if err != nil {
 		return SavedConnection{}, err
 	}
@@ -205,12 +212,12 @@ func (a *App) AddLocalConnection(in NewLocalConnection) (SavedConnection, error)
 	if label == "" {
 		label = name
 	}
-	saved := SavedConnection{ID: id, Name: label, Kind: "local", Instance: name, Port: in.Port}
+	saved := SavedConnection{ID: id, Name: label, Kind: connectionKindLocal, Instance: name, Port: in.Port}
 
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
 	for _, c := range a.connectionsLocked().Connections {
-		if c.Kind == "local" && c.Instance == name {
+		if c.Kind == connectionKindLocal && c.Instance == name {
 			return SavedConnection{}, fmt.Errorf("%s already reaches instance %s", c.Name, name)
 		}
 	}
@@ -228,7 +235,7 @@ func (a *App) SetConnectionPort(id string, port int) (SavedConnection, error) {
 	}
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
-	i, err := a.savedConnection(id, "local")
+	i, err := a.savedConnection(id, connectionKindLocal)
 	if err != nil {
 		return SavedConnection{}, err
 	}
@@ -250,7 +257,7 @@ func (a *App) AddConnection(in NewConnection) (SavedConnection, error) {
 	if in.Password == "" && !in.NoPassword {
 		return SavedConnection{}, errors.New("enter the service's password, or say it has none")
 	}
-	id, err := newConnectionID("remote")
+	id, err := newConnectionID(connectionKindRemote)
 	if err != nil {
 		return SavedConnection{}, err
 	}
@@ -258,7 +265,7 @@ func (a *App) AddConnection(in NewConnection) (SavedConnection, error) {
 	if name == "" {
 		name = strings.TrimPrefix(strings.TrimPrefix(address, "https://"), "http://")
 	}
-	saved := SavedConnection{ID: id, Name: name, Kind: "remote", URL: address, NoPassword: in.NoPassword}
+	saved := SavedConnection{ID: id, Name: name, Kind: connectionKindRemote, URL: address, NoPassword: in.NoPassword}
 
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()

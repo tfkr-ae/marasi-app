@@ -82,7 +82,7 @@ func (a *App) localInstanceFor(id string) (name, port string, err error) {
 	}
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
-	i, err := a.savedConnection(id, "local")
+	i, err := a.savedConnection(id, connectionKindLocal)
 	if err != nil {
 		return "", "", err
 	}
