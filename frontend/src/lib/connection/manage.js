@@ -8,8 +8,11 @@ import {
   RemoveConnection,
   SetConnectionAddress,
   SetConnectionPort,
+  StartLocalInstance,
+  StopLocalInstance,
 } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { connectionStore } from "../../stores/connectionStore.js";
+import { createInstanceControl } from "./instanceControl.js";
 
 /** Saves a remote, `{name, url, password, noPassword}`; resolves to it. */
 export async function addConnection(input) {
@@ -56,15 +59,18 @@ export async function removeConnection(id) {
 }
 
 /**
- * Whether the app owns a run on connection `id`, so Remove waits for a
- * stop; false when Go can't say (Go refuses the remove anyway).
+ * Stop and Start for local connection `connection` while it isn't active
+ * (instanceControl.js). It runs when the CLI lists its instance (Local's is
+ * `default`); a start leaves the active connection as it is.
  */
-export async function ownsRun(id) {
-  try {
-    return Boolean(await OwnsRun(id));
-  } catch {
-    return false;
-  }
+export function localInstanceControl(connection) {
+  const instance = connection.instance || "default";
+  return createInstanceControl({
+    running: async () => ((await LocalInstances()) ?? []).includes(instance),
+    owns: () => OwnsRun(connection.id),
+    stop: () => StopLocalInstance(connection.id),
+    start: () => StartLocalInstance(connection.id, ""),
+  });
 }
 
 /** A Go error's text, for the inline error line. */

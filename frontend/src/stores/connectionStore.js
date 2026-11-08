@@ -24,6 +24,7 @@ import { loadedProject, projectStore, resyncProject } from "./projectStore.js";
 import { activeConnectionId } from "./activeConnection.js";
 import { trackRecents } from "./recentProjects.js";
 import { projectData } from "./projectData.js";
+import { homeStore } from "./homeStore.js";
 import { projectName } from "../lib/openProgress.js";
 
 export const connectionStore = createConnectionStore({
@@ -40,6 +41,9 @@ export const connectionStore = createConnectionStore({
   setActive: (id) => SetActiveConnection(id),
   // Leaving a connection: the last service's data goes before the next loads.
   clearStores: () => projectData.clear(),
+  // A stop takes the proxy listener with it; Home shows it off, as a
+  // listener.stopped event would, until Start loads the project again.
+  serviceStopped: () => homeStore.onListener({ status: "stopped" }),
   // After a stream reset (expired or invalid) or a service without a run ID.
   resync: () => resyncProject(),
   // After a reconnect that found another project or a restarted service:

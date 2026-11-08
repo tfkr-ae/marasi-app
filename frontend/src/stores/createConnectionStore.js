@@ -17,6 +17,8 @@
 //   savePassword(id, password)                       replace it (Go)
 //   setActive(id)                                    save the active connection (Go)
 //   clearStores()                                    forget the last service's data
+//   serviceStopped()                                 the stop took the proxy
+//                                                    listener with it
 //   confirmSwitch() -> bool                          the unsaved-work prompt (Go)
 //   confirmFollow(project) -> bool                   the same prompt, for a project
 //                                                    another client opened (Go)
@@ -628,8 +630,12 @@ export function reduce(state, action) {
     case "INSTANCE_STOPPED":
       // `stopped` names no connection kind: a remote's stop reaches it too.
       // The pages stay, dimmed and inert, on the project Start opens again.
+      // The proxy listener stopped with it, though no listener.stopped event
+      // came over the closed stream (`service-stopped`).
       if (state.busy !== "stop") return refuse(state, "No stop is under way.");
-      return go(state, { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false });
+      return go(state, { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false }, [
+        { type: "service-stopped" },
+      ]);
 
     case "STOP_FAILED":
       if (state.busy !== "stop") return refuse(state, "No stop is under way.");
@@ -748,6 +754,13 @@ export function createConnectionStore(api, timers = globalThis) {
           await api.setActive(step.id);
         } catch (err) {
           console.error("Saving the active connection failed:", err);
+        }
+        return;
+      case "service-stopped":
+        try {
+          await api.serviceStopped();
+        } catch (err) {
+          console.error("Showing the stopped listener failed:", err);
         }
         return;
       case "clear-stores":

@@ -7,7 +7,10 @@
 	// remote has its address and Remove. Every connection offers Stop, which
 	// asks first for a remote ("Stop <name>?": the app can't start it again)
 	// or a run the app doesn't own; once stopped, "Marasi stopped" with Start
-	// for a local connection and Retry for a remote. The password and sharing rows
+	// for a local connection and Retry for a remote. A local connection that
+	// isn't active offers Stop while its instance runs and Start while it
+	// doesn't (instanceControl.js), leaving the active connection as it is.
+	// The password and sharing rows
 	// (ConnectionAccess) go after the service rows. A local connection the
 	// researcher added (not Local) has its proxy port and Remove.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
@@ -15,7 +18,7 @@
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, removeBlock, whereText } from "./status.js";
-	import { errorText, ownsRun, removeConnection, setAddress, setPort } from "./manage.js";
+	import { errorText, localInstanceControl, removeConnection, setAddress, setPort } from "./manage.js";
 	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
 	import { cliMissing, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
@@ -72,18 +75,13 @@
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
 	$: reached = isActive && state.version !== null && phase !== "stopped";
-	// Whether the app owns a run on this added local connection, read again
-	// as the active connection or its phase changes (a switch away, a stop).
-	let ownedRun = false;
-	let ownedRead = 0;
-	function readOwnedRun() {
-		const read = ++ownedRead;
-		ownsRun(connection.id).then((owned) => {
-			if (read === ownedRead) ownedRun = owned;
-		});
-	}
-	$: if (added) readOwnedRun(isActive, state.phase);
-	$: removeHint = removeBlock({ isActive, ownedRun: added && ownedRun });
+	// A local connection's instance: whether it runs and whether the app owns
+	// the run, read again as the active connection or its phase changes (a
+	// switch away, a stop), with Stop and Start while it isn't active.
+	const local = connection.kind === "local" ? localInstanceControl(connection) : null;
+	$: instance = local ? $local : null;
+	$: if (local) local.refresh(isActive, state.phase);
+	$: removeHint = removeBlock({ isActive, ownedRun: added && Boolean(instance?.owned) });
 	const row = rows
 		? "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
 		: "flex items-center justify-between gap-4 py-2 border-b border-surface-200 dark:border-surface-700";
@@ -112,6 +110,33 @@
 			<button type="button" class={primary} data-testid="connection-switch" on:click={() => connectionStore.switchTo(connection.id)}>
 				Switch
 			</button>
+		</div>
+	{/if}
+	{#if !isActive && local && instance.running !== null}
+		<div class="mt-3 border-t border-surface-200 dark:border-surface-700" data-testid="connection-instance">
+			<div class={row}>
+				<div>
+					<p>Instance</p>
+					<p class="text-xs opacity-70" data-testid="connection-stop-hint">
+						{#if instance.stopAsk}Another program started it.{:else if instance.running}Stop Marasi and its proxy{:else}Not running{/if}
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if instance.stopAsk}
+						<button type="button" class={primary} data-testid="connection-stop-confirm" on:click={() => local.confirmStop()}>Stop</button>
+						<button type="button" class={neutral} on:click={() => local.cancelStop()}>Cancel</button>
+					{:else if instance.running}
+						<button type="button" class={neutral} disabled={instance.busy !== null} data-testid="connection-stop" on:click={() => local.stop()}
+							>{instance.busy === "stop" ? "Stopping…" : "Stop"}</button
+						>
+					{:else}
+						<button type="button" class={primary} disabled={instance.busy !== null} data-testid="connection-detail-start" on:click={() => local.start()}
+							>{instance.busy === "start" ? "Starting…" : "Start"}</button
+						>
+					{/if}
+				</div>
+			</div>
+			{#if instance.error}<p class="mt-2 text-xs text-error-600 dark:text-error-400" role="alert">{instance.error}</p>{/if}
 		</div>
 	{/if}
 	{#if isActive && phase === "auth-failed"}
