@@ -1,6 +1,6 @@
 // The connection store bound to the app: the saved connections and their
-// passwords through Go (connections.go, keychain.go), the local instance
-// through Go's ConnectLocal, and the service through the app's service
+// passwords through Go (connections.go, keychain.go), a local connection's
+// instance through Go's ConnectLocal, and the service through the app's service
 // client. The lifecycle is in createConnectionStore.js.
 import {
   AddRecentProject,
@@ -26,7 +26,7 @@ import { projectName } from "../lib/openProgress.js";
 export const connectionStore = createConnectionStore({
   ...connectionServiceApi(service, projectStore),
   listConnections: () => ListConnections(),
-  connectLocal: () => ConnectLocal(),
+  connectLocal: (id) => ConnectLocal(id),
   connectionPassword: (id) => ConnectionPassword(id),
   savePassword: (id, password) => SetConnectionPassword(id, password),
   forgetPassword: (id, origins) => SetConnectionNoPassword(id, origins),

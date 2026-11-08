@@ -33,7 +33,7 @@
 		busy = true;
 		problem = "";
 		try {
-			const outcome = await updateCLI({ checkForUpdate: CheckForCLIUpdate, restart: RestartLocalInstance });
+			const outcome = await updateCLI({ checkForUpdate: CheckForCLIUpdate, restart: () => RestartLocalInstance($connectionStore.connection.id) });
 			if (!outcome.ok) {
 				problem = outcome.text;
 				return;
