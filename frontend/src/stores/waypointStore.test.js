@@ -92,3 +92,15 @@ test("clear forgets the last project's waypoints", async () => {
   store.clear();
   assert.deepEqual(get(store), {});
 });
+
+test("a load the project switch superseded changes nothing when its answer comes late", async () => {
+  let answer;
+  const answers = [new Promise((resolve) => (answer = resolve)), Promise.resolve({ items: [{ hostname: "b.test", override: "127.0.0.1" }] })];
+  const store = createWaypointStore({ get: () => answers.shift() });
+  const superseded = store.load();
+  store.clear();
+  await store.load();
+  answer({ items: [{ hostname: "a.test", override: "10.0.0.1" }] });
+  await superseded;
+  assert.deepEqual(get(store), { "b.test": "127.0.0.1" });
+});
