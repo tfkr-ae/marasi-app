@@ -36,7 +36,7 @@
 		Sun,
 		ToggleLeft,
 	} from "lucide-svelte";
-	import MarasiKeys from "./MarasiKeys.svelte";
+	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
 	import { ToggleFlag } from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { checkpointStore } from "../../../stores/checkpointStore";
@@ -281,4 +281,4 @@
 	});
 </script>
 
-<MarasiKeys paletteTier="global" {menuOptions} />
+<MarasiMenu paletteTier="global" globalEntries={menuOptions} />

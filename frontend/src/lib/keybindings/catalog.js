@@ -2,6 +2,7 @@ import { CONTEXTS, extensionPageContext } from "./contexts.js";
 import { isReservedBinding } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
 import { OPEN_MENU } from "./keymap.js";
+import { FACTORY_MENU_GROUPS } from "./menuGroups.js";
 import { MACOS, PLATFORMS, WINDOWS_LINUX } from "./platform.js";
 
 // The menu action catalog: stable identity, menu context, label/description
@@ -29,6 +30,11 @@ function action(id, label, description, keywords, defaults, context = "global") 
   return { id, context, label, description, keywords, defaults };
 }
 
+// A menu action in the menu group `group` of its context (menuGroups.js).
+function inGroup(group, definition) {
+  return { ...definition, group };
+}
+
 // One page or drawer menu: each action's id is `<context>.<slug>`, so ids
 // stay unique when a key or label is reused in a mutually exclusive state.
 // A row's optional sixth element adds flags, such as `yieldsToEditors`: the
@@ -49,29 +55,29 @@ function pageActions(context, rows) {
 // saved profiles key their overrides by id.
 export const FACTORY_ACTIONS = [
   action("global.open-menu", "Open Marasi Menu", "Open or close the Marasi menu", "menu, commands, palette", primary("k")),
-  action("global.go-home", "Marasi", "Dashboard", "home, dashboard", primary("1")),
-  action("global.go-ledger", "Ledger", "View requests", "ledger", primary("2")),
-  action("global.go-compass", "Compass", "Configure scope", "compass", primary("3")),
-  action("global.go-checkpoint", "Checkpoint", "Intercept Requests", "checkpoint", primary("4")),
-  action("global.go-launchpad", "Launchpad", "Edit and Repeat Requests", "Launchpad", primary("5")),
-  action("global.go-armory", "Armory", "Create request templates", "armory,template,attack", primary("6")),
-  action("global.go-logbook", "Logbook", "Review test cases and findings", "logbook,findings,tests", primary("7")),
-  action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8")),
-  action("global.go-settings", "Settings", "Configure your settings", "settings", primary(",")),
-  action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`")),
-  action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d")),
-  action("global.copy-certificate", "Copy Certificate", "Copy Certificate", "certificate,copy", primary("shift+,")),
+  inGroup("go", action("global.go-home", "Marasi", "Dashboard", "home, dashboard", primary("1"))),
+  inGroup("go", action("global.go-ledger", "Ledger", "View requests", "ledger", primary("2"))),
+  inGroup("go", action("global.go-compass", "Compass", "Configure scope", "compass", primary("3"))),
+  inGroup("go", action("global.go-checkpoint", "Checkpoint", "Intercept Requests", "checkpoint", primary("4"))),
+  inGroup("go", action("global.go-launchpad", "Launchpad", "Edit and Repeat Requests", "Launchpad", primary("5"))),
+  inGroup("go", action("global.go-armory", "Armory", "Create request templates", "armory,template,attack", primary("6"))),
+  inGroup("go", action("global.go-logbook", "Logbook", "Review test cases and findings", "logbook,findings,tests", primary("7"))),
+  inGroup("go", action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8"))),
+  inGroup("go", action("global.go-settings", "Settings", "Configure your settings", "settings", primary(","))),
+  inGroup("browser", action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"))),
+  inGroup("browser", action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d"))),
+  inGroup("browser", action("global.copy-certificate", "Copy Certificate", "Copy Certificate", "certificate,copy", primary("shift+,"))),
   action("global.jump-to-toast", "Jump to Toast", "Jump to the active toast", "toast", primary(".")),
-  action("global.open-project", "Open Project", "Open a project", "open project", primary("o")),
-  action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l")),
-  action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t")),
-  action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u")),
-  action("global.increase-text-size", "Increase Text Size", "Make all text one size larger", "text, font, size, larger, bigger, zoom in", primary("=")),
-  action("global.decrease-text-size", "Decrease Text Size", "Make all text one size smaller", "text, font, size, smaller, zoom out", primary("-")),
-  action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0")),
-  action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u")),
-  action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", primary("9")),
-  action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i")),
+  inGroup("project", action("global.open-project", "Open Project", "Open a project", "open project", primary("o"))),
+  inGroup("project", action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l"))),
+  inGroup("appearance", action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t"))),
+  inGroup("appearance", action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u"))),
+  inGroup("appearance", action("global.increase-text-size", "Increase Text Size", "Make all text one size larger", "text, font, size, larger, bigger, zoom in", primary("="))),
+  inGroup("appearance", action("global.decrease-text-size", "Decrease Text Size", "Make all text one size smaller", "text, font, size, smaller, zoom out", primary("-"))),
+  inGroup("appearance", action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0"))),
+  inGroup("project", action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u"))),
+  inGroup("project", action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", primary("9"))),
+  inGroup("browser", action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i"))),
   ...pageActions("ledger.drawer-closed", [
     ["toggle-settings", "Toggle Query Fields", "Show or hide the query fields and examples", "settings, toggle, query, fields, help", primary("p")],
     ["focus-query", "Search", "Jump to search input", "search", primary("s")],
@@ -318,6 +324,7 @@ export function extensionNavigationActions(extensions = []) {
       index < 9 ? primary(`alt+${index + 1}`) : { [MACOS]: [], [WINDOWS_LINUX]: [] },
     ),
     positionalDefault: true,
+    group: "go",
   }));
 }
 
@@ -415,8 +422,10 @@ export function extensionPageMenus(extensions = [], menus = {}) {
   return { contexts, actions };
 }
 
-export function createCatalog(definitions, { contexts = CONTEXTS } = {}) {
+export function createCatalog(definitions, { contexts = CONTEXTS, groups = FACTORY_MENU_GROUPS } = {}) {
   const contextIds = new Set(contexts.map((context) => context.id));
+  const groupKey = (context, id) => `${context}\u0000${id}`;
+  const groupsByKey = new Map(groups.map((g) => [groupKey(g.context, g.id), g]));
   const byId = new Map();
   for (const definition of definitions) {
     if (!ACTION_ID.test(definition.id)) {
@@ -427,6 +436,9 @@ export function createCatalog(definitions, { contexts = CONTEXTS } = {}) {
     }
     if (!contextIds.has(definition.context)) {
       throw new Error(`unknown menu context ${definition.context} for ${definition.id}`);
+    }
+    if (definition.group && !groupsByKey.has(groupKey(definition.context, definition.group))) {
+      throw new Error(`unknown menu group ${definition.group} for ${definition.id}`);
     }
     const defaults = {};
     for (const platform of PLATFORMS) {
@@ -445,6 +457,10 @@ export function createCatalog(definitions, { contexts = CONTEXTS } = {}) {
     get: (id) => byId.get(id),
     has: (id) => byId.has(id),
     inContext: (contextId) => actions.filter((a) => a.context === contextId),
+    // Menu groups (menuGroups.js), in catalog order.
+    groups,
+    group: (contextId, id) => groupsByKey.get(groupKey(contextId, id)),
+    groupsIn: (contextId) => groups.filter((g) => g.context === contextId),
   };
 }
 

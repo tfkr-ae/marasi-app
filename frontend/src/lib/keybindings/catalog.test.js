@@ -321,3 +321,73 @@ test("Checkpoint actions keep their ids and keys but name the Items | Rules page
     assert.doesNotMatch(`${action.label} | ${action.description} | ${action.keywords}`, /accordi|settings/i, action.id);
   }
 });
+
+// Menu groups: the Marasi menu gathers related menu actions under a menu
+// group, opened in the menu by ⌘ (Ctrl) + its menu letter.
+
+test("every menu action's group exists in the action's own context", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }], extensionMenus: { "Port Scanner": [{ name: "Scan", action: "scan" }] } });
+  for (const action of catalog.actions) {
+    if (!action.group) continue;
+    assert.ok(catalog.group(action.context, action.group), `${action.id}: no group ${action.group} in ${action.context}`);
+  }
+});
+
+test("the global menu groups gather Marasi's own actions as the spec lists them", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }] });
+  const inGroup = (id) =>
+    catalog
+      .inContext("global")
+      .filter((a) => a.group === id)
+      .map((a) => a.id.replace(/^global\./, ""));
+  assert.deepEqual(
+    catalog.groupsIn("global").map((g) => [g.id, g.label, g.letter]),
+    [
+      ["go", "Go to", "G"],
+      ["project", "Project", "P"],
+      ["browser", "Browser & proxy", "B"],
+      ["appearance", "Appearance", "A"],
+    ],
+  );
+  assert.deepEqual(inGroup("go"), [
+    "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
+    "go-armory", "go-logbook", "go-workshop", "go-settings", "open-extension.port-scanner",
+  ]);
+  assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener"]);
+  assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);
+  assert.deepEqual(inGroup("appearance").sort(), [
+    "decrease-text-size", "increase-text-size", "reset-text-size", "toggle-light-mode", "toggle-vim",
+  ]);
+  assert.equal(catalog.get("global.jump-to-toast").group, undefined);
+  assert.equal(catalog.get("global.open-menu").group, undefined);
+});
+
+test("menu letters are unique at each menu level, global groups included", () => {
+  const catalog = buildCatalog();
+  const global = catalog.groupsIn("global");
+  for (const context of catalog.contexts) {
+    const level = context.id === "global" ? global : [...catalog.groupsIn(context.id), ...global];
+    const seen = new Map();
+    for (const group of level) {
+      assert.ok(!seen.has(group.letter), `${context.id}: ${group.id} and ${seen.get(group.letter)} share ${group.letter}`);
+      seen.set(group.letter, group.id);
+    }
+  }
+});
+
+test("no menu group uses K, Q or H", () => {
+  for (const group of buildCatalog().groups) {
+    assert.match(group.letter, /^[A-Z]$/, group.id);
+    assert.ok(!["K", "Q", "H"].includes(group.letter), `${group.context}.${group.id} uses ${group.letter}`);
+  }
+});
+
+test("every menu group has a label, an icon, a tone and a description", () => {
+  const groups = buildCatalog().groups;
+  assert.ok(groups.length >= 4);
+  for (const group of groups) {
+    for (const field of ["label", "icon", "tone", "description"]) {
+      assert.ok(typeof group[field] === "string" && group[field].length > 0, `${group.context}.${group.id} has no ${field}`);
+    }
+  }
+});
