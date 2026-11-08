@@ -122,8 +122,16 @@ _Avoid_: editable action, user-defined command
 A Marasi-defined page or interface state that determines which menu actions are available, such as Ledger with its drawer open or closed.
 _Avoid_: keybinding mode
 
+**Menu group**:
+A Marasi-defined, named set of related menu actions that the Marasi menu shows as one entry, such as Go to or Copy. A researcher's keybinding profile does not change which group an action is in.
+_Avoid_: submenu, category, section
+
+**Menu letter**:
+The single letter that, pressed with ⌘ (Ctrl on Windows and Linux) while the Marasi menu is open, picks a menu group, or a menu action whose own binding doesn't use ⌘. It is unique among the entries it chooses between and means nothing outside the open menu. Any other menu action is picked in the menu by its own binding.
+_Avoid_: mnemonic, access key, hotkey
+
 **Keybinding profile**:
-A named collection of bindings for Marasi menu actions that a researcher can select and customize. Factory defaults remain recoverable independently of those customizations.
+A named collection of bindings and menu letters for Marasi menu actions that a researcher can select and customize. Factory defaults remain recoverable independently of those customizations.
 _Avoid_: Vim mode, Chrome profile
 
 ### Updates
