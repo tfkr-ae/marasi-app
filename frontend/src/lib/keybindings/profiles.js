@@ -128,6 +128,48 @@ function menuLevels(catalog) {
   ];
 }
 
+// Each context's menu, for the letter-taken check: the groups of its top
+// level (as menuLevels) and every action a key can reach there, those of the
+// global context and of the contexts it conflicts with, grouped or not (with
+// the menu open, a key runs its action wherever it is listed). Mirrors
+// menuReach in keybinding_validation.go.
+function menuReach(catalog) {
+  const global = catalog.groups.filter((group) => group.context === "global");
+  const inGlobal = catalog.actions.filter((action) => action.context === "global");
+  return catalog.contexts.map(({ id }) => {
+    if (id === "global") return { groups: global, actions: inGlobal };
+    const near = (context) => context !== "global" && contextsConflict(catalog.contexts, id, context);
+    return {
+      groups: [...global, ...catalog.groups.filter((group) => near(group.context))],
+      actions: [...inGlobal, ...catalog.actions.filter((action) => near(action.context))],
+    };
+  });
+}
+
+// letter-taken problems in one platform variant: an action in a group's menu
+// is bound to ⌥ (Alt) + the group's letter, the key that opens the group, so
+// the menu would have to show the group under another key. Mirrors
+// letterTakenProblems in keybinding_validation.go.
+function letterTakenProblems(catalog, profile, platform, keymap) {
+  const problems = [];
+  const letters = menuLetters(catalog, profile);
+  const reported = new Set();
+  for (const { groups, actions } of menuReach(catalog)) {
+    for (const group of groups) {
+      const letter = letters[menuGroupId(group)];
+      const binding = `alt+${letter.toLowerCase()}`;
+      for (const action of actions) {
+        const pair = `${menuGroupId(group)} ${action.id}`;
+        if (reported.has(pair) || !keymap.bindingsFor(action.id).includes(binding)) continue;
+        reported.add(pair);
+        const detail = `${binding} opens ${group.label} (${group.context}) in the menu but is bound to ${action.id} (${action.context})`;
+        problems.push({ ...problem(profile, platform, "letter-taken", [action.id], binding, detail), groups: [menuGroupId(group)], letter });
+      }
+    }
+  }
+  return problems;
+}
+
 // Menu letter problems in one profile, on every platform (platform null):
 //   letter-invalid    an override is not one capital letter A–Z, or is
 //                     reserved (K, Q, H); checked for dormant groups too
@@ -174,6 +216,9 @@ export function validateLetters(catalog, profile) {
 //   menu-shadowed  an action in another context shares a menu-opening
 //                  binding (the global context is always eligible, so it
 //                  would win wherever that context is)
+//   letter-taken   an action is bound to ⌥ + the menu letter of a group in
+//                  its menu (letterTakenProblems); it also names the group
+//                  (`groups`, `letter`)
 // then its menu letter problems (validateLetters), which hold on every
 // platform and have a null platform. A problem's `message` names the profile
 // (and platform) before its explanation, which `detail` holds alone.
@@ -217,6 +262,7 @@ export function validateProfile(catalog, profile) {
         }
       }
     }
+    problems.push(...letterTakenProblems(catalog, profile, platform, keymap));
   }
   return [...problems, ...validateLetters(catalog, profile)];
 }
@@ -272,7 +318,9 @@ export function catalogDescriptor(catalog) {
 // profile: as with a new default (docs/adr/2026-10-10-keybinding-profiles-override-factory-defaults.md),
 // the saved letter wins, and the menu gives a clashing factory group a
 // derived key (menuModel.js); a letter that can't be a menu letter is
-// ignored. Saving is still refused (validateLetters).
+// ignored. An action bound to a group's ⌥ letter (letter-taken) doesn't
+// drop it either: the action keeps the key and the group moves.
+// Saving is still refused (validateLetters, letter-taken).
 export function liveKeybindings(state, catalog, platform) {
   const factory = { overrides: {}, knownActions: undefined, letters: {} };
   if (!state?.config) return { ...factory, problem: "" };
@@ -281,7 +329,7 @@ export function liveKeybindings(state, catalog, platform) {
   if (!profile) {
     return { ...factory, problem: `active keybinding profile ${state.config.activeProfile} does not exist` };
   }
-  const problems = validateProfile(catalog, profile).filter((p) => p.platform === platform);
+  const problems = validateProfile(catalog, profile).filter((p) => p.platform === platform && p.kind !== "letter-taken");
   if (problems.length) {
     return { ...factory, problem: `${problems.map((p) => p.message).join("; ")}. Using factory shortcuts.` };
   }

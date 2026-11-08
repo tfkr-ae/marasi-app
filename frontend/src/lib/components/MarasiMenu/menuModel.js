@@ -4,22 +4,35 @@
 // node; MarasiMenu.svelte draws it.
 //
 // A level is the top (both sections together) or one open menu group. Menu
-// keys are binding strings in the dispatcher's form ("meta+shift+l"):
-// 1. A group's is primary + its menu letter (the factory letter or the
-//    profile's override). Overridden groups claim theirs first, so a
-//    profile's letter wins over a factory letter a later release gives
-//    another group; that group then gets a derived letter (rule 3).
-// 2. An action's is its first binding that starts with primary, exactly
-//    (shift and alt kept), if nothing earlier at its level uses it and it
-//    isn't reserved.
-// 3. Anything left gets primary + a letter derived from the label's
-//    distinctive words.
+// keys are binding strings in the dispatcher's form ("meta+shift+l"). The
+// menu never shows a key that differs from what the action is bound to:
+// 1. An action's is its own binding: the first that starts with primary,
+//    else its first other modified one, exactly (shift and alt kept), if
+//    nothing earlier at its level uses it and it isn't reserved. With the
+//    menu open the dispatcher runs it as it does with the menu closed
+//    (dispatcher.js dispatch).
+// 2. A group's is ⌥ (Alt on Windows/Linux) + its menu letter (the factory
+//    letter or the profile's override). No action uses ⌥ + a letter, and a
+//    profile that binds one to a group's letter in the same menu can't be
+//    saved (validateProfile, letter-taken), so a group never takes a
+//    shortcut. If a stale saved state still clashes, the action keeps its
+//    key and the group gets a derived letter (rule 3). Overridden groups
+//    claim theirs before factory ones, so a profile's letter wins over a
+//    factory letter a later release gives another group.
+// 3. Anything left, a group whose letter is taken or an action with no
+//    modified binding (the Logbook's bare N, which the search field would
+//    type), gets ⌥ + a letter derived from the label's distinctive words.
 // primary is ⌘ on macOS and Ctrl on Windows/Linux. The menu shortcut and
 // primary + a reserved menu letter (menuGroups.js) are never menu keys.
 import { OPEN_MENU } from "../../keybindings/keymap.js";
 import { menuGroupId, RESERVED_MENU_LETTERS } from "../../keybindings/menuGroups.js";
+import { isModifiedBinding } from "../../keybindings/keys.js";
 import { MACOS } from "../../keybindings/platform.js";
 import { matchesMenuSearch } from "./menuSearch.js";
+
+// The modifier of menu letters: ⌥ on macOS, Alt on Windows/Linux.
+export const LETTER_MODIFIER = "alt";
+export const letterKey = (letter) => `${LETTER_MODIFIER}+${String(letter).toLowerCase()}`;
 
 export function primaryModifier(platform) {
   return platform === MACOS ? "meta" : "ctrl";
@@ -48,7 +61,7 @@ function assignKeys(rows, { primary, reserved, bindingsFor, groupLabel = "" }) {
       ...all.join(""),
     ];
     for (const letter of candidates) {
-      const binding = `${primary}+${letter.toLowerCase()}`;
+      const binding = letterKey(letter);
       if (free(binding)) return take(row, binding);
     }
     row.menuKey = null;
@@ -56,14 +69,15 @@ function assignKeys(rows, { primary, reserved, bindingsFor, groupLabel = "" }) {
 
   const groups = rows.filter((row) => row.kind === "group").sort((a, b) => Number(b.overridden) - Number(a.overridden));
   const actions = rows.filter((row) => row.kind !== "group");
+  for (const row of actions) {
+    const bindings = row.actionId ? bindingsFor(row.actionId) : [];
+    const own = bindings.find((b) => b.startsWith(`${primary}+`)) ?? bindings.find(isModifiedBinding);
+    if (free(own)) take(row, own);
+  }
   for (const row of groups) {
-    const binding = `${primary}+${row.letter.toLowerCase()}`;
+    const binding = letterKey(row.letter);
     if (free(binding)) take(row, binding);
     else derive(row);
-  }
-  for (const row of actions) {
-    const own = row.actionId ? bindingsFor(row.actionId).find((b) => b.startsWith(`${primary}+`)) : null;
-    if (free(own)) take(row, own);
   }
   // A word every action at this level shares names none of them.
   if (actions.length > 1) {
@@ -161,7 +175,8 @@ export function rowsAt(menu, group = null) {
 }
 
 // The entry a key picks at a level, or null. Menu keys are off while the
-// search has text, so the primary modifier with A, C, V, X or Z edits it.
+// search has text, so the primary modifier with A, C, V, X or Z edits it,
+// and ⌥ + a letter types into it as in any field.
 export function entryForKey(menu, { group = null, query = "", binding }) {
   if (String(query).trim() !== "" || !binding) return null;
   return rowsAt(menu, group).find((row) => row.menuKey === binding) ?? null;

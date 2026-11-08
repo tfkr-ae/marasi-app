@@ -3,9 +3,9 @@
 	// answers which entry a key picks and what a search matches; this draws
 	// it and keeps the open group, the search text and the highlight. Every
 	// shortcut works with the menu open: the dispatcher sees it first, closes
-	// the menu and runs the action (app.js installMenuShortcuts). A ⌘ (Ctrl on
-	// Windows/Linux) key no action takes reaches this menu: ⌘ + a menu letter
-	// opens a group. Typing searches.
+	// the menu and runs the action (app.js installMenuShortcuts), so every key
+	// the menu shows is the action's real one. ⌥ (Alt on Windows/Linux) + a
+	// menu letter opens a group. Typing searches.
 	import { onMount, tick } from "svelte";
 	import { ChevronRight, CornerDownLeft, Search } from "lucide-svelte";
 	import {
@@ -14,7 +14,6 @@
 		menuPalettes,
 	} from "../../keybindings/app.js";
 	import { bindingFromEvent, formatBinding } from "../../keybindings/keys.js";
-	import { MACOS } from "../../keybindings/platform.js";
 	import { buildMenu, entryForKey, isReservedKey, searchMenu } from "./menuModel.js";
 	import { groupIcon, groupTone, NEUTRAL_TONE } from "./groupStyle.js";
 	import MenuKeys from "./MenuKeys.svelte";
@@ -37,7 +36,7 @@
 	let query = "";
 	let groupId = null;
 	let active = 0;
-	let primaryHeld = false;
+	let letterHeld = false;
 	let missedKey = "";
 	let missedTimer;
 
@@ -46,7 +45,7 @@
 		query = "";
 		groupId = null;
 		active = 0;
-		primaryHeld = false;
+		letterHeld = false;
 		lastPointer = pointer;
 		dialog.showModal();
 		await tick();
@@ -72,7 +71,8 @@
 	}
 
 	$: platform = $menuDispatcher.platform;
-	$: primaryName = platform === MACOS ? "⌘" : "Ctrl";
+	// ⌥ on every platform, as the key badges print it (formatBinding).
+	const letterName = "⌥";
 	$: menu = buildMenu({
 		catalog: $menuDispatcher.catalog,
 		pageEntries,
@@ -122,10 +122,12 @@
 
 	async function onKeydown(event) {
 		const key = event.key?.toLowerCase();
-		if (key === "meta" || key === "control") primaryHeld = true;
-		const primaryDown =
-			platform === MACOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-		if (primaryDown && !searching && !MODIFIER_KEYS.has(key)) {
+		if (key === "alt") letterHeld = true;
+		// The dispatcher has already run any key an action is bound to; what
+		// reaches here is ⌥ + a menu letter, or a ⌘ key of an entry whose
+		// context isn't live.
+		const menuModifier = event.metaKey || event.ctrlKey || event.altKey;
+		if (menuModifier && !searching && !MODIFIER_KEYS.has(key)) {
 			const binding = bindingFromEvent(event);
 			// Reserved keys pass through untouched: the menu shortcut reaches
 			// the dispatcher, which closes the menu, and ⌘Q and ⌘H reach macOS.
@@ -161,8 +163,7 @@
 		dialog?.querySelector("[data-menu-active]")?.scrollIntoView({ block: "nearest" });
 	}
 	function onKeyup(event) {
-		const key = event.key?.toLowerCase();
-		if (key === "meta" || key === "control") primaryHeld = false;
+		if (event.key?.toLowerCase() === "alt") letterHeld = false;
 	}
 
 	function handleClickOutside(event) {
@@ -356,8 +357,8 @@
 				{current?.kind === "group" ? "open" : "run"}</span
 			>
 			{#if group}<span>⌫ back</span>{/if}
-			<span class={primaryHeld ? "font-semibold opacity-100" : ""}
-				>{searching ? `Clear search for ${primaryName} keys` : `Hold ${primaryName} + key`}</span
+			<span class={letterHeld ? "font-semibold opacity-100" : ""}
+				>{searching ? "Clear search for menu keys" : `${letterName} + letter opens a group`}</span
 			>
 		</span>
 	</div>

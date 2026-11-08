@@ -127,7 +127,7 @@ A Marasi-defined, named set of related menu actions that the Marasi menu shows a
 _Avoid_: submenu, category, section
 
 **Menu letter**:
-The single letter that, pressed with ⌘ (Ctrl on Windows and Linux) while the Marasi menu is open, picks a menu group, or a menu action whose own binding doesn't use ⌘. It is unique among the entries it chooses between and means nothing outside the open menu. Any other menu action is picked in the menu by its own binding.
+The single letter that, pressed with ⌥ (Alt on Windows and Linux) while the Marasi menu is open, picks a menu group, or a menu action with no modified binding. It is unique among the entries it chooses between and means nothing outside the open menu. No menu action may be bound to ⌥ + the letter of a group in its menu. Any other menu action runs on its own binding, with the menu open or closed.
 _Avoid_: mnemonic, access key, hotkey
 
 **Keybinding profile**:

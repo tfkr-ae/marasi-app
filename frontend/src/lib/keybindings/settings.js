@@ -502,6 +502,14 @@ function explain(catalog, problem) {
         [first, `${binding} is shadowed by ${rest.map((id) => other(id, first)).join(", ")}; the menu must open everywhere`],
         ...rest.map((id) => [id, `${binding} would shadow ${label(first)}, which must open everywhere`]),
       ];
+    case "letter-taken": {
+      // The group's row says it too (letterRowProblems).
+      const group = catalog.groups.find((g) => menuGroupId(g) === problem.groups[0]);
+      let where = "";
+      if (group.context === "global") where = " in Marasi";
+      else if (group.context !== catalog.get(first)?.context) where = ` in ${contextName(catalog, group.context)}`;
+      return [[first, `${binding} opens the ${group.label} menu group${where}; change one of them`]];
+    }
     default:
       return [[first, problem.message]];
   }
@@ -616,9 +624,10 @@ export function saveProblems(catalog, draft, current = {}) {
 }
 
 // The profile's menu letter problems (validateLetters), per group id and
-// worded for that group's row, naming the other group of a clash. A global
-// group is named as the Marasi section shows it.
-function letterRowProblems(catalog, profile) {
+// worded for that group's row, naming the other group of a clash, and the
+// variant's letter-taken problems, naming the action bound to the group's
+// key. A global group is named as the Marasi section shows it.
+function letterRowProblems(catalog, profile, platform) {
   const byId = new Map(catalog.groups.map((group) => [menuGroupId(group), group]));
   const other = (id, from) => {
     const group = byId.get(id);
@@ -637,6 +646,13 @@ function letterRowProblems(catalog, profile) {
       note(first, `${problem.letter} is also used by ${other(second, first)}`);
       note(second, `${problem.letter} is also used by ${other(first, second)}`);
     }
+  }
+  for (const problem of validateProfile(catalog, profile)) {
+    if (problem.kind !== "letter-taken" || problem.platform !== platform) continue;
+    const action = catalog.get(problem.actions[0]);
+    const group = catalog.groups.find((g) => menuGroupId(g) === problem.groups[0]);
+    const where = action.context === group.context ? "" : ` in ${contextName(catalog, action.context)}`;
+    note(problem.groups[0], `${formatBinding(problem.binding, platform)} is ${action.label}'s shortcut${where}`);
   }
   return messages;
 }
@@ -700,7 +716,7 @@ export function browse({ catalog, profile, platform, query = "", filter = "all" 
   const keymap = profileKeymap(catalog, profile, platform);
   const { conflicts, shadows } = rowProblems(catalog, profile, platform);
   const unavailable = unavailableRows(catalog, profile, platform);
-  const letterProblems = letterRowProblems(catalog, profile);
+  const letterProblems = letterRowProblems(catalog, profile, platform);
   const entries = actionGroups(catalog);
   for (const [id, { extension }] of unavailable) {
     if (entries.some((group) => group.id === id)) continue;

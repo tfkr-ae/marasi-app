@@ -4,6 +4,7 @@ import { buildCatalog, createCatalog, extensionsWithGUI } from "./catalog.js";
 import { contextsConflict } from "./contexts.js";
 import { createKeymap } from "./keymap.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
+import { factoryProfile, validateProfile } from "./profiles.js";
 
 test("menu opening is a global action bound to ⌘K on macOS and Ctrl+K on Windows/Linux", () => {
   const action = buildCatalog().get("global.open-menu");
@@ -139,6 +140,23 @@ test("extension-declared ids never clash with Marasi's own extension actions", (
   assert.ok(catalog.get("extension-page.port-scanner.toggle-settings"));
   assert.ok(catalog.get("extension.port-scanner.open"));
   assert.ok(catalog.get("extension.port-scanner.toggle-settings"));
+});
+
+// ⌥ + a global group's letter opens that group in every menu, extension
+// pages included, so an extension can't claim it (and block every save).
+test("an extension default on ⌥ + a global group's letter is dropped, and the profile stays valid", () => {
+  const catalog = buildCatalog({
+    extensions: [scanner],
+    extensionMenus: {
+      "Port Scanner": [
+        { name: "Scan", action: "scan", keys: ["⌥+G", "alt+G"] },
+        { name: "Pause", action: "pause", keys: ["⌥+J", "alt+J"] },
+      ],
+    },
+  });
+  assert.deepEqual(catalog.get("extension.port-scanner.scan").defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
+  assert.deepEqual(catalog.get("extension.port-scanner.pause").defaults, { [MACOS]: ["alt+j"], [WINDOWS_LINUX]: ["alt+j"] });
+  assert.deepEqual(validateProfile(catalog, factoryProfile()), []);
 });
 
 test("malformed extension menu items never break the catalog", () => {

@@ -348,16 +348,20 @@ function extensionItemDefaults(keys) {
 // Factory defaults must form a valid profile (see validateProfile in
 // profiles.js; the menu tests check the real catalog), and extension
 // data must not break that: an extension default is dropped when it is a
-// reserved key, opens the Marasi menu, or is already bound on the same page
-// (Toggle Settings or an earlier item). The action stays, unbound for that
-// key; the researcher can bind it.
+// reserved key, opens the Marasi menu, is ⌥ + a global menu group's factory
+// letter (the key that opens it in the menu), or is already bound on the
+// same page (Toggle Settings or an earlier item). The action stays, unbound
+// for that key; the researcher can bind it.
 function takenOnExtensionPage(toggleSettings) {
   const menu = FACTORY_ACTIONS.find((a) => a.id === OPEN_MENU);
+  const letters = FACTORY_MENU_GROUPS.filter((group) => group.context === "global").map(
+    (group) => `alt+${group.letter.toLowerCase()}`,
+  );
   return Object.fromEntries(
     PLATFORMS.map((platform) => [
       platform,
       new Set(
-        [...menu.defaults[platform], ...toggleSettings.defaults[platform]].map(normalizeBinding),
+        [...menu.defaults[platform], ...toggleSettings.defaults[platform], ...letters].map(normalizeBinding),
       ),
     ]),
   );
