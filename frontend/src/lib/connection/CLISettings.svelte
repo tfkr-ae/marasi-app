@@ -17,7 +17,7 @@
 	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { on } from "../runtime.js";
-	import { cliResultText, cliSourceLabel } from "./cli.js";
+	import { CLI_UPDATE_CHECKED_EVENT, cliResultText, cliSourceLabel } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import CLIProgress from "./CLIProgress.svelte";
 	import { serviceUpdateLine, serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
@@ -30,6 +30,9 @@
 	// The check found a newer CLI and is installing it (its first progress).
 	let installingUpdate = false;
 	let changing = false;
+	// The update check Go runs after placing the carried CLI is installing
+	// a newer one (its progress, while Check isn't running).
+	let updatingInBackground = false;
 
 	// The connected service updating its own binary (update.* events).
 	$: serviceUpdate = serviceUpdateLine($serviceUpdateStore);
@@ -49,6 +52,18 @@
 	onMount(() => {
 		LocateCLI().then((info) => (cli = info)).catch(failure);
 		GetCLIChannel().then((c) => (channel = c)).catch(failure);
+		// The layout toasts the result; this shows the CLI it left.
+		const stopProgress = on("cli-install-progress", () => {
+			if (!checking && cli?.found) updatingInBackground = true;
+		});
+		const stopChecked = on(CLI_UPDATE_CHECKED_EVENT, (result) => {
+			updatingInBackground = false;
+			if (result?.cli) cli = result.cli;
+		});
+		return () => {
+			stopProgress();
+			stopChecked();
+		};
 	});
 
 	function chooseChannel(setting) {
@@ -121,7 +136,7 @@
 			>
 		</div>
 	</div>
-	{#if checking && installingUpdate}
+	{#if (checking && installingUpdate) || updatingInBackground}
 		<div class="py-3"><CLIProgress /></div>
 	{/if}
 {/if}

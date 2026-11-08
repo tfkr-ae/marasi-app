@@ -140,6 +140,12 @@ func TestInstallCLIPlacesTheCarriedCopyWithoutTheNetwork(t *testing.T) {
 	if data, _ := os.ReadFile(installed); !bytes.Equal(data, cliBinaryNew) {
 		t.Fatalf("after the update check the CLI is %q, want 06.11.2026", data)
 	}
+	// The frontend hears the check's result, so Settings and the CLI setup
+	// show the new version without being reopened.
+	checked := cliUpdateChecks(c.events)
+	if len(checked) != 1 || checked[0].Outcome != "installed" || checked[0].Version != "06.11.2026" || checked[0].CLI.Version != "06.11.2026" {
+		t.Fatalf("cli-update-checked events = %+v, want one installing 06.11.2026", checked)
+	}
 }
 
 func TestInstallCLIFromTheCarriedCopySucceedsWhenTheReleaseServerIsUnreachable(t *testing.T) {
@@ -165,6 +171,9 @@ func TestInstallCLIFromTheCarriedCopySucceedsWhenTheReleaseServerIsUnreachable(t
 	}
 	if saved := c.app.Config.cliPath(); saved.Path != installed {
 		t.Fatalf("app config holds %+v, want the installed path", saved)
+	}
+	if checked := cliUpdateChecks(c.events); len(checked) != 1 || checked[0].Outcome != "failed" {
+		t.Fatalf("cli-update-checked events = %+v, want one failed check", checked)
 	}
 }
 
@@ -295,4 +304,17 @@ func cliProgressSteps(events *recordedEvents) []string {
 		}
 	}
 	return steps
+}
+
+// cliUpdateChecks lists the results the cli-update-checked events carried.
+func cliUpdateChecks(events *recordedEvents) []CLIInstall {
+	events.mu.Lock()
+	defer events.mu.Unlock()
+	var results []CLIInstall
+	for i, name := range events.names {
+		if name == cliUpdateCheckedEvent {
+			results = append(results, events.data[i][0].(CLIInstall))
+		}
+	}
+	return results
 }

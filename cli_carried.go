@@ -121,18 +121,24 @@ func (c *checkedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// cliUpdateCheckedEvent tells the frontend the result of the update check
+// that followed placing the carried copy, a CLIInstall, so Settings and the
+// CLI setup show the CLI it left without being reopened.
+const cliUpdateCheckedEvent = "cli-update-checked"
+
 // checkForCLIUpdateAfterInstall is the CLI update check Install runs after
-// placing the carried copy, so a researcher gets the channel's latest when
-// the copy is older. It runs in the background; a failure (an unreachable
-// GitHub, say) leaves the carried copy installed.
+// placing the carried copy: CheckForCLIUpdate, as Settings' Check for CLI
+// update runs it, so a researcher gets the channel's latest when the copy is
+// older. It runs in the background and reports its result to the frontend;
+// a failure (an unreachable GitHub, say) leaves the carried copy installed.
 func (a *App) checkForCLIUpdateAfterInstall() {
 	result, err := a.CheckForCLIUpdate()
-	switch {
-	case err != nil:
+	if err != nil {
 		log.Printf("checking for a Marasi CLI update after installing the carried CLI: %v", err)
-	case result.Failure != nil:
-		log.Printf("checking for a Marasi CLI update after installing the carried CLI: %s", result.Failure.Reason)
-	case result.Outcome == cliOutcomeInstalled:
-		log.Printf("updated the Marasi CLI from the carried %s to %s", a.cliRuntime.carried.Version, result.Version)
+		return
 	}
+	if result.Failure != nil {
+		log.Printf("checking for a Marasi CLI update after installing the carried CLI: %s", result.Failure.Reason)
+	}
+	a.emitEvent(cliUpdateCheckedEvent, result)
 }
