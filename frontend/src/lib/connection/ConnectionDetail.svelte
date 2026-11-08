@@ -4,9 +4,10 @@
 	// connection). The Connections modal shows it
 	// compact; Settings → Connection in the Settings row layout (`rows`).
 	// Another connection offers Switch; a refused password asks for it; a
-	// remote has its address and Remove. The local connection offers Stop
-	// (asking first when the run isn't the app's), and once stopped, "Marasi
-	// stopped" with Start (Retry for a remote). The password and sharing rows
+	// remote has its address and Remove. Every connection offers Stop, which
+	// asks first for a remote ("Stop <name>?": the app can't start it again)
+	// or a run the app doesn't own; once stopped, "Marasi stopped" with Start
+	// for the local connection and Retry for a remote. The password and sharing rows
 	// (ConnectionAccess) go after the service rows.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
@@ -140,13 +141,18 @@
 				</div>
 				<p class="font-mono text-xs" data-testid="connection-api">{state.api ?? "none"}</p>
 			</div>
-			{#if connection.kind === "local" && phase === "connected"}
+			{#if phase === "connected"}
 				<div class={row}>
 					<div>
-						<p>Instance</p>
-						<p class="text-xs opacity-70" data-testid="connection-stop-hint">
-							{state.stopAsk ? "Another program started it." : "Stop Marasi and its proxy"}
-						</p>
+						{#if state.stopAsk && connection.kind === "remote"}
+							<p data-testid="connection-stop-title">Stop {connection.name}?</p>
+							<p class="text-xs opacity-70" data-testid="connection-stop-hint">The app can't start it again.</p>
+						{:else}
+							<p>Instance</p>
+							<p class="text-xs opacity-70" data-testid="connection-stop-hint">
+								{state.stopAsk ? "Another program started it." : "Stop Marasi and its proxy"}
+							</p>
+						{/if}
 					</div>
 					<div class="flex items-center gap-2">
 						{#if state.stopAsk}
