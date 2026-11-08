@@ -58,7 +58,10 @@ type App struct {
 	// none runs; update requests skip a system proxy that is it
 	// (update_client.go). Tests replace it.
 	localProxyListener func() string
-	local              localInstance
+	// locals is each local connection's instance, by connection id
+	// (local_instance.go's localFor).
+	localsMu sync.Mutex
+	locals   map[string]*localInstance
 	// cliRuntime holds the Marasi CLI's replaceable functions (cli.go).
 	cliRuntime cliRuntime
 	// unsavedDrafts is the number of launchpads with a dirty Launchpad
@@ -230,12 +233,13 @@ func (a *App) ConfirmProjectSwitch() (bool, error) {
 }
 
 // ServiceShutdown is called when Wails shuts the app down, after the quit
-// went ahead. It stops the local instance when the app started it and,
-// after "Restart now", relaunches.
+// went ahead. It stops every owned run (a local instance's run the app
+// started, in this launch or an earlier one) and, after "Restart now",
+// relaunches.
 func (a *App) ServiceShutdown() error {
 	a.stopUpdateChecks()
 	a.CancelUpdateDownload()
-	if err := a.stopOwnedLocal(); err != nil {
+	if err := a.stopOwnedRuns(); err != nil {
 		log.Printf("%v", err)
 	}
 	a.relaunchIfRestarting()

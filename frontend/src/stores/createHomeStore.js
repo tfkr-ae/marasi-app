@@ -10,16 +10,18 @@
 //   setListener(address, port, active) -> {status, address, port}
 //
 // homeStore.js routes the stream's events, as the service sends them, to
-// onLog, onListener and onJobComplete.
+// onLog, onListener, onJobComplete, onRequest, onResponse and
+// onCountsChanged.
 // A part that fails to read stays null (or as it was) and the rest load.
 import { get, writable } from "svelte/store";
 import { toListener, toLog, toScope } from "./homeApi.js";
 import { codeIDs } from "../lib/errorCodes.js";
 
 /**
- * How long Home waits after another client changes what the dashboard
- * counts (notes, launchpads, deleted pairs) before reading the counts again,
- * so a burst reads once.
+ * How long Home waits after a change to what the dashboard counts (captured
+ * traffic, interceptions, notes, launchpads, deleted pairs) before reading
+ * the counts again. The first change starts the wait and later ones don't
+ * restart it, so a steady stream reads once per window, not never.
  */
 export const DASHBOARD_SETTLE_MS = 500;
 
@@ -67,6 +69,16 @@ export function createHomeStore(api) {
   let countsTimer = null;
   let counting = Promise.resolve();
 
+  // Reads the counts once the settle window that the first change since
+  // the last read started has passed. Later changes join that window.
+  function countsChanged() {
+    if (countsTimer !== null) return;
+    countsTimer = setTimeout(() => {
+      countsTimer = null;
+      counting = readDashboard();
+    }, DASHBOARD_SETTLE_MS);
+  }
+
   return {
     subscribe: store.subscribe,
     populate,
@@ -75,13 +87,16 @@ export function createHomeStore(api) {
     onScope(scope) {
       store.update((s) => ({ ...s, scope: toScope(scope) }));
     },
-    /** Another client changed what the dashboard counts; reads it once the burst settles. */
-    onCountsChanged() {
-      clearTimeout(countsTimer);
-      countsTimer = setTimeout(() => {
-        countsTimer = null;
-        counting = readDashboard();
-      }, DASHBOARD_SETTLE_MS);
+    /** Another client changed what the dashboard counts; reads it once the window settles. */
+    onCountsChanged: countsChanged,
+    /** A traffic.request event: a captured request adds to Requests. */
+    onRequest: countsChanged,
+    /**
+     * A traffic.response event: only one whose metadata marks it
+     * intercepted, the flag the Intercepted count follows, changes a count.
+     */
+    onResponse(event) {
+      if (event?.metadata?.intercepted === true) countsChanged();
     },
     /** Waits for a dashboard read onCountsChanged started. */
     settled: () => counting,

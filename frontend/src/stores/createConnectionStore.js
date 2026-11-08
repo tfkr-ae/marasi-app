@@ -5,7 +5,10 @@
 // next action. Tests run the reducer alone, and the store with a fake api:
 //
 //   listConnections() -> {connections, activeId}     the saved connections (Go)
-//   connectLocal() -> {url, password, startedByApp}  start or attach (Go)
+//   connectLocal(id) -> {url, password, startedByApp}  start or attach local
+//                                                    connection id's instance (Go);
+//                                                    startedByApp: the run is the
+//                                                    app's (saved ownership)
 //   connectionPassword(id) -> password               a remote's saved password (Go)
 //   savePassword(id, password)                       replace it (Go)
 //   setActive(id)                                    save the active connection (Go)
@@ -636,7 +639,7 @@ export function createConnectionStore(api, timers = globalThis) {
       case "connect-local": {
         let local;
         try {
-          local = await api.connectLocal();
+          local = await api.connectLocal(get(store).connection.id);
         } catch (err) {
           settle(session, { type: "INSTANCE_FAILED", error: message(err) });
           return;
@@ -749,7 +752,7 @@ export function createConnectionStore(api, timers = globalThis) {
         let reached, status;
         try {
           if (connection.kind === "local") {
-            reached = await api.connectLocal();
+            reached = await api.connectLocal(connection.id);
           } else {
             reached = { url: connection.url, password: await api.connectionPassword(connection.id), startedByApp: false };
           }
@@ -858,7 +861,7 @@ export function createConnectionStore(api, timers = globalThis) {
         try {
           reached =
             connection.kind === "local"
-              ? await api.connectLocal()
+              ? await api.connectLocal(connection.id)
               : { url: connection.url, password: step.password ?? "", startedByApp: false };
           if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });

@@ -113,8 +113,7 @@ const (
 func localApp(t *testing.T, cli *fakeCLI) *App {
 	t.Helper()
 	t.Setenv(cliConfigDirEnv, "")
-	app := &App{}
-	app.useLocalInstanceRuntime()
+	app := newTestApp(t)
 	app.runCLI = cli.run
 	app.findCLI = func() (string, error) { return "/bin/marasi", nil }
 	app.newPassword = func() (string, error) { return "generated", nil }
@@ -129,7 +128,7 @@ func TestConnectLocalStartsTheInstanceWhenItIsNotRunning(t *testing.T) {
 		answer("service control pair", 0, paired)
 	app := localApp(t, cli)
 
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +163,7 @@ func TestConnectLocalAttachesToARunningInstanceWithoutStartingAnother(t *testing
 		answer("service control pair", 0, paired)
 	app := localApp(t, cli)
 
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +186,7 @@ func TestConnectLocalTurnsOnAControlListenerWhenTheRunningInstanceHasNone(t *tes
 		answer("service control pair", 0, paired)
 	app := localApp(t, cli)
 
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +216,7 @@ func TestConnectLocalAttachesWhenTheInstanceStartedMeanwhile(t *testing.T) {
 		answer("service control pair", 0, paired)
 	app := localApp(t, cli)
 
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +231,7 @@ func TestConnectLocalReportsTheCLIsErrorWhenStartingFails(t *testing.T) {
 		answer("service start", 1, `{"error":"starting proxy listener: address already in use"}`)
 	app := localApp(t, cli)
 
-	_, err := app.ConnectLocal()
+	_, err := app.ConnectLocal(localConnectionID)
 	if err == nil || !strings.Contains(err.Error(), "address already in use") || !strings.Contains(err.Error(), "instance_failed") {
 		t.Fatalf("err = %v, want the CLI's error with the instance_failed code", err)
 	}
@@ -243,7 +242,7 @@ func TestConnectLocalReportsAMissingCLI(t *testing.T) {
 	app := localApp(t, cli)
 	app.findCLI = func() (string, error) { return "", errors.New(`exec: "marasi": executable file not found in $PATH`) }
 
-	_, err := app.ConnectLocal()
+	_, err := app.ConnectLocal(localConnectionID)
 	if err == nil || !strings.Contains(err.Error(), "cli_missing") {
 		t.Fatalf("err = %v, want the cli_missing code", err)
 	}
@@ -287,7 +286,7 @@ func TestQuitStopsTheRunTheAppStarted(t *testing.T) {
 		answer("service control pair", 0, paired).
 		answer("service stop", 0, stopped)
 	app := quittingApp(t, cli)
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +307,7 @@ func TestQuitLeavesAnInstanceTheAppAttachedToRunning(t *testing.T) {
 		answer("service control pair", 0, paired).
 		answer("service stop", 0, stopped)
 	app := quittingApp(t, cli)
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,10 +332,10 @@ func TestQuitLeavesAReplacementAnotherClientStartedRunning(t *testing.T) {
 		answer("service control pair", 0, paired).
 		answer("service stop", 0, stopped)
 	app := quittingApp(t, cli)
-	if _, err := app.ConnectLocal(); err != nil {
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
 		t.Fatal(err)
 	}
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +359,7 @@ func TestQuitLeavesAReplacementStartedAfterTheAppLastConnected(t *testing.T) {
 		answer("service control pair", 0, paired).
 		answer("service stop", 0, stopped)
 	app := quittingApp(t, cli)
-	if _, err := app.ConnectLocal(); err != nil {
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -375,7 +374,7 @@ func TestQuitBeforeConnectingStopsNothing(t *testing.T) {
 	cli := &fakeCLI{}
 	app := localApp(t, cli)
 
-	if err := app.stopOwnedLocal(); err != nil {
+	if err := app.stopOwnedRuns(); err != nil {
 		t.Fatal(err)
 	}
 	if len(cli.calls) != 0 {
@@ -397,7 +396,7 @@ func TestEveryCLICallUsesTheConfigDirOverrideAndNoInheritedMarasiVariables(t *te
 	app.findCLI = func() (string, error) { return "/bin/marasi", nil }
 	app.newPassword = func() (string, error) { return "generated", nil }
 
-	if _, err := app.ConnectLocal(); err != nil {
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -442,7 +441,7 @@ func TestConnectLocalStartsTheProxyOnAFreePortWhenTheDefaultIsTaken(t *testing.T
 		answer("service control pair", 0, paired)
 	app := localApp(t, cli)
 
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,7 +477,7 @@ func TestConnectLocalStartsTheProxyOnTheConfiguredDefaultListener(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	if _, err := app.ConnectLocal(); err != nil {
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -497,7 +496,7 @@ func TestConnectLocalDoesNotRetryAStartThatFailedForAnotherReason(t *testing.T) 
 		answer("service start", 1, `{"error":"opening project: database is locked"}`)
 	app := localApp(t, cli)
 
-	if _, err := app.ConnectLocal(); err == nil || !strings.Contains(err.Error(), "database is locked") {
+	if _, err := app.ConnectLocal(localConnectionID); err == nil || !strings.Contains(err.Error(), "database is locked") {
 		t.Fatalf("err = %v, want the CLI's error", err)
 	}
 	if len(cli.startCalls()) != 1 {
@@ -515,7 +514,7 @@ func TestConnectLocalSaysARunningInstanceWithoutPairingIsOutdated(t *testing.T) 
 		answer("service control pair", 1, `{"error":"reading pairing: 404 Not Found"}`)
 	app := localApp(t, cli)
 
-	_, err := app.ConnectLocal()
+	_, err := app.ConnectLocal(localConnectionID)
 
 	if err == nil || !strings.Contains(err.Error(), "instance_outdated") {
 		t.Fatalf("err = %v, want the instance_outdated code", err)
@@ -531,7 +530,7 @@ func TestConnectLocalReportsOtherPairingFailuresAsInstanceFailed(t *testing.T) {
 		answer("service control pair", 1, `{"error":"connecting to instance socket: connection refused"}`)
 	app := localApp(t, cli)
 
-	_, err := app.ConnectLocal()
+	_, err := app.ConnectLocal(localConnectionID)
 	if err == nil || !strings.Contains(err.Error(), "instance_failed") || strings.Contains(err.Error(), "instance_outdated") {
 		t.Fatalf("err = %v, want instance_failed", err)
 	}
@@ -547,7 +546,7 @@ func TestRestartLocalInstanceStopsTheRunningOneAndStartsItsProjectWithTheAppsCLI
 		answer("service stop", 0, stopped)
 	app := quittingApp(t, cli)
 
-	if err := app.RestartLocalInstance(); err != nil {
+	if err := app.RestartLocalInstance(localConnectionID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -565,7 +564,7 @@ func TestRestartLocalInstanceStopsTheRunningOneAndStartsItsProjectWithTheAppsCLI
 		t.Fatalf("started on port %q, want the default", port)
 	}
 
-	connection, err := app.ConnectLocal()
+	connection, err := app.ConnectLocal(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -584,7 +583,7 @@ func TestRestartLocalInstanceStartsNothingWhenStoppingFails(t *testing.T) {
 		answer("service stop", 1, `{"error":"stopping instance: 404 Not Found"}`)
 	app := localApp(t, cli)
 
-	err := app.RestartLocalInstance()
+	err := app.RestartLocalInstance(localConnectionID)
 
 	if err == nil || !strings.Contains(err.Error(), "404 Not Found") {
 		t.Fatalf("err = %v, want the stop's error", err)
@@ -601,7 +600,7 @@ func TestRestartLocalInstanceStartsOneThatIsNoLongerRunning(t *testing.T) {
 		answer("service start", 0, started)
 	app := localApp(t, cli)
 
-	if err := app.RestartLocalInstance(); err != nil {
+	if err := app.RestartLocalInstance(localConnectionID); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"service status", "service start", "service status"}; !slices.Equal(cli.subcommands(), want) {
@@ -609,5 +608,159 @@ func TestRestartLocalInstanceStartsOneThatIsNoLongerRunning(t *testing.T) {
 	}
 	if project := flagValue(cli.lastCall("service start").args, "--project"); project != "" {
 		t.Fatalf("started project %q, want the default", project)
+	}
+}
+
+// relaunchedApp is a fresh App over app's config directory, as the next
+// launch builds it, on cli.
+func relaunchedApp(t *testing.T, app *App, cli *fakeCLI) *App {
+	t.Helper()
+	next := newApp(app.Config.ConfigDir)
+	var err error
+	if next.Config, err = LoadConfig(app.Config.ConfigDir); err != nil {
+		t.Fatalf("loading app config: %v", err)
+	}
+	next.runCLI = cli.run
+	next.findCLI = func() (string, error) { return "/bin/marasi", nil }
+	next.newPassword = func() (string, error) { return "generated", nil }
+	return next
+}
+
+func TestARelaunchedAppOwnsTheRunAnEarlierLaunchStarted(t *testing.T) {
+	first := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired)
+	app := quittingApp(t, first)
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-app")).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	relaunched := relaunchedApp(t, app, cli)
+	connection, err := relaunched.ConnectLocal(localConnectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !connection.StartedByApp {
+		t.Fatal("the run an earlier launch started doesn't read as the app's after a relaunch")
+	}
+
+	relaunched.ServiceShutdown()
+
+	if cli.stops() != 1 {
+		t.Fatalf("stopped the earlier launch's run %d times, want once (calls %v)", cli.stops(), cli.subcommands())
+	}
+}
+
+func TestAChangedRunClearsTheSavedOwnership(t *testing.T) {
+	first := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired)
+	app := quittingApp(t, first)
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Between launches another client restarts the instance.
+	second := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-other")).
+		answer("service control pair", 0, paired)
+	relaunched := relaunchedApp(t, app, second)
+	connection, err := relaunched.ConnectLocal(localConnectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection.StartedByApp {
+		t.Fatal("another client's run reads as the app's")
+	}
+
+	// The record is gone: even the old run coming back isn't the app's.
+	third := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-app")).
+		answer("service control pair", 0, paired).
+		answer("service stop", 0, stopped)
+	again := relaunchedApp(t, relaunched, third)
+	if connection, err = again.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+	if connection.StartedByApp {
+		t.Fatal("a cleared ownership came back")
+	}
+	again.ServiceShutdown()
+	if third.stops() != 0 {
+		t.Fatalf("quitting stopped a run the app no longer owns (calls %v)", third.subcommands())
+	}
+}
+
+func TestQuitAfterARelaunchLeavesAnotherClientsReplacementRunning(t *testing.T) {
+	first := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired)
+	app := quittingApp(t, first)
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+
+	// The relaunched app never connects locally (it is on a remote) while
+	// another client replaces the run.
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-other")).
+		answer("service stop", 0, stopped)
+	relaunched := relaunchedApp(t, app, cli)
+
+	relaunched.ServiceShutdown()
+
+	if cli.stops() != 0 {
+		t.Fatalf("quitting stopped another client's replacement (calls %v)", cli.subcommands())
+	}
+}
+
+func TestQuitStopsARunAnEarlierLaunchStartedWithoutConnectingFirst(t *testing.T) {
+	first := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired)
+	app := quittingApp(t, first)
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-app")).
+		answer("service stop", 0, stopped)
+	relaunched := relaunchedApp(t, app, cli)
+
+	relaunched.ServiceShutdown()
+
+	if cli.stops() != 1 {
+		t.Fatalf("stopped the owned run %d times, want once (calls %v)", cli.stops(), cli.subcommands())
+	}
+	if instance := flagValue(cli.lastCall("service stop").args, "--instance"); instance != "default" {
+		t.Fatalf("stopped instance %q, want default", instance)
+	}
+}
+
+func TestLocalInstanceOperationsRefuseAConnectionThatIsNotLocal(t *testing.T) {
+	cli := &fakeCLI{}
+	app := quittingApp(t, cli)
+
+	if _, err := app.ConnectLocal("remote-abc"); err == nil {
+		t.Fatal("connected locally through a connection that isn't local")
+	}
+	if err := app.RestartLocalInstance("remote-abc"); err == nil {
+		t.Fatal("restarted through a connection that isn't local")
+	}
+	if len(cli.calls) != 0 {
+		t.Fatalf("ran the CLI %v for a connection that isn't local", cli.subcommands())
 	}
 }
