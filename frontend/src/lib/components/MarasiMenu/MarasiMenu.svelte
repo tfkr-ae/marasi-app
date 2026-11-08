@@ -6,19 +6,23 @@
 	// and inside it an action's own binding runs it. Typing searches.
 	import { onMount, tick } from "svelte";
 	import { ChevronRight, CornerDownLeft, Search } from "lucide-svelte";
-	import { menuDispatcher, menuPalettes } from "../../keybindings/app.js";
+	import {
+		globalMenuEntries,
+		menuDispatcher,
+		menuPalettes,
+	} from "../../keybindings/app.js";
 	import { bindingFromEvent, formatBinding } from "../../keybindings/keys.js";
 	import { MACOS } from "../../keybindings/platform.js";
 	import { buildMenu, entryForKey, searchMenu } from "./menuModel.js";
 	import { groupIcon, groupTone, NEUTRAL_TONE } from "./groupStyle.js";
 	import MenuKeys from "./MenuKeys.svelte";
 
-	// Entries: { actionId, icon }, optionally with a live name (such as the
-	// intercept toggle), subtitle or keywords. Text not given comes from the
-	// catalog.
+	// The page's entries: { actionId, icon }, optionally with a live name,
+	// subtitle or keywords. Text not given comes from the catalog. The
+	// Marasi section lists the global entries GlobalMenu publishes. The
+	// global tier passes no page entries, so it shows only that section.
 	export let pageEntries = [];
-	export let globalEntries = [];
-	// The page section's heading.
+	// The page section's heading, in the primary colour.
 	export let pageName = "";
 	// Menu-context tier: the menu shortcut opens the most specific mounted
 	// menu (overlay, then page, then global).
@@ -64,7 +68,7 @@
 	$: menu = buildMenu({
 		catalog: $menuDispatcher.catalog,
 		pageEntries,
-		globalEntries,
+		globalEntries: $globalMenuEntries,
 		bindingsFor: $menuDispatcher.bindingsFor,
 		platform,
 	});

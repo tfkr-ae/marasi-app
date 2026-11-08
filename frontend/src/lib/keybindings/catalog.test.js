@@ -362,6 +362,53 @@ test("the global menu groups gather Marasi's own actions as the spec lists them"
   assert.equal(catalog.get("global.open-menu").group, undefined);
 });
 
+// A context's menu groups as [id, label, letter, slugs of its actions].
+function groupsOf(catalog, context) {
+  return catalog.groupsIn(context).map((g) => [
+    g.id,
+    g.label,
+    g.letter,
+    catalog
+      .inContext(context)
+      .filter((a) => a.group === g.id)
+      .map((a) => a.id.slice(context.length + 1))
+      .sort(),
+  ]);
+}
+
+test("the Ledger with its drawer open groups its actions as the spec lists them", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "ledger.drawer-open"), [
+    ["navigate", "Navigate", "N", ["first-result", "last-result", "next-request", "open-request", "open-row-menu", "previous-request"]],
+    ["focus", "Focus", "F", ["focus-exclusion", "focus-query", "focus-sitemap"]],
+    ["send", "Send to", "S", ["send-to-armory", "send-to-launchpad"]],
+    ["logbook", "Logbook", "L", ["create-finding", "create-test-case", "link-finding", "link-test-case", "unlink-finding", "unlink-test-case"]],
+    ["copy", "Copy", "C", ["copy-browser-view-url", "copy-raw-request", "copy-raw-response", "copy-url"]],
+    ["view", "View", "V", ["toggle-fullscreen", "toggle-sidebar", "toggle-word-wrap", "view-metadata", "view-note"]],
+  ]);
+  assert.equal(catalog.get("ledger.drawer-open.websocket.open-stream").group, undefined);
+});
+
+test("the Ledger with its drawer closed groups only Focus", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "ledger.drawer-closed"), [
+    ["focus", "Focus", "F", ["focus-exclusion", "focus-query", "focus-sitemap"]],
+  ]);
+});
+
+test("no page menu group uses a global group's letter (G, P, B or A)", () => {
+  const catalog = buildCatalog();
+  const global = new Map(catalog.groupsIn("global").map((g) => [g.letter, g.id]));
+  assert.deepEqual([...global.keys()].sort(), ["A", "B", "G", "P"]);
+  for (const group of catalog.groups) {
+    if (group.context === "global") continue;
+    assert.ok(
+      !global.has(group.letter),
+      `${group.context}.${group.id} uses ${group.letter}, the letter of global.${global.get(group.letter)}`,
+    );
+  }
+});
+
 test("menu letters are unique at each menu level, global groups included", () => {
   const catalog = buildCatalog();
   const global = catalog.groupsIn("global");
