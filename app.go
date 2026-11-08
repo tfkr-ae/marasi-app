@@ -120,6 +120,9 @@ type App struct {
 	// askingToQuit is set while askThenQuit waits for an answer, so a second
 	// ⌘Q or close doesn't open a second prompt.
 	askingToQuit atomic.Bool
+	// quitQuestion waits for, and keeps, the answer to "Stop Marasi too?"
+	// (quit_question.go).
+	quitQuestion quitQuestion
 	// restarting is set once the researcher confirmed "Restart now", so
 	// beforeClose does not ask about losing work a second time and close
 	// relaunches.
@@ -233,14 +236,16 @@ func (a *App) ConfirmProjectSwitch() (bool, error) {
 }
 
 // ServiceShutdown is called when Wails shuts the app down, after the quit
-// went ahead. It stops every owned run (a local instance's run the app
-// started, in this launch or an earlier one) and, after "Restart now",
-// relaunches.
+// went ahead. When the quit question or When quitting said Stop, it stops
+// every owned run (a local instance's run the app started, in this launch
+// or an earlier one); after "Restart now" it stops none, and relaunches.
 func (a *App) ServiceShutdown() error {
 	a.stopUpdateChecks()
 	a.CancelUpdateDownload()
-	if err := a.stopOwnedRuns(); err != nil {
-		log.Printf("%v", err)
+	if a.stopsOwnedRunsOnQuit() {
+		if err := a.stopOwnedRuns(); err != nil {
+			log.Printf("%v", err)
+		}
 	}
 	a.relaunchIfRestarting()
 	return nil
@@ -248,13 +253,14 @@ func (a *App) ServiceShutdown() error {
 
 // shouldQuit is Wails' ShouldQuit: it reports whether a quit may go ahead.
 // It runs on the main thread, where waiting for a dialog would hang Linux, so
-// when the quit would lose work and isn't confirmed yet it refuses, and asks
-// in the background before quitting again.
+// when the quit would lose work or ask the quit question and isn't
+// confirmed yet it refuses, and asks in the background before quitting
+// again.
 func (a *App) shouldQuit() bool {
 	if a.restarting.Load() || a.quitting.Load() {
 		return true
 	}
-	if !a.hasWorkToLose() {
+	if !a.hasWorkToLose() && !a.asksOnQuit() {
 		a.quitting.Store(true)
 		return true
 	}
@@ -287,8 +293,8 @@ func (a *App) askThenQuit() {
 	a.quitApp()
 }
 
-// beforeClose asks before closing Marasi would lose work, and reports whether
-// to keep Marasi open.
+// beforeClose asks before closing Marasi would lose work, then asks the quit
+// question, and reports whether to keep Marasi open.
 func (a *App) beforeClose() bool {
 	// "Restart now" or an earlier pass has already warned about losing work.
 	if a.restarting.Load() || a.quitting.Load() {
@@ -299,6 +305,9 @@ func (a *App) beforeClose() bool {
 		log.Printf("cancelling active Armory runs: %v", err)
 	}
 	if err != nil || !confirmed {
+		return true
+	}
+	if a.askAboutOwnedRuns() {
 		return true
 	}
 	a.quitting.Store(true)

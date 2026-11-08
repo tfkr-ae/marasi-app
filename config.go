@@ -41,8 +41,9 @@ type Config struct {
 	DefaultAddress string `mapstructure:"default_address"` // Default proxy server address
 	DefaultPort    string `mapstructure:"default_port"`    // Default proxy server port
 	SyntaxMode     string `mapstructure:"syntax_mode"`
-	WrapMode       string `mapstructure:"wrap_mode"` // "auto", "enabled" or "disabled": whether editors wrap a line too long to wrap quickly
-	TextSize       string `mapstructure:"text_size"` // "small", "default", "large" or "xlarge"; the frontend reads anything else as "default" (frontend/src/lib/textSize.js)
+	WrapMode       string `mapstructure:"wrap_mode"`     // "auto", "enabled" or "disabled": whether editors wrap a line too long to wrap quickly
+	TextSize       string `mapstructure:"text_size"`     // "small", "default", "large" or "xlarge"; the frontend reads anything else as "default" (frontend/src/lib/textSize.js)
+	WhenQuitting   string `mapstructure:"when_quitting"` // "ask", "keep" or "stop": whether quitting stops owned runs (quit_question.go); anything else reads as "ask"
 
 	// TestCaseProfile holds the parsed test cases profile.
 	// Ignored by the main application viper instance.
@@ -98,6 +99,7 @@ var configDefaults = map[string]any{
 	"wrap_mode":       "auto",
 	"text_size":       "default",
 	"default_port":    "8080",
+	whenQuittingKey:   whenQuittingAsk,
 }
 
 func (cfg *Config) path() string {

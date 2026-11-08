@@ -37,7 +37,7 @@ printf '%s\n' "$NP" > "$MARASI_VERIFY_STATE_DIR/proxy-port"
 
 ### Start versus attach
 
-Launch in attach mode (default), then clean up: `service-after-quit.txt` reads `service_after_app_quit=running`. Launch with `MARASI_VERIFY_SERVICE=app`, drive Home, then clean up: it reads `stopped`. In app mode, `ps -ww -o command= -p "$(cat "$MARASI_VERIFY_STATE_DIR/service.pid")"` shows `--port 0` and `--control-address 127.0.0.1:0` and never the password, which the app passes as `MARASI_PASSWORD`.
+Launch in attach mode (default), then clean up: `service-after-quit.txt` reads `service_after_app_quit=running`. Launch with `MARASI_VERIFY_SERVICE=app`, drive Home, then clean up: it reads `running`, because When quitting is Ask and `TERM` answers no question; with When quitting set to Stop Marasi it reads `stopped`. In app mode, `ps -ww -o command= -p "$(cat "$MARASI_VERIFY_STATE_DIR/service.pid")"` shows `--port 0` and `--control-address 127.0.0.1:0` and never the password, which the app passes as `MARASI_PASSWORD`.
 
 Drive the listener button (`[data-testid=home-listener]`, `Listener off` when the service has none) only when reconfiguration is under test. Its `Setup Listener` modal starts or moves the service's listener (`POST /listener/start` or `/listener/update`). Proven, with `<NP>` a free port (then write it to `proxy-port`):
 
