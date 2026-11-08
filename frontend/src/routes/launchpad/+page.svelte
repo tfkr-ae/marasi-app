@@ -392,7 +392,7 @@
         toastStore.trigger({ message, background });
     }
 
-    // ⌥↑ ⌥↓ ⌥⇧↑ ⌥⇧↓, ⌘⇧F and ⌘⇧B in the tree: the menu's Order or New
+    // ⌘⇧↑ ⌘⇧↓ ⌘↑ ⌘↓, ⌘⇧F and ⌘⇧B in the tree: the menu's Order or New
     // item, run as choosing it would; when the menu greys it, its reason
     // instead.
     function runEntryShortcut(actionId) {
@@ -408,7 +408,7 @@
         runEntryAction(item.action);
     }
 
-    // ⌘⇧↓ selects the open launchpad's last entry through the usual
+    // ⌘J selects the open launchpad's last entry through the usual
     // draft guard. While that launchpad is compared, it only scrolls, so A
     // and B stay as picked.
     async function jumpToEnd() {

@@ -712,6 +712,45 @@ func TestAppKeybindingMenuLetters(t *testing.T) {
 		}
 	})
 
+	// ⌥ (Alt) + a group's letter opens it in the menu, so no action a key
+	// reaches in that menu may be bound to it.
+	t.Run("should refuse an action bound to ⌥ + the letter of a group in its menu, per platform", func(t *testing.T) {
+		bound := func(platform, action, key string, letters ...string) KeybindingConfig {
+			config := withLetters(letters...)
+			config.Profiles[0].Overrides[platform] = []KeybindingOverride{{Action: action, Keys: []string{key}}}
+			return config
+		}
+		refused := map[string]struct {
+			config KeybindingConfig
+			want   string
+		}{
+			"a page action on a global letter": {bound("macos", "ledger.drawer-closed.open-item", "alt+p"),
+				`profile "Work" (macos): alt+p opens Project (global) in the menu but is bound to ledger.drawer-closed.open-item (ledger.drawer-closed)`},
+			"a global action on a page letter": {bound("windows-linux", "global.go-home", "alt+c"),
+				`profile "Work" (windows-linux): alt+c opens Copy (ledger.drawer-open) in the menu but is bound to global.go-home (global)`},
+			"a moved letter": {bound("macos", "ledger.drawer-open.close", "alt+e", "global.go", "E"),
+				`profile "Work" (macos): alt+e opens Go to (global) in the menu but is bound to ledger.drawer-open.close (ledger.drawer-open)`},
+		}
+		for name, c := range refused {
+			t.Run(name, func(t *testing.T) {
+				_, err := loadConfigApp(t, t.TempDir()).SaveKeybindings(c.config, letterKeybindingCatalog())
+				if err == nil || !strings.Contains(err.Error(), c.want) {
+					t.Fatalf("wanted an error containing: %q\ngot: %v", c.want, err)
+				}
+			})
+		}
+		// ⌘ + the letter is another key, and a page group's letter is free
+		// in another page's menu.
+		for _, config := range []KeybindingConfig{
+			bound("macos", "ledger.drawer-closed.open-item", "meta+p"),
+			bound("macos", "ledger.drawer-closed.open-item", "alt+c"),
+		} {
+			if _, err := loadConfigApp(t, t.TempDir()).SaveKeybindings(config, letterKeybindingCatalog()); err != nil {
+				t.Fatalf("wanted the save to succeed: %v", err)
+			}
+		}
+	})
+
 	t.Run("should allow groups in different page contexts to share a letter, and a moved letter to free the factory one", func(t *testing.T) {
 		for _, config := range []KeybindingConfig{
 			withLetters("ledger.drawer-closed.view", "C", "ledger.drawer-open.websocket.frames", "V"),

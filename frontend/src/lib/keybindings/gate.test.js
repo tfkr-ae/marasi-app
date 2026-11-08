@@ -160,15 +160,11 @@ test("on the Launchpad, the Marasi menu opens from its search, rename and create
   assert.equal(dispatcher.resolve(openMenu(element("INPUT", { id: "commandmenu" })), menuOpen), "global.open-menu");
 });
 
-test("on the Launchpad, a field keeps Escape, Enter and the jump-to-latest key", () => {
+test("on the Launchpad, a field keeps Escape and Enter", () => {
   const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: MACOS });
   const launchpad = { ...home, route: "/launchpad" };
   const field = element("INPUT");
   for (const [key, code] of [["Escape", "Escape"], ["Enter", "Enter"]]) {
     assert.equal(dispatcher.resolve(keydown(key, code, { target: field }), launchpad), null, key);
   }
-  const jump = (target) => keydown("ArrowDown", "ArrowDown", { metaKey: true, shiftKey: true, target });
-  assert.equal(dispatcher.resolve(jump(field), launchpad), null);
-  assert.equal(dispatcher.resolve(jump(codeMirror), launchpad), null);
-  assert.equal(dispatcher.resolve(jump(element("BODY")), launchpad), "launchpad.jump-to-latest");
 });

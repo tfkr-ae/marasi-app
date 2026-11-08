@@ -1,7 +1,10 @@
 // Whether a key event may run menu actions at all, before any binding is
 // looked up. Returns:
 // - "blocked": no menu action runs.
-// - "menu-only": only global.open-menu runs (it closes the open menu).
+// - "menu-open": the Marasi menu is open. Every eligible action may run, as
+//   with the menu closed: the menu shortcut closes it, and any other
+//   shortcut closes it and runs its action (dispatch's closeMenu). Typing
+//   stays in its search field (unmodified keys belong to the field).
 // - "open": every eligible action may run.
 //
 // `state` is the dispatcher state: { route, modal, dialogOpen, ... }.
@@ -77,6 +80,6 @@ export function shortcutGate(event, state) {
   if (blockedByFormField(event, state)) return "blocked";
   if (unmodifiedKeyBelongsToPage(event)) return "blocked";
   // An open <dialog> without a modal is the Marasi menu itself.
-  if (!state.modal && state.dialogOpen) return "menu-only";
+  if (!state.modal && state.dialogOpen) return "menu-open";
   return "open";
 }

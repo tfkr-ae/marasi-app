@@ -38,7 +38,7 @@ test("no target when nothing is in view", () => {
   assert.equal(jumpTarget([row("a", -100, true)], view), null);
 });
 
-// ⌘⇧↓: the open launchpad's last Launchpad entry in entry order, whatever is on screen.
+// ⌘J: the open launchpad's last Launchpad entry in entry order, whatever is on screen.
 const lists = {
   launchpads: [{ ID: "lp1" }, { ID: "lp2" }],
   entriesByLaunchpad: { lp1: [{ ID: "a" }, { ID: "b" }, { ID: "c" }], lp2: [{ ID: "d" }] },

@@ -717,6 +717,38 @@ test("each sidebar entry lists its context's menu groups with their letters, and
   assert.equal(menuGroupsOf(draft, "ledger.drawer-open")[0].factoryLetter, "C");
 });
 
+// ⌥ (Alt) + a group's letter opens it in the menu, so an action bound to it
+// in the same menu is a conflict on both rows, like two actions sharing a key.
+test("an action bound to a group's ⌥ letter is a conflict on the action's row and the group's, and blocks saving", () => {
+  const close = { profileId: "default", platform: MACOS, actionId: "ledger.drawer-open.close" };
+  const draft = addBinding(pageLetterCatalog, factoryDraft(), close, "alt+c");
+  const view = browse({ catalog: pageLetterCatalog, profile: draft.profiles[0], platform: MACOS });
+  const entry = view.groups.find((g) => g.id === "ledger.drawer-open");
+  const copy = entry.menuGroups.find((row) => row.id === "ledger.drawer-open.copy");
+  const row = entry.all.find((r) => r.action.id === "ledger.drawer-open.close");
+  assert.deepEqual([copy.status, copy.problem], ["conflict", "⌥C is Close's shortcut"]);
+  assert.deepEqual([row.status, row.problem], ["conflict", "⌥C opens the Copy menu group; change one of them"]);
+  assert.equal(entry.conflictCount, 2);
+  assert.deepEqual(
+    saveProblems(pageLetterCatalog, draft, { profileId: "default", platform: MACOS }).map((p) => p.message),
+    ["Default · macOS · Ledger · Drawer open · Close: ⌥C opens the Copy menu group; change one of them"],
+  );
+  // The other platform's view of the group is clean.
+  const windows = browse({ catalog: pageLetterCatalog, profile: draft.profiles[0], platform: WINDOWS_LINUX });
+  assert.equal(windows.groups.find((g) => g.id === "ledger.drawer-open").menuGroups[0].status, "");
+});
+
+test("a global group's ⌥ letter names the page on the group's row and Marasi on the action's", () => {
+  const draft = setGroupLetter(pageLetterCatalog, factoryDraft(), { profileId: "default", groupId: "global.project" }, "E");
+  const close = { profileId: "default", platform: MACOS, actionId: "ledger.drawer-open.close" };
+  const taken = addBinding(pageLetterCatalog, draft, close, "alt+e");
+  const view = browse({ catalog: pageLetterCatalog, profile: taken.profiles[0], platform: MACOS });
+  const project = view.groups.find((g) => g.id === "global").menuGroups.find((r) => r.id === "global.project");
+  const row = view.groups.find((g) => g.id === "ledger.drawer-open").all.find((r) => r.action.id === "ledger.drawer-open.close");
+  assert.equal(project.problem, "⌥E is Close's shortcut in Ledger · Drawer open");
+  assert.equal(row.problem, "⌥E opens the Project menu group in Marasi; change one of them");
+});
+
 test("recording a group letter takes one letter key, waits through modifiers, and Esc cancels", () => {
   assert.deepEqual(captureLetter(keydown("x", "KeyX")), { type: "letter", letter: "X" });
   assert.deepEqual(captureLetter(keydown("X", "KeyX", { shiftKey: true })), { type: "letter", letter: "X" });

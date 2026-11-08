@@ -305,6 +305,7 @@
 						heading={current.id === "global" ? "Marasi" : "Menu groups"}
 						onRecord={startLetterCapture}
 						onReset={(groupId) => edit(resetGroupLetter(draft, { profileId: profile.id, groupId }))}
+						{platform}
 					/>
 					{#if current.menuItems.length}
 						<h3 class="border-b border-surface-300 px-3 py-1.5 text-sm font-bold opacity-70 dark:border-surface-600">Actions</h3>

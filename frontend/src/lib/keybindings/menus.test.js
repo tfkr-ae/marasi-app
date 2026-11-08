@@ -178,25 +178,22 @@ test("each page's shared shortcuts run that page's action", () => {
   }
 });
 
-test("the Logbook's menu moves to the next record on N and has no settings to toggle", () => {
+test("the Logbook moves to the next record on ⌘⇧] and has no settings to toggle", () => {
   const dispatcher = mac();
   const page = on("/logbook");
-  assert.equal(dispatcher.resolve(keydown("n", "KeyN"), page), "logbook.next-record");
+  assert.equal(dispatcher.resolve(cmdShift("}", "BracketRight"), page), "logbook.next-record");
   assert.equal(dispatcher.resolve(cmdShift("S", "KeyS"), page), "logbook.focus-search");
   assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), page), "logbook.create-finding");
   assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), page), "logbook.create-test-case");
   assert.equal(dispatcher.resolve(cmdShift("E", "KeyE"), page), "logbook.export-report");
   assert.equal(dispatcher.resolve(cmd("p", "KeyP"), page), null);
-  // N is typed, not run, in the search field, an inline fix or an editor.
-  assert.equal(dispatcher.resolve(keydown("n", "KeyN", {}, { tagName: "INPUT" }), page), null);
-  assert.equal(dispatcher.resolve(keydown("n", "KeyN", {}, { tagName: "TEXTAREA" }), page), null);
-  // N is the Logbook's alone.
-  assert.equal(dispatcher.resolve(keydown("n", "KeyN"), on("/ledger")), null);
+  // A bare N no longer runs anything.
+  assert.equal(dispatcher.resolve(keydown("n", "KeyN"), page), null);
 });
 
-test("the Logbook's N is bound on both platforms, and Esc stays with the page", () => {
+test("Next Record is ⌘⇧] (Ctrl+Shift+]) on both platforms, and Esc stays with the page", () => {
   const catalog = buildCatalog();
-  assert.deepEqual(catalog.get("logbook.next-record").defaults, { [MACOS]: ["n"], [WINDOWS_LINUX]: ["n"] });
+  assert.deepEqual(catalog.get("logbook.next-record").defaults, { [MACOS]: ["meta+shift+]"], [WINDOWS_LINUX]: ["ctrl+shift+]"] });
   assert.equal(catalog.get("logbook.toggle-settings"), undefined);
   assert.equal(mac().resolve(keydown("Escape", "Escape"), on("/logbook")), null);
 });
@@ -343,7 +340,7 @@ test("the WebSocket modal's shared and per-tab shortcuts run the open tab's acti
     ["stream", cmdShift("{", "BracketLeft"), "websocket.stream.previous-frame"],
     ["stream", cmdShift("}", "BracketRight"), "websocket.stream.next-frame"],
     ["stream", cmdShift("M", "KeyM"), "websocket.stream.toggle-frame-metadata"],
-    ["stream", cmdShift("ArrowDown", "ArrowDown"), "websocket.stream.jump-to-bottom"],
+    ["stream", cmd("j", "KeyJ"), "websocket.stream.jump-to-bottom"],
   ];
   for (const [tab, event, actionId] of expected) {
     assert.equal(dispatcher.resolve(event, websocketModal(tab)), actionId, `${tab} ${event.key}`);
@@ -511,7 +508,7 @@ test("Launchpad page shortcuts run only on the Launchpad page", () => {
     [cmd("\\", "Backslash"), "launchpad.toggle-sidebar"],
     [cmdShift("C", "KeyC"), "launchpad.toggle-compare"],
     [cmdShift("S", "KeyS"), "launchpad.focus-search"],
-    [cmdShift("ArrowDown", "ArrowDown"), "launchpad.jump-to-latest"],
+    [cmd("j", "KeyJ"), "launchpad.jump-to-latest"],
   ];
   for (const [event, actionId] of expected) {
     assert.equal(dispatcher.resolve(event, on("/launchpad")), actionId, event.key);
@@ -521,17 +518,15 @@ test("Launchpad page shortcuts run only on the Launchpad page", () => {
   assert.equal(dispatcher.resolve(cmd("\\", "Backslash"), on("/ledger")), "ledger.drawer-closed.toggle-sidebar");
 });
 
-test("jump to last entry leaves ⌘⇧↓ to a focused editor or text field", () => {
+test("jump to last entry runs on ⌘J from the request editor and a text field too", () => {
   const dispatcher = mac();
   const codeMirror = { tagName: "DIV", isContentEditable: true, closest: (s) => (s.includes(".cm-editor") ? {} : null) };
   const field = { tagName: "INPUT", closest: () => null };
   for (const target of [codeMirror, field]) {
-    const event = keydown("ArrowDown", "ArrowDown", { metaKey: true, shiftKey: true }, target);
-    assert.equal(dispatcher.resolve(event, on("/launchpad")), null, target.tagName);
+    assert.equal(dispatcher.resolve(keydown("j", "KeyJ", { metaKey: true }, target), on("/launchpad")), "launchpad.jump-to-latest", target.tagName);
   }
-  // Other Launchpad shortcuts still run from the request editor.
-  const compare = keydown("C", "KeyC", { metaKey: true, shiftKey: true }, codeMirror);
-  assert.equal(dispatcher.resolve(compare, on("/launchpad")), "launchpad.toggle-compare");
+  // ⌘⇧↓ is no longer Marasi's on the Launchpad: it selects to the end in a field.
+  assert.equal(dispatcher.resolve(cmdShift("ArrowDown", "ArrowDown"), on("/launchpad")), null);
 });
 
 test("⌘A selects every entry only while the Launchpad tree has focus, and not from its search box", () => {
@@ -547,17 +542,18 @@ test("⌘A selects every entry only while the Launchpad tree has focus, and not 
   assert.ok(contextsConflict(CONTEXTS, "launchpad.tree", "launchpad"));
 });
 
-test("⌥ arrows move the entry selection only while the Launchpad tree has focus, and not from an editor", () => {
-  const alt = (key, mods = {}, target) => keydown(key, key, { altKey: true, ...mods }, target);
+test("⌘⇧ arrows move the entry selection a step and ⌘ arrows to the ends, only while the Launchpad tree has focus", () => {
   const tree = { ...on("/launchpad"), launchpadTreeFocused: true };
-  for (const dispatcher of [mac(), createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX })]) {
-    assert.equal(dispatcher.resolve(alt("ArrowUp"), tree), "launchpad.tree.move-entries-up");
-    assert.equal(dispatcher.resolve(alt("ArrowDown"), tree), "launchpad.tree.move-entries-down");
-    assert.equal(dispatcher.resolve(alt("ArrowUp", { shiftKey: true }), tree), "launchpad.tree.move-entries-top");
-    assert.equal(dispatcher.resolve(alt("ArrowDown", { shiftKey: true }), tree), "launchpad.tree.move-entries-bottom");
-    assert.equal(dispatcher.resolve(alt("ArrowUp"), on("/launchpad")), null);
-    // ⌥↑ moves a line in CodeMirror; the tree's search box keeps it too.
-    const search = alt("ArrowUp", {}, { tagName: "INPUT", closest: () => null });
+  for (const [dispatcher, mod] of [[mac(), "metaKey"], [createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX }), "ctrlKey"]]) {
+    const press = (key, shift, target) => keydown(key, key, { [mod]: true, shiftKey: shift }, target);
+    assert.equal(dispatcher.resolve(press("ArrowUp", true), tree), "launchpad.tree.move-entries-up");
+    assert.equal(dispatcher.resolve(press("ArrowDown", true), tree), "launchpad.tree.move-entries-down");
+    assert.equal(dispatcher.resolve(press("ArrowUp", false), tree), "launchpad.tree.move-entries-top");
+    assert.equal(dispatcher.resolve(press("ArrowDown", false), tree), "launchpad.tree.move-entries-bottom");
+    assert.equal(dispatcher.resolve(press("ArrowUp", true), on("/launchpad")), null);
+    // A field or editor keeps them (caret and selection moves); so does the
+    // tree's search box.
+    const search = press("ArrowUp", false, { tagName: "INPUT", closest: () => null });
     assert.equal(dispatcher.resolve(search, tree), null);
   }
 });

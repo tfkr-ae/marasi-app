@@ -41,9 +41,13 @@ menuDispatcher.register(OPEN_MENU, () => menuPalettes.active()?.toggle());
 // handling keep precedence. Keys pressed in a CodeMirror editor are
 // dispatched in the bubble phase instead, after the editor handled them.
 export function installMenuShortcuts(getState) {
-	const onKeydown = (event) => menuDispatcher.dispatch(event, getState());
+	// An open <dialog> is the Marasi menu (gate.js); a shortcut pressed in it
+	// closes it, then runs.
+	const closeMenu = () => document.querySelector("dialog[open]")?.close();
+	const onKeydown = (event) =>
+		menuDispatcher.dispatch(event, getState(), { closeMenu });
 	const afterEditor = (event) =>
-		menuDispatcher.dispatch(event, getState(), { afterEditor: true });
+		menuDispatcher.dispatch(event, getState(), { afterEditor: true, closeMenu });
 	window.addEventListener("keydown", onKeydown, true);
 	window.addEventListener("keydown", afterEditor);
 	return () => {

@@ -66,7 +66,6 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
       .actionsFor(binding)
       .filter((id) => !(editing && keymap.catalog.get(id)?.yieldsToEditors));
     if (!bound.length) return null;
-    if (gate === "menu-only") return bound.includes(OPEN_MENU) ? OPEN_MENU : null;
     for (const contextId of eligibleContextIds(state, keymap.catalog.contexts)) {
       const winner = bound.find((id) => keymap.catalog.get(id).context === contextId);
       if (winner) return winner;
@@ -94,12 +93,18 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
   // switch the Launchpad tab. The window capture listener therefore skips
   // editor events, and a window bubble listener passes `afterEditor: true`
   // to dispatch only those.
-  function dispatch(event, state, { afterEditor = false } = {}) {
+  //
+  // With the Marasi menu open, a shortcut works as it does with the menu
+  // closed: `closeMenu` closes the menu first, then the action runs. The menu
+  // shortcut itself toggles the menu, so it is left to its handler. A key no
+  // action takes reaches the menu (its group and menu letters).
+  function dispatch(event, state, { afterEditor = false, closeMenu } = {}) {
     if (isInEditor(event.target) !== afterEditor) return false;
     const actionId = resolve(event, state);
     if (!actionId || !handlerFor(actionId)) return false;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (actionId !== OPEN_MENU && shortcutGate(event, state) === "menu-open") closeMenu?.();
     return run(actionId);
   }
 

@@ -24,7 +24,7 @@ export function jumpTarget(rows, view) {
 }
 
 /**
- * What ⌘⇧↓ selects: the open launchpad's last Launchpad entry in entry order as
+ * What ⌘J (Jump to Last Entry) selects: the open launchpad's last Launchpad entry in entry order as
  * `{ launchpadId, entryId }`, or null when there is none to select.
  */
 export function lastEntry({ selectedLaunchpadId, entriesByLaunchpad }) {

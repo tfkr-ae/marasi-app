@@ -131,12 +131,70 @@ test("a blocking modal suppresses menu shortcuts, but the WebSocket modal does n
   );
 });
 
-test("while the menu is open only the menu shortcut runs, so it can close the menu", () => {
+test("with the menu open, a shortcut closes the menu and runs its action, as with the menu closed", () => {
   const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: MACOS });
-  const paletteOpen = { ...home, dialogOpen: true };
+  const { calls, handler } = recorder();
+  dispatcher.register("global.go-home", handler("go-home"));
+  dispatcher.register("global.open-menu", handler("toggle-menu"));
+  dispatcher.register("ledger.drawer-closed.toggle-settings", handler("toggle-query-fields"));
   const searchInput = { tagName: "INPUT", id: "commandmenu" };
-  assert.equal(dispatcher.resolve(cmd("1", "Digit1"), paletteOpen), null);
-  assert.equal(dispatcher.resolve(keydown("k", "KeyK", { metaKey: true }, searchInput), paletteOpen), "global.open-menu");
+  const menuOpen = { ...home, dialogOpen: true };
+  let closed = 0;
+  const closeMenu = () => (closed += 1);
+
+  const home1 = cmd("1", "Digit1", { target: searchInput });
+  assert.equal(dispatcher.dispatch(home1, menuOpen, { closeMenu }), true);
+  assert.deepEqual([calls, closed, home1.defaultPrevented], [["go-home"], 1, true]);
+
+  // A page's own shortcut, on its page.
+  assert.equal(dispatcher.dispatch(cmd("p", "KeyP", { target: searchInput }), { ...menuOpen, route: "/ledger" }, { closeMenu }), true);
+  assert.deepEqual([calls.at(-1), closed], ["toggle-query-fields", 2]);
+
+  // The menu shortcut toggles the menu itself; nothing else closes it.
+  assert.equal(dispatcher.dispatch(cmd("k", "KeyK", { target: searchInput }), menuOpen, { closeMenu }), true);
+  assert.deepEqual([calls.at(-1), closed], ["toggle-menu", 2]);
+
+  // A key no action takes is left to the menu, and typing to its search.
+  const free = cmd("j", "KeyJ", { target: searchInput });
+  assert.equal(dispatcher.dispatch(free, menuOpen, { closeMenu }), false);
+  assert.equal(free.defaultPrevented, false);
+  assert.equal(dispatcher.resolve(keydown("n", "KeyN", {}, searchInput), { ...menuOpen, route: "/logbook" }), null);
+  assert.equal(closed, 2);
+});
+
+// The researcher added a bare O to the Ledger's Open (⌘⇧O by default).
+test("with the menu open, an added bare key types into the search while the ⌘ key still runs the action", () => {
+  const catalog = buildCatalog();
+  const dispatcher = createDispatcher({ catalog, platform: MACOS });
+  const knownActions = catalog.actions.map((a) => a.id).sort();
+  dispatcher.configure({
+    keybindings: {
+      config: {
+        version: 1,
+        activeProfile: "work",
+        profiles: [{
+          id: "work",
+          name: "Work",
+          overrides: { [MACOS]: [{ action: "ledger.drawer-closed.open-request", keys: ["meta+shift+o", "o"] }], [WINDOWS_LINUX]: [] },
+          knownActions,
+        }],
+      },
+      problem: "",
+    },
+  });
+  const { calls, handler } = recorder();
+  dispatcher.register("ledger.drawer-closed.open-request", handler("open-request"));
+  const ledger = { ...home, route: "/ledger" };
+  const searchInput = { tagName: "INPUT", id: "commandmenu" };
+  const menuOpen = { ...ledger, dialogOpen: true };
+
+  assert.equal(dispatcher.resolve(keydown("o", "KeyO"), ledger), "ledger.drawer-closed.open-request");
+  const typed = keydown("o", "KeyO", {}, searchInput);
+  assert.equal(dispatcher.dispatch(typed, menuOpen, { closeMenu: () => calls.push("closed") }), false);
+  assert.equal(typed.defaultPrevented, false);
+  const chord = cmd("O", "KeyO", { shiftKey: true, target: searchInput });
+  assert.equal(dispatcher.dispatch(chord, menuOpen, { closeMenu: () => calls.push("closed") }), true);
+  assert.deepEqual(calls, ["closed", "open-request"]);
 });
 
 test("form fields block shortcuts except on Ledger, Logbook, Launchpad and Settings", () => {
