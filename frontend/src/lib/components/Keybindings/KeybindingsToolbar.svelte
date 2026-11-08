@@ -179,7 +179,7 @@
 		const at = variant;
 		onConfirm({
 			title: `Reset ${name} bindings?`,
-			body: `Every action in ${profile.name} returns to its ${name} default, and every menu group to its factory letter. The other platform's bindings are unchanged.`,
+			body: `${name} bindings and menu letters return to their defaults.`,
 			label: "Reset",
 			run: () => onEdit(resetProfile(catalog, draft, at)),
 		});

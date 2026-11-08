@@ -62,6 +62,8 @@ The type scale is Tailwind's rem sizes plus two dense sizes, `text-2xs` (0.6875r
 | Paths, ids, log lines | `font-mono text-2xs` |
 | Counts, badges, group labels | `text-3xs` |
 
+**Exception: the Marasi menu.** `MarasiMenu.svelte` and `MenuKeys.svelte` are larger than the scale on purpose, so the menu reads at a glance (the menu redesign spec): `text-sm` rows and search field, `text-xs` descriptions and counts, and 1.5rem (`h-6`) key and count badges. Leave those sizes as they are, and don't copy them elsewhere. The Keybindings settings are not part of the exception.
+
 Write every text size in rem, including CodeMirror `fontSize` styles. `lib/textSizeRem.test.js` fails on a text size in px and names its file and line.
 
 `app.css` adds the denser `.btn-group-sm` and `.table-dense`. To match the scale, copy from `LedgerTable.svelte`, `DrawerRail.svelte` or `OpeningScreen.svelte` instead of measuring.

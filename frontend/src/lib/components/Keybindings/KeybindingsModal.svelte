@@ -307,7 +307,7 @@
 						onReset={(groupId) => edit(resetGroupLetter(draft, { profileId: profile.id, groupId }))}
 					/>
 					{#if current.menuItems.length}
-						<h3 class="border-b border-surface-300 px-3 py-1.5 text-xs font-bold opacity-70 dark:border-surface-600">Actions</h3>
+						<h3 class="border-b border-surface-300 px-3 py-1.5 text-sm font-bold opacity-70 dark:border-surface-600">Actions</h3>
 					{/if}
 					<ActionRows
 						rows={current.items}
