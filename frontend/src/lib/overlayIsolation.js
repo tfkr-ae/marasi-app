@@ -285,8 +285,11 @@ export function isolateOverlays(appRoot, stores) {
     scheduleSync();
   });
   const unsubscribeToast = stores.toastStore.subscribe(scheduleSync);
+  // Watch the whole body: a modal renders outside appRoot, and a dialog it
+  // holds (the WebSocket modal's Marasi menu) must become the active
+  // overlay, so that Escape closes that dialog and not the modal under it.
   const dialogObserver = new MutationObserver(scheduleSync);
-  dialogObserver.observe(appRoot, {
+  dialogObserver.observe(document.body, {
     attributes: true,
     subtree: true,
     attributeFilter: ["open"],

@@ -13,7 +13,7 @@
     } from "@skeletonlabs/skeleton";
     import CodeMirror from "svelte-codemirror-editor";
     import { extensionsStore } from "../../stores/extensionsStore.js";
-    import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
     import { useMenuActions } from "../../lib/keybindings/app.js";
     import {
         EditIcon,
@@ -96,7 +96,7 @@
     let accOpened = false;
 </script>
 
-<MarasiKeys menuOptions={compassMenu} />
+<MarasiMenu paletteTier="page" pageName="Compass" pageEntries={compassMenu} />
 <Accordion rounded="false" padding="py-3 px-3" regionControl="text-sm font-bold" class="bg-surface-50 dark:bg-surface-900 text-surface-900-50-token">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon size="16" /></svelte:fragment>

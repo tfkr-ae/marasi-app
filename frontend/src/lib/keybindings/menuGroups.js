@@ -35,4 +35,16 @@ export const FACTORY_MENU_GROUPS = Object.freeze([
   group("ledger.drawer-open", "copy", "Copy", "C", "Copy", "sky", "URLs and raw HTTP"),
   group("ledger.drawer-open", "view", "View", "V", "Eye", "rose", "Notes, metadata and layout"),
   group("ledger.drawer-closed", "focus", "Focus", "F", "Crosshair", "orange", "Jump to search, filter or the sitemap"),
+  // The Launchpad. Entries holds the tree's actions, which share its menu.
+  group("launchpad", "launch", "Launch", "L", "Rocket", "violet", "Create, edit and launch requests"),
+  group("launchpad", "navigate", "Navigate", "N", "ArrowDownUp", "indigo", "Move between launchpads and entries"),
+  group("launchpad", "compare", "Compare", "C", "GitCompare", "amber", "Compare two entries"),
+  group("launchpad", "view", "View", "V", "Eye", "rose", "Layout, notes and metadata"),
+  group("launchpad.tree", "entries", "Entries", "E", "ListTree", "teal", "Select and reorder entries"),
+  // The Armory page. Its drawer's actions stay loose.
+  group("armory.page", "templates", "Templates", "T", "FileCode", "indigo", "Create, edit and switch templates"),
+  group("armory.page", "runs", "Runs", "R", "Play", "emerald", "Launch, cancel and switch runs"),
+  // The Checkpoint. Held items is I, because H is reserved.
+  group("checkpoint", "held", "Held items", "I", "Hand", "rose", "Forward, drop or edit held items"),
+  group("checkpoint", "rules", "Rules", "R", "ListFilter", "amber", "Edit and apply rules"),
 ]);

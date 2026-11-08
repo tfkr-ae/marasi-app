@@ -25,7 +25,7 @@
 	} from "lucide-svelte";
 	import { onDestroy } from "svelte";
 	import { isSuperseded } from "../service/errors.js";
-	import MarasiKeys from "./MarasiMenu/MarasiKeys.svelte";
+	import MarasiMenu from "./MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions, websocketTab } from "../keybindings/app.js";
 	import { stepWebSocketTab } from "../keybindings/contexts.js";
 	import WebSocketCheckpoint from "./WebSocketCheckpoint.svelte";
@@ -201,7 +201,7 @@
 	}
 </script>
 
-<MarasiKeys paletteTier="overlay" menuOptions={websocketMenu} />
+<MarasiMenu paletteTier="overlay" pageName="WebSocket" pageEntries={websocketMenu} />
 
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->

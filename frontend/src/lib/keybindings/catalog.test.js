@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog, extensionsWithGUI } from "./catalog.js";
+import { contextsConflict } from "./contexts.js";
 import { createKeymap } from "./keymap.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
 
@@ -396,6 +397,50 @@ test("the Ledger with its drawer closed groups only Focus", () => {
   ]);
 });
 
+test("the Launchpad groups its actions as Launch, Navigate, Compare, View and Entries", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "launchpad"), [
+    ["launch", "Launch", "L", ["cancel-launch", "create", "delete-tab", "edit-request", "launch", "toggle-tls"]],
+    ["navigate", "Navigate", "N", ["focus-search", "jump-to-latest", "next-entry", "next-tab", "previous-entry", "previous-tab"]],
+    ["compare", "Compare", "C", ["swap-compare", "toggle-compare", "toggle-compare-view"]],
+    ["view", "View", "V", ["copy-browser-view-url", "toggle-group-by-status", "toggle-settings", "toggle-sidebar", "view-metadata", "view-notes"]],
+  ]);
+  assert.deepEqual(groupsOf(catalog, "launchpad.tree"), [
+    ["entries", "Entries", "E", catalog.inContext("launchpad.tree").map((a) => a.id.slice("launchpad.tree.".length)).sort()],
+  ]);
+  assert.equal(catalog.group("launchpad", "navigate").description, "Move between launchpads and entries");
+  assert.equal(catalog.group("ledger.drawer-open", "navigate").description, "Move between requests");
+});
+
+test("the Armory page groups Templates and Runs, with the rest loose", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "armory.page"), [
+    ["templates", "Templates", "T", ["create-template", "edit-template", "next-template", "previous-template", "save-template"]],
+    ["runs", "Runs", "R", ["cancel-run", "launch-run", "next-run", "previous-run", "refresh-runs"]],
+  ]);
+  for (const slug of ["toggle-settings", "open-first-request", "select-all-traffic"]) {
+    assert.equal(catalog.get(`armory.page.${slug}`).group, undefined, slug);
+  }
+});
+
+test("the Checkpoint groups Held items under I, since H is reserved, and Rules", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "checkpoint"), [
+    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked"]],
+    ["rules", "Rules", "R", ["edit-rules", "update-rules"]],
+  ]);
+  assert.equal(catalog.get("checkpoint.toggle-settings").group, undefined);
+  assert.equal(catalog.get("checkpoint.show-logs").group, undefined);
+});
+
+test("Logbook, Compass, Workshop, the Armory drawer and the WebSocket contexts have no menu groups", () => {
+  const catalog = buildCatalog();
+  for (const context of ["logbook", "compass", "workshop", "armory.drawer", "websocket", "websocket.stream", "websocket.checkpoint", "websocket.inject"]) {
+    assert.deepEqual(catalog.groupsIn(context), [], context);
+    assert.ok(catalog.inContext(context).every((a) => !a.group), context);
+  }
+});
+
 test("no page menu group uses a global group's letter (G, P, B or A)", () => {
   const catalog = buildCatalog();
   const global = new Map(catalog.groupsIn("global").map((g) => [g.letter, g.id]));
@@ -409,11 +454,17 @@ test("no page menu group uses a global group's letter (G, P, B or A)", () => {
   }
 });
 
-test("menu letters are unique at each menu level, global groups included", () => {
+// A menu level holds a context's groups, those of the same-tier contexts it
+// overlaps (the Launchpad tree's Entries sits beside the Launchpad's), and
+// the global groups.
+test("menu letters are unique at each menu level, overlapping contexts and global groups included", () => {
   const catalog = buildCatalog();
   const global = catalog.groupsIn("global");
   for (const context of catalog.contexts) {
-    const level = context.id === "global" ? global : [...catalog.groupsIn(context.id), ...global];
+    const page = catalog.contexts
+      .filter((other) => other.id !== "global" && contextsConflict(catalog.contexts, context.id, other.id))
+      .flatMap((other) => catalog.groupsIn(other.id));
+    const level = context.id === "global" ? global : [...page, ...global];
     const seen = new Map();
     for (const group of level) {
       assert.ok(!seen.has(group.letter), `${context.id}: ${group.id} and ${seen.get(group.letter)} share ${group.letter}`);

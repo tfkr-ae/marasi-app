@@ -7,7 +7,7 @@
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
-	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { checkpointItemContext as itemContext, checkpointRules, checkpointStore } from "../../stores/checkpointStore";
 	import { launchpadStore } from "../../stores/launchpadStore";
@@ -233,7 +233,7 @@
 </script>
 
 <svelte:window on:keydown={onKeydown} />
-<MarasiKeys menuOptions={checkpointMenu} />
+<MarasiMenu paletteTier="page" pageName="Checkpoint" pageEntries={checkpointMenu} />
 
 <div class="cp-page relative flex h-full min-h-0">
 	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} />

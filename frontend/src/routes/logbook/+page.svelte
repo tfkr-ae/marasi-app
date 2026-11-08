@@ -24,7 +24,7 @@
 	import { logbookStore, nextOf, openRecordOf } from "../../stores/logbookStore";
 	import { editRecord, newRecord, showMovedSession } from "../../lib/logbook/recordEditor.js";
 	import { toastError } from "../../lib/toasts.js";
-	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { menuDispatcher, useMenuActions } from "../../lib/keybindings/app.js";
 	import { shortcutLabel } from "../../lib/keybindings/keys.js";
 
@@ -136,7 +136,7 @@
 
 <svelte:window on:keydown|capture={noteModal} on:keydown={onWindowKeydown} />
 
-<MarasiKeys menuOptions={logbookMenu} />
+<MarasiMenu paletteTier="page" pageName="Logbook" pageEntries={logbookMenu} />
 
 <div class="logbook-page relative flex h-full min-h-0 overflow-hidden text-xs">
 	<Dock

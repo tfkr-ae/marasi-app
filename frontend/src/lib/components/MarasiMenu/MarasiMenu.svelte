@@ -18,9 +18,11 @@
 	import MenuKeys from "./MenuKeys.svelte";
 
 	// The page's entries: { actionId, icon }, optionally with a live name,
-	// subtitle or keywords. Text not given comes from the catalog. The
-	// Marasi section lists the global entries GlobalMenu publishes. The
-	// global tier passes no page entries, so it shows only that section.
+	// subtitle or keywords. Text not given comes from the catalog. An entry
+	// without an actionId (an extension menu item that declares no action) is
+	// listed, keyed by its name, and runs nothing. The Marasi section lists
+	// the global entries GlobalMenu publishes. The global tier passes no page
+	// entries, so it shows only that section.
 	export let pageEntries = [];
 	// The page section's heading, in the primary colour.
 	export let pageName = "";
@@ -322,7 +324,7 @@
 			{:else if current?.kind === "group"}
 				{current.description} · {current.items.length} actions
 			{:else if current}
-				{current.subtitle ?? current.name}
+				{current.subtitle || current.name}
 			{/if}
 		</span>
 		{#if !searching && current && current.kind !== "group" && realBindings.length}
