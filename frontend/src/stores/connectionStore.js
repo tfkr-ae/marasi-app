@@ -1,6 +1,7 @@
 // The connection store bound to the app: the saved connections and their
 // passwords through Go (connections.go, keychain.go), a local connection's
-// instance through Go's ConnectLocal, and the service through the app's service
+// instance through Go's ConnectLocal (Start and Stop through
+// StartLocalInstance and StopLocalInstance), and the service through the app's service
 // client. The lifecycle is in createConnectionStore.js.
 import {
   AddRecentProject,
@@ -12,6 +13,8 @@ import {
   SetActiveConnection,
   SetConnectionNoPassword,
   SetConnectionPassword,
+  StartLocalInstance,
+  StopLocalInstance,
 } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { service } from "../lib/service/index.js";
 import { get } from "svelte/store";
@@ -27,6 +30,8 @@ export const connectionStore = createConnectionStore({
   ...connectionServiceApi(service, projectStore),
   listConnections: () => ListConnections(),
   connectLocal: (id) => ConnectLocal(id),
+  startLocal: (id, project) => StartLocalInstance(id, project),
+  stopLocal: (id) => StopLocalInstance(id),
   connectionPassword: (id) => ConnectionPassword(id),
   savePassword: (id, password) => SetConnectionPassword(id, password),
   forgetPassword: (id, origins) => SetConnectionNoPassword(id, origins),

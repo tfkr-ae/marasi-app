@@ -7,8 +7,8 @@
 	import { QUIT_QUESTION_EVENT, quitAnswerOf } from "../lib/connection/quitQuestion.js";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
 	import OutdatedInstance from "../lib/connection/OutdatedInstance.svelte";
-	import { filePickerShown } from "../lib/connection/status.js";
-	import { primaryVariant } from "../lib/launchpad/format.js";
+	import { filePickerShown, pagesHeld, startupOffersConnections, startupText } from "../lib/connection/status.js";
+	import { neutralVariant, primaryVariant } from "../lib/launchpad/format.js";
 	import {
 		computePosition,
 		autoUpdate,
@@ -253,16 +253,13 @@
 	$: if ($connectionStore.phase !== "failed") cliSetupOffered = false;
 	$: if (shouldOfferCLISetup($connectionStore, cliSetupOffered)) {
 		cliSetupOffered = true;
+		openConnections();
+	}
+	// The start screen's Connections… opens the Connections modal over it,
+	// so the researcher can switch before the app has loaded.
+	function openConnections() {
 		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
 	}
-	// What the start screen says while the app reaches the service.
-	const startingText = {
-		idle: "Starting...",
-		starting: "Starting Marasi...",
-		connecting: "Connecting to Marasi...",
-		connected: "Loading project...",
-		failed: "Couldn't reach Marasi",
-	};
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
 		return {
@@ -799,12 +796,13 @@
 			<!-- Content area -->
 			<div id="content" class="flex-1 overflow-auto">
 				<div class="sticky top-0 z-20"><ConnectionBanner /></div>
-				<!-- The service has another project open than the pages show:
-				     they stay visible but read-only until the banner's Load it. -->
+				<!-- The service has another project open than the pages show, or
+				     Marasi is stopped: they stay visible but read-only until the
+				     banner's Load it or Start. -->
 				<div
 					class="contents"
-					class:held-pages={$connectionStore.phase === "project-changed"}
-					inert={$connectionStore.phase === "project-changed"}
+					class:held-pages={pagesHeld($connectionStore.phase)}
+					inert={pagesHeld($connectionStore.phase)}
 					data-testid="pages"
 				>
 					{#key $pagesKey}
@@ -840,7 +838,7 @@
 						mode={$modeCurrent ? "light" : "dark"}
 					/>
 					<p class="text-xs text-center" data-testid="connection-status">
-						{startingText[$connectionStore.phase] ?? $appState.message}
+						{startupText($connectionStore) ?? $appState.message}
 					</p>
 					{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) !== null}
 						<div class="mt-2 max-w-md">
@@ -850,13 +848,25 @@
 						<p class="mt-2 max-w-md text-xs text-center opacity-70 break-words">
 							{$connectionStore.error}
 						</p>
-						<div class="mt-3 flex justify-center">
+					{/if}
+					{#if startupOffersConnections($connectionStore.phase)}
+						<div class="mt-3 flex justify-center gap-2">
+							{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) === null}
+								<button
+									type="button"
+									class="btn btn-sm {primaryVariant($modeCurrent)}"
+									on:click={() => connectionStore.retry()}
+								>
+									Retry
+								</button>
+							{/if}
 							<button
 								type="button"
-								class="btn btn-sm {primaryVariant($modeCurrent)}"
-								on:click={() => connectionStore.retry()}
+								class="btn btn-sm {neutralVariant($modeCurrent)}"
+								data-testid="startup-connections"
+								on:click={openConnections}
 							>
-								Retry
+								Connections…
 							</button>
 						</div>
 					{/if}

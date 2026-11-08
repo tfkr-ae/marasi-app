@@ -4,7 +4,9 @@
 	// connection). The Connections modal shows it
 	// compact; Settings → Connection in the Settings row layout (`rows`).
 	// Another connection offers Switch; a refused password asks for it; a
-	// remote has its address and Remove. The password and sharing rows
+	// remote has its address and Remove. The local connection offers Stop
+	// (asking first when the run isn't the app's), and once stopped, "Marasi
+	// stopped" with Start (Retry for a remote). The password and sharing rows
 	// (ConnectionAccess) go after the service rows.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
@@ -51,7 +53,7 @@
 	$: state = $connectionStore;
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
-	$: reached = isActive && state.version !== null;
+	$: reached = isActive && state.version !== null && phase !== "stopped";
 	const row = rows
 		? "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
 		: "flex items-center justify-between gap-4 py-2 border-b border-surface-200 dark:border-surface-700";
@@ -96,6 +98,15 @@
 		<div class="mt-3 bg-warning-500/15 p-3">
 			<OutdatedInstance error={state.error} />
 		</div>
+	{:else if isActive && phase === "stopped"}
+		<div class="mt-3 flex items-center gap-3 bg-surface-500/10 p-3" data-testid="connection-stopped">
+			<p class="min-w-0 flex-1 text-xs">Marasi stopped</p>
+			{#if connection.kind === "local"}
+				<button type="button" class={primary} data-testid="connection-detail-start" on:click={() => connectionStore.startInstance()}>Start</button>
+			{:else}
+				<button type="button" class={neutral} on:click={() => connectionStore.retry()}>Retry</button>
+			{/if}
+		</div>
 	{:else if isActive && phase === "failed"}
 		<div class="mt-3 flex items-center gap-3 bg-error-500/10 p-3">
 			<p class="min-w-0 flex-1 break-words text-xs">{state.error}</p>
@@ -129,6 +140,27 @@
 				</div>
 				<p class="font-mono text-xs" data-testid="connection-api">{state.api ?? "none"}</p>
 			</div>
+			{#if connection.kind === "local" && phase === "connected"}
+				<div class={row}>
+					<div>
+						<p>Instance</p>
+						<p class="text-xs opacity-70" data-testid="connection-stop-hint">
+							{state.stopAsk ? "Another program started it." : "Stop Marasi and its proxy"}
+						</p>
+					</div>
+					<div class="flex items-center gap-2">
+						{#if state.stopAsk}
+							<button type="button" class={primary} data-testid="connection-stop-confirm" on:click={() => connectionStore.confirmStop()}>Stop</button>
+							<button type="button" class={neutral} on:click={() => connectionStore.cancelStop()}>Cancel</button>
+						{:else}
+							<button type="button" class={neutral} disabled={state.busy !== null} data-testid="connection-stop" on:click={() => connectionStore.stop()}
+								>{state.busy === "stop" ? "Stopping…" : "Stop"}</button
+							>
+						{/if}
+					</div>
+				</div>
+				{#if state.stopError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" role="alert">{state.stopError}</p>{/if}
+			{/if}
 		</div>
 	{/if}
 
