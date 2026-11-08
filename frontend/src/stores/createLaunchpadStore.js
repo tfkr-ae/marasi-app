@@ -633,7 +633,13 @@ export function createLaunchpadStore(api) {
   // Loads the launchpad list. Drafts, entries and selection of launchpads
   // that still exist are kept, so the page can call this on every visit.
   // `prefer` opens that launchpad instead of the current one, if it exists.
+  // The pending launches are read alongside: they don't need the list.
   async function populate(prefer = null) {
+    await Promise.all([populateList(prefer), loadPendingLaunches()]);
+  }
+
+  // Reads the launchpad list and opens the preferred or current launchpad.
+  async function populateList(prefer) {
     const version = projectStateVersion;
     const launchpads = (await api.getLaunchpads()) || [];
     if (version !== projectStateVersion) return;
@@ -659,7 +665,7 @@ export function createLaunchpadStore(api) {
     });
     const exists = (id) => launchpads.some((launchpad) => launchpad.ID === id);
     const selected = [prefer, current.selectedLaunchpadId].find(exists) ?? launchpads[0]?.ID ?? null;
-    await Promise.all([selectLaunchpad(selected), loadPendingLaunches()]);
+    await selectLaunchpad(selected);
   }
 
   // After a reconnect to the same project: rereads the launchpads, every

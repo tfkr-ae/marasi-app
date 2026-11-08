@@ -442,6 +442,30 @@ test("populate picks up launches still pending, so a page opened mid-launch show
   assert.equal(pendingLaunchOf(get(store), "lp1"), null);
 });
 
+test("populate asks for the pending launches without waiting for the launchpads", async () => {
+  const api = twoLaunchpads();
+  api.pending.push(launchState("d", "lp2", "pending"));
+  const list = api.getLaunchpads;
+  let answer;
+  api.getLaunchpads = () => new Promise((resolve) => (answer = () => resolve(list())));
+  const pendingLaunches = api.pendingLaunches;
+  let asked = false;
+  api.pendingLaunches = () => {
+    asked = true;
+    return pendingLaunches();
+  };
+  const store = createLaunchpadStore(api);
+
+  const populating = store.populate();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(asked, true);
+
+  answer();
+  await populating;
+  assert.equal(get(store).selectedLaunchpadId, "lp1");
+  assert.equal(pendingLaunchOf(get(store), "lp2")?.ID, "d");
+});
+
 test("populate settles a launch the store thought pending but Marasi has finished", async () => {
   const api = twoLaunchpads();
   api.nextLaunchIds.push("d");

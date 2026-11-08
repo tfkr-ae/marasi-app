@@ -26,7 +26,7 @@
 		busy = true;
 		problem = "";
 		try {
-			await RestartLocalInstance();
+			await RestartLocalInstance($connectionStore.connection.id);
 			confirming = false;
 			connectionStore.retry();
 		} catch (err) {

@@ -275,9 +275,9 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch, confirmFollow } = {}
   let onDrop = null;
   let onReset = null;
   const api = {
-    connectLocal: async () => {
+    connectLocal: async (id) => {
       calls.push("connectLocal");
-      return connectLocal ? connectLocal() : { url: "http://127.0.0.1:51391", password: "pw", startedByApp: true };
+      return connectLocal ? connectLocal(id) : { url: "http://127.0.0.1:51391", password: "pw", startedByApp: true };
     },
     use: (connection) => calls.push(["use", connection]),
     readStatus: async () => {
@@ -354,6 +354,24 @@ test("start() reaches the service through the api and loads its project", async 
     ["loadProject", "/p/scratchpad.marasi"],
   ]);
   assert.equal(get(store).owned, true);
+});
+
+test("the local connection is reached by its id, and a run an earlier launch started reads as owned", async () => {
+  const reachedIds = [];
+  const { api } = fakeApi({
+    connectLocal: (id) => {
+      reachedIds.push(id);
+      // Go's saved ownership: the run is the app's though this launch attached.
+      return { url: "http://127.0.0.1:51391", password: "pw", startedByApp: true };
+    },
+  });
+  const store = createConnectionStore(api);
+
+  store.start();
+  const connected = await reached(store, "connected");
+
+  assert.deepEqual(reachedIds, ["local"]);
+  assert.equal(connected.owned, true);
 });
 
 test("a failed start shows the error, and retry() reaches the service", async () => {

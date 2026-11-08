@@ -43,7 +43,7 @@
 	// Read only when asked, so the password never sits in a store.
 	let revealed = null;
 	async function readPassword() {
-		return local ? (await LocalPairing()).password : await ConnectionPassword(connection.id);
+		return local ? (await LocalPairing(connection.id)).password : await ConnectionPassword(connection.id);
 	}
 	const toggleReveal = attempt(async () => {
 		revealed = revealed === null ? await readPassword() : null;
@@ -102,7 +102,7 @@
 	}
 	async function loadPairing() {
 		try {
-			pairing = await LocalPairing();
+			pairing = await LocalPairing(connection.id);
 		} catch (err) {
 			error = errorText(err);
 		}

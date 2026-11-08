@@ -55,6 +55,15 @@ test("Check for updates… is a global Marasi menu action bound to ⌘⇧U and C
   assert.deepEqual(action.defaults, { [MACOS]: ["meta+shift+u"], [WINDOWS_LINUX]: ["ctrl+shift+u"] });
 });
 
+test("Connections… is a keyless global Marasi menu action", () => {
+  const action = buildCatalog().get("global.connections");
+  assert.ok(action);
+  assert.equal(action.label, "Connections…");
+  assert.equal(action.context, "global");
+  assert.equal(action.keyless, true);
+  assert.deepEqual(action.defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
+});
+
 test("an unknown action id has no catalog entry", () => {
   assert.equal(buildCatalog().get("global.does-not-exist"), undefined);
 });

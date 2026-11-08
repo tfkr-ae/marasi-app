@@ -14,7 +14,7 @@ func TestLocalPairingReadsThePayloadThroughTheSocket(t *testing.T) {
 	cli := (&fakeCLI{}).answer("service control pair", 0, `{"url":"http://100.64.1.2:9000","password":"pw","instance":"default"}`)
 	app := localApp(t, cli)
 
-	pairing, err := app.LocalPairing()
+	pairing, err := app.LocalPairing(localConnectionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestLocalPairingWithoutAListenerSaysSo(t *testing.T) {
 	cli := (&fakeCLI{}).answer("service control pair", 1, `{"error":"reading pairing: the instance has no control listener network address"}`)
 	app := localApp(t, cli)
 
-	if _, err := app.LocalPairing(); err == nil || !strings.Contains(err.Error(), "no control listener") {
+	if _, err := app.LocalPairing(localConnectionID); err == nil || !strings.Contains(err.Error(), "no control listener") {
 		t.Fatalf("err = %v, want the CLI's reason", err)
 	}
 }

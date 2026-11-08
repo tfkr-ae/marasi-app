@@ -83,6 +83,9 @@ type Config struct {
 	connections      []SavedConnection
 	activeConnection string
 	recentProjects   map[string][]RecentProject
+	// ownedRuns is the run_id the app last started per local connection id
+	// (owned_runs.go).
+	ownedRuns map[string]string
 }
 
 const appConfigName = "marasi_appconfig"
@@ -232,6 +235,7 @@ func LoadConfig(appConfigDir string) (*Config, error) {
 	config.connections = parseConnections(documentValue(doc, connectionsKey))
 	config.activeConnection = parseActiveConnection(documentValue(doc, activeConnectionKey))
 	config.recentProjects = parseRecentProjects(documentValue(doc, recentProjectsKey))
+	config.ownedRuns = parseOwnedRuns(documentValue(doc, ownedRunsKey))
 
 	if err := loadTestCases(appConfigDir, config); err != nil {
 		return nil, fmt.Errorf("loading test cases: %w", err)

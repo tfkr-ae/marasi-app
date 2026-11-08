@@ -102,6 +102,28 @@ test("the active runs count per template, for the rail and the template list", a
   assert.deepEqual(activeCountsOf(get(store)), { total: 3, byTemplate: { [T1]: 2, [T2]: 1 } });
 });
 
+test("populate asks for the wordlists and active runs without waiting for the templates", async () => {
+  const routes = serviceRoutes();
+  const templates = routes["GET /armory/template"];
+  let answer;
+  routes["GET /armory/template"] = () => new Promise((resolve) => (answer = () => resolve(templates)));
+  const { client, store } = setup(routes);
+
+  const populating = store.populate();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(
+    client.calls.map(([method, path]) => `${method} ${path}`).sort(),
+    ["GET /armory/run", "GET /armory/template", "GET /wordlist"],
+  );
+
+  answer();
+  await populating;
+  const state = get(store);
+  assert.deepEqual(state.templates.map((t) => t.ID), [T1, T2]);
+  assert.deepEqual(state.wordlists, [{ Name: "words.txt", Size: 120 }]);
+  assert.deepEqual(activeCountsOf(state), { total: 2, byTemplate: { [T1]: 1, [T2]: 1 } });
+});
+
 test("populate reads the wordlists with their names and sizes", async () => {
   const { store } = setup();
   await store.populate();
