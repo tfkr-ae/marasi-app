@@ -2,7 +2,16 @@
 // Settings → Connection.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filePickerShown, pagesHeld, phaseLabel, phaseTone, statusHint, whereText } from "./status.js";
+import {
+  filePickerShown,
+  pagesHeld,
+  phaseLabel,
+  phaseTone,
+  startupOffersConnections,
+  startupText,
+  statusHint,
+  whereText,
+} from "./status.js";
 
 test("the dot is green when connected, amber on the way, red when it failed", () => {
   assert.equal(phaseTone("connected"), "bg-success-500");
@@ -51,4 +60,29 @@ test("the pages are held, dimmed and inert, while another project waits or Maras
   assert.equal(pagesHeld("project-changed"), true);
   assert.equal(pagesHeld("stopped"), true);
   for (const phase of ["connected", "reconnecting", "starting", "failed"]) assert.equal(pagesHeld(phase), false, phase);
+});
+
+test("the start screen names the remote it's reaching", () => {
+  const office = { id: "r1", kind: "remote", name: "Office", url: "http://10.0.0.5:9000" };
+  assert.equal(startupText({ phase: "connecting", connection: office }), "Connecting to Office…");
+  assert.equal(startupText({ phase: "failed", connection: office }), "Couldn't reach Office");
+});
+
+test("the start screen reads as before on Local", () => {
+  const local = { id: "local", kind: "local", name: "Local" };
+  assert.equal(startupText({ phase: "idle", connection: local }), "Starting…");
+  assert.equal(startupText({ phase: "starting", connection: local }), "Starting Marasi…");
+  assert.equal(startupText({ phase: "connecting", connection: local }), "Connecting to Marasi…");
+  assert.equal(startupText({ phase: "connected", connection: local }), "Loading project…");
+  assert.equal(startupText({ phase: "failed", connection: local }), "Couldn't reach Marasi");
+  assert.equal(startupText({ phase: "auth-failed", connection: local }), "Password refused");
+});
+
+test("the start screen offers Connections… until it reaches the service, and after it fails", () => {
+  for (const phase of ["starting", "connecting", "failed", "auth-failed"]) {
+    assert.equal(startupOffersConnections(phase), true, phase);
+  }
+  for (const phase of ["idle", "connected"]) {
+    assert.equal(startupOffersConnections(phase), false, phase);
+  }
 });

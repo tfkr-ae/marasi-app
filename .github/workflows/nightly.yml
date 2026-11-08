@@ -92,6 +92,8 @@ jobs:
             echo "version=$(date -u '+%d.%m.%Y') (nightly ${sha:0:7})"
           } >> "$GITHUB_OUTPUT"
 
+  # Each build carries its platform's Marasi CLI, the latest CLI release on
+  # this channel, verified (build.yml, "Carry the Marasi CLI").
   build:
     needs: prepare
     if: needs.prepare.outputs.publish == 'true'

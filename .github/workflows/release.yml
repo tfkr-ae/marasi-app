@@ -27,6 +27,8 @@ jobs:
             exit 1
           fi
 
+  # Each build carries its platform's Marasi CLI, the latest CLI release on
+  # this channel, verified (build.yml, "Carry the Marasi CLI").
   build:
     needs: prepare
     uses: ./.github/workflows/build.yml

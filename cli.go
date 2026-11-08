@@ -15,11 +15,15 @@ import (
 	"time"
 
 	"aead.dev/minisign"
+
+	"github.com/tfkr-ae/marasi-app/internal/marasicli"
 )
 
-// The Marasi CLI (GLOSSARY "Marasi CLI"): the app never bundles it
-// (docs/adr/2026-11-06-the-marasi-cli-is-never-bundled.md). It finds one,
-// or installs and updates one from Marasi's GitHub releases.
+// The Marasi CLI (GLOSSARY "Marasi CLI"): the app never runs a CLI from
+// inside itself. It finds one, or installs one, from the copy a release or
+// nightly build carries or from Marasi's GitHub releases, and updates it
+// from those releases
+// (docs/adr/2026-11-08-the-app-carries-a-compressed-cli-it-installs-once.md).
 //
 //   - cli.go: the replaceable functions every CLI effect goes through, and
 //     reading a CLI's build;
@@ -27,19 +31,21 @@ import (
 //   - cli_locate.go: finding the CLI (custom path, then PATH) and checking
 //     a candidate is Marasi;
 //   - cli_install.go: installing and updating it, verified against
-//     marasiCLIPublicKey.
+//     marasiCLIPublicKey;
+//   - cli_archive.go: extracting a release's archive build;
+//   - cli_carried.go: the CLI a release or nightly build carries.
 //
 // Running the CLI goes through App.runCLI (local_instance.go).
 
 // defaultCLIReleaseSource is the GitHub releases API of the Marasi
 // repository, which publishes the CLI builds.
-const defaultCLIReleaseSource = "https://api.github.com/repos/tfkr-ae/marasi"
+const defaultCLIReleaseSource = marasicli.ReleaseSource
 
 // marasiCLIPublicKey is the minisign public key Marasi signs its releases'
-// checksums.txt with (Marasi's docs/adr/2026-10-18-updates-are-signed-with-an-embedded-key.md,
-// its MARASI_SIGNING_PUBLIC_KEY repository variable). It is built into the
-// app whatever the build, so a development build can install a CLI too.
-const marasiCLIPublicKey = "RWTKYt9SjZnVCHRuMsvU26+0Gh9A6/hGeLTU7Mn2ToTZ4oJ5dw3jIXsR"
+// checksums.txt with. It is built into the app whatever the build, so a
+// development build can install a CLI too, and cmd/carry-cli verifies the
+// carried CLI with it.
+const marasiCLIPublicKey = marasicli.PublicKey
 
 // cliRuntime holds the replaceable functions the CLI's locate, install and
 // update go through. useCLIRuntime sets the real ones; tests replace them.
@@ -74,6 +80,11 @@ type cliRuntime struct {
 	getenv  func(name string) string
 	// sleep waits between attempts to remove a CLI an update moved aside.
 	sleep func(d time.Duration)
+	// carried is the CLI this build carries (cli_carried.go), nil for none.
+	carried *carriedCLI
+	// background runs work, such as the update check after Install places
+	// the carried CLI, without waiting for it.
+	background func(work func())
 
 	// mu makes installs and updates run one at a time.
 	mu sync.Mutex
@@ -101,6 +112,8 @@ func (a *App) useCLIRuntime() {
 	r.homeDir = os.UserHomeDir
 	r.getenv = os.Getenv
 	r.sleep = time.Sleep
+	r.carried = buildCarriedCLI()
+	r.background = func(work func()) { go work() }
 }
 
 func parseMinisignKey(text string) (minisign.PublicKey, error) {

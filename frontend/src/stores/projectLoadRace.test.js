@@ -2,8 +2,8 @@
 // drives the real project store, whose loads run the real projectData
 // registry over fake stores that answer when the test says. A connection
 // switch or a newer open, reload or load supersedes the running one, which
-// then changes nothing: not the opening screen, the loaded project, the
-// generation, or the registry's later stores.
+// then changes nothing: not the opening screen, the loaded project or the
+// generation, even when its stores finish late or fail.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
@@ -177,33 +177,33 @@ test("a superseded reload finishing after the switch's load changes nothing", as
   assert.deepEqual(fake.outcomes, ["done", "opened", "superseded"]);
 });
 
-test("a switch during the registry's load stops the superseded load before its next store", async () => {
+test("a switch during the registry's load: the superseded load's late stores, even a failing one, change nothing", async () => {
   const stores = ["home", "ledger", "logbook"];
   const fake = setup(stores);
   await connectedToAlpha(fake, "/a.marasi", stores);
   await followed(fake, "/a-new.marasi");
-  fake.next("home.load").resolve();
+  const alpha = Object.fromEntries(stores.map((name) => [name, fake.next(`${name}.load`)]));
+  alpha.home.resolve();
   await settle();
-  const alphaLedger = fake.next("ledger.load");
 
   await switchedToBeta(fake, "/b.marasi");
-  fake.calls.length = 0;
-  alphaLedger.resolve();
+  const generation = get(fake.projectStore).generation;
+  alpha.ledger.reject(new Error("ledger is down"));
+  alpha.logbook.resolve();
   await settle();
-  assert.equal(fake.has("logbook.load"), false);
 
-  for (const name of stores) {
-    fake.next(`${name}.load`).resolve();
-    await settle();
-  }
+  const during = get(fake.projectStore);
+  assert.equal(during.opening?.path, "/b.marasi");
+  assert.equal(during.opening.failure, null);
+  assert.equal(during.loaded.path, "/a.marasi");
+  assert.equal(during.generation, generation);
 
-  assert.deepEqual(
-    fake.calls.map(([name]) => name),
-    ["ledger.load", "logbook.load"],
-  );
-  assert.equal(fake.has("logbook.load"), false);
+  for (const name of stores) fake.next(`${name}.load`).resolve();
+  await settle();
+
   assert.equal(get(fake.projectStore).loaded.path, "/b.marasi");
   assert.equal(get(fake.projectStore).opening, null);
+  assert.equal(get(fake.projectStore).generation, generation + 1);
   assert.deepEqual(fake.outcomes, ["done", "superseded", "opened"]);
 });
 

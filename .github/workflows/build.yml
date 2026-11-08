@@ -90,15 +90,21 @@ jobs:
           # task is the wails3 Taskfile task that builds the platform into
           # bin/; asset is the release asset's name in bin/, which each
           # defaultInstaller downloads. A tags entry passes extra build tags.
+          # cli is the platform of the Marasi CLI the build carries; the
+          # universal macOS build carries the arm64 CLI in its arm64 half
+          # only, since Marasi publishes no darwin/amd64 CLI.
           - os: ubuntu-24.04
             task: linux:build
             asset: marasi-app
+            cli: linux/amd64
           - os: windows-latest
             task: windows:build
             asset: marasi-app.exe
+            cli: windows/amd64
           - os: macos-latest
             task: darwin:package:universal
             asset: marasi-app.app.zip
+            cli: darwin/arm64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -125,10 +131,21 @@ jobs:
       # main.go embeds frontend/build, which binding generation needs before
       # the frontend build fills it.
       - run: mkdir -p frontend/build && touch frontend/build/.keep
+      # Release and nightly builds carry their platform's Marasi CLI, gzipped
+      # (docs/adr/2026-11-08-the-app-carries-a-compressed-cli-it-installs-once.md):
+      # the latest CLI release on the app's channel, verified against the
+      # signing key and trusted comment the app uses, and its SHA-256. Any
+      # failure fails the build. The carried_cli tag embeds carried_cli/.
+      - name: Carry the Marasi CLI
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          PLATFORM: ${{ matrix.cli }}
+          GH_TOKEN: ${{ github.token }}
+        run: go run ./cmd/carry-cli -channel "$CHANNEL" -platform "$PLATFORM" -out carried_cli
       - name: Build
         env:
           TASK: ${{ matrix.task }}
-          TAGS: ${{ matrix.tags }}
+          TAGS: carried_cli${{ matrix.tags && format(',{0}', matrix.tags) || '' }}
           CHANNEL: ${{ inputs.channel }}
           VERSION: ${{ inputs.version }}
           # The public half of the Marasi signing key (docs/adr/2026-10-17-updates-are-signed-with-an-embedded-key.md), the base64
@@ -148,10 +165,7 @@ jobs:
           fi
           # The platform Taskfiles read CHANNEL, VERSION and
           # SIGNING_PUBLIC_KEY from the environment into -X ldflags.
-          args=("$TASK")
-          if [ -n "$TAGS" ]; then
-            args+=("EXTRA_TAGS=$TAGS")
-          fi
+          args=("$TASK" "EXTRA_TAGS=$TAGS")
           wails3 task "${args[@]}"
       - if: runner.os == 'macOS'
         uses: Apple-Actions/import-codesign-certs@v7
