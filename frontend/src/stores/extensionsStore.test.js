@@ -344,3 +344,22 @@ test("extension.settings.updated replaces that extension's settings in the list,
   await store.saveSettings("panel", { depth: 1 });
   assert.deepEqual(get(list)[2].Settings, { depth: 1 }, "the app's own save shows too");
 });
+
+test("a load the project switch superseded changes nothing when its answer comes late", async () => {
+  const routes = serviceRoutes();
+  let answer;
+  const late = new Promise((resolve) => (answer = resolve));
+  const first = { ...routes };
+  first["GET /extension"] = () => late;
+  const { store, list, ui } = setup(first);
+  const superseded = store.populate();
+  // The switch clears the store and the next project has no extensions.
+  store.clear();
+  routes["GET /extension"] = { items: [] };
+  Object.assign(first, routes);
+  await store.populate();
+  answer(serviceRoutes()["GET /extension"]);
+  await superseded;
+  assert.deepEqual(get(list), []);
+  assert.deepEqual(get(ui), {});
+});

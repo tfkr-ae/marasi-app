@@ -61,7 +61,12 @@
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
-	import { outdatedVersion, shouldOfferCLISetup } from "../lib/connection/cli.js";
+	import {
+		CLI_UPDATE_CHECKED_EVENT,
+		cliUpdateCheckedNotice,
+		outdatedVersion,
+		shouldOfferCLISetup,
+	} from "../lib/connection/cli.js";
 	import { connectionsModal } from "../lib/connection/modal.js";
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
 	import { reportLogbookEdits } from "../stores/logbookStore";
@@ -303,6 +308,11 @@
 		on("update-progress", onUpdateProgress);
 		on("update-installed", onUpdateInstalled);
 		on("update-failed", onUpdateFailed);
+		// The update check after Install placed the carried CLI found a newer one.
+		const stopCLIUpdateToasts = on(CLI_UPDATE_CHECKED_EVENT, (result) => {
+			const message = cliUpdateCheckedNotice(result);
+			if (message) toastStore.trigger({ message });
+		});
 		refreshUpdateState();
 		autoModeWatcher();
 		StartupRoutine2.then((project) => {
@@ -349,6 +359,7 @@
 			off("update-progress");
 			off("update-installed");
 			off("update-failed");
+			stopCLIUpdateToasts();
 			stopExtensionToasts();
 		};
 	});

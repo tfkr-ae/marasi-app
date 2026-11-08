@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"strings"
 
 	"aead.dev/minisign"
+	"github.com/tfkr-ae/marasi-app/internal/marasicli"
 )
 
 // verifyChecksums checks that signature is the Marasi signing key's
@@ -18,26 +16,7 @@ func verifyChecksums(key minisign.PublicKey, checksums, signature []byte) (map[s
 	if !minisign.Verify(key, checksums, signature) {
 		return nil, failed(UpdateFailureSignature, "the release's checksums are not signed by the Marasi signing key")
 	}
-	return parseChecksums(checksums), nil
-}
-
-// parseChecksums reads sha256sum output: "<64 hex>  <name>" per line, with
-// "*<name>" in binary mode. Lines that are not a checksum are skipped.
-func parseChecksums(checksums []byte) map[string]string {
-	sums := map[string]string{}
-	scanner := bufio.NewScanner(bytes.NewReader(checksums))
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) != 2 {
-			continue
-		}
-		sum := strings.ToLower(fields[0])
-		if decoded, err := hex.DecodeString(sum); err != nil || len(decoded) != sha256.Size {
-			continue
-		}
-		sums[strings.TrimPrefix(fields[1], "*")] = sum
-	}
-	return sums
+	return marasicli.ParseChecksums(checksums), nil
 }
 
 // copyHashing copies src to dst, reporting each chunk to progress, and

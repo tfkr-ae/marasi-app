@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/tfkr-ae/marasi-app/internal/marasicli"
 )
 
 // releaseSource reads Marasi App releases from the GitHub releases API at
@@ -84,18 +86,7 @@ func (s releaseSource) get(ctx context.Context, path string) (githubRelease, err
 		return githubRelease{}, fmt.Errorf("GitHub answered %s", res.Status)
 	}
 
-	var body struct {
-		TagName    string `json:"tag_name"`
-		Name       string `json:"name"`
-		Body       string `json:"body"`
-		HTMLURL    string `json:"html_url"`
-		Prerelease bool   `json:"prerelease"`
-		Assets     []struct {
-			Name string `json:"name"`
-			Size int64  `json:"size"`
-			URL  string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
+	var body marasicli.Release
 	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&body); err != nil {
 		return githubRelease{}, fmt.Errorf("reading GitHub's answer: %w", err)
 	}

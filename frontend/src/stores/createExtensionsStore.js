@@ -44,8 +44,15 @@ export function createExtensionsStore(
     return { ...renders, state: { ...state, ...kept } };
   }
 
+  // Bumped by clear, so a read a project switch superseded drops its
+  // answer instead of showing the last project's extensions.
+  let generation = 0;
+
+  // Reads every extension; resolves to null when clear came first.
   async function read() {
+    const thisRun = generation;
     const read = await Promise.all((await api.list()).map(readExtension));
+    if (thisRun !== generation) return null;
     list.set(read.map((r) => r.ext));
     ui.set(Object.fromEntries(read.filter((r) => r.drawn).map((r) => [r.ext.Name, drawing(r.ext.Name, r.drawn)])));
     return read;
@@ -55,6 +62,7 @@ export function createExtensionsStore(
   async function populate() {
     edited.clear();
     const read_ = await read();
+    if (!read_) return;
     for (const [name, editor] of Object.entries(codeEditors)) {
       editor.set(read_.find((r) => r.ext.Name === name)?.detail.LuaContent ?? "");
     }
@@ -69,6 +77,7 @@ export function createExtensionsStore(
   }
 
   function clear() {
+    generation++;
     edited.clear();
     list.set([]);
     ui.set({});

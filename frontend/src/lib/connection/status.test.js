@@ -7,6 +7,8 @@ import {
   pagesHeld,
   phaseLabel,
   phaseTone,
+  reachingText,
+  removeBlock,
   startupOffersConnections,
   startupText,
   statusHint,
@@ -92,4 +94,20 @@ test("the start screen offers Connections… until it reaches the service, and a
   for (const phase of ["idle", "connected"]) {
     assert.equal(startupOffersConnections(phase), false, phase);
   }
+});
+
+test("the switch banner reads as the start screen while it reaches the connection", () => {
+  const work = { id: "local-abc", kind: "local", name: "Work", instance: "work" };
+  const local = { id: "local", kind: "local", name: "Local" };
+  assert.equal(reachingText({ phase: "starting", connection: work }), "Connecting to Work…");
+  assert.equal(reachingText({ phase: "starting", connection: local }), "Starting Marasi…");
+  assert.equal(reachingText({ phase: "connecting", connection: local }), "Connecting to Marasi…");
+  assert.equal(reachingText({ phase: "connected", connection: local }), null);
+});
+
+test("Remove waits for a switch away, then for a stop of the run the app owns", () => {
+  assert.equal(removeBlock({ isActive: true, ownedRun: false }), "Switch away first");
+  assert.equal(removeBlock({ isActive: true, ownedRun: true }), "Switch away first");
+  assert.equal(removeBlock({ isActive: false, ownedRun: true }), "Stop it first");
+  assert.equal(removeBlock({ isActive: false, ownedRun: false }), null);
 });

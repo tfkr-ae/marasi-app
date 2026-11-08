@@ -86,7 +86,7 @@ func TestEditingALocalConnectionsPortKeepsTheRest(t *testing.T) {
 	}
 }
 
-func TestRemovingALocalConnectionForgetsItsRecentsAndOwnedRun(t *testing.T) {
+func TestRemovingALocalConnectionForgetsItsRecents(t *testing.T) {
 	app, dir := connectionsApp(t, nil)
 	saved := addWork(t, app, 0)
 	if err := app.AddRecentProject(saved.ID, "a", "/p/a.marasi"); err != nil {
@@ -106,6 +106,18 @@ func TestRemovingALocalConnectionForgetsItsRecentsAndOwnedRun(t *testing.T) {
 	}
 	if err := app.SetActiveConnection(localConnectionID); err != nil {
 		t.Fatal(err)
+	}
+	// The app's run there still runs: removing would leave it running with
+	// nothing to stop it on quit.
+	if !app.OwnsRun(saved.ID) {
+		t.Fatal("OwnsRun is false for Work's owned run")
+	}
+	if err := app.RemoveConnection(saved.ID); err == nil || !strings.Contains(err.Error(), "stop it first") {
+		t.Fatalf("err = %v, want stop it first", err)
+	}
+	app.saveOwnedRun(saved.ID, "") // as Stop does
+	if app.OwnsRun(saved.ID) {
+		t.Fatal("OwnsRun is true after the stop")
 	}
 	if err := app.RemoveConnection(saved.ID); err != nil {
 		t.Fatal(err)

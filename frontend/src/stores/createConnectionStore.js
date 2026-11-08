@@ -222,7 +222,7 @@ function begin(state) {
   const { connection } = state;
   reset.session = state.session + 1;
   if (connection.kind === "local") {
-    return go(state, { phase: "starting", error: null, ...reset }, [{ type: "connect-local" }]);
+    return go(state, { phase: "starting", error: null, ...reset }, [{ type: "connect-local", id: connection.id }]);
   }
   return go(state, { phase: "connecting", error: null, ...reset }, [
     { type: "connect-remote", id: connection.id, url: connection.url },
@@ -695,7 +695,7 @@ export function createConnectionStore(api, timers = globalThis) {
             await api.startLocal(step.id, step.project ?? "");
             if (!current(session)) return;
           }
-          local = await api.connectLocal(get(store).connection.id);
+          local = await api.connectLocal(step.id);
         } catch (err) {
           settle(session, { type: "INSTANCE_FAILED", error: message(err) });
           return;

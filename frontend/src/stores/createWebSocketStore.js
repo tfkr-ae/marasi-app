@@ -141,10 +141,15 @@ export function createWebSocketStore(api) {
 		}
 	}
 
+	// Bumped by clear, so a read a project switch superseded drops its
+	// answer instead of showing the last project's flag.
+	let run = 0;
+
 	async function populateInterceptFlag() {
+		const thisRun = run;
 		try {
 			const enabled = await api.GetWSInterceptFlag();
-			setInterceptFlag(enabled);
+			if (thisRun === run) setInterceptFlag(enabled);
 		} catch (err) {
 			console.error("Loading WebSocket intercept state", err);
 		}
@@ -216,7 +221,8 @@ export function createWebSocketStore(api) {
 	return {
 		subscribe,
 
-		clear: () =>
+		clear: () => {
+			run++;
 			set({
 				messagesByRequestId: {},
 				connectionsByRequestId: {},
@@ -226,7 +232,8 @@ export function createWebSocketStore(api) {
 				interceptionErrorsByRequestId: {},
 				wsInterceptEnabled: false,
 				progressByRequestId: {},
-			}),
+			});
+		},
 
 		upsertInterception,
 		populateInterception,

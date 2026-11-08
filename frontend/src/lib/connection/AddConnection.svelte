@@ -10,7 +10,7 @@
 	import { primaryButton } from "../launchpad/format.js";
 	import { addConnection, addLocalConnection, errorText, listInstances } from "./manage.js";
 	import { parsePairing } from "./pairing.js";
-	import { parsePort } from "./localPort.js";
+	import { PORT_RANGE_MESSAGE, parsePort } from "./localPort.js";
 
 	const dispatch = createEventDispatcher();
 	$: primary = primaryButton($modeCurrent);
@@ -54,7 +54,7 @@
 	function addLocal() {
 		const port = parsePort(localPort);
 		if (port === null) {
-			error = "Port is 1–65535, or blank for any";
+			error = PORT_RANGE_MESSAGE;
 			return;
 		}
 		add({ name: localName.trim(), instance: instance.trim(), port }, addLocalConnection);
