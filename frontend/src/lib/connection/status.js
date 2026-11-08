@@ -40,3 +40,29 @@ export const statusHint = (state) => `${state.connection.name} · ${phaseLabel(s
  * host, so they open from the service's list or a typed path.
  */
 export const filePickerShown = (connection) => connection.kind === "local";
+
+/**
+ * What the start screen says while the app reaches the active connection,
+ * before the first project loads: a remote by its name, Local as Marasi.
+ */
+export function startupText({ phase, connection }) {
+  const name = connection.kind === "remote" ? connection.name : "Marasi";
+  const text = {
+    idle: "Starting…",
+    starting: "Starting Marasi…",
+    connecting: `Connecting to ${name}…`,
+    connected: "Loading project…",
+    failed: `Couldn't reach ${name}`,
+    "auth-failed": phaseLabel("auth-failed"),
+  };
+  return text[phase] ?? null;
+}
+
+const switchable = ["starting", "connecting", "failed", "auth-failed"];
+
+/**
+ * Whether the start screen offers Connections…: while the app is still
+ * reaching the service and after it fails, so the researcher can switch
+ * without waiting for a timeout.
+ */
+export const startupOffersConnections = (phase) => switchable.includes(phase);
