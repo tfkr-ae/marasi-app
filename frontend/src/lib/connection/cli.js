@@ -32,7 +32,12 @@ const sources = { custom: "Custom path", installed: "Installed by Marasi", path:
 /** Where the CLI was found. */
 export const cliSourceLabel = (source) => sources[source] ?? source;
 
-const progressSteps = { download: "Downloading…", verify: "Verifying…", install: "Installing…" };
+const progressSteps = {
+  download: "Downloading…",
+  verify: "Verifying…",
+  extract: "Extracting…",
+  install: "Installing…",
+};
 
 /**
  * What a running install says, from Go's latest cli-install-progress

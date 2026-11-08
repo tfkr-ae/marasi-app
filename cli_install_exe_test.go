@@ -171,3 +171,61 @@ func TestInstallingTheCLIOnWindowsAgainReplacesALeftoverNotYetRemoved(t *testing
 	fileHolds(t, path, cliBinaryNew)
 	fileHolds(t, path+".old", cliBinaryOld)
 }
+
+func publishWindowsArchiveUpdate(t *testing.T, c *cliInstall) {
+	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{
+		"marasi-windows-amd64.exe": []byte("bare build"),
+		"marasi-windows-amd64.zip": cliArchive(t, "windows", cliBinaryNew),
+	}))
+}
+
+func TestCheckForCLIUpdateOnWindowsFromAnArchiveMovesTheRunningCLIAside(t *testing.T) {
+	c := newCLIInstall(t, "windows", "amd64")
+	files := c.onWindows()
+	path := runningWindowsCLI(t, c, files, cliBinaryOld)
+	publishWindowsArchiveUpdate(t, c)
+
+	result, err := c.app.CheckForCLIUpdate()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Outcome != "installed" {
+		t.Fatalf("result = %+v, want installed", result)
+	}
+	fileHolds(t, path, cliBinaryNew)
+	fileHolds(t, path+".old", cliBinaryOld)
+	if got := dirFiles(t, filepath.Dir(path)); !slices.Equal(got, []string{"marasi.exe", "marasi.exe.old"}) {
+		t.Fatalf("folder holds %v, want marasi.exe and the running marasi.exe.old", got)
+	}
+}
+
+func TestCheckForCLIUpdateOnWindowsFromAnArchivePutsTheRunningCLIBackWhenTheNewOneCannotMoveIn(t *testing.T) {
+	c := newCLIInstall(t, "windows", "amd64")
+	files := c.onWindows()
+	path := runningWindowsCLI(t, c, files, cliBinaryOld)
+	publishWindowsArchiveUpdate(t, c)
+	rename := c.app.cliRuntime.rename
+	c.app.cliRuntime.rename = func(from, to string) error {
+		if strings.HasPrefix(filepath.Base(from), ".marasi.exe.") {
+			return errors.New("disk full")
+		}
+		return rename(from, to)
+	}
+
+	result, err := c.app.CheckForCLIUpdate()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Outcome != "failed" || result.Failure == nil || result.Failure.Kind != "install" {
+		t.Fatalf("result = %+v, want an install failure", result)
+	}
+	fileHolds(t, path, cliBinaryOld)
+	if !files.running[path] {
+		t.Fatal("the running CLI was not put back at marasi.exe")
+	}
+	if got := dirFiles(t, filepath.Dir(path)); !slices.Equal(got, []string{"marasi.exe"}) {
+		t.Fatalf("folder holds %v, want only marasi.exe", got)
+	}
+}
