@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
-import { CONTEXTS, contextsConflict, stepWebSocketTab } from "./contexts.js";
+import { CONTEXTS, contextsConflict, eligibleContextIds, stepWebSocketTab } from "./contexts.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
 import { factoryKeybindings } from "./profiles.js";
@@ -635,5 +635,69 @@ test("⌘A selects the Armory run's traffic, but not from the template editor or
   for (const target of [codeMirror, field]) {
     const event = keydown("a", "KeyA", { metaKey: true }, target);
     assert.equal(dispatcher.resolve(event, on("/armory")), null, target.tagName);
+  }
+});
+
+// Every menu context, each in a dispatcher state where it is eligible.
+function everyContextState() {
+  return [
+    on("/"),
+    ...["stream", "checkpoint", "inject", "connection"].map((tab) => websocketModal(tab)),
+    on("/ledger"),
+    on("/ledger", requestDrawer()),
+    on("/ledger", requestDrawer(websocketUpgrade)),
+    on("/armory"),
+    armoryDrawerOpen(),
+    ...["launchpad", "checkpoint", "logbook", "compass", "workshop"].map((page) => on(`/${page}`)),
+    { ...on("/launchpad"), launchpadTreeFocused: true },
+    on("/extension/Repeater"),
+  ];
+}
+
+test("Connections… is a global action with no factory key on either platform", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Repeater" }] });
+  const action = catalog.get("global.connections");
+  assert.equal(action.context, "global");
+  assert.equal(action.label, "Connections…");
+  for (const platform of [MACOS, WINDOWS_LINUX]) {
+    const dispatcher = createDispatcher({
+      catalog,
+      platform,
+      keybindings: { config: factoryKeybindings(), problem: "" },
+    });
+    assert.deepEqual(dispatcher.bindingsFor("global.connections"), [], platform);
+  }
+});
+
+test("Connections… bound in a custom profile opens from every menu context", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Repeater" }] });
+  const profile = {
+    id: "work",
+    name: "Work",
+    overrides: {
+      [MACOS]: [{ action: "global.connections", keys: ["meta+shift+9"] }],
+      [WINDOWS_LINUX]: [{ action: "global.connections", keys: ["ctrl+shift+9"] }],
+    },
+    knownActions: catalog.actions.map((a) => a.id),
+  };
+  const config = { version: 1, activeProfile: "work", profiles: [profile] };
+  assert.deepEqual(validateKeybindings(catalog, config), []);
+
+  const states = everyContextState();
+  const covered = new Set(states.flatMap((state) => eligibleContextIds(state, catalog.contexts)));
+  for (const context of catalog.contexts) {
+    assert.ok(covered.has(context.id), `no state covers ${context.id}`);
+  }
+
+  const mac = createDispatcher({ catalog, platform: MACOS, keybindings: { config, problem: "" } });
+  const other = createDispatcher({ catalog, platform: WINDOWS_LINUX, keybindings: { config, problem: "" } });
+  for (const state of states) {
+    const label = `${state.route} ${state.modal ?? ""} ${state.websocketTab ?? ""}`;
+    assert.equal(mac.resolve(cmdShift("(", "Digit9"), state), "global.connections", label);
+    assert.equal(
+      other.resolve(keydown("(", "Digit9", { ctrlKey: true, shiftKey: true }), state),
+      "global.connections",
+      label,
+    );
   }
 });
