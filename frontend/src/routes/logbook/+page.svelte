@@ -7,7 +7,7 @@
 	// The Logbook page, in the Ledger's frame: the dock holds the outline
 	// and the create and status controls, the toolbar filters, and the
 	// workspace shows the summary, or a record in its place. Back and Esc
-	// return to the list, Next and N (logbook.next-record) move through it.
+	// return to the list, Next and ⌘⇧] (logbook.next-record) move through it.
 	// A record opens on its first missing item (or the one asked for),
 	// filled in place; moving away from one with input asks first. Edit
 	// opens the modal.
@@ -44,7 +44,7 @@
 	// An inline fix whose record was deleted elsewhere carries on in the modal.
 	$: if ($logbookStore.session?.remote === "deleted" && !$modalStore.length) showMovedSession(modalStore);
 	$: next = nextOf($logbookStore);
-	// Next's tooltip names the live key, since N can be remapped.
+	// Next's tooltip names the live key, since ⌘⇧] can be remapped.
 	$: nextKey = shortcutLabel($menuDispatcher, "logbook.next-record");
 	$: nextLabel = $logbookStore.filters.status === "all" ? "Next in progress" : "Next";
 	$: nextTitle = nextKey ? `${nextLabel} (${nextKey})` : nextLabel;
@@ -101,7 +101,7 @@
 		logbookStore.close();
 	}
 
-	// N by default (logbook.next-record); it waits while the leave prompt is up.
+	// ⌘⇧] by default (logbook.next-record); it waits while the leave prompt is up.
 	function nextRecord() {
 		if (!opened || $modalStore[0] || $logbookStore.fix?.leaving) return;
 		logbookStore.openNext();

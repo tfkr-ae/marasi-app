@@ -36,7 +36,7 @@ function action(id, label, description, keywords, defaults, { context = "global"
 // stay unique when a key or label is reused in a mutually exclusive state.
 // A row's optional sixth element adds flags: `group`, its menu group, or
 // `yieldsToEditors`: the action never runs while focus is in an editor or
-// text field, which keeps its keys there (⌘⇧↓ selects to the end in
+// text field, which keeps its keys there (⌘↑ moves to the start in
 // CodeMirror).
 function pageActions(context, rows) {
   return rows.map(([slug, label, description, keywords, defaults, flags = {}]) =>
@@ -162,18 +162,18 @@ export const FACTORY_ACTIONS = [
     ["toggle-compare", "Compare Entries", "Compare two entries of the open launchpad, or stop comparing", "compare, diff", primary("shift+c"), { group: "compare" }],
     ["toggle-compare-view", "Switch Compare Request/Response", "Show the request or the response diff while comparing", "compare, diff, request, response", primary("shift+r"), { group: "compare" }],
     ["swap-compare", "Swap Compared Entries", "Swap the A and B entries while comparing", "compare, swap", primary("shift+x"), { group: "compare" }],
-    ["jump-to-latest", "Jump to Last Entry", "Select the last entry in entry order and scroll the sidebar to it", "last, end, latest, bottom, jump, scroll, select", primary("shift+down"), { yieldsToEditors: true, group: "navigate" }],
+    ["jump-to-latest", "Jump to Last Entry", "Select the last entry in entry order and scroll the sidebar to it", "last, end, latest, bottom, jump, scroll, select", primary("j"), { group: "navigate" }],
   ]),
   // Esc, which collapses the entry selection, is reserved for the page
   // (gate.js), so the tree handles it itself.
-  // The ⌥ arrows move the entry selection, as its context menu's Order
-  // items do: ⌥ on both platforms, so not primary().
+  // ⌘⇧↑ and ⌘⇧↓ move the entry selection a step, ⌘↑ and ⌘↓ to the ends of
+  // its launchpad, as its context menu's Order items do.
   ...pageActions("launchpad.tree", [
     ["select-all-entries", "Select All Entries", "Select every entry of the focused launchpad", "select, all, entries", primary("a"), { yieldsToEditors: true, group: "entries" }],
-    ["move-entries-up", "Move Entries Up", "Move the selected entries above the entry before them", "move, up, order, reorder, entries", both("alt+arrowup"), { yieldsToEditors: true, group: "entries" }],
-    ["move-entries-down", "Move Entries Down", "Move the selected entries below the entry after them", "move, down, order, reorder, entries", both("alt+arrowdown"), { yieldsToEditors: true, group: "entries" }],
-    ["move-entries-top", "Move Entries to Top", "Move the selected entries to the start of their launchpad", "move, top, first, order, reorder, entries", both("alt+shift+arrowup"), { yieldsToEditors: true, group: "entries" }],
-    ["move-entries-bottom", "Move Entries to Bottom", "Move the selected entries to the end of their launchpad", "move, bottom, last, end, order, reorder, entries", both("alt+shift+arrowdown"), { yieldsToEditors: true, group: "entries" }],
+    ["move-entries-up", "Move Entries Up", "Move the selected entries above the entry before them", "move, up, order, reorder, entries", primary("shift+arrowup"), { yieldsToEditors: true, group: "entries" }],
+    ["move-entries-down", "Move Entries Down", "Move the selected entries below the entry after them", "move, down, order, reorder, entries", primary("shift+arrowdown"), { yieldsToEditors: true, group: "entries" }],
+    ["move-entries-top", "Move Entries to Top", "Move the selected entries to the start of their launchpad", "move, top, first, order, reorder, entries", primary("arrowup"), { yieldsToEditors: true, group: "entries" }],
+    ["move-entries-bottom", "Move Entries to Bottom", "Move the selected entries to the end of their launchpad", "move, bottom, last, end, order, reorder, entries", primary("arrowdown"), { yieldsToEditors: true, group: "entries" }],
     // ⌘⇧T is the page's Toggle TLS, which is eligible with the tree.
     ["create-finding", "New Finding from Entries", "Create a new finding from the selected entries' requests", "create, new, finding, entries, requests", primary("shift+f"), { yieldsToEditors: true, group: "entries" }],
     ["create-test-case", "New Test Case from Entries", "Create a new test case from the selected entries' requests", "create, new, test, case, entries, requests", primary("shift+b"), { yieldsToEditors: true, group: "entries" }],
@@ -197,14 +197,15 @@ export const FACTORY_ACTIONS = [
   ]),
   // Esc, which goes back to the list, is reserved for the page (gate.js),
   // so the page handles it itself. It has no action: one without a default
-  // key would show as unbound in the factory profile. N is unmodified, so
-  // it never runs while a field or editor has focus.
+  // key would show as unbound in the factory profile. Next Record is ⌘⇧],
+  // like Next Request, Next Entry and Next Run: Marasi's defaults always use
+  // ⌘ (Ctrl), so they work in the open Marasi menu too.
   ...pageActions("logbook", [
     ["focus-search", "Search Logbook", "Jump to search input", "search", primary("shift+s")],
     ["create-finding", "Create Finding", "Create a new draft finding", "create, new, finding", primary("shift+f")],
     ["create-test-case", "Create Test Case", "Draft a new blank test case", "create, new, test, case", primary("shift+t")],
     ["export-report", "Export Report", "Create a report from logbook", "report, template, findings", primary("shift+e")],
-    ["next-record", "Next Record", "Open the next record in the list", "next, record, finding, test, case", both("n")],
+    ["next-record", "Next Record", "Open the next record in the list", "next, record, finding, test, case", primary("shift+]")],
   ]),
   ...pageActions("compass", [
     ["toggle-settings", "Toggle Compass Settings", "Toggle Settings Accordian", "settings, toggle", primary("p")],
@@ -226,7 +227,7 @@ export const FACTORY_ACTIONS = [
   ...pageActions("websocket.stream", [
     ["previous-frame", "Previous WebSocket Message", "Select the previous message in the stream", "websocket previous message", primary("shift+[")],
     ["next-frame", "Next WebSocket Message", "Select the next message in the stream", "websocket next message", primary("shift+]")],
-    ["jump-to-bottom", "Jump to Bottom", "Jump to the newest message and resume auto-scroll", "websocket stream bottom newest follow auto-scroll", primary("shift+down")],
+    ["jump-to-bottom", "Jump to Bottom", "Jump to the newest message and resume auto-scroll", "websocket stream bottom newest follow auto-scroll", primary("j")],
     ["toggle-frame-metadata", "Toggle Message Metadata", "Switch between the message payload and metadata", "websocket message metadata payload", primary("shift+m")],
     ["copy-frame-to-inject", "Copy Message to Inject", "Copy the selected message into the Inject tab", "websocket message copy inject", primary("shift+i")],
   ]),

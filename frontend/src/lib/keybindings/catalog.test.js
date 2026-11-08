@@ -261,20 +261,32 @@ test("Launchpad actions keep their ids and keys but say Launchpad, not Tab or Se
   }
 });
 
-test("the Launchpad tree moves the entry selection up, down, to the top and to the bottom with ⌥ arrows", () => {
+test("the Launchpad tree moves the entry selection a step with ⌘⇧ arrows and to the ends with ⌘ arrows", () => {
   const catalog = buildCatalog();
   const expected = [
-    ["launchpad.tree.move-entries-up", "Move Entries Up", "alt+arrowup"],
-    ["launchpad.tree.move-entries-down", "Move Entries Down", "alt+arrowdown"],
-    ["launchpad.tree.move-entries-top", "Move Entries to Top", "alt+shift+arrowup"],
-    ["launchpad.tree.move-entries-bottom", "Move Entries to Bottom", "alt+shift+arrowdown"],
+    ["launchpad.tree.move-entries-up", "Move Entries Up", "shift+arrowup"],
+    ["launchpad.tree.move-entries-down", "Move Entries Down", "shift+arrowdown"],
+    ["launchpad.tree.move-entries-top", "Move Entries to Top", "arrowup"],
+    ["launchpad.tree.move-entries-bottom", "Move Entries to Bottom", "arrowdown"],
   ];
   for (const [id, label, binding] of expected) {
     const action = catalog.get(id);
     assert.ok(action, id);
     assert.equal(action.context, "launchpad.tree", id);
     assert.equal(action.label, label, id);
-    assert.deepEqual(action.defaults, { [MACOS]: [binding], [WINDOWS_LINUX]: [binding] }, id);
+    assert.deepEqual(action.defaults, { [MACOS]: [`meta+${binding}`], [WINDOWS_LINUX]: [`ctrl+${binding}`] }, id);
+  }
+});
+
+// Marasi's defaults always use ⌘ (Ctrl), so every one works in the open
+// Marasi menu, where a key without it types into the search, and the menu
+// shows it as the action's key. Extension navigation keeps ⌘⌥1–9.
+test("every factory default uses ⌘ on macOS and Ctrl on Windows and Linux", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }] });
+  for (const action of catalog.actions) {
+    assert.ok(action.defaults[MACOS].length && action.defaults[WINDOWS_LINUX].length, `${action.id} has a default`);
+    for (const binding of action.defaults[MACOS]) assert.match(binding, /^meta\+/, `${action.id}: ${binding}`);
+    for (const binding of action.defaults[WINDOWS_LINUX]) assert.match(binding, /^ctrl\+/, `${action.id}: ${binding}`);
   }
 });
 
@@ -303,7 +315,7 @@ test("the Launchpad page offers search, create, sidebar, grouping, compare and j
     ["launchpad.toggle-compare", "Compare Entries", "meta+shift+c", "ctrl+shift+c"],
     ["launchpad.toggle-compare-view", "Switch Compare Request/Response", "meta+shift+r", "ctrl+shift+r"],
     ["launchpad.swap-compare", "Swap Compared Entries", "meta+shift+x", "ctrl+shift+x"],
-    ["launchpad.jump-to-latest", "Jump to Last Entry", "meta+shift+arrowdown", "ctrl+shift+arrowdown"],
+    ["launchpad.jump-to-latest", "Jump to Last Entry", "meta+j", "ctrl+j"],
     ["launchpad.cancel-launch", "Cancel Launch", "meta+shift+.", "ctrl+shift+."],
   ];
   for (const [id, label, mac, win] of expected) {

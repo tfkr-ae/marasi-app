@@ -6,27 +6,26 @@
 // A level is the top (both sections together) or one open menu group. Menu
 // keys are binding strings in the dispatcher's form ("meta+shift+l"). The
 // menu never shows a key that differs from what the action is bound to:
-// 1. An action's is its own binding: the first that starts with primary,
-//    else its first other modified one, exactly (shift and alt kept), if
-//    nothing earlier at its level uses it and it isn't reserved. With the
-//    menu open the dispatcher runs it as it does with the menu closed
-//    (dispatcher.js dispatch).
+// 1. An action's is its first binding that starts with primary, exactly
+//    (shift and alt kept), if nothing earlier at its level uses it and it
+//    isn't reserved. With the menu open the dispatcher runs it as it does
+//    with the menu closed (dispatcher.js dispatch). An action with no such
+//    binding has no menu key: Marasi's defaults all use primary, and a key
+//    without it is the search field's typing while the menu is open. Its
+//    other modified bindings still run it from the open menu.
 // 2. A group's is ⌥ (Alt on Windows/Linux) + its menu letter (the factory
 //    letter or the profile's override). No action uses ⌥ + a letter, and a
 //    profile that binds one to a group's letter in the same menu can't be
 //    saved (validateProfile, letter-taken), so a group never takes a
 //    shortcut. If a stale saved state still clashes, the action keeps its
-//    key and the group gets a derived letter (rule 3). Overridden groups
-//    claim theirs before factory ones, so a profile's letter wins over a
-//    factory letter a later release gives another group.
-// 3. Anything left, a group whose letter is taken or an action with no
-//    modified binding (the Logbook's bare N, which the search field would
-//    type), gets ⌥ + a letter derived from the label's distinctive words.
+//    key and the group gets ⌥ + a letter derived from its label's
+//    distinctive words. Overridden groups claim theirs before factory ones,
+//    so a profile's letter wins over a factory letter a later release gives
+//    another group.
 // primary is ⌘ on macOS and Ctrl on Windows/Linux. The menu shortcut and
 // primary + a reserved menu letter (menuGroups.js) are never menu keys.
 import { OPEN_MENU } from "../../keybindings/keymap.js";
 import { menuGroupId, RESERVED_MENU_LETTERS } from "../../keybindings/menuGroups.js";
-import { isModifiedBinding } from "../../keybindings/keys.js";
 import { MACOS } from "../../keybindings/platform.js";
 import { matchesMenuSearch } from "./menuSearch.js";
 
@@ -42,25 +41,21 @@ export function primaryModifier(platform) {
 const FILLER = new Set(["to", "in", "the", "a", "an", "of", "for", "by", "as", "on", "and", "or"]);
 const wordsOf = (label) => String(label ?? "").split(/[^A-Za-z]+/).filter(Boolean);
 
-// The menu keys of one level's rows, set on each row as `menuKey`.
-function assignKeys(rows, { primary, reserved, bindingsFor, groupLabel = "" }) {
+// The menu keys of one level's rows, set on each row as `menuKey` (null for
+// none).
+function assignKeys(rows, { primary, reserved, bindingsFor }) {
   const used = new Set();
   const free = (binding) => binding && !used.has(binding) && !reserved.has(binding);
   const take = (row, binding) => {
     used.add(binding);
     row.menuKey = binding;
   };
-  const shared = new Set(wordsOf(groupLabel).map((w) => w.toLowerCase()));
+  // A group whose letter is taken: ⌥ + a letter from its label, its
+  // distinctive words' initials first.
   const derive = (row) => {
-    const all = wordsOf(row.kind === "group" ? row.label : row.name);
-    const distinct = all.filter((w) => !FILLER.has(w.toLowerCase()) && !shared.has(w.toLowerCase()));
-    const candidates = [
-      ...distinct.map((w) => w[0]),
-      ...distinct.join(""),
-      ...all.map((w) => w[0]),
-      ...all.join(""),
-    ];
-    for (const letter of candidates) {
+    const all = wordsOf(row.label);
+    const distinct = all.filter((w) => !FILLER.has(w.toLowerCase()));
+    for (const letter of [...distinct.map((w) => w[0]), ...distinct.join(""), ...all.join("")]) {
       const binding = letterKey(letter);
       if (free(binding)) return take(row, binding);
     }
@@ -68,23 +63,19 @@ function assignKeys(rows, { primary, reserved, bindingsFor, groupLabel = "" }) {
   };
 
   const groups = rows.filter((row) => row.kind === "group").sort((a, b) => Number(b.overridden) - Number(a.overridden));
-  const actions = rows.filter((row) => row.kind !== "group");
+  const actions = rows.filter((r) => r.kind !== "group");
   for (const row of actions) {
-    const bindings = row.actionId ? bindingsFor(row.actionId) : [];
-    const own = bindings.find((b) => b.startsWith(`${primary}+`)) ?? bindings.find(isModifiedBinding);
+    const own = row.actionId ? bindingsFor(row.actionId).find((b) => b.startsWith(`${primary}+`)) : null;
     if (free(own)) take(row, own);
+    else row.menuKey = null;
   }
+  // The dispatcher runs an action's other keys too, so no group takes one.
+  for (const row of actions) for (const binding of row.actionId ? bindingsFor(row.actionId) : []) used.add(binding);
   for (const row of groups) {
     const binding = letterKey(row.letter);
     if (free(binding)) take(row, binding);
     else derive(row);
   }
-  // A word every action at this level shares names none of them.
-  if (actions.length > 1) {
-    const sets = actions.map((row) => new Set(wordsOf(row.name).map((w) => w.toLowerCase())));
-    for (const word of sets[0]) if (sets.every((set) => set.has(word))) shared.add(word);
-  }
-  for (const row of actions) if (row.menuKey === undefined) derive(row);
 }
 
 // One section's groups (in catalog order) and loose actions (in entry
@@ -156,7 +147,7 @@ export function buildMenu({ catalog, pageEntries = [], globalEntries = [], bindi
     sections.flatMap((s) => s.rows),
     keys,
   );
-  for (const g of sections.flatMap((s) => s.groups)) assignKeys(g.items, { ...keys, groupLabel: g.label });
+  for (const g of sections.flatMap((s) => s.groups)) assignKeys(g.items, keys);
   return { platform, primary, reserved, sections };
 }
 

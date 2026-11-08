@@ -183,10 +183,10 @@
 		return row.group ? groupTone(row.group) : NEUTRAL_TONE;
 	}
 
-	// An action's real bindings, and the footer's note on them.
-	$: realBindings =
+	// The highlighted action's bindings besides its menu key, for the footer.
+	$: otherBindings =
 		current && current.kind !== "group" && current.actionId
-			? $menuDispatcher.bindingsFor(current.actionId)
+			? $menuDispatcher.bindingsFor(current.actionId).filter((binding) => binding !== current.menuKey)
 			: [];
 
 	onMount(() => menuPalettes.register(paletteTier, { toggle }));
@@ -313,10 +313,10 @@
 							>
 						{/if}
 						<span class="flex items-center justify-end gap-1">
-							{#if !searching && row.menuKey}
+							<!-- Only the menu key: a key without ⌘ is typing here. The
+							     footer lists the action's other keys. -->
+							{#if row.menuKey && !(searching && row.kind === "group")}
 								<MenuKeys bindings={[row.menuKey]} {platform} />
-							{:else if row.kind !== "group" && row.actionId}
-								<MenuKeys bindings={$menuDispatcher.bindingsFor(row.actionId)} {platform} />
 							{/if}
 						</span>
 						<span class="flex w-3.5 flex-none justify-center">
@@ -342,14 +342,12 @@
 				{current.subtitle || current.name}
 			{/if}
 		</span>
-		{#if !searching && current && current.kind !== "group" && realBindings.length}
-			{#if !realBindings.includes(current.menuKey)}
-				<span class="flex flex-none items-center gap-1.5 opacity-80"
-					>Outside the menu <MenuKeys bindings={realBindings} {platform} /></span
-				>
-			{:else}
-				<span class="flex-none opacity-60">Same key outside the menu</span>
-			{/if}
+		<!-- The highlighted action's keys the row doesn't show, such as a bare
+		     key, which works only outside the menu. -->
+		{#if current && current.kind !== "group" && otherBindings.length}
+			<span class="flex flex-none items-center gap-1.5 opacity-80"
+				>{current.menuKey ? "Also" : "Outside the menu"} <MenuKeys bindings={otherBindings} {platform} /></span
+			>
 		{/if}
 		<span class="flex flex-none items-center gap-2 opacity-60">
 			<span class="flex items-center gap-1"

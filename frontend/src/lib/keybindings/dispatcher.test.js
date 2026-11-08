@@ -162,6 +162,41 @@ test("with the menu open, a shortcut closes the menu and runs its action, as wit
   assert.equal(closed, 2);
 });
 
+// The researcher added a bare O to the Ledger's Open (⌘⇧O by default).
+test("with the menu open, an added bare key types into the search while the ⌘ key still runs the action", () => {
+  const catalog = buildCatalog();
+  const dispatcher = createDispatcher({ catalog, platform: MACOS });
+  const knownActions = catalog.actions.map((a) => a.id).sort();
+  dispatcher.configure({
+    keybindings: {
+      config: {
+        version: 1,
+        activeProfile: "work",
+        profiles: [{
+          id: "work",
+          name: "Work",
+          overrides: { [MACOS]: [{ action: "ledger.drawer-closed.open-request", keys: ["meta+shift+o", "o"] }], [WINDOWS_LINUX]: [] },
+          knownActions,
+        }],
+      },
+      problem: "",
+    },
+  });
+  const { calls, handler } = recorder();
+  dispatcher.register("ledger.drawer-closed.open-request", handler("open-request"));
+  const ledger = { ...home, route: "/ledger" };
+  const searchInput = { tagName: "INPUT", id: "commandmenu" };
+  const menuOpen = { ...ledger, dialogOpen: true };
+
+  assert.equal(dispatcher.resolve(keydown("o", "KeyO"), ledger), "ledger.drawer-closed.open-request");
+  const typed = keydown("o", "KeyO", {}, searchInput);
+  assert.equal(dispatcher.dispatch(typed, menuOpen, { closeMenu: () => calls.push("closed") }), false);
+  assert.equal(typed.defaultPrevented, false);
+  const chord = cmd("O", "KeyO", { shiftKey: true, target: searchInput });
+  assert.equal(dispatcher.dispatch(chord, menuOpen, { closeMenu: () => calls.push("closed") }), true);
+  assert.deepEqual(calls, ["closed", "open-request"]);
+});
+
 test("form fields block shortcuts except on Ledger, Logbook, Launchpad and Settings", () => {
   const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: MACOS });
   const input = { tagName: "INPUT" };
