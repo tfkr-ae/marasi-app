@@ -25,6 +25,7 @@ export { OPEN_MENU };
 export function createDispatcher({ catalog, platform, overrides = {}, keybindings = null }) {
   let keymap;
   let problem = "";
+  let letters = {};
   const handlers = new Map();
   const subscribers = new Set();
 
@@ -33,6 +34,8 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
       catalog: keymap.catalog,
       platform: keymap.platform,
       bindingsFor: keymap.bindingsFor,
+      // The live profile's menu letter overrides, by group id (menuModel.js).
+      letters,
       problem,
     };
   }
@@ -46,6 +49,7 @@ export function createDispatcher({ catalog, platform, overrides = {}, keybinding
       ? liveKeybindings(keybindings, catalog, platform)
       : { overrides: overrides[platform] ?? {}, problem: "" };
     problem = live.problem;
+    letters = live.letters ?? {};
     keymap = createKeymap(catalog, platform, live.overrides, { knownActions: live.knownActions });
     const current = snapshot();
     for (const fn of subscribers) fn(current);

@@ -8,6 +8,7 @@ import {
   catalogDescriptor,
   factoryKeybindings,
   factoryProfile,
+  menuGroupId,
   profileKeymap,
   settleProfile,
   validateProfile,
@@ -117,6 +118,43 @@ export function resetPlatform(catalog, draft, variant) {
   return updateVariant(draft, variant, (list) => list.filter((o) => !catalog.has(o.action)));
 }
 
+// Menu letters. A letter target is one menu group in one profile:
+//   { profileId, groupId }   groupId = "<context>.<group>"
+// Letters hold on both platforms, so a target names no platform.
+
+function updateLetters(draft, profileId, update) {
+  return {
+    ...draft,
+    profiles: draft.profiles.map((profile) => (profile.id === profileId ? { ...profile, letters: update(profile.letters ?? []) } : profile)),
+  };
+}
+
+// Sets the group's menu letter. The factory letter becomes inheritance
+// again, so only real customizations are stored. Validation (saveProblems)
+// judges the letter, so a refused one can still be shown and fixed.
+export function setGroupLetter(catalog, draft, { profileId, groupId }, letter) {
+  const factory = catalog.groups.find((group) => menuGroupId(group) === groupId)?.letter;
+  return updateLetters(draft, profileId, (list) => {
+    const rest = list.filter((l) => l.group !== groupId);
+    if (letter === factory) return rest;
+    const index = list.findIndex((l) => l.group === groupId);
+    const next = { group: groupId, letter };
+    return index === -1 ? [...rest, next] : list.map((l, i) => (i === index ? next : l));
+  });
+}
+
+// Returns one group to its factory letter.
+export function resetGroupLetter(draft, { profileId, groupId }) {
+  return updateLetters(draft, profileId, (list) => list.filter((l) => l.group !== groupId));
+}
+
+// Returns every catalog group of the profile to its factory letter. Letters
+// for groups the catalog lacks are kept, like dormant binding overrides.
+export function resetGroupLetters(catalog, draft, profileId) {
+  const known = new Set(catalog.groups.map(menuGroupId));
+  return updateLetters(draft, profileId, (list) => list.filter((l) => !known.has(l.group)));
+}
+
 // Profile lifecycle. Profiles are created, duplicated, renamed, activated
 // and deleted in the draft like any other edit; only Save persists them.
 // A profile's id is its stable identity: it is chosen once, from the name
@@ -223,6 +261,7 @@ function canonicalConfig(config) {
       id: profile.id,
       name: profile.name,
       knownActions: [...(profile.knownActions ?? [])].sort(),
+      letters: [...(profile.letters ?? [])].sort((a, b) => a.group.localeCompare(b.group)),
       overrides: Object.fromEntries(
         Object.keys(profile.overrides ?? {})
           .sort()
@@ -488,11 +527,27 @@ function profileProblems(draft) {
 // one on a hidden profile or platform can still be found and shown:
 //   { profileId, platform, groupId, actionId, message }
 // `message` reads "Profile · Platform · Page · State · Action: explanation".
-// Profile-level problems have null platform, groupId and actionId. With
-// `current` ({ profileId, platform }) that variant's problems come first.
+// Profile-level problems have null platform, groupId and actionId. A menu
+// letter problem holds on both platforms (null platform, null actionId): it
+// has `menuGroupId`, the first group it names, its sidebar `groupId` is that
+// group's context (null for a group the catalog lacks), and its message reads
+// "Profile · explanation". With `current` ({ profileId, platform }) that
+// variant's problems come first.
 export function saveProblems(catalog, draft, current = {}) {
   const variant = draft.profiles.flatMap((profile) =>
     validateProfile(catalog, profile).map((problem) => {
+      if (problem.platform === null) {
+        const [first] = problem.groups;
+        const group = catalog.groups.find((g) => menuGroupId(g) === first);
+        return {
+          profileId: profile.id,
+          platform: null,
+          groupId: group?.context ?? null,
+          actionId: null,
+          menuGroupId: first,
+          message: `${profile.name} · ${problem.message.slice(`${profile.name}: `.length)}`,
+        };
+      }
       const [actionId, explanation] = explain(catalog, problem)[0];
       const action = catalog.get(actionId);
       const place = [profile.name, PLATFORM_NAMES[problem.platform], contextName(catalog, action.context), action.label];
@@ -505,7 +560,7 @@ export function saveProblems(catalog, draft, current = {}) {
       };
     }),
   );
-  const onScreen = (p) => p.profileId === current.profileId && p.platform === current.platform;
+  const onScreen = (p) => p.profileId === current.profileId && (p.platform === current.platform || p.platform === null);
   return [...profileProblems(draft), ...variant.filter(onScreen), ...variant.filter((p) => !onScreen(p))];
 }
 

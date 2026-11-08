@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
-import { factoryProfile, profileKeymap, settleProfile } from "./profiles.js";
+import { factoryProfile, menuLetters, profileKeymap, settleProfile } from "./profiles.js";
+import { saveProblems, setGroupLetter } from "./settings.js";
 import { exportBlocker, exportFileName, exportProfile, importProfile } from "./portable.js";
 
 // Exporting a keybinding profile to a portable file and importing it back
@@ -191,4 +192,55 @@ test("an import becomes a distinct profile even when the file came from this dra
   assert.notEqual(profileId, "work");
   assert.equal(next.activeProfile, "work");
   assert.equal(next.profiles.length, 2);
+});
+
+// Menu letters. This catalog has the factory groups, all global: Go to (G),
+// Project (P), Browser & proxy (B) and Appearance (A).
+const lettered = { ...work, letters: [{ group: "global.go", letter: "X" }, { group: "compass.filters", letter: "F" }] };
+
+function letteredFileWith(edit) {
+  const file = JSON.parse(exportProfile(lettered));
+  edit(file);
+  return JSON.stringify(file);
+}
+
+test("export then import carries the menu letters, a dormant group's letter included", () => {
+  const { draft, profileId } = importProfile(catalog, draftOf(profile("default", "Default")), exportProfile(lettered));
+  const imported = draft.profiles.find((p) => p.id === profileId);
+  assert.deepEqual(imported.letters, lettered.letters);
+  assert.deepEqual(menuLetters(catalog, imported), { "global.go": "X", "global.project": "P", "global.browser": "B", "global.appearance": "A" });
+});
+
+test("a profile on the factory letters exports no letters, so the file reads as before", () => {
+  assert.equal("letters" in JSON.parse(exportProfile(work)).profile, false);
+  const { draft, profileId } = importProfile(catalog, draftOf(profile("default", "Default")), exportProfile(work));
+  assert.deepEqual(draft.profiles.find((p) => p.id === profileId).letters, []);
+});
+
+const rejectedLetters = [
+  ["letters that are not a list", letteredFileWith((f) => (f.profile.letters = { "global.go": "X" })), /^The menu letters are not a list$/],
+  ["a letter that is not an object", letteredFileWith((f) => (f.profile.letters[0] = "X")), /^A menu letter is not an object$/],
+  ["a letter with an extra field", letteredFileWith((f) => (f.profile.letters[0].platform = "macos")), /^A menu letter has an unknown field "platform"$/],
+  ["an invalid group id", letteredFileWith((f) => (f.profile.letters[0].group = "Go to")), /^Menu group "Go to": invalid group id$/],
+  ["a group given twice", letteredFileWith((f) => f.profile.letters.push({ group: "global.go", letter: "Y" })), /^Menu group "global\.go": letter given twice$/],
+  ["a non-letter", letteredFileWith((f) => (f.profile.letters[0].letter = "1")), /^Go to \(global\): menu letter "1" is not a single letter A–Z$/],
+  ["a missing letter", letteredFileWith((f) => delete f.profile.letters[0].letter), /^Go to \(global\): menu letter undefined is not a single letter A–Z$/],
+  ["a reserved letter", letteredFileWith((f) => (f.profile.letters[0].letter = "Q")), /^Go to \(global\): menu letter Q is reserved; K, Q and H are never menu letters$/],
+  ["two groups on one letter", letteredFileWith((f) => (f.profile.letters[0].letter = "B")), /^Go to \(global\) and Browser & proxy \(global\) both use menu letter B$/],
+];
+
+for (const [what, text, message] of rejectedLetters) {
+  test(`importing ${what} is rejected without touching the draft`, () => {
+    const draft = draftOf(profile("default", "Default"));
+    const before = structuredClone(draft);
+    assert.throws(() => importProfile(catalog, draft, text), { message });
+    assert.deepEqual(draft, before);
+  });
+}
+
+test("an import refuses a bad letter with the explanation a save gives", () => {
+  const text = letteredFileWith((f) => (f.profile.letters[0].letter = "B"));
+  const draft = setGroupLetter(catalog, draftOf(profile("default", "Default")), { profileId: "default", groupId: "global.go" }, "B");
+  const [saveProblem] = saveProblems(catalog, draft);
+  assert.throws(() => importProfile(catalog, draftOf(profile("default", "Default")), text), { message: saveProblem.message.replace("Default · ", "") });
 });

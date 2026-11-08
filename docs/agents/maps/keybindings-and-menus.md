@@ -16,6 +16,7 @@ How a keyboard shortcut or a ⌘K menu item reaches its handler, and where a new
 - `RESERVED_MENU_LETTERS` (K, Q, H) sits beside the factory letters in `menuGroups.js`. Change both there.
 - `groupStyle.js` maps a group's icon and tone names to the lucide component and Tailwind classes.
 - A menu key is primary + the group's menu letter; an action's own first primary binding (Shift and Alt kept); else primary + a letter derived from the label's distinctive words. The menu shortcut and primary + a reserved letter are never menu keys. Menu keys are off while the search has text. A group with one action in the entries is shown as that action.
+- A profile can override a group's letter: `letters` in the profile (`[{group, letter}]`, group id `<context>.<group>`, the same on both platforms), next to the binding overrides. `validateLetters` in `profiles.js` refuses a non-letter, K, Q or H, and two groups at one menu level sharing a letter (a context's groups plus the global ones), naming both groups. `liveKeybindings` hands the active profile's letters to the dispatcher, whose snapshot carries them as `letters`, and `MarasiMenu.svelte` passes them to `buildMenu`. `setGroupLetter`, `resetGroupLetter` and `resetGroupLetters` in `settings.js` edit them in the draft.
 - `catalog.test.js` checks each group exists in its action's context, letters are unique per level (a context's groups plus the global ones), none is K, Q or H, and every group has a label, icon, tone and description.
 
 ## Adding an action
@@ -32,8 +33,8 @@ No test checks a handler's or a menu item's `actionId` against the catalog. A mi
 ## Profiles and Go
 
 - The settings UI is `frontend/src/lib/components/Keybindings/KeybindingsModal.svelte`, modelled by `settings.js`. It lists every catalog action, so a new one needs no change there.
-- `SaveKeybindings` in `keybindings.go` receives the profile with the catalog (`catalogDescriptor` in `profiles.js`). Go owns no list of actions.
-- `keybinding_validation.go` repeats the rules of `keys.js`, `gate.js`, `keymap.js` and `profiles.js` by hand (see its header). Change a rule in both.
+- `SaveKeybindings` in `keybindings.go` receives the profile with the catalog (`catalogDescriptor` in `profiles.js`: actions, contexts and menu groups with their factory letters). Go owns no list of actions or groups.
+- `keybinding_validation.go` repeats the rules of `keys.js`, `gate.js`, `keymap.js` and `profiles.js` by hand (see its header). Change a rule in both. Its letter checks: `menuLetterProblem` and the group-id checks in `checkKeybindingStructure`, and `letterProblems` for clashes; `reservedMenuLetters` repeats `RESERVED_MENU_LETTERS`.
 - A saved profile reaches the dispatcher through `readKeybindings` in `frontend/src/stores.js`, then `keybindingState`, then `menuDispatcher.configure` in `GlobalMenu.svelte`.
 
 ## Decisions

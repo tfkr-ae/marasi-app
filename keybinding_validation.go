@@ -13,7 +13,8 @@ import (
 // contexts, factory defaults) is owned by the frontend and sent with each
 // save; this file mirrors the rules of frontend/src/lib/keybindings
 // (keys.js normalizeBinding, gate.js isReservedBinding, keymap.js
-// resolution, profiles.js validation). Keep them in step.
+// resolution, profiles.js validation, menuGroups.js reserved menu letters,
+// portable.js letter structure). Keep them in step.
 
 const openMenuAction = "global.open-menu"
 
@@ -21,6 +22,22 @@ var (
 	actionIDPattern  = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$`)
 	profileIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
+
+// reservedMenuLetters mirrors RESERVED_MENU_LETTERS in menuGroups.js: never
+// menu letters, on every platform, so a profile moves between platforms.
+var reservedMenuLetters = []string{"K", "Q", "H"}
+
+// menuLetterProblem mirrors menuLetterProblem in profiles.js: why letter
+// cannot be a menu letter, or "".
+func menuLetterProblem(letter string) string {
+	if len(letter) != 1 || letter[0] < 'A' || letter[0] > 'Z' {
+		return fmt.Sprintf("menu letter %q is not a single letter A–Z", letter)
+	}
+	if slices.Contains(reservedMenuLetters, letter) {
+		return fmt.Sprintf("menu letter %s is reserved; K, Q and H are never menu letters", letter)
+	}
+	return ""
+}
 
 // Canonical binding text: modifiers in the order meta, ctrl, alt, shift, then
 // the lowercase key, joined by "+". Mirrors normalizeBinding in keys.js.
@@ -192,6 +209,20 @@ func checkKeybindingStructure(config KeybindingConfig) error {
 			return fmt.Errorf("profile name %q is used twice", strings.TrimSpace(profile.Name))
 		}
 		names[name] = true
+		groups := map[string]bool{}
+		for _, letter := range profile.Letters {
+			where := fmt.Sprintf("profile %q menu group %q", profile.Name, letter.Group)
+			if !actionIDPattern.MatchString(letter.Group) {
+				return fmt.Errorf("%s: invalid group id", where)
+			}
+			if groups[letter.Group] {
+				return fmt.Errorf("%s: letter given twice", where)
+			}
+			groups[letter.Group] = true
+			if problem := menuLetterProblem(letter.Letter); problem != "" {
+				return fmt.Errorf("%s: %s", where, problem)
+			}
+		}
 		for platform, overrides := range profile.Overrides {
 			if !slices.Contains(keybindingPlatforms, platform) {
 				return fmt.Errorf("profile %q has unknown platform %q", profile.Name, platform)
@@ -374,6 +405,9 @@ func validateKeybindings(config KeybindingConfig, actions KeybindingCatalog) err
 	}
 	var problems []error
 	for _, profile := range config.Profiles {
+		for _, problem := range letterProblems(actions.Groups, profile) {
+			problems = append(problems, fmt.Errorf("profile %q: %s", profile.Name, problem))
+		}
 		for _, platform := range keybindingPlatforms {
 			resolved := resolveVariant(catalog, profile, platform)
 			for _, problem := range variantProblems(catalog, resolved) {
@@ -422,4 +456,57 @@ func nonMenu(a, b KeybindingAction) KeybindingAction {
 		return b
 	}
 	return a
+}
+
+// letterProblems mirrors the letter-duplicate rule of validateLetters in
+// profiles.js: two groups at one menu level may not share a letter. A level
+// is the global groups, or one other context's groups with the global ones,
+// since every menu lists the global groups at its top. The letters are
+// already checked (checkKeybindingStructure); a group with no override keeps
+// its factory letter, and overrides for groups the catalog lacks are dormant.
+func letterProblems(groups []KeybindingGroup, profile KeybindingProfile) []string {
+	letters := map[string]string{}
+	for _, group := range groups {
+		letters[group.ID] = group.Letter
+	}
+	for _, override := range profile.Letters {
+		if _, ok := letters[override.Group]; ok {
+			letters[override.Group] = override.Letter
+		}
+	}
+	var global []KeybindingGroup
+	var contexts []string
+	for _, group := range groups {
+		if group.Context == "global" {
+			global = append(global, group)
+		} else if !slices.Contains(contexts, group.Context) {
+			contexts = append(contexts, group.Context)
+		}
+	}
+	levels := [][]KeybindingGroup{global}
+	for _, context := range contexts {
+		level := slices.Clone(global)
+		for _, group := range groups {
+			if group.Context == context {
+				level = append(level, group)
+			}
+		}
+		levels = append(levels, level)
+	}
+	var problems []string
+	reported := map[[2]string]bool{}
+	for _, level := range levels {
+		for i, first := range level {
+			for _, second := range level[i+1:] {
+				pair := [2]string{first.ID, second.ID}
+				if letters[first.ID] != letters[second.ID] || reported[pair] {
+					continue
+				}
+				reported[pair] = true
+				problems = append(problems, fmt.Sprintf("%s (%s) and %s (%s) both use menu letter %s",
+					first.Label, first.Context, second.Label, second.Context, letters[first.ID]))
+			}
+		}
+	}
+	return problems
 }

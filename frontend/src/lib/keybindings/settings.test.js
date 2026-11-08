@@ -14,9 +14,13 @@ import {
   removeBinding,
   replaceBinding,
   resetAction,
+  resetGroupLetter,
+  resetGroupLetters,
   saveDraft,
   saveProblems,
+  setGroupLetter,
 } from "./settings.js";
+import { menuLetters } from "./profiles.js";
 
 const contexts = [
   { id: "global", tier: "global", label: "Global", page: "Global", state: "Every page", isEligible: () => true },
@@ -587,4 +591,85 @@ test("pagesOf groups page/state entries under one page, in order, with summed co
     { actionCount: websocket.actionCount, unboundCount: websocket.unboundCount, conflictCount: websocket.conflictCount },
     { actionCount: 8, unboundCount: 1, conflictCount: 2 },
   );
+});
+
+// Menu letters. This catalog has the factory groups: Go to (G), Project (P),
+// Browser & proxy (B) and Appearance (A), all global.
+const goTo = { profileId: "default", groupId: "global.go" };
+const letterOf = (draft, groupId, profileId = "default") => menuLetters(catalog, draft.profiles.find((p) => p.id === profileId))[groupId];
+
+test("a group's letter is set per profile, and setting the factory letter again is no customization", () => {
+  const opened = factoryDraft();
+  const moved = setGroupLetter(catalog, opened, goTo, "X");
+  assert.equal(letterOf(moved, "global.go"), "X");
+  assert.equal(letterOf(moved, "global.project"), "P");
+  assert.deepEqual(moved.profiles[0].letters, [{ group: "global.go", letter: "X" }]);
+  assert.equal(isDirty(moved, opened), true);
+  const back = setGroupLetter(catalog, moved, goTo, "G");
+  assert.deepEqual(back.profiles[0].letters, []);
+  assert.equal(isDirty(back, opened), false);
+  assert.deepEqual(opened.profiles[0].letters ?? [], [], "the draft as opened is untouched");
+});
+
+test("reset restores the factory letters: one group, or every group of the profile, keeping dormant overrides", () => {
+  let draft = setGroupLetter(catalog, factoryDraft(), goTo, "X");
+  draft = setGroupLetter(catalog, draft, { profileId: "default", groupId: "global.project" }, "Y");
+  draft = setGroupLetter(catalog, draft, { profileId: "default", groupId: "compass.filters" }, "F");
+  const one = resetGroupLetter(draft, goTo);
+  assert.equal(letterOf(one, "global.go"), "G");
+  assert.equal(letterOf(one, "global.project"), "Y");
+  const all = resetGroupLetters(catalog, draft, "default");
+  assert.equal(letterOf(all, "global.go"), "G");
+  assert.equal(letterOf(all, "global.project"), "P");
+  assert.deepEqual(all.profiles[0].letters, [{ group: "compass.filters", letter: "F" }]);
+});
+
+test("a letter clash blocks saving, names both groups, and points at the first one", () => {
+  const draft = setGroupLetter(catalog, factoryDraft(), goTo, "P");
+  assert.deepEqual(saveProblems(catalog, draft, { profileId: "default", platform: MACOS }), [
+    {
+      profileId: "default",
+      platform: null,
+      groupId: "global",
+      actionId: null,
+      menuGroupId: "global.go",
+      message: "Default · Go to (global) and Project (global) both use menu letter P",
+    },
+  ]);
+});
+
+test("a reserved or non-letter menu letter blocks saving", () => {
+  const reserved = setGroupLetter(catalog, factoryDraft(), goTo, "K");
+  assert.deepEqual(
+    saveProblems(catalog, reserved).map((p) => p.message),
+    ["Default · Go to (global): menu letter K is reserved; K, Q and H are never menu letters"],
+  );
+  const digit = setGroupLetter(catalog, factoryDraft(), goTo, "7");
+  assert.deepEqual(saveProblems(catalog, digit).map((p) => p.message), ['Default · Go to (global): menu letter "7" is not a single letter A–Z']);
+});
+
+test("saving sends the letters with the catalog's groups, and the live menu letters follow", async () => {
+  const draft = setGroupLetter(catalog, factoryDraft(), goTo, "X");
+  const live = createDispatcher({ catalog, platform: MACOS });
+  let sent;
+  const result = await saveDraft({
+    draft,
+    catalog,
+    save: async (config, descriptor) => {
+      sent = { config, descriptor };
+      return { config, problem: "" };
+    },
+    apply: (state) => live.configure({ keybindings: state }),
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(sent.config.profiles[0].letters, [{ group: "global.go", letter: "X" }]);
+  assert.deepEqual(sent.descriptor.groups.map((g) => [g.id, g.letter]), [
+    ["global.go", "G"],
+    ["global.project", "P"],
+    ["global.browser", "B"],
+    ["global.appearance", "A"],
+  ]);
+  let seen;
+  live.subscribe((snapshot) => (seen = snapshot));
+  assert.deepEqual(seen.letters, { "global.go": "X" });
 });

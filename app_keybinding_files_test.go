@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -87,6 +89,59 @@ func TestAppKeybindingProfileFiles(t *testing.T) {
 
 		if _, err := app.ImportKeybindingProfile(); err == nil {
 			t.Fatal("wanted: an error for a missing file")
+		}
+	})
+
+	t.Run("should save an imported profile's menu letters, and refuse a bad one with the frontend's explanation", func(t *testing.T) {
+		// The profile part of a file portable.js exports, which the frontend
+		// imports and then saves with SaveKeybindings.
+		file := func(letter string) string {
+			return `{"format": "marasi-keybinding-profile", "version": 1, "profile": {"name": "Work", "overrides": {"macos": [], "windows-linux": []},
+				"knownActions": [], "letters": [{"group": "global.go", "letter": "` + letter + `"}]}}`
+		}
+		importAndSave := func(t *testing.T, app *App, contents string) (KeybindingState, error) {
+			t.Helper()
+			path := filepath.Join(t.TempDir(), "work.marasi-keys.json")
+			if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(keybindingProfileFileEnv, path)
+			imported, err := app.ImportKeybindingProfile()
+			if err != nil {
+				t.Fatalf("importing: %v", err)
+			}
+			var parsed struct{ Profile KeybindingProfile }
+			if err := json.Unmarshal([]byte(imported.Contents), &parsed); err != nil {
+				t.Fatalf("parsing the file: %v", err)
+			}
+			config := knownKeybindings()
+			parsed.Profile.ID = "work"
+			config.Profiles = append(config.Profiles, parsed.Profile)
+			return app.SaveKeybindings(config, letterKeybindingCatalog())
+		}
+
+		dir := t.TempDir()
+		saved, err := importAndSave(t, loadConfigApp(t, dir), file("X"))
+		if err != nil {
+			t.Fatalf("saving the imported profile: %v", err)
+		}
+		want := []KeybindingLetter{{Group: "global.go", Letter: "X"}}
+		if got := saved.Config.Profiles[1].Letters; !reflect.DeepEqual(got, want) {
+			t.Fatalf("wanted: %+v\ngot: %+v", want, got)
+		}
+		if got := loadConfigApp(t, dir).GetKeybindings().Config.Profiles[1].Letters; !reflect.DeepEqual(got, want) {
+			t.Fatalf("wanted after restart: %+v\ngot: %+v", want, got)
+		}
+
+		// portable.test.js refuses the same file with "Go to (global) and
+		// Project (global) both use menu letter P".
+		_, err = importAndSave(t, loadConfigApp(t, t.TempDir()), file("P"))
+		if err == nil || !strings.Contains(err.Error(), `profile "Work": Go to (global) and Project (global) both use menu letter P`) {
+			t.Fatalf("wanted the clash refused\ngot: %v", err)
+		}
+		_, err = importAndSave(t, loadConfigApp(t, t.TempDir()), file("Q"))
+		if err == nil || !strings.Contains(err.Error(), "menu letter Q is reserved; K, Q and H are never menu letters") {
+			t.Fatalf("wanted the reserved letter refused\ngot: %v", err)
 		}
 	})
 }

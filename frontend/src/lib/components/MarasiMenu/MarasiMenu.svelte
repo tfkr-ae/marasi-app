@@ -67,6 +67,7 @@
 		globalEntries,
 		bindingsFor: $menuDispatcher.bindingsFor,
 		platform,
+		letters: $menuDispatcher.letters,
 	});
 	$: group = groupId ? menu.sections.flatMap((s) => s.groups).find((g) => g.id === groupId) : null;
 	$: searching = query.trim() !== "";
