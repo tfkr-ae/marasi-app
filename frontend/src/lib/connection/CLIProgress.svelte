@@ -1,7 +1,8 @@
 <script>
 	// A running CLI install or update: its step, from Go's
 	// cli-install-progress events, and the download's bar (indeterminate
-	// when the size is unknown, and while verifying and installing).
+	// when the size is unknown, and while verifying, extracting and
+	// installing).
 	// CLISetup and CLISettings show it while InstallCLI or CheckForCLIUpdate
 	// runs.
 	import { ProgressBar } from "@skeletonlabs/skeleton";

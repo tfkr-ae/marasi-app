@@ -81,8 +81,8 @@ type CLIInstall struct {
 const cliInstallProgressEvent = "cli-install-progress"
 
 // CLIInstallProgress is the step a CLI install is on: download (with the
-// bytes received and the total, 0 when the server didn't say), verify or
-// install.
+// bytes received and the total, 0 when the server didn't say), verify,
+// extract (an archive build) or install.
 type CLIInstallProgress struct {
 	Step     string `json:"step"`
 	Received int64  `json:"received"`
@@ -272,7 +272,9 @@ func (a *App) findCLIRelease(ctx context.Context, channel Channel) (githubReleas
 	case err != nil:
 		return githubRelease{}, "", failed(UpdateFailureNetwork, "%v", err)
 	}
-	if _, ok := release.asset(asset); !ok {
+	_, bare := release.asset(asset)
+	archiveAsset, archived := a.cliArchive()
+	if _, ok := release.asset(archiveAsset); !bare && !(archived && ok) {
 		if nightly {
 			// The nightly is recreated on each run; its assets may still be
 			// uploading.
@@ -288,11 +290,11 @@ func (a *App) findCLIRelease(ctx context.Context, channel Channel) (githubReleas
 }
 
 // installCLIRelease downloads this platform's CLI from release, verifies it
-// and moves it to target. Nothing touches target's folder until the build
-// is verified.
+// and moves it to target. It takes the platform's archive when the signed
+// checksums list it and the bare executable otherwise. Nothing touches
+// target's folder until the build is verified and extracted.
 func (a *App) installCLIRelease(ctx context.Context, release githubRelease, channel Channel, version, target string) error {
 	r := &a.cliRuntime
-	asset, _ := a.cliAsset()
 	checksumsURL, ok := release.asset(checksumsAsset)
 	if !ok {
 		return failed(UpdateFailureSignature, "The release has no %s", checksumsAsset)
@@ -301,7 +303,6 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if !ok {
 		return failed(UpdateFailureSignature, "The release isn't signed")
 	}
-	build, _ := release.asset(asset)
 
 	a.reportCLIProgress(CLIInstallProgress{Step: "download"})
 	checksums, err := a.downloadCLISmall(ctx, checksumsURL.URL)
@@ -318,9 +319,21 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if trustedComment(signature) != "marasi "+string(channel)+" "+version {
 		return failed(UpdateFailureSignature, "Signature is for another release, nothing installed")
 	}
-	want, ok := parseChecksums(checksums)[asset]
-	if !ok {
+	sums := parseChecksums(checksums)
+	asset, archived := a.cliArchive()
+	want, listed := sums[asset]
+	build, published := release.asset(asset)
+	if !archived || !listed || !published {
+		asset, _ = a.cliAsset()
+		archived = false
+		want, listed = sums[asset]
+		build, published = release.asset(asset)
+	}
+	if !listed {
 		return failed(UpdateFailureChecksum, "Signed checksums don't list %s, nothing installed", asset)
+	}
+	if !published {
+		return failed(UpdateFailureNoBuild, cliNoBuildReason)
 	}
 
 	tmp, err := r.tempDir()
@@ -337,27 +350,36 @@ func (a *App) installCLIRelease(ctx context.Context, release githubRelease, chan
 	if got != want {
 		return failed(UpdateFailureChecksum, "Checksum mismatch, nothing installed")
 	}
-	a.reportCLIProgress(CLIInstallProgress{Step: "install"})
-	return a.placeCLI(download, target)
-}
-
-// placeCLI copies the verified build next to target, marks the copy
-// executable on Unix, then renames it over target, so a failure at any step
-// leaves target as it was. On Windows target may be running (the local
-// instance's service), so swapAside moves it aside first.
-func (a *App) placeCLI(download, target string) error {
-	r := &a.cliRuntime
-	dir := filepath.Dir(target)
-	if err := r.mkdirAll(dir); err != nil {
-		return failed(UpdateFailureInstall, "Could not create %s: %v", dir, err)
+	if archived {
+		a.reportCLIProgress(CLIInstallProgress{Step: "extract"})
+		extracted := filepath.Join(tmp, cliFileName(r.goos))
+		if err := a.extractCLI(download, cliFileName(r.goos), extracted); err != nil {
+			return err
+		}
+		download = extracted
 	}
 	file, err := os.Open(download)
 	if err != nil {
 		return failed(UpdateFailureInstall, "Could not read the download: %v", err)
 	}
 	defer file.Close()
+	a.reportCLIProgress(CLIInstallProgress{Step: "install"})
+	return a.placeCLI(file, target)
+}
+
+// placeCLI writes the verified CLI read from src next to target, marks the
+// copy executable on Unix, then renames it over target, so a failure at any
+// step leaves target as it was. On Windows target may be running (the local
+// instance's service), so swapAside moves it aside first. src is the
+// downloaded or extracted build.
+func (a *App) placeCLI(src io.Reader, target string) error {
+	r := &a.cliRuntime
+	dir := filepath.Dir(target)
+	if err := r.mkdirAll(dir); err != nil {
+		return failed(UpdateFailureInstall, "Could not create %s: %v", dir, err)
+	}
 	staged := filepath.Join(dir, fmt.Sprintf(".%s.%d.new", filepath.Base(target), time.Now().UnixNano()))
-	if err := r.writeFile(staged, file); err != nil {
+	if err := r.writeFile(staged, src); err != nil {
 		r.remove(staged)
 		return failed(UpdateFailureInstall, "Could not write to %s: %v", dir, err)
 	}
