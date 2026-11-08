@@ -128,6 +128,16 @@ test("listener events keep the listener status current", async () => {
   assert.deepEqual(get(store).listener, { status: true, address: "0.0.0.0", port: "9090" });
 });
 
+test("a stopped service shows its listener off, not the last port", async () => {
+  const { store } = setup();
+  await store.populate();
+  store.onListener({ status: "active", proxy_listener: "127.0.0.1:8080" });
+  // The connection store's serviceStopped (connectionStore.js), after a Stop.
+  store.onListener({ status: "stopped" });
+  assert.equal(get(store).listener.status, false);
+  assert.equal(get(store).listener.port, "");
+});
+
 test("the intercepted count is read again once its job completes", async () => {
   let reads = 0;
   const routes = serviceRoutes();

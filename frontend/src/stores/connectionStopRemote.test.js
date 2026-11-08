@@ -105,6 +105,7 @@ function fakeApi() {
     },
     stopService: async (bound) => calls.push(["stopService", bound === link]),
     stopLocal: async (id) => calls.push(["stopLocal", id]),
+    serviceStopped: async () => calls.push("serviceStopped"),
     openEvents: (handlers) => {
       calls.push(handlers.resume ? "resumeEvents" : "openEvents");
       onDrop = handlers.onDrop;
@@ -147,7 +148,7 @@ test("confirmStop() on a remote posts the service's stop through the bound clien
   await reached(store, "stopped");
   drop();
   await settle();
-  assert.deepEqual(calls, ["closeEvents", ["stopService", true]]);
+  assert.deepEqual(calls, ["closeEvents", ["stopService", true], "serviceStopped"]);
   assert.equal(get(store).phase, "stopped");
 
   calls.length = 0;

@@ -52,9 +52,16 @@ test("Stop of an owned run closes the stream and stops the instance, then the st
   assert.deepEqual(stopping.types, ["close-events", "stop-instance"]);
   assert.equal(stopping.steps[1].id, "local");
 
-  const { state, refusals } = from(true, { type: "STOP" }, { type: "STREAM_DROPPED" }, { type: "INSTANCE_STOPPED" });
+  const { state, refusals, types } = from(
+    true,
+    { type: "STOP" },
+    { type: "STREAM_DROPPED" },
+    { type: "INSTANCE_STOPPED" },
+  );
   assert.deepEqual(refusals, []);
   assert.equal(state.phase, "stopped");
+  // The proxy listener stopped too, though no event came over the closed stream.
+  assert.deepEqual(types, ["close-events", "stop-instance", "service-stopped"]);
   assert.equal(state.owned, false);
   // The pages keep the project they show, which Start opens again.
   assert.equal(state.project, "/p/engagement.marasi");
@@ -71,7 +78,7 @@ test("Stop of a run the app doesn't own asks first, and Cancel keeps it running"
   assert.deepEqual(cancelled.types, []);
 
   const confirmed = from(false, { type: "STOP" }, { type: "STOP", confirmed: true }, { type: "INSTANCE_STOPPED" });
-  assert.deepEqual(confirmed.types, ["close-events", "stop-instance"]);
+  assert.deepEqual(confirmed.types, ["close-events", "stop-instance", "service-stopped"]);
   assert.equal(confirmed.state.phase, "stopped");
   assert.equal(confirmed.state.stopAsk, false);
 });
@@ -98,7 +105,7 @@ test("nothing leaves stopped by itself", () => {
     { type: "SERVICE_RESTARTING" },
   );
   assert.equal(state.phase, "stopped");
-  assert.deepEqual(types, ["close-events", "stop-instance"]);
+  assert.deepEqual(types, ["close-events", "stop-instance", "service-stopped"]);
 });
 
 test("Start from stopped begins a session that starts the instance on its project", () => {
@@ -139,6 +146,7 @@ function fakeApi({ connectLocal } = {}) {
       return connectLocal ? connectLocal() : { url: "http://127.0.0.1:51391", password: "pw", startedByApp: true };
     },
     stopLocal: async (id) => calls.push(["stopLocal", id]),
+    serviceStopped: async () => calls.push("serviceStopped"),
     startLocal: async (id, project) => calls.push(["startLocal", id, project]),
     use: (connection) => calls.push(["use", connection?.url ?? null]),
     readStatus: async () => {
@@ -193,7 +201,7 @@ test("stop() stops the local instance through Go and the store stays stopped aft
   drop();
   await settle();
 
-  assert.deepEqual(calls, ["closeEvents", ["stopLocal", "local"]]);
+  assert.deepEqual(calls, ["closeEvents", ["stopLocal", "local"], "serviceStopped"]);
   assert.equal(get(store).phase, "stopped");
   assert.deepEqual(timers.waits(), []);
 });
