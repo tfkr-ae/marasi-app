@@ -26,4 +26,13 @@ export const FACTORY_MENU_GROUPS = Object.freeze([
   group("global", "project", "Project", "P", "FolderOpen", "amber", "Projects, connections and updates"),
   group("global", "browser", "Browser & proxy", "B", "Globe", "teal", "Chrome, the certificate and intercept"),
   group("global", "appearance", "Appearance", "A", "Palette", "fuchsia", "Theme, text size and Vim"),
+  // The Ledger. With the drawer open, the WebSocket stream action stays
+  // loose; with it closed, only Focus is a group.
+  group("ledger.drawer-open", "navigate", "Navigate", "N", "ArrowDownUp", "indigo", "Move between requests"),
+  group("ledger.drawer-open", "focus", "Focus", "F", "Crosshair", "orange", "Jump to search, filter or the sitemap"),
+  group("ledger.drawer-open", "send", "Send to", "S", "Send", "violet", "Hand requests to another tool"),
+  group("ledger.drawer-open", "logbook", "Logbook", "L", "BookOpenCheck", "emerald", "Findings and test cases"),
+  group("ledger.drawer-open", "copy", "Copy", "C", "Copy", "sky", "URLs and raw HTTP"),
+  group("ledger.drawer-open", "view", "View", "V", "Eye", "rose", "Notes, metadata and layout"),
+  group("ledger.drawer-closed", "focus", "Focus", "F", "Crosshair", "orange", "Jump to search, filter or the sitemap"),
 ]);

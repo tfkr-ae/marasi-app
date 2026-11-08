@@ -46,7 +46,7 @@
 	import SavedQueriesMenu from "../../lib/ledger/SavedQueriesMenu.svelte";
 	import { readyMadeQueries } from "../../stores/savedQueriesStore";
 	import { appendToQuery } from "../../lib/ledgerQueryFields";
-	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { canOpenDrawerStream } from "../../lib/websocket/presentation.js";
 	import Dock from "../../lib/dock/Dock.svelte";
@@ -1046,7 +1046,8 @@
 	// Every Ledger action stays registered; the drawer-closed, drawer-open and
 	// WebSocket-upgrade menu contexts decide which ones a key reaches.
 	useMenuActions([...ledgerMenu, websocketDrawerMenuItem, ...drawerMenu]);
-	// The menu lists the actions of the drawer's current state.
+	// The menu lists the actions of the drawer's current state, grouped as
+	// the catalog says, then the Marasi section.
 	$: menuOptions = !$drawerKeys.open
 		? ledgerMenu
 		: canOpenDrawerStream($drawerKeys.meta)
@@ -1089,7 +1090,7 @@
 </script>
 
 <svelte:window on:keydown={onWindowKeydown} on:pointerdown={onWindowPointerDown} />
-<MarasiKeys {menuOptions} />
+<MarasiMenu paletteTier="page" pageName="Ledger" pageEntries={menuOptions} />
 
 <div class="ledger-page relative flex h-full min-h-0 overflow-hidden">
 	<Dock

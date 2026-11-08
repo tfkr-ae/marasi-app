@@ -29,7 +29,7 @@ To add a row-menu action:
 3. Add a `case` to `runMenuAction`.
 4. Add a store method, map its API name to a service call in `ledgerApi.js`, and add it to the tests' fake APIs.
 
-For a shortcut, also follow `keybindings-and-menus.md`.
+For a shortcut, also follow `keybindings-and-menus.md`. ⌘K opens `MarasiMenu` with `menuOptions`, which follow the drawer: `ledgerMenu` when it is closed, `drawerMenu` (with the WebSocket stream action for an upgrade) when it is open. Their menu groups are the `group` flags on the `ledger.drawer-open` and `ledger.drawer-closed` rows in `catalog.js`, defined in `menuGroups.js`.
 
 ## Bulk changes
 

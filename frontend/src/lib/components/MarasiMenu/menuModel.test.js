@@ -200,3 +200,23 @@ test("a search inside a group searches only that group", () => {
   assert.deepEqual(found(menuFor(), { group: "page.copy", query: "r" }), [["Copy Raw Request", "Copy"]]);
   assert.deepEqual(found(menuFor(), { group: "page.copy", query: "settings" }), []);
 });
+
+test("a page action and a global group never share a menu key", () => {
+  // Bound to ⌘G and ⌘A, the Go to and Appearance letters: the groups keep
+  // their keys and the page actions get others.
+  const menu = menuFor({ overrides: { "page.only": ["meta+g"], "page.new-note": ["meta+a"] } });
+  const top = menu.sections.flatMap((s) => s.rows);
+  assert.equal(groupNamed(menu, "Go to").menuKey, "meta+g");
+  assert.equal(groupNamed(menu, "Appearance").menuKey, "meta+a");
+  const keys = top.map((row) => row.menuKey);
+  assert.equal(new Set(keys).size, keys.length, keys.join(" "));
+  assert.equal(label(entryForKey(menu, { binding: "meta+g" })), "Go to");
+  assert.equal(label(entryForKey(menu, { binding: "meta+a" })), "Appearance");
+});
+
+test("a menu with no page entries shows only the Marasi section", () => {
+  assert.deepEqual(
+    menuFor({ page: [] }).sections.map((s) => s.scope),
+    ["global"],
+  );
+});
