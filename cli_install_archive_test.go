@@ -134,6 +134,46 @@ func TestInstallCLIPrefersThePlatformsArchive(t *testing.T) {
 	}
 }
 
+// The archives in testdata/cli-archives come from Marasi's own
+// scripts/archive-cli.sh, so this pins the app to the layout Marasi's
+// Release and Nightly workflows publish: the asset name per platform and
+// one root entry with the platform's file name.
+func TestInstallCLIFromTheArchivesMarasiPublishes(t *testing.T) {
+	for _, platform := range []struct {
+		goos, goarch, bare, archive, file string
+	}{
+		{"darwin", "arm64", "marasi-darwin-arm64", "marasi-darwin-arm64.zip", "marasi"},
+		{"linux", "amd64", "marasi-linux-amd64", "marasi-linux-amd64.tar.gz", "marasi"},
+		{"windows", "amd64", "marasi-windows-amd64.exe", "marasi-windows-amd64.zip", "marasi.exe"},
+	} {
+		t.Run(platform.goos+"/"+platform.goarch, func(t *testing.T) {
+			archive, err := os.ReadFile(filepath.Join("testdata", "cli-archives", platform.archive))
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := newCLIInstall(t, platform.goos, platform.goarch)
+			publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{
+				platform.bare:    []byte("bare build"),
+				platform.archive: archive,
+			}))
+			dir := filepath.Join(t.TempDir(), "bin")
+
+			result, err := c.app.InstallCLI(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if result.Outcome != "installed" {
+				t.Fatalf("outcome = %+v, want installed", result)
+			}
+			fileHolds(t, filepath.Join(dir, platform.file), []byte("#!/bin/sh\n# Marasi CLI archive fixture: "+platform.bare+"\n"))
+			if got := c.downloads(); slices.Contains(got, platform.bare) || !slices.Contains(got, platform.archive) {
+				t.Fatalf("downloaded %v, want the archive and not the bare build", got)
+			}
+		})
+	}
+}
+
 func TestInstallCLIFallsBackToTheBareBuildWhenTheSignedChecksumsListNoArchive(t *testing.T) {
 	for name, release := range map[string]func(t *testing.T) cliRelease{
 		"a release without archives": func(t *testing.T) cliRelease {

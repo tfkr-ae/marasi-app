@@ -120,3 +120,16 @@ test("an event no listener wants still advances lastEventId", async () => {
   assert.deepEqual(got, ["run.8"]);
   source.close();
 });
+
+// Accept is a CORS-safelisted header, so beside the password it needs no
+// preflight entry: Marasi's cached preflight (Allow-Headers "Authorization,
+// Content-Type") still covers the stream.
+test("the stream sends only the password and a safelisted Accept", async () => {
+  const http = streamingFetch();
+  const EventSource = createFetchEventSource(http.fetch);
+  const source = new EventSource("http://127.0.0.1:1/events", { headers: { Authorization: "Bearer pw" } });
+
+  await until(() => http.calls.length === 1);
+  assert.deepEqual(http.calls[0].headers, { Accept: "text/event-stream", Authorization: "Bearer pw" });
+  source.close();
+});
