@@ -13,6 +13,7 @@
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import UpdateCLI from "../connection/UpdateCLI.svelte";
+	import { reachingText } from "../connection/status.js";
 	import { service } from "../service/index.js";
 	import { SERVICE_UPDATE_EVENTS, serviceUpdateToast } from "../../stores/serviceUpdateStore.js";
 
@@ -67,7 +68,7 @@
 {:else if $connectionStore.switching && ($connectionStore.phase === "starting" || $connectionStore.phase === "connecting")}
 	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">
 		<span class="h-2 w-2 animate-pulse rounded-full bg-warning-500"></span>
-		<span class="flex-1">{$connectionStore.phase === "starting" ? "Starting Marasi…" : `Connecting to ${name}…`}</span>
+		<span class="flex-1" data-testid="connection-banner-text">{reachingText($connectionStore)}</span>
 	</div>
 {:else if $connectionStore.phase === "connected" && $connectionStore.restarting}
 	<div class="flex items-center gap-3 bg-warning-500/20 px-4 py-1.5 text-xs" data-testid="connection-banner">

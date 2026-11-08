@@ -54,17 +54,43 @@ export const pagesHeld = (phase) => phase === "project-changed" || phase === "st
  * its name, Local as Marasi.
  */
 export function startupText({ phase, connection }) {
-  const named = connection.kind === "remote" || connection.id !== "local";
-  const name = named ? connection.name : "Marasi";
+  const reaching = reachingText({ phase, connection });
+  if (reaching) return reaching;
   const text = {
     idle: "Starting…",
-    starting: named ? `Connecting to ${name}…` : "Starting Marasi…",
-    connecting: `Connecting to ${name}…`,
     connected: "Loading project…",
-    failed: `Couldn't reach ${name}`,
+    failed: `Couldn't reach ${startupName(connection)}`,
     "auth-failed": phaseLabel("auth-failed"),
   };
   return text[phase] ?? null;
+}
+
+// A remote or a named local connection by its name, Local as Marasi.
+const isNamed = (connection) => connection.kind === "remote" || connection.id !== "local";
+const startupName = (connection) => (isNamed(connection) ? connection.name : "Marasi");
+
+/**
+ * What the start screen and the switch banner say while the app reaches a
+ * connection (starting or connecting), or null in any other phase. Only
+ * Local starts as "Starting Marasi…".
+ */
+export function reachingText({ phase, connection }) {
+  const name = startupName(connection);
+  if (phase === "starting") return isNamed(connection) ? `Connecting to ${name}…` : "Starting Marasi…";
+  if (phase === "connecting") return `Connecting to ${name}…`;
+  return null;
+}
+
+/**
+ * Why an added connection's Remove is off, or null when it is on: the
+ * active connection waits for a switch away, and a local one whose run the
+ * app owns (Go's OwnsRun) for a stop, since a removed connection's run
+ * would keep running past quit.
+ */
+export function removeBlock({ isActive, ownedRun }) {
+  if (isActive) return "Switch away first";
+  if (ownedRun) return "Stop it first";
+  return null;
 }
 
 const switchable = ["starting", "connecting", "failed", "auth-failed"];

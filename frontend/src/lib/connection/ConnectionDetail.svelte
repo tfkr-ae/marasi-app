@@ -14,9 +14,9 @@
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
-	import { phaseLabel, phaseTone, whereText } from "./status.js";
-	import { errorText, removeConnection, setAddress, setPort } from "./manage.js";
-	import { parsePort, portText } from "./localPort.js";
+	import { phaseLabel, phaseTone, removeBlock, whereText } from "./status.js";
+	import { errorText, ownsRun, removeConnection, setAddress, setPort } from "./manage.js";
+	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
 	import { cliMissing, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import OutdatedInstance from "./OutdatedInstance.svelte";
@@ -50,7 +50,7 @@
 		manageError = "";
 		const value = parsePort(port);
 		if (value === null) {
-			manageError = "Port is 1–65535, or blank for any";
+			manageError = PORT_RANGE_MESSAGE;
 			return;
 		}
 		try {
@@ -72,6 +72,18 @@
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
 	$: reached = isActive && state.version !== null && phase !== "stopped";
+	// Whether the app owns a run on this added local connection, read again
+	// as the active connection or its phase changes (a switch away, a stop).
+	let ownedRun = false;
+	let ownedRead = 0;
+	function readOwnedRun() {
+		const read = ++ownedRead;
+		ownsRun(connection.id).then((owned) => {
+			if (read === ownedRead) ownedRun = owned;
+		});
+	}
+	$: if (added) readOwnedRun(isActive, state.phase);
+	$: removeHint = removeBlock({ isActive, ownedRun: added && ownedRun });
 	const row = rows
 		? "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
 		: "flex items-center justify-between gap-4 py-2 border-b border-surface-200 dark:border-surface-700";
@@ -206,12 +218,11 @@
 			<div class={row}>
 				<div>
 					<p>Remove</p>
-					<p class="text-xs opacity-70">{isActive ? "Switch away first" : "Forget it and its password"}</p>
+					<p class="text-xs opacity-70">{removeHint ?? "Forget it and its password"}</p>
 				</div>
-				<button type="button" class={neutral} disabled={isActive} data-testid="connection-remove" on:click={remove}>Remove</button>
+				<button type="button" class={neutral} disabled={removeHint !== null} data-testid="connection-remove" on:click={remove}>Remove</button>
 			</div>
 		</div>
-		{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
 	{/if}
 
 	{#if added}
@@ -229,11 +240,11 @@
 			<div class={row}>
 				<div>
 					<p>Remove</p>
-					<p class="text-xs opacity-70">{isActive ? "Switch away first" : "Forget it; the instance keeps running"}</p>
+					<p class="text-xs opacity-70" data-testid="connection-remove-hint">{removeHint ?? "Forget it; the instance keeps running"}</p>
 				</div>
-				<button type="button" class={neutral} disabled={isActive} data-testid="connection-remove" on:click={remove}>Remove</button>
+				<button type="button" class={neutral} disabled={removeHint !== null} data-testid="connection-remove" on:click={remove}>Remove</button>
 			</div>
 		</div>
-		{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
 	{/if}
+	{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
 </div>

@@ -4,6 +4,7 @@ import {
   AddConnection,
   AddLocalConnection,
   LocalInstances,
+  OwnsRun,
   RemoveConnection,
   SetConnectionAddress,
   SetConnectionPort,
@@ -52,6 +53,18 @@ export async function setAddress(id, url) {
 export async function removeConnection(id) {
   await RemoveConnection(id);
   await connectionStore.load();
+}
+
+/**
+ * Whether the app owns a run on connection `id`, so Remove waits for a
+ * stop; false when Go can't say (Go refuses the remove anyway).
+ */
+export async function ownsRun(id) {
+  try {
+    return Boolean(await OwnsRun(id));
+  } catch {
+    return false;
+  }
 }
 
 /** A Go error's text, for the inline error line. */

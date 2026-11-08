@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -370,9 +369,21 @@ func (a *App) ConnectionPassword(id string) (string, error) {
 	return password, nil
 }
 
+// errRemoveOwnedRun refuses to remove a local connection whose instance runs
+// a run the app started: once forgotten, quitting would neither ask about
+// nor stop it.
+var errRemoveOwnedRun = errors.New("the app started its instance, which still runs: stop it first")
+
+// OwnsRun reports whether the app owns a run on connection id (a saved
+// owned run, which a stop or another client's restart clears), so Remove
+// is refused.
+func (a *App) OwnsRun(id string) bool {
+	return a.savedOwnedRun(id) != ""
+}
+
 // RemoveConnection forgets an added connection, its recent projects and a
-// remote's password or a local connection's owned run (the app stops
-// managing that instance; it keeps running). Local and the active one stay.
+// remote's password. Local, the active one and one whose run the app owns
+// (OwnsRun) stay.
 func (a *App) RemoveConnection(id string) error {
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
@@ -386,21 +397,18 @@ func (a *App) RemoveConnection(id string) error {
 	if a.Config.activeConnection == id {
 		return errors.New("switch to another connection first")
 	}
+	if a.Config.ownedRuns[id] != "" {
+		return errRemoveOwnedRun
+	}
 	removed := a.Config.connections[i]
 	next := slices.Delete(slices.Clone(a.Config.connections), i, i+1)
 	recents := cloneRecents(a.Config.recentProjects)
 	delete(recents, id)
-	runs := maps.Clone(a.Config.ownedRuns)
-	delete(runs, id)
-	if runs == nil {
-		runs = map[string]string{}
-	}
-	if err := writeConfigKeys(a.Config.path(), map[string]any{connectionsKey: next, recentProjectsKey: recents, ownedRunsKey: runs}); err != nil {
+	if err := writeConfigKeys(a.Config.path(), map[string]any{connectionsKey: next, recentProjectsKey: recents}); err != nil {
 		return fmt.Errorf("saving connections: %w", err)
 	}
 	a.Config.connections = next
 	a.Config.recentProjects = recents
-	a.Config.ownedRuns = runs
 	if err := a.forgetPassword(removed.PasswordRef); err != nil {
 		log.Printf("[!] forgetting the password for %s: %v", id, err)
 	}

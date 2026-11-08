@@ -12,3 +12,6 @@ export function parsePort(text) {
 
 /** A saved port as the field shows it: "" for any free port. */
 export const portText = (port) => (port ? String(port) : "");
+
+/** What a typed port that isn't one (parsePort's null) says. */
+export const PORT_RANGE_MESSAGE = "Port is 1–65535, or blank for any";
