@@ -78,6 +78,13 @@ test("the start screen reads as before on Local", () => {
   assert.equal(startupText({ phase: "auth-failed", connection: local }), "Password refused");
 });
 
+test("the start screen names a named local connection other than Local", () => {
+  const work = { id: "local-abc", kind: "local", name: "Work", instance: "work" };
+  assert.equal(startupText({ phase: "starting", connection: work }), "Connecting to Work…");
+  assert.equal(startupText({ phase: "connecting", connection: work }), "Connecting to Work…");
+  assert.equal(startupText({ phase: "failed", connection: work }), "Couldn't reach Work");
+});
+
 test("the start screen offers Connections… until it reaches the service, and after it fails", () => {
   for (const phase of ["starting", "connecting", "failed", "auth-failed"]) {
     assert.equal(startupOffersConnections(phase), true, phase);

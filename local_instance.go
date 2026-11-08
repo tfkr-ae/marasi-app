@@ -11,6 +11,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,22 +62,37 @@ type localInstance struct {
 	connection string
 	// name is the instance the connection names, passed as --instance.
 	name string
+	// port is the proxy port an added local connection starts on: its saved
+	// port, or "0" for any free one. "" is Local's: the app's default
+	// listener (listenerDefaults), moving to a free port when it is taken.
+	port string
 	// cliPath is the CLI the instance was last reached with, for stopping it.
 	cliPath string
 }
 
-// localInstanceFor is the instance local connection id names, or an error
-// when id isn't a local connection.
-func (a *App) localInstanceFor(id string) (string, error) {
+// localInstanceFor is the instance local connection id names and the proxy
+// port it starts on (see localInstance.port): Local's `default`, or a saved
+// local connection's instance; an error when id isn't a local connection.
+func (a *App) localInstanceFor(id string) (name, port string, err error) {
 	if id == localConnectionID {
-		return localInstanceName, nil
+		return localInstanceName, "", nil
 	}
-	return "", fmt.Errorf("no local connection %s", id)
+	if a.Config == nil {
+		return "", "", fmt.Errorf("no local connection %s", id)
+	}
+	a.Config.mu.Lock()
+	defer a.Config.mu.Unlock()
+	i, err := a.savedConnection(id, "local")
+	if err != nil {
+		return "", "", err
+	}
+	c := a.Config.connections[i]
+	return c.Instance, strconv.Itoa(c.Port), nil
 }
 
 // localFor is the handle on local connection id's instance.
 func (a *App) localFor(id string) (*localInstance, error) {
-	name, err := a.localInstanceFor(id)
+	name, port, err := a.localInstanceFor(id)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +106,9 @@ func (a *App) localFor(id string) (*localInstance, error) {
 		l = &localInstance{connection: id, name: name}
 		a.locals[id] = l
 	}
+	l.mu.Lock()
+	l.port = port
+	l.mu.Unlock()
 	return l, nil
 }
 
@@ -271,17 +291,30 @@ func (a *App) localStatus(l *localInstance) (status localInstanceStatus, running
 }
 
 // startLocal starts the instance with the proxy on the app's default
-// listener (default_address, default_port), or on a free port of the same
-// address when that port is taken, a control listener on a free loopback
-// port and a generated password, and saves the new run as the app's owned
-// run on its connection. extra are more `service start` flags, such as
-// --project.
+// address (default_address) and, for Local, its default port (default_port),
+// or a free port of the same address when that port is taken; an added local
+// connection starts on its saved port, or any free one when it has none.
+// It gives a control listener on a free loopback port and a generated
+// password, and saves the new run as the app's owned run on its connection.
+// Starting an instance that has never run creates it. An added local
+// connection without --project in extra opens the project named for its
+// instance (--project-name), not the scratchpad. extra are more
+// `service start` flags, such as --project.
 func (a *App) startLocal(l *localInstance, extra ...string) error {
 	password, err := a.newPassword()
 	if err != nil {
 		return err
 	}
 	address, port := a.listenerDefaults()
+	fixed := l.port != ""
+	if fixed {
+		port = l.port
+		if !slices.Contains(extra, "--project") {
+			// Marasi's own pick is the scratchpad, which Local's instance
+			// holds open; an added instance opens one named for it.
+			extra = append([]string{"--project-name", l.name}, extra...)
+		}
+	}
 	var started struct {
 		ProxyListener string `json:"proxy_listener"`
 	}
@@ -290,7 +323,7 @@ func (a *App) startLocal(l *localInstance, extra ...string) error {
 		return a.cli(l, []string{"MARASI_PASSWORD=" + password}, &started, args...)
 	}
 	err = start(port)
-	if err != nil && port != "0" && portTaken(err) {
+	if err != nil && !fixed && port != "0" && portTaken(err) {
 		log.Printf("[*] proxy port %s:%s is taken, starting the local instance on a free port", address, port)
 		err = start("0")
 	}
@@ -396,7 +429,10 @@ func runIDIf(running bool, status localInstanceStatus) string {
 // CLI's error message.
 func (a *App) cli(l *localInstance, extraEnv []string, out any, command ...string) error {
 	path := l.cliPath
-	args := []string{"--instance", l.name}
+	var args []string
+	if l.name != "" {
+		args = []string{"--instance", l.name}
+	}
 	if a.cliConfigDir != "" {
 		args = append(args, "--config-dir", a.cliConfigDir)
 	}

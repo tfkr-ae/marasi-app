@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -14,11 +15,13 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Saved connections (spec "App config"): the local connection, which is
-// always there and never saved, and the remotes the researcher added. App
-// config keeps each remote's id, name, URL, no-password flag, allowed
-// origins and a password reference (keychain.go), never the password; the
-// active connection's id; and the recent projects per connection.
+// Saved connections (spec "App config"): Local, the local connection for
+// the `default` instance, which is always there and never saved, and the
+// connections the researcher added: local connections for other named
+// instances (instance and optional proxy port) and remotes. App config keeps
+// each remote's id, name, URL, no-password flag, allowed origins and a
+// password reference (keychain.go), never the password; the active
+// connection's id; and the recent projects per connection.
 
 const (
 	connectionsKey      = "connections"
@@ -37,6 +40,10 @@ type SavedConnection struct {
 	NoPassword     bool     `json:"noPassword" yaml:"no_password"`
 	AllowedOrigins []string `json:"allowedOrigins" yaml:"allowed_origins,omitempty"`
 	PasswordRef    string   `json:"-" yaml:"password_ref,omitempty"`
+	// Instance is the service instance a local connection names.
+	Instance string `json:"instance" yaml:"instance,omitempty"`
+	// Port is a local connection's proxy port; 0 starts it on any free port.
+	Port int `json:"port" yaml:"port,omitempty"`
 }
 
 // Connections is the list, local first, and the active connection's id.
@@ -53,6 +60,14 @@ type NewConnection struct {
 	NoPassword bool   `json:"noPassword"`
 }
 
+// NewLocalConnection is a local connection to add: an instance name, picked
+// from the CLI's list or typed, and an optional proxy port (0 for any).
+type NewLocalConnection struct {
+	Name     string `json:"name"`
+	Instance string `json:"instance"`
+	Port     int    `json:"port"`
+}
+
 // RecentProject is a project opened on a connection; Opened is RFC 3339.
 type RecentProject struct {
 	Name   string `json:"name" yaml:"name"`
@@ -60,7 +75,7 @@ type RecentProject struct {
 	Opened string `json:"opened" yaml:"opened"`
 }
 
-var localConnection = SavedConnection{ID: localConnectionID, Name: "Local", Kind: "local"}
+var localConnection = SavedConnection{ID: localConnectionID, Name: "Local", Kind: "local", Instance: localInstanceName}
 
 func parseConnections(node *yaml.Node) []SavedConnection {
 	var saved []SavedConnection
@@ -71,7 +86,9 @@ func parseConnections(node *yaml.Node) []SavedConnection {
 		log.Printf("[!] %s in the app config isn't a list of connections, ignoring it: %v", connectionsKey, err)
 		return nil
 	}
-	return slices.DeleteFunc(saved, func(c SavedConnection) bool { return c.ID == "" || c.ID == localConnectionID })
+	return slices.DeleteFunc(saved, func(c SavedConnection) bool {
+		return c.ID == "" || c.ID == localConnectionID || (c.Kind == "local" && c.Instance == "")
+	})
 }
 
 func parseRecentProjects(node *yaml.Node) map[string][]RecentProject {
@@ -128,19 +145,100 @@ func (a *App) findConnection(id string) int {
 // remoteConnection is the index of the remote `id` in Config.connections,
 // or an error naming it when there is none. Callers hold Config.mu.
 func (a *App) remoteConnection(id string) (int, error) {
+	return a.savedConnection(id, "remote")
+}
+
+// savedConnection is the index of the added connection `id` of kind in
+// Config.connections, or an error naming it. Callers hold Config.mu.
+func (a *App) savedConnection(id, kind string) (int, error) {
 	i := a.findConnection(id)
-	if i < 0 {
-		return -1, fmt.Errorf("no remote connection %s", id)
+	if i < 0 || a.Config.connections[i].Kind != kind {
+		return -1, fmt.Errorf("no %s connection %s", kind, id)
 	}
 	return i, nil
 }
 
-func newConnectionID() (string, error) {
+func newConnectionID(kind string) (string, error) {
 	b := make([]byte, 6)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return "remote-" + hex.EncodeToString(b), nil
+	return kind + "-" + hex.EncodeToString(b), nil
+}
+
+// instanceName checks a typed instance name as the Marasi CLI does
+// (resolveInstancePath): not empty, no path, no .sock suffix.
+func instanceName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	switch {
+	case name == "":
+		return "", errors.New("enter an instance name")
+	case name == "." || name == ".." || strings.ContainsAny(name, `/\`):
+		return "", fmt.Errorf("%q isn't an instance name: no paths", name)
+	case strings.HasSuffix(name, ".sock"):
+		return "", fmt.Errorf("%q isn't an instance name: no .sock suffix", name)
+	}
+	return name, nil
+}
+
+func checkPort(port int) error {
+	if port < 0 || port > 65535 {
+		return fmt.Errorf("port %d isn't 0–65535", port)
+	}
+	return nil
+}
+
+// AddLocalConnection saves a local connection for a named instance on this
+// machine, one that isn't saved yet; `default` is Local's.
+func (a *App) AddLocalConnection(in NewLocalConnection) (SavedConnection, error) {
+	name, err := instanceName(in.Instance)
+	if err != nil {
+		return SavedConnection{}, err
+	}
+	if err := checkPort(in.Port); err != nil {
+		return SavedConnection{}, err
+	}
+	id, err := newConnectionID("local")
+	if err != nil {
+		return SavedConnection{}, err
+	}
+	label := strings.TrimSpace(in.Name)
+	if label == "" {
+		label = name
+	}
+	saved := SavedConnection{ID: id, Name: label, Kind: "local", Instance: name, Port: in.Port}
+
+	a.Config.mu.Lock()
+	defer a.Config.mu.Unlock()
+	for _, c := range a.connectionsLocked().Connections {
+		if c.Kind == "local" && c.Instance == name {
+			return SavedConnection{}, fmt.Errorf("%s already reaches instance %s", c.Name, name)
+		}
+	}
+	if err := a.writeConnections(append(slices.Clone(a.Config.connections), saved)); err != nil {
+		return SavedConnection{}, err
+	}
+	return saved, nil
+}
+
+// SetConnectionPort changes an added local connection's proxy port (0 for
+// any free port); it applies from the instance's next start.
+func (a *App) SetConnectionPort(id string, port int) (SavedConnection, error) {
+	if err := checkPort(port); err != nil {
+		return SavedConnection{}, err
+	}
+	a.Config.mu.Lock()
+	defer a.Config.mu.Unlock()
+	i, err := a.savedConnection(id, "local")
+	if err != nil {
+		return SavedConnection{}, err
+	}
+	next := slices.Clone(a.Config.connections)
+	next[i].Port = port
+	if err := a.writeConnections(next); err != nil {
+		return SavedConnection{}, err
+	}
+	return next[i], nil
 }
 
 // AddConnection saves a remote: its password goes to the keychain (or the
@@ -153,7 +251,7 @@ func (a *App) AddConnection(in NewConnection) (SavedConnection, error) {
 	if in.Password == "" && !in.NoPassword {
 		return SavedConnection{}, errors.New("enter the service's password, or say it has none")
 	}
-	id, err := newConnectionID()
+	id, err := newConnectionID("remote")
 	if err != nil {
 		return SavedConnection{}, err
 	}
@@ -272,17 +370,18 @@ func (a *App) ConnectionPassword(id string) (string, error) {
 	return password, nil
 }
 
-// RemoveConnection forgets a remote, its password and its recent projects.
-// The local connection and the active one stay.
+// RemoveConnection forgets an added connection, its recent projects and a
+// remote's password or a local connection's owned run (the app stops
+// managing that instance; it keeps running). Local and the active one stay.
 func (a *App) RemoveConnection(id string) error {
 	a.Config.mu.Lock()
 	defer a.Config.mu.Unlock()
 	if id == localConnectionID {
 		return errors.New("the local connection can't be removed")
 	}
-	i, err := a.remoteConnection(id)
-	if err != nil {
-		return err
+	i := a.findConnection(id)
+	if i < 0 {
+		return fmt.Errorf("no connection %s", id)
 	}
 	if a.Config.activeConnection == id {
 		return errors.New("switch to another connection first")
@@ -291,11 +390,17 @@ func (a *App) RemoveConnection(id string) error {
 	next := slices.Delete(slices.Clone(a.Config.connections), i, i+1)
 	recents := cloneRecents(a.Config.recentProjects)
 	delete(recents, id)
-	if err := writeConfigKeys(a.Config.path(), map[string]any{connectionsKey: next, recentProjectsKey: recents}); err != nil {
+	runs := maps.Clone(a.Config.ownedRuns)
+	delete(runs, id)
+	if runs == nil {
+		runs = map[string]string{}
+	}
+	if err := writeConfigKeys(a.Config.path(), map[string]any{connectionsKey: next, recentProjectsKey: recents, ownedRunsKey: runs}); err != nil {
 		return fmt.Errorf("saving connections: %w", err)
 	}
 	a.Config.connections = next
 	a.Config.recentProjects = recents
+	a.Config.ownedRuns = runs
 	if err := a.forgetPassword(removed.PasswordRef); err != nil {
 		log.Printf("[!] forgetting the password for %s: %v", id, err)
 	}
@@ -353,7 +458,7 @@ func cloneRecents(recents map[string][]RecentProject) map[string][]RecentProject
 	return next
 }
 
-// writeConnections saves the remotes. Callers hold Config.mu.
+// writeConnections saves the added connections. Callers hold Config.mu.
 func (a *App) writeConnections(next []SavedConnection) error {
 	if err := writeConfigKeys(a.Config.path(), map[string]any{connectionsKey: next}); err != nil {
 		return fmt.Errorf("saving connections: %w", err)

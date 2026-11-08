@@ -343,3 +343,36 @@ func TestStopLeavesARunTheAppDoesNotOwnRunning(t *testing.T) {
 		t.Fatalf("Stop stopped another client's run (calls %v)", cli.subcommands())
 	}
 }
+
+func TestTheQuitQuestionNamesAnOwnedNamedLocalConnection(t *testing.T) {
+	cli := &fakeCLI{}
+	app := ownerApp(t, cli)
+	setWhenQuitting(t, app, whenQuittingAsk)
+	work, err := app.AddLocalConnection(NewLocalConnection{Name: "Work", Instance: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.saveOwnedRun(work.ID, "run-work")
+	cli.answer("service status", 0, runOf("run-work")).answer("service stop", 0, stopped)
+	asked := quitQuestions(app)
+	recordQuits(app)
+
+	app.shouldQuit()
+	question := waitForQuestion(t, asked)
+	app.AnswerQuitQuestion(quitAnswerStop, false)
+	waitUntilAnswered(t, app)
+	app.ServiceShutdown()
+
+	if !slices.Equal(question.Connections, []string{"Local", "Work"}) {
+		t.Fatalf("the question named %v, want [Local Work]", question.Connections)
+	}
+	var stopped []string
+	for _, call := range cli.calls {
+		if call.subcommand() == "service stop" {
+			stopped = append(stopped, flagValue(call.args, "--instance"))
+		}
+	}
+	if !slices.Equal(stopped, []string{"default", "work"}) {
+		t.Fatalf("stopped instances %v, want default and work", stopped)
+	}
+}

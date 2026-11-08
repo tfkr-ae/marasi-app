@@ -57,3 +57,29 @@ func (a *App) StartLocalInstance(id, project string) error {
 	}
 	return nil
 }
+
+// LocalInstances lists the instances the Marasi CLI reports on this machine
+// (`service list`), running or unhealthy, for the add form. An instance
+// that has never run, or is stopped, isn't listed; the form takes a typed
+// name for those.
+func (a *App) LocalInstances() ([]string, error) {
+	path, err := a.findCLI()
+	if err != nil {
+		return nil, codedError("finding the Marasi CLI", codeCLIMissing, nil, err)
+	}
+	var list struct {
+		Items []struct {
+			Instance string `json:"instance"`
+		} `json:"items"`
+	}
+	if err := a.cli(&localInstance{cliPath: path}, nil, &list, "service", "list"); err != nil {
+		return nil, codedError("listing the local instances", codeInstanceFailed, nil, err)
+	}
+	names := make([]string, 0, len(list.Items))
+	for _, item := range list.Items {
+		if item.Instance != "" {
+			names = append(names, item.Instance)
+		}
+	}
+	return names, nil
+}
