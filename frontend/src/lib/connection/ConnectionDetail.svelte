@@ -7,13 +7,15 @@
 	// remote has its address and Remove. The local connection offers Stop
 	// (asking first when the run isn't the app's), and once stopped, "Marasi
 	// stopped" with Start (Retry for a remote). The password and sharing rows
-	// (ConnectionAccess) go after the service rows.
+	// (ConnectionAccess) go after the service rows. A local connection the
+	// researcher added (not Local) has its proxy port and Remove.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
-	import { errorText, removeConnection, setAddress } from "./manage.js";
+	import { errorText, removeConnection, setAddress, setPort } from "./manage.js";
+	import { parsePort, portText } from "./localPort.js";
 	import { cliMissing, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import OutdatedInstance from "./OutdatedInstance.svelte";
@@ -42,6 +44,20 @@
 			manageError = errorText(err);
 		}
 	}
+	let port = portText(connection.port);
+	async function savePort() {
+		manageError = "";
+		const value = parsePort(port);
+		if (value === null) {
+			manageError = "Port is 1–65535, or blank for any";
+			return;
+		}
+		try {
+			await setPort(connection.id, value);
+		} catch (err) {
+			manageError = errorText(err);
+		}
+	}
 	async function remove() {
 		manageError = "";
 		try {
@@ -50,6 +66,7 @@
 			manageError = errorText(err);
 		}
 	}
+	$: added = connection.kind === "local" && connection.id !== "local";
 	$: state = $connectionStore;
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
@@ -184,6 +201,29 @@
 				<div>
 					<p>Remove</p>
 					<p class="text-xs opacity-70">{isActive ? "Switch away first" : "Forget it and its password"}</p>
+				</div>
+				<button type="button" class={neutral} disabled={isActive} data-testid="connection-remove" on:click={remove}>Remove</button>
+			</div>
+		</div>
+		{#if manageError}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="connection-manage-error">{manageError}</p>{/if}
+	{/if}
+
+	{#if added}
+		<div class="mt-3 border-t border-surface-200 dark:border-surface-700" data-testid="connection-local-manage">
+			<div class={row}>
+				<div>
+					<p>Proxy port</p>
+					<p class="text-xs opacity-70">From the next Start; blank for any</p>
+				</div>
+				<form class="flex min-w-0 items-center gap-2" on:submit|preventDefault={savePort}>
+					<input class="input h-8 w-24 py-1 font-mono text-xs" inputmode="numeric" placeholder="Any" data-testid="connection-port" bind:value={port} />
+					<button type="submit" class={neutral} disabled={port.trim() === portText(connection.port)}>Save</button>
+				</form>
+			</div>
+			<div class={row}>
+				<div>
+					<p>Remove</p>
+					<p class="text-xs opacity-70">{isActive ? "Switch away first" : "Forget it; the instance keeps running"}</p>
 				</div>
 				<button type="button" class={neutral} disabled={isActive} data-testid="connection-remove" on:click={remove}>Remove</button>
 			</div>

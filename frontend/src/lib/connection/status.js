@@ -50,13 +50,15 @@ export const pagesHeld = (phase) => phase === "project-changed" || phase === "st
 
 /**
  * What the start screen says while the app reaches the active connection,
- * before the first project loads: a remote by its name, Local as Marasi.
+ * before the first project loads: a remote or a named local connection by
+ * its name, Local as Marasi.
  */
 export function startupText({ phase, connection }) {
-  const name = connection.kind === "remote" ? connection.name : "Marasi";
+  const named = connection.kind === "remote" || connection.id !== "local";
+  const name = named ? connection.name : "Marasi";
   const text = {
     idle: "Starting…",
-    starting: "Starting Marasi…",
+    starting: named ? `Connecting to ${name}…` : "Starting Marasi…",
     connecting: `Connecting to ${name}…`,
     connected: "Loading project…",
     failed: `Couldn't reach ${name}`,
