@@ -5,7 +5,7 @@
 	import ConnectionsModal from "../lib/connection/ConnectionsModal.svelte";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
 	import OutdatedInstance from "../lib/connection/OutdatedInstance.svelte";
-	import { filePickerShown, startupOffersConnections, startupText } from "../lib/connection/status.js";
+	import { filePickerShown, pagesHeld, startupOffersConnections, startupText } from "../lib/connection/status.js";
 	import { neutralVariant, primaryVariant } from "../lib/launchpad/format.js";
 	import {
 		computePosition,
@@ -775,12 +775,13 @@
 			<!-- Content area -->
 			<div id="content" class="flex-1 overflow-auto">
 				<div class="sticky top-0 z-20"><ConnectionBanner /></div>
-				<!-- The service has another project open than the pages show:
-				     they stay visible but read-only until the banner's Load it. -->
+				<!-- The service has another project open than the pages show, or
+				     Marasi is stopped: they stay visible but read-only until the
+				     banner's Load it or Start. -->
 				<div
 					class="contents"
-					class:held-pages={$connectionStore.phase === "project-changed"}
-					inert={$connectionStore.phase === "project-changed"}
+					class:held-pages={pagesHeld($connectionStore.phase)}
+					inert={pagesHeld($connectionStore.phase)}
 					data-testid="pages"
 				>
 					{#key $pagesKey}

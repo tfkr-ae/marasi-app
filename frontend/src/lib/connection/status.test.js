@@ -2,7 +2,16 @@
 // Settings → Connection.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filePickerShown, phaseLabel, phaseTone, startupOffersConnections, startupText, statusHint, whereText } from "./status.js";
+import {
+  filePickerShown,
+  pagesHeld,
+  phaseLabel,
+  phaseTone,
+  startupOffersConnections,
+  startupText,
+  statusHint,
+  whereText,
+} from "./status.js";
 
 test("the dot is green when connected, amber on the way, red when it failed", () => {
   assert.equal(phaseTone("connected"), "bg-success-500");
@@ -40,6 +49,17 @@ test("a remote is its address", () => {
 test("the native file picker shows only on the local connection", () => {
   assert.equal(filePickerShown({ kind: "local" }), true);
   assert.equal(filePickerShown({ kind: "remote", url: "http://10.0.0.5:9000" }), false);
+});
+
+test("a stopped connection reads Stopped, with a grey dot", () => {
+  assert.equal(phaseLabel("stopped"), "Stopped");
+  assert.equal(phaseTone("stopped"), "bg-surface-400");
+});
+
+test("the pages are held, dimmed and inert, while another project waits or Marasi is stopped", () => {
+  assert.equal(pagesHeld("project-changed"), true);
+  assert.equal(pagesHeld("stopped"), true);
+  for (const phase of ["connected", "reconnecting", "starting", "failed"]) assert.equal(pagesHeld(phase), false, phase);
 });
 
 test("the start screen names the remote it's reaching", () => {
