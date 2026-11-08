@@ -316,3 +316,136 @@ test("a customization that takes a stable default is still a duplicate", () => {
     [{ kind: "duplicate", actions: ["global.go-home", "global.open-extension.alpha"] }],
   );
 });
+
+// Menu letters. The catalog's groups are fixtures here, so the rules hold for
+// whatever groups the factory catalog has: two global groups, two in the
+// Ledger drawer, one in the WebSocket drawer and one with the drawer closed.
+function menuGroup(context, id, label, letter) {
+  return { context, id, label, letter, icon: "Eye", tone: "sky", description: label };
+}
+const letterGroups = [
+  menuGroup("global", "go", "Go to", "G"),
+  menuGroup("global", "project", "Project", "P"),
+  menuGroup("ledger.drawer-open", "copy", "Copy", "C"),
+  menuGroup("ledger.drawer-open", "send", "Send", "S"),
+  menuGroup("ledger.drawer-open.websocket", "frames", "Frames", "F"),
+  menuGroup("ledger.drawer-closed", "view", "View", "V"),
+];
+const groupedCatalog = createCatalog(baseActions, { contexts, groups: letterGroups });
+
+function withLetters(letters) {
+  return { ...profile("work", "Work"), letters: Object.entries(letters).map(([group, letter]) => ({ group, letter })) };
+}
+
+const letterMessages = (letters) => validateKeybindings(groupedCatalog, saved([withLetters(letters)]).config).map((p) => p.message);
+
+test("a page group may not take a global group's menu letter, and the refusal names both groups", () => {
+  assert.deepEqual(letterMessages({ "ledger.drawer-open.copy": "G" }), [
+    "Work: Go to (global) and Copy (ledger.drawer-open) both use menu letter G",
+  ]);
+});
+
+test("two groups of one page context, or two global groups, may not share a menu letter; each clash is reported once", () => {
+  assert.deepEqual(letterMessages({ "ledger.drawer-open.send": "C", "global.project": "G" }), [
+    "Work: Go to (global) and Project (global) both use menu letter G",
+    "Work: Copy (ledger.drawer-open) and Send (ledger.drawer-open) both use menu letter C",
+  ]);
+});
+
+test("groups in different page contexts may share a menu letter, and a moved letter frees the factory one", () => {
+  assert.deepEqual(letterMessages({ "ledger.drawer-closed.view": "C", "ledger.drawer-open.websocket.frames": "V" }), []);
+  assert.deepEqual(letterMessages({ "global.go": "X", "ledger.drawer-open.copy": "G" }), []);
+});
+
+// The WebSocket drawer overlaps the Ledger drawer, so both share one menu.
+test("groups in overlapping contexts are one menu level and may not share a menu letter", () => {
+  assert.deepEqual(letterMessages({ "ledger.drawer-open.websocket.frames": "S" }), [
+    "Work: Send (ledger.drawer-open) and Frames (ledger.drawer-open.websocket) both use menu letter S",
+  ]);
+});
+
+test("the Launchpad tree's Entries shares the Launchpad's menu, so it may not take Launch's letter", () => {
+  const app = buildCatalog();
+  const work = { ...factoryProfile("work", "Work"), knownActions: app.actions.map((a) => a.id), letters: [{ group: "launchpad.tree.entries", letter: "L" }] };
+  assert.deepEqual(
+    validateKeybindings(app, saved([work]).config).map((p) => p.message),
+    ["Work: Launch (launchpad) and Entries (launchpad.tree) both use menu letter L"],
+  );
+});
+
+test("a menu letter must be one capital letter A–Z", () => {
+  for (const letter of ["1", "", "XY", "x", "É", "⌘"]) {
+    assert.deepEqual(letterMessages({ "global.go": letter }), [`Work: Go to (global): menu letter ${JSON.stringify(letter)} is not a single letter A–Z`], letter);
+  }
+});
+
+test("K, Q and H are never menu letters, on either platform", () => {
+  for (const letter of ["K", "Q", "H"]) {
+    const problems = validateKeybindings(groupedCatalog, saved([withLetters({ "ledger.drawer-open.copy": letter })]).config);
+    assert.deepEqual(
+      problems.map((p) => [p.platform, p.message]),
+      [[null, `Work: Copy (ledger.drawer-open): menu letter ${letter} is reserved; K, Q and H are never menu letters`]],
+    );
+  }
+});
+
+test("a menu group's letter may be given only once", () => {
+  const work = { ...profile("work", "Work"), letters: [{ group: "global.go", letter: "X" }, { group: "global.go", letter: "Y" }] };
+  assert.deepEqual(
+    validateKeybindings(groupedCatalog, saved([work]).config).map((p) => p.message),
+    ["Work: Go to (global): menu letter given twice"],
+  );
+});
+
+test("a letter override for a group this build lacks is kept dormant, but must still be a usable letter", () => {
+  assert.deepEqual(letterMessages({ "compass.filters": "G" }), []);
+  assert.deepEqual(letterMessages({ "compass.filters": "Q" }), [
+    "Work: compass.filters: menu letter Q is reserved; K, Q and H are never menu letters",
+  ]);
+});
+
+test("the menu follows the active profile's letters, and changes with the saved profile without a reload", () => {
+  const dispatcher = createDispatcher({ catalog: groupedCatalog, platform: MACOS });
+  let seen;
+  dispatcher.subscribe((snapshot) => (seen = snapshot));
+  assert.deepEqual(seen.letters, {});
+  dispatcher.configure({ keybindings: saved([withLetters({ "global.go": "X" })]) });
+  assert.deepEqual(seen.letters, { "global.go": "X" });
+  assert.equal(seen.problem, "");
+  dispatcher.configure({ keybindings: saved([withLetters({})]) });
+  assert.deepEqual(seen.letters, {});
+});
+
+// The ADR's rule for a new default: the researcher's saved letter wins on
+// load, and the menu gives the clashing factory group a derived key. A save
+// that creates the clash is still refused (above).
+test("a saved letter that clashes with a factory letter keeps the profile live, bindings and letter included", () => {
+  const dispatcher = createDispatcher({ catalog: groupedCatalog, platform: WINDOWS_LINUX });
+  let seen;
+  dispatcher.subscribe((snapshot) => (seen = snapshot));
+  const work = { ...withLetters({ "global.go": "P" }), overrides: { [MACOS]: [], [WINDOWS_LINUX]: [{ action: "global.go-home", keys: ["ctrl+j"] }] } };
+  dispatcher.configure({ keybindings: saved([work]) });
+  assert.equal(seen.problem, "");
+  assert.deepEqual(seen.letters, { "global.go": "P" });
+  assert.deepEqual(seen.bindingsFor("global.go-home"), ["ctrl+j"]);
+});
+
+test("a saved letter that can't be a menu letter is ignored on load, and the profile stays live", () => {
+  const dispatcher = createDispatcher({ catalog: groupedCatalog, platform: MACOS });
+  let seen;
+  dispatcher.subscribe((snapshot) => (seen = snapshot));
+  dispatcher.configure({ keybindings: saved([withLetters({ "global.go": "K", "global.project": "X" })]) });
+  assert.equal(seen.problem, "");
+  assert.deepEqual(seen.letters, { "global.project": "X" });
+});
+
+test("the catalog descriptor sent with a save lists every menu group with its factory letter", () => {
+  assert.deepEqual(catalogDescriptor(groupedCatalog).groups, [
+    { id: "global.go", context: "global", label: "Go to", letter: "G" },
+    { id: "global.project", context: "global", label: "Project", letter: "P" },
+    { id: "ledger.drawer-open.copy", context: "ledger.drawer-open", label: "Copy", letter: "C" },
+    { id: "ledger.drawer-open.send", context: "ledger.drawer-open", label: "Send", letter: "S" },
+    { id: "ledger.drawer-open.websocket.frames", context: "ledger.drawer-open.websocket", label: "Frames", letter: "F" },
+    { id: "ledger.drawer-closed.view", context: "ledger.drawer-closed", label: "View", letter: "V" },
+  ]);
+});

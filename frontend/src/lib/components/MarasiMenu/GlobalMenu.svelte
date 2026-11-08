@@ -2,7 +2,8 @@
 	// Global menu actions: mounted once by the layout, so they work on every
 	// route regardless of which page mounted first. Registers a live handler
 	// per catalog action with the central dispatcher, keeps the dispatcher's
-	// catalog (extensions) and platform current, and renders the global
+	// catalog (extensions) and platform current, publishes the global entries
+	// that every Marasi menu lists (globalMenuEntries), and renders the global
 	// Marasi menu used where a page has no menu of its own.
 	import { goto } from "$app/navigation";
 	import { onMount } from "svelte";
@@ -36,7 +37,7 @@
 		Sun,
 		ToggleLeft,
 	} from "lucide-svelte";
-	import MarasiKeys from "./MarasiKeys.svelte";
+	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
 	import { ToggleFlag } from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { checkpointStore } from "../../../stores/checkpointStore";
@@ -58,7 +59,10 @@
 		listenerModal,
 		openProjectPicker,
 	} from "../../globalActions.js";
-	import { menuDispatcher } from "../../keybindings/app.js";
+	import {
+		globalMenuEntries,
+		menuDispatcher,
+	} from "../../keybindings/app.js";
 	import {
 		DEFAULT_TEXT_SIZE,
 		largerTextSize,
@@ -269,6 +273,7 @@
 				extensionsUI: $extensions_ui,
 			}),
 		);
+	$: globalMenuEntries.set(menuOptions);
 
 	onMount(() => {
 		const unregister = Object.entries(handlers).map(([id, handler]) =>
@@ -281,4 +286,4 @@
 	});
 </script>
 
-<MarasiKeys paletteTier="global" {menuOptions} />
+<MarasiMenu paletteTier="global" />

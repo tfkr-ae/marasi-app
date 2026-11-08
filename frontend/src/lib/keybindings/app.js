@@ -14,6 +14,11 @@ export const menuDispatcher = createDispatcher({
 
 export const menuPalettes = createPaletteRegistry();
 
+// The global menu's entries ({ actionId, icon, name, ... }, with live names
+// such as the intercept toggle), published by GlobalMenu.svelte. Every
+// Marasi menu lists them in its Marasi section, after the page's own.
+export const globalMenuEntries = writable([]);
+
 // The WebSocket modal's open tab (one of WEBSOCKET_TABS), or null while the
 // modal is closed. The modal publishes it; its tab contexts read it as
 // `state.websocketTab`.

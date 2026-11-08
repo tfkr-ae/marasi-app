@@ -34,7 +34,7 @@
     import { get } from "svelte/store";
     import { afterNavigate } from "$app/navigation";
     import { page } from "$app/stores";
-    import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
     import { useMenuActions } from "../../lib/keybindings/app.js";
     import LaunchpadDock from "../../lib/launchpad/LaunchpadDock.svelte";
     import LaunchpadTree from "../../lib/launchpad/LaunchpadTree.svelte";
@@ -626,7 +626,7 @@
         { actionId: "launchpad.next-tab", icon: ArrowRightIcon, handler: () => stepLaunchpad(1) },
         { actionId: "launchpad.previous-tab", icon: ArrowLeftIcon, handler: () => stepLaunchpad(-1) },
         { actionId: "launchpad.next-entry", icon: ArrowDownIcon, handler: () => stepEntry(1) },
-        { actionId: "launchpad.previous-entry", icon: ArrowDownIcon, handler: () => stepEntry(-1) },
+        { actionId: "launchpad.previous-entry", icon: ArrowUpIcon, handler: () => stepEntry(-1) },
         { actionId: "launchpad.delete-tab", icon: TrashIcon, handler: deleteOpenLaunchpad },
         {
             actionId: "launchpad.edit-request",
@@ -660,7 +660,7 @@
 </script>
 
 <svelte:window on:keydown={onKeydown} />
-<MarasiKeys menuOptions={launchpadMenu} />
+<MarasiMenu paletteTier="page" pageName="Launchpad" pageEntries={launchpadMenu} />
 
 <div class="relative flex h-full min-h-0">
     <LaunchpadDock bind:this={dock} store={launchpadStore} {searchInput}>

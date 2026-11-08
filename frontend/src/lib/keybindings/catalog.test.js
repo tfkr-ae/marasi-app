@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog, extensionsWithGUI } from "./catalog.js";
+import { contextsConflict } from "./contexts.js";
 import { createKeymap } from "./keymap.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
 
@@ -319,5 +320,172 @@ test("Checkpoint actions keep their ids and keys but name the Items | Rules page
   }
   for (const action of catalog.inContext("checkpoint")) {
     assert.doesNotMatch(`${action.label} | ${action.description} | ${action.keywords}`, /accordi|settings/i, action.id);
+  }
+});
+
+// Menu groups: the Marasi menu gathers related menu actions under a menu
+// group, opened in the menu by ⌘ (Ctrl) + its menu letter.
+
+test("every menu action's group exists in the action's own context", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }], extensionMenus: { "Port Scanner": [{ name: "Scan", action: "scan" }] } });
+  for (const action of catalog.actions) {
+    if (!action.group) continue;
+    assert.ok(catalog.group(action.context, action.group), `${action.id}: no group ${action.group} in ${action.context}`);
+  }
+});
+
+test("the global menu groups gather Marasi's own actions as the spec lists them", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }] });
+  const inGroup = (id) =>
+    catalog
+      .inContext("global")
+      .filter((a) => a.group === id)
+      .map((a) => a.id.replace(/^global\./, ""));
+  assert.deepEqual(
+    catalog.groupsIn("global").map((g) => [g.id, g.label, g.letter]),
+    [
+      ["go", "Go to", "G"],
+      ["project", "Project", "P"],
+      ["browser", "Browser & proxy", "B"],
+      ["appearance", "Appearance", "A"],
+    ],
+  );
+  assert.deepEqual(inGroup("go"), [
+    "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
+    "go-armory", "go-logbook", "go-workshop", "go-settings", "open-extension.port-scanner",
+  ]);
+  assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener"]);
+  assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);
+  assert.deepEqual(inGroup("appearance").sort(), [
+    "decrease-text-size", "increase-text-size", "reset-text-size", "toggle-light-mode", "toggle-vim",
+  ]);
+  assert.equal(catalog.get("global.jump-to-toast").group, undefined);
+  assert.equal(catalog.get("global.open-menu").group, undefined);
+});
+
+// A context's menu groups as [id, label, letter, slugs of its actions].
+function groupsOf(catalog, context) {
+  return catalog.groupsIn(context).map((g) => [
+    g.id,
+    g.label,
+    g.letter,
+    catalog
+      .inContext(context)
+      .filter((a) => a.group === g.id)
+      .map((a) => a.id.slice(context.length + 1))
+      .sort(),
+  ]);
+}
+
+test("the Ledger with its drawer open groups its actions as the spec lists them", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "ledger.drawer-open"), [
+    ["navigate", "Navigate", "N", ["first-result", "last-result", "next-request", "open-request", "open-row-menu", "previous-request"]],
+    ["focus", "Focus", "F", ["focus-exclusion", "focus-query", "focus-sitemap"]],
+    ["send", "Send to", "S", ["send-to-armory", "send-to-launchpad"]],
+    ["logbook", "Logbook", "L", ["create-finding", "create-test-case", "link-finding", "link-test-case", "unlink-finding", "unlink-test-case"]],
+    ["copy", "Copy", "C", ["copy-browser-view-url", "copy-raw-request", "copy-raw-response", "copy-url"]],
+    ["view", "View", "V", ["toggle-fullscreen", "toggle-sidebar", "toggle-word-wrap", "view-metadata", "view-note"]],
+  ]);
+  assert.equal(catalog.get("ledger.drawer-open.websocket.open-stream").group, undefined);
+});
+
+test("the Ledger with its drawer closed groups only Focus", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "ledger.drawer-closed"), [
+    ["focus", "Focus", "F", ["focus-exclusion", "focus-query", "focus-sitemap"]],
+  ]);
+});
+
+test("the Launchpad groups its actions as Launch, Navigate, Compare, View and Entries", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "launchpad"), [
+    ["launch", "Launch", "L", ["cancel-launch", "create", "delete-tab", "edit-request", "launch", "toggle-tls"]],
+    ["navigate", "Navigate", "N", ["focus-search", "jump-to-latest", "next-entry", "next-tab", "previous-entry", "previous-tab"]],
+    ["compare", "Compare", "C", ["swap-compare", "toggle-compare", "toggle-compare-view"]],
+    ["view", "View", "V", ["copy-browser-view-url", "toggle-group-by-status", "toggle-settings", "toggle-sidebar", "view-metadata", "view-notes"]],
+  ]);
+  assert.deepEqual(groupsOf(catalog, "launchpad.tree"), [
+    ["entries", "Entries", "E", catalog.inContext("launchpad.tree").map((a) => a.id.slice("launchpad.tree.".length)).sort()],
+  ]);
+  assert.equal(catalog.group("launchpad", "navigate").description, "Move between launchpads and entries");
+  assert.equal(catalog.group("ledger.drawer-open", "navigate").description, "Move between requests");
+});
+
+test("the Armory page groups Templates and Runs, with the rest loose", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "armory.page"), [
+    ["templates", "Templates", "T", ["create-template", "edit-template", "next-template", "previous-template", "save-template"]],
+    ["runs", "Runs", "R", ["cancel-run", "launch-run", "next-run", "previous-run", "refresh-runs"]],
+  ]);
+  for (const slug of ["toggle-settings", "open-first-request", "select-all-traffic"]) {
+    assert.equal(catalog.get(`armory.page.${slug}`).group, undefined, slug);
+  }
+});
+
+test("the Checkpoint groups Held items under I, since H is reserved, and Rules", () => {
+  const catalog = buildCatalog();
+  assert.deepEqual(groupsOf(catalog, "checkpoint"), [
+    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked"]],
+    ["rules", "Rules", "R", ["edit-rules", "update-rules"]],
+  ]);
+  assert.equal(catalog.get("checkpoint.toggle-settings").group, undefined);
+  assert.equal(catalog.get("checkpoint.show-logs").group, undefined);
+});
+
+test("Logbook, Compass, Workshop, the Armory drawer and the WebSocket contexts have no menu groups", () => {
+  const catalog = buildCatalog();
+  for (const context of ["logbook", "compass", "workshop", "armory.drawer", "websocket", "websocket.stream", "websocket.checkpoint", "websocket.inject"]) {
+    assert.deepEqual(catalog.groupsIn(context), [], context);
+    assert.ok(catalog.inContext(context).every((a) => !a.group), context);
+  }
+});
+
+test("no page menu group uses a global group's letter (G, P, B or A)", () => {
+  const catalog = buildCatalog();
+  const global = new Map(catalog.groupsIn("global").map((g) => [g.letter, g.id]));
+  assert.deepEqual([...global.keys()].sort(), ["A", "B", "G", "P"]);
+  for (const group of catalog.groups) {
+    if (group.context === "global") continue;
+    assert.ok(
+      !global.has(group.letter),
+      `${group.context}.${group.id} uses ${group.letter}, the letter of global.${global.get(group.letter)}`,
+    );
+  }
+});
+
+// A menu level holds a context's groups, those of the same-tier contexts it
+// overlaps (the Launchpad tree's Entries sits beside the Launchpad's), and
+// the global groups.
+test("menu letters are unique at each menu level, overlapping contexts and global groups included", () => {
+  const catalog = buildCatalog();
+  const global = catalog.groupsIn("global");
+  for (const context of catalog.contexts) {
+    const page = catalog.contexts
+      .filter((other) => other.id !== "global" && contextsConflict(catalog.contexts, context.id, other.id))
+      .flatMap((other) => catalog.groupsIn(other.id));
+    const level = context.id === "global" ? global : [...page, ...global];
+    const seen = new Map();
+    for (const group of level) {
+      assert.ok(!seen.has(group.letter), `${context.id}: ${group.id} and ${seen.get(group.letter)} share ${group.letter}`);
+      seen.set(group.letter, group.id);
+    }
+  }
+});
+
+test("no menu group uses K, Q or H", () => {
+  for (const group of buildCatalog().groups) {
+    assert.match(group.letter, /^[A-Z]$/, group.id);
+    assert.ok(!["K", "Q", "H"].includes(group.letter), `${group.context}.${group.id} uses ${group.letter}`);
+  }
+});
+
+test("every menu group has a label, an icon, a tone and a description", () => {
+  const groups = buildCatalog().groups;
+  assert.ok(groups.length >= 4);
+  for (const group of groups) {
+    for (const field of ["label", "icon", "tone", "description"]) {
+      assert.ok(typeof group[field] === "string" && group[field].length > 0, `${group.context}.${group.id} has no ${field}`);
+    }
   }
 });

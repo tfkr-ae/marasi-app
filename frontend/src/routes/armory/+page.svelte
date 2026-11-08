@@ -37,7 +37,7 @@
 	} from "lucide-svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/stores";
-	import MarasiKeys from "../../lib/components/MarasiMenu/MarasiKeys.svelte";
+	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { armoryDrawer, useMenuActions } from "../../lib/keybindings/app.js";
 	import { activeCountsOf, armoryStore, drawerShareOf } from "../../stores/armoryStore";
 	import {
@@ -733,7 +733,7 @@
 <svelte:window on:keydown|capture={onWindowKeydown} />
 
 <div class="flex h-full min-h-0 overflow-hidden text-sm">
-	<MarasiKeys {menuOptions} />
+	<MarasiMenu paletteTier="page" pageName="Armory" pageEntries={menuOptions} />
 	<ArmoryDock
 		templates={filteredTemplates}
 		runsByTemplate={$armoryStore.runsByTemplate}

@@ -608,3 +608,149 @@ func resolveActiveKeybindings(config KeybindingConfig, actions KeybindingCatalog
 	}
 	return nil, fmt.Errorf("active profile %q does not exist", config.ActiveProfile)
 }
+
+// letterKeybindingCatalog is testKeybindingCatalog with menu groups, the way
+// the frontend describes them: two global groups, two in the Ledger drawer,
+// one in the WebSocket drawer and one with the drawer closed. Mirrors the
+// menu letter fixtures in profiles.test.js.
+func letterKeybindingCatalog() KeybindingCatalog {
+	catalog := testKeybindingCatalog()
+	catalog.Groups = []KeybindingGroup{
+		{ID: "global.go", Context: "global", Label: "Go to", Letter: "G"},
+		{ID: "global.project", Context: "global", Label: "Project", Letter: "P"},
+		{ID: "ledger.drawer-open.copy", Context: "ledger.drawer-open", Label: "Copy", Letter: "C"},
+		{ID: "ledger.drawer-open.send", Context: "ledger.drawer-open", Label: "Send", Letter: "S"},
+		{ID: "ledger.drawer-open.websocket.frames", Context: "ledger.drawer-open.websocket", Label: "Frames", Letter: "F"},
+		{ID: "ledger.drawer-closed.view", Context: "ledger.drawer-closed", Label: "View", Letter: "V"},
+	}
+	return catalog
+}
+
+// withLetters is the known factory section with the default profile renamed
+// Work and holding letter overrides, given as group, letter pairs.
+func withLetters(pairs ...string) KeybindingConfig {
+	config := knownKeybindings()
+	config.Profiles[0].Name = "Work"
+	for i := 0; i < len(pairs); i += 2 {
+		config.Profiles[0].Letters = append(config.Profiles[0].Letters, KeybindingLetter{Group: pairs[i], Letter: pairs[i+1]})
+	}
+	return config
+}
+
+func TestAppKeybindingMenuLetters(t *testing.T) {
+	t.Run("should keep a profile's menu letters across saves and restarts, and write none for factory letters", func(t *testing.T) {
+		dir := t.TempDir()
+		app := loadConfigApp(t, dir)
+		config := withLetters("global.go", "X", "compass.filters", "F")
+
+		saved, err := app.SaveKeybindings(config, letterKeybindingCatalog())
+		if err != nil {
+			t.Fatalf("saving keybindings: %v", err)
+		}
+		want := []KeybindingLetter{{Group: "global.go", Letter: "X"}, {Group: "compass.filters", Letter: "F"}}
+		if !reflect.DeepEqual(saved.Config.Profiles[0].Letters, want) {
+			t.Fatalf("wanted: %+v\ngot: %+v", want, saved.Config.Profiles[0].Letters)
+		}
+		restarted := loadConfigApp(t, dir).GetKeybindings()
+		if restarted.Problem != "" || !reflect.DeepEqual(restarted.Config.Profiles[0].Letters, want) {
+			t.Fatalf("wanted after restart: %+v\ngot: %+v (problem %q)", want, restarted.Config.Profiles[0].Letters, restarted.Problem)
+		}
+		if section := readAppConfig(t, dir); !strings.Contains(section, "letters:") || !strings.Contains(section, "group: global.go") {
+			t.Fatalf("wanted the letters in the app config\ngot:\n%s", section)
+		}
+
+		// Reset: the profile back on the factory letters stores none.
+		if _, err := app.SaveKeybindings(withLetters(), letterKeybindingCatalog()); err != nil {
+			t.Fatalf("saving the reset profile: %v", err)
+		}
+		if section := readAppConfig(t, dir); strings.Contains(section, "letters") {
+			t.Fatalf("wanted no letters after a reset\ngot:\n%s", section)
+		}
+		if got := loadConfigApp(t, dir).GetKeybindings().Config.Profiles[0].Letters; len(got) != 0 {
+			t.Fatalf("wanted the factory letters after a reset\ngot: %+v", got)
+		}
+	})
+
+	t.Run("should refuse a letter clash or an unusable letter, naming the groups, and leave disk unchanged", func(t *testing.T) {
+		cases := map[string]struct {
+			config KeybindingConfig
+			want   string
+		}{
+			"page group on a global letter":    {withLetters("ledger.drawer-open.copy", "G"), `profile "Work": Go to (global) and Copy (ledger.drawer-open) both use menu letter G`},
+			"two groups of one page context":   {withLetters("ledger.drawer-open.send", "C"), `profile "Work": Copy (ledger.drawer-open) and Send (ledger.drawer-open) both use menu letter C`},
+			"two global groups":                {withLetters("global.project", "G"), `profile "Work": Go to (global) and Project (global) both use menu letter G`},
+			"groups in overlapping contexts":   {withLetters("ledger.drawer-open.websocket.frames", "S"), `profile "Work": Send (ledger.drawer-open) and Frames (ledger.drawer-open.websocket) both use menu letter S`},
+			"K":                                {withLetters("global.go", "K"), `profile "Work": Go to (global): menu letter K is reserved; K, Q and H are never menu letters`},
+			"Q":                                {withLetters("ledger.drawer-open.copy", "Q"), `profile "Work": Copy (ledger.drawer-open): menu letter Q is reserved; K, Q and H are never menu letters`},
+			"H":                                {withLetters("global.go", "H"), `profile "Work": Go to (global): menu letter H is reserved; K, Q and H are never menu letters`},
+			"a digit":                          {withLetters("global.go", "1"), `profile "Work": Go to (global): menu letter "1" is not a single letter A–Z`},
+			"a lowercase letter":               {withLetters("global.go", "x"), `profile "Work": Go to (global): menu letter "x" is not a single letter A–Z`},
+			"two letters":                      {withLetters("global.go", "XY"), `profile "Work": Go to (global): menu letter "XY" is not a single letter A–Z`},
+			"no letter":                        {withLetters("global.go", ""), `profile "Work": Go to (global): menu letter "" is not a single letter A–Z`},
+			"a reserved letter, dormant group": {withLetters("compass.filters", "Q"), `profile "Work": compass.filters: menu letter Q is reserved; K, Q and H are never menu letters`},
+			"an invalid group id":              {withLetters("Go to", "X"), `profile "Work" menu group "Go to": invalid group id`},
+			"a group given twice":              {withLetters("global.go", "X", "global.go", "Y"), `profile "Work": Go to (global): menu letter given twice`},
+		}
+		for name, c := range cases {
+			t.Run(name, func(t *testing.T) {
+				dir := t.TempDir()
+				app := loadConfigApp(t, dir)
+				before := readAppConfig(t, dir)
+				live := app.GetKeybindings()
+
+				_, err := app.SaveKeybindings(c.config, letterKeybindingCatalog())
+				if err == nil || !strings.Contains(err.Error(), c.want) {
+					t.Fatalf("wanted an error containing: %q\ngot: %v", c.want, err)
+				}
+				if after := readAppConfig(t, dir); after != before {
+					t.Fatalf("wanted disk unchanged:\n%s\ngot:\n%s", before, after)
+				}
+				if got := app.GetKeybindings(); !reflect.DeepEqual(got, live) {
+					t.Fatalf("wanted live config unchanged: %+v\ngot: %+v", live, got)
+				}
+			})
+		}
+	})
+
+	t.Run("should allow groups in different page contexts to share a letter, and a moved letter to free the factory one", func(t *testing.T) {
+		for _, config := range []KeybindingConfig{
+			withLetters("ledger.drawer-closed.view", "C", "ledger.drawer-open.websocket.frames", "V"),
+			withLetters("global.go", "X", "ledger.drawer-open.copy", "G"),
+			withLetters("compass.filters", "G"),
+		} {
+			if _, err := loadConfigApp(t, t.TempDir()).SaveKeybindings(config, letterKeybindingCatalog()); err != nil {
+				t.Fatalf("wanted %+v saved\ngot: %v", config.Profiles[0].Letters, err)
+			}
+		}
+	})
+
+	// A letter problem never drops the profile on load (the "keybinding
+	// profiles override factory defaults" ADR): the frontend ignores a letter
+	// it can't use, and only a save is refused.
+	t.Run("should keep a saved profile whose menu letters can't be used, and refuse to save it", func(t *testing.T) {
+		dir := t.TempDir()
+		writeAppConfig(t, dir, "keybindings:\n  version: 1\n  active_profile: mine\n  profiles:\n    - id: mine\n      name: Mine\n"+
+			"      overrides:\n        macos:\n          - action: global.go-home\n            keys: [meta+j]\n"+
+			"      letters:\n        - group: global.go\n          letter: K\n        - group: global.project\n          letter: X\n        - group: global.project\n          letter: \"Y\"\n")
+
+		app := loadConfigApp(t, dir)
+		state := app.GetKeybindings()
+		if state.Problem != "" {
+			t.Fatalf("wanted no problem\ngot: %q", state.Problem)
+		}
+		profile := state.Config.Profiles[0]
+		wantLetters := []KeybindingLetter{{Group: "global.go", Letter: "K"}, {Group: "global.project", Letter: "X"}, {Group: "global.project", Letter: "Y"}}
+		if profile.ID != "mine" || !reflect.DeepEqual(profile.Letters, wantLetters) || !reflect.DeepEqual(profile.Overrides[platformMacOS][0].Keys, []string{"meta+j"}) {
+			t.Fatalf("wanted the saved profile kept\ngot: %+v", profile)
+		}
+		_, err := app.SaveKeybindings(state.Config, letterKeybindingCatalog())
+		for _, want := range []string{
+			`profile "Mine": Go to (global): menu letter K is reserved; K, Q and H are never menu letters`,
+			`profile "Mine": Project (global): menu letter given twice`,
+		} {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("wanted the save refused with %q\ngot: %v", want, err)
+			}
+		}
+	})
+}

@@ -7,7 +7,7 @@
     import { Accordion, AccordionItem } from "@skeletonlabs/skeleton";
     import { SettingsIcon, ToggleLeftIcon } from "lucide-svelte";
     import * as Icons from "lucide-svelte";
-    import MarasiKeys from "../../../lib/components/MarasiMenu/MarasiKeys.svelte";
+    import MarasiMenu from "../../../lib/components/MarasiMenu/MarasiMenu.svelte";
     import { registerMenuActions } from "../../../lib/keybindings/app.js";
     import {
         extensionMenuActionId,
@@ -79,7 +79,7 @@
     onDestroy(() => unregisterMenu());
 </script>
 
-<MarasiKeys {menuOptions} />
+<MarasiMenu paletteTier="page" pageName={extensionName} pageEntries={menuOptions} />
 <Accordion rounded="false" padding="py-3 px-3" regionControl="text-sm font-bold">
     <AccordionItem bind:open={accOpened}>
         <svelte:fragment slot="lead"><SettingsIcon size="16" /></svelte:fragment>

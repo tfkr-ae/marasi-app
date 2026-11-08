@@ -3,14 +3,13 @@
 	// replacement), then Add binding and Reset in fixed positions so every
 	// row's buttons line up.
 	import { Plus, RotateCcw, X } from "lucide-svelte";
+	import IconButton from "./IconButton.svelte";
 
 	export let row;
 	export let disabled = false;
 	export let onRecord; // (index?) => void; no index adds an alternative
 	export let onRemove; // (index) => void
 	export let onReset; // () => void
-
-	const iconButton = "btn h-8 w-8 shrink-0 p-0 variant-soft-primary !border-0 !ring-0";
 </script>
 
 <div class="flex shrink-0 items-center justify-end gap-2">
@@ -35,20 +34,13 @@
 			</span>
 		{/each}
 	</div>
-	<button
-		type="button"
-		class={iconButton}
-		{disabled}
-		title="Add binding"
-		aria-label="Add binding to {row.action.label}"
-		on:click={() => onRecord()}><Plus size={16} /></button
+	<IconButton {disabled} title="Add binding" label="Add binding to {row.action.label}" on:click={() => onRecord()}
+		><Plus size={16} /></IconButton
 	>
-	<button
-		type="button"
-		class={iconButton}
+	<IconButton
 		disabled={disabled || !row.resettable}
 		title={row.available === false ? row.note : row.resettable ? "Reset to default" : "Already the default"}
-		aria-label="Reset {row.action.label}"
-		on:click={onReset}><RotateCcw size={16} /></button
+		label="Reset {row.action.label}"
+		on:click={onReset}><RotateCcw size={16} /></IconButton
 	>
 </div>

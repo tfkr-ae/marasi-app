@@ -34,11 +34,22 @@ type KeybindingOverride struct {
 // KnownActions lists the catalog action ids the profile was last saved
 // against; an action missing from it is new to the profile, and its factory
 // defaults inherit only when they do not collide with a customization.
+// Letters overrides menu groups' menu letters on both platforms; a group
+// with none keeps its factory letter. It is left out of the file when empty.
 type KeybindingProfile struct {
 	ID           string                          `json:"id" yaml:"id"`
 	Name         string                          `json:"name" yaml:"name"`
 	Overrides    map[string][]KeybindingOverride `json:"overrides" yaml:"overrides"`
 	KnownActions []string                        `json:"knownActions" yaml:"known_actions"`
+	Letters      []KeybindingLetter              `json:"letters,omitempty" yaml:"letters,omitempty"`
+}
+
+// KeybindingLetter is one menu group's menu letter override. Group is the
+// group id "<context>.<group>"; like action ids, it is a value, not a map key,
+// because Viper lowercases keys and splits them at dots.
+type KeybindingLetter struct {
+	Group  string `json:"group" yaml:"group"`
+	Letter string `json:"letter" yaml:"letter"`
 }
 
 // KeybindingConfig is the persisted keybindings section.
@@ -118,6 +129,16 @@ func (a *App) GetKeybindings() KeybindingState {
 type KeybindingCatalog struct {
 	Actions  []KeybindingAction  `json:"actions"`
 	Contexts []KeybindingContext `json:"contexts"`
+	Groups   []KeybindingGroup   `json:"groups"`
+}
+
+// KeybindingGroup is a menu group with its factory menu letter. ID is
+// "<context>.<group>", the id profiles key their letter overrides by.
+type KeybindingGroup struct {
+	ID      string `json:"id"`
+	Context string `json:"context"`
+	Label   string `json:"label"`
+	Letter  string `json:"letter"`
 }
 
 // KeybindingContext is a menu context's collision data. Overlaps lists

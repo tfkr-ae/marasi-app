@@ -1,6 +1,7 @@
 <script>
 	// The two toolbar fields: Profile (select plus its Manage menu) and
-	// Platform (select plus Reset for that platform). Choosing a profile or
+	// Platform (select plus Reset for that platform's bindings and the
+	// profile's menu letters). Choosing a profile or
 	// platform only changes what the modal edits; it never activates a
 	// profile or changes this device's dispatch. Every Manage entry and Reset
 	// is a draft edit (onEdit) that only Save persists, except Export, which
@@ -15,12 +16,12 @@
 		deleteBlocker,
 		deleteProfile,
 		duplicateProfile,
-		isPlatformCustomized,
+		isProfileCustomized,
 		makeActive,
 		makeActiveBlocker,
 		profileNameProblem,
 		renameProfile,
-		resetPlatform,
+		resetProfile,
 		suggestProfileName,
 	} from "../../keybindings/settings.js";
 	import ModalCard from "./ModalCard.svelte";
@@ -48,7 +49,7 @@
 	$: pending = menuOpen || Boolean(naming) || Boolean(notice);
 	$: profile = draft.profiles.find((p) => p.id === profileId) ?? draft.profiles[0];
 	$: variant = { profileId: profile.id, platform };
-	$: canResetPlatform = isPlatformCustomized(catalog, draft, variant);
+	$: canResetPlatform = isProfileCustomized(catalog, draft, variant);
 	$: nameProblem = naming ? profileNameProblem(draft, naming.value, naming.profileId) : "";
 	$: activeBlocker = makeActiveBlocker(draft, profile.id);
 	$: deleteReason = deleteBlocker(draft, profile.id);
@@ -178,9 +179,9 @@
 		const at = variant;
 		onConfirm({
 			title: `Reset ${name} bindings?`,
-			body: `Every action in ${profile.name} returns to its ${name} default. The other platform is unchanged.`,
+			body: `${name} bindings and menu letters return to their defaults.`,
 			label: "Reset",
-			run: () => onEdit(resetPlatform(catalog, draft, at)),
+			run: () => onEdit(resetProfile(catalog, draft, at)),
 		});
 	}
 
@@ -255,8 +256,8 @@
 				class={sideButton}
 				disabled={!canResetPlatform}
 				title={canResetPlatform
-					? `Reset every ${platformNames[platform]} binding in ${profile.name}`
-					: `Every ${platformNames[platform]} binding in ${profile.name} is already the default`}
+					? `Reset every ${platformNames[platform]} binding and menu letter in ${profile.name}`
+					: `Every ${platformNames[platform]} binding and menu letter in ${profile.name} is already the default`}
 				on:click={confirmResetPlatform}
 			>
 				<RotateCcw size={16} class="mr-1" /> Reset
