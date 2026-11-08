@@ -588,3 +588,17 @@ test("pagesOf groups page/state entries under one page, in order, with summed co
     { actionCount: 8, unboundCount: 1, conflictCount: 2 },
   );
 });
+
+test("Connections… has no factory key, isn't flagged unbound, and takes a key in a custom profile", () => {
+  const real = buildCatalog();
+  const target = { profileId: "default", platform: MACOS, actionId: "global.connections" };
+  const draft = openDraft(null, real);
+  const row = (profile) =>
+    browse({ catalog: real, profile, platform: MACOS }).groups.flatMap((g) => g.all).find((r) => r.action.id === "global.connections");
+  assert.deepEqual(row(draft.profiles[0]).bindings, []);
+  assert.equal(row(draft.profiles[0]).status, "");
+
+  const bound = addBinding(real, draft, target, "meta+shift+9");
+  assert.deepEqual(row(bound.profiles[0]).bindings, ["meta+shift+9"]);
+  assert.deepEqual(saveProblems(real, bound), []);
+});
