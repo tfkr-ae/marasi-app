@@ -19,6 +19,13 @@ function group(context, id, label, letter, icon, tone, description) {
   return Object.freeze({ context, id, label, letter, icon, tone, description });
 }
 
+// A menu group's id in profiles and the menu model: "<context>.<group>".
+export const menuGroupId = (group) => `${group.context}.${group.id}`;
+
+// The Ledger's Focus group, the same with the drawer open or closed.
+const ledgerFocus = (context) =>
+  group(context, "focus", "Focus", "F", "Crosshair", "orange", "Jump to search, filter or the sitemap");
+
 // The factory menu groups. The global letters (G, P, B, A) are in use at
 // the top level of every menu, so no page group may use them.
 export const FACTORY_MENU_GROUPS = Object.freeze([
@@ -29,12 +36,12 @@ export const FACTORY_MENU_GROUPS = Object.freeze([
   // The Ledger. With the drawer open, the WebSocket stream action stays
   // loose; with it closed, only Focus is a group.
   group("ledger.drawer-open", "navigate", "Navigate", "N", "ArrowDownUp", "indigo", "Move between requests"),
-  group("ledger.drawer-open", "focus", "Focus", "F", "Crosshair", "orange", "Jump to search, filter or the sitemap"),
+  ledgerFocus("ledger.drawer-open"),
   group("ledger.drawer-open", "send", "Send to", "S", "Send", "violet", "Hand requests to another tool"),
   group("ledger.drawer-open", "logbook", "Logbook", "L", "BookOpenCheck", "emerald", "Findings and test cases"),
   group("ledger.drawer-open", "copy", "Copy", "C", "Copy", "sky", "URLs and raw HTTP"),
   group("ledger.drawer-open", "view", "View", "V", "Eye", "rose", "Notes, metadata and layout"),
-  group("ledger.drawer-closed", "focus", "Focus", "F", "Crosshair", "orange", "Jump to search, filter or the sitemap"),
+  ledgerFocus("ledger.drawer-closed"),
   // The Launchpad. Entries holds the tree's actions, which share its menu.
   group("launchpad", "launch", "Launch", "L", "Rocket", "violet", "Create, edit and launch requests"),
   group("launchpad", "navigate", "Navigate", "N", "ArrowDownUp", "indigo", "Move between launchpads and entries"),

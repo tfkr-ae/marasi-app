@@ -154,11 +154,8 @@ export function importProfile(catalog, draft, text) {
   const name = suggestProfileName(draft, file.name);
   const candidate = { id: newProfileId(draft, name), name, overrides: file.overrides, knownActions: file.knownActions, letters: file.letters };
   const [problem] = validateProfile(catalog, candidate);
-  if (problem?.platform === null) throw new Error(problem.message.slice(`${candidate.name}: `.length));
-  if (problem) {
-    const prefix = `${candidate.name} (${problem.platform}): `;
-    throw new Error(`${PLATFORM_NAMES[problem.platform]}: ${problem.message.slice(prefix.length)}`);
-  }
+  if (problem?.platform === null) throw new Error(problem.detail);
+  if (problem) throw new Error(`${PLATFORM_NAMES[problem.platform]}: ${problem.detail}`);
   const imported = settleProfile(catalog, candidate);
   return { draft: { ...draft, profiles: [...draft.profiles, imported] }, profileId: imported.id, name };
 }

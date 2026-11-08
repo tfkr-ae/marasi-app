@@ -17,7 +17,7 @@
 // primary is ⌘ on macOS and Ctrl on Windows/Linux. The menu shortcut and
 // primary + a reserved menu letter (menuGroups.js) are never menu keys.
 import { OPEN_MENU } from "../../keybindings/keymap.js";
-import { RESERVED_MENU_LETTERS } from "../../keybindings/menuGroups.js";
+import { menuGroupId, RESERVED_MENU_LETTERS } from "../../keybindings/menuGroups.js";
 import { MACOS } from "../../keybindings/platform.js";
 import { matchesMenuSearch } from "./menuSearch.js";
 
@@ -90,7 +90,7 @@ function buildSection(scope, entries, catalog, letters) {
     };
     const definition = action?.group ? catalog.group(action.context, action.group) : null;
     if (definition) {
-      const id = `${definition.context}.${definition.id}`;
+      const id = menuGroupId(definition);
       if (!groups.has(id)) {
         groups.set(id, {
           kind: "group",

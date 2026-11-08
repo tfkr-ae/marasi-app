@@ -12,7 +12,7 @@ How a keyboard shortcut or a ⌘K menu item reaches its handler, and where a new
 
 ## Menu groups and menu letters
 
-- A menu group is defined in `FACTORY_MENU_GROUPS` (`menuGroups.js`): context, id, label, factory menu letter, icon (a lucide name) and tone, and a description. A menu action joins one through its `group` field (`inGroup` in `catalog.js`; extension navigation actions join Go to). The catalog exposes them as `groups`, `group(context, id)` and `groupsIn(context)`, and refuses an action whose group isn't in its context. Never rename a group id.
+- A menu group is defined in `FACTORY_MENU_GROUPS` (`menuGroups.js`): context, id, label, factory menu letter, icon (a lucide name) and tone, and a description. A menu action joins one through its `group` field (the `{ group }` option of `action` in `catalog.js`, or the `group` flag on a `pageActions` row; extension navigation actions join Go to). `menuGroupId` (`menuGroups.js`) gives a group's id, `<context>.<group>`. The catalog exposes them as `groups`, `group(context, id)` and `groupsIn(context)`, and refuses an action whose group isn't in its context. Never rename a group id.
 - `RESERVED_MENU_LETTERS` (K, Q, H) sits beside the factory letters in `menuGroups.js`. Change both there.
 - `groupStyle.js` maps a group's icon and tone names to the lucide component and Tailwind classes.
 - A menu key is primary + the group's menu letter; an action's own first primary binding (Shift and Alt kept); else primary + a letter derived from the label's distinctive words. The menu shortcut and primary + a reserved letter are never menu keys. Menu keys are off while the search has text. A group with one action in the entries is shown as that action.
@@ -24,7 +24,7 @@ How a keyboard shortcut or a ⌘K menu item reaches its handler, and where a new
 
 1. Add a row in `FACTORY_ACTIONS`, in its context's `pageActions` block. Never rename an existing id, because saved profiles key their overrides by it. Give every built-in action a default key: the factory profile must have no unbound action (`settings.test.js`). Unmodified Escape, Tab and Enter are reserved (`isReservedBinding`), so a page handles them itself, as the Ledger and Logbook do with Esc. A bare key, such as the Logbook's N, is allowed; it never runs while focus is in a field or editor.
 2. A new context also needs an entry in `CONTEXTS`, and a field in `shortcutState` if its eligibility needs new UI state.
-3. For a global action, set its menu group with `inGroup` (or leave it loose). Add `{actionId, icon, handler}` to the page's menu array, which it passes to both `useMenuActions` and its menu (`MarasiMenu`). A page action joins a menu group with the `group` flag on its `pageActions` row. For `global.*`, add to the `handlers` and `icons` maps in `GlobalMenu.svelte`.
+3. For a global action, set its menu group with `action`'s `{ group }` option (or leave it loose). Add `{actionId, icon, handler}` to the page's menu array, which it passes to both `useMenuActions` and its menu (`MarasiMenu`). A page action joins a menu group with the `group` flag on its `pageActions` row. For `global.*`, add to the `handlers` and `icons` maps in `GlobalMenu.svelte`.
 4. If a row menu or the Ledger drawer rail shows the action, give the item the same `actionId`. See `ledger.md` and `launchpad.md`.
 5. If the action opens a modal, pass `toggleAction: "<actionId>"` to `modalStore.trigger`, so the same key closes it (`overlayIsolation.js`).
 6. Test the key in `menus.test.js`. It also catches two actions in one context sharing a key.

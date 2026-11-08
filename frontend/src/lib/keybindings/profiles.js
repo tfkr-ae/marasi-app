@@ -2,7 +2,7 @@ import { contextsConflict } from "./contexts.js";
 import { isReservedBinding, reservedBindingProblem } from "./gate.js";
 import { normalizeBinding } from "./keys.js";
 import { createKeymap, OPEN_MENU } from "./keymap.js";
-import { RESERVED_MENU_LETTERS } from "./menuGroups.js";
+import { menuGroupId, RESERVED_MENU_LETTERS } from "./menuGroups.js";
 import { PLATFORMS } from "./platform.js";
 
 // Keybinding profiles (docs/adr/2026-10-10-keybinding-profiles-override-factory-defaults.md), independent of where they are stored:
@@ -48,8 +48,7 @@ export function variantOverrides(profile, platform) {
   return Object.fromEntries((profile?.overrides?.[platform] ?? []).map(({ action, keys }) => [action, keys]));
 }
 
-// A menu group's id in profiles and the menu model: "<context>.<group>".
-export const menuGroupId = (group) => `${group.context}.${group.id}`;
+export { menuGroupId };
 
 // The profile's menu letter overrides as { [groupId]: letter }, the shape
 // the menu model takes.
@@ -93,6 +92,7 @@ function problem(profile, platform, kind, actions, binding, message) {
     kind,
     actions,
     binding,
+    detail: message,
     message: `${profile.name} (${platform}): ${message}`,
   };
 }
@@ -106,6 +106,7 @@ function letterProblem(profile, kind, groups, letter, message) {
     actions: [],
     groups,
     letter,
+    detail: message,
     message: `${profile.name}: ${message}`,
   };
 }
@@ -174,7 +175,8 @@ export function validateLetters(catalog, profile) {
 //                  binding (the global context is always eligible, so it
 //                  would win wherever that context is)
 // then its menu letter problems (validateLetters), which hold on every
-// platform and have a null platform.
+// platform and have a null platform. A problem's `message` names the profile
+// (and platform) before its explanation, which `detail` holds alone.
 export function validateProfile(catalog, profile) {
   const problems = [];
   for (const platform of PLATFORMS) {

@@ -26,25 +26,22 @@ function both(...keys) {
   return { [MACOS]: keys, [WINDOWS_LINUX]: keys };
 }
 
-function action(id, label, description, keywords, defaults, context = "global") {
-  return { id, context, label, description, keywords, defaults };
-}
-
-// A menu action in the menu group `group` of its context (menuGroups.js).
-function inGroup(group, definition) {
-  return { ...definition, group };
+// `options` holds the action's context (global when absent) and flags such
+// as `group`, the menu group of its context it joins (menuGroups.js).
+function action(id, label, description, keywords, defaults, { context = "global", ...flags } = {}) {
+  return { id, context, label, description, keywords, defaults, ...flags };
 }
 
 // One page or drawer menu: each action's id is `<context>.<slug>`, so ids
 // stay unique when a key or label is reused in a mutually exclusive state.
-// A row's optional sixth element adds flags, such as `yieldsToEditors`: the
-// action never runs while focus is in an editor or text field, which keeps
-// its keys there (⌘⇧↓ selects to the end in CodeMirror).
+// A row's optional sixth element adds flags: `group`, its menu group, or
+// `yieldsToEditors`: the action never runs while focus is in an editor or
+// text field, which keeps its keys there (⌘⇧↓ selects to the end in
+// CodeMirror).
 function pageActions(context, rows) {
-  return rows.map(([slug, label, description, keywords, defaults, flags = {}]) => ({
-    ...action(`${context}.${slug}`, label, description, keywords, defaults, context),
-    ...flags,
-  }));
+  return rows.map(([slug, label, description, keywords, defaults, flags = {}]) =>
+    action(`${context}.${slug}`, label, description, keywords, defaults, { ...flags, context }),
+  );
 }
 
 // The built-in actions. An action listed here shows in the keybinding
@@ -55,29 +52,29 @@ function pageActions(context, rows) {
 // saved profiles key their overrides by id.
 export const FACTORY_ACTIONS = [
   action("global.open-menu", "Open Marasi Menu", "Open or close the Marasi menu", "menu, commands, palette", primary("k")),
-  inGroup("go", action("global.go-home", "Marasi", "Dashboard", "home, dashboard", primary("1"))),
-  inGroup("go", action("global.go-ledger", "Ledger", "View requests", "ledger", primary("2"))),
-  inGroup("go", action("global.go-compass", "Compass", "Configure scope", "compass", primary("3"))),
-  inGroup("go", action("global.go-checkpoint", "Checkpoint", "Intercept Requests", "checkpoint", primary("4"))),
-  inGroup("go", action("global.go-launchpad", "Launchpad", "Edit and Repeat Requests", "Launchpad", primary("5"))),
-  inGroup("go", action("global.go-armory", "Armory", "Create request templates", "armory,template,attack", primary("6"))),
-  inGroup("go", action("global.go-logbook", "Logbook", "Review test cases and findings", "logbook,findings,tests", primary("7"))),
-  inGroup("go", action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8"))),
-  inGroup("go", action("global.go-settings", "Settings", "Configure your settings", "settings", primary(","))),
-  inGroup("browser", action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"))),
-  inGroup("browser", action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d"))),
-  inGroup("browser", action("global.copy-certificate", "Copy Certificate", "Copy Certificate", "certificate,copy", primary("shift+,"))),
+  action("global.go-home", "Marasi", "Dashboard", "home, dashboard", primary("1"), { group: "go" }),
+  action("global.go-ledger", "Ledger", "View requests", "ledger", primary("2"), { group: "go" }),
+  action("global.go-compass", "Compass", "Configure scope", "compass", primary("3"), { group: "go" }),
+  action("global.go-checkpoint", "Checkpoint", "Intercept Requests", "checkpoint", primary("4"), { group: "go" }),
+  action("global.go-launchpad", "Launchpad", "Edit and Repeat Requests", "Launchpad", primary("5"), { group: "go" }),
+  action("global.go-armory", "Armory", "Create request templates", "armory,template,attack", primary("6"), { group: "go" }),
+  action("global.go-logbook", "Logbook", "Review test cases and findings", "logbook,findings,tests", primary("7"), { group: "go" }),
+  action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8"), { group: "go" }),
+  action("global.go-settings", "Settings", "Configure your settings", "settings", primary(","), { group: "go" }),
+  action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"), { group: "browser" }),
+  action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d"), { group: "browser" }),
+  action("global.copy-certificate", "Copy Certificate", "Copy Certificate", "certificate,copy", primary("shift+,"), { group: "browser" }),
   action("global.jump-to-toast", "Jump to Toast", "Jump to the active toast", "toast", primary(".")),
-  inGroup("project", action("global.open-project", "Open Project", "Open a project", "open project", primary("o"))),
-  inGroup("project", action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l"))),
-  inGroup("appearance", action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t"))),
-  inGroup("appearance", action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u"))),
-  inGroup("appearance", action("global.increase-text-size", "Increase Text Size", "Make all text one size larger", "text, font, size, larger, bigger, zoom in", primary("="))),
-  inGroup("appearance", action("global.decrease-text-size", "Decrease Text Size", "Make all text one size smaller", "text, font, size, smaller, zoom out", primary("-"))),
-  inGroup("appearance", action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0"))),
-  inGroup("project", action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u"))),
-  inGroup("project", action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", primary("9"))),
-  inGroup("browser", action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i"))),
+  action("global.open-project", "Open Project", "Open a project", "open project", primary("o"), { group: "project" }),
+  action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l"), { group: "project" }),
+  action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t"), { group: "appearance" }),
+  action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u"), { group: "appearance" }),
+  action("global.increase-text-size", "Increase Text Size", "Make all text one size larger", "text, font, size, larger, bigger, zoom in", primary("="), { group: "appearance" }),
+  action("global.decrease-text-size", "Decrease Text Size", "Make all text one size smaller", "text, font, size, smaller, zoom out", primary("-"), { group: "appearance" }),
+  action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0"), { group: "appearance" }),
+  action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u"), { group: "project" }),
+  action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", primary("9"), { group: "project" }),
+  action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i"), { group: "browser" }),
   ...pageActions("ledger.drawer-closed", [
     ["toggle-settings", "Toggle Query Fields", "Show or hide the query fields and examples", "settings, toggle, query, fields, help", primary("p")],
     ["focus-query", "Search", "Jump to search input", "search", primary("s"), { group: "focus" }],
@@ -315,17 +312,16 @@ function navigableExtensions(extensions) {
 // marked `positionalDefault`: they move with the order, so an inherited one
 // yields to any binding that collides with it (see createKeymap).
 export function extensionNavigationActions(extensions = []) {
-  return navigableExtensions(extensions).map((extension, index) => ({
-    ...action(
+  return navigableExtensions(extensions).map((extension, index) =>
+    action(
       extensionNavigationActionId(extension.Name),
       extension.Name,
       `Open ${extension.Name}`,
       `${extension.Name}`,
       index < 9 ? primary(`alt+${index + 1}`) : { [MACOS]: [], [WINDOWS_LINUX]: [] },
+      { positionalDefault: true, group: "go" },
     ),
-    positionalDefault: true,
-    group: "go",
-  }));
+  );
 }
 
 // An extension menu item's `keys`: `[mac, windows/linux]`, or one string in
@@ -397,7 +393,7 @@ export function extensionPageMenus(extensions = [], menus = {}) {
         "Toggle Settings Accordian",
         "settings, toggle",
         primary("p"),
-        context,
+        { context },
       ),
     );
     const items = Array.isArray(menus?.[name]) ? menus[name] : [];
@@ -414,7 +410,7 @@ export function extensionPageMenus(extensions = [], menus = {}) {
           String(item.subtitle ?? ""),
           String(item.keywords ?? ""),
           claimDefaults(extensionItemDefaults(item.keys), taken),
-          context,
+          { context },
         ),
       );
     }

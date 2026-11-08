@@ -151,17 +151,24 @@ export function resetGroupLetter(draft, { profileId, groupId }) {
   return updateLetters(draft, profileId, (list) => list.filter((l) => l.group !== groupId));
 }
 
+// The catalog's menu group ids, computed once per catalog.
+const groupIds = new WeakMap();
+function catalogGroupIds(catalog) {
+  if (!groupIds.has(catalog)) groupIds.set(catalog, new Set(catalog.groups.map(menuGroupId)));
+  return groupIds.get(catalog);
+}
+
 // Returns every catalog group of the profile to its factory letter. Letters
 // for groups the catalog lacks are kept, like dormant binding overrides.
 export function resetGroupLetters(catalog, draft, profileId) {
-  const known = new Set(catalog.groups.map(menuGroupId));
+  const known = catalogGroupIds(catalog);
   return updateLetters(draft, profileId, (list) => list.filter((l) => !known.has(l.group)));
 }
 
 // Whether the toolbar's Reset would change anything: the variant's
 // bindings (isPlatformCustomized) or the profile's catalog letters.
 export function isProfileCustomized(catalog, draft, variant) {
-  const known = new Set(catalog.groups.map(menuGroupId));
+  const known = catalogGroupIds(catalog);
   const profile = draft.profiles.find((item) => item.id === variant.profileId);
   return isPlatformCustomized(catalog, draft, variant) || (profile?.letters ?? []).some((l) => known.has(l.group));
 }
@@ -589,7 +596,7 @@ export function saveProblems(catalog, draft, current = {}) {
           groupId: group?.context ?? null,
           actionId: null,
           menuGroupId: first,
-          message: `${profile.name} · ${problem.message.slice(`${profile.name}: `.length)}`,
+          message: `${profile.name} · ${problem.detail}`,
         };
       }
       const [actionId, explanation] = explain(catalog, problem)[0];
