@@ -353,8 +353,24 @@ test("two groups of one page context, or two global groups, may not share a menu
 });
 
 test("groups in different page contexts may share a menu letter, and a moved letter frees the factory one", () => {
-  assert.deepEqual(letterMessages({ "ledger.drawer-closed.view": "C", "ledger.drawer-open.websocket.frames": "S" }), []);
+  assert.deepEqual(letterMessages({ "ledger.drawer-closed.view": "C", "ledger.drawer-open.websocket.frames": "V" }), []);
   assert.deepEqual(letterMessages({ "global.go": "X", "ledger.drawer-open.copy": "G" }), []);
+});
+
+// The WebSocket drawer overlaps the Ledger drawer, so both share one menu.
+test("groups in overlapping contexts are one menu level and may not share a menu letter", () => {
+  assert.deepEqual(letterMessages({ "ledger.drawer-open.websocket.frames": "S" }), [
+    "Work: Send (ledger.drawer-open) and Frames (ledger.drawer-open.websocket) both use menu letter S",
+  ]);
+});
+
+test("the Launchpad tree's Entries shares the Launchpad's menu, so it may not take Launch's letter", () => {
+  const app = buildCatalog();
+  const work = { ...factoryProfile("work", "Work"), knownActions: app.actions.map((a) => a.id), letters: [{ group: "launchpad.tree.entries", letter: "L" }] };
+  assert.deepEqual(
+    validateKeybindings(app, saved([work]).config).map((p) => p.message),
+    ["Work: Launch (launchpad) and Entries (launchpad.tree) both use menu letter L"],
+  );
 });
 
 test("a menu letter must be one capital letter A–Z", () => {

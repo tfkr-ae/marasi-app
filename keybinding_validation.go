@@ -405,7 +405,7 @@ func validateKeybindings(config KeybindingConfig, actions KeybindingCatalog) err
 	}
 	var problems []error
 	for _, profile := range config.Profiles {
-		for _, problem := range letterProblems(actions.Groups, profile) {
+		for _, problem := range letterProblems(catalog, actions.Groups, profile) {
 			problems = append(problems, fmt.Errorf("profile %q: %s", profile.Name, problem))
 		}
 		for _, platform := range keybindingPlatforms {
@@ -458,22 +458,12 @@ func nonMenu(a, b KeybindingAction) KeybindingAction {
 	return a
 }
 
-// letterProblems mirrors the letter-duplicate rule of validateLetters in
-// profiles.js: two groups at one menu level may not share a letter. A level
-// is the global groups, or one other context's groups with the global ones,
-// since every menu lists the global groups at its top. The letters are
-// already checked (checkKeybindingStructure); a group with no override keeps
-// its factory letter, and overrides for groups the catalog lacks are dormant.
-func letterProblems(groups []KeybindingGroup, profile KeybindingProfile) []string {
-	letters := map[string]string{}
-	for _, group := range groups {
-		letters[group.ID] = group.Letter
-	}
-	for _, override := range profile.Letters {
-		if _, ok := letters[override.Group]; ok {
-			letters[override.Group] = override.Letter
-		}
-	}
+// menuLevels mirrors menuLevels in profiles.js: the global groups, and for
+// each other context the global groups with the groups of every context it
+// conflicts with (itself and the same-tier contexts it overlaps, such as
+// launchpad.tree beside launchpad), since one menu lists them all. Groups
+// keep catalog order.
+func menuLevels(catalog keybindingCatalog, groups []KeybindingGroup) [][]KeybindingGroup {
 	var global []KeybindingGroup
 	var contexts []string
 	for _, group := range groups {
@@ -487,18 +477,36 @@ func letterProblems(groups []KeybindingGroup, profile KeybindingProfile) []strin
 	for _, context := range contexts {
 		level := slices.Clone(global)
 		for _, group := range groups {
-			if group.Context == context {
+			if group.Context != "global" && catalog.conflicting(context, group.Context) {
 				level = append(level, group)
 			}
 		}
 		levels = append(levels, level)
 	}
+	return levels
+}
+
+// letterProblems mirrors the letter-duplicate rule of validateLetters in
+// profiles.js: two groups at one menu level (menuLevels) may not share a
+// letter. The letters are already checked (checkKeybindingStructure); a
+// group with no override keeps its factory letter, and overrides for groups
+// the catalog lacks are dormant.
+func letterProblems(catalog keybindingCatalog, groups []KeybindingGroup, profile KeybindingProfile) []string {
+	letters := map[string]string{}
+	for _, group := range groups {
+		letters[group.ID] = group.Letter
+	}
+	for _, override := range profile.Letters {
+		if _, ok := letters[override.Group]; ok {
+			letters[override.Group] = override.Letter
+		}
+	}
 	var problems []string
 	reported := map[[2]string]bool{}
-	for _, level := range levels {
+	for _, level := range menuLevels(catalog, groups) {
 		for i, first := range level {
 			for _, second := range level[i+1:] {
-				pair := [2]string{first.ID, second.ID}
+				pair := [2]string{min(first.ID, second.ID), max(first.ID, second.ID)}
 				if letters[first.ID] != letters[second.ID] || reported[pair] {
 					continue
 				}

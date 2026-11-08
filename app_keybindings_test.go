@@ -679,6 +679,7 @@ func TestAppKeybindingMenuLetters(t *testing.T) {
 			"page group on a global letter":    {withLetters("ledger.drawer-open.copy", "G"), `profile "Work": Go to (global) and Copy (ledger.drawer-open) both use menu letter G`},
 			"two groups of one page context":   {withLetters("ledger.drawer-open.send", "C"), `profile "Work": Copy (ledger.drawer-open) and Send (ledger.drawer-open) both use menu letter C`},
 			"two global groups":                {withLetters("global.project", "G"), `profile "Work": Go to (global) and Project (global) both use menu letter G`},
+			"groups in overlapping contexts":   {withLetters("ledger.drawer-open.websocket.frames", "S"), `profile "Work": Send (ledger.drawer-open) and Frames (ledger.drawer-open.websocket) both use menu letter S`},
 			"K":                                {withLetters("global.go", "K"), `profile "Work" menu group "global.go": menu letter K is reserved; K, Q and H are never menu letters`},
 			"Q":                                {withLetters("ledger.drawer-open.copy", "Q"), `profile "Work" menu group "ledger.drawer-open.copy": menu letter Q is reserved; K, Q and H are never menu letters`},
 			"H":                                {withLetters("global.go", "H"), `profile "Work" menu group "global.go": menu letter H is reserved; K, Q and H are never menu letters`},
@@ -713,7 +714,7 @@ func TestAppKeybindingMenuLetters(t *testing.T) {
 
 	t.Run("should allow groups in different page contexts to share a letter, and a moved letter to free the factory one", func(t *testing.T) {
 		for _, config := range []KeybindingConfig{
-			withLetters("ledger.drawer-closed.view", "C", "ledger.drawer-open.websocket.frames", "S"),
+			withLetters("ledger.drawer-closed.view", "C", "ledger.drawer-open.websocket.frames", "V"),
 			withLetters("global.go", "X", "ledger.drawer-open.copy", "G"),
 			withLetters("compass.filters", "G"),
 		} {

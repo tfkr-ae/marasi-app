@@ -110,12 +110,21 @@ function letterProblem(profile, kind, groups, letter, message) {
   };
 }
 
-// The menu levels: the global groups, and each other context's groups with
-// the global ones, since every menu lists the global groups at its top.
+// The menu levels: the global groups, and for each other context the global
+// groups with the groups of every context it conflicts with
+// (contextsConflict: itself and the same-tier contexts it overlaps, such as
+// launchpad.tree beside launchpad), since one menu lists them all. Groups
+// keep catalog order. Mirrors menuLevels in keybinding_validation.go.
 function menuLevels(catalog) {
   const global = catalog.groups.filter((group) => group.context === "global");
   const contexts = [...new Set(catalog.groups.map((group) => group.context))].filter((id) => id !== "global");
-  return [global, ...contexts.map((id) => [...global, ...catalog.groups.filter((group) => group.context === id)])];
+  return [
+    global,
+    ...contexts.map((id) => [
+      ...global,
+      ...catalog.groups.filter((group) => group.context !== "global" && contextsConflict(catalog.contexts, id, group.context)),
+    ]),
+  ];
 }
 
 // Menu letter problems in one profile, on every platform (platform null):
@@ -139,7 +148,7 @@ export function validateLetters(catalog, profile) {
     level.forEach((first, i) => {
       for (const second of level.slice(i + 1)) {
         const letter = letters[menuGroupId(first)];
-        const pair = `${menuGroupId(first)} ${menuGroupId(second)}`;
+        const pair = [menuGroupId(first), menuGroupId(second)].sort().join(" ");
         if (letter !== letters[menuGroupId(second)] || reported.has(pair)) continue;
         reported.add(pair);
         problems.push(
