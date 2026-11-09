@@ -34,7 +34,7 @@ export async function setPort(id, port) {
   await connectionStore.load();
 }
 
-/** The instances the Marasi CLI lists; [] when it can't say. */
+/** The instances the Marasi CLI lists (`{instance, status, version, project, proxy_listener}`); [] when it can't say. */
 export async function listInstances() {
   try {
     return (await LocalInstances()) ?? [];
@@ -66,7 +66,7 @@ export async function removeConnection(id) {
 export function localInstanceControl(connection) {
   const instance = connection.instance || "default";
   return createInstanceControl({
-    running: async () => ((await LocalInstances()) ?? []).includes(instance),
+    running: async () => ((await LocalInstances()) ?? []).some((i) => i.instance === instance),
     owns: () => OwnsRun(connection.id),
     stop: () => StopLocalInstance(connection.id),
     start: () => StartLocalInstance(connection.id, ""),
