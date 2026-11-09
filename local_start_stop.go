@@ -58,28 +58,35 @@ func (a *App) StartLocalInstance(id, project string) error {
 	return nil
 }
 
+// LocalInstance is one instance the Marasi CLI lists on this machine.
+type LocalInstance struct {
+	Instance      string `json:"instance"`
+	Status        string `json:"status"`
+	Version       string `json:"version"`
+	Project       string `json:"project"`
+	ProxyListener string `json:"proxy_listener"`
+}
+
 // LocalInstances lists the instances the Marasi CLI reports on this machine
-// (`service list`), running or unhealthy, for the add form. An instance
-// that has never run, or is stopped, isn't listed; the form takes a typed
-// name for those.
-func (a *App) LocalInstances() ([]string, error) {
+// (`service list`), running or unhealthy, for the add form and a local
+// connection's Stop. An instance that has never run, or is stopped, isn't
+// listed; the form takes a typed name for those.
+func (a *App) LocalInstances() ([]LocalInstance, error) {
 	path, err := a.findCLI()
 	if err != nil {
 		return nil, codedError("finding the Marasi CLI", codeCLIMissing, nil, err)
 	}
 	var list struct {
-		Items []struct {
-			Instance string `json:"instance"`
-		} `json:"items"`
+		Items []LocalInstance `json:"items"` // a null proxy_listener reads as ""
 	}
 	if err := a.cli(&localInstance{cliPath: path}, nil, &list, "service", "list"); err != nil {
 		return nil, codedError("listing the local instances", codeInstanceFailed, nil, err)
 	}
-	names := make([]string, 0, len(list.Items))
+	instances := make([]LocalInstance, 0, len(list.Items))
 	for _, item := range list.Items {
 		if item.Instance != "" {
-			names = append(names, item.Instance)
+			instances = append(instances, item)
 		}
 	}
-	return names, nil
+	return instances, nil
 }

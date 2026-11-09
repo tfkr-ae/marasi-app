@@ -323,6 +323,14 @@ func (a *App) startLocal(l *localInstance, extra ...string) error {
 		return a.cli(l, []string{"MARASI_PASSWORD=" + password}, &started, args...)
 	}
 	err = start(port)
+	if err != nil && address != loopback && addressMissing(err) {
+		// The default address belongs to another network or machine (an app
+		// config copied from an old laptop): start on loopback this time and
+		// keep the setting.
+		log.Printf("[*] %s isn't an address on this machine, starting the local instance on %s", address, loopback)
+		address = loopback
+		err = start(port)
+	}
 	if err != nil && !fixed && port != "0" && portTaken(err) {
 		log.Printf("[*] proxy port %s:%s is taken, starting the local instance on a free port", address, port)
 		err = start("0")
@@ -349,7 +357,7 @@ func (a *App) startLocal(l *localInstance, extra ...string) error {
 // listenerDefaults is the proxy listener the app starts the local instance
 // on: default_address and default_port in app config, else 127.0.0.1:8080.
 func (a *App) listenerDefaults() (address, port string) {
-	address, port = "127.0.0.1", "8080"
+	address, port = loopback, "8080"
 	if a.Config != nil {
 		if a.Config.DefaultAddress != "" {
 			address = a.Config.DefaultAddress
@@ -359,6 +367,17 @@ func (a *App) listenerDefaults() (address, port string) {
 		}
 	}
 	return address, port
+}
+
+// loopback is where the proxy starts when the default address isn't there.
+const loopback = "127.0.0.1"
+
+// addressMissing reports whether a start failed because the proxy address
+// isn't one of this machine's (EADDRNOTAVAIL on macOS and Linux,
+// WSAEADDRNOTAVAIL on Windows).
+func addressMissing(err error) bool {
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "assign requested address") || strings.Contains(text, "requested address is not valid")
 }
 
 // portTaken reports whether a start failed because the proxy port is in use
