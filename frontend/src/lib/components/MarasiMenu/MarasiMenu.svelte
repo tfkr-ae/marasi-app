@@ -166,7 +166,12 @@
 		if (event.key?.toLowerCase() === "alt") letterHeld = false;
 	}
 
+	// A backdrop click targets the dialog itself. A row's click also bubbles
+	// here, after opening a group has already re-rendered and re-centred the
+	// smaller dialog, so its point may lie outside the new box: only the
+	// dialog's own clicks count.
 	function handleClickOutside(event) {
+		if (event.target !== dialog) return;
 		const rect = dialog.getBoundingClientRect();
 		if (
 			event.clientX < rect.left ||
