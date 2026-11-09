@@ -465,6 +465,68 @@ func TestConnectLocalStartsTheProxyOnAFreePortWhenTheDefaultIsTaken(t *testing.T
 	}
 }
 
+func TestConnectLocalStartsOnLoopbackWhenTheDefaultAddressIsNotOnThisMachine(t *testing.T) {
+	for _, text := range []string{
+		"listen tcp 10.100.128.151:8080: bind: can't assign requested address",
+		"listen tcp 10.100.128.151:8080: bind: cannot assign requested address",
+		"listen tcp 10.100.128.151:8080: bind: The requested address is not valid in its context.",
+	} {
+		t.Run(text, func(t *testing.T) {
+			cli := (&fakeCLI{}).
+				answer("service status", 1, notRunning).
+				answer("service status", 0, runOf("run-app")).
+				answer("service start", 1, `{"error":"binding proxy listener on address 10.100.128.151 port 8080: `+text+`"}`).
+				answer("service start", 0, started).
+				answer("service control pair", 0, paired)
+			app := localApp(t, cli)
+			if _, err := app.SetFlag("default_address", "10.100.128.151"); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := app.ConnectLocal(localConnectionID); err != nil {
+				t.Fatal(err)
+			}
+
+			starts := cli.startCalls()
+			if len(starts) != 2 {
+				t.Fatalf("started %d times, want the default address then loopback (calls %v)", len(starts), cli.subcommands())
+			}
+			if port, address := flagValue(starts[1].args, "--port"), flagValue(starts[1].args, "--address"); port != "8080" || address != "127.0.0.1" {
+				t.Fatalf("retry on %s:%s, want 127.0.0.1:8080", address, port)
+			}
+			if app.Config.DefaultAddress != "10.100.128.151" {
+				t.Fatalf("default_address = %q, want it kept", app.Config.DefaultAddress)
+			}
+		})
+	}
+}
+
+func TestConnectLocalFallsBackToLoopbackThenAFreePort(t *testing.T) {
+	cli := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-app")).
+		answer("service start", 1, `{"error":"listen tcp 10.1.1.1:8080: bind: can't assign requested address"}`).
+		answer("service start", 1, `{"error":"listen tcp 127.0.0.1:8080: bind: address already in use"}`).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired)
+	app := localApp(t, cli)
+	if _, err := app.SetFlag("default_address", "10.1.1.1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+
+	starts := cli.startCalls()
+	if len(starts) != 3 {
+		t.Fatalf("started %d times, want 3 (calls %v)", len(starts), cli.subcommands())
+	}
+	if port, address := flagValue(starts[2].args, "--port"), flagValue(starts[2].args, "--address"); port != "0" || address != "127.0.0.1" {
+		t.Fatalf("last start on %s:%s, want 127.0.0.1:0", address, port)
+	}
+}
+
 func TestConnectLocalStartsTheProxyOnTheConfiguredDefaultListener(t *testing.T) {
 	cli := (&fakeCLI{}).
 		answer("service status", 1, notRunning).
