@@ -2,6 +2,7 @@
 
 ## Sub-features
 
+- Connection section (first in the list): the connections with the active one's status, `Add connection`, the picked connection's details (as in the Connections modal, [dashboard.md](dashboard.md)), and When quitting (`[data-testid=when-quitting]`: `Ask`/`Keep Marasi running`/`Stop Marasi`, saved to `when_quitting` in `marasi_appconfig.yaml`)
 - Appearance section: Text size (`Small`/`Default`/`Large`/`X-Large`, saved to `text_size` in `marasi_appconfig.yaml`; the global `⌘=`/`⌘-`/`⌘0` step and reset it) and the Dark mode toggle
 - Vim, syntax mode, line wrapping (`wrap_mode`), default interface, and default port
 - Waypoint management
@@ -12,11 +13,11 @@
 - Maintenance section: Marasi's background jobs for the open project (search index, sitemap, formatted bodies) with their state, and Rebuild for the search index and the sitemap
 - Build version displayed beside the page heading (`dev` in a local development build)
 - Updates section, in two parts under sub-headings. Marasi App (`[data-testid=updates-app]`): the Channel (`Release`/`Nightly`), the update status with `Check`, `Check automatically`, and `Reinstall` of the latest release; the global `Check for updates…` action (`⌘⇧U`, id `global.check-for-updates`) runs the same check. Marasi CLI (`#cli`, `[data-testid=updates-cli]`): the CLI's Location with `Change`, Source, Version with `Check for CLI update` (`[data-testid=cli-check]`), the CLI Channel (`Follow app`/`Release`/`Nightly`), the connected service's own update line, and the CLI setup when no CLI is found. There is no separate Marasi CLI section; `?section=cli` and `?section=updates#cli` open Updates at its CLI part
-- Keybindings modal (`Configure Keybindings`): rebind menu actions per profile and platform, saved to the `keybindings` section of `marasi_appconfig.yaml`
+- Keybindings modal (`Configure Keybindings`): rebind menu actions per profile and platform, saved to the `keybindings` section of `marasi_appconfig.yaml`; each sidebar entry lists its menu groups above its actions (`[data-menu-groups]`, headed `Marasi` for the global ones), each with its `⌥` letter as a `Record a letter for <group>` button and Reset
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates (App and Marasi CLI) and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
+Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Connection, Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates (App and Marasi CLI) and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `global` (Settings has no page menu) in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
@@ -42,6 +43,12 @@ Keybindings: in Keyboard & Editor, `{"text":"Configure Keybindings"}` opens the 
 
 ```json
 {"name":"kb-save","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"text":"Configure Keybindings"},{"waitText":"Every page"},{"click":"button[aria-label=\"Add binding to Ledger\"]"},{"waitSelector":"[data-key-capture]"},{"key":"cmd+j"},{"waitText":"Unsaved changes"},{"text":"Save"},{"waitText":"Keybindings saved"},{"key":"cmd+j"},{"waitPath":"/ledger"}]}
+```
+
+When quitting, in the Connection section, writes `when_quitting` on click; set it back to `Ask` afterwards. Proven (`when_quitting: keep`, then `ask` again):
+
+```json
+{"name":"connection-section","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Connection"},{"waitText":"Where Marasi runs."},{"waitText":"Connected","within":"[data-testid=connection-item]"},{"waitText":"scratchpad","within":"[data-testid=connection-project]"},{"click":"[data-testid=when-quitting] [role=radio]","hasText":"Keep Marasi running"},{"waitSelector":"[data-testid=when-quitting] [role=radio][aria-checked=true]"}]}
 ```
 
 ## Gotchas

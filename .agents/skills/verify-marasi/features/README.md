@@ -15,4 +15,4 @@ Marasi's primary user interface is the Wails desktop app. Verification drives it
 | Application settings | [settings.md](settings.md) | Settings route opens and a reversible setting persists to isolated config |
 | Native flows | [native.md](native.md) | Each flow's stub, Go test, or check by hand on a native build |
 
-Use `.agents/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. Use `drive.sh <feature> compare "<visible label>" "<shortcut>"` when an in-page control also has a MarasiKeys binding. The feature files describe the additional actions needed for complete behavioral proof.
+Use `.agents/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. Use `drive.sh <feature> compare "<visible label>" "<shortcut>"` when an in-page control also has a Marasi menu keybinding. The feature files describe the additional actions needed for complete behavioral proof.

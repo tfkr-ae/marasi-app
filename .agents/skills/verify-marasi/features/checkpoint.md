@@ -78,7 +78,7 @@ Hold `/cp-a` and `/cp-b` again. `Drop n` asks; `Drop` on one item doesn't. The r
 {"name":"drop-n","steps":[
  {"waitText":"Drop 2"},
  {"key":"cmd+k"},{"waitSelector":"#commandmenu"},{"click":"#commandmenu"},{"key":"cmd+a"},{"insert":"drop"},
- {"click":"dialog[open] li","hasText":"Drop Picked Items"},{"waitText":"Drop 2 intercepted items?"},
+ {"click":"dialog[open] button","hasText":"Drop Picked Items"},{"waitText":"Drop 2 intercepted items?"},
  {"text":"Drop","within":".modal-footer"},{"waitText":"Dropped 2"},{"waitText":"Nothing intercepted"}]}
 ```
 
