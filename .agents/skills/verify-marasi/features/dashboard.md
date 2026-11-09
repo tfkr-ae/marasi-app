@@ -8,6 +8,7 @@
 - Open Project, Download Certificate, and Start Chrome actions
 - Switching projects: the `Switch Projects` picker, the opening screen (steps, a locked project), and the refusal while Checkpoint holds items
 - Global light/dark appearance toggle
+- The Connections modal: the rail's connection tile (`[data-testid=connection-tile]`, the connection's name, `Local`) or `⌘9` (`global.connections`, `Connections…` in the menu)
 
 ## How to get to it (user POV)
 
@@ -50,6 +51,14 @@ Drive the listener button (`[data-testid=home-listener]`, `Listener off` when th
 `lsof -nP -t -iTCP:<NP> -sTCP:LISTEN` must print the service PID (`service.pid`), not the app's. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal shows `No recent projects` until the list loads. `Browse Files...`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
 
 Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/dark mode with `Command+U`, and toggle it back. This proves the global shortcut reads the live theme after navigating away from the dashboard.
+
+Home's counts follow traffic without navigating. Proven, with a request sent through the proxy (`curl -x http://127.0.0.1:<proxy port> …`) a few seconds after the drive starts on a fresh project:
+
+```json
+{"name":"live-counts","steps":[{"waitText":"Total Requests\n\n0"},{"waitText":"Total Requests\n\n1","timeoutMs":15000}]}
+```
+
+Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cmd+9"`: the rail tile and `⌘9` both paint `Connections` (the connection list, `Add connection`, and the picked connection's status, Project, Service version, API level and Instance `Stop`). Settings › Connection shows the same list and details as a section ([settings.md](settings.md)).
 
 ### Switching projects
 
@@ -103,6 +112,6 @@ Run `retrynow` straight after restoring the CLI, inside the wait, or the schedul
 
 - Each verification launch picks its own free proxy port (`<proxy port>`, in `$MARASI_VERIFY_STATE_DIR/proxy-port`); an instance the app starts picks one with `--port 0`. The proxy belongs to the service process, never the app.
 - The proxy itself answers the host `marasi`: `curl -x 127.0.0.1:<proxy port> http://marasi/cert` returns the CA certificate (`application/x-x509-ca-cert`), the URL the first-run setup shows. Download Certificate needs a native save dialog ([native.md](native.md)). Start Chrome opens an external process. Record and clean up anything those actions create.
-- The Marasi menu (MarasiKeys) keeps a closed `<dialog>` of the same labels. The driver's hit-test skips those copies; never target a label by `textContent`.
-- `Project Dashboard` paints before the cards, log table, and listener status finish loading. Counts and scope refresh when Home mounts; the log and the listener update live from the stream. Wait for the specific value.
+- The Marasi menu keeps a closed `<dialog>` of the same labels. The driver's hit-test skips those copies; never target a label by `textContent`.
+- `Project Dashboard` paints before the cards, log table, and listener status finish loading. Counts and scope refresh when Home mounts; the counts also follow captured traffic live (`traffic.request`, reread at most every 500 ms), and the log and the listener update live from the stream. Wait for the specific value.
 - Shortcuts are gated by `frontend/src/lib/keybindings/gate.js`: unmodified keys never fire from inputs or editors; modified ones are dropped from form fields except on `/ledger`, `/logbook`, `/launchpad` and `/settings` (and the menu's own search field). An open modal (other than the WebSocket overlay) blocks all menu shortcuts, including global ones; the binding that opened the modal can still close it via `isModalToggle`. The WebSocket modal keeps its own contexts plus global.
