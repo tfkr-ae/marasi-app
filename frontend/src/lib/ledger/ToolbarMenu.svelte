@@ -83,7 +83,7 @@
 	{#if open}
 		<div
 			id="{id}Panel"
-			class="card absolute right-0 top-full z-40 mt-1 max-h-[60vh] overflow-auto shadow-xl {panelClass}"
+			class="absolute -right-px top-full z-40 max-h-[60vh] overflow-auto border border-surface-300-600-token bg-surface-100-800-token shadow-xl {panelClass}"
 			role="dialog"
 			aria-label={label}
 		>

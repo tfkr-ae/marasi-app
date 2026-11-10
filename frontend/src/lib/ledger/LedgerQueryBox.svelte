@@ -33,12 +33,34 @@
 	let syncing = false;
 	// True when the query runs past the box's one line.
 	let overflowing = false;
+	// CodeMirror opens suggestions under the caret; these move them so the
+	// list hangs from the toolbar's bottom border (drop), and the ready-made
+	// list fills the search area (inset, span): the box plus the Live
+	// indicator, between the dock's border and the first menu's divider.
+	let drop = 0;
+	let inset = 0;
+	let span = 0;
 	const wrapping = new Compartment();
 
 	function measureOverflow() {
 		view?.requestMeasure({
-			read: (v) => v.scrollDOM.scrollWidth > v.scrollDOM.clientWidth + 1,
-			write: (wide) => (overflowing = wide),
+			read: (v) => {
+				const caret = v.coordsAtPos(v.state.selection.main.head);
+				const bar = parent.closest(".ledger-toolbar")?.getBoundingClientRect();
+				const area = parent.closest(".ledger-search")?.getBoundingClientRect();
+				return {
+					wide: v.scrollDOM.scrollWidth > v.scrollDOM.clientWidth + 1,
+					drop: caret && bar ? bar.bottom - caret.bottom : 0,
+					inset: caret && area ? area.left - caret.left : 0,
+					span: area?.width ?? 0,
+				};
+			},
+			write: (m) => {
+				overflowing = m.wide;
+				drop = m.drop;
+				inset = m.inset;
+				span = m.span;
+			},
 		});
 	}
 
@@ -174,7 +196,12 @@
 							},
 						}),
 					),
-					autocompletion({ override: [completionSource], icons: false }),
+					autocompletion({
+						override: [completionSource],
+						icons: false,
+						// The ready-made list belongs to the whole box, not the caret.
+						tooltipClass: (state) => (state.doc.length ? "" : "ledger-query-ready"),
+					}),
 					wrapping.of([]),
 					// One line only: line breaks from typing or pasting become spaces.
 					EditorState.transactionFilter.of((tr) =>
@@ -193,7 +220,7 @@
 					}),
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged && !syncing) dispatch("change", update.state.doc.toString());
-						if (update.docChanged || update.geometryChanged) measureOverflow();
+						if (update.docChanged || update.selectionSet || update.geometryChanged) measureOverflow();
 					}),
 				],
 			}),
@@ -216,10 +243,14 @@
 	}
 </script>
 
-<svelte:window on:pointerdown|capture={onWindowPointerDown} />
+<svelte:window on:pointerdown|capture={onWindowPointerDown} on:resize={measureOverflow} />
 
 <div class="flex min-w-0 flex-1 items-start gap-1">
-	<div bind:this={parent} class="ledger-query min-w-0 flex-1 {expanded ? 'ledger-query-expanded' : ''}"></div>
+	<div
+		bind:this={parent}
+		class="ledger-query min-w-0 flex-1 {expanded ? 'ledger-query-expanded' : ''}"
+		style="--ledger-query-drop: {drop}px; --ledger-query-inset: {inset}px; --ledger-query-span: {span}px"
+	></div>
 	{#if overflowing || expanded}
 		<button
 			type="button"
@@ -287,6 +318,32 @@
 		box-shadow: 0 10px 25px rgb(0 0 0 / 0.18);
 		color: rgb(var(--color-surface-900));
 	}
+	/* Suggestions hang from the toolbar's border, so they draw no top border
+	   of their own. Field, operator and value labels start under the word
+	   being typed (the item's 10px padding plus the 1px border). */
+	.ledger-query :global(.cm-tooltip.cm-tooltip-autocomplete) {
+		margin-top: var(--ledger-query-drop);
+		margin-left: -11px;
+		border-top-width: 0;
+	}
+	/* The ready-made list fills the search area; the dock's border and the
+	   menu divider are its sides. */
+	.ledger-query :global(.cm-tooltip.cm-tooltip-autocomplete.ledger-query-ready) {
+		margin-left: var(--ledger-query-inset);
+		width: var(--ledger-query-span);
+		border-left-width: 0;
+		border-right-width: 0;
+	}
+	.ledger-query :global(.cm-tooltip.cm-tooltip-autocomplete.ledger-query-ready > ul) {
+		min-width: 0;
+		max-width: none;
+	}
+	/* Its text starts in line with the search icon (the area's 12px inset). */
+	.ledger-query :global(.cm-tooltip.cm-tooltip-autocomplete.ledger-query-ready > ul > li),
+	.ledger-query :global(.cm-tooltip.cm-tooltip-autocomplete.ledger-query-ready > ul > completion-section) {
+		padding-left: 12px;
+		padding-right: 12px;
+	}
 	:global(.dark) .ledger-query :global(.cm-tooltip) {
 		border-color: rgb(var(--color-surface-600));
 		background: rgb(var(--color-surface-800));
@@ -323,7 +380,11 @@
 		opacity: 0.6;
 		margin-left: 1.2em;
 	}
+	/* The note beside the list shares the list's right border, and its top
+	   border lies on the line above the chosen suggestion (the toolbar's
+	   border for the first). */
 	.ledger-query :global(.cm-tooltip.cm-completionInfo) {
+		margin-top: -1px;
 		padding: 6px 10px;
 		max-width: 22rem;
 		font-family: system-ui;
