@@ -26,7 +26,7 @@ Shortcuts: every menu shortcut for this feature is a catalog action in context `
 
 Run `scripts/drive.sh logbook` for route proof; it waits for `In progress`, which the dock's status toggle always paints.
 
-A fresh scratchpad has no records and no traffic. Send a few requests through the proxy first (see `ledger.md`; the recipes below link `/profile`, whose JSON body holds `admin`). Use a unique marker per run (`LB09L` in light, `LB09D` in dark) and change the waits that count records (`1 test case`) to match the project. Run the recipes in this order; each leaves the page as the next one expects. Check light and dark mode: switch with `{"key":"cmd+u"},{"waitSelector":"html.dark"}`.
+A fresh scratchpad has no records and no traffic. Send a few requests through the proxy first (see `ledger/capture-and-query.md`; the recipes below link `/profile`, whose JSON body holds `admin`). Use a unique marker per run (`LB09L` in light, `LB09D` in dark) and change the waits that count records (`1 test case`) to match the project. Run the recipes in this order; each leaves the page as the next one expects. Check light and dark mode: switch with `{"key":"cmd+u"},{"waitSelector":"html.dark"}`.
 
 **Modal: dirty prompt, Discard, Save and close.** X, Esc and a click on the backdrop each ask; Esc on the prompt keeps editing; Discard leaves nothing; Save and close creates the record.
 

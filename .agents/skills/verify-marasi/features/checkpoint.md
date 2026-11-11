@@ -119,7 +119,7 @@ CodeMirror puts `data-language` on `.cm-content`, so `div[data-language=lua] .cm
 
 ### WebSocket upgrade drop
 
-Narrow `interceptResponse` to the upgrade path (`return response:request():path() == "/ws-drop"`), start the upgrade, select its `RES 101` entry, and click `Drop`. The Ledger row then shows the neutral slashed icon titled `Upgrade response dropped` and cannot open a stream (see [ledger.md](ledger.md)). Drop the response, not the request: a dropped request never reaches the response pipeline, so it does not set `dropped`.
+Narrow `interceptResponse` to the upgrade path (`return response:request():path() == "/ws-drop"`), start the upgrade, select its `RES 101` entry, and click `Drop`. The Ledger row then shows the neutral slashed icon titled `Upgrade response dropped` and cannot open a stream (see [ledger/websocket.md](ledger/websocket.md)). Drop the response, not the request: a dropped request never reaches the response pipeline, so it does not set `dropped`.
 
 ### WebSocket messages
 
