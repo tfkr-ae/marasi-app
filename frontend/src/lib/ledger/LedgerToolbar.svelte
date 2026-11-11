@@ -91,23 +91,27 @@
 
 <!-- Toolbar: the query box, then the menus. -->
 <div
-	class="ledger-toolbar relative flex min-h-11 flex-none items-stretch border-b border-surface-300-600-token bg-surface-50 dark:bg-surface-900"
+	class="ledger-toolbar relative flex min-h-11 flex-none items-stretch border-b border-surface-300-600-token bg-surface-50 dark:bg-surface-900 {queryExpanded ? 'ledger-toolbar-expanded' : ''}"
 >
 	<!-- The search area: the query box and the Live indicator. The
 	     ready-made queries span it. -->
 	<div class="ledger-search flex min-w-0 flex-1 items-stretch">
-		<!-- An expanded query wraps, and the toolbar grows to show it all. -->
+		<!-- An expanded query wraps, and the toolbar grows to show it all. The
+		     controls either side of the box stay on its first line: each group
+		     is one query line tall (.ledger-query-line). -->
 		<div class="flex min-w-0 flex-1 gap-2 pl-3 {queryExpanded ? 'items-start py-3' : 'items-center'}">
-			{#if $queryPending || $querying}
-				<span
-					class="ledger-querying flex shrink-0"
-					title="Querying Marasi…"
-					role="status"
-					aria-label="Querying Marasi"><LoaderCircle size={15} class="animate-spin opacity-70" /></span
-				>
-			{:else}
-				<Search size={15} class="shrink-0 opacity-70" />
-			{/if}
+			<span class="ledger-query-line flex shrink-0 items-center">
+				{#if $queryPending || $querying}
+					<span
+						class="ledger-querying flex shrink-0"
+						title="Querying Marasi…"
+						role="status"
+						aria-label="Querying Marasi"><LoaderCircle size={15} class="animate-spin opacity-70" /></span
+					>
+				{:else}
+					<Search size={15} class="shrink-0 opacity-70" />
+				{/if}
+			</span>
 			<LedgerQueryBox
 				bind:expanded={queryExpanded}
 				value={$queryText}
@@ -119,56 +123,60 @@
 				}}
 				on:run={() => ledgerStore.runQuery($queryText)}
 			/>
-			{#if queryBoxError}
-				<span
-					id="ledgerQueryError"
-					class="flex max-w-[24rem] items-center gap-1 text-xs text-error-500"
-					role="alert"
-					title={queryBoxError.position
-						? `Position ${queryBoxError.position}: ${queryBoxError.message}`
-						: queryBoxError.message}
-					><CircleAlert size={14} class="shrink-0" /><span class="truncate"
-						>{queryBoxError.message}</span
-					></span
-				>
-			{:else if $queryActive}
-				<span id="ledgerQueryMatchCount" class="whitespace-nowrap text-xs opacity-70"
-					>{ghostRows ? "Querying…" : $statusCount}</span
-				>
-				{#if $indexNote}
+			<!-- Expanded, the query takes the width and the error message gives
+			     way first, down to its icon (the full text is its title). -->
+			<div class="ledger-query-line flex min-w-0 items-center gap-2">
+				{#if queryBoxError}
 					<span
-						id="ledgerIndexBuilding"
-						class="flex items-center gap-1 whitespace-nowrap text-xs text-warning-800 dark:text-warning-400"
-						role="status"
-						title="Marasi is still indexing older pairs, so text matches may be missing"
-						><TriangleAlert size={13} />{$indexNote}</span
+						id="ledgerQueryError"
+						class="flex min-w-0 max-w-[24rem] items-center gap-1 text-xs text-error-500"
+						role="alert"
+						title={queryBoxError.position
+							? `Position ${queryBoxError.position}: ${queryBoxError.message}`
+							: queryBoxError.message}
+						><CircleAlert size={14} class="shrink-0" /><span class="truncate"
+							>{queryBoxError.message}</span
+						></span
 					>
+				{:else if $queryActive}
+					<span id="ledgerQueryMatchCount" class="whitespace-nowrap text-xs opacity-70"
+						>{ghostRows ? "Querying…" : $statusCount}</span
+					>
+					{#if $indexNote}
+						<span
+							id="ledgerIndexBuilding"
+							class="flex items-center gap-1 whitespace-nowrap text-xs text-warning-800 dark:text-warning-400"
+							role="status"
+							title="Marasi is still indexing older pairs, so text matches may be missing"
+							><TriangleAlert size={13} />{$indexNote}</span
+						>
+					{/if}
 				{/if}
-			{/if}
-			{#if $queryText}
+				{#if $queryText}
+					<button
+						id="ledgerQueryClear"
+						type="button"
+						class="shrink-0 opacity-70 hover:opacity-100"
+						title="Clear query (Esc)"
+						aria-label="Clear query"
+						on:click={() => ledgerStore.clearQuery()}
+					>
+						<X size={15} />
+					</button>
+				{/if}
 				<button
-					id="ledgerQueryClear"
+					id="ledgerQueryFieldsToggle"
 					type="button"
-					class="opacity-70 hover:opacity-100"
-					title="Clear query (Esc)"
-					aria-label="Clear query"
-					on:click={() => ledgerStore.clearQuery()}
+					class="btn btn-sm shrink-0 px-2 {queryFieldsOpen ? primary : 'opacity-70 hover:opacity-100'}"
+					title="Query fields"
+					aria-label="Query fields"
+					aria-expanded={queryFieldsOpen}
+					aria-controls="ledgerQueryFields"
+					on:click={() => (queryFieldsOpen = !queryFieldsOpen)}
 				>
-					<X size={15} />
+					<CircleHelp size={15} />
 				</button>
-			{/if}
-			<button
-				id="ledgerQueryFieldsToggle"
-				type="button"
-				class="btn btn-sm px-2 {queryFieldsOpen ? primary : 'opacity-70 hover:opacity-100'}"
-				title="Query fields"
-				aria-label="Query fields"
-				aria-expanded={queryFieldsOpen}
-				aria-controls="ledgerQueryFields"
-				on:click={() => (queryFieldsOpen = !queryFieldsOpen)}
-			>
-				<CircleHelp size={15} />
-			</button>
+			</div>
 		</div>
 		{#if $inLiveView}
 			<span
@@ -237,3 +245,19 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* One line of the query box: its 0.875rem text at line-height 1.5. */
+	.ledger-toolbar :global(.ledger-query-line) {
+		height: 1.3125rem;
+	}
+	/* Expanded, the toolbar grows, so Live and the menu buttons put their
+	   label on the query's first line rather than in the middle: their one
+	   flex line packs to the top, its icon and text still centred on it. */
+	.ledger-toolbar-expanded :global(#ledgerLive),
+	.ledger-toolbar-expanded > :global(div > button) {
+		flex-wrap: wrap;
+		align-content: flex-start;
+		padding-top: 0.75rem;
+	}
+</style>
