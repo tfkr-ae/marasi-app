@@ -13,6 +13,7 @@
 	import { MAX_ARTIFACT_BYTES, formatSize, previewOf } from "./artifacts.js";
 	import RequestPair from "./RequestPair.svelte";
 	import ArtifactPreview from "./ArtifactPreview.svelte";
+	import { createPairRows } from "./pairRows.js";
 
 	export let session;
 	export let tab = "requests";
@@ -22,13 +23,21 @@
 	$: original = session.original;
 	$: kept = (id) => draft.Requests.includes(id);
 
-	// Each pair is read once here; the list rows and the viewer share it.
+	// The viewer reads the picked pair in full, once. The list reads rows:
+	// the saved links in one query, a link staged here on its own
+	// (pairRows.js).
 	const pairs = new Map();
 	function readPair(id) {
 		const key = String(id);
 		if (!pairs.has(key)) pairs.set(key, logbookStore.readPair(id).catch(() => null));
 		return pairs.get(key);
 	}
+	const savedId = session.isNew ? null : session.original.ID;
+	const readRow = createPairRows({
+		listLinked: () =>
+			savedId != null ? logbookStore.listLinkedRows(session.kind, savedId, session.original.Requests.length) : [],
+		readPair: (id) => logbookStore.readPair(id),
+	});
 
 	// A list row from a pair (GetRawDetails) or a traffic search option.
 	const rowOf = (details) => ({
@@ -51,7 +60,7 @@
 	async function loadRow(id) {
 		if (rows[id]) return;
 		rows[id] = { method: "", url: "…", status: 0, number: null };
-		const details = await readPair(id);
+		const details = await readRow(id);
 		rows[id] = details ? rowOf(details) : { method: "", url: "Couldn't read this request", status: 0, number: null };
 	}
 
