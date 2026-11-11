@@ -50,6 +50,7 @@
 	function onOpen() {
 		saving = false;
 		editing = null;
+		savedQueriesStore.setCountsOpen(true);
 		savedQueriesStore.loadCounts();
 	}
 
@@ -131,6 +132,7 @@
 	stayOpen={Boolean($modalStore[0])}
 	bind:open
 	on:open={onOpen}
+	on:close={() => savedQueriesStore.setCountsOpen(false)}
 >
 	<div class="ledger-saved-queries text-sm">
 		<div class="border-b border-surface-500/30 p-3">

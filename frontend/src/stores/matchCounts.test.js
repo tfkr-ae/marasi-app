@@ -166,3 +166,70 @@ test("clear cancels a scheduled count", () => {
   counts.clear();
   assert.equal(timers.pending().length, 0);
 });
+
+test("a change while the menu is closed marks the counts stale and counts nothing", async () => {
+  const timers = fakeTimers();
+  const calls = [];
+  const counts = createMatchCounts({
+    queries: () => ["a"],
+    count: async (q) => (calls.push(q), { count: 1, capped: false }),
+    timers,
+  });
+  await counts.load();
+  calls.length = 0;
+
+  counts.changed();
+  counts.changed();
+  assert.deepEqual(get(counts), { a: { count: 1, capped: false, stale: true } }, "the last count shows, dimmed");
+  assert.equal(timers.pending().length, 0, "nothing is scheduled for a closed menu");
+  assert.deepEqual(calls, []);
+});
+
+test("a change while the menu is open recounts once for a burst", async () => {
+  const timers = fakeTimers();
+  const calls = [];
+  const counts = createMatchCounts({
+    queries: () => ["a"],
+    count: async (q) => (calls.push(q), { count: 2, capped: false }),
+    timers,
+    delay: 1500,
+  });
+  counts.setOpen(true);
+  counts.changed();
+  counts.changed();
+  assert.equal(timers.pending().length, 1);
+  timers.fire();
+  await settle();
+  assert.deepEqual(calls, ["a"]);
+  assert.deepEqual(get(counts), { a: { count: 2, capped: false } });
+
+  counts.setOpen(false);
+  counts.changed();
+  assert.equal(timers.pending().length, 0, "closing the menu stops recounting");
+});
+
+test("a schedule during a scheduled run waits for it, then counts again after the delay", async () => {
+  const timers = fakeTimers();
+  const gated = gatedCount({ a: { count: 1, capped: false }, b: { count: 2, capped: false } });
+  let answer = gated.count;
+  const counts = createMatchCounts({ queries: () => ["a", "b"], count: (q) => answer(q), timers, delay: 1500 });
+
+  counts.schedule();
+  timers.fire();
+  await settle();
+  assert.deepEqual(gated.calls, ["a", "b"]);
+
+  counts.schedule();
+  counts.schedule();
+  assert.equal(timers.pending().length, 0, "nothing new starts while a run is in flight");
+  gated.releaseAll();
+  await settle();
+  await settle();
+  assert.deepEqual(get(counts), { a: { count: 1, capped: false }, b: { count: 2, capped: false } }, "the run finished");
+  assert.equal(timers.pending().length, 1, "one more run waits for the delay");
+  answer = async () => ({ count: 7, capped: false });
+  timers.fire();
+  await settle();
+  await settle();
+  assert.deepEqual(get(counts), { a: { count: 7, capped: false }, b: { count: 7, capped: false } });
+});

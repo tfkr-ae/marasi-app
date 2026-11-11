@@ -335,8 +335,12 @@ export function createSavedQueriesStore(
   });
   counts.subscribe((value) => update((state) => ({ ...state, counts: value })));
   const loadCounts = counts.load;
-  // Counts after a project load, a resync or new traffic, once for a burst.
+  // Counts after a project load or a resync, once for a burst.
   const scheduleCounts = counts.schedule;
+  // New traffic or another client's change: marks the counts stale, and
+  // recounts only while the menu is open (setCountsOpen).
+  const countsChanged = counts.changed;
+  const setCountsOpen = counts.setOpen;
   // Forgets every count and stops counting, as a project switch does.
   const clearCounts = counts.clear;
 
@@ -351,6 +355,8 @@ export function createSavedQueriesStore(
     setBuiltinHidden,
     loadCounts,
     scheduleCounts,
+    countsChanged,
+    setCountsOpen,
     clearCounts,
   };
 }

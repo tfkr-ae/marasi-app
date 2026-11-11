@@ -200,7 +200,8 @@
 		title="Pairs by highlight"
 		badge={activeHighlights ? String(activeHighlights) : ""}
 		panelClass="w-72"
-		on:open={highlightCounts.load}
+		on:open={() => (highlightCounts.setOpen(true), highlightCounts.load())}
+		on:close={() => highlightCounts.setOpen(false)}
 	>
 		<HighlightsMenu
 			queryText={$queryText}
@@ -217,7 +218,8 @@
 		title="Pairs with a note or a link"
 		badge={activeMarks ? String(activeMarks) : ""}
 		panelClass="w-64"
-		on:open={markCounts.load}
+		on:open={() => (markCounts.setOpen(true), markCounts.load())}
+		on:close={() => markCounts.setOpen(false)}
 	>
 		<MarksMenu
 			queryText={$queryText}
