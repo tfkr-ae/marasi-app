@@ -39,3 +39,5 @@ jobs:
       # the gitignored bindings in frontend/src/lib/bindings.
       - run: sh scripts/bootstrap.sh
       - run: sh scripts/check.sh
+        env:
+          GO_TEST_FLAGS: -race
