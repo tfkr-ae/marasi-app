@@ -3,10 +3,11 @@
 	// or "done" on their heading, then the optional ones, where an unset
 	// item reads "Not set" without a warning. Every row is one height. A
 	// missing item has a filled Add or Link, a filled one a quiet edit icon;
-	// either opens the item's inline fix under its row.
+	// either opens the item's inline fix under its row. Text cut short at two
+	// lines expands in place, read-only, from a click on it or its chevron.
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { AlertTriangle, Check, CircleDashed, Pencil } from "lucide-svelte";
+	import { AlertTriangle, Check, ChevronDown, ChevronUp, CircleDashed, Pencil } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import InlineFix from "./InlineFix.svelte";
 	import { SEVERITY_BADGE } from "./severityColors.js";
@@ -32,6 +33,42 @@
 		["Required", completeness.items.filter((item) => item.required)],
 		["Optional", completeness.items.filter((item) => !item.required)],
 	].filter(([, items]) => items.length);
+
+	/** The item read in full, or null; one at a time, and none on another record. */
+	let expanded = null;
+	/** Items whose text runs past two lines. */
+	let clipped = {};
+	let shownID = record?.ID;
+	$: if (String(record?.ID) !== String(shownID)) {
+		shownID = record?.ID;
+		expanded = null;
+		clipped = {};
+	}
+	$: if (expanded && expanded === fixing) expanded = null;
+
+	function toggle(key) {
+		expanded = expanded === key ? null : key;
+	}
+
+	// Watches a clamped paragraph and marks its item when the text overflows.
+	function clamp(node, key) {
+		let current = key;
+		const measure = () => {
+			if (expanded === current) return;
+			const over = node.scrollHeight > node.clientHeight + 1;
+			if (!!clipped[current] !== over) clipped = { ...clipped, [current]: over };
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(node);
+		measure();
+		return {
+			update(next) {
+				current = next;
+				measure();
+			},
+			destroy: () => observer.disconnect(),
+		};
+	}
 
 	function valueOf(key) {
 		if (key === "Requests") {
@@ -69,9 +106,9 @@
 					<div
 						data-item={item.key}
 						data-focused={item.key === fixing || undefined}
-						class="grid h-12 grid-cols-[9.375rem_minmax(0,1fr)_auto] items-center gap-3 px-3"
+						class="grid {expanded === item.key ? 'min-h-12' : 'h-12'} grid-cols-[9.375rem_minmax(0,1fr)_auto] items-center gap-3 px-3"
 					>
-						<div class="flex items-center gap-2 text-2xs font-semibold">
+						<div class="flex items-center gap-2 text-2xs font-semibold {expanded === item.key ? 'self-start pt-4' : ''}">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />
 							{:else if item.required}<AlertTriangle size={13} class="flex-none text-warning-800 dark:text-warning-500" />
 							{:else}<CircleDashed size={12} class="flex-none opacity-40" />{/if}
@@ -94,11 +131,35 @@
 										>{record.CVSSVector.replace("CVSS:3.1/", "")}</code
 									>
 								</p>
+							{:else if expanded === item.key}
+								<p class="whitespace-pre-wrap break-words py-3 text-xs leading-relaxed" data-expanded={item.key}>{value}</p>
+							{:else if clipped[item.key]}
+								<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
+								<p
+									class="line-clamp-2 cursor-pointer whitespace-pre-line text-xs leading-snug"
+									title="Click to read in full"
+									use:clamp={item.key}
+									on:click={() => toggle(item.key)}
+								>
+									{value}
+								</p>
 							{:else}
-								<p class="line-clamp-2 whitespace-pre-line text-xs leading-snug" title={value}>{value}</p>
+								<p class="line-clamp-2 whitespace-pre-line text-xs leading-snug" use:clamp={item.key}>{value}</p>
 							{/if}
 						</div>
-						<div class="flex w-16 justify-end">
+						<div class="flex w-16 items-center justify-end gap-0.5 {expanded === item.key ? 'self-start pt-2.5' : ''}">
+							{#if item.done && (clipped[item.key] || expanded === item.key) && fixing !== item.key}
+								<button
+									type="button"
+									class="p-1 opacity-50 hover:opacity-100"
+									title={expanded === item.key ? "Collapse" : "Expand"}
+									aria-label="{expanded === item.key ? 'Collapse' : 'Expand'} {item.label.toLowerCase()}"
+									aria-expanded={expanded === item.key}
+									data-expand={item.key}
+									on:click={() => toggle(item.key)}
+									>{#if expanded === item.key}<ChevronUp size={12} />{:else}<ChevronDown size={12} />{/if}</button
+								>
+							{/if}
 							{#if store && fixing !== item.key}
 								{#if item.done}
 									<button
