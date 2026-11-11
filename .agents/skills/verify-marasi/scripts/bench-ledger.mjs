@@ -1,6 +1,6 @@
 // Benchmarks the Ledger in the running verification instance and checks the
-// results against its performance budget (features/ledger.md, "Performance
-// budget"). Run it through bench-ledger.sh, after bench-seed.sh has filled
+// results against its performance budget (features/ledger/performance.md).
+// Run it through bench-ledger.sh, after bench-seed.sh has filled
 // the project. Every figure is the median of its runs, in milliseconds.
 //
 //   warmShell / warmRows  Home -> Ledger click until the toolbar / first row
