@@ -100,7 +100,7 @@
 							></span>
 						{/if}
 						<span
-							class="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-3xs font-bold
+							class="relative z-10 flex h-5 w-5 shrink-0 items-center justify-center text-3xs font-bold
 							{step.mark === 'failed'
 								? 'bg-error-500 text-white'
 								: step.mark === 'done'

@@ -790,7 +790,7 @@
 										<span class="truncate font-mono text-sm" title={type}>{type}</span>
 										<button
 											type="button"
-											class="rounded p-0.5 opacity-40 hover:bg-surface-300 hover:opacity-100 group-hover:opacity-80 dark:hover:bg-surface-600"
+											class="p-0.5 opacity-40 hover:bg-surface-300 hover:opacity-100 group-hover:opacity-80 dark:hover:bg-surface-600"
 											title="Remove {type}"
 											aria-label="Remove {type}"
 											on:click={() =>
@@ -1063,7 +1063,7 @@
 					<div class={row} data-highlight={highlight.number}>
 						<div class="flex items-center gap-3">
 							<span
-								class="h-4 w-4 shrink-0 rounded-sm"
+								class="h-4 w-4 shrink-0"
 								style="background-color: {highlight.color}"
 							></span>
 							<div>
@@ -1074,7 +1074,7 @@
 						<div class="{control} items-center gap-2">
 							<input
 								type="color"
-								class="h-8 w-12 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
+								class="h-8 w-12 shrink-0 cursor-pointer border-0 bg-transparent p-0"
 								aria-label="Highlight {highlight.number} colour"
 								value={highlight.color}
 								on:change={(event) =>

@@ -295,7 +295,7 @@
 					{#each GHOST_WIDTHS[i % GHOST_WIDTHS.length] as width, c}
 						<span class="flex items-center {LEDGER_COLUMNS[c]?.align === 'right' ? 'justify-end' : ''}"
 							>{#if width}<span
-									class="ledger-ghost-bar block h-2 animate-pulse rounded-sm bg-surface-300 dark:bg-surface-600"
+									class="ledger-ghost-bar block h-2 animate-pulse bg-surface-300 dark:bg-surface-600"
 									style="width: {width * 100}%; animation-delay: {(i % 6) * 120}ms"
 								></span>{/if}</span
 						>

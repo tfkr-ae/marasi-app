@@ -198,7 +198,7 @@ const theme = EditorView.baseTheme({
     cursor: "pointer",
     padding: "0 4px",
     margin: "0 1px",
-    borderRadius: "3px",
+    borderRadius: "0",
     backgroundColor: "rgba(127, 127, 127, 0.18)",
     opacity: "0.8",
   },
