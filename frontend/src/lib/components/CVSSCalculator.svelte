@@ -89,12 +89,12 @@
 			</span>
 			{#if scored}
 				<span class="flex-none text-base font-bold leading-none tabular-nums">{score.toFixed(1)}</span>
-				<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[severity] ?? 'variant-soft'}"
+				<span class="badge flex-none px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[severity] ?? 'variant-soft'}"
 					>{severity}</span
 				>
 				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-2xs opacity-80">{vector.replace("CVSS:3.1/", "")}</code>
 			{:else if vector}
-				<span class="badge flex-none variant-filled-error rounded-sm px-1.5 py-0.5 text-3xs font-bold">Invalid</span>
+				<span class="badge flex-none variant-filled-error px-1.5 py-0.5 text-3xs font-bold">Invalid</span>
 				<code class="min-w-0 flex-1 truncate bg-transparent p-0 font-mono text-2xs opacity-80">{vector}</code>
 			{:else}
 				<span class="min-w-0 flex-1 truncate text-xs opacity-60">Not scored</span>

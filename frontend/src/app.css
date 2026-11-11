@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Marasi is square-edged. The theme sets Skeleton's radius tokens to 0px
+   (tfkr-theme.js), but Skeleton draws its icon button and icon badge as
+   circles whatever the tokens say. squareEdges.test.js checks both. */
+.btn-icon,
+.badge-icon {
+  border-radius: 0;
+}
+
 body {
   --ctx-menu-background: rgb(var(--color-surface-50));
   --ctx-menu-border: 1px solid rgb(var(--color-primary-500));
@@ -24,7 +32,6 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: rgb(var(--color-surface-500) / 0.35);
-  border-radius: 4px;
 }
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-corner {

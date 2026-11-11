@@ -50,7 +50,7 @@
 	$: countsLoading = !dashboard;
 	$: scopeLoading = !$homeStore.scope;
 	const ghost =
-		"dashboard-ghost inline-block h-7 w-16 animate-pulse rounded-sm bg-surface-300 align-middle dark:bg-surface-600";
+		"dashboard-ghost inline-block h-7 w-16 animate-pulse bg-surface-300 align-middle dark:bg-surface-600";
 
 	onMount(() => {
 		homeStore.refreshDashboard();
@@ -73,7 +73,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-primary-700)); color: rgb(var(--color-primary-200))"
 					>
 						<ActivityIcon size="16" />
@@ -98,7 +98,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-tertiary-700)); color: rgb(var(--color-tertiary-200))"
 					>
 						<Edit2Icon size="16" />
@@ -123,7 +123,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-surface-700)); color: rgb(var(--color-surface-300))"
 					>
 						<SendIcon size="16" />
@@ -148,7 +148,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-warning-700)); color: rgb(var(--color-warning-200))"
 					>
 						<FlagIcon size="16" />
@@ -179,7 +179,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-tertiary-700)); color: rgb(var(--color-tertiary-100))"
 					>
 						<BookCheck size="16" />
@@ -203,7 +203,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-primary-700)); color: rgb(var(--color-primary-100))"
 					>
 						<ShieldAlert size="16" />
@@ -231,7 +231,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-success-700)); color: rgb(var(--color-success-200))"
 					>
 						{#if !defaultAllow}
@@ -262,7 +262,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-secondary-700)); color: rgb(var(--color-surface-800))"
 					>
 						<CheckCircleIcon size="16" />
@@ -287,7 +287,7 @@
 			<div class="card-body p-3">
 				<div class="flex items-center">
 					<div
-						class="rounded-full p-2"
+						class="p-2"
 						style="background-color: rgb(var(--color-primary-700)); color: rgb(var(--color-error-200))"
 					>
 						<XCircleIcon size="16" />

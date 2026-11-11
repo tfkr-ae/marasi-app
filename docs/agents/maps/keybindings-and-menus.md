@@ -29,6 +29,7 @@ How a keyboard shortcut or a ⌘K menu item reaches its handler, and where a new
 4. If a row menu or the Ledger drawer rail shows the action, give the item the same `actionId`. See `ledger.md` and `launchpad.md`.
 5. If the action opens a modal, pass `toggleAction: "<actionId>"` to `modalStore.trigger`, so the same key closes it (`overlayIsolation.js`).
 6. Test the key in `menus.test.js`. It also catches two actions in one context sharing a key.
+7. `defaults.test.js` pins every factory default and menu letter in `defaults.fixture.json`, so a new action, a changed default or a changed letter fails until you regenerate the fixture on purpose: `UPDATE_KEYBINDING_DEFAULTS=1 node --test src/lib/keybindings/defaults.test.js` in `frontend/`.
 
 No test checks a handler's or a menu item's `actionId` against the catalog. A misspelt id fails silently: the menu shows no key, and the shortcut does nothing.
 

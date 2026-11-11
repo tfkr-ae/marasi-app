@@ -48,7 +48,7 @@
 	const STALE_TIP = "Updating for the current query…";
 
 	// The ghost rows' bars, as in the table's ghost rows.
-	const ghostBar = "block h-2 animate-pulse rounded-sm bg-surface-300 dark:bg-surface-600";
+	const ghostBar = "block h-2 animate-pulse bg-surface-300 dark:bg-surface-600";
 	$: hosts = hostCountLabel(state);
 	$: roots = state.levels[""];
 	// While Marasi's sitemap job still places older pairs, ghost hosts stand

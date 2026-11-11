@@ -37,7 +37,7 @@
             {#each items as item}
                 {#if activeTab === item.value && item.panel}
                     <div
-                        class="p-4 border border-t-0 border-surface-500/30 rounded-b-container"
+                        class="p-4 border border-t-0 border-surface-500/30"
                     >
                         <Renderer schema={item.panel} {extensionData} />
                     </div>

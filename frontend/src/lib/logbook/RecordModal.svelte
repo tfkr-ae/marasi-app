@@ -145,7 +145,7 @@
 				<textarea
 					autofocus
 					data-field={expanded}
-					class="textarea min-h-0 w-full flex-1 resize-none rounded-token border-0 p-4 text-xs leading-relaxed"
+					class="textarea min-h-0 w-full flex-1 resize-none border-0 p-4 text-xs leading-relaxed"
 					value={session.draft[expanded] ?? ""}
 					on:input={(e) => logbookStore.updateDraft({ [expanded]: e.currentTarget.value })}
 				></textarea>
@@ -186,7 +186,7 @@
 						{/if}
 					</p>
 					<div class="flex flex-wrap gap-1">
-						{#each changes as change}<span class="badge rounded-sm px-1.5 py-0.5 text-3xs variant-soft">{change}</span>{/each}
+						{#each changes as change}<span class="badge px-1.5 py-0.5 text-3xs variant-soft">{change}</span>{/each}
 					</div>
 					<div class="flex justify-end gap-2 pt-1">
 						<button bind:this={keepButton} type="button" class="btn btn-sm {neutral}" on:click={() => logbookStore.keepEditing()}>Keep editing</button>

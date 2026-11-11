@@ -58,7 +58,7 @@
 	const head =
 		"flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900";
 	const heldHead = "!bg-primary-500/10 shadow-[inset_3px_0_0_rgb(var(--color-primary-500))]";
-	const chip = "cp-chip ml-1 rounded bg-primary-500 px-1 py-px text-3xs font-bold uppercase text-white";
+	const chip = "cp-chip ml-1 bg-primary-500 px-1 py-px text-3xs font-bold uppercase text-white";
 
 	let editor;
 	/** Focuses the intercepted pane's editor. */

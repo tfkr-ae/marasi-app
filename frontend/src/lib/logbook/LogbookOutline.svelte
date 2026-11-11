@@ -160,7 +160,7 @@
 								size={12}
 								class="flex-none opacity-60"
 							/>{/if}
-						{#if section.by === "severity"}<span class="h-2.5 w-2.5 flex-none rounded-sm {SEVERITY_MARK[group.key]}"
+						{#if section.by === "severity"}<span class="h-2.5 w-2.5 flex-none {SEVERITY_MARK[group.key]}"
 							></span>{/if}
 						<span class="min-w-0 flex-1 truncate {section.by === 'tag' && group.key !== '#none' ? 'font-mono text-2xs' : ''}"
 							>{group.title}</span
@@ -181,7 +181,7 @@
 						>
 							{#if on}<span class="absolute bottom-0 left-0 top-0 w-[3px] bg-primary-500"></span>{/if}
 							{#if group.title === null && section.kind === "finding"}<span
-									class="h-2 w-2 flex-none rounded-sm {SEVERITY_MARK[record.Severity] ?? 'bg-surface-400'}"
+									class="h-2 w-2 flex-none {SEVERITY_MARK[record.Severity] ?? 'bg-surface-400'}"
 									title={record.Severity}
 								></span>{/if}
 							<span class="min-w-0 flex-1 truncate">{record.Title}</span>

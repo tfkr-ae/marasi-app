@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
+	import { primaryVariant } from "../launchpad/format.js";
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
@@ -112,7 +113,7 @@
 
 		<div class="flex shrink-0 items-center gap-1">
 			<button
-				class="btn btn-sm variant-soft-primary"
+				class="btn btn-sm {primaryVariant($modeCurrent)}"
 				disabled={!intercepted || processing}
 				on:click={forward}
 			>
@@ -133,7 +134,7 @@
 				Intercept {interceptEnabled ? "On" : "Off"}
 			</button>
 			<button
-				class="btn btn-sm variant-soft-primary"
+				class="btn btn-sm {primaryVariant($modeCurrent)}"
 				disabled={!intercepted || processing}
 				on:click={drop}
 			>

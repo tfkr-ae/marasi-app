@@ -17,7 +17,7 @@
 	import { DELETE_LAUNCHPAD_PENDING_HINT } from "../launchPending.js";
 	import { browserViewRefusal } from "../browserView.js";
 	import { compareView } from "./compare.js";
-	import { launchEndText, primaryVariant, statusClass } from "./format.js";
+	import { launchEndText, neutralVariant, primaryVariant, statusClass } from "./format.js";
 	import LaunchpadCompare from "./LaunchpadCompare.svelte";
 
 	export let store;
@@ -41,6 +41,7 @@
 	$: pending = !!pendingLaunchOf(state, launchpadId);
 	$: endText = selectedId ? launchEndText(launchOf(state, selectedId)) : null;
 	$: primary = primaryVariant($modeCurrent);
+	$: neutral = neutralVariant($modeCurrent);
 	$: theme = $modeCurrent ? githubLight : oneDark;
 	$: vimExtensions = $marasiConfig.VimEnabled ? [vim()] : [];
 	// Long strings fold in both editors; the panes' titles say when a shown
@@ -180,7 +181,7 @@
 
 			{#if dirty && !comparing}
 				<button
-					class="btn btn-sm variant-soft-warning"
+					class="btn btn-sm {neutral}"
 					title="Revert the draft to the entry it was seeded from"
 					on:click={() => store.revertDraft(launchpadId)}
 				>

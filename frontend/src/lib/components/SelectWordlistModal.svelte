@@ -80,7 +80,7 @@
 			{:else}
 				{#each options as wordlist (wordlist.Name)}
 					<div>
-						<div class="flex items-center gap-2 rounded px-2 py-1 hover:bg-surface-200 dark:hover:bg-surface-700">
+						<div class="flex items-center gap-2 px-2 py-1 hover:bg-surface-200 dark:hover:bg-surface-700">
 							<button
 								type="button"
 								class="min-w-0 flex-1 truncate text-left text-sm"

@@ -68,7 +68,7 @@
 				>
 					{#if open}<ChevronDown size={12} class="flex-none" />{:else}<ChevronRight size={12} class="flex-none" />{/if}
 					{#if link.kind === "finding"}<span
-							class="badge rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[link.record.Severity] ??
+							class="badge px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[link.record.Severity] ??
 								'variant-soft'}">{link.record.Severity || "None"}</span
 						>{:else}<BookCheck size={13} class="flex-none text-tertiary-500" />{/if}
 					<span class="min-w-0 flex-1 truncate text-xs font-semibold">{link.record.Title}</span>

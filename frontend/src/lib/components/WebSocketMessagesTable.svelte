@@ -9,6 +9,7 @@
 		createColumnHelper,
 	} from "@tanstack/svelte-table";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { primaryVariant } from "../launchpad/format.js";
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
@@ -439,7 +440,7 @@
 				</div>
 				{#if !autoScroll && messages.length > 0}
 					<button
-						class="btn btn-sm variant-filled-primary absolute bottom-3 left-1/2 z-20 -translate-x-1/2 shadow-lg"
+						class="btn btn-sm {primaryVariant($modeCurrent)} absolute bottom-3 left-1/2 z-20 -translate-x-1/2 shadow-lg"
 						on:click={jumpToBottom}
 					>
 						<ArrowDown size={14} />
@@ -491,7 +492,7 @@
 						class="flex shrink-0 items-center gap-1"
 					>
 						<button
-							class="btn btn-sm variant-soft-primary"
+							class="btn btn-sm {primaryVariant($modeCurrent)}"
 							disabled={!selected}
 							on:click={toggleView}
 						>
@@ -504,7 +505,7 @@
 								: "Metadata"}
 						</button>
 						<button
-							class="btn btn-sm variant-soft-primary"
+							class="btn btn-sm {primaryVariant($modeCurrent)}"
 							disabled={!selected}
 							on:click={copyToInject}
 						>
