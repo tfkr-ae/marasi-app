@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fakeServiceClient as fakeClient } from "./fakeServiceClient.js";
 import { createLedgerApi, toUpgradeEvent } from "./ledgerApi.js";
-import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
+import { NO_BODIES, RAW_ONLY, toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { createExclusion } from "./contentTypeExclusion.js";
 
 const notFound = { status: 404, body: { error: "not_found" } };
@@ -409,4 +409,20 @@ test("stream events map to the live request, response and upgrade shapes the Led
   );
   // websocket.handshake_ended carries only the state.
   assert.deepEqual(toUpgradeEvent({ request_id: "a", state: "failed" }), { RequestID: "a", State: "failed" });
+});
+
+test("getRawDetails asks Marasi to leave out the parts a reader doesn't need", async () => {
+  const pair = { id: "0190a", number: 4, request: { method: "GET", raw: null }, response: { status_code: 200, raw: null }, prettified: { request: null, response: null } };
+  const { api, client } = setup({ "GET /traffic/0190a": pair });
+  await api.getRawDetails("0190a");
+  await api.getRawDetails("0190a", RAW_ONLY);
+  await api.getRawDetails("0190a", NO_BODIES);
+  const details = await api.getRawDetails("0190a", NO_BODIES);
+  assert.deepEqual(
+    client.calls.filter((c) => c.path === "/traffic/0190a").map((c) => c.query),
+    [{}, { prettified: false }, { raw: false, prettified: false }, { raw: false, prettified: false }],
+    "the default read sends no parameters, as before",
+  );
+  assert.equal(details.Request.Raw, "", "a left-out part reads as empty");
+  assert.deepEqual(details.Prettified, { Request: "", Response: "" });
 });

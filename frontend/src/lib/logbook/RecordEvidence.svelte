@@ -14,6 +14,7 @@
 	import RequestPair from "./RequestPair.svelte";
 	import ArtifactPreview from "./ArtifactPreview.svelte";
 	import { createPairRows } from "./pairRows.js";
+	import { NO_BODIES } from "../../stores/trafficApi.js";
 
 	export let session;
 	export let tab = "requests";
@@ -36,7 +37,7 @@
 	const readRow = createPairRows({
 		listLinked: () =>
 			savedId != null ? logbookStore.listLinkedRows(session.kind, savedId, session.original.Requests.length) : [],
-		readPair: (id) => logbookStore.readPair(id),
+		readPair: (id) => logbookStore.readPair(id, NO_BODIES),
 	});
 
 	// A list row from a pair (GetRawDetails) or a traffic search option.

@@ -11,7 +11,7 @@ Which files work together on the Checkpoint page, how a held item reaches the pa
   - `ItemWorkspace.svelte` is the selected item's title bar, buttons and request | response split;
   - `RulesEditor.svelte` is the Lua rules editor and Update rules;
   - `httpParse.js` is the editor's malformed warning: a port of what Go's `http.ReadRequest` and `http.ReadResponse` check, giving Go's error text. `httpParse.cases.json` records Go's answers, which `httpParse.test.js` checks;
-  - `itemContext.js` reads a held response's request (`GET /traffic/{id}`) and a WebSocket message's connection. One instance, `checkpointItemContext` in `checkpointStore.js`, is loaded by `+layout.svelte` for every held item and shared by the page and the abandon toast;
+  - `itemContext.js` reads a held response's request (`GET /traffic/{id}?raw=false&prettified=false`, no bodies) and a WebSocket message's connection. One instance, `checkpointItemContext` in `checkpointStore.js`, is loaded by `+layout.svelte` for every held item and shared by the page and the abandon toast;
   - `items.js` holds the pure helpers (`summarize`, `groupByHost`, `treeOrder`, `bulkTargets`, `itemTitle`, `abandonLabel`, `abandonText`, and `KIND_LABELS`, which `KindTag.svelte` shows), tested in `items.test.js`.
 - `frontend/src/stores/checkpointRules.js`: the rules. `checkpointCode` is the rules in the editor, `checkpointCodeApplied` the rules Checkpoint runs (both live in `checkpointStore.js`; `stores.js` re-exports them). `checkpointStore.js` binds the rules to `extensionsStore`'s `code` and `run`. Tests: `checkpointRules.test.js`.
 - `frontend/src/lib/checkpointBadge.js` gives the rail icon's count badge and title (`Checkpoint · N intercepted`), drawn in `+layout.svelte`.

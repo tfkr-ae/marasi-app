@@ -34,7 +34,7 @@ Every store reaches the service the same way, as `homeStore` does:
 
 ## Marasi source
 
-The app pins `github.com/tfkr-ae/marasi` in `go.mod`. `GOWORK=off go list -m -f '{{.Dir}}' github.com/tfkr-ae/marasi` gives that version's source. `~/Projects/marasi-project/marasi` is the sibling checkout, for unreleased changes.
+The app pins `github.com/tfkr-ae/marasi` in `go.mod`. A pair read (`GET /traffic/{id}`) asks only for what its reader shows, through `pairQuery` in `stores/trafficApi.js`: `RAW_ONLY` (`?prettified=false`) for copies, Launchpad and a drawer with Prettify off; `NO_BODIES` (`?raw=false&prettified=false`) for the Checkpoint item context and Logbook evidence rows; no parameters for a drawer with Prettify on, since a part without a prettified copy (a request with no body) shows raw and the parameters can't pick one part. Marasi before 4e3b8dc ignores them. `GOWORK=off go list -m -f '{{.Dir}}' github.com/tfkr-ae/marasi` gives that version's source. `~/Projects/marasi-project/marasi` is the sibling checkout, for unreleased changes.
 
 ## The Go shell
 

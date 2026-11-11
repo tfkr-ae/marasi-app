@@ -13,6 +13,7 @@
 	import { sameID } from "./pairs.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
 	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
+	import { RAW_ONLY } from "../../stores/trafficApi.js";
 
 	/** The Ledger store: getDetails, getNote, getMetadata and saveNote. */
 	export let store;
@@ -43,20 +44,25 @@
 	// the rail's Prettify button shows it as an amber dot.
 	$: prettifiedMoving = groupBuilding($jobsStore, "prettified");
 
-	// The full pair (GetRawDetails): undefined while it loads, null when the
-	// read failed. A newer pair's read wins.
+	// The pair (GetRawDetails): undefined while it loads, null when the read
+	// failed. A newer pair's read wins. With Prettify off only the raw text
+	// is read; turning Prettify on reads the pair again in full, since a
+	// part without a prettified copy (a request with no body) shows raw.
 	let details;
 	let detailsFor = null;
-	$: loadDetails(pair.ID);
-	async function loadDetails(id) {
-		if (sameID(detailsFor, id)) return;
+	let detailsFull = false;
+	$: loadDetails(pair.ID, $prettify);
+	async function loadDetails(id, full) {
+		const moved = !sameID(detailsFor, id);
+		if (!moved && (detailsFull || !full)) return;
 		detailsFor = id;
-		details = undefined;
-		const row = await store.getDetails(id).catch((error) => {
+		detailsFull = full;
+		if (moved) details = undefined;
+		const row = await store.getDetails(id, full ? undefined : RAW_ONLY).catch((error) => {
 			console.error("Reading the request failed:", error);
 			return null;
 		});
-		if (sameID(detailsFor, id)) details = row ?? null;
+		if (sameID(detailsFor, id) && detailsFull === full) details = row ?? null;
 	}
 
 	// The pair's note, null while it loads. It is read again whenever the

@@ -19,6 +19,7 @@ import { launchpadStore } from "../../stores/launchpadStore";
 import { UNTITLED_LAUNCHPAD } from "../launchpad/format.js";
 import { highlightPalette } from "../../stores/highlightsStore";
 import { findingStore } from "../../stores/findingStore";
+import { RAW_ONLY } from "../../stores/trafficApi.js";
 import { newRecord } from "../logbook/recordEditor.js";
 import {
 	ledgerStore,
@@ -112,10 +113,10 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 		});
 	}
 
-	// The focused pair's full request and response.
+	// The focused pair's raw request and response.
 	function focusedDetails() {
 		const focused = focusedPair(get(ledgerStore));
-		return focused ? ledgerStore.getDetails(focused.ID) : Promise.reject(new Error("no pair"));
+		return focused ? ledgerStore.getDetails(focused.ID, RAW_ONLY) : Promise.reject(new Error("no pair"));
 	}
 
 	async function openWebSocketStream() {
@@ -347,7 +348,7 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 		}
 		let details;
 		try {
-			details = await Promise.all(pairs.map((pair) => ledgerStore.getDetails(pair.ID)));
+			details = await Promise.all(pairs.map((pair) => ledgerStore.getDetails(pair.ID, RAW_ONLY)));
 		} catch (error) {
 			return toastError(`Failed to read ${label}`, error);
 		}

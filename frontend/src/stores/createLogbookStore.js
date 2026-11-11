@@ -1288,7 +1288,7 @@ export function createLogbookStore(api, timers = globalThis) {
     // traffic rows (the evidence list), an artifact with its bytes
     // (Data), and saving an artifact through the native Save dialog (false
     // when cancelled).
-    readPair: (id) => api.getPair(id),
+    readPair: (id, parts) => api.getPair(id, parts),
     listLinkedRows: (kind, id, limit) => api.listLinkedRows(kind, id, limit),
     readArtifact: (id) => api.getArtifact(id),
     downloadArtifact: (id) => api.downloadArtifact(id),
