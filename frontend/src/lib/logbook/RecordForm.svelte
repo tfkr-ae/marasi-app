@@ -37,14 +37,14 @@
 
 	const update = (patch) => logbookStore.updateDraft(patch);
 	const label = "mb-1 block text-2xs font-semibold opacity-70";
-	const field = "input h-8 rounded-token border-0 py-1 text-xs";
+	const field = "input h-8 border-0 py-1 text-xs";
 	const SHORT = { Informational: "Info" };
 </script>
 
 <input
 	bind:this={titleInput}
 	data-field="Title"
-	class="input h-9 flex-none rounded-token border-0 py-1 text-sm font-bold"
+	class="input h-9 flex-none border-0 py-1 text-sm font-bold"
 	placeholder={finding ? "Finding title" : "Test case title"}
 	value={draft.Title}
 	on:input={(e) => update({ Title: e.currentTarget.value })}
@@ -57,7 +57,7 @@
 			{#each SEVERITIES as severity}
 				<button
 					type="button"
-					class="rounded-sm px-1 py-1 text-2xs font-semibold {draft.Severity === severity ? SEVERITY_BADGE[severity] : 'bg-surface-200-700-token opacity-70 hover:opacity-100'}"
+					class="px-1 py-1 text-2xs font-semibold {draft.Severity === severity ? SEVERITY_BADGE[severity] : 'bg-surface-200-700-token opacity-70 hover:opacity-100'}"
 					aria-pressed={draft.Severity === severity}
 					on:click={() => update({ Severity: severity })}>{SHORT[severity] ?? severity}</button
 				>
@@ -97,7 +97,7 @@
 			<span class={label}>Findings <span class="font-normal opacity-70">{findings.length}</span></span>
 			{#each findings as f (f.ID)}
 				<div class="flex items-center gap-2 py-0.5 text-2xs">
-					<span class="badge flex-none rounded-sm px-1.5 py-0 text-3xs {SEVERITY_BADGE[f.Severity] ?? 'variant-soft'}">{f.Severity}</span>
+					<span class="badge flex-none px-1.5 py-0 text-3xs {SEVERITY_BADGE[f.Severity] ?? 'variant-soft'}">{f.Severity}</span>
 					<span class="min-w-0 flex-1 truncate">{f.Title}</span>
 				</div>
 			{:else}
@@ -118,7 +118,7 @@
 		<textarea
 			id="logbook-{t.key}"
 			data-field={t.key}
-			class="textarea w-full rounded-token border-0 text-xs leading-relaxed"
+			class="textarea w-full border-0 text-xs leading-relaxed"
 			rows={t.rows}
 			placeholder={t.placeholder}
 			value={draft[t.key] ?? ""}

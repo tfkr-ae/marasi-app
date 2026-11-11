@@ -111,7 +111,7 @@
       </div>
       
       {#if error}
-        <div class="mt-3 p-2 bg-error-100 text-error-800 border border-error-300 dark:bg-error-700 dark:text-error-100 dark:border-error-600 rounded">
+        <div class="mt-3 p-2 bg-error-100 text-error-800 border border-error-300 dark:bg-error-700 dark:text-error-100 dark:border-error-600">
           {error}
         </div>
       {/if}

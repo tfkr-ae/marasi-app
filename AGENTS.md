@@ -2,6 +2,10 @@
 
 Run Go commands as `GOWORK=off go …`. Agent worktrees can sit inside a checkout whose parent `go.work` excludes this module, and `go` then fails with "main module … does not contain package". A fresh worktree runs `scripts/bootstrap.sh` first, to create `frontend/build` and `frontend/node_modules`, install `wails3` at the version `go.mod` pins, and generate the Wails v3 bindings in `frontend/src/lib/bindings`.
 
+## Checks
+
+Run `scripts/check.sh` before you commit; CI runs the same script. It runs `go vet`, the Go tests, `npm test` and `npm run check` (svelte-check, errors only).
+
 ## Building the app
 
 The app runs on Wails v3, built through its Taskfile scaffold (`Taskfile.yml` and `build/`); there is no `wails.json`. `wails3 build` builds `bin/marasi-app`, and on macOS `wails3 package` builds `bin/marasi-app.app`. Set `CHANNEL`, `VERSION` and `SIGNING_PUBLIC_KEY` in the environment for a release build; without them it is a development build. Pass extra build tags with `wails3 build -tags a,b`. Don't run `wails3 update build-assets`: it overwrites the hand-kept `build/darwin/Info.plist` and the Windows assets.

@@ -110,7 +110,7 @@
 
 					<div class="relative w-fit">
 						<div
-							class="flex w-full overflow-hidden rounded-container-token"
+							class="flex w-full overflow-hidden"
 						>
 							<button
 								type="button"

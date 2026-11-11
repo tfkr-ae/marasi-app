@@ -26,7 +26,7 @@
 </script>
 
 {#if value}
-	<div class="flex h-8 items-center gap-2 rounded-token bg-tertiary-500/15 px-2 text-xs" data-field="TestCaseID">
+	<div class="flex h-8 items-center gap-2 bg-tertiary-500/15 px-2 text-xs" data-field="TestCaseID">
 		<BookCheck size={13} class="flex-none text-tertiary-600 dark:text-tertiary-400" />
 		<span class="min-w-0 flex-1 truncate font-semibold">{linked?.Title ?? "Test case"}</span>
 		{#if linked}<span class="flex-none text-3xs opacity-60">{categoryOf(linked)}</span>{/if}
@@ -34,7 +34,7 @@
 	</div>
 {:else}
 	<div class="relative" data-field="TestCaseID">
-		<div class="flex h-8 items-center gap-2 rounded-token bg-surface-200-700-token px-2 focus-within:ring-1 focus-within:ring-primary-500/60">
+		<div class="flex h-8 items-center gap-2 bg-surface-200-700-token px-2 focus-within:ring-1 focus-within:ring-primary-500/60">
 			<Search size={12} class="flex-none opacity-60" />
 			<input
 				class="h-6 min-w-0 flex-1 border-0 bg-transparent p-0 text-xs placeholder:opacity-60 focus:ring-0"
@@ -47,7 +47,7 @@
 			/>
 		</div>
 		{#if focused && hits.length}
-			<div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-auto rounded-container-token bg-surface-50 py-1 shadow-xl ring-1 ring-surface-500/30 dark:bg-surface-800">
+			<div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-auto bg-surface-50 py-1 shadow-xl ring-1 ring-surface-500/30 dark:bg-surface-800">
 				{#each hits as testCase (testCase.ID)}
 					<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left text-xs hover:bg-primary-500/15" on:mousedown|preventDefault={() => pick(testCase)}>
 						<span class="min-w-0 flex-1 truncate">{testCase.Title}</span>

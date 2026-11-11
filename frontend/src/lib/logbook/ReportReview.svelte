@@ -33,7 +33,7 @@
 				<div class="flex-1 py-1.5 text-center ring-1 ring-surface-500/20">
 					<div class="text-sm font-bold tabular-nums">{review.severityCounts[severity]}</div>
 					<div class="flex items-center justify-center gap-1 text-3xs opacity-70">
-						<span class="h-2 w-2 rounded-sm {SEVERITY_MARK[severity]}"></span>{severity === "Informational" ? "Info" : severity}
+						<span class="h-2 w-2 {SEVERITY_MARK[severity]}"></span>{severity === "Informational" ? "Info" : severity}
 					</div>
 				</div>
 			{/each}
@@ -95,7 +95,7 @@
 		{#each review.findings as finding, i (finding.ID)}
 			<div class="flex items-center gap-2 py-0.5 text-2xs">
 				<span class="w-9 flex-none font-mono text-3xs opacity-60">{number("F", i)}</span>
-				<span class="h-2 w-2 flex-none rounded-sm {SEVERITY_MARK[finding.Severity] ?? 'bg-surface-400'}"></span>
+				<span class="h-2 w-2 flex-none {SEVERITY_MARK[finding.Severity] ?? 'bg-surface-400'}"></span>
 				<span class="min-w-0 flex-1 truncate">{finding.Title || "Untitled"}</span>
 				{#if missing.has(`finding:${finding.ID}`)}
 					<AlertTriangle size={10} class="flex-none text-warning-800 dark:text-warning-500" />

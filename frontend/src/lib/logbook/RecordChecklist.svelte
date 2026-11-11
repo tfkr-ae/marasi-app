@@ -87,7 +87,7 @@
 									<b class="tabular-nums">{Number(record.CVSSScore).toFixed(1)}</b>
 									<!-- The record's own severity, as its header shows. -->
 									{#if record.Severity}<span
-											class="badge rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
+											class="badge px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
 											>{record.Severity}</span
 										>{/if}
 									<code class="min-w-0 truncate bg-transparent p-0 font-mono text-2xs opacity-70" title={record.CVSSVector}

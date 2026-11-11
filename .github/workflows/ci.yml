@@ -1,0 +1,43 @@
+name: CI
+
+# Checks every pull request and every push to main. build.yml's test job runs
+# only for nightlies, releases and manual builds.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # bootstrap.sh installs wails3 into GOPATH/bin but adds it to PATH only
+      # in its own shell; later steps find it through GITHUB_PATH.
+      - run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # Creates frontend/build, runs npm ci, installs wails3 and generates
+      # the gitignored bindings in frontend/src/lib/bindings.
+      - run: sh scripts/bootstrap.sh
+      - run: sh scripts/check.sh
+        env:
+          GO_TEST_FLAGS: -race

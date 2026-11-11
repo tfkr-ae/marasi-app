@@ -66,6 +66,10 @@ The type scale is Tailwind's rem sizes plus two dense sizes, `text-2xs` (0.6875r
 
 Write every text size in rem, including CodeMirror `fontSize` styles. `lib/textSizeRem.test.js` fails on a text size in px and names its file and line.
 
+Marasi is square-edged. `lib/squareEdges.test.js` fails on any `rounded*` class or CSS radius except `rounded-none`, `rounded-0` and `rounded-full` on a dot of at most `h-4 w-4` (other circles go in its `CIRCLES` list with a reason). The theme pins Skeleton's radius tokens to 0px, and `app.css` squares `btn-icon` and `badge-icon`.
+
+Action buttons (`btn`, `btn-icon`) take their variant from `primaryVariant($modeCurrent)`, or `tertiaryVariant`/`neutralVariant`, in `lib/launchpad/format.js`: no other Skeleton `variant-*` and no border or ring. `lib/buttonVariants.test.js` checks them; its `GRANDFATHERED` list holds the existing exceptions.
+
 `app.css` adds the denser `.btn-group-sm` and `.table-dense`. To match the scale, copy from `LedgerTable.svelte`, `DrawerRail.svelte` or `OpeningScreen.svelte` instead of measuring.
 
 ## Decisions
