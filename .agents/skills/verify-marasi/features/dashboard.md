@@ -58,7 +58,7 @@ Home's counts follow traffic without navigating. Proven, with a request sent thr
 {"name":"live-counts","steps":[{"waitText":"Total Requests\n\n0"},{"waitText":"Total Requests\n\n1","timeoutMs":15000}]}
 ```
 
-Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cmd+9"`: the rail tile and `⌘9` both paint `Connections` (the connection list, `Add connection`, and the picked connection's status, Project, Service version, API level and Instance `Stop`). Settings › Connection shows the same list and details as a section ([settings.md](settings.md)).
+Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cmd+9"`: the rail tile and `⌘9` both paint `Connections` (the connection list, `Add connection`, and the picked connection's status, Project, Service version, API level and Instance `Stop`). Settings › Connection shows the same list and details as a section ([settings.md](settings.md)). Add connection also lists unsaved running local instances under `[data-testid=add-local-running]` (rows `[data-testid=add-local-running-item]`: instance, project, proxy listener, version, and Add). Proven with a second isolated instance named `extra` that had no saved connection yet; one-click Add saves a connection for that instance's current proxy port.
 
 ### Switching projects
 
