@@ -4,7 +4,10 @@ import { emptySelection, rowRange, tableRows } from "./state.js";
 import { isSelected } from "./selectors.js";
 
 /** The selection; ⌘A counts its pairs through `api`. */
-export function createSelection(core, api) {
+// `knownCount(query, asOf)` is the Ledger's count of the results it shows,
+// when it is exact for that query and as_of; ⌘A uses it rather than
+// counting again.
+export function createSelection(core, api, { knownCount = () => null } = {}) {
   const { update, track } = core;
 
   function setSelection(selection) {
@@ -91,7 +94,10 @@ export function createSelection(core, api) {
       incomingResponse: sameID(previous.focus, focus) ? previous.incomingResponse : null,
       query,
     });
-    track(countSelection(query));
+    // The table's own count of these very results needs no second read.
+    const known = knownCount(query.text, asOf);
+    if (known) setSelection({ ...core.current.selection, query: { ...query, count: known } });
+    else track(countSelection(query));
   }
 
   // Counts a ⌘A selection's pairs; dropped when the selection has changed.

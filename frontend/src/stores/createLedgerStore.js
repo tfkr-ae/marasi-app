@@ -154,7 +154,7 @@ export function createLedgerStore(api) {
   const win = createWindow(core, api, { exclusionLoaded: () => exclusion.loaded() });
   const exclusion = createExclusion(core, api, win);
   const query = createQuery(core, api, win);
-  const sel = createSelection(core, api);
+  const sel = createSelection(core, api, { knownCount: win.knownCount });
   const live = createLive(core, api, win, sel);
   const nav = createNavigation(core, api, win, sel);
   const bulk = createBulk(core, api, {
@@ -229,6 +229,7 @@ export function createLedgerStore(api) {
     populate: exclusion.populate,
     resync: exclusion.resync,
     reload: win.reload,
+    forgetCount: win.forgetCount,
     settled,
 
     // Another client's changes, from the stream (ledgerStore.js).
