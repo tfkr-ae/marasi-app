@@ -23,6 +23,7 @@ Which files work together on the Logbook page, how a finding or test case is rea
 - `nextOf` follows `groupsOf`'s on-screen order, findings then test cases, and wraps. With the status filter on All, it skips Done records ("Next in progress").
 - The request/response pair (`RequestPair`) and a text artifact (`ArtifactPreview`) use the Ledger drawer's `DrawerEditor` and behave as the Ledger and Launchpad editors do: syntax by `usesSyntax` and the Syntax setting, wrapping by the shared `lineWrap` store (the Ledger drawer's Wrap lines) and the Line wrapping setting. They have no wrap control of their own; a pane whose long line paused wrapping says `Not wrapped` (`.logbook-wrap-suspended`), as the Launchpad's panes do.
 - A dock section's `GroupPicker` menu sits inside that section's sticky header, so `LogbookOutline` raises the header (`z-20`) while its menu is open; otherwise the next section's header, at the same `z-10`, paints over the menu.
+- A checklist row clamps its text to two lines. When the text runs past them (`clamp` in `RecordChecklist`), a chevron (`data-expand`) or a click on the text shows it in full, read-only, in place (`data-expanded`). One row expands at a time; opening another record or the row's inline fix collapses it.
 - Opening a record (`open(kind, id, focus)`) starts a fix on its first missing required item (`firstMissingOf`), or on `focus` when given. The fix does not take focus, so Next Record (⌘⇧]) and Esc keep working.
 
 ## Changing a record
