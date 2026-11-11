@@ -7,6 +7,7 @@
 	// is a draft edit (onEdit) that only Save persists, except Export, which
 	// writes the selected profile to a file (docs/keybinding-profile-format.md).
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { neutralVariant, primaryVariant } from "../../launchpad/format.js";
 	import { CheckCircle2, ChevronDown, Copy, Download, Pencil, Plus, RotateCcw, Trash2, Upload } from "lucide-svelte";
 	import { ExportKeybindingProfile, ImportKeybindingProfile } from "../../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { PLATFORM_NAMES as platformNames } from "../../keybindings/platform.js";
@@ -38,7 +39,7 @@
 	export let pending = false;
 
 	const inputClass = "h-8 py-1 text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0";
-	const sideButton = "btn btn-sm h-8 shrink-0 variant-soft-primary !border-0 !ring-0";
+	$: sideButton = `btn btn-sm h-8 shrink-0 ${primaryVariant($modeCurrent)}`;
 
 	const toastStore = getToastStore();
 
@@ -289,7 +290,7 @@
 			{/if}
 		</form>
 		<svelte:fragment slot="footer">
-			<button type="button" class="btn btn-sm variant-ghost-surface" on:click={() => (naming = null)}>Cancel</button>
+			<button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" on:click={() => (naming = null)}>Cancel</button>
 			<button
 				type="submit"
 				form="keybindings-profile-name"

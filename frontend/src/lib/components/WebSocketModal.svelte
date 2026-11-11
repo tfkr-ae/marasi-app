@@ -2,6 +2,7 @@
 	import {
 		getModalStore,
 		getToastStore,
+		modeCurrent,
 		TabGroup,
 		Tab,
 	} from "@skeletonlabs/skeleton";
@@ -25,6 +26,7 @@
 	} from "lucide-svelte";
 	import { onDestroy } from "svelte";
 	import { isSuperseded } from "../service/errors.js";
+	import { primaryVariant } from "../launchpad/format.js";
 	import MarasiMenu from "./MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions, websocketTab } from "../keybindings/app.js";
 	import { stepWebSocketTab } from "../keybindings/contexts.js";
@@ -237,7 +239,7 @@
 
 			<div class="flex items-center gap-2">
 				<button
-					class="btn btn-sm variant-soft-error"
+					class="btn btn-sm {primaryVariant($modeCurrent)}"
 					disabled={upgrade.state !== "open" || closing}
 					on:click={closeConnection}
 				>

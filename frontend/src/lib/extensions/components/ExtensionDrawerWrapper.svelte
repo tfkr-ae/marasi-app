@@ -23,7 +23,7 @@
         >
             <h3 class="h3 font-bold">{title}</h3>
             <button
-                class="btn-icon btn-icon-sm variant-soft-surface"
+                class="btn-icon btn-icon-sm hover:bg-surface-500/15"
                 on:click={close}
             >
                 <X size={18} />

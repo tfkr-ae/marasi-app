@@ -929,9 +929,7 @@
 	buttonPositive={$modeCurrent
 		? "btn-sm variant-ghost-primary border-0 ring-0"
 		: "btn-sm variant-filled-primary"}
-	buttonNeutral={$modeCurrent
-		? "btn-sm variant-ghost-surface border-0 ring-0"
-		: "btn-sm variant-ghost-surface"}
+	buttonNeutral={`btn-sm ${neutralVariant($modeCurrent)}`}
 />
 
 <style>
@@ -948,7 +946,7 @@
 		background-color: rgb(var(--color-surface-50)) !important;
 		opacity: 1 !important;
 	}
-	:global(html:not(.dark) .modal-footer .variant-ghost-surface),
+	:global(html:not(.dark) .modal-footer .variant-ghost),
 	:global(html:not(.dark) .modal-footer .variant-ghost-primary) {
 		border: 0 !important;
 		box-shadow: none !important;

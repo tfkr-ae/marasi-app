@@ -16,7 +16,7 @@
 		RotateCw,
 	} from "lucide-svelte";
 	import Logo from "./Logo.svelte";
-	import { primaryButton } from "../launchpad/format.js";
+	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { openingScreen } from "../openProgress.js";
 
 	/** The open in progress (openProgress.js state). */
@@ -37,9 +37,7 @@
 	$: pickedName = screen.choices.find((choice) => choice.path === picked)?.name;
 
 	// The Modal's neutral and positive buttons, square.
-	$: neutral =
-		"btn btn-sm rounded-none " +
-		($modeCurrent ? "variant-ghost-surface border-0 ring-0" : "variant-ghost-surface");
+	$: neutral = neutralButton($modeCurrent);
 	$: positive = primaryButton($modeCurrent);
 
 	const bar = {
