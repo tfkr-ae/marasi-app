@@ -300,6 +300,31 @@ test("sorting by a column reloads from the top under its order_by, and the sort 
   assert.deepEqual(get(store).sort, { field: "status_code", desc: false });
 });
 
+test("a re-sort keeps the results' count rather than counting them again, until a change", async () => {
+  const api = fakeApi({ traffic: [pair(1, { Host: "b.test" }), pair(2, { Host: "a.test" })] });
+  const store = createLedgerStore(api);
+  await store.populate();
+  await store.settled();
+  const counted = countCalls(api).length;
+  assert.ok(counted > 0, "the first read counts");
+
+  await store.sortBy("host");
+  await store.sortBy("host");
+  await store.settled();
+  assert.equal(countCalls(api).length, counted, "a sort only reorders: no new count");
+  assert.equal(get(store).results.count.count, 2);
+
+  store.forgetCount();
+  await store.sortBy("number");
+  await store.settled();
+  assert.ok(countCalls(api).length > counted, "after a change, the next sort counts again");
+
+  const before = countCalls(api).length;
+  await store.reload();
+  await store.settled();
+  assert.ok(countCalls(api).length > before, "any other reload still counts");
+});
+
 test("a pending pair sorts last both ways and moves once its response arrives", async () => {
   const traffic = [pair(1, { StatusCode: 500 }), pair(2, { StatusCode: -1, ContentType: "", Length: "" }), pair(3, { StatusCode: 200 })];
   const api = fakeApi({ traffic });

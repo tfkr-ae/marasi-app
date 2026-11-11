@@ -7,9 +7,13 @@
 	import ArtifactPreview from "./ArtifactPreview.svelte";
 	import RequestList from "./RequestList.svelte";
 	import RequestPair from "./RequestPair.svelte";
+	import { createPairRows } from "./pairRows.js";
 
-	/** readPair, readArtifact and downloadArtifact, as the Logbook store has them. */
+	/** readPair, listLinkedRows, readArtifact and downloadArtifact, as the Logbook store has them. */
 	export let store;
+	/** The record's kind ("finding" or "testCase") and ID, whose saved links the list reads in one query. */
+	export let kind = null;
+	export let recordId = null;
 	/** Linked request IDs. */
 	export let requests = [];
 	/** ArtifactMetadata list. */
@@ -21,13 +25,19 @@
 	export let stackPair = false;
 	export let tab = "requests";
 
-	// Each pair is read once per viewer: the list and the pair share it.
+	// The viewer reads the picked pair in full, once; the list reads only
+	// rows (pairRows.js), so a record with many links never reads every
+	// body.
 	const pairs = new Map();
 	const read = (id) => {
 		const key = String(id);
 		if (!pairs.has(key)) pairs.set(key, store.readPair(id).catch(() => null));
 		return pairs.get(key);
 	};
+	const readRow = createPairRows({
+		listLinked: () => (kind && recordId != null ? store.listLinkedRows(kind, recordId, requests.length) : []),
+		readPair: (id) => store.readPair(id),
+	});
 
 	let request = requests[0] ?? null;
 	let artifactID = artifacts[0]?.ID ?? null;
@@ -61,7 +71,7 @@
 			style={layout === "stack" ? "" : `width: ${listWidth}px`}
 		>
 			{#if tab === "requests"}
-				<RequestList ids={requests} {read} bind:selected={request} />
+				<RequestList ids={requests} read={readRow} bind:selected={request} />
 			{:else}
 				<ArtifactList {artifacts} bind:selected={artifactID} />
 			{/if}

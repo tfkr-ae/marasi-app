@@ -18,7 +18,7 @@ export const COUNT_CHANGE_EVENTS = Object.freeze([
   "launchpad.deleted",
 ]);
 
-/** Calls `schedule` after each of COUNT_CHANGE_EVENTS from `service`. */
-export function followCountChanges(service, schedule) {
-  for (const event of COUNT_CHANGE_EVENTS) service.on(event, () => schedule());
+/** Calls `onChange` after each of COUNT_CHANGE_EVENTS from `service`. */
+export function followCountChanges(service, onChange) {
+  for (const event of COUNT_CHANGE_EVENTS) service.on(event, () => onChange());
 }

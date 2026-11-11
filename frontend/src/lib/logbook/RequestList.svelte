@@ -5,7 +5,7 @@
 
 	/** The linked requests' IDs. */
 	export let ids = [];
-	/** Reads a pair in full (GetRawDetails), id -> Promise<row>. */
+	/** Reads a row, id -> Promise of a pair, or of its listed part (pairRows.js). */
 	export let read;
 	/** The picked request's ID. */
 	export let selected = null;

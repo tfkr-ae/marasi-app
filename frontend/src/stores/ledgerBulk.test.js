@@ -120,6 +120,7 @@ test("⌘A selects the whole query up to the results' as_of, never ids", async (
     queries,
   });
   await store.runQuery("host:api");
+  const callsBefore = api.calls.length;
   store.selectAll();
   await store.settled();
 
@@ -128,9 +129,20 @@ test("⌘A selects the whole query up to the results' as_of, never ids", async (
   assert.deepEqual(selectionSpec(state), { query: "host:api", exclusion: ["image/png"], as_of: idOf(4) });
   assert.deepEqual(selected(store), [idOf(1), idOf(3)], "the loaded rows show as selected");
   assert.equal(state.selection.focus, idOf(3), "the top row is focused");
-  assert.deepEqual(api.calls.at(-1), ["countTraffic", "host:api", "", { AsOf: idOf(4) }]);
+  assert.equal(api.calls.length, callsBefore, "the table's exact count of these results is reused, not read again");
   assert.equal(selectionSize(state), 2);
   assert.equal(allSelectedLabel(state), "All 2 matching selected");
+});
+
+test("⌘A counts its selection when the table's count may be out of date", async () => {
+  const queries = { "host:api": (p) => p.Host === "api.acme.test" };
+  const { store, api } = await storeWith({ traffic: [pair(1), pair(2, { Host: "www.acme.test" }), pair(3)], queries });
+  await store.runQuery("host:api");
+  store.forgetCount();
+  store.selectAll();
+  await store.settled();
+  assert.deepEqual(api.calls.at(-1), ["countTraffic", "host:api", "", { AsOf: idOf(3) }]);
+  assert.equal(allSelectedLabel(get(store)), "All 2 matching selected");
 });
 
 test("⌘A in the live view selects it with an empty query", async () => {

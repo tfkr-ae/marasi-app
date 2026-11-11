@@ -36,9 +36,10 @@ export const savedQueriesStore = createSavedQueriesStore(
 
 // The project's saved queries belong to the project open; a resync reads
 // them again, since another client may have saved one. Match counts start
-// soon after a load or resync, and again after new traffic or another
-// client's change (countChanges.js), so the menu usually opens with its
-// numbers; a switch forgets the last project's.
+// soon after a load or resync, so the menu opens with numbers. New traffic
+// or another client's change (countChanges.js) marks them stale and
+// recounts only while the menu is open; opening it recounts. A switch
+// forgets the last project's.
 projectData.register("savedQueries", {
   clear: savedQueriesStore.clearCounts,
   load: async () => {
@@ -50,7 +51,7 @@ projectData.register("savedQueries", {
     savedQueriesStore.scheduleCounts();
   },
 });
-followCountChanges(service, savedQueriesStore.scheduleCounts);
+followCountChanges(service, savedQueriesStore.countsChanged);
 
 /** The visible saved queries as the query box's ready-made suggestions ({ label, query }). */
 export const readyMadeQueries = derived(savedQueriesStore, (state) =>

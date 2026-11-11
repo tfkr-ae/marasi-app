@@ -1284,10 +1284,12 @@ export function createLogbookStore(api, timers = globalThis) {
     // whether it ran.
     guard: guarded,
     deleteRecord,
-    // Evidence reads: a linked pair in full, an artifact with its bytes
+    // Evidence reads: a linked pair in full, a record's linked pairs as
+    // traffic rows (the evidence list), an artifact with its bytes
     // (Data), and saving an artifact through the native Save dialog (false
     // when cancelled).
     readPair: (id) => api.getPair(id),
+    listLinkedRows: (kind, id, limit) => api.listLinkedRows(kind, id, limit),
     readArtifact: (id) => api.getArtifact(id),
     downloadArtifact: (id) => api.downloadArtifact(id),
     // Report export: the template names, restoring the default template,

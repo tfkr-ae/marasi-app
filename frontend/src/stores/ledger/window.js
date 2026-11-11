@@ -87,13 +87,48 @@ export function createWindow(core, api, { exclusionLoaded }) {
     };
   }
 
+  // The last count read: its query, as_of and exclusion, and what Marasi
+  // answered. A read of the same results (a re-sort, or ⌘A on them) uses it
+  // instead of counting again; forgetCount drops it after any change that
+  // can move a count without moving the as_of (countChanges.js).
+  let lastCount = null;
+  const countKey = (query, asOf, exclusion) => JSON.stringify([query, asOf, [...exclusion].sort()]);
+
+  /** Drops the remembered count, after a change that may alter it. */
+  function forgetCount() {
+    lastCount = null;
+  }
+
+  /**
+   * The remembered count of `query` at `asOf` under the current exclusion,
+   * as { count, capped }, or null when it isn't known exactly.
+   */
+  function knownCount(query, asOf) {
+    if (!lastCount || lastCount.key !== countKey(query, asOf, core.current.exclusion)) return null;
+    return { count: lastCount.counted.Count, capped: lastCount.counted.Capped };
+  }
+
   // Counts the results, and the pairs among them the exclusion hides. The
-  // count never holds up the rows.
-  async function loadCount(gen) {
+  // count never holds up the rows. With `reuse`, a count already read for
+  // these very results is used again.
+  async function loadCount(gen, { reuse = false } = {}) {
     await exclusionLoaded();
     if (gen !== generation) return;
     const { query, results, exclusion } = core.current;
     const asOf = results.shownAsOf ?? "";
+    const key = countKey(query.ranQuery, asOf, exclusion);
+    const show = (counted, all) => {
+      const hidden = !all ? 0 : all.Capped || counted.Capped || all.QueryError ? null : all.Count - counted.Count;
+      updateResults((r) => ({
+        ...r,
+        count: { count: counted.Count, capped: counted.Capped },
+        hidden,
+      }));
+    };
+    if (reuse && lastCount?.key === key) {
+      show(lastCount.counted, lastCount.all);
+      return;
+    }
     try {
       const [counted, all] = await Promise.all([
         api.countTraffic(query.ranQuery, "", { AsOf: asOf }),
@@ -102,12 +137,8 @@ export function createWindow(core, api, { exclusionLoaded }) {
           : null,
       ]);
       if (gen !== generation || counted.QueryError) return;
-      const hidden = !all ? 0 : all.Capped || counted.Capped || all.QueryError ? null : all.Count - counted.Count;
-      updateResults((r) => ({
-        ...r,
-        count: { count: counted.Count, capped: counted.Capped },
-        hidden,
-      }));
+      lastCount = { key, counted, all };
+      show(counted, all);
     } catch (err) {
       console.error("Counting traffic failed:", err);
     }
@@ -118,7 +149,7 @@ export function createWindow(core, api, { exclusionLoaded }) {
    * window, then counts it. Returns the query error, if any, and leaves
    * the earlier results in place when there is one.
    */
-  async function readFirstPage(text, { onSuccess } = {}) {
+  async function readFirstPage(text, { onSuccess, reuseCount = false } = {}) {
     const gen = ++generation;
     firstPageGen = gen;
     loadingForward = loadingBackward = false;
@@ -159,13 +190,16 @@ export function createWindow(core, api, { exclusionLoaded }) {
       querying: false,
       results: { ...resultsFromPage(page, ""), reset: ++resets },
     }));
-    await loadCount(gen);
+    await loadCount(gen, { reuse: reuseCount });
     return null;
   }
 
-  /** Reads the current results again from the top. */
-  function reload() {
-    return track(readFirstPage(core.current.query.ranQuery));
+  /**
+   * Reads the current results again from the top. `reuseCount` keeps a count
+   * already read for the same results, as a re-sort does: it only reorders.
+   */
+  function reload({ reuseCount = false } = {}) {
+    return track(readFirstPage(core.current.query.ranQuery, { reuseCount }));
   }
 
   // Drops pages far from the rows in view until the window fits. A page
@@ -414,6 +448,8 @@ export function createWindow(core, api, { exclusionLoaded }) {
     resultsFromPage,
     readFirstPage,
     reload,
+    forgetCount,
+    knownCount,
     trim,
     loadAround,
     countNewMatches,
@@ -451,6 +487,7 @@ export function createWindow(core, api, { exclusionLoaded }) {
     // A project switch: reads under way are dropped and paging starts again.
     reset: () => {
       generation++;
+      lastCount = null;
       reading = false;
       cancelNewMatches();
       loadingForward = loadingBackward = false;

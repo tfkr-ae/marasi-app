@@ -114,7 +114,8 @@ export function createQuery(core, api, win) {
           : { field, desc: NEWEST_FIRST_FIELDS.has(field) };
       return { ...state, sort };
     });
-    return reload();
+    // A sort only reorders the results, so their count stands.
+    return reload({ reuseCount: true });
   }
 
   return {

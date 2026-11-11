@@ -1,8 +1,8 @@
-// The Ledger toolbar's Highlights and Marks menu counts, kept in the
-// background so each menu opens with its numbers (see createMatchCounts):
-// they start soon after a project load or resync, and again after new
-// traffic or another client's change; a switch forgets the last project's.
-// Opening a menu recounts it at once, keeping the last numbers, dimmed.
+// The Ledger toolbar's Highlights and Marks menu counts (see
+// createMatchCounts): they start soon after a project load or resync; new
+// traffic or another client's change marks them stale, and recounts only a
+// menu that is open; a switch forgets the last project's. Opening a menu
+// recounts it at once, keeping the last numbers, dimmed.
 import { service } from "../lib/service/index.js";
 import { HIGHLIGHT_TERMS } from "../lib/ledger/highlights.js";
 import { MARKS } from "../lib/ledger/marks.js";
@@ -25,4 +25,4 @@ projectData.register("ledgerMenuCounts", {
   clear: () => all.forEach((counts) => counts.clear()),
   load: schedule,
 });
-followCountChanges(service, schedule);
+followCountChanges(service, () => all.forEach((counts) => counts.changed()));

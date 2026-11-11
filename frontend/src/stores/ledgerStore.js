@@ -16,6 +16,7 @@ import { createLedgerApi, toUpgradeEvent } from "./ledgerApi.js";
 import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { createLedgerStore, FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
 import { projectData } from "./projectData.js";
+import { followCountChanges } from "./countChanges.js";
 
 export {
   allSelectedLabel,
@@ -80,6 +81,10 @@ service.on("metadata.updated", ledgerStore.onMetadataUpdated);
 service.on("note.updated", ledgerStore.onNoteUpdated);
 service.on("note.deleted", ledgerStore.onNoteDeleted);
 service.on("traffic.index_complete", ledgerStore.onIndexComplete);
+// A remembered count (reused by a re-sort and ⌘A) is dropped after any
+// change that can alter it, including a finished search index.
+followCountChanges(service, ledgerStore.forgetCount);
+service.on("traffic.index_complete", () => ledgerStore.forgetCount());
 
 if (typeof window !== "undefined") {
   setInterval(ledgerStore.flush, FLUSH_INTERVAL_MS);

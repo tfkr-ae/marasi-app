@@ -93,6 +93,8 @@
 			{#key `${kind}:${record.ID}`}
 				<EvidenceViewer
 					{store}
+					{kind}
+					recordId={record.ID}
 					requests={record.Requests ?? []}
 					artifacts={record.Artifacts ?? []}
 					listWidth={width > 1000 ? 300 : 240}
