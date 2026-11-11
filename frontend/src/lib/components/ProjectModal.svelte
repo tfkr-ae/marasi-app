@@ -2,36 +2,38 @@
     import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
     import { onMount, tick } from "svelte";
     import { projectStore } from "../../stores/projectStore.js";
-    import { pickedProject, projectMatches } from "../../stores/projectApi.js";
+    import { newProject, pickerChoice, pickerRows } from "../../stores/projectApi.js";
     import { connectionStore } from "../../stores/connectionStore.js";
     import { filePickerShown } from "../connection/status.js";
+    import { neutralVariant, primaryVariant } from "../launchpad/format.js";
     import { OpenFileDialog } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
-    import { X } from "lucide-svelte";
+    import { FolderOpen, Plus, X } from "lucide-svelte";
 
     export let parent;
-    let recent = [];
-    let input = '';
-    let filteredList = [];
-    let selectedIndex = -1;
     const modalStore = getModalStore();
-    const cBase = 'card p-4 w-modal shadow-xl space-y-3 text-sm bg-surface-50-800-token text-surface-900-50-token';
-    const cHeader = 'text-2xl font-bold';
-    const cForm = 'space-y-3';
-    
-    // A listed project opens its exact path; typed text opens by name
-    // (projectTarget).
-    function openSelected() {
-        const picked = pickedProject(filteredList, selectedIndex, input);
-        if (picked) {
-            $modalStore[0].response(picked);
-            modalStore.close();
-        }
+
+    let projects = [];
+    let rows = [];
+    let ready = false;
+    let input = "";
+    let selected = -1;
+    let list;
+
+    // Typed text that names no listed project gets a Create row above the
+    // matches; Enter takes the selected row (pickerRows).
+    $: ({ rows, selected } = pickerRows(projects, input));
+    $: row = rows[selected];
+    $: creating = row?.kind === "create" ? newProject(row.text) : null;
+
+    function choose(r = row) {
+        if (!r) return;
+        $modalStore[0].response(pickerChoice(r));
+        modalStore.close();
     }
-    
+
     async function openFileSelector() {
         try {
             const selectedPath = await OpenFileDialog();
-            
             if (selectedPath) {
                 $modalStore[0].response(selectedPath);
                 modalStore.close();
@@ -40,158 +42,104 @@
             console.error("Error opening file dialog:", error);
         }
     }
-    
-    function selectProject(index) {
-        selectedIndex = index;
-    }
-    
-    function filterProjects() {
-        filteredList = projectMatches(recent, input);
-        if (!input.trim()) return;
-        // Reset selected index when filter changes
-        selectedIndex = filteredList.length > 0 ? 0 : -1;
-    }
-    
+
     async function handleKeydown(event) {
-        if (event.key === 'Enter') {
-            // Changed condition to check if an item is selected instead of checking input
+        if (event.key === "Enter") {
             event.preventDefault();
-            openSelected();
-        } else if (event.key === 'ArrowDown') {
+            choose();
+        } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            if (selectedIndex < filteredList.length - 1) {
-                selectedIndex++;
-                // Wait for Svelte to update the DOM
-                await tick();
-                scrollSelectedIntoView();
-            }
-        } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            if (selectedIndex > 0) {
-                selectedIndex--;
-                // Wait for Svelte to update the DOM
-                await tick();
-                scrollSelectedIntoView();
-            }
+            selected = Math.max(0, Math.min(rows.length - 1, selected + (event.key === "ArrowDown" ? 1 : -1)));
+            await tick();
+            list?.querySelector(".project-item.selected")?.scrollIntoView({ block: "nearest", behavior: "auto" });
         }
     }
-    // Simplified scroll function - no setTimeout needed
-    function scrollSelectedIntoView() {
-        const selectedElement = document.querySelector('.project-item.selected');
-        if (selectedElement) {
-            selectedElement.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-        }
-    } 
-    // Watch input changes to update filtered list
-    $: {
-        input;
-        filterProjects();
+
+    function focus(node) {
+        setTimeout(() => node.focus(), 10);
     }
-    
+
     onMount(() => {
         // The recent projects, then the service's other named projects.
-        projectStore.list().then((projects) => {
-            recent = projects;
-            filteredList = projects;
-            if (filteredList.length > 0) {
-                selectedIndex = 0;
-            }
-            
-            // Focus the input field after loading
-            setTimeout(() => {
-                document.querySelector('input[type="search"]')?.focus();
-            }, 10);
-        }).catch((error) => console.error("Listing projects failed:", error));
+        projectStore
+            .list()
+            .then((listed) => (projects = listed))
+            .catch((error) => console.error("Listing projects failed:", error))
+            .finally(() => (ready = true));
     });
 </script>
 
 {#if $modalStore[0]}
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="modal-example-form {cBase} rounded-0" on:keydown={(event) => {
-		if (event.key === 'Escape') {
+    <div class="card p-4 w-modal shadow-xl space-y-3 text-sm bg-surface-50-800-token text-surface-900-50-token rounded-0" on:keydown={(event) => {
+        if (event.key === "Escape") {
             event.stopImmediatePropagation();
             modalStore.close();
-        } 
+        }
     }}>
-		<header class="flex justify-between items-center">
-			<h2 class="text-base font-bold">
-				{$modalStore[0].title ?? '(title missing)'}
-			</h2>
-			<button class="text-2xl leading-none" aria-label="Close" on:click={modalStore.close}>
-				<X size={16} />
-			</button>
-		</header>
-        <form class="modal-form {cForm}" on:submit|preventDefault>
-            <!-- SEARCH BAR AT TOP -->
-            <div class="relative w-full mb-2">
-                <input class="input w-full h-8 py-1 text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
-                       type="search"
-                       name="project-name"
-                       autocomplete="off"
-                       autocorrect="off"
-                       autocapitalize="off"
-                       spellcheck="false"
-                       bind:value={input}
-                       placeholder="Search or enter new project name..."
-                       on:keydown={handleKeydown} />
-            </div>
-            
-            <!-- RECENT PROJECTS LIST -->
-            <div class="card w-full h-64 overflow-y-auto p-0 bg-white dark:bg-surface-700">
-                {#if filteredList.length > 0}
-                    <ul class="project-list">
-                        {#each filteredList as project, i}
-                            <!-- svelte-ignore a11y-click-events-have-key-events -->
-                            <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-                            <li class="project-item {selectedIndex === i ? 'selected' : ''}" 
-                                on:click={() => selectProject(i)}
-                                on:dblclick={() => {
-                                    selectProject(i);
-                                    openSelected();
-                                }}>
-                                <div class="project-name">{project.name}</div>
-                                <div class="project-path">{project.path}</div>
-                            </li>
-                        {/each}
-                    </ul>
-                {:else}
-                    <div class="p-4 text-center text-xs opacity-70">
-                        {input.trim() ? 'No matching projects found' : 'No recent projects'}
+        <header class="flex justify-between items-center">
+            <h2 class="text-base font-bold">{$modalStore[0].title ?? "(title missing)"}</h2>
+            <button class="text-2xl leading-none" aria-label="Close" on:click={modalStore.close}>
+                <X size={16} />
+            </button>
+        </header>
+        <form class="space-y-3" on:submit|preventDefault>
+            <input class="input w-full h-8 py-1 text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
+                   type="search"
+                   name="project-name"
+                   autocomplete="off"
+                   autocorrect="off"
+                   autocapitalize="off"
+                   spellcheck="false"
+                   use:focus
+                   bind:value={input}
+                   placeholder="Find or create a project"
+                   on:keydown={handleKeydown} />
+
+            <div bind:this={list} class="card w-full h-64 overflow-y-auto p-0 bg-white dark:bg-surface-700">
+                {#if !input.trim()}
+                    <div class="px-4 py-2 text-xs opacity-60 flex items-center gap-2">
+                        <Plus size={12} /> Type a name to create a project
                     </div>
                 {/if}
-            </div>
-            
-            <!-- PRIMARY ACTION BUTTON -->
-            <div class="w-full mt-3">
-                <button 
-                    type="button"
-                    class="btn btn-sm w-full {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-                    on:click={openSelected}
-                >
-                    {filteredList.length > 0 ? 'Open Selected' : 'Create New Project'}
-                </button>
-            </div>
-            
-            <!-- ALTERNATIVE ACTION (BROWSE FILES): local only; a remote's
-                 projects open from its list or a typed path. -->
-            {#if filePickerShown($connectionStore.connection)}
-             <hr>
-            <div class="w-full mt-2">
-                <button 
-                    type="button"
-                    class="btn btn-sm w-full {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-                    on:click={openFileSelector}
-                >
-                    Browse Files...
-                </button>
-            </div>
-            {/if}
-            
-            <!-- Simple information about project creation behavior -->
-            <div class="text-xs opacity-70 mt-2">
-                {#if !input.includes('/') && !input.includes('\\')}
-                    New projects with just a name will be created in the default directory.
+                <ul class="project-list">
+                    {#each rows as r, i}
+                        <!-- svelte-ignore a11y-click-events-have-key-events -->
+                        <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+                        <li class="project-item {selected === i ? 'selected' : ''} {r.kind}"
+                            on:click={() => (selected = i)}
+                            on:dblclick={() => choose(r)}>
+                            {#if r.kind === "create"}
+                                {@const made = newProject(r.text)}
+                                <div class="project-name flex items-center gap-2"><Plus size={14} /> Create “{made.name}”</div>
+                                <div class="project-path">New project · {made.path ?? "Projects folder"}</div>
+                            {:else}
+                                <div class="project-name">{r.project.name}</div>
+                                <div class="project-path">{r.project.path}</div>
+                            {/if}
+                        </li>
+                        {#if r.kind === "create" && rows.length > 1}
+                            <li class="text-xs opacity-50 px-4 pt-2 pb-1 uppercase tracking-wide">Existing projects</li>
+                        {/if}
+                    {/each}
+                </ul>
+                {#if ready && !rows.length}
+                    <div class="p-4 text-center text-xs opacity-70">No projects yet</div>
                 {/if}
+            </div>
+
+            <div class="flex gap-2">
+                <!-- Browse: local only; a remote's projects open from the list or a typed path. -->
+                {#if filePickerShown($connectionStore.connection)}
+                    <button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" on:click={openFileSelector}>
+                        <FolderOpen size={14} /><span>Browse…</span>
+                    </button>
+                {/if}
+                <button type="button" class="btn btn-sm flex-1 min-w-0 {primaryVariant($modeCurrent)}" disabled={!row} on:click={() => choose()}>
+                    <span class="truncate">
+                        {#if creating}Create “{creating.name}”{:else if row}Open {row.project.name}{:else}Open{/if}
+                    </span>
+                </button>
             </div>
         </form>
     </div>
@@ -203,12 +151,16 @@
         padding: 0;
         margin: 0;
     }
-    
+
     .project-item {
         padding: 0.75rem 1rem;
         cursor: pointer;
     }
-    
+
+    .project-item.create {
+        border-bottom: 1px dashed rgb(var(--color-surface-500) / 0.3);
+    }
+
     .project-item:hover,
     .project-item.selected {
         background-color: rgb(var(--color-primary-100));
@@ -218,12 +170,12 @@
     :global(.dark) .project-item.selected {
         background-color: rgb(var(--color-primary-500) / 0.2);
     }
-    
+
     .project-name {
         font-weight: 500;
         margin-bottom: 0.25rem;
     }
-    
+
     .project-path {
         font-size: 0.8rem;
         opacity: 0.7;
