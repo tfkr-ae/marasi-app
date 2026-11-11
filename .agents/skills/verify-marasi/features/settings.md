@@ -2,7 +2,7 @@
 
 ## Sub-features
 
-- Connection section (first in the list): the connections with the active one's status, `Add connection`, the picked connection's details (as in the Connections modal, [dashboard.md](dashboard.md)), and When quitting (`[data-testid=when-quitting]`: `Ask`/`Keep Marasi running`/`Stop Marasi`, saved to `when_quitting` in `marasi_appconfig.yaml`)
+- Connection section (first in the list): the connections with the active one's status, `Add connection` (including unsaved running local instances at `[data-testid=add-local-running]`, as in the Connections modal, [dashboard.md](dashboard.md)), the picked connection's details, and When quitting (`[data-testid=when-quitting]`: `Ask`/`Keep Marasi running`/`Stop Marasi`, saved to `when_quitting` in `marasi_appconfig.yaml`)
 - Appearance section: Text size (`Small`/`Default`/`Large`/`X-Large`, saved to `text_size` in `marasi_appconfig.yaml`; the global `⌘=`/`⌘-`/`⌘0` step and reset it) and the Dark mode toggle
 - Vim, syntax mode, line wrapping (`wrap_mode`), default interface, and default port
 - Waypoint management
