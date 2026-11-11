@@ -245,7 +245,9 @@
 
 <svelte:window on:pointerdown|capture={onWindowPointerDown} on:resize={measureOverflow} />
 
-<div class="flex min-w-0 flex-1 items-start gap-1">
+<!-- Expanded, the box keeps at least 3/5 of the row, so a long error beside
+     it truncates instead of squeezing the query into a narrow column. -->
+<div class="flex min-w-0 {expanded ? 'shrink-0 grow basis-3/5' : 'flex-1'} items-start gap-1">
 	<div
 		bind:this={parent}
 		class="ledger-query min-w-0 flex-1 {expanded ? 'ledger-query-expanded' : ''}"
@@ -255,7 +257,7 @@
 		<button
 			type="button"
 			id="ledgerQueryExpand"
-			class="flex-none p-0.5 opacity-60 hover:opacity-100"
+			class="ledger-query-line flex flex-none items-center px-0.5 opacity-60 hover:opacity-100"
 			title={expanded ? "Back to one line" : "Show the whole query"}
 			aria-label={expanded ? "Back to one line" : "Show the whole query"}
 			aria-pressed={expanded}
@@ -290,6 +292,10 @@
 		font-family: var(--theme-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 		overflow: hidden;
 		line-height: 1.5;
+	}
+	/* The expand button is one query line tall, centred on the first line. */
+	.ledger-query-line {
+		height: 1.3125rem;
 	}
 	.ledger-query-expanded :global(.cm-scroller) {
 		max-height: 30vh;
