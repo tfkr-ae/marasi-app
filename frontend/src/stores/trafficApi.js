@@ -65,6 +65,24 @@ export function toResponseEvent(data) {
 }
 
 /**
+ * The query for GET /traffic/{id} that leaves out what a reader doesn't
+ * need: `raw: false` drops the raw request and response (base64),
+ * `prettified: false` the prettified copies. Both default to true, as
+ * Marasi's do. A dropped part reads as "" in toDetails.
+ */
+export function pairQuery({ raw = true, prettified = true } = {}) {
+  const query = {};
+  if (!raw) query.raw = false;
+  if (!prettified) query.prettified = false;
+  return query;
+}
+
+/** What a reader that shows only the raw text asks for. */
+export const RAW_ONLY = Object.freeze({ prettified: false });
+/** What a reader that shows only number, method, host, path and status asks for. */
+export const NO_BODIES = Object.freeze({ raw: false, prettified: false });
+
+/**
  * GET /traffic/{id} as the full pair the drawer reads (the binding's
  * RequestResponseRow): raw bodies as text, prettified copies as "" when
  * the pair has none.

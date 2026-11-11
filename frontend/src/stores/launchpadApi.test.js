@@ -11,6 +11,7 @@ import { createLaunchpadStore, isDraftDirty } from "./createLaunchpadStore.js";
 import { serviceError } from "../lib/service/errors.js";
 import { entrySearchQuery } from "../lib/launchpad/entrySearch.js";
 import { pendingLaunchIDs } from "../lib/launchPending.js";
+import { fakeServiceClient } from "./fakeServiceClient.js";
 import { marasiMoveRefusal } from "../lib/launchpad/entryMove.js";
 
 // A fake service client: `routes` maps "METHOD /path" to a body, or to a
@@ -353,4 +354,13 @@ test("launchpad events map to the store's summary, and traffic.changed names the
   assert.deepEqual(launchpadsChangedBy({ change: "link", selection, target: { kind: "finding", id: "f1" } }), []);
   assert.equal(launchpadsChangedBy({ change: "delete", selection }), null);
   assert.equal(launchpadsChangedBy({ change: "highlight", selection }), null);
+});
+
+test("getRawDetails reads only the raw text: Launchpad never shows the prettified copies", async () => {
+  const client = fakeServiceClient({
+    "GET /traffic/0190a": { id: "0190a", number: 1, request: { method: "GET", raw: "R0VUIC8=" }, response: { status_code: 200, raw: null }, prettified: { request: null, response: null } },
+  });
+  const details = await createLaunchpadApi(client).getRawDetails("0190a");
+  assert.deepEqual(client.calls.at(-1).query, { prettified: false });
+  assert.equal(details.Request.Raw, "GET /");
 });

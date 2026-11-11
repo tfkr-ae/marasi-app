@@ -282,7 +282,7 @@ export function createLedgerStore(api) {
 
     /** The request pickers' options: the newest pairs matching `text`. */
     searchRequests: (text) => searchRequests(api.queryTraffic, text),
-    getDetails: (id) => api.getRawDetails(id),
+    getDetails: (id, parts) => api.getRawDetails(id, parts),
     getMetadata: (id) => api.getMetadata(id),
     getNote: (id) => api.getNote(id),
     saveNote: bulk.saveNote,

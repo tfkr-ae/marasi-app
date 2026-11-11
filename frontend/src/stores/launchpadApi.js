@@ -7,7 +7,7 @@
 // trafficApi.js's toRequestEvent and toResponseEvent) is
 // exported for launchpadStore.js.
 import { encodeBase64Text } from "../lib/service/bytes.js";
-import { toDetails } from "./trafficApi.js";
+import { pairQuery, RAW_ONLY, toDetails } from "./trafficApi.js";
 
 /** A launchpad from GET /launchpad, in the store's fields. */
 export function toLaunchpad(launchpad) {
@@ -101,7 +101,7 @@ export function createLaunchpadApi(client) {
     // Null for a pair the service can't find, as the binding gave.
     async getRawDetails(id) {
       try {
-        return toLaunchpadDetails(await client.get(`/traffic/${id}`));
+        return toLaunchpadDetails(await client.get(`/traffic/${id}`, pairQuery(RAW_ONLY)));
       } catch (err) {
         if (isNotFound(err)) return null;
         throw err;

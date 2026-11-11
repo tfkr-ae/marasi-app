@@ -8,6 +8,7 @@
 	import RequestList from "./RequestList.svelte";
 	import RequestPair from "./RequestPair.svelte";
 	import { createPairRows } from "./pairRows.js";
+	import { NO_BODIES } from "../../stores/trafficApi.js";
 
 	/** readPair, listLinkedRows, readArtifact and downloadArtifact, as the Logbook store has them. */
 	export let store;
@@ -36,7 +37,7 @@
 	};
 	const readRow = createPairRows({
 		listLinked: () => (kind && recordId != null ? store.listLinkedRows(kind, recordId, requests.length) : []),
-		readPair: (id) => store.readPair(id),
+		readPair: (id) => store.readPair(id, NO_BODIES),
 	});
 
 	let request = requests[0] ?? null;

@@ -2,7 +2,7 @@
 // takes, each call a control API route (or a few) mapped to the shapes the
 // store reads. The content-type exclusion is the app's: `exclusion`
 // (contentTypeExclusion.js) passes it on every traffic read.
-import { countTraffic, readTraffic, toDetails } from "./trafficApi.js";
+import { countTraffic, pairQuery, readTraffic, toDetails } from "./trafficApi.js";
 
 // The body key that names a link target, by the store's target kind.
 const TARGET_KEYS = { launchpad: "launchpad_id", finding: "finding_id", test_case: "test_case_id" };
@@ -69,9 +69,10 @@ export function createLedgerApi(client, { exclusion }) {
         Complete: { sitemap: counted.sitemap?.complete ?? true },
       };
     },
-    // The full pair, or null when it's gone.
-    getRawDetails: async (id) => {
-      const pair = await orNull(client.get(`/traffic/${id}`));
+    // The full pair, or null when it's gone. `parts` (pairQuery) leaves out
+    // the raw text or the prettified copies.
+    getRawDetails: async (id, parts) => {
+      const pair = await orNull(client.get(`/traffic/${id}`, pairQuery(parts)));
       return pair && toDetails(pair);
     },
     getMetadata: (id) => client.get(`/traffic/${id}/metadata`),
