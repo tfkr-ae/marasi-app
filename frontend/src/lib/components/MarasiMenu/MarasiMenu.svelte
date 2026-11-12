@@ -17,7 +17,7 @@
 	import { buildMenu, entryForKey, isReservedKey, searchMenu } from "./menuModel.js";
 	import { groupIcon, groupTone, NEUTRAL_TONE } from "./groupStyle.js";
 	import MenuKeys from "./MenuKeys.svelte";
-	import { iosCheck } from "../../platform.js";
+	import { mobileCheck } from "../../platform.js";
 
 	// The page's entries: { actionId, icon }, optionally with a live name,
 	// subtitle or keywords. Text not given comes from the catalog. An entry
@@ -40,8 +40,8 @@
 	let letterHeld = false;
 	let missedKey = "";
 	let missedTimer;
-	let onIOS = false;
-	iosCheck.then((ios) => (onIOS = ios));
+	let onMobile = false;
+	mobileCheck.then((isMobile) => (onMobile = isMobile));
 
 	export async function toggle() {
 		if (dialog.open) return close();
@@ -51,18 +51,18 @@
 		letterHeld = false;
 		lastPointer = pointer;
 		// iOS: the search box stays read-only, so no keyboard, until it is
-		// tapped (unlockSearch); the dialog focuses itself (focusSelfOnIOS).
-		if (onIOS) input.readOnly = true;
+		// tapped (unlockSearch); the dialog focuses itself (focusSelfOnMobile).
+		if (onMobile) input.readOnly = true;
 		dialog.showModal();
-		if (onIOS) return;
+		if (onMobile) return;
 		await tick();
 		input?.focus();
 	}
 	// On iOS the dialog focuses itself when it opens, not the search box (or
 	// the list, which scrolled the search box away). Set as an attribute: the
 	// dialog reads it when it opens.
-	const focusSelfOnIOS = (node) => {
-		iosCheck.then((ios) => ios && node.setAttribute("autofocus", ""));
+	const focusSelfOnMobile = (node) => {
+		mobileCheck.then((isMobile) => isMobile && node.setAttribute("autofocus", ""));
 	};
 	// The tap that unlocks the search box focuses it, raising the keyboard.
 	function unlockSearch() {
@@ -227,7 +227,7 @@
 <dialog
 	class="marasi-menu w-[40rem] max-w-[92vw] overflow-hidden border border-surface-300-600-token bg-surface-50-900-token p-0 text-surface-900-50-token shadow-2xl"
 	bind:this={dialog}
-	use:focusSelfOnIOS
+	use:focusSelfOnMobile
 	on:click={handleClickOutside}
 	on:cancel|preventDefault={close}
 	on:keyup={onKeyup}
@@ -264,7 +264,7 @@
 			aria-label="Search commands"
 		/>
 		<!-- On iOS the menu is a full-screen sheet with no backdrop to tap. -->
-		{#if onIOS}
+		{#if onMobile}
 			<button type="button" class="flex-none p-1 opacity-70" aria-label="Close" on:click={close}><X size="16" /></button>
 		{/if}
 	</div>

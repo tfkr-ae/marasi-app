@@ -9,7 +9,7 @@
 	import { getModalStore } from "@skeletonlabs/skeleton";
 	import { Laptop, Plus, Server, X } from "lucide-svelte";
 	import { connectionStore } from "../../stores/connectionStore.js";
-	import { ios } from "../platform.js";
+	import { mobile } from "../platform.js";
 	import AddConnection from "./AddConnection.svelte";
 	import ConnectionDetail from "./ConnectionDetail.svelte";
 	import PairConnection from "./PairConnection.svelte";
@@ -19,11 +19,11 @@
 	const modalStore = getModalStore();
 	// A connection's id, or "add" for the add form.
 	let picked = $connectionStore.connection.id;
-	$: view = connectionsView({ ios: $ios, connections: $connectionStore.connections, picked });
+	$: view = connectionsView({ mobile: $mobile, connections: $connectionStore.connections, picked });
 
 	function added(id) {
 		picked = id;
-		if ($ios) connectionStore.switchTo(id);
+		if ($mobile) connectionStore.switchTo(id);
 	}
 	const row = (on) =>
 		`flex w-full items-center gap-2 border-l-4 px-3 py-2 text-left hover:bg-surface-200 dark:hover:bg-surface-700 ${

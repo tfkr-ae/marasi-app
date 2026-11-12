@@ -3,7 +3,7 @@
 	// test-case icon) and title, then Next, Edit and Delete; below, what it
 	// needs, its linked records and its evidence. An item filled in place
 	// saves on its own; moving away from one with input asks first.
-	import { ios } from "../platform.js";
+	import { mobile } from "../platform.js";
 	import { tick } from "svelte";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { ArrowLeft, ArrowRight, BookCheck, Pencil, Trash2 } from "lucide-svelte";
@@ -99,7 +99,7 @@
 					requests={record.Requests ?? []}
 					artifacts={record.Artifacts ?? []}
 					listWidth={width > 1000 ? 300 : 240}
-					layout={$ios && width < 560 ? "stack" : "split"}
+					layout={$mobile && width < 560 ? "stack" : "split"}
 					stackPair={width < 860}
 				/>
 			{/key}

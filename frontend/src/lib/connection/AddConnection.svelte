@@ -15,7 +15,7 @@
 	import { addConnection, addLocalConnection, errorText, listInstances } from "./manage.js";
 	import { parsePairing } from "./pairing.js";
 	import { PORT_RANGE_MESSAGE, parsePort } from "./localPort.js";
-	import { ios, iosCheck } from "../platform.js";
+	import { mobile, mobileCheck } from "../platform.js";
 
 	const dispatch = createEventDispatcher();
 	$: primary = primaryButton($modeCurrent);
@@ -33,7 +33,7 @@
 	let instances = [];
 	$: running = unsavedInstances(instances, $connectionStore.connections);
 	onMount(async () => {
-		if (!(await iosCheck)) instances = await listInstances();
+		if (!(await mobileCheck)) instances = await listInstances();
 	});
 
 	async function add(input, save = addConnection) {
@@ -77,7 +77,7 @@
 
 <div class="text-sm" data-testid="add-connection">
 	<h3 class="text-sm font-bold">Add a connection</h3>
-	{#if !$ios}
+	{#if !$mobile}
 	<p class="mt-3 flex items-center gap-2 text-xs opacity-70"><Laptop size={14} /> This machine</p>
 	{#if running.length}
 		<ul class="mt-1 divide-y divide-surface-300 border border-surface-300 text-xs dark:divide-surface-600 dark:border-surface-600" data-testid="add-local-running">

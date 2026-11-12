@@ -3,7 +3,7 @@
     import { getDrawerStore } from "@skeletonlabs/skeleton";
     import { X } from "lucide-svelte";
     import { extensionsStore } from "../../stores/extensionsStore.js";
-    import { ios } from "../platform.js";
+    import { mobile } from "../platform.js";
 
     const drawerStore = getDrawerStore();
 
@@ -28,9 +28,9 @@
 </script>
 <!-- On iOS the drawer is a full-screen sheet (app.css) with no backdrop
      to tap, so its title row carries a close button. -->
-<div class="extension-logs-head relative p-1 text-center text-sm font-bold" class:ios-logs-head={$ios}>
+<div class="extension-logs-head relative p-1 text-center text-sm font-bold" class:mobile-logs-head={$mobile}>
     {extensionName} Logs
-    {#if $ios}
+    {#if $mobile}
         <button
             type="button"
             class="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center opacity-70"
@@ -53,6 +53,6 @@
                                 )}] - {log.Text.trim()}
         </pre>
     {/each}
-{:else if $ios}
+{:else if $mobile}
     <p class="p-8 text-center text-xs opacity-60">No logs yet</p>
 {/if}

@@ -1,7 +1,7 @@
 <script context="module">
 	// The docks' states the iOS app has collapsed already: each starts
 	// collapsed there, once, so one the researcher opens stays open.
-	const collapsedOnIOS = new WeakSet();
+	const collapsedOnMobile = new WeakSet();
 </script>
 
 <script>
@@ -17,7 +17,7 @@
 	import { tick } from "svelte";
 	import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-svelte";
 	import { DOCK, dragWidth, settleDrag, toggleDock } from "./dock.js";
-	import { iosCheck } from "../platform.js";
+	import { mobileCheck } from "../platform.js";
 
 	export let state;
 	export let limits = DOCK;
@@ -49,16 +49,16 @@
 	// Narrow (the iPhone Duo folded) the open dock covers the page, so
 	// choosing what it lists (a row marked data-dock-pick) closes it and
 	// shows the choice. A tap with Shift or ⌘ picks more and stays.
-	let onIOS = false;
+	let onMobile = false;
 	function closeOnPick(event) {
-		if (!onIOS || event.shiftKey || event.metaKey || event.ctrlKey) return;
+		if (!onMobile || event.shiftKey || event.metaKey || event.ctrlKey) return;
 		if (!matchMedia("(max-width: 40rem)").matches) return;
 		if (event.target.closest?.("[data-dock-pick]")) collapse();
 	}
-	iosCheck.then((ios) => {
-		onIOS = ios;
-		if (!ios || collapsedOnIOS.has(state)) return;
-		collapsedOnIOS.add(state);
+	mobileCheck.then((isMobile) => {
+		onMobile = isMobile;
+		if (!isMobile || collapsedOnMobile.has(state)) return;
+		collapsedOnMobile.add(state);
 		setDock({ collapsed: true });
 	});
 

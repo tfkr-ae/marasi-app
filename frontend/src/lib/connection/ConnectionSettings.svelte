@@ -16,12 +16,12 @@
 	import ConnectionDetail from "./ConnectionDetail.svelte";
 	import PairConnection from "./PairConnection.svelte";
 	import { connectionsView } from "./pairing-view.js";
-	import { ios } from "../platform.js";
+	import { mobile } from "../platform.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
 
 	// A connection's id, or "add" for the add form.
 	let picked = $connectionStore.connection.id;
-	$: view = connectionsView({ ios: $ios, connections: $connectionStore.connections, picked });
+	$: view = connectionsView({ mobile: $mobile, connections: $connectionStore.connections, picked });
 	$: activeId = $connectionStore.connection.id;
 	const toastStore = getToastStore();
 	$: primary = primaryButton($modeCurrent);
@@ -33,7 +33,7 @@
 	// As in the Connections modal, the iOS app switches to a new remote at once.
 	function added(id) {
 		picked = id;
-		if ($ios) connectionStore.switchTo(id);
+		if ($mobile) connectionStore.switchTo(id);
 	}
 
 	function setWhenQuitting(value) {
@@ -87,7 +87,7 @@
 	{/if}
 </div>
 
-{#if !$ios}
+{#if !$mobile}
 <div
 	class="settings-row flex items-center justify-between gap-8 border-b border-surface-300 py-3 dark:border-surface-600"
 	data-testid="when-quitting"

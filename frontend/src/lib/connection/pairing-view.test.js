@@ -6,28 +6,28 @@ const local = { id: "local", kind: "local", name: "Local" };
 const lab = { id: "lab", kind: "remote", name: "Lab", url: "http://10.0.0.5:9000" };
 
 test("the desktop modal lists every connection and shows the picked one", () => {
-  const view = connectionsView({ ios: false, connections: [local, lab], picked: "lab" });
+  const view = connectionsView({ mobile: false, connections: [local, lab], picked: "lab" });
   assert.deepEqual(view, { listed: [local, lab], showList: true, pane: "detail", connection: lab });
 });
 
 test("the desktop modal falls back to the first connection, and shows the add form for add", () => {
-  assert.equal(connectionsView({ ios: false, connections: [local, lab], picked: "gone" }).connection, local);
-  assert.equal(connectionsView({ ios: false, connections: [local, lab], picked: "add" }).pane, "add");
+  assert.equal(connectionsView({ mobile: false, connections: [local, lab], picked: "gone" }).connection, local);
+  assert.equal(connectionsView({ mobile: false, connections: [local, lab], picked: "add" }).pane, "add");
 });
 
 test("on iOS with no remote the modal is only the scanner", () => {
-  const view = connectionsView({ ios: true, connections: [local], picked: "local" });
+  const view = connectionsView({ mobile: true, connections: [local], picked: "local" });
   assert.deepEqual(view, { listed: [], showList: false, pane: "pair", connection: null });
 });
 
 test("on iOS the modal lists the remotes and never Local", () => {
-  const view = connectionsView({ ios: true, connections: [local, lab], picked: "lab" });
+  const view = connectionsView({ mobile: true, connections: [local, lab], picked: "lab" });
   assert.deepEqual(view, { listed: [lab], showList: true, pane: "detail", connection: lab });
 });
 
 test("on iOS picking add, or still being on Local, shows the scanner", () => {
-  assert.equal(connectionsView({ ios: true, connections: [local, lab], picked: "add" }).pane, "pair");
-  assert.equal(connectionsView({ ios: true, connections: [local, lab], picked: "local" }).pane, "pair");
+  assert.equal(connectionsView({ mobile: true, connections: [local, lab], picked: "add" }).pane, "pair");
+  assert.equal(connectionsView({ mobile: true, connections: [local, lab], picked: "local" }).pane, "pair");
 });
 
 test("each scanner failure has its line, and an unknown one names itself", () => {

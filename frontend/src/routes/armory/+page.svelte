@@ -73,7 +73,7 @@
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
 	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
 	import { isSuperseded } from "../../lib/service/errors.js";
-	import { ios } from "../../lib/platform.js";
+	import { mobile } from "../../lib/platform.js";
 
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
@@ -846,10 +846,10 @@
 				<!-- Over the bottom of the workspace only, so it moves with the
 				     dock. The red top line is drawn over the drawer, as in the
 				     Ledger, so CodeMirror's sticky gutters can't paint over it. -->
-				<!-- On iOS, maximised fills the screen (app.css, .ios-fullscreen). -->
+				<!-- On mobile, maximised fills the screen (app.css, .mobile-fullscreen). -->
 				<div
 					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised ? 'top-0' : ''}"
-					class:ios-fullscreen={$ios && drawerMaximised}
+					class:mobile-fullscreen={$mobile && drawerMaximised}
 					style={drawerMaximised ? "" : `height: ${drawerShare * 100}%`}
 				>
 					{#if !drawerMaximised}

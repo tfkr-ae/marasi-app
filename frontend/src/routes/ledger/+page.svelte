@@ -31,7 +31,7 @@
 	import { highlightPalette } from "../../stores/highlightsStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
-	import { ios } from "../../lib/platform.js";
+	import { mobile } from "../../lib/platform.js";
 	import {
 		ledgerStore,
 		tableRows,
@@ -306,10 +306,10 @@
 				     gutters are composited layers (z-index 200) that WebKit's elastic
 				     scrolling could paint over a border, and a border also made the
 				     page a pixel taller than its box. -->
-				<!-- On iOS, maximised fills the screen (app.css, .ios-fullscreen). -->
+				<!-- On mobile, maximised fills the screen (app.css, .mobile-fullscreen). -->
 				<div
 					class="relative isolate min-h-0"
-					class:ios-fullscreen={$ios && $drawerLayout.maximised}
+					class:mobile-fullscreen={$mobile && $drawerLayout.maximised}
 					style="flex: {$drawerLayout.maximised ? 1 : $drawerLayout.split} 1 0"
 				>
 					{#if !$drawerLayout.maximised}

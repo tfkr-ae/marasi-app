@@ -85,7 +85,7 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
-	import { ios, iosCheck } from "../lib/platform.js";
+	import { mobile, mobileCheck } from "../lib/platform.js";
 	import { installSwipeToClose } from "../lib/swipeToClose.js";
 	import { installLongPress, installTwoFingerSwipeDown, keepKeyboardDown } from "../lib/touch.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
@@ -339,10 +339,10 @@
 	// (app.css, overlayIsolation.js). A tap on one of its pages closes them,
 	// unless the modal holds edits it asks about before closing; More only
 	// opens its sheet.
-	const liveNav = () => ($ios ? ".nav-rail, .bottom-bar, .bottom-bar-backdrop" : null);
+	const liveNav = () => ($mobile ? ".nav-rail, .bottom-bar, .bottom-bar-backdrop" : null);
 	const GUARDED_MODALS = ["LogbookRecord", "Keybindings", "QuitQuestion"];
 	function closeOverlaysForNav(event) {
-		if (!$ios) return;
+		if (!$mobile) return;
 		const tile = event.target?.closest?.(".nav-rail a, .nav-rail button, .bottom-bar button");
 		if (!tile || tile.closest(".bottom-bar-more")) return;
 		if ($modalStore.length && !GUARDED_MODALS.includes($modalStore[0]?.component)) modalStore.clear();
@@ -371,8 +371,8 @@
 	// iOS: a swipe down closes the open modal, drawer or menu.
 	onMount(() => {
 		let stop = () => {};
-		iosCheck.then((onIOS) => {
-			if (onIOS) stop = installSwipeToClose(() => [$modalStore.length, $modalStore[0], $drawerStore.open]);
+		mobileCheck.then((onMobile) => {
+			if (onMobile) stop = installSwipeToClose(() => [$modalStore.length, $modalStore[0], $drawerStore.open]);
 		});
 		return () => stop();
 	});
@@ -441,8 +441,8 @@
 		});
 		// Touch fixes, on iOS only (lib/touch.js).
 		let stopTouch = () => {};
-		iosCheck.then((onIOS) => {
-			if (!onIOS) return;
+		mobileCheck.then((onMobile) => {
+			if (!onMobile) return;
 			const stopLongPress = installLongPress(window);
 			const stopKeyboard = keepKeyboardDown(modalStore, document);
 			// Opens the Marasi menu, not over another dialog.
@@ -486,7 +486,7 @@
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"
 				aspectRatio="py-2.5 px-1.5"
-				width={$ios ? "w-12" : "w-[4.75rem]"}
+				width={$mobile ? "w-12" : "w-[4.75rem]"}
 				spacing="space-y-0.5"
 			>
 				<!-- AppRailTiles -->
@@ -506,7 +506,7 @@
 							class="flex justify-center items-center w-full"
 						>
 							<Logo
-								size={$ios ? "36" : "52"}
+								size={$mobile ? "36" : "52"}
 								mode={$page.url.pathname ===
 									"/" ||
 								$modeCurrent
@@ -949,7 +949,7 @@
 					/>
 				{/if}
 			</div>
-			{#if $ios}
+			{#if $mobile}
 				<BottomBar primary={barPrimary} more={barMore} onConnections={openConnections} />
 			{/if}
 		{:else if !$opening}

@@ -1,26 +1,50 @@
-// Whether this is the iOS app, asked of Go once when the app loads (the
-// layout registers the Connections modal, which imports this): false until
-// Go answers, and when the question fails. On iOS the root element also gets
-// the `ios` class, for touch-only CSS in app.css.
+// Which platform the app runs on, asked of Go once when the app loads (the
+// layout registers the Connections modal, which imports this): "desktop"
+// until Go answers, and when the question fails.
 //
-// The iOS app runs no Marasi CLI, no Chrome and no app updater of its own,
-// so what needs them is hidden there; nothing changes on the desktop.
-import { writable } from "svelte/store";
-import { isIOS } from "./runtime.js";
+// Two questions, kept apart:
+// - `mobile`: a phone or tablet app (iOS, Android). It runs no Marasi CLI,
+//   no Chrome and no app updater of its own, pairs with a remote service,
+//   and takes the touch layout. The root element gets the `mobile` class,
+//   for the touch-only CSS.
+// - `platform`: which one, for the few things that differ between them
+//   (the share sheet, the QR scanner). The root element gets its name as a
+//   class too (`ios`, `android`).
+// Nothing changes on the desktop.
+import { derived, writable } from "svelte/store";
+import { platformOS } from "./runtime.js";
 
-/** Resolves to whether this is the iOS app; false when Go can't say. */
-export const iosCheck = isIOS().catch(() => false);
+const MOBILE_OS = new Set(["ios", "android"]);
 
-const store = writable(false);
-iosCheck.then((ios) => {
-	store.set(ios);
-	if (ios && typeof document !== "undefined") document.documentElement.classList.add("ios");
+/** Maps Go's OS (runtime.GOOS) to "ios", "android" or "desktop". */
+export function platformOf(os) {
+	return MOBILE_OS.has(os) ? os : "desktop";
+}
+
+/** Resolves to "ios", "android" or "desktop"; "desktop" when Go can't say. */
+export const platformCheck = platformOS()
+	.then(platformOf)
+	.catch(() => "desktop");
+
+/** Resolves to whether this is the iOS or Android app. */
+export const mobileCheck = platformCheck.then((name) => name !== "desktop");
+
+const store = writable("desktop");
+platformCheck.then((name) => {
+	store.set(name);
+	if (name !== "desktop" && typeof document !== "undefined") {
+		document.documentElement.classList.add("mobile", name);
+	}
 });
 
-export const ios = { subscribe: store.subscribe };
+/** "ios", "android" or "desktop". */
+export const platform = { subscribe: store.subscribe };
 
-/** ⌘K actions the iOS app leaves out: they start Chrome or update the app. */
-export const IOS_HIDDEN_ACTIONS = new Set(["global.start-chrome", "global.check-for-updates"]);
+/** Whether this is the iOS or Android app. */
+export const mobile = derived(store, (name) => name !== "desktop");
 
-/** Settings sections the iOS app leaves out: Chrome, and the app and CLI updaters. */
-export const IOS_HIDDEN_SECTIONS = new Set(["browser", "updates"]);
+/** ⌘K actions the mobile app leaves out: they start Chrome or update the app. */
+export const MOBILE_HIDDEN_ACTIONS = new Set(["global.start-chrome", "global.check-for-updates"]);
+
+/** Settings sections the mobile app leaves out: Chrome, and the app and CLI updaters. */
+export const MOBILE_HIDDEN_SECTIONS = new Set(["browser", "updates"]);

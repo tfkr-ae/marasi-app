@@ -9,10 +9,10 @@
  * connection, `connection`), "add" (the desktop add form) or "pair" (the
  * iOS scanner with its manual form).
  */
-export function connectionsView({ ios, connections, picked }) {
-  const listed = ios ? connections.filter((c) => c.kind !== "local") : connections;
+export function connectionsView({ mobile, connections, picked }) {
+  const listed = mobile ? connections.filter((c) => c.kind !== "local") : connections;
   const connection = listed.find((c) => c.id === picked) ?? null;
-  if (ios) {
+  if (mobile) {
     const pairing = picked === "add" || connection === null;
     return { listed, showList: listed.length > 0, pane: pairing ? "pair" : "detail", connection };
   }

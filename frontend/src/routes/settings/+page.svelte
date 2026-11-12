@@ -57,7 +57,7 @@
 	import CLISettings from "../../lib/connection/CLISettings.svelte";
 	import { statusHint } from "../../lib/connection/status.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
-	import { IOS_HIDDEN_SECTIONS, ios, iosCheck } from "../../lib/platform.js";
+	import { MOBILE_HIDDEN_SECTIONS, mobile, mobileCheck } from "../../lib/platform.js";
 	import { followChromeConfig } from "../../lib/chromeConfigEvents.js";
 	import { service } from "../../lib/service/index.js";
 	import { isSuperseded } from "../../lib/service/errors.js";
@@ -94,7 +94,7 @@
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
 		{ id: "updates", name: "Updates", hint: "App and Marasi CLI", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
-	].filter((entry) => !($ios && IOS_HIDDEN_SECTIONS.has(entry.id)));
+	].filter((entry) => !($mobile && MOBILE_HIDDEN_SECTIONS.has(entry.id)));
 	const syntaxModes = [
 		["disabled", "Disabled"],
 		["auto", "Auto"],
@@ -453,8 +453,8 @@
 			})
 			.catch((error) => toastError(toastStore, "Error reading the update settings", error));
 		// The iOS app has no Chrome (and no Browser section).
-		iosCheck.then((onIOS) => {
-			if (onIOS) return;
+		mobileCheck.then((onMobile) => {
+			if (onMobile) return;
 			readChromePaths();
 			readChromeProfiles();
 		});

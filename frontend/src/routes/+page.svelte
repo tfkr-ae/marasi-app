@@ -24,7 +24,7 @@
 	import { followChromeConfig } from "../lib/chromeConfigEvents.js";
 	import { service } from "../lib/service/index.js";
 	import { connectionStore } from "../stores/connectionStore.js";
-	import { ios, iosCheck } from "../lib/platform.js";
+	import { mobile, mobileCheck } from "../lib/platform.js";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -43,7 +43,7 @@
 
 	onMount(() => {
 		// The iOS app has no Chrome to start.
-		iosCheck.then((onIOS) => onIOS || readChromeProfiles());
+		mobileCheck.then((onMobile) => onMobile || readChromeProfiles());
 		return followChromeConfig(service.on, {
 			connectionKind: () => get(connectionStore).connection.kind,
 			onPaths: () => {},
@@ -54,7 +54,7 @@
 		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));
 </script>
 
-<div class="content" class:ios-home={$ios}>
+<div class="content" class:mobile-home={$mobile}>
 	<div class="no-select dashboard-content">
 		<div class="container mx-auto p-4 space-y-4 text-sm">
 			<div
@@ -110,7 +110,7 @@
 						>
 					</button>
 
-					{#if !$ios}
+					{#if !$mobile}
 					<div class="relative w-fit">
 						<div
 							class="flex w-full overflow-hidden"
@@ -169,11 +169,11 @@
 				</div>
 			</div>
 			<Dashboard />
-			{#if $ios}<LogTable compact />{/if}
+			{#if $mobile}<LogTable compact />{/if}
 		</div>
 	</div>
 
-	{#if !$ios}
+	{#if !$mobile}
 	<div class="log-table-container">
 		<LogTable />
 	</div>
@@ -227,21 +227,21 @@
 
 	/* The iOS app: one scrolling column, the cards and the log in line
 	   with the header, no split between them. */
-	.ios-home {
+	.mobile-home {
 		height: 100%;
 		overflow-y: auto;
 	}
-	.ios-home .dashboard-content {
+	.mobile-home .dashboard-content {
 		flex: none;
 		max-height: none;
 		overflow: visible;
 	}
 	/* Full width, so its edges line up with the connection banner's
 	   (px-4) above the page, as the header does with the cards. */
-	.ios-home :global(.container) {
+	.mobile-home :global(.container) {
 		max-width: none;
 	}
-	.ios-home :global([data-dashboard]) {
+	.mobile-home :global([data-dashboard]) {
 		padding-left: 0;
 		padding-right: 0;
 	}
