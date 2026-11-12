@@ -1,8 +1,9 @@
 <script>
-	// Pairing in the mobile app: on iOS the camera reads the QR code another
-	// Marasi app's Share shows, or Enter manually opens the add form. Android
-	// has no scanner yet, so it opens on the form. Dispatches `added` with
-	// the new connection's id; the modal switches to it.
+	// Pairing in the mobile app: the camera reads the QR code another Marasi
+	// app's Share shows (on iOS a viewfinder in the page, QRScanner.svelte;
+	// on Android a full-screen scanner, androidScan.js), or Enter manually
+	// opens the add form. Dispatches `added` with the new connection's id;
+	// the modal switches to it.
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
@@ -12,12 +13,23 @@
 	import { parsePairing } from "./pairing.js";
 	import { scanErrorText } from "./pairing-view.js";
 	import { platform } from "../platform.js";
+	import { scanOnAndroid } from "./androidScan.js";
 
 	const dispatch = createEventDispatcher();
 	$: primary = primaryButton($modeCurrent);
 	$: neutral = neutralButton($modeCurrent);
 	let manual = false;
-	$: canScan = $platform === "ios";
+	$: canScan = $platform === "ios" || $platform === "android";
+
+	async function scanAndroid() {
+		error = "";
+		try {
+			const text = await scanOnAndroid();
+			if (text !== null) await scanned(text);
+		} catch (err) {
+			error = scanErrorText(String(err?.message ?? err));
+		}
+	}
 	let error = "";
 	let busy = false;
 	// A new key reopens the camera after a code that didn't pair.
@@ -60,6 +72,10 @@
 		<div class="mt-3 flex justify-center">
 			{#if busy}
 				<p class="py-8 text-xs opacity-70">Adding…</p>
+			{:else if $platform === "android"}
+				<button type="button" class="{primary} w-full max-w-[18rem]" data-testid="pair-scan-android" on:click={scanAndroid}>
+					Scan QR code
+				</button>
 			{:else}
 				{#key scan}
 					<QRScanner on:scanned={(e) => scanned(e.detail)} on:failed={(e) => (error = scanErrorText(e.detail))} />
@@ -68,7 +84,7 @@
 		</div>
 		{#if error}<p class="mt-2 text-xs text-error-600 dark:text-error-400" data-testid="pair-error">{error}</p>{/if}
 		<div class="mt-3 flex justify-center">
-			<button type="button" class={primary} data-testid="pair-manual" on:click={() => ((manual = true), (error = ""))}>
+			<button type="button" class={$platform === "android" ? neutral : primary} data-testid="pair-manual" on:click={() => ((manual = true), (error = ""))}>
 				Enter manually
 			</button>
 		</div>

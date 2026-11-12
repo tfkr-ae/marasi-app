@@ -311,3 +311,24 @@ func TestRecentProjectsKeepTheLatestFew(t *testing.T) {
 		t.Fatalf("recents %+v", recents)
 	}
 }
+
+// A platform's own secure store (Android's) wins over go-keyring, in every
+// build: it never prompts.
+func TestPlatformKeychainIsUsedInEveryBuild(t *testing.T) {
+	kc := newFakeKeychain()
+	saved := platformKeychain
+	platformKeychain = kc.funcs
+	t.Cleanup(func() { platformKeychain = saved })
+
+	app := &App{}
+	app.useKeychainRuntime()
+	if app.keychain == nil {
+		t.Fatal("a development build with a platform keychain should use it")
+	}
+	if err := app.keychain.set(keychainService, "lab", "s3cret"); err != nil {
+		t.Fatal(err)
+	}
+	if kc.items[keychainService+"/lab"] != "s3cret" {
+		t.Fatalf("the password went elsewhere: %v", kc.items)
+	}
+}

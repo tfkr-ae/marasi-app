@@ -45,11 +45,20 @@ func releaseBuild() bool {
 	return Channel(buildChannel).valid()
 }
 
-// useKeychainRuntime points App.keychain at the OS keychain on a release
-// build, and leaves it nil on a development build, which rebuilds too often
-// for a keychain prompt each time.
+// platformKeychain is the platform's own secure store where go-keyring
+// has none: Android sets it (keychain_android.go). It never prompts, so
+// every build uses it.
+var platformKeychain func() *keychain
+
+// useKeychainRuntime points App.keychain at the platform's secure store
+// when it has one, else at the OS keychain on a release build. It leaves
+// it nil on a desktop development build, which rebuilds too often for a
+// keychain prompt each time.
 func (a *App) useKeychainRuntime() {
-	if releaseBuild() {
+	switch {
+	case platformKeychain != nil:
+		a.keychain = platformKeychain()
+	case releaseBuild():
 		a.keychain = osKeychain()
 	}
 }

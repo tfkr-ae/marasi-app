@@ -5,7 +5,7 @@ includes:
 
 vars:
   APP_ID: '{{.APP_ID | default "ae.tfkr.marasi"}}'
-  MIN_SDK: '21'
+  MIN_SDK: '24'
   TARGET_SDK: '35'
   # The emulator runs the host architecture; physical devices are arm64
   HOST_ARCH:

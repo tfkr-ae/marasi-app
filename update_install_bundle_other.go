@@ -1,4 +1,4 @@
-//go:build unix && !darwin
+//go:build (unix && !darwin) || ios
 
 package main
 
@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-// exchangePaths swaps two directories outside macOS, where bundleInstaller
+// exchangePaths swaps two directories outside macOS (and on iOS), where bundleInstaller
 // only runs in tests: location is renamed aside, staged moved into its
 // place, and location restored if that fails.
 func exchangePaths(staged, location string) error {

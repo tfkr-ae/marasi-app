@@ -452,6 +452,24 @@ public class WailsBridge {
         mainHandler.post(() -> {
             try {
                 JSONObject opts = new JSONObject(json);
+                // Marasi: a file to share ({"file", "mime", "name"}), the
+                // Save As of a platform with no save dialog
+                // (share_file_android.go). It must sit under a FileProvider
+                // path (xml/file_paths.xml).
+                String file = opts.optString("file", "");
+                if (!file.isEmpty()) {
+                    android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                            activity, activity.getPackageName() + ".fileprovider", new java.io.File(file));
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType(opts.optString("mime", "application/octet-stream"));
+                    send.putExtra(Intent.EXTRA_STREAM, uri);
+                    send.putExtra(Intent.EXTRA_TITLE, opts.optString("name", ""));
+                    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    Intent chooser = Intent.createChooser(send, opts.optString("name", null));
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    activity.startActivity(chooser);
+                    return;
+                }
                 String text = opts.optString("text", "");
                 String url = opts.optString("url", "");
                 StringBuilder body = new StringBuilder();

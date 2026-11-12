@@ -181,13 +181,16 @@ func newApp(configDir string) *App {
 }
 
 // ServiceStartup is called when Wails starts the app, before the window
-// loads. It saves the app's context and starts the update checks; the
-// frontend connects to the service.
+// loads. It saves the app's context and starts the update checks (not in
+// the mobile apps, which have no updater); the frontend connects to the
+// service.
 func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
 	go a.removeUpdateLeftovers()
 	go a.removeCLILeftovers()
-	a.startUpdateChecks(ctx)
+	if !mobileApp {
+		a.startUpdateChecks(ctx)
+	}
 	return nil
 }
 

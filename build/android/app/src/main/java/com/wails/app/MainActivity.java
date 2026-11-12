@@ -33,6 +33,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import android.webkit.JavascriptInterface;
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanOptions;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -77,6 +81,12 @@ public class MainActivity extends AppCompatActivity {
     // as 0, so the system bars' insets are pushed in, again after each load.
     private String safeAreaScript = null;
 
+    // Marasi: the pairing QR scanner, a full-screen camera view from
+    // zxing-android-embedded. The page asks for it (MarasiAndroid.scanQr)
+    // and hears back through a "marasi-qr" window event: {text} for a
+    // code, {cancelled: true} when the researcher backs out.
+    private ActivityResultLauncher<ScanOptions> qrLauncher;
+
     // The Go-side dialog ID of the in-flight file picker (-1 when idle)
     private int pendingFilePickerCallbackID = -1;
     private static final int PHOTO_CAPTURE_REQUEST = 7002;
@@ -110,6 +120,19 @@ public class MainActivity extends AppCompatActivity {
         // Initialize the native Go library
         bridge = new WailsBridge(this);
         bridge.initialize();
+
+        qrLauncher = registerForActivityResult(new ScanContract(), result -> {
+            JSONObject detail = new JSONObject();
+            try {
+                if (result.getContents() == null) detail.put("cancelled", true);
+                else detail.put("text", result.getContents());
+            } catch (Exception ignored) {
+            }
+            if (webView != null) {
+                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('marasi-qr',{detail:"
+                        + detail + "}))", null);
+            }
+        });
 
         // Set up WebView
         setupWebView();
@@ -248,6 +271,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Add JavaScript interface for Go communication
         webView.addJavascriptInterface(new WailsJSBridge(bridge, webView), "wails");
+        webView.addJavascriptInterface(new MarasiAndroid(), "MarasiAndroid");
 
         // A WebChromeClient is required for HTML <input type="file"> elements to
         // work; without onShowFileChooser the WebView silently ignores clicks on
@@ -949,6 +973,21 @@ public class MainActivity extends AppCompatActivity {
         }
         if (webView != null) {
             webView.destroy();
+        }
+    }
+
+    // Marasi: what the page asks of Android directly (window.MarasiAndroid).
+    private class MarasiAndroid {
+        @JavascriptInterface
+        public void scanQr() {
+            runOnUiThread(() -> {
+                ScanOptions options = new ScanOptions();
+                options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
+                options.setPrompt("Scan the QR code from Share in Marasi on your computer");
+                options.setBeepEnabled(false);
+                options.setOrientationLocked(false);
+                qrLauncher.launch(options);
+            });
         }
     }
 

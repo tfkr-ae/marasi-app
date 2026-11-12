@@ -3,4 +3,7 @@
     <!-- Camera captures are written here and shared with the camera app via the
          FileProvider. -->
     <cache-path name="captures" path="captures/" />
+    <!-- Marasi: a Save As goes to the share sheet from here
+         (share_file_android.go). -->
+    <files-path name="share" path="share/" />
 </paths>
