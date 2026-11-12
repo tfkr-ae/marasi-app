@@ -195,11 +195,11 @@
 		:global(html.mobile .bottom-bar) {
 			display: block;
 		}
-		/* The bar is as tall as its icons plus part of the home indicator's
+		/* The bar is as tall as its icons plus the home indicator's whole
 		   inset, and the icons sit centred in it: the same space above and
 		   below them. */
 		:global(html.mobile .bottom-bar-tile) {
-			--bar-pad: calc((0.625rem + max(var(--safe-bottom) * 0.4 + 0.375rem, 0.625rem)) / 2);
+			--bar-pad: calc((1.5rem + max(var(--safe-bottom) - 0.75rem, 0.25rem)) / 2);
 			padding-top: var(--bar-pad);
 			padding-bottom: var(--bar-pad);
 		}
