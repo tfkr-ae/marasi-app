@@ -85,7 +85,8 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
-	import { mobile, mobileCheck } from "../lib/platform.js";
+	import { mobile, mobileCheck, platformCheck } from "../lib/platform.js";
+	import { androidBack } from "../lib/androidBack.js";
 	import { installSwipeToClose } from "../lib/swipeToClose.js";
 	import { installLongPress, installTwoFingerSwipeDown, keepKeyboardDown } from "../lib/touch.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
@@ -383,6 +384,21 @@
 			if (isMobile) stop = installSwipeToClose(document, { close: closeTopOverlay, snapshot: openOverlays });
 		});
 		return () => stop();
+	});
+	// Android: Back asks the page first (MainActivity.handleBack).
+	onMount(() => {
+		platformCheck.then((name) => {
+			if (name !== "android") return;
+			window.marasiBack = () =>
+				androidBack({
+					closeTop: closeTopOverlay,
+					historyIndex: history.state?.["sveltekit:history"] ?? 0,
+					path: get(page).url.pathname,
+					back: () => history.back(),
+					home: () => goto("/"),
+				});
+		});
+		return () => delete window.marasiBack;
 	});
 	onMount(() => {
 		// Opens another client (the Marasi CLI, another app) starts while

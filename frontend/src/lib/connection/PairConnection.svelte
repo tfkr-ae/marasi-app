@@ -1,7 +1,8 @@
 <script>
-	// Pairing in the iOS app: the camera reads the QR code another Marasi
-	// app's Share shows, or Enter manually opens the add form. Dispatches
-	// `added` with the new connection's id; the modal switches to it.
+	// Pairing in the mobile app: on iOS the camera reads the QR code another
+	// Marasi app's Share shows, or Enter manually opens the add form. Android
+	// has no scanner yet, so it opens on the form. Dispatches `added` with
+	// the new connection's id; the modal switches to it.
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
@@ -10,11 +11,13 @@
 	import { addConnection, errorText } from "./manage.js";
 	import { parsePairing } from "./pairing.js";
 	import { scanErrorText } from "./pairing-view.js";
+	import { platform } from "../platform.js";
 
 	const dispatch = createEventDispatcher();
 	$: primary = primaryButton($modeCurrent);
 	$: neutral = neutralButton($modeCurrent);
 	let manual = false;
+	$: canScan = $platform === "ios";
 	let error = "";
 	let busy = false;
 	// A new key reopens the camera after a code that didn't pair.
@@ -44,11 +47,13 @@
 </script>
 
 <div class="text-sm" data-testid="pair-connection">
-	{#if manual}
+	{#if manual || !canScan}
 		<AddConnection on:added />
-		<button type="button" class="{neutral} mt-3" data-testid="pair-scan" on:click={() => ((manual = false), (error = ""))}>
-			Scan a QR code instead
-		</button>
+		{#if canScan}
+			<button type="button" class="{neutral} mt-3" data-testid="pair-scan" on:click={() => ((manual = false), (error = ""))}>
+				Scan a QR code instead
+			</button>
+		{/if}
 	{:else}
 		<h3 class="text-sm font-bold">Pair with Marasi</h3>
 		<p class="mt-1 text-xs opacity-70">Scan the QR code from Share in Marasi on your computer.</p>
