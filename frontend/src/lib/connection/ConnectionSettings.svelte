@@ -1,7 +1,9 @@
 <script>
 	// Settings → Connection: the Connections modal's list and details, laid
 	// out as a Settings section, with Add connection under the list, and
-	// When quitting under the details.
+	// When quitting under the details. The iOS app lists only remotes, adds by
+	// pairing, and has no When quitting: it runs no local instance
+	// (pairing-view.js).
 	import { Laptop, Plus, Server } from "lucide-svelte";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { primaryButton } from "../launchpad/format.js";
@@ -12,12 +14,14 @@
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import AddConnection from "./AddConnection.svelte";
 	import ConnectionDetail from "./ConnectionDetail.svelte";
+	import PairConnection from "./PairConnection.svelte";
+	import { connectionsView } from "./pairing-view.js";
+	import { ios } from "../platform.js";
 	import { phaseLabel, phaseTone, whereText } from "./status.js";
 
-	$: connections = $connectionStore.connections;
 	// A connection's id, or "add" for the add form.
 	let picked = $connectionStore.connection.id;
-	$: pickedConnection = connections.find((c) => c.id === picked) ?? connections[0];
+	$: view = connectionsView({ ios: $ios, connections: $connectionStore.connections, picked });
 	$: activeId = $connectionStore.connection.id;
 	const toastStore = getToastStore();
 	$: primary = primaryButton($modeCurrent);
@@ -25,6 +29,12 @@
 	$: whenQuitting = WHEN_QUITTING.some(([value]) => value === $marasiConfig?.WhenQuitting)
 		? $marasiConfig.WhenQuitting
 		: "ask";
+
+	// As in the Connections modal, the iOS app switches to a new remote at once.
+	function added(id) {
+		picked = id;
+		if ($ios) connectionStore.switchTo(id);
+	}
 
 	function setWhenQuitting(value) {
 		SetFlag("when_quitting", value)
@@ -37,7 +47,7 @@
 <p class="text-xs opacity-70">Where Marasi runs.</p>
 
 <div class="mt-3 border-y border-surface-300 dark:border-surface-600">
-	{#each connections as c (c.id)}
+	{#each view.listed as c (c.id)}
 		<button
 			type="button"
 			data-testid="connection-item"
@@ -59,7 +69,7 @@
 	{/each}
 	<button
 		type="button"
-		class="flex w-full items-center gap-3 px-2 py-2 text-left hover:bg-primary-500/10 {picked === 'add' ? '!bg-primary-500/20' : ''}"
+		class="flex w-full items-center gap-3 px-2 py-2 text-left hover:bg-primary-500/10 {view.pane !== 'detail' ? '!bg-primary-500/20' : ''}"
 		data-testid="add-connection-item"
 		on:click={() => (picked = "add")}
 	>
@@ -68,19 +78,22 @@
 </div>
 
 <div class="mt-4">
-	{#if picked === "add"}
-		<AddConnection on:added={(e) => (picked = e.detail)} />
+	{#if view.pane === "pair"}
+		<PairConnection on:added={(e) => added(e.detail)} />
+	{:else if view.pane === "add"}
+		<AddConnection on:added={(e) => added(e.detail)} />
 	{:else}
-		{#key pickedConnection.id}<ConnectionDetail connection={pickedConnection} rows />{/key}
+		{#key view.connection.id}<ConnectionDetail connection={view.connection} rows />{/key}
 	{/if}
 </div>
 
+{#if !$ios}
 <div
-	class="flex items-center justify-between gap-8 border-b border-surface-300 py-3 dark:border-surface-600"
+	class="settings-row flex items-center justify-between gap-8 border-b border-surface-300 py-3 dark:border-surface-600"
 	data-testid="when-quitting"
 >
 	<p>When quitting</p>
-	<div class="flex w-80 shrink-0 text-sm" role="radiogroup" aria-label="When quitting">
+	<div class="settings-control flex w-80 shrink-0 text-sm" role="radiogroup" aria-label="When quitting">
 		{#each WHEN_QUITTING as [value, label]}
 			<button
 				type="button"
@@ -94,3 +107,4 @@
 		{/each}
 	</div>
 </div>
+{/if}

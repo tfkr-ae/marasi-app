@@ -38,8 +38,8 @@
 	$: serviceUpdate = serviceUpdateLine($serviceUpdateStore);
 	$: primary = primaryButton($modeCurrent);
 	$: neutral = neutralButton($modeCurrent);
-	const row = "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
-	const control = "flex w-80 shrink-0";
+	const row = "settings-row flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
+	const control = "settings-control flex w-80 shrink-0";
 	const channels = [
 		["app", "Follow app"],
 		["release", "Release"],

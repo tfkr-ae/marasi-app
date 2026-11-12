@@ -30,5 +30,5 @@
 			class:animate-pulse={phase === "reconnecting"}
 		></span>
 	</span>
-	<span class="max-w-[4.25rem] truncate">{connection.name}</span>
+	<span class="rail-label max-w-[4.25rem] truncate">{connection.name}</span>
 </button>

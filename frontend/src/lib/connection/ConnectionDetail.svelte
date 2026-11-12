@@ -83,8 +83,8 @@
 	$: if (local) local.refresh(isActive, state.phase);
 	$: removeHint = removeBlock({ isActive, ownedRun: added && Boolean(instance?.owned) });
 	const row = rows
-		? "flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
-		: "flex items-center justify-between gap-4 py-2 border-b border-surface-200 dark:border-surface-700";
+		? "settings-row flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
+		: "settings-row flex items-center justify-between gap-4 py-2 border-b border-surface-200 dark:border-surface-700";
 </script>
 
 <div class="text-sm" data-testid="connection-detail">
@@ -236,7 +236,7 @@
 					<p class="text-xs opacity-70">The service's control listener</p>
 				</div>
 				<form class="flex min-w-0 items-center gap-2" on:submit|preventDefault={saveAddress}>
-					<input class="input h-8 w-56 py-1 font-mono text-xs" data-testid="connection-address" bind:value={address} />
+					<input class="narrow-full input h-8 w-56 py-1 font-mono text-xs" data-testid="connection-address" bind:value={address} />
 					<button type="submit" class={neutral} disabled={!address.trim() || address.trim() === connection.url}>Save</button>
 				</form>
 			</div>
