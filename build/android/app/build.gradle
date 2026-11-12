@@ -48,7 +48,11 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled = false
+            // Marasi: R8 drops and renames Java the app doesn't reach and
+            // drops unused resources. Go reaches the bridge by name through
+            // JNI, which R8 can't see; proguard-rules.pro keeps it.
+            minifyEnabled = true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig = hasKeystore ? signingConfigs.release : signingConfigs.debug
         }
