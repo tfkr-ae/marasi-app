@@ -185,8 +185,8 @@
 	/* ---- The narrow mobile bottom bar (BottomBar.svelte) ----
 	   Under 40rem the app rail gives way to a bar along the bottom, under the
 	   page. Its tiles run to the screen's bottom edge, so a selected one fills
-	   to it, with the home indicator's inset inside them, below the icons
-	   (as the rail's first tile holds the top inset). Wider, the rail is back
+	   to it, with the home indicator inside them, just below the icons (as
+	   the rail's first tile holds the top inset). Wider, the rail is back
 	   and the bar hides. While the keyboard is up the bar hides too. */
 	:global(.bottom-bar) {
 		display: none;
@@ -195,8 +195,12 @@
 		:global(html.mobile .bottom-bar) {
 			display: block;
 		}
+		/* The icons sit low, most of the inset under them taken back: only
+		   the home indicator's own strip (about 40% of the inset) stays
+		   clear below them. */
 		:global(html.mobile .bottom-bar-tile) {
-			padding-bottom: calc(0.75rem + max(var(--safe-bottom) - 0.75rem, 0.25rem));
+			padding-top: 0.625rem;
+			padding-bottom: max(calc(var(--safe-bottom) * 0.4 + 0.375rem), 0.625rem);
 		}
 		:global(html.mobile .bottom-bar.bottom-bar-hidden) {
 			display: none;
