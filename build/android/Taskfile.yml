@@ -52,7 +52,7 @@ tasks:
         vars:
           ARCH: '{{.ARCH | default .HOST_ARCH}}'
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
@@ -107,10 +107,16 @@ tasks:
         mkdir -p {{.BIN_DIR}}
         mkdir -p build/android/app/src/main/jniLibs/$JNI_DIR
 
-        go build -buildmode=c-shared -overlay build/android/overlay.json {{.BUILD_FLAGS}} \
+        go build -buildmode=c-shared -overlay build/android/overlay.json {{.BUILD_FLAGS}} -ldflags="{{.LDFLAGS}}" \
           -o build/android/app/src/main/jniLibs/$JNI_DIR/libwails.so
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      # Marasi: the release's channel and version for build_info.go
+      # (Settings → About), each only when its environment variable is set,
+      # as on the desktop. Kept out of BUILD_FLAGS, which binding generation
+      # quotes.
+      LDFLAGS_X: '{{if .CHANNEL}} -X main.buildChannel={{.CHANNEL}}{{end}}{{if .VERSION}} -X ''main.version={{.VERSION}}''{{end}}'
+      LDFLAGS: '{{if eq .PRODUCTION "true"}}-w -s{{end}}{{.LDFLAGS_X}}'
 
   compile:go:all-archs:
     summary: Compile Go code for all Android architectures (fat APK)
@@ -222,7 +228,7 @@ tasks:
         echo "AAB created: {{.BIN_DIR}}/{{.APP_NAME}}.aab"
 
   assemble:aab:release:
-    summary: Assembles a release AAB for Play Store upload (signed with the debug keystore unless ANDROID_KEYSTORE_FILE is set)
+    summary: Assembles a release AAB for Play Store upload, signed with the upload key ANDROID_KEYSTORE_FILE names
     preconditions:
       - sh: 'command -v java >/dev/null || [ -n "$JAVA_HOME" ]'
         msg: "Java not found. Install a JDK (e.g. brew install openjdk@21) and/or set JAVA_HOME"
@@ -231,11 +237,13 @@ tasks:
         # With Play App Signing, the keystore configured here is your UPLOAD
         # key: Google verifies the upload with it, then re-signs the app with
         # the app signing key it manages for distribution.
+        # Marasi: a store bundle is never signed with the debug keystore,
+        # which Google Play rejects; without the upload key it stops here.
         if [ -z "$ANDROID_KEYSTORE_FILE" ]; then
-          echo "WARNING: ANDROID_KEYSTORE_FILE is not set, so this AAB will be"
-          echo "signed with the debug keystore. Google Play rejects debug-signed"
-          echo "bundles. Set ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD,"
-          echo "ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD before uploading."
+          echo "ANDROID_KEYSTORE_FILE is not set. Set ANDROID_KEYSTORE_FILE,"
+          echo "ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD"
+          echo "to the upload key, then build again."
+          exit 1
         fi
         cd build/android
         # The exec bit is lost when gradlew is extracted from the embedded

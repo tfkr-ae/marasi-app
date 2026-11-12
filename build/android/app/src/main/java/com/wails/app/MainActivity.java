@@ -41,6 +41,7 @@ import androidx.annotation.Nullable;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewAssetLoader;
@@ -987,6 +988,19 @@ public class MainActivity extends AppCompatActivity {
                 options.setBeepEnabled(false);
                 options.setOrientationLocked(false);
                 qrLauncher.launch(options);
+            });
+        }
+
+        // The status and navigation bars' icons follow the app's own colour
+        // scheme (Settings, the Color Scheme tile), not the phone's: dark
+        // icons over a light page, light ones over a dark page.
+        @JavascriptInterface
+        public void setLightBars(boolean light) {
+            runOnUiThread(() -> {
+                androidx.core.view.WindowInsetsControllerCompat bars =
+                        WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+                bars.setAppearanceLightStatusBars(light);
+                bars.setAppearanceLightNavigationBars(light);
             });
         }
     }

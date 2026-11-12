@@ -17,7 +17,7 @@
 	import { buildMenu, entryForKey, isReservedKey, searchMenu } from "./menuModel.js";
 	import { groupIcon, groupTone, NEUTRAL_TONE } from "./groupStyle.js";
 	import MenuKeys from "./MenuKeys.svelte";
-	import { mobileCheck } from "../../platform.js";
+	import { MOBILE_GROUP_DESCRIPTIONS, mobile, mobileCheck } from "../../platform.js";
 
 	// The page's entries: { actionId, icon }, optionally with a live name,
 	// subtitle or keywords. Text not given comes from the catalog. An entry
@@ -40,6 +40,8 @@
 	let letterHeld = false;
 	let missedKey = "";
 	let missedTimer;
+	// A group's description, as the mobile app words it where it differs.
+	const describe = (group, isMobile) => (isMobile && MOBILE_GROUP_DESCRIPTIONS[group.id]) || group.description;
 	let onMobile = false;
 	mobileCheck.then((isMobile) => (onMobile = isMobile));
 
@@ -322,7 +324,7 @@
 						{#if row.kind === "group"}
 							<span class="flex items-baseline gap-2.5 truncate">
 								<span class="text-sm font-semibold">{row.label}</span>
-								<span class="truncate text-xs opacity-60">{row.description}</span>
+								<span class="truncate text-xs opacity-60">{describe(row, $mobile)}</span>
 							</span>
 						{:else}
 							<span class="block truncate text-sm">
@@ -367,7 +369,7 @@
 			{#if missedKey}
 				<b>{formatBinding(missedKey, platform)}</b> isn't a menu key here
 			{:else if current?.kind === "group"}
-				{current.description} · {current.items.length} actions
+				{describe(current, $mobile)} · {current.items.length} actions
 			{:else if current}
 				{current.subtitle || current.name}
 			{/if}

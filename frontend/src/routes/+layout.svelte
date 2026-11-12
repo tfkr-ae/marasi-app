@@ -402,6 +402,9 @@
 		});
 		return () => stop();
 	});
+	// Android: the system bars' icons follow the app's colour scheme
+	// (MainActivity's MarasiAndroid.setLightBars); $modeCurrent is true in light.
+	$: if (typeof window !== "undefined") window.MarasiAndroid?.setLightBars?.(Boolean($modeCurrent));
 	// Android: Back asks the page first (MainActivity.handleBack).
 	onMount(() => {
 		platformCheck.then((name) => {

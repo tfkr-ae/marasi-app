@@ -4,6 +4,7 @@
 	// Alt on Windows/Linux) as a button (click it to record another letter) and Reset in the same positions as
 	// an action's Add binding and Reset. The global entry's groups are the ones
 	// every Marasi menu shows in its Marasi section, so they are headed Marasi.
+	import { MOBILE_GROUP_DESCRIPTIONS, mobile } from "../../platform.js";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { RotateCcw } from "lucide-svelte";
 	import { primaryVariant } from "../../launchpad/format.js";
@@ -37,7 +38,9 @@
 						<div class="kb-text flex min-w-0 flex-col">
 							<span>{row.group.label}</span>
 							{#if row.group.description}
-								<span class="kb-desc text-xs opacity-70">{row.group.description}</span>
+								<span class="kb-desc text-xs opacity-70"
+									>{($mobile && MOBILE_GROUP_DESCRIPTIONS[row.id]) || row.group.description}</span
+								>
 							{/if}
 							{#if row.status === "conflict"}
 								<span class="text-xs text-error-600 dark:text-error-400">{row.problem}</span>

@@ -46,6 +46,12 @@ export const mobile = derived(store, (name) => name !== "desktop");
 /** ⌘K actions the mobile app leaves out: they start Chrome or update the app. */
 export const MOBILE_HIDDEN_ACTIONS = new Set(["global.start-chrome", "global.check-for-updates"]);
 
+/**
+ * Menu groups whose description names what the mobile app leaves out, by
+ * group id ("<context>.<group>"), with what the mobile app says instead.
+ */
+export const MOBILE_GROUP_DESCRIPTIONS = { "global.browser": "The certificate and intercept" };
+
 /** Settings sections the mobile app leaves out: Chrome, and the app and CLI updaters. */
 export const MOBILE_HIDDEN_SECTIONS = new Set(["browser", "updates"]);
 

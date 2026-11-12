@@ -52,9 +52,15 @@ tasks:
             ref: .PRODUCTION
     cmds:
       - echo "Building iOS app {{.APP_NAME}} ({{.IOS_PLATFORM}})..."
-      - go build -buildmode=c-archive -overlay build/ios/xcode/overlay.json {{.BUILD_FLAGS}} -o {{.OUTPUT}}.a
+      - go build -buildmode=c-archive -overlay build/ios/xcode/overlay.json {{.BUILD_FLAGS}} -ldflags="{{.LDFLAGS}}" -o {{.OUTPUT}}.a
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,ios -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags ios,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,ios -trimpath -buildvcs=false{{else}}-tags ios,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      # Marasi: the release's channel and version for build_info.go
+      # (Settings → About), each only when its environment variable is set,
+      # as on the desktop. Kept out of BUILD_FLAGS, which binding generation
+      # quotes.
+      LDFLAGS_X: '{{if .CHANNEL}} -X main.buildChannel={{.CHANNEL}}{{end}}{{if .VERSION}} -X ''main.version={{.VERSION}}''{{end}}'
+      LDFLAGS: '{{if eq .PRODUCTION "true"}}-w -s{{end}}{{.LDFLAGS_X}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
       SDK_PATH:
@@ -123,6 +129,9 @@ tasks:
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - cp "{{.BIN_DIR}}/{{.APP_NAME | lower}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/"
       - cp build/ios/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/"
+      - task: stamp:info-plist
+        vars:
+          PLIST: '{{.BIN_DIR}}/{{.APP_NAME}}.app/Info.plist'
       - |
         # Embed the provisioning profile for device builds when provided
         if [ "{{.IOS_PLATFORM}}" = "device" ] && [ -n "{{.PROVISIONING_PROFILE}}" ]; then
@@ -162,6 +171,42 @@ tasks:
         else
           codesign --force --sign "{{.CODESIGN_IDENTITY}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app"
         fi
+
+  # Marasi: what Xcode writes into a bundle's Info.plist and App Store
+  # Connect checks, since this bundle is assembled without Xcode: the
+  # version (VERSION's numbers, e.g. 1.2.3 from v1.2.3) and build number
+  # (BUILD_NUMBER, else the time, so each upload is newer), the minimum iOS,
+  # and the platform, SDK and Xcode that built it.
+  stamp:info-plist:
+    internal: true
+    cmds:
+      - |
+        P=/usr/libexec/PlistBuddy
+        PLIST="{{.PLIST}}"
+        set_key() { $P -c "Set :$1 $2" "$PLIST" 2>/dev/null || $P -c "Add :$1 string $2" "$PLIST"; }
+        if [ -n "{{.VERSION}}" ]; then
+          SHORT=$(printf '%s' "{{.VERSION}}" | sed -E 's/^v//; s/[^0-9.].*$//')
+          [ -n "$SHORT" ] && set_key CFBundleShortVersionString "$SHORT"
+        fi
+        BUILD="{{.BUILD_NUMBER}}"
+        [ -n "$BUILD" ] || BUILD=$(date -u +%Y%m%d%H%M)
+        set_key CFBundleVersion "$BUILD"
+        set_key MinimumOSVersion "{{.MIN_IOS_VERSION}}"
+        $P -c "Delete :CFBundleSupportedPlatforms" "$PLIST" 2>/dev/null || true
+        $P -c "Add :CFBundleSupportedPlatforms array" -c "Add :CFBundleSupportedPlatforms:0 string {{if eq .IOS_PLATFORM "device"}}iPhoneOS{{else}}iPhoneSimulator{{end}}" "$PLIST"
+        SDK_VERSION=$(xcrun --sdk {{.IOS_SDK}} --show-sdk-version)
+        SDK_BUILD=$(xcrun --sdk {{.IOS_SDK}} --show-sdk-build-version)
+        XCODE_VERSION=$(xcodebuild -version | awk 'NR==1 {print $2}')
+        XCODE_BUILD=$(xcodebuild -version | awk 'NR==2 {print $3}')
+        set_key DTPlatformName "{{.IOS_SDK}}"
+        set_key DTPlatformVersion "$SDK_VERSION"
+        set_key DTPlatformBuild "$SDK_BUILD"
+        set_key DTSDKName "{{.IOS_SDK}}$SDK_VERSION"
+        set_key DTSDKBuild "$SDK_BUILD"
+        set_key DTXcode "$(printf '%s' "$XCODE_VERSION" | awk -F. '{printf "%d%d%d", $1, $2, ($3 == "" ? 0 : $3)}')"
+        set_key DTXcodeBuild "$XCODE_BUILD"
+        set_key DTCompiler com.apple.compilers.llvm.clang.1_0
+        set_key BuildMachineOSBuild "$(sw_vers -buildVersion)"
 
   deploy-simulator:
     summary: Deploy to iOS Simulator

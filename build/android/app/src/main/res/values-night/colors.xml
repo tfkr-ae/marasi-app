@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Marasi: the dark page surface (tfkr-theme.js surface-900), for the window
+     behind the page and the splash when the phone is in dark mode. -->
+<resources>
+    <color name="marasi_surface">#17191D</color>
+</resources>

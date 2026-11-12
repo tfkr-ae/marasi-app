@@ -15,8 +15,13 @@ android {
         // Marasi: 24 for the QR scanner (zxing-android-embedded).
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Marasi: VERSION's numbers (1.2.3 from v1.2.3) and BUILD_NUMBER, as
+        // the iOS build stamps them; without BUILD_NUMBER the code is the
+        // minutes since 1970, so each upload is newer.
+        def releaseVersion = (System.getenv("VERSION") ?: "").replaceFirst(/^v/, "").replaceFirst(/[^0-9.].*$/, "")
+        def buildNumber = System.getenv("BUILD_NUMBER")
+        versionCode = buildNumber ? Integer.parseInt(buildNumber) : (int) (System.currentTimeMillis() / 60000L)
+        versionName = releaseVersion ?: "1.0"
 
         // Configure supported ABIs
         ndk {

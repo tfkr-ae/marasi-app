@@ -2,13 +2,16 @@
 <resources>
     <style name="Theme.WailsApp" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/wails_blue</item>
-        <item name="colorPrimaryVariant">@color/wails_blue_dark</item>
+        <item name="colorPrimary">@color/marasi_primary</item>
+        <item name="colorPrimaryVariant">@color/marasi_primary</item>
         <item name="colorOnPrimary">@android:color/white</item>
         <!-- Status bar color. -->
-        <item name="android:statusBarColor">@color/wails_background</item>
-        <item name="android:navigationBarColor">@color/wails_background</item>
+        <item name="android:statusBarColor">@color/marasi_surface</item>
+        <item name="android:navigationBarColor">@color/marasi_surface</item>
+        <!-- Marasi: dark status-bar icons on the light surface, light ones on
+             the dark (values-night). -->
+        <item name="android:windowLightStatusBar">@bool/marasi_light_bars</item>
         <!-- Window background -->
-        <item name="android:windowBackground">@color/wails_background</item>
+        <item name="android:windowBackground">@color/marasi_surface</item>
     </style>
 </resources>

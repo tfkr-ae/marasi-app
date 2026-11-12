@@ -4,12 +4,13 @@
 
     <!-- Internet permission for WebView -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Observe network connectivity / type for android:NetworkChanged events -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Marasi: the biometric library Wails' template includes asks for these;
+         Marasi never asks for a fingerprint or face, so they go. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
 
     <queries>
         <intent>
@@ -52,10 +53,9 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <service
-            android:name=".WailsForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+        <!-- Marasi: no foreground service (Wails' WailsForegroundService):
+             the app runs nothing in the background, and Play asks apps that
+             declare one to justify it. -->
     </application>
 
 </manifest>
