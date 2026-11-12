@@ -195,12 +195,13 @@
 		:global(html.mobile .bottom-bar) {
 			display: block;
 		}
-		/* The icons sit low, part of the inset under them taken back: the
-		   home indicator's strip (about half the inset) stays clear below
-		   them. */
+		/* The bar is as tall as its icons plus part of the home indicator's
+		   inset, and the icons sit centred in it: the same space above and
+		   below them. */
 		:global(html.mobile .bottom-bar-tile) {
-			padding-top: 0.625rem;
-			padding-bottom: max(calc(var(--safe-bottom) * 0.55 + 0.375rem), 0.75rem);
+			--bar-pad: calc((0.625rem + max(var(--safe-bottom) * 0.4 + 0.375rem, 0.625rem)) / 2);
+			padding-top: var(--bar-pad);
+			padding-bottom: var(--bar-pad);
 		}
 		:global(html.mobile .bottom-bar.bottom-bar-hidden) {
 			display: none;
