@@ -58,7 +58,7 @@
 
 </script>
 
-<div class="no-select p-4">
+<div class="no-select p-4" data-dashboard>
 	<h2 class="text-base font-bold mb-4">
 		{$activeProject} Project Dashboard
 	</h2>

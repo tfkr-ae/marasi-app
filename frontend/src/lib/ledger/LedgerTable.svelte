@@ -196,10 +196,15 @@
 	}
 
 	// Pressing a row selects it: plain starts a drag sweep, ⌘/Ctrl toggles
-	// and ⇧ selects a range. Right-clicks belong to the menu.
+	// and ⇧ selects a range. Right-clicks belong to the menu. A touch selects
+	// on its tap instead (onRowClick): pressing would select whatever row a
+	// scroll starts on and open the drawer, and the browser sends no click for
+	// a touch that scrolled.
 	let sweeping = false;
+	let touched = false;
 	function onRowPointerDown(event, id) {
-		if (event.button !== 0) return;
+		touched = event.pointerType === "touch";
+		if (touched || event.button !== 0) return;
 		const toggle = event.metaKey || event.ctrlKey;
 		if (toggle || event.shiftKey) {
 			dispatch("click", { id, toggle, range: event.shiftKey });
@@ -207,6 +212,9 @@
 		}
 		sweeping = true;
 		dispatch("sweepstart", id);
+	}
+	function onRowClick(id) {
+		if (touched) dispatch("click", { id, toggle: false, range: false });
 	}
 	function onRowPointerEnter(id) {
 		if (sweeping) dispatch("sweep", id);
@@ -272,6 +280,7 @@
 						? 'justify-end'
 						: 'justify-start'} {mark ? 'text-primary-500' : ''}"
 					role="columnheader"
+					data-col={column.key}
 					aria-sort={sortAria(sort, column)}
 					title={sortTitle(sort, column)}
 					data-sort={column.sort}
@@ -281,7 +290,7 @@
 					>{#if mark}<span class="shrink-0">{mark}</span>{/if}</button
 				>
 			{:else}
-				<span role="columnheader">{column.label}</span>
+				<span role="columnheader" data-col={column.key}>{column.label}</span>
 			{/if}
 		{/each}
 	</div>
@@ -293,7 +302,7 @@
 					style="grid-template-columns: {template}; height: {rowHeight}px"
 				>
 					{#each GHOST_WIDTHS[i % GHOST_WIDTHS.length] as width, c}
-						<span class="flex items-center {LEDGER_COLUMNS[c]?.align === 'right' ? 'justify-end' : ''}"
+						<span class="flex items-center {LEDGER_COLUMNS[c]?.align === 'right' ? 'justify-end' : ''}" data-col={LEDGER_COLUMNS[c]?.key}
 							>{#if width}<span
 									class="ledger-ghost-bar block h-2 animate-pulse bg-surface-300 dark:bg-surface-600"
 									style="width: {width * 100}%; animation-delay: {(i % 6) * 120}ms"
@@ -326,6 +335,7 @@
 						aria-selected={selected}
 						on:pointerdown={(event) => onRowPointerDown(event, row.ID)}
 						on:pointerenter={() => onRowPointerEnter(row.ID)}
+						on:click={() => onRowClick(row.ID)}
 						on:contextmenu|preventDefault={(event) => dispatch("menu", { id: row.ID, event })}
 					>
 						{#if focused}
@@ -342,23 +352,24 @@
 								aria-hidden="true"
 							></span>
 						{/if}
-						<span class="text-right tabular-nums {dim}"
+						<span class="text-right tabular-nums {dim}" data-col="number"
 							>{row.Number || ""}</span
 						>
-						<span class="flex items-center !overflow-visible !pl-1"><RowBadges {row} /></span>
-						<span class={dim}>{shortTime(row.RequestedAt)}</span>
-						<span class={METHOD_CLASS[row.Method] ?? ""}>{row.Method ?? ""}</span>
-						<span title={row.Host}>{row.Host ?? ""}</span>
-						<span title={row.Path}>{row.Path ?? ""}</span>
-						<span class="text-right {statusClass(row.StatusCode)}">{statusText(row.StatusCode)}</span>
+						<span class="flex items-center !overflow-visible !pl-1" data-col="badges"><RowBadges {row} /></span>
+						<span class={dim} data-col="time">{shortTime(row.RequestedAt)}</span>
+						<span class={METHOD_CLASS[row.Method] ?? ""} data-col="method">{row.Method ?? ""}</span>
+						<span title={row.Host} data-col="host">{row.Host ?? ""}</span>
+						<span title={row.Path} data-col="path">{row.Path ?? ""}</span>
+						<span class="text-right {statusClass(row.StatusCode)}" data-col="status">{statusText(row.StatusCode)}</span>
 						<!-- svelte-ignore a11y-no-static-element-interactions -->
 						<span
+							data-col="type"
 							class="ledger-type {dim}"
 							aria-label={row.ContentType || undefined}
 							on:mouseenter={(event) => showTypeTip(event, row.ContentType)}
 							on:mouseleave={() => (typeTip = null)}>{shortType(row.ContentType)}</span
 						>
-						<span class="text-right {dim}">{formatSize(row.Length)}</span>
+						<span class="text-right {dim}" data-col="size">{formatSize(row.Length)}</span>
 					</div>
 				{/each}
 			</div>

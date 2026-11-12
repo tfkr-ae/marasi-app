@@ -129,6 +129,36 @@ function isEditable(element) {
   );
 }
 
+// Make the app inert under an overlay, but for the parts `live` names
+// (the iOS app's rail or bottom bar, which stay in view and in use beside
+// a modal): their ancestors stay live, and every other branch goes inert.
+function setAppInert(root, on, live) {
+  const kept = on && live ? Array.from(root.querySelectorAll(live)) : [];
+  if (!kept.length) {
+    for (const element of root.querySelectorAll("[data-overlay-inert]")) {
+      element.inert = false;
+      delete element.dataset.overlayInert;
+    }
+    root.inert = on;
+    return;
+  }
+  root.inert = false;
+  const walk = (parent) => {
+    for (const child of parent.children) {
+      if (kept.includes(child)) {
+        child.inert = false;
+      } else if (kept.some((element) => child.contains(element))) {
+        child.inert = false;
+        walk(child);
+      } else {
+        child.inert = true;
+        child.dataset.overlayInert = "";
+      }
+    }
+  };
+  walk(root);
+}
+
 export function isolateOverlays(appRoot, stores) {
   let activeOverlay = null;
   let currentModal = null;
@@ -153,7 +183,11 @@ export function isolateOverlays(appRoot, stores) {
         overlay !== activeOverlay && !overlay.contains(activeOverlay);
     }
 
-    appRoot.inert = Boolean(activeOverlay && !appRoot.contains(activeOverlay));
+    setAppInert(
+      appRoot,
+      Boolean(activeOverlay && !appRoot.contains(activeOverlay)),
+      stores.live?.(),
+    );
     for (const toast of document.querySelectorAll(".snackbar-wrapper")) {
       toast.inert = false;
     }
@@ -307,7 +341,7 @@ export function isolateOverlays(appRoot, stores) {
       dialogObserver.disconnect();
       document.removeEventListener("focusin", handleFocusIn);
       window.removeEventListener("keydown", handleKeydown, true);
-      appRoot.inert = false;
+      setAppInert(appRoot, false);
       for (const overlay of document.querySelectorAll(overlaySelector)) {
         overlay.inert = false;
       }

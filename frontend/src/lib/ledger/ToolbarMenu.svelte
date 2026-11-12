@@ -66,7 +66,7 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
-	class="relative flex items-stretch border-l border-surface-300-600-token {widthClass}"
+	class="toolbar-menu relative flex items-stretch border-l border-surface-300-600-token {widthClass}"
 	bind:this={root}
 	on:keydown={onKeydown}
 >
@@ -84,7 +84,7 @@
 		on:click={toggle}
 	>
 		{#if icon}<svelte:component this={icon} size={15} class="opacity-70" />{/if}
-		{label}
+		<span class="toolbar-label">{label}</span>
 		{#if badge !== ""}
 			<span class="badge {primary} max-w-[9rem] truncate px-1.5 py-0 text-3xs">{badge}</span>
 		{/if}
@@ -92,7 +92,7 @@
 	{#if open}
 		<div
 			id="{id}Panel"
-			class="absolute -right-px top-full z-40 max-h-[60vh] overflow-auto border border-surface-300-600-token bg-surface-100-800-token shadow-xl {panelClass}"
+			class="toolbar-panel absolute -right-px top-full z-40 max-h-[60vh] overflow-auto border border-surface-300-600-token bg-surface-100-800-token shadow-xl {panelClass}"
 			role="dialog"
 			aria-label={label}
 		>

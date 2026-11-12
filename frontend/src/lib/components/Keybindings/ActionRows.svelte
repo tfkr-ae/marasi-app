@@ -21,7 +21,7 @@
 <ul>
 	{#each rows as row (row.action.id)}
 		<li
-			class="flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {bar[row.status] ?? 'border-l-transparent'}"
+			class="kb-row flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {bar[row.status] ?? 'border-l-transparent'}"
 			data-action-id={row.action.id}
 			data-unavailable={row.available === false ? "" : undefined}
 		>

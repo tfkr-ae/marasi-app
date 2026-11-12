@@ -3,6 +3,7 @@
 	// test-case icon) and title, then Next, Edit and Delete; below, what it
 	// needs, its linked records and its evidence. An item filled in place
 	// saves on its own; moving away from one with input asks first.
+	import { ios } from "../platform.js";
 	import { tick } from "svelte";
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { ArrowLeft, ArrowRight, BookCheck, Pencil, Trash2 } from "lucide-svelte";
@@ -63,23 +64,23 @@
 </script>
 
 <div class="logbook-record relative flex h-full min-h-0 flex-col" bind:clientWidth={width} data-kind={kind} data-id={record.ID}>
-	<header class="flex h-12 flex-none items-center gap-2 border-b border-surface-500/30 px-4">
+	<header class="logbook-record-head flex h-12 flex-none items-center gap-2 border-b border-surface-500/30 px-4">
 		<button id="logbookBack" class="btn btn-sm flex-none {primary}" title="Back to the list (Esc)" on:click={onBack}
 			><ArrowLeft size={12} class="mr-1" />Back</button
 		>
 		{#if kind === "finding"}
-			<span class="badge flex-none px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
+			<span class="record-badge badge flex-none px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
 				>{record.Severity || "None"}</span
 			>
 		{:else}
-			<BookCheck size={15} class="flex-none text-tertiary-500" />
+			<BookCheck size={15} class="record-badge flex-none text-tertiary-500" />
 		{/if}
 		<h1 class="min-w-0 flex-1 truncate text-sm font-bold" title={record.Title}>{record.Title}</h1>
 		<button id="logbookNext" class="btn btn-sm flex-none {primary}" disabled={!hasNext} title={nextTitle} on:click={onNext}
-			>Next<ArrowRight size={12} class="ml-1" /></button
+			aria-label="Next"><span class="record-label">Next</span><ArrowRight size={12} class="ml-1" /></button
 		>
 		<button id="logbookEdit" class="btn btn-sm flex-none {primary}" title="Edit" on:click={onEdit}
-			><Pencil size={12} class="mr-1" />Edit</button
+			aria-label="Edit"><Pencil size={12} class="mr-1" /><span class="record-label">Edit</span></button
 		>
 		<button id="logbookDelete" class="btn btn-sm flex-none px-2.5 {primary}" title="Delete" aria-label="Delete" on:click={onDelete}
 			><span class="flex h-5 items-center"><Trash2 size={14} /></span></button
@@ -98,6 +99,7 @@
 					requests={record.Requests ?? []}
 					artifacts={record.Artifacts ?? []}
 					listWidth={width > 1000 ? 300 : 240}
+					layout={$ios && width < 560 ? "stack" : "split"}
 					stackPair={width < 860}
 				/>
 			{/key}

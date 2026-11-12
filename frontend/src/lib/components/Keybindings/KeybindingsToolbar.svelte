@@ -192,7 +192,7 @@
 	}
 </script>
 
-<div class="grid grid-cols-2 gap-3">
+<div class="kb-toolbar grid grid-cols-2 gap-3">
 	<div class="label">
 		<span id="keybindings-profile-label">Profile</span>
 		<div class="relative flex">

@@ -52,7 +52,7 @@
 <div class="logbook-summary h-full overflow-auto pb-20">
 	<div class="space-y-5 px-5 py-4">
 		{#if filters.kind !== "testCases"}
-			<div class="flex gap-2">
+			<div class="logbook-cards flex gap-2">
 				{#each SEVERITIES as severity}
 					{@const on = filters.severities.includes(severity)}
 					<button

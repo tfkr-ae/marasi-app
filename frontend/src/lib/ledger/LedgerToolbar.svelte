@@ -183,7 +183,7 @@
 				id="ledgerLive"
 				class="flex items-center gap-1.5 px-3 text-sm"
 				title="The live view: every pair, newest first"
-				><span class="h-2 w-2 rounded-full bg-success-500"></span>Live</span
+				><span class="h-2 w-2 rounded-full bg-success-500"></span><span class="toolbar-label">Live</span></span
 			>
 		{:else}
 			<button
@@ -192,7 +192,7 @@
 				class="flex items-center gap-1.5 px-3 text-sm hover:bg-surface-200-700-token"
 				title="Back to the live view: clears the query and the sort"
 				on:click={() => ledgerStore.backToLive()}
-				><span class="h-2 w-2 rounded-full bg-surface-400"></span>Live</button
+				><span class="h-2 w-2 rounded-full bg-surface-400"></span><span class="toolbar-label">Live</span></button
 			>
 		{/if}
 	</div>

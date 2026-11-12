@@ -85,6 +85,9 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
+	import { ios, iosCheck } from "../lib/platform.js";
+	import { installSwipeToClose } from "../lib/swipeToClose.js";
+	import { installLongPress, installTwoFingerSwipeDown, keepKeyboardDown } from "../lib/touch.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
@@ -95,9 +98,11 @@
 		ChefHat,
 		Brush,
 		BookOpenCheckIcon,
+		HomeIcon,
 		PuzzleIcon,
 		Swords,
 	} from "lucide-svelte";
+	import BottomBar from "../lib/components/BottomBar.svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
 	import MetadataModal from "../lib/components/MetadataModal.svelte";
 	import InterfaceModal from "../lib/components/InterfaceModal.svelte";
@@ -131,6 +136,7 @@
 	import {
 		installMenuShortcuts,
 		menuDispatcher,
+		menuPalettes,
 		websocketTab,
 		armoryDrawer,
 		keybindingCapture,
@@ -196,6 +202,70 @@
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
 	// The Armory icon's runs-in-progress badge (see armoryBadge).
 	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
+	// The narrow iOS bottom bar's pages (BottomBar.svelte), going where the
+	// rail's tiles go: Home and the main four in the bar, the rest under More.
+	$: barPrimary = [
+		{ id: "home", label: "Home", icon: HomeIcon, path: "/", go: () => goto("/") },
+		{ id: "ledger", label: "Ledger", icon: BookIcon, path: "/ledger", go: () => goto("/ledger") },
+		{ id: "checkpoint", label: "Checkpoint", icon: FlagIcon, path: "/checkpoint", badge: heldBadge.label, go: () => goto("/checkpoint") },
+		{ id: "launchpad", label: "Launchpad", icon: SendIcon, path: "/launchpad", go: () => goto("/launchpad") },
+		{ id: "logbook", label: "Logbook", icon: BookOpenCheckIcon, path: "/logbook", go: () => goto("/logbook") },
+	];
+	$: barMore = [
+		{ id: "compass", label: "Compass", icon: CompassIcon, path: "/compass", go: () => goto("/compass") },
+		{ id: "armory", label: "Armory", icon: Swords, path: "/armory", badge: runningBadge.label, go: () => goto("/armory") },
+		{ id: "workshop", label: "Workshop", icon: ToolIcon, path: "/workshop", go: () => goto("/workshop") },
+		{
+			id: "chef",
+			label: "Chef",
+			icon: ChefHat,
+			path: "/sveltechef",
+			go: async () => {
+				await loadSvelteChef();
+				goto("/sveltechef");
+				showChef = true;
+			},
+		},
+		{
+			id: "excalidraw",
+			label: "Excalidraw",
+			icon: Brush,
+			path: "/excalidraw",
+			go: async () => {
+				await loadExcalidraw();
+				goto("/excalidraw");
+				showExcali = true;
+			},
+		},
+		{
+			id: "interact",
+			label: "Interactsh",
+			icon: ZapIcon,
+			path: "/interact",
+			go: async () => {
+				await loadInteract();
+				goto("/interact");
+				showInteract = true;
+			},
+		},
+		...$extensions
+			.filter((extension) => $extensions_ui[extension.Name]?.icon || extension.UICode)
+			.map((extension) => ({
+				id: "extension-" + extension.Name,
+				label: extension.Name,
+				icon: PuzzleIcon,
+				path: "/extension/" + extension.Name,
+				go: () => goto("/extension/" + extension.Name),
+			})),
+		{
+			id: "settings",
+			label: "Settings",
+			icon: SettingsIcon,
+			path: "/settings",
+			dot: settingsIndicator ? (settingsIndicator.kind === "dot" ? dotTones[settingsIndicator.tone].dot : "bg-primary-500") : "",
+			go: () => goto(settingsPath($updateState)),
+		},
+	];
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -265,6 +335,19 @@
 	function openConnections() {
 		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
 	}
+	// iOS: modals and drawers leave the rail or bottom bar in view and in use
+	// (app.css, overlayIsolation.js). A tap on one of its pages closes them,
+	// unless the modal holds edits it asks about before closing; More only
+	// opens its sheet.
+	const liveNav = () => ($ios ? ".nav-rail, .bottom-bar, .bottom-bar-backdrop" : null);
+	const GUARDED_MODALS = ["LogbookRecord", "Keybindings", "QuitQuestion"];
+	function closeOverlaysForNav(event) {
+		if (!$ios) return;
+		const tile = event.target?.closest?.(".nav-rail a, .nav-rail button, .bottom-bar button");
+		if (!tile || tile.closest(".bottom-bar-more")) return;
+		if ($modalStore.length && !GUARDED_MODALS.includes($modalStore[0]?.component)) modalStore.clear();
+		if ($drawerStore.open) drawerStore.close();
+	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
 		return {
@@ -285,6 +368,14 @@
 		return menuDispatcher.isModalToggle(event, actionId, shortcutState());
 	}
 	let removeMenuShortcuts = () => {};
+	// iOS: a swipe down closes the open modal, drawer or menu.
+	onMount(() => {
+		let stop = () => {};
+		iosCheck.then((onIOS) => {
+			if (onIOS) stop = installSwipeToClose(() => [$modalStore.length, $modalStore[0], $drawerStore.open]);
+		});
+		return () => stop();
+	});
 	onMount(() => {
 		// Opens another client (the Marasi CLI, another app) starts while
 		// the app is connected: the opening screen follows them, and the
@@ -348,7 +439,25 @@
 				},
 			);
 		});
+		// Touch fixes, on iOS only (lib/touch.js).
+		let stopTouch = () => {};
+		iosCheck.then((onIOS) => {
+			if (!onIOS) return;
+			const stopLongPress = installLongPress(window);
+			const stopKeyboard = keepKeyboardDown(modalStore, document);
+			// Opens the Marasi menu, not over another dialog.
+			const stopSwipe = installTwoFingerSwipeDown(window, () => {
+				if (document.querySelector("dialog[open]") || $modalStore.length > 0) return;
+				menuPalettes.active()?.toggle();
+			});
+			stopTouch = () => {
+				stopLongPress();
+				stopKeyboard();
+				stopSwipe();
+			};
+		});
 		return () => {
+			stopTouch();
 			stopFollowing();
 			stopReportingDrafts();
 			stopReportingLogbookEdits();
@@ -366,17 +475,18 @@
 </script>
 
 <div
-	class="flex flex-col h-screen"
-	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle }}
+	class="app-frame flex flex-col h-screen safe-area-pad"
+	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle, live: liveNav }}
 >
-	<div class="flex flex-1 h-screen">
+	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+	<div class="app-body flex flex-1 h-screen" on:click|capture={closeOverlaysForNav}>
 		{#if $appState.started}
 			<GlobalMenu />
 			<AppRail
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"
 				aspectRatio="py-2.5 px-1.5"
-				width="w-[4.75rem]"
+				width={$ios ? "w-12" : "w-[4.75rem]"}
 				spacing="space-y-0.5"
 			>
 				<!-- AppRailTiles -->
@@ -396,7 +506,7 @@
 							class="flex justify-center items-center w-full"
 						>
 							<Logo
-								size="52"
+								size={$ios ? "36" : "52"}
 								mode={$page.url.pathname ===
 									"/" ||
 								$modeCurrent
@@ -839,6 +949,9 @@
 					/>
 				{/if}
 			</div>
+			{#if $ios}
+				<BottomBar primary={barPrimary} more={barMore} onConnections={openConnections} />
+			{/if}
 		{:else if !$opening}
 			<div
 				class="flex items-center w-full h-full justify-center"
@@ -892,7 +1005,7 @@
 <!-- The opening screen covers the app rather than replacing it, so the open
      project's pages stay mounted, exactly as they were, if the open fails. -->
 {#if $opening && $openingShown}
-	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
+	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token safe-area-pad">
 		<OpeningScreen
 			state={$opening}
 			browse={filePickerShown($connectionStore.connection)}

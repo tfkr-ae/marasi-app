@@ -1,3 +1,9 @@
+<script context="module">
+	// The docks' states the iOS app has collapsed already: each starts
+	// collapsed there, once, so one the researcher opens stays open.
+	const collapsedOnIOS = new WeakSet();
+</script>
+
 <script>
 	// A side dock, shared by the Launchpad and the Ledger: drag the edge to
 	// resize, drag below the snap point to collapse to a strip. The strip has
@@ -11,6 +17,7 @@
 	import { tick } from "svelte";
 	import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-svelte";
 	import { DOCK, dragWidth, settleDrag, toggleDock } from "./dock.js";
+	import { iosCheck } from "../platform.js";
 
 	export let state;
 	export let limits = DOCK;
@@ -37,6 +44,23 @@
 	function setDock(next) {
 		state.set({ ...$state, ...next });
 	}
+
+	// A phone has no room for a sidebar: on iOS each dock starts collapsed.
+	// Narrow (the iPhone Duo folded) the open dock covers the page, so
+	// choosing what it lists (a row marked data-dock-pick) closes it and
+	// shows the choice. A tap with Shift or ⌘ picks more and stays.
+	let onIOS = false;
+	function closeOnPick(event) {
+		if (!onIOS || event.shiftKey || event.metaKey || event.ctrlKey) return;
+		if (!matchMedia("(max-width: 40rem)").matches) return;
+		if (event.target.closest?.("[data-dock-pick]")) collapse();
+	}
+	iosCheck.then((ios) => {
+		onIOS = ios;
+		if (!ios || collapsedOnIOS.has(state)) return;
+		collapsedOnIOS.add(state);
+		setDock({ collapsed: true });
+	});
 
 	export async function expand(focusSearch = false) {
 		setDock({ collapsed: false });
@@ -114,7 +138,8 @@
 {/if}
 
 {#if !collapsed || dragging || peeking}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- The click only watches for a chosen row (closeOnPick); the rows have their own keys. -->
+	<!-- svelte-ignore a11y-no-static-element-interactions a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
 	<aside
 		class="lp-dock {overlay
 			? 'absolute bottom-0 left-11 top-0 z-20 shadow-2xl'
@@ -122,6 +147,7 @@
 		style="width: {overlay ? width : panelWidth}px"
 		on:mouseenter={() => clearTimeout(peekTimer)}
 		on:mouseleave={() => collapsed && peek(false, 250)}
+		on:click={closeOnPick}
 	>
 		<!-- Content keeps at least the minimum width while dragging narrower. -->
 		<div class="flex h-full min-h-0 flex-col" style="width: {Math.max(overlay ? width : panelWidth, limits.min)}px">
@@ -132,7 +158,7 @@
 					<slot name="header" />
 					{#if !collapsed}
 						<button
-							class="opacity-70 hover:opacity-100"
+							class="dock-collapse opacity-70 hover:opacity-100"
 							title="Collapse"
 							aria-label={collapseLabel}
 							on:click={collapse}
@@ -148,7 +174,7 @@
 		</div>
 		{#if !$$slots.header && !collapsed}
 			<button
-				class="absolute right-1.5 top-1.5 z-20 opacity-50 hover:opacity-100"
+				class="dock-collapse absolute right-1.5 top-1.5 z-20 opacity-50 hover:opacity-100"
 				title="Collapse"
 				aria-label={collapseLabel}
 				on:click={collapse}

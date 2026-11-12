@@ -19,6 +19,7 @@
 	import { usesSyntax } from "../ledger/drawer.js";
 	import { primaryVariant, statusClass } from "../launchpad/format.js";
 	import { interceptedFor, itemTitle } from "./items.js";
+	import PaneTabs from "../components/PaneTabs.svelte";
 
 	export let store;
 	/** { item, summary, launch, context } for the selected item. */
@@ -55,6 +56,14 @@
 
 	const OPCODES = { 0: "continuation", 1: "text", 2: "binary", 8: "close", 9: "ping", 10: "pong" };
 	$: heldLeft = item.Type === "request";
+	// Narrow iOS screens show one side at a time (PaneTabs): the held one first.
+	let narrowPane = "left";
+	$: {
+		item.ID;
+		narrowPane = heldLeft ? "left" : "right";
+	}
+	$: leftLabel = item.Type === "websocket" ? "Connection" : "Request";
+	$: rightLabel = item.Type === "websocket" ? "Message" : "Response";
 	const head =
 		"flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900";
 	const heldHead = "!bg-primary-500/10 shadow-[inset_3px_0_0_rgb(var(--color-primary-500))]";
@@ -70,7 +79,7 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col">
-	<header class="flex items-center gap-3 border-b border-surface-500/30 bg-surface-50 px-3 py-2 dark:bg-surface-900">
+	<header class="cp-itembar flex items-center gap-3 border-b border-surface-500/30 bg-surface-50 px-3 py-2 dark:bg-surface-900">
 		<div class="min-w-0 flex-1">
 			<h2 class="cp-title truncate font-mono text-sm font-bold">{itemTitle(summary, request?.Number)}</h2>
 			<p class="cp-meta truncate text-2xs opacity-60">
@@ -78,7 +87,7 @@
 				{#if entry.launch} · from Launchpad · {entry.launch}{/if}
 			</p>
 		</div>
-		<div class="flex flex-none items-center gap-2">
+		<div class="cp-actions flex flex-none items-center gap-2">
 			<button class="cp-forward btn btn-sm {primary}" disabled={!!error || checking} title="Forward" on:click={() => onForward(item.ID)}>
 				<Forward size={14} class="mr-1" />Forward
 			</button>
@@ -89,7 +98,8 @@
 					title="Forward and intercept its response"
 					on:click={() => onForward(item.ID, { interceptResponse: true })}
 				>
-					<CornerDownRight size={14} class="mr-1" />Forward + intercept response
+					<CornerDownRight size={14} class="mr-1" /><span class="cp-long-label">Forward + intercept response</span
+					><span class="cp-short-label">+ Response</span>
 				</button>
 			{/if}
 			<button class="cp-drop btn btn-sm {primary}" title="Drop" on:click={() => onDrop(item.ID)}>
@@ -98,10 +108,17 @@
 		</div>
 	</header>
 
+	<PaneTabs
+		tabs={[
+			{ id: "left", label: leftLabel },
+			{ id: "right", label: rightLabel },
+		]}
+		bind:active={narrowPane}
+	/>
 	{#key item.Type + item.ID}
-		<div class="grid min-h-0 flex-1 grid-cols-2">
+		<div class="cp-panes grid min-h-0 flex-1 grid-cols-2">
 			<!-- Left: the request, or a WebSocket message's connection. -->
-			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30">
+			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "left"}>
 				{#if item.Type === "websocket"}
 					<div class={head}><span class="font-bold">Connection</span></div>
 					<dl class="cp-connection grid grid-cols-[6rem_1fr] gap-y-1 p-3 font-mono text-2xs">
@@ -163,7 +180,7 @@
 			</section>
 
 			<!-- Right: the response, or the WebSocket message. -->
-			<section class="flex min-h-0 min-w-0 flex-col">
+			<section class="flex min-h-0 min-w-0 flex-col" class:pane-off={narrowPane !== "right"}>
 				{#if item.Type === "request"}
 					<div class={head}><span class="font-bold">Response</span></div>
 					<p class="p-4 text-xs opacity-60">Not sent yet</p>

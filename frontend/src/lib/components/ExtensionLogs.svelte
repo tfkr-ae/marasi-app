@@ -1,6 +1,11 @@
 <script>
     import { onMount } from "svelte";
+    import { getDrawerStore } from "@skeletonlabs/skeleton";
+    import { X } from "lucide-svelte";
     import { extensionsStore } from "../../stores/extensionsStore.js";
+    import { ios } from "../platform.js";
+
+    const drawerStore = getDrawerStore();
 
     export let extensionName = "";
     let logs = [];
@@ -21,8 +26,18 @@
         };
     });
 </script>
-<div class="text-center p-1 text-sm font-bold">
+<!-- On iOS the drawer is a full-screen sheet (app.css) with no backdrop
+     to tap, so its title row carries a close button. -->
+<div class="extension-logs-head relative p-1 text-center text-sm font-bold" class:ios-logs-head={$ios}>
     {extensionName} Logs
+    {#if $ios}
+        <button
+            type="button"
+            class="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center opacity-70"
+            aria-label="Close"
+            on:click={() => drawerStore.close()}><X size={18} /></button
+        >
+    {/if}
 </div>
 {#if logs?.length > 0}
     {#each logs as log}
@@ -38,4 +53,6 @@
                                 )}] - {log.Text.trim()}
         </pre>
     {/each}
+{:else if $ios}
+    <p class="p-8 text-center text-xs opacity-60">No logs yet</p>
 {/if}

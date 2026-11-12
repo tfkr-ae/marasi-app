@@ -6,6 +6,7 @@
 	// decides whether test cases are listed) and saves it through the native
 	// Save dialog. Clicking a gap closes the modal and opens that record at
 	// the missing item.
+	import PaneTabs from "../components/PaneTabs.svelte";
 	import { getModalStore, getToastStore, modeCurrent, SlideToggle } from "@skeletonlabs/skeleton";
 	import { onMount } from "svelte";
 	import { FileText, RotateCcw, SquareArrowRight, X } from "lucide-svelte";
@@ -112,6 +113,8 @@
 
 	const label = "mb-1 block text-2xs font-semibold opacity-70";
 	const input = "input h-8 py-1 text-xs";
+	// Narrow iOS screens show the details or the report's preview, as tabs.
+	let narrowPane = "details";
 </script>
 
 {#if $modalStore[0]}
@@ -125,8 +128,15 @@
 				><X size={16} /></button
 			>
 		</header>
+		<PaneTabs
+			tabs={[
+				{ id: "details", label: "Details" },
+				{ id: "preview", label: "Preview" },
+			]}
+			bind:active={narrowPane}
+		/>
 		<div class="flex min-h-0 flex-1">
-			<div class="min-w-0 flex-1 space-y-4 overflow-auto px-5 py-4">
+			<div class="min-w-0 flex-1 space-y-4 overflow-auto px-5 py-4" class:pane-off={narrowPane !== "details"}>
 				<section>
 					<span class={label}>Template</span>
 					<div class="flex items-center gap-2">
@@ -157,7 +167,7 @@
 				</section>
 				<section>
 					<h3 class="mb-2 text-sm font-bold">Report details</h3>
-					<div class="grid grid-cols-6 gap-x-3 gap-y-2.5">
+					<div class="export-details grid grid-cols-6 gap-x-3 gap-y-2.5">
 						<label class="col-span-4"
 							><span class={label}>Title</span><input class={input} bind:value={$reportMetadata.title} /></label
 						>
@@ -190,7 +200,7 @@
 				<section>
 					<h3 class="mb-2 text-sm font-bold">Options</h3>
 					<div class="divide-y divide-surface-500/20 ring-1 ring-surface-500/30">
-						<div class="flex h-10 items-center gap-3 px-3">
+						<div class="export-option flex h-10 items-center gap-3 px-3">
 							<div class="min-w-0 flex-1 font-semibold">Include test cases</div>
 							<SlideToggle
 								name="exportIncludeTestCases"
@@ -201,7 +211,7 @@
 								on:change={(e) => setIncludeTestCases(e.currentTarget.checked)}
 							/>
 						</div>
-						<div class="flex h-10 items-center gap-3 px-3">
+						<div class="export-option flex h-10 items-center gap-3 px-3">
 							<div class="min-w-0 flex-1 font-semibold">Mark as draft</div>
 							<SlideToggle
 								name="exportDraft"
@@ -211,7 +221,7 @@
 								bind:checked={$reportMetadata.is_draft}
 							/>
 						</div>
-						<div class="flex h-10 items-center gap-3 px-3">
+						<div class="export-option flex h-10 items-center gap-3 px-3">
 							<div class="flex min-w-0 flex-1 items-center gap-1.5">
 								<span class="font-semibold">Truncate bodies</span>
 								{#if truncating}
@@ -239,12 +249,13 @@
 				</section>
 			</div>
 			<div
-				class="w-[25rem] flex-none overflow-auto border-l border-surface-500/30 bg-surface-100/60 px-5 py-4 dark:bg-surface-900/40"
+				class:pane-off={narrowPane !== "preview"}
+				class="export-preview w-[25rem] flex-none overflow-auto border-l border-surface-500/30 bg-surface-100/60 px-5 py-4 dark:bg-surface-900/40"
 			>
 				<ReportReview store={logbookStore} {includeTestCases} onGap={openGap} />
 			</div>
 		</div>
-		<footer class="flex flex-none justify-end gap-2 border-t border-surface-500/30 px-3 py-2">
+		<footer class="export-foot flex flex-none justify-end gap-2 border-t border-surface-500/30 px-3 py-2">
 			<button type="button" class="btn btn-sm {neutral}" on:click={modalStore.close}>Cancel</button>
 			<button
 				id="exportReport"

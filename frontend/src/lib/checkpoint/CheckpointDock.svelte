@@ -74,7 +74,7 @@
 	</svelte:fragment>
 
 	<div class="flex h-full min-h-0 flex-col">
-		<div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-surface-500/30 px-2 py-1.5 text-xs">
+		<div class="cp-bulk flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-surface-500/30 px-2 py-1.5 text-xs">
 			<div class="cp-intercept-all" title="Intercept every request and response, whatever the rules say">
 				<SlideToggle name="Intercept all" size="sm" active="bg-success-500" checked={$interceptFlag} on:change={onToggleIntercept}
 					><span class="whitespace-nowrap text-xs">Intercept all</span></SlideToggle
@@ -133,6 +133,7 @@
 							<div
 								role="treeitem"
 								aria-selected={selected}
+								data-dock-pick
 								data-item={item.ID}
 								data-picked={isPicked ? "true" : undefined}
 								class="cp-entry relative flex cursor-default select-none items-center gap-1.5 py-[3px] pl-6 pr-2 font-mono text-2xs {selected

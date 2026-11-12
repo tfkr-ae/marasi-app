@@ -10,7 +10,7 @@
 
 <div class="space-y-2 text-xs">
 	<p class="opacity-80">{QUERY_PREAMBLE}</p>
-	<table class="w-full">
+	<table class="query-fields w-full">
 		<tbody>
 			{#each QUERY_FIELDS as field}
 				<tr class="border-t border-surface-500/20 align-top">

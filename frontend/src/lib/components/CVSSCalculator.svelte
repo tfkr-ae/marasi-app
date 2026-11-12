@@ -76,7 +76,7 @@
 </script>
 
 <div class="border border-surface-500/30 bg-white dark:bg-surface-800" data-testid="cvss-calculator">
-	<div class="flex items-center gap-1 pr-1">
+	<div class="cvss-head flex items-center gap-1 pr-1">
 		<button
 			type="button"
 			class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
@@ -144,7 +144,7 @@
 				<div class="space-y-1">
 					<div class="text-3xs font-bold uppercase tracking-wider opacity-50">{group.name}</div>
 					{#each group.metrics as m}
-						<div class="flex items-center gap-2">
+						<div class="cvss-metric flex items-center gap-2">
 							<span class="w-28 flex-none truncate text-2xs opacity-80" title="{m.name} ({m.key})">{m.name}</span>
 							<div class="flex min-w-0 flex-1 gap-px" role="group" aria-label={m.name}>
 								{#each m.options as [value, label]}

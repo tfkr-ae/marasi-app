@@ -277,7 +277,7 @@
 			onConfirm={(next) => (confirmation = next)}
 		/>
 
-		<div class="flex items-center gap-4">
+		<div class="kb-search-row flex items-center gap-4">
 			<input
 				class="input {inputClass}"
 				type="search"
@@ -297,7 +297,7 @@
 			</div>
 		</div>
 
-		<div class="flex min-h-0 flex-1 border-y border-surface-300 dark:border-surface-600">
+		<div class="kb-body flex min-h-0 flex-1 border-y border-surface-300 dark:border-surface-600">
 			<ContextSidebar groups={visibleGroups} selected={selectedGroup} onSelect={(id) => (selectedGroup = id)} />
 			<section class="min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
 				{#if current}

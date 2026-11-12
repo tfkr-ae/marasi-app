@@ -19,6 +19,7 @@
 	import { compareView } from "./compare.js";
 	import { launchEndText, neutralVariant, primaryVariant, statusClass } from "./format.js";
 	import LaunchpadCompare from "./LaunchpadCompare.svelte";
+	import PaneTabs from "../components/PaneTabs.svelte";
 
 	export let store;
 	export let onEditorFocus = () => {};
@@ -39,6 +40,10 @@
 	$: browserViewOff = browserViewRefusal(entries[entryIndex]);
 	$: dirty = isDraftDirty(state, launchpadId);
 	$: pending = !!pendingLaunchOf(state, launchpadId);
+	// The pane on show when the screen is too narrow for both (PaneTabs):
+	// a launch shows its response.
+	let narrowPane = "request";
+	$: if (pending) narrowPane = "response";
 	$: endText = selectedId ? launchEndText(launchOf(state, selectedId)) : null;
 	$: primary = primaryVariant($modeCurrent);
 	$: neutral = neutralVariant($modeCurrent);
@@ -126,7 +131,7 @@
 </script>
 
 {#if !launchpad}
-	<div class="flex h-full flex-col items-center justify-center opacity-60">
+	<div class="flex h-full flex-col items-center justify-center px-4 text-center opacity-60">
 		<h3 class="text-xl font-bold">No launchpad selected</h3>
 		<p class="text-sm">Create one with + in the sidebar, or send a request from the Ledger.</p>
 	</div>
@@ -135,7 +140,7 @@
 		<header class="lp-topbar flex items-center gap-3 border-b border-surface-500/30 bg-surface-50 px-3 py-2 dark:bg-surface-900">
 			<div class="min-w-0 flex-1">
 				{#if editing}
-					<div class="flex items-center gap-2">
+					<div class="lp-edit flex items-center gap-2">
 						<input
 							bind:this={nameField}
 							class="input h-8 w-56 text-sm font-bold"
@@ -181,23 +186,25 @@
 
 			{#if dirty && !comparing}
 				<button
-					class="btn btn-sm {neutral}"
+					class="lp-icon-btn btn btn-sm {neutral}"
 					title="Revert the draft to the entry it was seeded from"
+					aria-label="Revert draft"
 					on:click={() => store.revertDraft(launchpadId)}
 				>
-					<RotateCcw size={14} class="mr-1" /> Revert draft
+					<RotateCcw size={14} class="mr-1" /> <span class="lp-btn-label">Revert draft</span>
 				</button>
 			{/if}
 			<button
-				class="lp-compare-toggle btn btn-sm {compare ? primary : 'variant-soft'}"
+				class="lp-compare-toggle lp-icon-btn btn btn-sm {compare ? primary : 'variant-soft'}"
+				aria-label={compare ? "Close compare" : "Compare"}
 				disabled={!compare && entries.length < 2}
 				title={entries.length < 2 ? "Compare needs at least two entries" : compare ? "Close compare (Esc)" : "Compare the selected entry with another"}
 				on:click={toggleCompare}
 			>
 				<GitCompare size={14} class="mr-1" />
-				{compare ? "Close compare" : "Compare"}
+				<span class="lp-btn-label">{compare ? "Close compare" : "Compare"}</span>
 			</button>
-			<div class="flex items-center gap-2">
+			<div class="lp-https flex items-center gap-2">
 				<span class="text-sm font-bold">HTTPS</span>
 				<SlideToggle
 					name="TLS Toggle"
@@ -228,8 +235,17 @@
 		</header>
 
 		<LaunchpadCompare bind:this={comparePane} {store} />
-		<div class="grid min-h-0 flex-1 grid-cols-2" class:hidden={comparing}>
-			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30">
+		{#if !comparing}
+			<PaneTabs
+				tabs={[
+					{ id: "request", label: dirty ? "Request draft" : "Request" },
+					{ id: "response", label: "Response" },
+				]}
+				bind:active={narrowPane}
+			/>
+		{/if}
+		<div class="lp-panes grid min-h-0 flex-1 grid-cols-2" class:hidden={comparing}>
+			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "request"}>
 				<div class="flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900">
 					<span class="lp-request-title font-bold">
 						{dirty ? "Request draft" : "Request"}
@@ -255,7 +271,7 @@
 					{/key}
 				</div>
 			</section>
-			<section class="flex min-h-0 min-w-0 flex-col">
+			<section class="flex min-h-0 min-w-0 flex-col" class:pane-off={narrowPane !== "response"}>
 				<div class="flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900">
 					<span class="font-bold">
 						Response

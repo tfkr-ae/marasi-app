@@ -29,6 +29,10 @@
 	import { longStrings } from "../longStrings.js";
 	import { messageRow } from "../websocket/presentation.js";
 	import WebSocketMessageProperties from "./WebSocketMessageProperties.svelte";
+	import PaneTabs from "./PaneTabs.svelte";
+	// Narrow iOS screens show the list or the chosen message (PaneTabs);
+	// tapping a message opens it.
+	let narrowPane = "list";
 
 	export let requestId;
 	export let onOpenInject = () => {};
@@ -300,10 +304,18 @@
 	{#if loading && messages.length === 0}
 		<div class="p-4 text-xs opacity-60">Loading…</div>
 	{:else}
-		<div class="flex min-h-0 w-full min-w-0 flex-1">
+		<PaneTabs
+			tabs={[
+				{ id: "list", label: "Messages" },
+				{ id: "detail", label: "Message" },
+			]}
+			bind:active={narrowPane}
+		/>
+		<div class="ws-panes flex min-h-0 w-full min-w-0 flex-1">
 			<!-- left: table -->
 			<div
 				class="no-select relative min-h-0 w-1/2 min-w-0 border-r border-surface-500/30 font-mono text-xs"
+				class:pane-off={narrowPane !== "list"}
 			>
 				<div
 					bind:this={tableScroller}
@@ -380,10 +392,10 @@
 									? 'bg-surface-500/20 outline outline-1 outline-offset-[-1px] outline-primary-500'
 									: ''} {messageStateClasses(row.original, presented)}"
 								title={presented.tooltip}
-								on:click={() =>
-									selectFrame(
-										row.original,
-									)}
+								on:click={() => {
+									narrowPane = "detail";
+									selectFrame(row.original);
+								}}
 							>
 								{#each row.getVisibleCells() as cell}
 									<td
@@ -450,9 +462,9 @@
 			</div>
 
 			<!-- right: header-aligned toolbar + editor aligned to first row -->
-			<div class="flex min-h-0 w-1/2 min-w-0 flex-col">
+			<div class="flex min-h-0 w-1/2 min-w-0 flex-col" class:pane-off={narrowPane !== "detail"}>
 				<div
-					class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
+					class="ws-detail-bar flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 				>
 					<div
 						class="flex min-w-0 items-center gap-2 opacity-80"

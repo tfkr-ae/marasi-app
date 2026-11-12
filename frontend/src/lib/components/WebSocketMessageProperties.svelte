@@ -22,7 +22,7 @@
 </script>
 
 <div
-	class="grid shrink-0 grid-cols-[max-content_1fr_max-content_1fr] gap-x-4 gap-y-1 border-b border-surface-500/30 px-3 py-2 font-mono text-xs"
+	class="ws-properties grid shrink-0 grid-cols-[max-content_1fr_max-content_1fr] gap-x-4 gap-y-1 border-b border-surface-500/30 px-3 py-2 font-mono text-xs"
 >
 	<span class="opacity-60">Type</span><span>{properties.type}</span>
 	<span class="opacity-60">Direction</span><span>{properties.direction}</span>

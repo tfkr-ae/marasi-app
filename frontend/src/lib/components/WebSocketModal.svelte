@@ -216,7 +216,7 @@
 			}
 		}}
 	>
-		<header class="flex justify-between items-center gap-3">
+		<header class="ws-header flex justify-between items-center gap-3">
 			<div class="flex min-w-0 items-center gap-2">
 				<RadioIcon size={18} class={upgrade.iconClass} />
 				<h2 class="truncate text-base font-bold">
@@ -239,14 +239,16 @@
 
 			<div class="flex items-center gap-2">
 				<button
-					class="btn btn-sm {primaryVariant($modeCurrent)}"
+					class="ws-close-connection btn btn-sm {primaryVariant($modeCurrent)}"
+					aria-label="Close Connection"
+					title="Close Connection"
 					disabled={upgrade.state !== "open" || closing}
 					on:click={closeConnection}
 				>
 					<Unplug size={14} class="mr-1" />
-					{closing
+					<span class="ws-label">{closing
 						? "Closing…"
-						: "Close Connection"}
+						: "Close Connection"}</span>
 				</button>
 				<button
 					class="text-2xl leading-none"
@@ -259,7 +261,7 @@
 		</header>
 
 		<div class="mt-2 flex w-full justify-center">
-			<TabGroup padding="px-3 py-1" regionList="text-sm">
+			<TabGroup class="ws-tabs" padding="px-3 py-1" regionList="text-sm">
 				<Tab
 					bind:group={openTab}
 					name="stream"

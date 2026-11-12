@@ -24,6 +24,7 @@
 	import { followChromeConfig } from "../lib/chromeConfigEvents.js";
 	import { service } from "../lib/service/index.js";
 	import { connectionStore } from "../stores/connectionStore.js";
+	import { ios, iosCheck } from "../lib/platform.js";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -41,7 +42,8 @@
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
 
 	onMount(() => {
-		readChromeProfiles();
+		// The iOS app has no Chrome to start.
+		iosCheck.then((onIOS) => onIOS || readChromeProfiles());
 		return followChromeConfig(service.on, {
 			connectionKind: () => get(connectionStore).connection.kind,
 			onPaths: () => {},
@@ -52,7 +54,7 @@
 		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));
 </script>
 
-<div class="content">
+<div class="content" class:ios-home={$ios}>
 	<div class="no-select dashboard-content">
 		<div class="container mx-auto p-4 space-y-4 text-sm">
 			<div
@@ -108,6 +110,7 @@
 						>
 					</button>
 
+					{#if !$ios}
 					<div class="relative w-fit">
 						<div
 							class="flex w-full overflow-hidden"
@@ -162,15 +165,19 @@
 							</div>
 						{/if}
 					</div>
+					{/if}
 				</div>
 			</div>
 			<Dashboard />
+			{#if $ios}<LogTable compact />{/if}
 		</div>
 	</div>
 
+	{#if !$ios}
 	<div class="log-table-container">
 		<LogTable />
 	</div>
+	{/if}
 </div>
 
 <style>
@@ -216,6 +223,27 @@
 		background-color: rgb(var(--color-surface-900));
 		scrollbar-color: rgb(var(--color-surface-600))
 			rgb(var(--color-surface-800));
+	}
+
+	/* The iOS app: one scrolling column, the cards and the log in line
+	   with the header, no split between them. */
+	.ios-home {
+		height: 100%;
+		overflow-y: auto;
+	}
+	.ios-home .dashboard-content {
+		flex: none;
+		max-height: none;
+		overflow: visible;
+	}
+	/* Full width, so its edges line up with the connection banner's
+	   (px-4) above the page, as the header does with the cards. */
+	.ios-home :global(.container) {
+		max-width: none;
+	}
+	.ios-home :global([data-dashboard]) {
+		padding-left: 0;
+		padding-right: 0;
 	}
 
 	/* Responsive adjustments for small screens */

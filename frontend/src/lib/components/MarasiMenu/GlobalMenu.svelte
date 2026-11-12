@@ -44,6 +44,7 @@
 	import { updatePanelModal } from "../../updates.js";
 	import { connectionsModal } from "../../connection/modal.js";
 	import { startChrome } from "../../chrome.js";
+	import { IOS_HIDDEN_ACTIONS, ios } from "../../platform.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
 		extensions,
@@ -265,7 +266,7 @@
 
 	$: menuOptions = $menuDispatcher.catalog
 		.inContext("global")
-		.filter((action) => action.id !== OPEN_MENU)
+		.filter((action) => action.id !== OPEN_MENU && !($ios && IOS_HIDDEN_ACTIONS.has(action.id)))
 		.map((action) =>
 			entry(action, {
 				intercept: $interceptFlag,

@@ -24,7 +24,7 @@
 		<ul>
 			{#each rows as row (row.id)}
 				<li
-					class="flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {row.status ===
+					class="kb-row flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {row.status ===
 					'conflict'
 						? 'border-l-error-500'
 						: 'border-l-transparent'}"

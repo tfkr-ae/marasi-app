@@ -25,7 +25,7 @@
 </script>
 
 <div class="h-full overflow-auto p-4 text-sm">
-	<dl class="grid max-w-3xl grid-cols-[12rem_1fr] gap-x-6 gap-y-2">
+	<dl class="ws-conn grid max-w-3xl grid-cols-[12rem_1fr] gap-x-6 gap-y-2">
 		<dt class="opacity-60">URL</dt>
 		<dd class="break-all font-mono">{url}</dd>
 		<dt class="opacity-60">State</dt>

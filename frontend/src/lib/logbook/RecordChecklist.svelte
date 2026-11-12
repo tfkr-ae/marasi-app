@@ -106,7 +106,7 @@
 					<div
 						data-item={item.key}
 						data-focused={item.key === fixing || undefined}
-						class="grid {expanded === item.key ? 'min-h-12' : 'h-12'} grid-cols-[9.375rem_minmax(0,1fr)_auto] items-center gap-3 px-3"
+						class="checklist-row grid {expanded === item.key ? 'min-h-12' : 'h-12'} grid-cols-[9.375rem_minmax(0,1fr)_auto] items-center gap-3 px-3"
 					>
 						<div class="flex items-center gap-2 text-2xs font-semibold {expanded === item.key ? 'self-start pt-4' : ''}">
 							{#if item.done}<Check size={13} class="flex-none text-success-600 dark:text-success-500" />

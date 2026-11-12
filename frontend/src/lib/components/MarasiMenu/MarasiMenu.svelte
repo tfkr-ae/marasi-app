@@ -7,7 +7,7 @@
 	// the menu shows is the action's real one. ⌥ (Alt on Windows/Linux) + a
 	// menu letter opens a group. Typing searches.
 	import { onMount, tick } from "svelte";
-	import { ChevronRight, CornerDownLeft, Search } from "lucide-svelte";
+	import { ChevronRight, CornerDownLeft, Search, X } from "lucide-svelte";
 	import {
 		globalMenuEntries,
 		menuDispatcher,
@@ -17,6 +17,7 @@
 	import { buildMenu, entryForKey, isReservedKey, searchMenu } from "./menuModel.js";
 	import { groupIcon, groupTone, NEUTRAL_TONE } from "./groupStyle.js";
 	import MenuKeys from "./MenuKeys.svelte";
+	import { iosCheck } from "../../platform.js";
 
 	// The page's entries: { actionId, icon }, optionally with a live name,
 	// subtitle or keywords. Text not given comes from the catalog. An entry
@@ -39,6 +40,8 @@
 	let letterHeld = false;
 	let missedKey = "";
 	let missedTimer;
+	let onIOS = false;
+	iosCheck.then((ios) => (onIOS = ios));
 
 	export async function toggle() {
 		if (dialog.open) return close();
@@ -47,9 +50,25 @@
 		active = 0;
 		letterHeld = false;
 		lastPointer = pointer;
+		// iOS: the search box stays read-only, so no keyboard, until it is
+		// tapped (unlockSearch); the dialog focuses itself (focusSelfOnIOS).
+		if (onIOS) input.readOnly = true;
 		dialog.showModal();
+		if (onIOS) return;
 		await tick();
 		input?.focus();
+	}
+	// On iOS the dialog focuses itself when it opens, not the search box (or
+	// the list, which scrolled the search box away). Set as an attribute: the
+	// dialog reads it when it opens.
+	const focusSelfOnIOS = (node) => {
+		iosCheck.then((ios) => ios && node.setAttribute("autofocus", ""));
+	};
+	// The tap that unlocks the search box focuses it, raising the keyboard.
+	function unlockSearch() {
+		if (!input.readOnly) return;
+		input.readOnly = false;
+		input.focus();
 	}
 	function close() {
 		if (dialog?.open) dialog.close();
@@ -206,8 +225,9 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <dialog
-	class="w-[40rem] max-w-[92vw] overflow-hidden border border-surface-300-600-token bg-surface-50-900-token p-0 text-surface-900-50-token shadow-2xl"
+	class="marasi-menu w-[40rem] max-w-[92vw] overflow-hidden border border-surface-300-600-token bg-surface-50-900-token p-0 text-surface-900-50-token shadow-2xl"
 	bind:this={dialog}
+	use:focusSelfOnIOS
 	on:click={handleClickOutside}
 	on:cancel|preventDefault={close}
 	on:keyup={onKeyup}
@@ -235,6 +255,7 @@
 			id="commandmenu"
 			bind:this={input}
 			bind:value={query}
+			on:click={unlockSearch}
 			on:keydown={onKeydown}
 			class="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm focus:outline-none focus:ring-0"
 			placeholder={group ? `Search ${group.label}…` : "Search actions…"}
@@ -242,9 +263,13 @@
 			autocomplete="off"
 			aria-label="Search commands"
 		/>
+		<!-- On iOS the menu is a full-screen sheet with no backdrop to tap. -->
+		{#if onIOS}
+			<button type="button" class="flex-none p-1 opacity-70" aria-label="Close" on:click={close}><X size="16" /></button>
+		{/if}
 	</div>
 
-	<div class="max-h-[58vh] overflow-y-auto p-1.5">
+	<div class="marasi-menu-list max-h-[58vh] overflow-y-auto p-1.5">
 		{#each rows as row}
 			{#if row.heading !== undefined}
 				<div class="flex items-center gap-2 px-2.5 pb-1.5 pt-3">
@@ -350,11 +375,11 @@
 		<!-- The highlighted action's keys the row doesn't show, such as a bare
 		     key, which works only outside the menu. -->
 		{#if current && current.kind !== "group" && otherBindings.length}
-			<span class="flex flex-none items-center gap-1.5 opacity-80"
+			<span class="key-hints flex flex-none items-center gap-1.5 opacity-80"
 				>{current.menuKey ? "Also" : "Outside the menu"} <MenuKeys bindings={otherBindings} {platform} /></span
 			>
 		{/if}
-		<span class="flex flex-none items-center gap-2 opacity-60">
+		<span class="key-hints flex flex-none items-center gap-2 opacity-60">
 			<span class="flex items-center gap-1"
 				><CornerDownLeft size="11" />
 				{current?.kind === "group" ? "open" : "run"}</span

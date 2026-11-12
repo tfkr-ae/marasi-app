@@ -18,6 +18,25 @@ body {
   --ctx-menu-padding: 0.375rem 0.5rem;
 }
 
+/* On iOS the web view fills the screen (scene_delegate_ios.m) and the app
+   draws under the status bar and home indicator, so the frame and the fixed
+   overlays keep their content out of those areas. env() is 0 elsewhere. */
+.safe-area-pad {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.modal-backdrop {
+  padding: calc(1rem + env(safe-area-inset-top))
+    calc(1rem + env(safe-area-inset-right))
+    calc(1rem + env(safe-area-inset-bottom))
+    calc(1rem + env(safe-area-inset-left));
+}
+.snackbar-wrapper,
+.drawer-backdrop {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 /* Thin, theme-coloured scrollbars everywhere. The standard properties
    cover Chrome; the ::-webkit-scrollbar rules cover the desktop app's
    WebKit when it shows scrollbars all the time. A component can still
@@ -87,22 +106,1252 @@ select[data-overlay-initial-focus]:focus {
   box-shadow: none !important;
 }
 
-html:not(.dark) button.variant-ghost-primary:not(:disabled):hover,
-html:not(.dark) a.variant-ghost-primary:hover,
-html:not(.dark) .btn-group.variant-ghost-primary > button:not(:disabled):hover,
-html:not(.dark) .btn-group.variant-ghost-primary > a:hover {
-  background-color: rgb(var(--color-primary-200)) !important;
-  filter: none !important;
+/* Hover tints only where a pointer can hover, as tailwind.config.js has the
+   hover: variants: a touch screen keeps no tint on the last button tapped. */
+@media (hover: hover) and (pointer: fine) {
+  html:not(.dark) button.variant-ghost-primary:not(:disabled):hover,
+  html:not(.dark) a.variant-ghost-primary:hover,
+  html:not(.dark) .btn-group.variant-ghost-primary > button:not(:disabled):hover,
+  html:not(.dark) .btn-group.variant-ghost-primary > a:hover {
+    background-color: rgb(var(--color-primary-200)) !important;
+    filter: none !important;
+  }
+
+  html:not(.dark) button.variant-ghost-tertiary:not(:disabled):hover,
+  html:not(.dark) a.variant-ghost-tertiary:hover {
+    background-color: rgb(var(--color-tertiary-200)) !important;
+    filter: none !important;
+  }
+
+  html:not(.dark) button.variant-ghost-success:not(:disabled):hover,
+  html:not(.dark) a.variant-ghost-success:hover {
+    background-color: rgb(var(--color-success-200)) !important;
+    filter: none !important;
+  }
 }
 
-html:not(.dark) button.variant-ghost-tertiary:not(:disabled):hover,
-html:not(.dark) a.variant-ghost-tertiary:hover {
-  background-color: rgb(var(--color-tertiary-200)) !important;
-  filter: none !important;
+/* The iOS app (html.ios, lib/platform.js): a long press opens the app's
+   menu (lib/touch.js), not the system's link and image callout. Fields keep
+   theirs, for paste. */
+html.ios body {
+	-webkit-touch-callout: none;
+}
+html.ios input,
+html.ios textarea,
+html.ios [contenteditable] {
+	-webkit-touch-callout: default;
+}
+/* Nor does a long press select the text of a label or button: only fields
+   and the editors (request and response text to copy) select. */
+html.ios body {
+	-webkit-user-select: none;
+	user-select: none;
+}
+html.ios input,
+html.ios textarea,
+html.ios [contenteditable],
+html.ios .cm-editor,
+html.ios .cm-editor * {
+	-webkit-user-select: text;
+	user-select: text;
 }
 
-html:not(.dark) button.variant-ghost-success:not(:disabled):hover,
-html:not(.dark) a.variant-ghost-success:hover {
-  background-color: rgb(var(--color-success-200)) !important;
-  filter: none !important;
+/* The iOS Ledger fits its width: no sideways scroll. Host and Path share
+   what the fixed columns leave, and a narrow screen (the iPhone Duo folded)
+   drops Time, Type and Size. Cells carry data-col (LedgerTable.svelte); the
+   desktop keeps the inline template and its scroll. */
+html.ios .ledger-table {
+	container-type: inline-size;
+	overflow-x: hidden;
+}
+html.ios .ledger-table .lg-row {
+	min-width: 0;
+	grid-template-columns: 2.75rem 2rem 4.375rem 3.5rem minmax(0, 1fr) minmax(0, 1.6fr) 3.25rem 3rem 3.5rem !important;
+}
+@container (max-width: 36rem) {
+	html.ios .ledger-table .lg-row {
+		grid-template-columns: 2.75rem 2rem 3.5rem minmax(0, 1fr) minmax(0, 1.6fr) 3.25rem !important;
+	}
+	html.ios .ledger-table [data-col="time"],
+	html.ios .ledger-table [data-col="type"],
+	html.ios .ledger-table [data-col="size"] {
+		display: none;
+	}
+}
+
+/* Touch drags the resize handles (the docks, the Ledger and Armory
+   drawers): without touch-action the page takes the drag as a scroll and
+   cancels it. The handles also grow to a finger's width. */
+html.ios .lp-resize,
+html.ios .ledger-drawer-resize,
+html.ios .armory-drawer-resize {
+	touch-action: none;
+}
+html.ios .lp-resize {
+	width: 1.5rem;
+	left: -0.75rem;
+}
+html.ios .ledger-drawer-resize,
+html.ios .armory-drawer-resize {
+	height: 1.5rem;
+	top: -0.75rem;
+}
+
+/* The iOS Ledger and Armory drawers maximised: the whole screen, over the
+   app rail, the dock and the toolbar, with only the drawer's own rail beside
+   the request and response (routes/ledger and routes/armory). */
+html.ios .ios-fullscreen {
+	position: fixed;
+	inset: 0;
+	z-index: 500;
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 0;
+	background-color: rgb(var(--color-surface-50));
+}
+/* The editors and the rail's edge run the full height, under the home
+   indicator too; only the rail's buttons move in, clear of the screen's
+   curved corners (in landscape the top inset is 0, and the corner cut the
+   first button) and the indicator. */
+html.ios .ios-fullscreen .ledger-drawer-rail,
+html.ios .ios-fullscreen .ledger-drawer-column,
+html.ios .ios-fullscreen .armory-drawer-rail,
+html.ios .ios-fullscreen .armory-drawer-column {
+	padding-top: 1.5rem;
+	padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+/* The left inset: a highlighted pair's stripe fills it to the screen's
+   edge; without one the rail moves in by it. */
+html.ios .ios-fullscreen .ledger-drawer-highlight {
+	width: calc(3px + max(env(safe-area-inset-left), 0.5rem));
+}
+html.ios .ios-fullscreen .ledger-drawer > .ledger-drawer-rail:first-child,
+html.ios .ios-fullscreen .ledger-drawer > .ledger-drawer-column:first-child,
+html.ios .ios-fullscreen .armory-drawer > .armory-drawer-rail:first-child,
+html.ios .ios-fullscreen .armory-drawer > .armory-drawer-column:first-child {
+	margin-left: max(env(safe-area-inset-left), 0.5rem);
+}
+html.ios.dark .ios-fullscreen {
+	background-color: rgb(var(--color-surface-900));
+}
+
+/* The iOS page never moves: only its panes scroll. Sideways drags moved the
+   whole screen (the web view's own bounce is off too, scene_delegate_ios.m). */
+html.ios,
+html.ios body {
+	overflow: hidden;
+	overscroll-behavior: none;
+}
+
+/* No keyboard on iOS, so no shortcut hints: the keys in the Marasi menu, the
+   row menus and the drawer rails, and the row menu's key line. Keys named in
+   a sentence stay. */
+html.ios :not(p) > kbd,
+html.ios .key-hints {
+	display: none !important;
+}
+
+/* The iOS app rail: icons only, 48pt wide (the layout sets the width and a
+   smaller logo). Each tile keeps its name as its title. Settings draws its
+   icon in the label slot, so a label with an icon stays. */
+html.ios .nav-rail .app-rail-label:not(:has(svg)),
+html.ios .nav-rail .rail-label {
+	display: none;
+}
+
+/* The iOS Ledger toolbar, when short of room (the sitemap open): its
+   buttons drop their labels to icons, so they don't crowd the query box.
+   Each keeps its title and aria label. */
+html.ios .ledger-toolbar {
+	container-type: inline-size;
+}
+@container (max-width: 40rem) {
+	html.ios .ledger-toolbar .toolbar-label {
+		display: none;
+	}
+}
+
+/* The iOS Logbook toolbar, the Ledger's treatment: short of room (the
+   outline open) the search narrows and the menus take their own width;
+   shorter still, every button drops to its icon. Each keeps its title.
+   The kind toggles' icons (.toolbar-icon) show only then. */
+.toolbar-icon {
+	display: none;
+}
+html.ios .logbook-toolbar {
+	container-type: inline-size;
+}
+@container (max-width: 56rem) {
+	html.ios .logbook-toolbar .logbook-search {
+		width: auto;
+		flex: 1 1 0%;
+		min-width: 7rem;
+	}
+	html.ios .logbook-toolbar .toolbar-menu {
+		width: auto;
+		flex: none;
+	}
+}
+@container (max-width: 44rem) {
+	html.ios .logbook-toolbar .toolbar-label {
+		display: none;
+	}
+	html.ios .logbook-toolbar .toolbar-icon {
+		display: contents;
+	}
+}
+
+/* The iOS Armory, stacked on the phone's short screen: Run settings
+   shrinks and scrolls (RunSettings.svelte) instead of spilling under the
+   Traffic panel. */
+html.ios .armory-run-settings {
+	flex-shrink: 1;
+	min-height: 0;
+}
+
+/* The iOS frame: every page runs the full height, under the home
+   indicator too (the frame's bottom inset is dropped, and the body no
+   longer overflows the screen when a page, such as Compass, is taller).
+   Only the app rail's tiles move in, clear of the screen's curved corners,
+   as the drawer rail does when maximised. */
+html.ios .app-frame {
+	padding-bottom: 0;
+}
+html.ios .app-body {
+	height: auto;
+	min-height: 0;
+	overflow: hidden;
+}
+/* The inset is inside the first and last tiles, not around the rail, so
+   a selected Home or Settings tile fills to the screen's edge, its icon
+   clear of the curved corner. With the rail in view the frame drops its
+   top inset and the page takes it instead (pulling the rail up into the
+   frame's padding would be clipped by the body, as in portrait). */
+html.ios .app-frame:has(> .app-body > .nav-rail) {
+	padding-top: 0;
+}
+html.ios .app-frame:has(> .app-body > .nav-rail) #content {
+	margin-top: env(safe-area-inset-top);
+}
+html.ios .nav-rail .app-bar-default > .app-rail-anchor:first-child > .app-rail-wrapper {
+	padding-top: calc(0.625rem + max(env(safe-area-inset-top), 0.75rem));
+}
+html.ios .nav-rail .app-bar-trail > .app-rail-anchor:last-child > .app-rail-wrapper {
+	padding-bottom: calc(0.625rem + max(env(safe-area-inset-bottom), 1rem));
+}
+
+/* The iOS Logbook summary, short of room (the outline open): the severity
+   and test case cards go three to a row, so a long name (Informational)
+   keeps its margin inside the card. */
+html.ios .logbook-summary {
+	container-type: inline-size;
+}
+html.ios .logbook-cards > button {
+	padding-left: 0.5rem;
+	padding-right: 0.5rem;
+}
+@container (max-width: 40rem) {
+	html.ios .logbook-cards {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+/* The iOS dock's collapse button sits above the widened resize handle,
+   which otherwise covers it at the dock's edge and takes the tap. */
+html.ios .dock-collapse {
+	z-index: 40;
+}
+html.ios .dock-collapse:not(.absolute) {
+	position: relative;
+}
+
+/* ---- Narrow iOS screens: the iPhone Duo folded (under 40rem wide) ----
+   Side-by-side layouts become one column: a request and its response
+   become tabs (PaneTabs.svelte; elsewhere the tabs stay hidden), Settings
+   shows its sections list or one section, and rows stack. */
+.pane-tabs,
+.settings-chevron,
+.settings-back {
+	display: none;
+}
+html.ios .ios-home .header {
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+@media (max-width: 40rem) {
+	html.ios .pane-tabs {
+		display: flex;
+	}
+	html.ios .pane-off {
+		display: none !important;
+	}
+	html.ios .ledger-drawer-response,
+	html.ios .armory-drawer-response {
+		border-left-width: 0 !important;
+		border-top-width: 0 !important;
+	}
+	html.ios .armory-drawer-panes {
+		flex-direction: row !important;
+	}
+	html.ios .lp-panes {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	html.ios .lp-panes > section {
+		border-right-width: 0;
+	}
+	html.ios .lp-topbar {
+		flex-wrap: wrap;
+		row-gap: 0.5rem;
+	}
+	html.ios .lp-topbar > :first-child {
+		flex-basis: 100%;
+	}
+
+	/* The Logbook's linked request and response, one above the other. */
+	html.ios .logbook-pair {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: repeat(2, minmax(0, 1fr));
+	}
+
+	/* The Armory: the template editor and Run settings scroll as one
+	   column above the traffic, each at its own height. */
+	html.ios .armory-editor-area {
+		overflow-y: auto;
+	}
+	html.ios .armory-editor-area > section:first-child {
+		flex: none;
+		height: 11rem;
+	}
+	html.ios .armory-run-settings {
+		flex: none;
+	}
+
+	/* Settings: the sections list or one section, full width (the
+	   page's listing flag), and the rows stacked. */
+	html.ios .settings-page {
+		padding: 0.75rem;
+	}
+	html.ios .settings-listing .settings-section,
+	html.ios .settings-page:not(.settings-listing) .settings-nav,
+	html.ios .settings-page:not(.settings-listing) > header {
+		display: none;
+	}
+	html.ios .settings-nav {
+		flex: 1 1 0;
+		width: auto;
+		border-right-width: 0;
+	}
+	html.ios .settings-nav > button {
+		border-left-width: 0;
+		background: transparent;
+		padding-top: 0.625rem;
+		padding-bottom: 0.625rem;
+	}
+	html.ios .settings-chevron {
+		display: block;
+	}
+	html.ios .settings-back {
+		display: flex;
+	}
+	html.ios .settings-section {
+		padding: 0.75rem 0;
+	}
+	html.ios .settings-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.5rem;
+	}
+	html.ios .settings-control {
+		width: 100%;
+	}
+	html.ios .settings-row > * {
+		flex-wrap: wrap;
+	}
+	html.ios .narrow-full {
+		width: 100%;
+	}
+	/* A settings table stacks: its head hides, each row is a card whose
+	   values wrap, and the add row is a form, one full-width field to a
+	   line, its placeholders naming the fields. */
+	html.ios .settings-section table,
+	html.ios .settings-section table > tbody,
+	html.ios .settings-section table > tfoot {
+		display: block;
+		width: 100%;
+	}
+	html.ios .settings-section table > thead {
+		display: none;
+	}
+	html.ios .settings-section table > tbody > tr {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		column-gap: 0.75rem;
+		row-gap: 0.25rem;
+		padding: 0.5rem 0.75rem;
+		border-bottom: 1px solid rgb(var(--color-surface-500) / 0.2);
+	}
+	html.ios .settings-section table > tbody > tr > td {
+		display: block;
+		padding: 0 !important;
+		border: 0;
+		overflow-wrap: anywhere;
+	}
+	html.ios .settings-section table > tbody > tr > td:last-child {
+		margin-left: auto;
+	}
+	html.ios .settings-section table > tfoot > tr {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.75rem;
+	}
+	html.ios .settings-section table > tfoot > tr > td {
+		display: block;
+		width: 100%;
+		padding: 0 !important;
+	}
+	html.ios .settings-section table > tfoot > tr > td:empty {
+		display: none;
+	}
+	html.ios .settings-section table > tfoot input,
+	html.ios .settings-section table > tfoot select {
+		width: 100%;
+	}
+	/* A colour well stays a square beside its label field. */
+	html.ios .settings-control:has(> input[type="color"]) {
+		flex-wrap: nowrap;
+	}
+	html.ios .settings-control > input[type="color"] {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 2rem;
+		height: 2rem;
+	}
+	html.ios .settings-control > input[type="color"]::-webkit-color-swatch-wrapper {
+		padding: 0;
+	}
+	html.ios .settings-control > input[type="color"]::-webkit-color-swatch {
+		border: 0;
+		border-radius: 0;
+	}
+}
+
+/* The iOS Logbook toolbar at its narrowest: the search takes its own row
+   above the filters. */
+@media (max-width: 40rem) {
+	html.ios .logbook-toolbar {
+		flex-wrap: wrap;
+	}
+}
+@container (max-width: 30rem) {
+	html.ios .logbook-toolbar .logbook-search {
+		flex-basis: 100%;
+		min-height: 2.75rem;
+		border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+	}
+	html.ios .logbook-toolbar > * {
+		min-height: 2.75rem;
+	}
+}
+/* The iOS Ledger at its narrowest drops the row number too. */
+@container (max-width: 26rem) {
+	html.ios .ledger-table .lg-row {
+		grid-template-columns: 2rem 3.5rem minmax(0, 0.8fr) minmax(0, 1.6fr) 3.25rem !important;
+	}
+	html.ios .ledger-table [data-col="number"] {
+		display: none;
+	}
+}
+
+/* The iOS Ledger's status line stays one line, its count shortening, and
+   the drawer's rail scrolls when its buttons outgrow a short drawer. */
+html.ios .ledger-status > span {
+	white-space: nowrap;
+}
+html.ios .ledger-status #ledgerCount {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+html.ios .ledger-drawer-rail,
+html.ios .armory-drawer-rail {
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+/* Narrow iOS screens: an open sidebar (Dock) covers the page beside it
+   instead of squeezing it to a sliver, and a modal's fixed-width parts
+   fit the screen. */
+@media (max-width: 40rem) {
+	html.ios :has(> .lp-dock) {
+		position: relative;
+	}
+	html.ios .lp-dock:not(.absolute) {
+		position: absolute;
+		inset: 0 auto 0 0;
+		z-index: 35;
+		width: 100% !important;
+	}
+	html.ios .lp-dock:not(.absolute) > div:first-child {
+		width: 100% !important;
+	}
+	html.ios .lp-resize {
+		display: none;
+	}
+	html.ios .record-modal-body {
+		flex-direction: column;
+		overflow-y: auto;
+	}
+	html.ios .record-modal-form {
+		width: auto;
+		overflow: visible;
+		border-right-width: 0;
+	}
+	html.ios .record-modal-side {
+		flex: none;
+		min-height: 24rem;
+		border-top: 1px solid rgb(var(--color-surface-500) / 0.3);
+	}
+}
+
+/* iOS: every modal is a full-screen sheet at any width, its parts inside
+   the safe area. Skeleton's backdrop takes the sheet's colour and the
+   modal (a preset's box, or a component's root card) fills it. */
+html.ios .modal-backdrop,
+html.ios .logbook-pair-expanded {
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+		env(safe-area-inset-left) !important;
+}
+/* The sheet's colour (a light .card is surface-100), above the
+   layout's light backdrop tint (+layout.svelte). */
+html.ios:not(.dark) .modal-backdrop,
+html.ios:not(.dark) .logbook-pair-expanded {
+	background-color: rgb(var(--color-surface-100)) !important;
+}
+html.ios.dark .modal-backdrop,
+html.ios.dark .logbook-pair-expanded {
+	background-color: rgb(var(--color-surface-800)) !important;
+}
+html.ios .modal-transition {
+	height: 100%;
+	min-height: 100%;
+	align-items: stretch;
+}
+html.ios .modal-transition > .modal:not(.contents),
+html.ios .modal-transition > .modal.contents > *,
+html.ios .logbook-pair-expanded > .card {
+	width: 100% !important;
+	max-width: none !important;
+	height: 100% !important;
+	max-height: none !important;
+	margin: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	overflow-y: auto;
+}
+/* A preset (confirm, alert, prompt) keeps its buttons at the foot. */
+html.ios .modal-transition > .modal:not(.contents) {
+	display: flex;
+	flex-direction: column;
+}
+html.ios .modal-transition > .modal:not(.contents) .modal-footer {
+	margin-top: auto;
+}
+/* Parts sized for a floating box grow into the sheet instead. */
+html.ios .connections-modal {
+	display: flex;
+	flex-direction: column;
+}
+html.ios .connections-body {
+	flex: 1 1 0;
+	height: auto;
+}
+
+/* The iOS Keybindings modal when narrow: the profile and platform pickers
+   stack, the search takes its own row above the filters, the page and
+   state lists become strips that scroll sideways above the rows, and a
+   row's keys wrap under its name. */
+@media (max-width: 40rem) {
+	html.ios .kb-toolbar {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	html.ios .kb-search-row {
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	html.ios .kb-search-row > input {
+		flex-basis: 100%;
+	}
+	html.ios .kb-body {
+		flex-direction: column;
+	}
+	html.ios .kb-nav {
+		display: flex;
+		flex: none;
+		width: auto;
+		overflow-x: auto;
+		overflow-y: hidden;
+		border-right-width: 0;
+		border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+	}
+	html.ios .kb-nav > button {
+		width: auto;
+		flex: none;
+		gap: 0.5rem;
+		white-space: nowrap;
+	}
+	html.ios .kb-row {
+		flex-wrap: wrap;
+		row-gap: 0.25rem;
+	}
+	html.ios .kb-row > :last-child {
+		margin-left: auto;
+	}
+}
+
+/* The iOS Marasi menu is a full-screen sheet too (MarasiMenu.svelte),
+   its list taking the height between the search and the footer. */
+html.ios dialog.marasi-menu[open] {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: none;
+	height: 100%;
+	max-height: none;
+	margin: 0;
+	border-width: 0;
+	box-shadow: none;
+	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+		env(safe-area-inset-left);
+}
+html.ios .marasi-menu-list {
+	flex: 1 1 0;
+	max-height: none;
+}
+
+/* ---- Narrow iOS toolbars (the Ledger's and the Logbook's) ----
+   The Ledger's search takes its own row, so the query box has room to tap
+   and type in, and the menus share the row under it, equal widths. A
+   toolbar menu's panel spans the toolbar, under it, instead of hanging
+   off its button past the screen's edge; so does the query fields list,
+   whose field, operators and example stack. */
+@media (max-width: 40rem) {
+	html.ios .ledger-toolbar {
+		flex-wrap: wrap;
+	}
+	html.ios .ledger-search {
+		flex: 1 0 100%;
+		min-height: 2.75rem;
+		border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+	}
+	html.ios .ledger-toolbar > .toolbar-menu,
+	html.ios .ledger-toolbar > .ledger-types {
+		flex: 1 1 3rem;
+		min-width: 0;
+		min-height: 2.75rem;
+	}
+	html.ios .ledger-search + .toolbar-menu {
+		border-left-width: 0;
+	}
+	html.ios .ledger-toolbar > .toolbar-menu > button,
+	html.ios .ledger-toolbar > .ledger-types > button {
+		flex: 1 1 0;
+		justify-content: center;
+	}
+	html.ios .toolbar-menu,
+	html.ios .ledger-types {
+		position: static;
+	}
+	html.ios .toolbar-panel,
+	html.ios .ledger-query-fields {
+		left: 0 !important;
+		right: 0 !important;
+		width: auto !important;
+		max-width: none !important;
+		max-height: 70vh;
+		border-left-width: 0;
+		border-right-width: 0;
+	}
+	html.ios .query-fields tr {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		column-gap: 0.5rem;
+		padding: 0.25rem 0;
+	}
+	html.ios .query-fields td {
+		padding: 0;
+	}
+	html.ios .query-fields td:nth-child(3) {
+		grid-column: 1 / -1;
+	}
+}
+
+/* The narrow iOS Launchpad header: the name on its own row, then one row
+   of controls, every one the same height. Compare and Revert draft drop
+   to their icons (each keeps its label for VoiceOver) and Launch takes
+   the room left. Renaming stacks the name and description fields. */
+@media (max-width: 40rem) {
+	html.ios .lp-topbar {
+		column-gap: 0.5rem;
+	}
+	html.ios .lp-topbar > .btn,
+	html.ios .lp-topbar > .lp-https {
+		height: 2.25rem;
+		margin: 0;
+	}
+	html.ios .lp-topbar > .btn {
+		min-width: 2.25rem;
+		justify-content: center;
+	}
+	html.ios .lp-btn-label {
+		display: none;
+	}
+	html.ios .lp-icon-btn > svg {
+		margin-right: 0;
+	}
+	html.ios .lp-topbar > .lp-launch,
+	html.ios .lp-topbar > .lp-cancel {
+		flex: 1 1 0;
+	}
+	html.ios .lp-edit {
+		flex-wrap: wrap;
+	}
+	html.ios .lp-edit > input {
+		flex: 1 0 100%;
+		width: auto;
+	}
+}
+
+/* Checkpoint on a narrow iOS screen: Items | Rules is a full-width switch
+   big enough to tap, an item's title takes its own row above Forward and
+   Drop (equal widths), and its request and response are tabs. */
+.cp-short-label {
+	display: none;
+}
+@media (max-width: 40rem) {
+	html.ios .cp-switch {
+		padding-top: 0.375rem;
+		padding-bottom: 0.375rem;
+	}
+	html.ios .cp-switch > button {
+		flex: 1 1 0;
+		height: 2rem;
+	}
+	html.ios .cp-itembar {
+		flex-wrap: wrap;
+		row-gap: 0.5rem;
+	}
+	html.ios .cp-itembar > :first-child {
+		flex-basis: 100%;
+	}
+	html.ios .cp-actions {
+		flex: 1 1 100%;
+		flex-wrap: wrap;
+	}
+	html.ios .cp-actions > .btn {
+		flex: 1 1 0;
+		height: 2.25rem;
+		white-space: nowrap;
+	}
+	html.ios .cp-long-label {
+		display: none;
+	}
+	html.ios .cp-short-label {
+		display: inline;
+	}
+	html.ios .cp-panes {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	html.ios .cp-panes > section {
+		border-right-width: 0;
+	}
+}
+
+/* The WebSocket stream on a narrow iOS screen: Close Connection drops to
+   its icon beside the title, the four tabs share the width, the message
+   list and the chosen message are tabs (WebSocketMessagesTable.svelte),
+   the message's bar wraps, and its properties take two columns. */
+@media (max-width: 40rem) {
+	html.ios .ws-label {
+		display: none;
+	}
+	html.ios .ws-close-connection > svg {
+		margin-right: 0;
+	}
+	html.ios .ws-tabs {
+		width: 100%;
+	}
+	html.ios .ws-tabs .tab-list {
+		display: flex;
+	}
+	html.ios .ws-tabs .tab-list > * {
+		flex: 1 1 0;
+		min-width: 0;
+		padding-left: 0.25rem;
+		padding-right: 0.25rem;
+		font-size: 0.75rem;
+		text-align: center;
+	}
+	html.ios .ws-tabs .tab-list svg {
+		display: none;
+	}
+	html.ios .ws-tabs .tab-list div {
+		justify-content: center;
+	}
+	html.ios .ws-panes > div {
+		width: 100%;
+		border-right-width: 0;
+	}
+	html.ios .ws-detail-bar {
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 2.5rem;
+		padding-top: 0.25rem;
+		padding-bottom: 0.25rem;
+		row-gap: 0.25rem;
+	}
+	html.ios .ws-properties {
+		grid-template-columns: max-content minmax(0, 1fr);
+	}
+	html.ios .ws-properties > .col-span-2:empty {
+		display: none;
+	}
+	html.ios .ws-properties > .col-span-3 {
+		grid-column: span 1 / span 1;
+	}
+}
+@media (max-width: 40rem) {
+	html.ios .ws-bar {
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 2.5rem;
+		padding-top: 0.25rem;
+		padding-bottom: 0.25rem;
+		row-gap: 0.25rem;
+	}
+	html.ios .ws-conn {
+		grid-template-columns: max-content minmax(0, 1fr);
+		column-gap: 1rem;
+		overflow-wrap: anywhere;
+	}
+}
+
+/* The iOS Checkpoint dock: Intercept all on its own row, then Forward n
+   and Drop n side by side, equal widths, rather than wrapping unevenly. */
+html.ios .cp-bulk > .cp-intercept-all {
+	flex-basis: 100%;
+}
+html.ios .cp-bulk > .flex-1 {
+	display: none;
+}
+html.ios .cp-bulk > .btn {
+	flex: 1 1 0;
+	height: 2rem;
+}
+
+/* The Logbook record view on a narrow iOS screen: the title takes its own
+   row above Back and the actions, and a checklist row puts its value
+   under the label, at full width, with its button beside the label. */
+@media (max-width: 40rem) {
+	html.ios .logbook-record-head {
+		flex-wrap: wrap;
+		height: auto;
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+		row-gap: 0.5rem;
+	}
+	html.ios .logbook-record-head > .record-badge {
+		order: -2;
+	}
+	html.ios .logbook-record-head > h1 {
+		order: -1;
+		flex: 1 0 calc(100% - 5rem);
+		white-space: normal;
+	}
+	html.ios .logbook-record-head > #logbookNext {
+		margin-left: auto;
+	}
+	html.ios .logbook-record-head .record-label {
+		display: none;
+	}
+	html.ios .logbook-record-head svg.ml-1,
+	html.ios .logbook-record-head svg.mr-1 {
+		margin: 0;
+	}
+	html.ios .checklist-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+		height: auto;
+		min-height: 3rem;
+		row-gap: 0.25rem;
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+	}
+	html.ios .checklist-row > :nth-child(2) {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+	html.ios .checklist-row > :nth-child(2):empty {
+		display: none;
+	}
+}
+/* The finding and test case modal's foot, narrow: what's unsaved on its
+   own line, then Close and Save side by side. */
+@media (max-width: 40rem) {
+	html.ios .record-modal-foot {
+		flex-wrap: wrap;
+	}
+	html.ios .record-modal-foot > [data-unsaved-list] {
+		flex: 1 0 100%;
+	}
+	html.ios .record-modal-foot > .btn {
+		flex: 1 1 0;
+	}
+}
+
+/* The Logbook summary's lists on a narrow iOS screen: a finding's title
+   keeps the room, its severity badge takes only its own width, and its
+   test case (or a test case's tags) goes to a second line, or nowhere when
+   there is none. */
+@media (max-width: 40rem) {
+	html.ios .logbook-summary-findings > button,
+	html.ios .logbook-summary-test-cases > button {
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 2.25rem;
+		row-gap: 0.125rem;
+		padding-top: 0.375rem;
+		padding-bottom: 0.375rem;
+	}
+	html.ios .logbook-summary-findings > button > span:first-child {
+		width: auto;
+	}
+	html.ios .logbook-summary-findings > button > span:last-child,
+	html.ios .logbook-summary-test-cases > button > span:nth-last-child(2) {
+		order: 1;
+		flex: 1 0 100%;
+		width: auto;
+	}
+	html.ios .logbook-summary-findings > button > span:last-child:empty,
+	html.ios .logbook-summary-test-cases > button > span:nth-last-child(2):empty {
+		display: none;
+	}
+}
+@media (max-width: 40rem) {
+	html.ios .logbook-summary-findings > button > span:nth-child(2),
+	html.ios .logbook-summary-test-cases > button > span:first-child {
+		white-space: normal;
+		overflow: visible;
+	}
+	html.ios .logbook-summary-findings > button > span:empty,
+	html.ios .logbook-summary-test-cases > button > span:empty {
+		display: none;
+	}
+}
+
+/* The narrow iOS Armory: Run settings shows whole, its Launch and Draft
+   under it, and the editor area scrolls as one rather than nesting a
+   second scroll inside it. */
+@media (max-width: 40rem) {
+	html.ios .armory-run-body {
+		max-height: none;
+	}
+	html.ios .armory-run-body .overflow-y-auto {
+		overflow: visible;
+	}
+	html.ios .armory-run-body > *,
+	html.ios .armory-run-body > * > * {
+		flex: none;
+		min-height: auto;
+	}
+}
+
+/* ---- Narrow iOS: Home, the dock buttons, CVSS ---- */
+/* Home's listener and Open Project, and Download Certificate, each take
+   the full width, one row each. */
+@media (max-width: 40rem) {
+	html.ios .ios-home .header > * {
+		flex: 1 1 100%;
+		display: flex;
+	}
+	html.ios .ios-home .header > * > .btn {
+		flex: 1 1 0;
+		justify-content: center;
+	}
+}
+/* The dock's expand, search and collapse buttons are big enough to tap,
+   on every page and width on iOS. */
+html.ios .lp-strip > .btn {
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	justify-content: center;
+}
+html.ios .dock-collapse {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 2.25rem;
+	min-height: 2.25rem;
+	opacity: 0.8;
+}
+html.ios .dock-collapse.absolute {
+	top: 0;
+	right: 0;
+}
+html.ios .dock-collapse > svg,
+html.ios .lp-strip > .btn > svg {
+	width: 18px;
+	height: 18px;
+}
+/* The CVSS calculator, narrow: a metric's name above its options, the
+   options sharing the full width as taller buttons with whole labels. */
+@media (max-width: 40rem) {
+	html.ios .cvss-metric {
+		flex-wrap: wrap;
+		row-gap: 0.25rem;
+	}
+	html.ios .cvss-metric > span {
+		flex: 1 0 100%;
+		width: auto;
+	}
+	html.ios .cvss-metric > [role="group"] {
+		flex: 1 0 100%;
+		gap: 2px;
+	}
+	html.ios .cvss-metric > [role="group"] > button {
+		padding-top: 0.375rem;
+		padding-bottom: 0.375rem;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	html.ios .cvss-head {
+		flex-wrap: wrap;
+	}
+}
+
+/* iOS modal sheets take the page's own surface (the frame's, as the
+   Marasi menu does), not a card's lighter or darker one. */
+html.ios:not(.dark) .modal-backdrop,
+html.ios:not(.dark) .logbook-pair-expanded,
+html.ios:not(.dark) .modal-transition > .modal:not(.contents),
+html.ios:not(.dark) .modal-transition > .modal.contents > .card,
+html.ios:not(.dark) .logbook-pair-expanded > .card {
+	background-color: rgb(var(--color-surface-50)) !important;
+}
+html.ios.dark .modal-backdrop,
+html.ios.dark .logbook-pair-expanded,
+html.ios.dark .modal-transition > .modal:not(.contents),
+html.ios.dark .modal-transition > .modal.contents > .card,
+html.ios.dark .logbook-pair-expanded > .card {
+	background-color: rgb(var(--color-surface-900)) !important;
+}
+
+/* The iOS rail: a tap goes straight to the page, with no grey tap flash
+   and no hover tint left on the tile (a touch screen's hover sticks after
+   the tap). The selected tile keeps its colour. */
+html.ios .nav-rail,
+html.ios .nav-rail * {
+	-webkit-tap-highlight-color: transparent;
+}
+html.ios .nav-rail .bg-primary-hover-token:hover:not(.bg-primary-active-token) {
+	background-color: transparent;
+}
+
+/* A stacked settings row's buttons (Settings and the Connections
+   modal), narrow: they share the row's full width equally, so one button
+   spans it and two or three line up as equal halves or thirds. Text
+   beside them (a hidden password) takes an equal share too. */
+@media (max-width: 40rem) {
+	html.ios .settings-row > .btn:last-child {
+		width: 100%;
+	}
+	html.ios .settings-row > :last-child:has(> .btn) {
+		display: flex;
+		width: 100%;
+		gap: 0.5rem;
+	}
+	html.ios .settings-row > :last-child:has(> .btn) > .btn {
+		flex: 1 1 0;
+		justify-content: center;
+	}
+	html.ios .settings-row > :last-child:has(> .btn) > span {
+		flex: 1 1 0;
+		width: auto;
+	}
+}
+
+/* ---- The narrow iOS bottom bar (BottomBar.svelte) ----
+   Under 40rem the app rail gives way to a bar along the bottom, under the
+   page, its tabs clear of the home indicator. Wider, the rail is back and
+   the bar hides. While the keyboard is up the bar hides too. */
+.bottom-bar {
+	display: none;
+}
+@media (max-width: 40rem) {
+	html.ios .nav-rail {
+		display: none;
+	}
+	html.ios .app-body {
+		flex-direction: column;
+	}
+	html.ios .app-body > #content {
+		min-height: 0;
+		margin-left: env(safe-area-inset-left);
+		margin-right: env(safe-area-inset-right);
+	}
+	html.ios .app-frame {
+		padding-left: 0;
+		padding-right: 0;
+	}
+	html.ios .bottom-bar {
+		display: block;
+		padding-bottom: max(env(safe-area-inset-bottom), 0.25rem);
+	}
+	html.ios .bottom-bar.bottom-bar-hidden {
+		display: none;
+	}
+	html.ios .bottom-bar,
+	html.ios .bottom-bar * {
+		-webkit-tap-highlight-color: transparent;
+	}
+}
+/* The bar and its More sheet are solid, over the page and above the
+   sheet's backdrop. */
+.bottom-bar-backdrop {
+	z-index: 1000;
+}
+.bottom-bar {
+	z-index: 30;
+	background-color: rgb(var(--color-surface-50));
+	/* Its background runs edge to edge, under the side insets too (the
+	   frame drops its side padding and the page takes it, below); its
+	   tiles stay inside them, in line with the page. Only the last tile,
+	   More, reaches into the right inset, so filled it meets the edge. */
+	padding-left: env(safe-area-inset-left);
+	padding-right: env(safe-area-inset-right);
+}
+.bottom-bar-more {
+	margin-right: calc(-1 * env(safe-area-inset-right));
+	padding-right: env(safe-area-inset-right);
+}
+.bottom-bar-sheet {
+	padding-left: env(safe-area-inset-left);
+	padding-right: env(safe-area-inset-right);
+}
+.bottom-bar.bottom-bar-open {
+	z-index: 1001;
+}
+.bottom-bar-sheet {
+	background-color: rgb(var(--color-surface-50));
+}
+html.dark .bottom-bar,
+html.dark .bottom-bar-sheet {
+	background-color: rgb(var(--color-surface-800));
+}
+
+
+/* Export review, narrow iOS: Details | Preview tabs (ExportReview.svelte),
+   the details one field to a row, options that wrap, and Cancel and
+   Export sharing the foot. */
+@media (max-width: 40rem) {
+	html.ios .export-preview {
+		flex: 1 1 0;
+		width: auto;
+		border-left-width: 0;
+	}
+	html.ios .export-details {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	html.ios .export-details > * {
+		grid-column: 1 / -1;
+	}
+	html.ios .export-option {
+		height: auto;
+		min-height: 2.75rem;
+		flex-wrap: wrap;
+		padding-top: 0.375rem;
+		padding-bottom: 0.375rem;
+	}
+	html.ios .export-foot > .btn {
+		flex: 1 1 0;
+	}
+}
+
+/* iOS drawers (extension logs, extension drawers): a full-screen sheet
+   inside the safe area, like the modals, at any width; long log lines
+   wrap instead of scrolling sideways. */
+html.ios .drawer-backdrop .drawer {
+	width: 100% !important;
+	height: 100% !important;
+	max-width: none !important;
+	max-height: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+}
+/* The page's surface, as the modal sheets have. */
+html.ios .drawer-backdrop,
+html.ios .drawer-backdrop .drawer {
+	background-color: rgb(var(--color-surface-50)) !important;
+}
+html.ios.dark .drawer-backdrop,
+html.ios.dark .drawer-backdrop .drawer {
+	background-color: rgb(var(--color-surface-900)) !important;
+}
+html.ios .drawer pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+/* The iOS logs sheet's title row is as tall as a modal header, its close
+   button clear of the status bar's touch area. */
+html.ios .ios-logs-head {
+	display: flex;
+	height: 3.5rem;
+	align-items: center;
+	justify-content: center;
+	border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+}
+
+/* iOS modals, drawers and toasts leave the app's navigation in view: under
+   40rem they stop above the bottom bar (its height in --bottom-bar-height,
+   BottomBar.svelte; not while the keyboard hides it); wider they start
+   right of the rail (w-12, past the left inset). A tap on the bar or the
+   rail still goes through (overlayIsolation.js). */
+@media (max-width: 40rem) {
+	html.ios:has(.bottom-bar:not(.bottom-bar-hidden)) .modal-backdrop,
+	html.ios:has(.bottom-bar:not(.bottom-bar-hidden)) .logbook-pair-expanded,
+	html.ios:has(.bottom-bar:not(.bottom-bar-hidden)) .drawer-backdrop,
+	html.ios:has(.bottom-bar:not(.bottom-bar-hidden)) .snackbar-wrapper {
+		bottom: var(--bottom-bar-height, 0px) !important;
+		padding-bottom: 0 !important;
+	}
+}
+@media (min-width: 40.0625rem) {
+	html.ios:has(.nav-rail) .modal-backdrop,
+	html.ios:has(.nav-rail) .logbook-pair-expanded,
+	html.ios:has(.nav-rail) .drawer-backdrop {
+		left: calc(env(safe-area-inset-left) + 3rem) !important;
+		padding-left: 0 !important;
+	}
+	html.ios:has(.nav-rail) .snackbar-wrapper {
+		left: calc(env(safe-area-inset-left) + 3rem) !important;
+	}
+}
+
+/* The Logbook record's actions, narrow iOS: Next, Edit and Delete are
+   icon tiles of one size, as tall as Back. */
+@media (max-width: 40rem) {
+	html.ios .logbook-record-head > .btn {
+		height: 2.25rem;
+	}
+	html.ios .logbook-record-head > #logbookNext,
+	html.ios .logbook-record-head > #logbookEdit,
+	html.ios .logbook-record-head > #logbookDelete {
+		width: 2.75rem;
+		padding: 0;
+		justify-content: center;
+	}
+	html.ios .logbook-record-head > .btn svg {
+		width: 16px;
+		height: 16px;
+	}
 }
