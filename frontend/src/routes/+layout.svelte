@@ -111,7 +111,7 @@
 	import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
-	import { isolateOverlays } from "../lib/overlayIsolation.js";
+	import { closeTopOverlay, isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
@@ -335,18 +335,26 @@
 	function openConnections() {
 		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
 	}
-	// iOS: modals and drawers leave the rail or bottom bar in view and in use
-	// (app.css, overlayIsolation.js). A tap on one of its pages closes them,
-	// unless the modal holds edits it asks about before closing; More only
-	// opens its sheet.
+	// Mobile: modals and drawers leave the rail or bottom bar in view and in
+	// use (app.css, overlayIsolation.js). A tap on one of its pages closes
+	// the top one as Escape does; if it stays open (it asks about unsaved
+	// edits first), the tap goes nowhere. More only opens its sheet.
 	const liveNav = () => ($mobile ? ".nav-rail, .bottom-bar, .bottom-bar-backdrop" : null);
-	const GUARDED_MODALS = ["LogbookRecord", "Keybindings", "QuitQuestion"];
+	const openOverlays = () => [$modalStore.length, $modalStore[0], $drawerStore.open];
 	function closeOverlaysForNav(event) {
-		if (!$mobile) return;
+		if (!$mobile || !($modalStore.length || $drawerStore.open)) return;
 		const tile = event.target?.closest?.(".nav-rail a, .nav-rail button, .bottom-bar button");
 		if (!tile || tile.closest(".bottom-bar-more")) return;
-		if ($modalStore.length && !GUARDED_MODALS.includes($modalStore[0]?.component)) modalStore.clear();
-		if ($drawerStore.open) drawerStore.close();
+		// One at a time, as Escape would, until none is left or one stays.
+		for (let i = 0; i < 8 && ($modalStore.length || $drawerStore.open); i++) {
+			const before = openOverlays();
+			closeTopOverlay();
+			if (openOverlays().every((value, j) => value === before[j])) {
+				event.preventDefault();
+				event.stopPropagation();
+				return;
+			}
+		}
 	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
@@ -368,11 +376,11 @@
 		return menuDispatcher.isModalToggle(event, actionId, shortcutState());
 	}
 	let removeMenuShortcuts = () => {};
-	// iOS: a swipe down closes the open modal, drawer or menu.
+	// Mobile: a swipe down closes the open modal, drawer or menu.
 	onMount(() => {
 		let stop = () => {};
-		mobileCheck.then((onMobile) => {
-			if (onMobile) stop = installSwipeToClose(() => [$modalStore.length, $modalStore[0], $drawerStore.open]);
+		mobileCheck.then((isMobile) => {
+			if (isMobile) stop = installSwipeToClose(document, { close: closeTopOverlay, snapshot: openOverlays });
 		});
 		return () => stop();
 	});

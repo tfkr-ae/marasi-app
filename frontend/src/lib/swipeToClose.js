@@ -1,19 +1,31 @@
-// iOS: a swipe down closes the open sheet (a modal, a drawer, the Marasi
+// Mobile: a swipe down closes the open sheet (a modal, a drawer, the Marasi
 // menu, an expanded request), as on iOS's own sheets. The sheet follows the
-// finger; let go far or fast enough and it closes the way Escape does
-// (overlayIsolation.js), so a modal with unsaved edits still asks first and
-// springs back. A swipe starts only where there is nothing above to scroll
-// back to, and not inside an editor or a text field (but for the sheet's
-// header), so it never fights a scroll or a selection.
+// finger; let go far or fast enough and it slides out, then closes the way
+// Escape does (closeTopOverlay in overlayIsolation.js), so a modal with
+// unsaved edits still asks first and springs back. A swipe starts only
+// where there is nothing above to scroll back to, and not inside an editor
+// or a text field (but for the sheet's header), so it never fights a
+// scroll or a selection.
 
-const SHEETS = "dialog[open], .logbook-pair-expanded, .modal-backdrop, .drawer-backdrop";
+export const SHEETS = "dialog[open], .logbook-pair-expanded, .modal-backdrop, .drawer-backdrop";
 const NO_SWIPE =
   "input, textarea, select, [contenteditable=''], [contenteditable='true'], .cm-editor, .monaco-editor, [data-no-swipe]";
-const HEADER = 72; // px from the sheet's top where a swipe always starts
-const DISTANCE = 110; // px down that closes
-const FLICK = 0.5; // px/ms down that closes, past FLICK_MIN
-const FLICK_MIN = 40;
-const SPRING = "transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+export const HEADER_PX = 72; // from the sheet's top, where a swipe always starts
+export const CLOSE_PX = 110; // down, that closes
+export const FLICK = 0.5; // px/ms down that closes, past FLICK_MIN_PX
+export const FLICK_MIN_PX = 40;
+export const SPRING_MS = 240;
+const SPRING = `transform ${SPRING_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+
+/** Whether a drag let go at `dy` px, moving at `v` px/ms, closes the sheet. */
+export function closesAt(dy, v) {
+  return dy > CLOSE_PX || (dy > FLICK_MIN_PX && v > FLICK);
+}
+
+/** How long the slide out takes: the finger's speed, within bounds. */
+export function slideOutMs(rest, v) {
+  return Math.round(Math.min(260, Math.max(140, rest / Math.max(v, 1.2))));
+}
 
 function scrolledDown(target, sheet) {
   for (let el = target; el && el !== sheet.parentElement; el = el.parentElement) {
@@ -22,16 +34,27 @@ function scrolledDown(target, sheet) {
   return false;
 }
 
-const same = (a, b) =>
-  Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((value, i) => value === b[i]) : a === b;
+const isDialog = (sheet) => sheet.tagName === "DIALOG";
+
+const browserTime = {
+  frame: (fn) => requestAnimationFrame(fn),
+  cancelFrame: (id) => cancelAnimationFrame(id),
+  later: (fn, ms) => setTimeout(fn, ms),
+};
 
 /**
- * Starts listening; returns the function that stops.
- * `snapshot()` gives what is open, as a list (the modal store's top,
- * the drawer): when it changes after the Escape, the sheet closed.
+ * Starts listening on `root` (the document); returns the function that stops.
+ * - `close()` asks the top sheet to close (closeTopOverlay).
+ * - `snapshot()` gives what is open, as a list (the modal store's top, the
+ *   drawer): when it changes after `close()`, the sheet closed.
+ * - `height()` is the screen's height; `time` its frames and timers.
  */
-export function installSwipeToClose(snapshot = () => null) {
+export function installSwipeToClose(
+  root,
+  { close, snapshot = () => [], height = () => window.innerHeight, time = browserTime } = {},
+) {
   let drag = null;
+  let frame = 0;
 
   function start(event) {
     drag = null;
@@ -40,14 +63,13 @@ export function installSwipeToClose(snapshot = () => null) {
     const sheet = target?.closest?.(SHEETS);
     if (!sheet) return;
     const touch = event.touches[0];
-    const inHeader = touch.clientY - sheet.getBoundingClientRect().top < HEADER;
+    const inHeader = touch.clientY - sheet.getBoundingClientRect().top < HEADER_PX;
     if (!inHeader && (target.closest(NO_SWIPE) || scrolledDown(target, sheet))) return;
     drag = { sheet, x: touch.clientX, y: touch.clientY, t: event.timeStamp, dy: 0, v: 0, on: false };
   }
 
   // The sheet moves once a frame, on its own layer, however many touch
   // events arrive in between.
-  let frame = 0;
   const paint = () => {
     frame = 0;
     if (drag?.on) drag.sheet.style.transform = `translate3d(0, ${drag.dy}px, 0)`;
@@ -79,14 +101,14 @@ export function installSwipeToClose(snapshot = () => null) {
     drag.v = drag.v * 0.6 + ((next - drag.dy) / dt) * 0.4;
     drag.t = event.timeStamp;
     drag.dy = next;
-    if (!frame) frame = requestAnimationFrame(paint);
+    if (!frame) frame = time.frame(paint);
   }
 
   function end() {
     const current = drag;
     drag = null;
     if (!current?.on) return;
-    if (frame) cancelAnimationFrame(frame);
+    if (frame) time.cancelFrame(frame);
     frame = 0;
     const { sheet } = current;
     const settle = () => {
@@ -97,45 +119,45 @@ export function installSwipeToClose(snapshot = () => null) {
       sheet.style.transition = SPRING;
       sheet.style.transform = "";
       // A timer, not transitionend: a child's transition bubbles up too.
-      setTimeout(settle, 260);
+      time.later(settle, SPRING_MS + 20);
     };
-    if (!(current.dy > DISTANCE || (current.dy > FLICK_MIN && current.v > FLICK))) return springBack();
+    if (!closesAt(current.dy, current.v)) return springBack();
 
     // Slide all the way out first, at the finger's speed, then close: the
     // modal's own closing fade then runs off screen instead of fighting
     // the slide. If the sheet stays open (it asks to keep edits, say), it
     // springs back up under its question.
-    const rest = Math.max(window.innerHeight - current.dy, 0);
-    const ms = Math.round(Math.min(260, Math.max(140, rest / Math.max(current.v, 1.2))));
+    const ms = slideOutMs(Math.max(height() - current.dy, 0), current.v);
     sheet.style.transition = `transform ${ms}ms cubic-bezier(0.3, 0.6, 0.4, 1)`;
     sheet.style.transform = "translate3d(0, 100%, 0)";
-    const close = () => {
+    time.later(() => {
       const before = snapshot();
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      close();
       // Closed: the sheet left, the dialog shut, or the store moved on (a
       // modal fading out is still in the page).
-      requestAnimationFrame(() => {
-        const closed =
-          !sheet.isConnected || (sheet instanceof HTMLDialogElement && !sheet.open) || !same(snapshot(), before);
+      time.frame(() => {
+        const after = snapshot();
+        const moved = after.length !== before.length || after.some((value, i) => value !== before[i]);
+        const closed = !sheet.isConnected || (isDialog(sheet) && !sheet.open) || moved;
         if (!closed) return springBack();
         // A dialog stays in the page, shut: put it back for next time.
-        if (sheet instanceof HTMLDialogElement) {
+        // (A modal on its way out keeps going down.)
+        if (isDialog(sheet)) {
           sheet.style.transform = "";
           settle();
         }
       });
-    };
-    setTimeout(close, ms + 16);
+    }, ms + 16);
   }
 
-  document.addEventListener("touchstart", start, { passive: true });
-  document.addEventListener("touchmove", move, { passive: false });
-  document.addEventListener("touchend", end);
-  document.addEventListener("touchcancel", end);
+  root.addEventListener("touchstart", start, { passive: true });
+  root.addEventListener("touchmove", move, { passive: false });
+  root.addEventListener("touchend", end);
+  root.addEventListener("touchcancel", end);
   return () => {
-    document.removeEventListener("touchstart", start);
-    document.removeEventListener("touchmove", move);
-    document.removeEventListener("touchend", end);
-    document.removeEventListener("touchcancel", end);
+    root.removeEventListener("touchstart", start);
+    root.removeEventListener("touchmove", move);
+    root.removeEventListener("touchend", end);
+    root.removeEventListener("touchcancel", end);
   };
 }

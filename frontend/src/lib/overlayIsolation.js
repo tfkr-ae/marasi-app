@@ -46,7 +46,8 @@ function isModalToggleShortcut(event, modal, stores) {
 // key. A modal component that must decide for itself (the keybindings modal:
 // cancel a shortcut capture, dismiss an in-modal card, or ask before
 // discarding edits) registers a handler while it is mounted. The handler
-// receives the already-consumed event and decides whether to close.
+// runs in place of the close, on Escape or closeTopOverlay (a swipe down
+// on mobile), and decides whether to close.
 // Returns a function that removes exactly this handler.
 const modalEscapeHandlers = [];
 
@@ -56,6 +57,18 @@ export function interceptModalEscape(handler) {
     const index = modalEscapeHandlers.lastIndexOf(handler);
     if (index !== -1) modalEscapeHandlers.splice(index, 1);
   };
+}
+
+// The mounted isolation's close for the top overlay (isolateOverlays).
+let closeTop = () => false;
+
+/**
+ * Closes the top overlay as Escape does, so a modal that asks before
+ * discarding edits still asks: the mobile app's swipe down and its nav
+ * tiles use it. Returns whether there was an overlay to close.
+ */
+export function closeTopOverlay() {
+  return closeTop();
 }
 
 export function hasBlockingOverlay(modalStore) {
@@ -132,7 +145,7 @@ function isEditable(element) {
 // Make the app inert under an overlay, but for the parts `live` names
 // (the iOS app's rail or bottom bar, which stay in view and in use beside
 // a modal): their ancestors stay live, and every other branch goes inert.
-function setAppInert(root, on, live) {
+export function setAppInert(root, on, live) {
   const kept = on && live ? Array.from(root.querySelectorAll(live)) : [];
   if (!kept.length) {
     for (const element of root.querySelectorAll("[data-overlay-inert]")) {
@@ -255,6 +268,29 @@ export function isolateOverlays(appRoot, stores) {
     }
   }
 
+  // Escape's close, for the top overlay: a dialog is cancelled, a modal
+  // with an Escape handler decides for itself (it may ask first), any
+  // other modal answers false and closes, and a drawer closes.
+  function closeOverlay(overlay) {
+    if (overlay instanceof HTMLDialogElement) {
+      const cancelEvent = new Event("cancel", { cancelable: true });
+      if (overlay.dispatchEvent(cancelEvent)) overlay.close();
+    } else if (overlay.matches(".modal-backdrop") && modalEscapeHandlers.length) {
+      modalEscapeHandlers.at(-1)();
+    } else if (overlay.matches(".modal-backdrop")) {
+      currentModal?.response?.(false);
+      stores.modalStore.close();
+    } else {
+      stores.drawerStore.close();
+    }
+  }
+  closeTop = () => {
+    syncOverlay();
+    if (!activeOverlay) return false;
+    closeOverlay(activeOverlay);
+    return true;
+  };
+
   function handleKeydown(event) {
     const overlay = activeOverlay;
     if (!overlay) return;
@@ -273,17 +309,7 @@ export function isolateOverlays(appRoot, stores) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (overlay instanceof HTMLDialogElement) {
-        const cancelEvent = new Event("cancel", { cancelable: true });
-        if (overlay.dispatchEvent(cancelEvent)) overlay.close();
-      } else if (overlay.matches(".modal-backdrop") && modalEscapeHandlers.length) {
-        modalEscapeHandlers.at(-1)(event);
-      } else if (overlay.matches(".modal-backdrop")) {
-        currentModal?.response?.(false);
-        stores.modalStore.close();
-      } else {
-        stores.drawerStore.close();
-      }
+      closeOverlay(overlay);
       return;
     }
 
@@ -335,6 +361,7 @@ export function isolateOverlays(appRoot, stores) {
   return {
     destroy() {
       destroyed = true;
+      closeTop = () => false;
       unsubscribeModal();
       unsubscribeDrawer();
       unsubscribeToast();
