@@ -86,11 +86,11 @@
 			><span class="flex h-5 items-center"><Trash2 size={14} /></span></button
 		>
 	</header>
-	<div bind:this={body} class="min-h-0 flex-1 overflow-auto px-4 py-3 pb-24">
+	<div bind:this={body} class="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
 		<RecordChecklist {kind} {record} {store} {fix} testCases={$store.testCases} on:save={saveFix} on:leave={onBack} />
 		<div class="mt-5"><LinkedRecords {kind} {links} wide={width > 900} {onOpen} /></div>
 		<h2 class="{heading} mt-5">Evidence</h2>
-		<div class="h-[27.5rem] ring-1 ring-surface-500/30">
+		<div class="min-h-[27.5rem] flex-1 ring-1 ring-surface-500/30">
 			{#key `${kind}:${record.ID}`}
 				<EvidenceViewer
 					{store}
