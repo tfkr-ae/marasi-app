@@ -33,6 +33,16 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. |
 | WebSocket stream | the `WebsocketStream` modal | `WebSocketModal.svelte` and its `WebSocket*.svelte` tabs |
 
+## Mobile (iOS and Android)
+
+`lib/platform.js` asks Go for the OS once (`platformOS` in `runtime.js`). `platform` is `"ios"`, `"android"` or `"desktop"`; `mobile` is true for both phones, and the root element gets the `mobile` class and the platform's name. Use `mobile` for anything about layout, touch, or what a phone can't run (the Marasi CLI, Chrome, the updater: `MOBILE_HIDDEN_ACTIONS`, `MOBILE_HIDDEN_SECTIONS`); use `platform` only where the two phones differ (the share sheet, the QR scanner). The desktop never takes either path.
+
+- **Where the styles are.** A component's mobile layout is in its own `<style>`, as global `html.mobile …` selectors (the Logbook record's header in `LogbookRecord.svelte`, the WebSocket tabs in `WebSocketModal.svelte`). `app.css` keeps only what several share: touch and selection, the resize handles, the maximised Ledger and Armory drawers (`.mobile-fullscreen`), the settings rows, and the modal, drawer and toast sheets.
+- **Narrow layout.** Under 40rem (`COMPACT_QUERY`, the iPhone Duo folded, a phone) `BottomBar.svelte` replaces the app rail: the main pages, Connections, and More, a sheet with the rest, Settings and the Color Scheme tile. It publishes its height as `--bottom-bar-height`. Side-by-side panes become tabs with `PaneTabs.svelte` (the hidden pane gets `.pane-off`), and a dock closes when a row marked `data-dock-pick` is tapped (`Dock.svelte`).
+- **Insets.** Use `--safe-top`, `--safe-right`, `--safe-bottom` and `--safe-left`, never `env(safe-area-inset-*)`: Android's web view reports env() as 0, so the app sets the variables there. The mobile rail's width is `--mobile-rail-width`.
+- **Sheets.** Every modal, drawer and the Marasi menu fills the screen but leaves the bottom bar or rail in view and usable (`isolateOverlays`'s `live` option keeps them out of the inert app). A nav tap or a swipe down (`swipeToClose.js`) closes the top sheet through `closeTopOverlay()` in `overlayIsolation.js`, as Escape does, so a modal with an Escape handler (`interceptModalEscape`) can ask about unsaved edits first; the nav tap then goes nowhere.
+- **Touch.** `lib/touch.js`: a long press opens the context menus, the keyboard stays down under modals, and a two-finger swipe down opens the Marasi menu.
+
 ## Editors
 
 Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
