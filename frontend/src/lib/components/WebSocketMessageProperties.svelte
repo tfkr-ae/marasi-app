@@ -48,3 +48,24 @@
 		>
 	{/if}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The WebSocket stream on a narrow mobile screen: Close Connection drops to
+	   its icon beside the title, the four tabs share the width, the message
+	   list and the chosen message are tabs (WebSocketMessagesTable.svelte),
+	   the message's bar wraps, and its properties take two columns. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .ws-properties) {
+			grid-template-columns: max-content minmax(0, 1fr);
+		}
+		:global(html.mobile .ws-properties > .col-span-2:empty) {
+			display: none;
+		}
+		:global(html.mobile .ws-properties > .col-span-3) {
+			grid-column: span 1 / span 1;
+		}
+	}
+</style>

@@ -190,3 +190,29 @@
 		</div>
 	{/each}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The Logbook record view on a narrow mobile screen: the title takes its own
+	   row above Back and the actions, and a checklist row puts its value
+	   under the label, at full width, with its button beside the label. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .checklist-row) {
+			grid-template-columns: minmax(0, 1fr) auto;
+			height: auto;
+			min-height: 3rem;
+			row-gap: 0.25rem;
+			padding-top: 0.5rem;
+			padding-bottom: 0.5rem;
+		}
+		:global(html.mobile .checklist-row > :nth-child(2)) {
+			grid-column: 1 / -1;
+			grid-row: 2;
+		}
+		:global(html.mobile .checklist-row > :nth-child(2):empty) {
+			display: none;
+		}
+	}
+</style>

@@ -121,3 +121,16 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		/* The Logbook's linked request and response, one above the other. */
+		:global(html.mobile .logbook-pair) {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: repeat(2, minmax(0, 1fr));
+		}
+	}
+</style>

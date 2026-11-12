@@ -76,3 +76,18 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* Parts sized for a floating box grow into the sheet instead. */
+	:global(html.mobile .connections-modal) {
+		display: flex;
+		flex-direction: column;
+	}
+	:global(html.mobile .connections-body) {
+		flex: 1 1 0;
+		height: auto;
+	}
+</style>

@@ -260,4 +260,61 @@
 		align-content: flex-start;
 		padding-top: 0.75rem;
 	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Ledger toolbar, when short of room (the sitemap open): its
+	   buttons drop their labels to icons, so they don't crowd the query box.
+	   Each keeps its title and aria label. */
+	:global(html.mobile .ledger-toolbar) {
+		container-type: inline-size;
+	}
+	@media (max-width: 40rem) {
+		:global(html.mobile .ledger-toolbar) {
+			flex-wrap: wrap;
+		}
+		:global(html.mobile .ledger-search) {
+			flex: 1 0 100%;
+			min-height: 2.75rem;
+			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+		}
+		:global(html.mobile .ledger-toolbar > .toolbar-menu),
+		:global(html.mobile .ledger-toolbar > .ledger-types) {
+			flex: 1 1 3rem;
+			min-width: 0;
+			min-height: 2.75rem;
+		}
+		:global(html.mobile .ledger-search + .toolbar-menu) {
+			border-left-width: 0;
+		}
+		:global(html.mobile .ledger-toolbar > .toolbar-menu > button),
+		:global(html.mobile .ledger-toolbar > .ledger-types > button) {
+			flex: 1 1 0;
+			justify-content: center;
+		}
+		:global(html.mobile .toolbar-menu),
+		:global(html.mobile .ledger-types) {
+			position: static;
+		}
+		:global(html.mobile .toolbar-panel),
+		:global(html.mobile .ledger-query-fields) {
+			left: 0 !important;
+			right: 0 !important;
+			width: auto !important;
+			max-width: none !important;
+			max-height: 70vh;
+			border-left-width: 0;
+			border-right-width: 0;
+		}
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@container (max-width: 40rem) {
+		:global(html.mobile .ledger-toolbar .toolbar-label) {
+			display: none;
+		}
+	}
 </style>

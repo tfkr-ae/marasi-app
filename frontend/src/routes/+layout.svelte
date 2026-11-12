@@ -1092,4 +1092,72 @@
 	:global(.nav-rail::-webkit-scrollbar) {
 		display: none;
 	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile app rail: icons only, 48pt wide (the layout sets the width and a
+	   smaller logo). Each tile keeps its name as its title. Settings draws its
+	   icon in the label slot, so a label with an icon stays. */
+	:global(html.mobile .nav-rail .app-rail-label:not(:has(svg))),
+	:global(html.mobile .nav-rail .rail-label) {
+		display: none;
+	}
+	/* The mobile frame: every page runs the full height, under the home
+	   indicator too (the frame's bottom inset is dropped, and the body no
+	   longer overflows the screen when a page, such as Compass, is taller).
+	   Only the app rail's tiles move in, clear of the screen's curved corners,
+	   as the drawer rail does when maximised. */
+	:global(html.mobile .app-frame) {
+		padding-bottom: 0;
+	}
+	:global(html.mobile .app-body) {
+		height: auto;
+		min-height: 0;
+		overflow: hidden;
+	}
+	/* The inset is inside the first and last tiles, not around the rail, so
+	   a selected Home or Settings tile fills to the screen's edge, its icon
+	   clear of the curved corner. With the rail in view the frame drops its
+	   top inset and the page takes it instead (pulling the rail up into the
+	   frame's padding would be clipped by the body, as in portrait). */
+	:global(html.mobile .app-frame:has(> .app-body > .nav-rail)) {
+		padding-top: 0;
+	}
+	:global(html.mobile .app-frame:has(> .app-body > .nav-rail) #content) {
+		margin-top: var(--safe-top);
+	}
+	:global(html.mobile .nav-rail .app-bar-default > .app-rail-anchor:first-child > .app-rail-wrapper) {
+		padding-top: calc(0.625rem + max(var(--safe-top), 0.75rem));
+	}
+	:global(html.mobile .nav-rail .app-bar-trail > .app-rail-anchor:last-child > .app-rail-wrapper) {
+		padding-bottom: calc(0.625rem + max(var(--safe-bottom), 1rem));
+	}
+	/* The mobile rail: a tap goes straight to the page, with no grey tap flash
+	   and no hover tint left on the tile (a touch screen's hover sticks after
+	   the tap). The selected tile keeps its colour. */
+	:global(html.mobile .nav-rail),
+	:global(html.mobile .nav-rail *) {
+		-webkit-tap-highlight-color: transparent;
+	}
+	:global(html.mobile .nav-rail .bg-primary-hover-token:hover:not(.bg-primary-active-token)) {
+		background-color: transparent;
+	}
+	@media (max-width: 40rem) {
+		:global(html.mobile .nav-rail) {
+			display: none;
+		}
+		:global(html.mobile .app-body) {
+			flex-direction: column;
+		}
+		:global(html.mobile .app-body > #content) {
+			min-height: 0;
+			margin-left: var(--safe-left);
+			margin-right: var(--safe-right);
+		}
+		:global(html.mobile .app-frame) {
+			padding-left: 0;
+			padding-right: 0;
+		}
+	}
 </style>

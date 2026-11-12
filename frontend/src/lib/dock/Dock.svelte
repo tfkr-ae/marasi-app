@@ -205,3 +205,66 @@
 		></div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	:global(html.mobile .lp-resize) {
+		width: 1.5rem;
+		left: -0.75rem;
+	}
+	/* The mobile dock's collapse button sits above the widened resize handle,
+	   which otherwise covers it at the dock's edge and takes the tap. */
+	:global(html.mobile .dock-collapse) {
+		z-index: 40;
+	}
+	:global(html.mobile .dock-collapse:not(.absolute)) {
+		position: relative;
+	}
+	/* Narrow mobile screens: an open sidebar (Dock) covers the page beside it
+	   instead of squeezing it to a sliver, and a modal's fixed-width parts
+	   fit the screen. */
+	@media (max-width: 40rem) {
+		:global(html.mobile :has(> .lp-dock)) {
+			position: relative;
+		}
+		:global(html.mobile .lp-dock:not(.absolute)) {
+			position: absolute;
+			inset: 0 auto 0 0;
+			z-index: 35;
+			width: 100% !important;
+		}
+		:global(html.mobile .lp-dock:not(.absolute) > div:first-child) {
+			width: 100% !important;
+		}
+		:global(html.mobile .lp-resize) {
+			display: none;
+		}
+	}
+	/* The dock's expand, search and collapse buttons are big enough to tap,
+	   on every page and width on mobile. */
+	:global(html.mobile .lp-strip > .btn) {
+		width: 2.25rem;
+		height: 2.25rem;
+		padding: 0;
+		justify-content: center;
+	}
+	:global(html.mobile .dock-collapse) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.25rem;
+		min-height: 2.25rem;
+		opacity: 0.8;
+	}
+	:global(html.mobile .dock-collapse.absolute) {
+		top: 0;
+		right: 0;
+	}
+	:global(html.mobile .dock-collapse > svg),
+	:global(html.mobile .lp-strip > .btn > svg) {
+		width: 18px;
+		height: 18px;
+	}
+</style>

@@ -170,3 +170,34 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The CVSS calculator, narrow: a metric's name above its options, the
+	   options sharing the full width as taller buttons with whole labels. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .cvss-metric) {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		:global(html.mobile .cvss-metric > span) {
+			flex: 1 0 100%;
+			width: auto;
+		}
+		:global(html.mobile .cvss-metric > [role="group"]) {
+			flex: 1 0 100%;
+			gap: 2px;
+		}
+		:global(html.mobile .cvss-metric > [role="group"] > button) {
+			padding-top: 0.375rem;
+			padding-bottom: 0.375rem;
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+		:global(html.mobile .cvss-head) {
+			flex-wrap: wrap;
+		}
+	}
+</style>

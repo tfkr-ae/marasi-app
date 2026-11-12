@@ -268,3 +268,35 @@
 		</footer>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* Export review, narrow mobile: Details | Preview tabs (ExportReview.svelte),
+	   the details one field to a row, options that wrap, and Cancel and
+	   Export sharing the foot. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .export-preview) {
+			flex: 1 1 0;
+			width: auto;
+			border-left-width: 0;
+		}
+		:global(html.mobile .export-details) {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		:global(html.mobile .export-details > *) {
+			grid-column: 1 / -1;
+		}
+		:global(html.mobile .export-option) {
+			height: auto;
+			min-height: 2.75rem;
+			flex-wrap: wrap;
+			padding-top: 0.375rem;
+			padding-bottom: 0.375rem;
+		}
+		:global(html.mobile .export-foot > .btn) {
+			flex: 1 1 0;
+		}
+	}
+</style>

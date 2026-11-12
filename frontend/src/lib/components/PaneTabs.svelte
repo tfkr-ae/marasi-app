@@ -20,3 +20,21 @@
 		>
 	{/each}
 </div>
+
+<style>
+	/* Hidden but on a narrow mobile screen (below). */
+	:global(.pane-tabs) {
+		display: none;
+	}
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .pane-tabs) {
+			display: flex;
+		}
+		:global(html.mobile .pane-off) {
+			display: none !important;
+		}
+	}
+</style>

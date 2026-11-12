@@ -376,3 +376,45 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .ws-label) {
+			display: none;
+		}
+		:global(html.mobile .ws-close-connection > svg) {
+			margin-right: 0;
+		}
+		:global(html.mobile .ws-tabs) {
+			width: 100%;
+		}
+		:global(html.mobile .ws-tabs .tab-list) {
+			display: flex;
+		}
+		:global(html.mobile .ws-tabs .tab-list > *) {
+			flex: 1 1 0;
+			min-width: 0;
+			padding-left: 0.25rem;
+			padding-right: 0.25rem;
+			font-size: 0.75rem;
+			text-align: center;
+		}
+		:global(html.mobile .ws-tabs .tab-list svg) {
+			display: none;
+		}
+		:global(html.mobile .ws-tabs .tab-list div) {
+			justify-content: center;
+		}
+		:global(html.mobile .ws-bar) {
+			flex-wrap: wrap;
+			height: auto;
+			min-height: 2.5rem;
+			padding-top: 0.25rem;
+			padding-bottom: 0.25rem;
+			row-gap: 0.25rem;
+		}
+	}
+</style>

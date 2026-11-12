@@ -170,3 +170,21 @@
 		</div>
 	</div>
 </Dock>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Checkpoint dock: Intercept all on its own row, then Forward n
+	   and Drop n side by side, equal widths, rather than wrapping unevenly. */
+	:global(html.mobile .cp-bulk > .cp-intercept-all) {
+		flex-basis: 100%;
+	}
+	:global(html.mobile .cp-bulk > .flex-1) {
+		display: none;
+	}
+	:global(html.mobile .cp-bulk > .btn) {
+		flex: 1 1 0;
+		height: 2rem;
+	}
+</style>

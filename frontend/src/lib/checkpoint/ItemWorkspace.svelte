@@ -220,3 +220,45 @@
 		</div>
 	{/key}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* Checkpoint on a narrow mobile screen: Items | Rules is a full-width switch
+	   big enough to tap, an item's title takes its own row above Forward and
+	   Drop (equal widths), and its request and response are tabs. */
+	:global(.cp-short-label) {
+		display: none;
+	}
+	@media (max-width: 40rem) {
+		:global(html.mobile .cp-itembar) {
+			flex-wrap: wrap;
+			row-gap: 0.5rem;
+		}
+		:global(html.mobile .cp-itembar > :first-child) {
+			flex-basis: 100%;
+		}
+		:global(html.mobile .cp-actions) {
+			flex: 1 1 100%;
+			flex-wrap: wrap;
+		}
+		:global(html.mobile .cp-actions > .btn) {
+			flex: 1 1 0;
+			height: 2.25rem;
+			white-space: nowrap;
+		}
+		:global(html.mobile .cp-long-label) {
+			display: none;
+		}
+		:global(html.mobile .cp-short-label) {
+			display: inline;
+		}
+		:global(html.mobile .cp-panes) {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		:global(html.mobile .cp-panes > section) {
+			border-right-width: 0;
+		}
+	}
+</style>

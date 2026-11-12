@@ -124,3 +124,59 @@
 		on:click={onExport}><SquareArrowRight size={15} class="opacity-70" /><span class="toolbar-label">Export</span></button
 	>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	:global(html.mobile .logbook-toolbar) {
+		container-type: inline-size;
+	}
+	/* The mobile Logbook toolbar at its narrowest: the search takes its own row
+	   above the filters. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .logbook-toolbar) {
+			flex-wrap: wrap;
+		}
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Logbook toolbar, the Ledger's treatment: short of room (the
+	   outline open) the search narrows and the menus take their own width;
+	   shorter still, every button drops to its icon. Each keeps its title.
+	   The kind toggles' icons (.toolbar-icon) show only then. */
+	:global(.toolbar-icon) {
+		display: none;
+	}
+	@container (max-width: 56rem) {
+		:global(html.mobile .logbook-toolbar .logbook-search) {
+			width: auto;
+			flex: 1 1 0%;
+			min-width: 7rem;
+		}
+		:global(html.mobile .logbook-toolbar .toolbar-menu) {
+			width: auto;
+			flex: none;
+		}
+	}
+	@container (max-width: 44rem) {
+		:global(html.mobile .logbook-toolbar .toolbar-label) {
+			display: none;
+		}
+		:global(html.mobile .logbook-toolbar .toolbar-icon) {
+			display: contents;
+		}
+	}
+	@container (max-width: 30rem) {
+		:global(html.mobile .logbook-toolbar .logbook-search) {
+			flex-basis: 100%;
+			min-height: 2.75rem;
+			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+		}
+		:global(html.mobile .logbook-toolbar > *) {
+			min-height: 2.75rem;
+		}
+	}
+</style>

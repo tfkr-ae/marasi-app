@@ -404,3 +404,50 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Keybindings modal when narrow: the profile and platform pickers
+	   stack, the search takes its own row above the filters, the page and
+	   state lists become strips that scroll sideways above the rows, and a
+	   row's keys wrap under its name. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .kb-toolbar) {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		:global(html.mobile .kb-search-row) {
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
+		:global(html.mobile .kb-search-row > input) {
+			flex-basis: 100%;
+		}
+		:global(html.mobile .kb-body) {
+			flex-direction: column;
+		}
+		:global(html.mobile .kb-nav) {
+			display: flex;
+			flex: none;
+			width: auto;
+			overflow-x: auto;
+			overflow-y: hidden;
+			border-right-width: 0;
+			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+		}
+		:global(html.mobile .kb-nav > button) {
+			width: auto;
+			flex: none;
+			gap: 0.5rem;
+			white-space: nowrap;
+		}
+		:global(html.mobile .kb-row) {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		:global(html.mobile .kb-row > :last-child) {
+			margin-left: auto;
+		}
+	}
+</style>

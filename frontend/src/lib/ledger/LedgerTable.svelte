@@ -412,4 +412,43 @@
 		content: none !important;
 		margin: 0 !important;
 	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Ledger fits its width: no sideways scroll. Host and Path share
+	   what the fixed columns leave, and a narrow screen (the iPhone Duo folded)
+	   drops Time, Type and Size. Cells carry data-col (LedgerTable.svelte); the
+	   desktop keeps the inline template and its scroll. */
+	:global(html.mobile .ledger-table) {
+		container-type: inline-size;
+		overflow-x: hidden;
+	}
+	:global(html.mobile .ledger-table .lg-row) {
+		min-width: 0;
+		grid-template-columns: 2.75rem 2rem 4.375rem 3.5rem minmax(0, 1fr) minmax(0, 1.6fr) 3.25rem 3rem 3.5rem !important;
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@container (max-width: 36rem) {
+		:global(html.mobile .ledger-table .lg-row) {
+			grid-template-columns: 2.75rem 2rem 3.5rem minmax(0, 1fr) minmax(0, 1.6fr) 3.25rem !important;
+		}
+		:global(html.mobile .ledger-table [data-col="time"]),
+		:global(html.mobile .ledger-table [data-col="type"]),
+		:global(html.mobile .ledger-table [data-col="size"]) {
+			display: none;
+		}
+	}
+	/* The mobile Ledger at its narrowest drops the row number too. */
+	@container (max-width: 26rem) {
+		:global(html.mobile .ledger-table .lg-row) {
+			grid-template-columns: 2rem 3.5rem minmax(0, 0.8fr) minmax(0, 1.6fr) 3.25rem !important;
+		}
+		:global(html.mobile .ledger-table [data-col="number"]) {
+			display: none;
+		}
+	}
 </style>

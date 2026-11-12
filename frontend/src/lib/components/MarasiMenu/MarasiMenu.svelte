@@ -397,4 +397,27 @@
 		background: rgba(0, 0, 0, 0.45);
 		backdrop-filter: blur(2px);
 	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Marasi menu is a full-screen sheet too (MarasiMenu.svelte),
+	   its list taking the height between the search and the footer. */
+	:global(html.mobile dialog.marasi-menu[open]) {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		max-width: none;
+		height: 100%;
+		max-height: none;
+		margin: 0;
+		border-width: 0;
+		box-shadow: none;
+		padding: var(--safe-top) var(--safe-right) var(--safe-bottom)
+		var(--safe-left);
+	}
+	:global(html.mobile .marasi-menu-list) {
+		flex: 1 1 0;
+		max-height: none;
+	}
 </style>

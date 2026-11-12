@@ -177,3 +177,62 @@
 		</button>
 	</div>
 </nav>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* ---- The narrow mobile bottom bar (BottomBar.svelte) ----
+	   Under 40rem the app rail gives way to a bar along the bottom, under the
+	   page, its tabs clear of the home indicator. Wider, the rail is back and
+	   the bar hides. While the keyboard is up the bar hides too. */
+	:global(.bottom-bar) {
+		display: none;
+	}
+	@media (max-width: 40rem) {
+		:global(html.mobile .bottom-bar) {
+			display: block;
+			padding-bottom: max(var(--safe-bottom), 0.25rem);
+		}
+		:global(html.mobile .bottom-bar.bottom-bar-hidden) {
+			display: none;
+		}
+		:global(html.mobile .bottom-bar),
+		:global(html.mobile .bottom-bar *) {
+			-webkit-tap-highlight-color: transparent;
+		}
+	}
+	/* The bar and its More sheet are solid, over the page and above the
+	   sheet's backdrop. */
+	:global(.bottom-bar-backdrop) {
+		z-index: 1000;
+	}
+	:global(.bottom-bar) {
+		z-index: 30;
+		background-color: rgb(var(--color-surface-50));
+		/* Its background runs edge to edge, under the side insets too (the
+		frame drops its side padding and the page takes it, below); its
+		tiles stay inside them, in line with the page. Only the last tile,
+		More, reaches into the right inset, so filled it meets the edge. */
+		padding-left: var(--safe-left);
+		padding-right: var(--safe-right);
+	}
+	:global(.bottom-bar-more) {
+		margin-right: calc(-1 * var(--safe-right));
+		padding-right: var(--safe-right);
+	}
+	:global(.bottom-bar-sheet) {
+		padding-left: var(--safe-left);
+		padding-right: var(--safe-right);
+	}
+	:global(.bottom-bar.bottom-bar-open) {
+		z-index: 1001;
+	}
+	:global(.bottom-bar-sheet) {
+		background-color: rgb(var(--color-surface-50));
+	}
+	:global(html.dark .bottom-bar),
+	:global(html.dark .bottom-bar-sheet) {
+		background-color: rgb(var(--color-surface-800));
+	}
+</style>

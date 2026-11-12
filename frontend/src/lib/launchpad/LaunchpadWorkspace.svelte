@@ -321,3 +321,59 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .lp-panes) {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		:global(html.mobile .lp-panes > section) {
+			border-right-width: 0;
+		}
+		:global(html.mobile .lp-topbar) {
+			flex-wrap: wrap;
+			row-gap: 0.5rem;
+		}
+		:global(html.mobile .lp-topbar > :first-child) {
+			flex-basis: 100%;
+		}
+	}
+	/* The narrow mobile Launchpad header: the name on its own row, then one row
+	   of controls, every one the same height. Compare and Revert draft drop
+	   to their icons (each keeps its label for VoiceOver) and Launch takes
+	   the room left. Renaming stacks the name and description fields. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .lp-topbar) {
+			column-gap: 0.5rem;
+		}
+		:global(html.mobile .lp-topbar > .btn),
+		:global(html.mobile .lp-topbar > .lp-https) {
+			height: 2.25rem;
+			margin: 0;
+		}
+		:global(html.mobile .lp-topbar > .btn) {
+			min-width: 2.25rem;
+			justify-content: center;
+		}
+		:global(html.mobile .lp-btn-label) {
+			display: none;
+		}
+		:global(html.mobile .lp-icon-btn > svg) {
+			margin-right: 0;
+		}
+		:global(html.mobile .lp-topbar > .lp-launch),
+		:global(html.mobile .lp-topbar > .lp-cancel) {
+			flex: 1 1 0;
+		}
+		:global(html.mobile .lp-edit) {
+			flex-wrap: wrap;
+		}
+		:global(html.mobile .lp-edit > input) {
+			flex: 1 0 100%;
+			width: auto;
+		}
+	}
+</style>

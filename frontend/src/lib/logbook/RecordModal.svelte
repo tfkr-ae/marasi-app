@@ -198,3 +198,38 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .record-modal-body) {
+			flex-direction: column;
+			overflow-y: auto;
+		}
+		:global(html.mobile .record-modal-form) {
+			width: auto;
+			overflow: visible;
+			border-right-width: 0;
+		}
+		:global(html.mobile .record-modal-side) {
+			flex: none;
+			min-height: 24rem;
+			border-top: 1px solid rgb(var(--color-surface-500) / 0.3);
+		}
+	}
+	/* The finding and test case modal's foot, narrow: what's unsaved on its
+	   own line, then Close and Save side by side. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .record-modal-foot) {
+			flex-wrap: wrap;
+		}
+		:global(html.mobile .record-modal-foot > [data-unsaved-list]) {
+			flex: 1 0 100%;
+		}
+		:global(html.mobile .record-modal-foot > .btn) {
+			flex: 1 1 0;
+		}
+	}
+</style>

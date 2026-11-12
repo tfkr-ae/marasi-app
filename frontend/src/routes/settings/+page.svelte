@@ -1260,3 +1260,94 @@
 		</section>
 	</div>
 </div>
+
+<style>
+	/* Hidden but on a narrow mobile screen (below). */
+	:global(.settings-chevron),
+	:global(.settings-back) {
+		display: none;
+	}
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		/* Settings: the sections list or one section, full width (the
+		   page's listing flag), and the rows stacked. */
+		:global(html.mobile .settings-page) {
+			padding: 0.75rem;
+		}
+		:global(html.mobile .settings-listing .settings-section),
+		:global(html.mobile .settings-page:not(.settings-listing) .settings-nav),
+		:global(html.mobile .settings-page:not(.settings-listing) > header) {
+			display: none;
+		}
+		:global(html.mobile .settings-nav) {
+			flex: 1 1 0;
+			width: auto;
+			border-right-width: 0;
+		}
+		:global(html.mobile .settings-nav > button) {
+			border-left-width: 0;
+			background: transparent;
+			padding-top: 0.625rem;
+			padding-bottom: 0.625rem;
+		}
+		:global(html.mobile .settings-chevron) {
+			display: block;
+		}
+		:global(html.mobile .settings-back) {
+			display: flex;
+		}
+		:global(html.mobile .settings-section) {
+			padding: 0.75rem 0;
+		}
+		/* A settings table stacks: its head hides, each row is a card whose
+		   values wrap, and the add row is a form, one full-width field to a
+		   line, its placeholders naming the fields. */
+		:global(html.mobile .settings-section table),
+		:global(html.mobile .settings-section table > tbody),
+		:global(html.mobile .settings-section table > tfoot) {
+			display: block;
+			width: 100%;
+		}
+		:global(html.mobile .settings-section table > thead) {
+			display: none;
+		}
+		:global(html.mobile .settings-section table > tbody > tr) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			column-gap: 0.75rem;
+			row-gap: 0.25rem;
+			padding: 0.5rem 0.75rem;
+			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.2);
+		}
+		:global(html.mobile .settings-section table > tbody > tr > td) {
+			display: block;
+			padding: 0 !important;
+			border: 0;
+			overflow-wrap: anywhere;
+		}
+		:global(html.mobile .settings-section table > tbody > tr > td:last-child) {
+			margin-left: auto;
+		}
+		:global(html.mobile .settings-section table > tfoot > tr) {
+			display: flex;
+			flex-direction: column;
+			gap: 0.5rem;
+			padding: 0.75rem;
+		}
+		:global(html.mobile .settings-section table > tfoot > tr > td) {
+			display: block;
+			width: 100%;
+			padding: 0 !important;
+		}
+		:global(html.mobile .settings-section table > tfoot > tr > td:empty) {
+			display: none;
+		}
+		:global(html.mobile .settings-section table > tfoot input),
+		:global(html.mobile .settings-section table > tfoot select) {
+			width: 100%;
+		}
+	}
+</style>

@@ -416,3 +416,19 @@
 	{focusID}
 	{runMenuAction}
 />
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Ledger's status line stays one line, its count shortening, and
+	   the drawer's rail scrolls when its buttons outgrow a short drawer. */
+	:global(html.mobile .ledger-status > span) {
+		white-space: nowrap;
+	}
+	:global(html.mobile .ledger-status #ledgerCount) {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+</style>

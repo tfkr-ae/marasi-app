@@ -268,4 +268,25 @@
 			height: 20vh;
 		}
 	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	:global(html.mobile .mobile-home .header) {
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	/* ---- Narrow mobile: Home, the dock buttons, CVSS ---- */
+	   /* Home's listener and Open Project, and Download Certificate, each take
+	   the full width, one row each. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .mobile-home .header > *) {
+			flex: 1 1 100%;
+			display: flex;
+		}
+		:global(html.mobile .mobile-home .header > * > .btn) {
+			flex: 1 1 0;
+			justify-content: center;
+		}
+	}
 </style>

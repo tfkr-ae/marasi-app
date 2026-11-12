@@ -153,3 +153,14 @@
 	</div>
 </div>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .armory-drawer-panes) {
+			flex-direction: row !important;
+		}
+	}
+</style>

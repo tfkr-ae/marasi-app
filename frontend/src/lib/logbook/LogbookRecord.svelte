@@ -119,3 +119,54 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .logbook-record-head) {
+			flex-wrap: wrap;
+			height: auto;
+			padding-top: 0.5rem;
+			padding-bottom: 0.5rem;
+			row-gap: 0.5rem;
+		}
+		:global(html.mobile .logbook-record-head > .record-badge) {
+			order: -2;
+		}
+		:global(html.mobile .logbook-record-head > h1) {
+			order: -1;
+			flex: 1 0 calc(100% - 5rem);
+			white-space: normal;
+		}
+		:global(html.mobile .logbook-record-head > #logbookNext) {
+			margin-left: auto;
+		}
+		:global(html.mobile .logbook-record-head .record-label) {
+			display: none;
+		}
+		:global(html.mobile .logbook-record-head svg.ml-1),
+		:global(html.mobile .logbook-record-head svg.mr-1) {
+			margin: 0;
+		}
+	}
+	/* The Logbook record's actions, narrow mobile: Next, Edit and Delete are
+	   icon tiles of one size, as tall as Back. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .logbook-record-head > .btn) {
+			height: 2.25rem;
+		}
+		:global(html.mobile .logbook-record-head > #logbookNext),
+		:global(html.mobile .logbook-record-head > #logbookEdit),
+		:global(html.mobile .logbook-record-head > #logbookDelete) {
+			width: 2.75rem;
+			padding: 0;
+			justify-content: center;
+		}
+		:global(html.mobile .logbook-record-head > .btn svg) {
+			width: 16px;
+			height: 16px;
+		}
+	}
+</style>

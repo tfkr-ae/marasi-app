@@ -35,3 +35,29 @@
 		</tbody>
 	</table>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* ---- Narrow mobile toolbars (the Ledger's and the Logbook's) ----
+	   The Ledger's search takes its own row, so the query box has room to tap
+	   and type in, and the menus share the row under it, equal widths. A
+	   toolbar menu's panel spans the toolbar, under it, instead of hanging
+	   off its button past the screen's edge; so does the query fields list,
+	   whose field, operators and example stack. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .query-fields tr) {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr);
+			column-gap: 0.5rem;
+			padding: 0.25rem 0;
+		}
+		:global(html.mobile .query-fields td) {
+			padding: 0;
+		}
+		:global(html.mobile .query-fields td:nth-child(3)) {
+			grid-column: 1 / -1;
+		}
+	}
+</style>

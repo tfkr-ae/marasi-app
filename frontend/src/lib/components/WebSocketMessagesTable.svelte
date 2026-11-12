@@ -550,3 +550,23 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .ws-panes > div) {
+			width: 100%;
+			border-right-width: 0;
+		}
+		:global(html.mobile .ws-detail-bar) {
+			flex-wrap: wrap;
+			height: auto;
+			min-height: 2.5rem;
+			padding-top: 0.25rem;
+			padding-bottom: 0.25rem;
+			row-gap: 0.25rem;
+		}
+	}
+</style>

@@ -56,3 +56,18 @@
 {:else if $mobile}
     <p class="p-8 text-center text-xs opacity-60">No logs yet</p>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile logs sheet's title row is as tall as a modal header, its close
+	   button clear of the status bar's touch area. */
+	:global(html.mobile .mobile-logs-head) {
+		display: flex;
+		height: 3.5rem;
+		align-items: center;
+		justify-content: center;
+		border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+	}
+</style>
