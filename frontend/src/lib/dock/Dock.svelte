@@ -17,7 +17,7 @@
 	import { tick } from "svelte";
 	import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-svelte";
 	import { DOCK, dragWidth, settleDrag, toggleDock } from "./dock.js";
-	import { mobileCheck } from "../platform.js";
+	import { COMPACT_QUERY, mobileCheck } from "../platform.js";
 
 	export let state;
 	export let limits = DOCK;
@@ -52,7 +52,7 @@
 	let onMobile = false;
 	function closeOnPick(event) {
 		if (!onMobile || event.shiftKey || event.metaKey || event.ctrlKey) return;
-		if (!matchMedia("(max-width: 40rem)").matches) return;
+		if (!matchMedia(COMPACT_QUERY).matches) return;
 		if (event.target.closest?.("[data-dock-pick]")) collapse();
 	}
 	mobileCheck.then((isMobile) => {

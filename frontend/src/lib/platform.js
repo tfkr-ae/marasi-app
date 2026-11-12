@@ -48,3 +48,10 @@ export const MOBILE_HIDDEN_ACTIONS = new Set(["global.start-chrome", "global.che
 
 /** Settings sections the mobile app leaves out: Chrome, and the app and CLI updaters. */
 export const MOBILE_HIDDEN_SECTIONS = new Set(["browser", "updates"]);
+
+/**
+ * The narrow mobile layout's media query: the iPhone Duo folded, a phone.
+ * Under it the bottom bar replaces the app rail and side-by-side panes
+ * become tabs. app.css and the components' styles use the same 40rem.
+ */
+export const COMPACT_QUERY = "(max-width: 40rem)";

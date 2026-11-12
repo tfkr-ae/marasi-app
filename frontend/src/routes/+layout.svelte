@@ -486,7 +486,7 @@
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"
 				aspectRatio="py-2.5 px-1.5"
-				width={$mobile ? "w-12" : "w-[4.75rem]"}
+				width={$mobile ? "w-[var(--mobile-rail-width)]" : "w-[4.75rem]"}
 				spacing="space-y-0.5"
 			>
 				<!-- AppRailTiles -->

@@ -18,23 +18,34 @@ body {
   --ctx-menu-padding: 0.375rem 0.5rem;
 }
 
-/* On iOS the web view fills the screen (scene_delegate_ios.m) and the app
-   draws under the status bar and home indicator, so the frame and the fixed
-   overlays keep their content out of those areas. env() is 0 elsewhere. */
+/* On a phone the web view fills the screen (scene_delegate_ios.m) and the
+   app draws under the status bar and home indicator, so the frame and the
+   fixed overlays keep their content out of those areas. The insets are
+   variables, not env() directly: Android's web view reports env() as 0, so
+   the app sets them there itself. All are 0 on the desktop. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* The mobile app rail's width (routes/+layout.svelte); modals and
+     drawers start right of it. */
+  --mobile-rail-width: 3rem;
+}
 .safe-area-pad {
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: var(--safe-top) var(--safe-right)
+    var(--safe-bottom) var(--safe-left);
 }
 .modal-backdrop {
-  padding: calc(1rem + env(safe-area-inset-top))
-    calc(1rem + env(safe-area-inset-right))
-    calc(1rem + env(safe-area-inset-bottom))
-    calc(1rem + env(safe-area-inset-left));
+  padding: calc(1rem + var(--safe-top))
+    calc(1rem + var(--safe-right))
+    calc(1rem + var(--safe-bottom))
+    calc(1rem + var(--safe-left));
 }
 .snackbar-wrapper,
 .drawer-backdrop {
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: var(--safe-top) var(--safe-right)
+    var(--safe-bottom) var(--safe-left);
 }
 
 /* Thin, theme-coloured scrollbars everywhere. The standard properties
@@ -204,7 +215,7 @@ html.mobile .mobile-fullscreen {
 	position: fixed;
 	inset: 0;
 	z-index: 500;
-	padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 0;
+	padding: var(--safe-top) var(--safe-right) 0 0;
 	background-color: rgb(var(--color-surface-50));
 }
 /* The editors and the rail's edge run the full height, under the home
@@ -216,18 +227,18 @@ html.mobile .mobile-fullscreen .ledger-drawer-column,
 html.mobile .mobile-fullscreen .armory-drawer-rail,
 html.mobile .mobile-fullscreen .armory-drawer-column {
 	padding-top: 1.5rem;
-	padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+	padding-bottom: max(var(--safe-bottom), 1rem);
 }
 /* The left inset: a highlighted pair's stripe fills it to the screen's
    edge; without one the rail moves in by it. */
 html.mobile .mobile-fullscreen .ledger-drawer-highlight {
-	width: calc(3px + max(env(safe-area-inset-left), 0.5rem));
+	width: calc(3px + max(var(--safe-left), 0.5rem));
 }
 html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-rail:first-child,
 html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-column:first-child,
 html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-rail:first-child,
 html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-column:first-child {
-	margin-left: max(env(safe-area-inset-left), 0.5rem);
+	margin-left: max(var(--safe-left), 0.5rem);
 }
 html.mobile.dark .mobile-fullscreen {
 	background-color: rgb(var(--color-surface-900));
@@ -329,13 +340,13 @@ html.mobile .app-frame:has(> .app-body > .nav-rail) {
 	padding-top: 0;
 }
 html.mobile .app-frame:has(> .app-body > .nav-rail) #content {
-	margin-top: env(safe-area-inset-top);
+	margin-top: var(--safe-top);
 }
 html.mobile .nav-rail .app-bar-default > .app-rail-anchor:first-child > .app-rail-wrapper {
-	padding-top: calc(0.625rem + max(env(safe-area-inset-top), 0.75rem));
+	padding-top: calc(0.625rem + max(var(--safe-top), 0.75rem));
 }
 html.mobile .nav-rail .app-bar-trail > .app-rail-anchor:last-child > .app-rail-wrapper {
-	padding-bottom: calc(0.625rem + max(env(safe-area-inset-bottom), 1rem));
+	padding-bottom: calc(0.625rem + max(var(--safe-bottom), 1rem));
 }
 
 /* The mobile Logbook summary, short of room (the outline open): the severity
@@ -619,8 +630,8 @@ html.mobile .armory-drawer-rail {
    modal (a preset's box, or a component's root card) fills it. */
 html.mobile .modal-backdrop,
 html.mobile .logbook-pair-expanded {
-	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-		env(safe-area-inset-left) !important;
+	padding: var(--safe-top) var(--safe-right) var(--safe-bottom)
+		var(--safe-left) !important;
 }
 /* The sheet's colour (a light .card is surface-100), above the
    layout's light backdrop tint (+layout.svelte). */
@@ -721,8 +732,8 @@ html.mobile dialog.marasi-menu[open] {
 	margin: 0;
 	border-width: 0;
 	box-shadow: none;
-	padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-		env(safe-area-inset-left);
+	padding: var(--safe-top) var(--safe-right) var(--safe-bottom)
+		var(--safe-left);
 }
 html.mobile .marasi-menu-list {
 	flex: 1 1 0;
@@ -1196,8 +1207,8 @@ html.mobile .nav-rail .bg-primary-hover-token:hover:not(.bg-primary-active-token
 	}
 	html.mobile .app-body > #content {
 		min-height: 0;
-		margin-left: env(safe-area-inset-left);
-		margin-right: env(safe-area-inset-right);
+		margin-left: var(--safe-left);
+		margin-right: var(--safe-right);
 	}
 	html.mobile .app-frame {
 		padding-left: 0;
@@ -1205,7 +1216,7 @@ html.mobile .nav-rail .bg-primary-hover-token:hover:not(.bg-primary-active-token
 	}
 	html.mobile .bottom-bar {
 		display: block;
-		padding-bottom: max(env(safe-area-inset-bottom), 0.25rem);
+		padding-bottom: max(var(--safe-bottom), 0.25rem);
 	}
 	html.mobile .bottom-bar.bottom-bar-hidden {
 		display: none;
@@ -1227,16 +1238,16 @@ html.mobile .nav-rail .bg-primary-hover-token:hover:not(.bg-primary-active-token
 	   frame drops its side padding and the page takes it, below); its
 	   tiles stay inside them, in line with the page. Only the last tile,
 	   More, reaches into the right inset, so filled it meets the edge. */
-	padding-left: env(safe-area-inset-left);
-	padding-right: env(safe-area-inset-right);
+	padding-left: var(--safe-left);
+	padding-right: var(--safe-right);
 }
 .bottom-bar-more {
-	margin-right: calc(-1 * env(safe-area-inset-right));
-	padding-right: env(safe-area-inset-right);
+	margin-right: calc(-1 * var(--safe-right));
+	padding-right: var(--safe-right);
 }
 .bottom-bar-sheet {
-	padding-left: env(safe-area-inset-left);
-	padding-right: env(safe-area-inset-right);
+	padding-left: var(--safe-left);
+	padding-right: var(--safe-right);
 }
 .bottom-bar.bottom-bar-open {
 	z-index: 1001;
@@ -1329,11 +1340,11 @@ html.mobile .mobile-logs-head {
 	html.mobile:has(.nav-rail) .modal-backdrop,
 	html.mobile:has(.nav-rail) .logbook-pair-expanded,
 	html.mobile:has(.nav-rail) .drawer-backdrop {
-		left: calc(env(safe-area-inset-left) + 3rem) !important;
+		left: calc(var(--safe-left) + var(--mobile-rail-width)) !important;
 		padding-left: 0 !important;
 	}
 	html.mobile:has(.nav-rail) .snackbar-wrapper {
-		left: calc(env(safe-area-inset-left) + 3rem) !important;
+		left: calc(var(--safe-left) + var(--mobile-rail-width)) !important;
 	}
 }
 
