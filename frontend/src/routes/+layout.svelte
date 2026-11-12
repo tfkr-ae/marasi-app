@@ -354,6 +354,11 @@
 		if (!$mobile || !($modalStore.length || $drawerStore.open)) return;
 		const tile = event.target?.closest?.(".nav-rail a, .nav-rail button, .bottom-bar button");
 		if (!tile || tile.closest(".bottom-bar-more")) return;
+		// The Connections tile toggles its modal: with it open, the tap only
+		// closes it (left to reopen it, the modal flickered shut and back).
+		const togglesConnections =
+			$modalStore[0]?.component === "Connections" &&
+			Boolean(tile.closest("[data-testid=bottom-bar-connections], [data-testid=connection-tile]"));
 		// One at a time, as Escape would, until none is left or one stays.
 		for (let i = 0; i < 8 && ($modalStore.length || $drawerStore.open); i++) {
 			const before = openOverlays();
@@ -363,6 +368,10 @@
 				event.stopPropagation();
 				return;
 			}
+		}
+		if (togglesConnections) {
+			event.preventDefault();
+			event.stopPropagation();
 		}
 	}
 	// The state menu contexts and the shortcut gate are resolved against.

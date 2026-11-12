@@ -195,12 +195,12 @@
 		:global(html.mobile .bottom-bar) {
 			display: block;
 		}
-		/* The icons sit low, most of the inset under them taken back: only
-		   the home indicator's own strip (about 40% of the inset) stays
-		   clear below them. */
+		/* The icons sit low, part of the inset under them taken back: the
+		   home indicator's strip (about half the inset) stays clear below
+		   them. */
 		:global(html.mobile .bottom-bar-tile) {
 			padding-top: 0.625rem;
-			padding-bottom: max(calc(var(--safe-bottom) * 0.4 + 0.375rem), 0.625rem);
+			padding-bottom: max(calc(var(--safe-bottom) * 0.55 + 0.375rem), 0.75rem);
 		}
 		:global(html.mobile .bottom-bar.bottom-bar-hidden) {
 			display: none;
