@@ -853,9 +853,11 @@
 					<div
 						class="flex justify-center items-center w-full py-2"
 					>
+						<!-- On a phone the rail is 48pt wide: a smaller switch keeps
+						     8pt either side of it. -->
 						<LightSwitch
-							width="w-10"
-							height="h-5"
+							width={$mobile ? "w-8" : "w-10"}
+							height={$mobile ? "h-4" : "h-5"}
 							bgLight="bg-surface-200"
 							bgDark="bg-surface-500"
 							fillLight="fill-surface-50"

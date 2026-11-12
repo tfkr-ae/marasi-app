@@ -8,5 +8,6 @@ export const PLATFORM_NAMES = { [MACOS]: "macOS", [WINDOWS_LINUX]: "Windows / Li
 
 // DesktopOS is Go's runtime.GOOS, reported by GetMarasiConfig.
 export function platformFromDesktopOS(desktopOS) {
-  return desktopOS === "darwin" ? MACOS : WINDOWS_LINUX;
+  // An iPhone or iPad keyboard has ⌘, as a Mac's does.
+  return desktopOS === "darwin" || desktopOS === "ios" ? MACOS : WINDOWS_LINUX;
 }

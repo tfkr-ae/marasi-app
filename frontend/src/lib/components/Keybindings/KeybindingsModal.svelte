@@ -409,13 +409,20 @@
 	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
 	   global, as app.css's shared mobile rules are, so they weigh the same
 	   against Skeleton's and Tailwind's classes. */
-	/* The mobile Keybindings modal when narrow: the profile and platform pickers
-	   stack, the search takes its own row above the filters, the page and
-	   state lists become strips that scroll sideways above the rows, and a
-	   row's keys wrap under its name. */
+	/* The mobile Keybindings modal when narrow: the profile and platform
+	   pickers stack, each label above its picker; the search takes its own
+	   row and the filters share the row under it equally; the page and state
+	   lists become compact strips that scroll sideways, the selected one
+	   underlined; and every row stays one line, its description cut to fit,
+	   so the keys and Reset line up down the list. */
 	@media (max-width: 40rem) {
 		:global(html.mobile .kb-toolbar) {
 			grid-template-columns: minmax(0, 1fr);
+			gap: 0.5rem;
+		}
+		:global(html.mobile .kb-toolbar .label > span) {
+			font-size: 0.75rem;
+			opacity: 0.7;
 		}
 		:global(html.mobile .kb-search-row) {
 			flex-wrap: wrap;
@@ -423,6 +430,13 @@
 		}
 		:global(html.mobile .kb-search-row > input) {
 			flex-basis: 100%;
+		}
+		:global(html.mobile .kb-search-row > div) {
+			flex: 1 1 100%;
+		}
+		:global(html.mobile .kb-search-row > div > .btn) {
+			flex: 1 1 0;
+			justify-content: center;
 		}
 		:global(html.mobile .kb-body) {
 			flex-direction: column;
@@ -433,6 +447,7 @@
 			width: auto;
 			overflow-x: auto;
 			overflow-y: hidden;
+			scrollbar-width: none;
 			border-right-width: 0;
 			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
 		}
@@ -441,13 +456,31 @@
 			flex: none;
 			gap: 0.5rem;
 			white-space: nowrap;
+			padding: 0.5rem 0.75rem;
+			border-left-width: 0;
+			border-bottom: 2px solid transparent;
+			background-color: transparent;
+		}
+		:global(html.mobile .kb-nav > button[aria-current="true"]) {
+			border-bottom-color: rgb(var(--color-primary-500));
+			font-weight: 600;
 		}
 		:global(html.mobile .kb-row) {
-			flex-wrap: wrap;
-			row-gap: 0.25rem;
+			gap: 0.75rem;
+			padding-left: 0.5rem;
+			padding-right: 0.5rem;
 		}
-		:global(html.mobile .kb-row > :last-child) {
-			margin-left: auto;
+		:global(html.mobile .kb-row > :first-child) {
+			flex: 1 1 0;
+			min-width: 0;
+		}
+		:global(html.mobile .kb-text > span) {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		:global(html.mobile .kb-spacer) {
+			display: none;
 		}
 	}
 </style>

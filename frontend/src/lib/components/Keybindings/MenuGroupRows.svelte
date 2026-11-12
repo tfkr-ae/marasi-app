@@ -34,10 +34,10 @@
 						<span class="flex h-7 w-7 flex-none items-center justify-center {groupTone(row.group).tile}">
 							<svelte:component this={groupIcon(row.group)} size="15" />
 						</span>
-						<div class="flex min-w-0 flex-col">
+						<div class="kb-text flex min-w-0 flex-col">
 							<span>{row.group.label}</span>
 							{#if row.group.description}
-								<span class="text-xs opacity-70">{row.group.description}</span>
+								<span class="kb-desc text-xs opacity-70">{row.group.description}</span>
 							{/if}
 							{#if row.status === "conflict"}
 								<span class="text-xs text-error-600 dark:text-error-400">{row.problem}</span>
@@ -52,7 +52,7 @@
 							aria-label="Record a letter for {row.group.label}"
 							on:click={() => onRecord(row.id)}>{formatBinding(`alt+${row.letter.toLowerCase()}`, platform)}</button
 						>
-						<span class="h-8 w-8 shrink-0" aria-hidden="true"></span>
+						<span class="kb-spacer h-8 w-8 shrink-0" aria-hidden="true"></span>
 						<IconButton
 							disabled={!row.resettable}
 							title={row.resettable ? `Reset to ${row.factoryLetter}` : "Already the default"}

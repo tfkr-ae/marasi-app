@@ -25,10 +25,10 @@
 			data-action-id={row.action.id}
 			data-unavailable={row.available === false ? "" : undefined}
 		>
-			<div class="flex min-w-0 flex-col {row.available === false ? 'opacity-70' : ''}">
+			<div class="kb-text flex min-w-0 flex-col {row.available === false ? 'opacity-70' : ''}">
 				<span>{row.action.label}</span>
 				{#if row.action.description}
-					<span class="text-xs opacity-70">{row.action.description}</span>
+					<span class="kb-desc text-xs opacity-70">{row.action.description}</span>
 				{/if}
 				{#if row.status === "conflict"}
 					<span class="text-xs text-error-600 dark:text-error-400">{row.problem}</span>

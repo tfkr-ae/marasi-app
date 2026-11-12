@@ -62,7 +62,7 @@
 	// A tile as the rail draws one (routes/+layout.svelte): its icon only,
 	// the selected one filled with the primary colour.
 	const tab = (on) =>
-		`relative flex min-w-0 flex-1 items-center justify-center py-3 ${on ? "bg-primary-active-token" : ""}`;
+		`bottom-bar-tile relative flex min-w-0 flex-1 items-center justify-center py-3 ${on ? "bg-primary-active-token" : ""}`;
 </script>
 
 {#if open}
@@ -184,15 +184,19 @@
 	   against Skeleton's and Tailwind's classes. */
 	/* ---- The narrow mobile bottom bar (BottomBar.svelte) ----
 	   Under 40rem the app rail gives way to a bar along the bottom, under the
-	   page, its tabs clear of the home indicator. Wider, the rail is back and
-	   the bar hides. While the keyboard is up the bar hides too. */
+	   page. Its tiles run to the screen's bottom edge, so a selected one fills
+	   to it, with the home indicator's inset inside them, below the icons
+	   (as the rail's first tile holds the top inset). Wider, the rail is back
+	   and the bar hides. While the keyboard is up the bar hides too. */
 	:global(.bottom-bar) {
 		display: none;
 	}
 	@media (max-width: 40rem) {
 		:global(html.mobile .bottom-bar) {
 			display: block;
-			padding-bottom: max(var(--safe-bottom), 0.25rem);
+		}
+		:global(html.mobile .bottom-bar-tile) {
+			padding-bottom: calc(0.75rem + max(var(--safe-bottom) - 0.75rem, 0.25rem));
 		}
 		:global(html.mobile .bottom-bar.bottom-bar-hidden) {
 			display: none;
