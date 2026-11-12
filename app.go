@@ -41,6 +41,10 @@ type App struct {
 	// return the chosen path, "" when the user cancelled. Tests replace them.
 	openFileDialog func(openDialogOptions) (string, error)
 	saveFileDialog func(saveDialogOptions) (string, error)
+	// shareFile, set on iOS only, replaces the save dialog and the write
+	// after it: it shows the share sheet for a file of these bytes and
+	// returns its name, "" when cancelled (share_file_ios.go).
+	shareFile func(name string, data []byte) (string, error)
 	// setClipboardText puts text on the system clipboard. Tests replace it.
 	setClipboardText func(text string) error
 	// The local instance (local_instance.go). runCLI runs the Marasi CLI,

@@ -125,3 +125,9 @@ test("a failed binding call reads as the Go error's text", () => {
   toastError({ trigger: (toast) => toasts.push(toast.message) }, "Failed to launch", error);
   assert.deepEqual(toasts, ["Failed to launch: starting launch: launch_pending (l1, l2): busy"]);
 });
+
+test("isIOS asks Go for the OS, since iOS pages get no window._wails.environment", async () => {
+  const runtimeOn = (OS) => () => ({ System: { Environment: async () => ({ OS, Arch: "arm64", Debug: false }) } });
+  assert.equal(await createRuntime(runtimeOn("ios")).isIOS(), true);
+  assert.equal(await createRuntime(runtimeOn("darwin")).isIOS(), false);
+});

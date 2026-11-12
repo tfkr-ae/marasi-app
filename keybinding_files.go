@@ -40,6 +40,9 @@ type KeybindingProfileFile struct {
 // "" when the user cancelled.
 func (a *App) ExportKeybindingProfile(defaultName string, contents string) (string, error) {
 	path := os.Getenv(keybindingProfileFileEnv)
+	if path == "" && a.shareFile != nil {
+		return a.shareFile(filepath.Base(defaultName), []byte(contents))
+	}
 	if path == "" {
 		home, _ := os.UserHomeDir()
 		var err error

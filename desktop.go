@@ -34,6 +34,7 @@ func (a *App) useDesktopRuntime() {
 			Filters:   wailsFileFilters(options.Filters),
 		}).PromptForSingleSelection())
 	}
+	a.shareFile = platformShareFile
 	a.setClipboardText = func(text string) error {
 		if !a.wails.Clipboard.SetText(text) {
 			return errors.New("copying to the clipboard failed")
