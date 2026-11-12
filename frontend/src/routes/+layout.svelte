@@ -26,7 +26,6 @@
 		getModalStore,
 		LightSwitch,
 		modeCurrent,
-		autoModeWatcher,
 	} from "@skeletonlabs/skeleton";
 	initializeStores();
 	import { onMount } from "svelte";
@@ -86,6 +85,7 @@
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
 	import { mobile, mobileCheck, platformCheck } from "../lib/platform.js";
+	import { applyColourScheme } from "../lib/lightMode.js";
 	import { androidBack } from "../lib/androidBack.js";
 	import { installSwipeToClose } from "../lib/swipeToClose.js";
 	import { installLongPress, installTwoFingerSwipeDown, keepKeyboardDown } from "../lib/touch.js";
@@ -446,7 +446,7 @@
 			if (message) toastStore.trigger({ message });
 		});
 		refreshUpdateState();
-		autoModeWatcher();
+		applyColourScheme();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
 			// The project that opened, which may not be the scratchpad, names
