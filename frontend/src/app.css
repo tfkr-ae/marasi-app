@@ -231,7 +231,7 @@ html.mobile body {
    a sentence stay. */
 html.mobile :not(p) > kbd,
 html.mobile .key-hints {
-	display: none !important;
+	display: none;
 }
 
 /* ---- Narrow mobile screens: the iPhone Duo folded (under 40rem wide) ----
@@ -410,7 +410,7 @@ html.mobile .drawer pre {
 	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .logbook-pair-expanded,
 	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .drawer-backdrop,
 	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .snackbar-wrapper {
-		bottom: var(--bottom-bar-height, 0px) !important;
+		bottom: var(--bottom-bar-height, 0px);
 		padding-bottom: 0 !important;
 	}
 }
@@ -418,11 +418,11 @@ html.mobile .drawer pre {
 	html.mobile:has(.nav-rail) .modal-backdrop,
 	html.mobile:has(.nav-rail) .logbook-pair-expanded,
 	html.mobile:has(.nav-rail) .drawer-backdrop {
-		left: calc(var(--safe-left) + var(--mobile-rail-width)) !important;
+		left: calc(var(--safe-left) + var(--mobile-rail-width));
 		padding-left: 0 !important;
 	}
 	html.mobile:has(.nav-rail) .snackbar-wrapper {
-		left: calc(var(--safe-left) + var(--mobile-rail-width)) !important;
+		left: calc(var(--safe-left) + var(--mobile-rail-width));
 	}
 }
 

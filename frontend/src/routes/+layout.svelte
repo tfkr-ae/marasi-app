@@ -321,7 +321,9 @@
 		stopWaitingForProject = loadedProject.subscribe(
 			(project) => project && resolve(project),
 		);
-		readConfig().then(() => connectionStore.start());
+		readConfig()
+			.then(() => mobileCheck)
+			.then((remoteOnly) => connectionStore.start({ remoteOnly }));
 	});
 	// With no Marasi CLI, the Connections modal opens by itself on its CLI
 	// setup, once per failure (lib/connection/cli.js).
@@ -329,6 +331,12 @@
 	$: if ($connectionStore.phase !== "failed") cliSetupOffered = false;
 	$: if (shouldOfferCLISetup($connectionStore, cliSetupOffered)) {
 		cliSetupOffered = true;
+		openConnections();
+	}
+	// A phone with nothing paired opens Connections on its pairing, once.
+	let pairingOffered = false;
+	$: if ($connectionStore.phase === "unpaired" && !pairingOffered) {
+		pairingOffered = true;
 		openConnections();
 	}
 	// The start screen's Connections… opens the Connections modal over it,
@@ -500,7 +508,7 @@
 
 <div
 	class="app-frame flex flex-col h-screen safe-area-pad"
-	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle, live: liveNav }}
+	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle, live: liveNav, quiet: () => $mobile }}
 >
 	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 	<div class="app-body flex flex-1 h-screen" on:click|capture={closeOverlaysForNav}>

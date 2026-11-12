@@ -12,6 +12,7 @@ const labels = {
   failed: "Couldn't connect",
   "auth-failed": "Password refused",
   stopped: "Stopped",
+  unpaired: "Not paired",
 };
 
 /** The status text for `phase`. */
@@ -23,7 +24,7 @@ const amber = ["starting", "connecting", "reconnecting", "project-changed"];
 export function phaseTone(phase) {
   if (phase === "connected") return "bg-success-500";
   if (amber.includes(phase)) return "bg-warning-500";
-  if (phase === "idle" || phase === "stopped") return "bg-surface-400";
+  if (phase === "idle" || phase === "stopped" || phase === "unpaired") return "bg-surface-400";
   return "bg-error-500";
 }
 
@@ -61,6 +62,7 @@ export function startupText({ phase, connection }) {
     connected: "Loading project…",
     failed: `Couldn't reach ${startupName(connection)}`,
     "auth-failed": phaseLabel("auth-failed"),
+    unpaired: "Pair with Marasi on your computer to start",
   };
   return text[phase] ?? null;
 }
@@ -93,7 +95,7 @@ export function removeBlock({ isActive, ownedRun }) {
   return null;
 }
 
-const switchable = ["starting", "connecting", "failed", "auth-failed"];
+const switchable = ["starting", "connecting", "failed", "auth-failed", "unpaired"];
 
 /**
  * Whether the start screen offers Connections…: while the app is still

@@ -95,6 +95,13 @@ function getFocusableElements(overlay) {
   );
 }
 
+// Mobile (isolateOverlays' `quiet` option): an overlay that opens takes
+// focus itself, not its first text field, and nothing scrolls to it. On a
+// phone a focused field asks for the keyboard, and scrolling to one far down
+// (the Connections modal's Address) opened the sheet halfway down.
+let quietFocus = false;
+const focusQuietly = (element) => element.focus(quietFocus ? { preventScroll: true } : undefined);
+
 function focusInitially(element) {
   element.setAttribute("data-overlay-initial-focus", "");
   function handleBlur(event) {
@@ -103,7 +110,7 @@ function focusInitially(element) {
     element.removeEventListener("blur", handleBlur);
   }
   element.addEventListener("blur", handleBlur);
-  element.focus();
+  focusQuietly(element);
 }
 
 function focusOverlay(overlay, initial = false) {
@@ -111,7 +118,7 @@ function focusOverlay(overlay, initial = false) {
 
   const target = getFocusableElements(overlay)[0];
 
-  if (target) {
+  if (target && !(initial && quietFocus)) {
     if (initial) focusInitially(target);
     else target.focus();
     return;
@@ -186,6 +193,7 @@ export function isolateOverlays(appRoot, stores) {
     if (previousOverlay?.contains(document.activeElement)) {
       lastOverlayFocus.set(previousOverlay, document.activeElement);
     }
+    quietFocus = Boolean(stores.quiet?.());
     activeOverlay = getActiveOverlay({
       modalOpen: Boolean(currentModal),
       drawerOpen,
@@ -221,7 +229,7 @@ export function isolateOverlays(appRoot, stores) {
             previousFocus.focus();
           }
         } else {
-          const preferredInput = getPreferredInput(nextOverlay);
+          const preferredInput = quietFocus ? null : getPreferredInput(nextOverlay);
           if (preferredInput) {
             focusInitially(preferredInput);
           } else if (nextOverlay.contains(document.activeElement)) {
