@@ -4,14 +4,15 @@ Which files work together on the Ledger page, and how a row-menu action, a short
 
 ## Files
 
-- `frontend/src/routes/ledger/+page.svelte` wires everything together: the components, every action function, toasts and confirmations, the menu arrays for `useMenuActions`, and `drawerHandlers`.
-- `frontend/src/stores/createLedgerStore.js` holds the Ledger's state and logic. It takes its API as an argument. `frontend/src/stores/ledgerStore.js` binds it to the service client: `ledgerApi.js` maps the store's API names to service calls, and `trafficApi.js` maps traffic reads, rows and `traffic.*` events.
+- `frontend/src/routes/ledger/+page.svelte` lays out the page and wires the parts together: the sitemap dock, the table, the drawer and the status bar. In `frontend/src/lib/ledger/`, `LedgerToolbar.svelte` is the toolbar and query box, `LedgerRowMenu.svelte` opens the row menu and runs shortcuts (`runShortcut`), `ledgerActions.js` holds the row-menu actions with their toasts and confirmations (`runMenuAction`), and `ledgerMenus.js` holds the ⌘K menu arrays for `useMenuActions` and `drawerHandlers`.
+- `frontend/src/stores/createLedgerStore.js` holds the Ledger store's core and lists its public API. It takes its API as an argument. Each area's logic is in `frontend/src/stores/ledger/`: `state.js` (state shape, row helpers), `selectors.js` (labels, `selectionTarget`), `window.js` (pages, the window, counts, new matches), `live.js` (traffic events, `flush`, stream patches), `query.js` (query box, sort), `exclusion.js` (`populate`, `resync`, the exclusion), `selection.js`, `navigation.js` (steps and jumps), and `bulk.js` (notes, highlights, bulk actions). `frontend/src/stores/ledgerStore.js` binds it to the service client: `ledgerApi.js` maps the store's API names to service calls, and `trafficApi.js` maps traffic reads, rows and `traffic.*` events.
 - `frontend/src/lib/ledger/` holds the components and pure helpers. `rowMenu.js` describes the row menu as data, `RowMenu.svelte` draws it (the Launchpad reuses it), and `LedgerDrawer.svelte` and `DrawerRail.svelte` make up the drawer.
 - The sitemap, highlights and saved queries have their own `create*Store.js` and `*Store.js` pairs, with `sitemapApi.js`, `highlightsApi.js` and `savedQueriesApi.js` over the service.
-- Toolbar menu match counts come from `createMatchCounts.js`. It takes the list of queries and a count function, counts four at a time and fills in each count as it returns. A recount keeps the last numbers, marked `stale`, until the new ones arrive, and the menus show stale numbers dimmed (`opacity-30`). `schedule` recounts 1.5 s after the last trigger in a burst, so a menu usually opens with numbers. `clear` forgets every count on a project switch, so an unknown count shows `…`. Opening a menu recounts it at once. There are three users:
-  - Saved queries: `createSavedQueriesStore.js` mirrors the counts into `state.counts` (`loadCounts`, `scheduleCounts`, `clearCounts`) and counts through `GET /traffic/count` with the exclusion.
-  - Highlights and Marks: `ledgerMenuCounts.js` holds `highlightCounts` (`HIGHLIGHT_TERMS`) and `markCounts` (`MARKS`) and counts through `ledgerStore.countQuery`. It registers with projectData to clear on a switch and schedule on a load or resync.
-  - Triggers: each store schedules on the events in `countChanges.js` (`COUNT_CHANGE_EVENTS`): new or changed traffic, `metadata.updated` (highlights), `note.*`, and finding and launchpad links.
+- Toolbar menu match counts come from `createMatchCounts.js`. It takes the list of queries and a count function, counts four at a time and fills in each count as it returns. A recount keeps the last numbers, marked `stale`, until the new ones arrive, and the menus show stale numbers dimmed (`opacity-30`). `schedule` counts 1.5 s after the first call in a burst, after a project load or resync, so a menu opens with numbers; a scheduled run is never stopped by another schedule, which waits for it and then for the delay again. `changed` (the trigger events) only marks the counts stale, and schedules a recount only while the menu is open (`setOpen`, from `ToolbarMenu`'s `open` and `close` events), so counts nobody is looking at never keep Marasi busy during capture. `clear` forgets every count on a project switch, so an unknown count shows `…`. Opening a menu recounts it at once. There are three users:
+  - Saved queries: `createSavedQueriesStore.js` mirrors the counts into `state.counts` (`loadCounts`, `scheduleCounts`, `countsChanged`, `setCountsOpen`, `clearCounts`) and counts through `GET /traffic/count` with the exclusion.
+  - Highlights and Marks: `ledgerMenuCounts.js` holds `highlightCounts` (`HIGHLIGHT_TERMS`) and `markCounts` (`MARKS`) and counts through `ledgerStore.countQuery`. It registers with projectData to clear on a switch and schedule on a load or resync. `LedgerToolbar.svelte` calls `setOpen` from each menu's `open` and `close`.
+  - Triggers: each store calls `changed` on the events in `countChanges.js` (`COUNT_CHANGE_EVENTS`): new or changed traffic, `metadata.updated` (highlights), `note.*`, and finding and launchpad links.
+- The results count (`loadCount` in `window.js`) reads `GET /traffic/count` twice, with the exclusion and without it (for `hidden by type`), and remembers the answer by query, as_of and exclusion. A re-sort (`reload({ reuseCount: true })` from `sortBy`) and ⌘A (`knownCount`, passed to `createSelection`) reuse it for the same results instead of counting again; any other reload counts. `forgetCount` drops it on `COUNT_CHANGE_EVENTS` and `traffic.index_complete` (`ledgerStore.js`) and on a project switch.
 - The content-type exclusion is `contentTypeExclusion.js`: the app default stays in the app config (the `GetDefaultContentTypeExclusion` binding), the project override is a client setting (`clientSettingsApi.js`, `/client-settings/marasi-app/...`). Saved queries and highlight labels are client settings too.
 - Tests drive the API files against `fakeServiceClient.js`.
 
@@ -19,15 +20,15 @@ Which files work together on the Ledger page, and how a row-menu action, a short
 
 The page has three entry points, and all of them lead to `runMenuAction`:
 
-- **Row menu.** `menuFor` builds the items. Choosing one calls `runMenuAction`, which switches on the item's `action.type`.
+- **Row menu.** `menuFor` builds the items (`LedgerRowMenu.svelte` passes it `rowMenuContext`). Choosing one calls `runMenuAction`, which switches on the item's `action.type`.
 - **Shortcut.** An entry in `drawerMenu` calls `runShortcut`, which finds the row-menu item with the same `actionId` (`menuAction`) and runs it as if it had been chosen.
 - **Drawer rail.** `DrawerRail.svelte` sends an action id, and `LedgerDrawer.svelte` passes it on to `drawerHandlers`.
 
 To add a row-menu action:
 1. Add the item to `menuFor`, with an `actionId` if it has a shortcut, and `disabled` when it can't run on a ⌘A selection.
 2. Add its icon to `ICONS` in `RowMenu.svelte` if it is new.
-3. Add a `case` to `runMenuAction`.
-4. Add a store method, map its API name to a service call in `ledgerApi.js`, and add it to the tests' fake APIs.
+3. Add a `case` to `runMenuAction` in `ledgerActions.js`.
+4. Add a store method (bulk actions go in `stores/ledger/bulk.js`), map its API name to a service call in `ledgerApi.js`, and add it to the tests' fake APIs.
 
 For a shortcut, also follow `keybindings-and-menus.md`. ⌘K opens `MarasiMenu` with `menuOptions`, which follow the drawer: `ledgerMenu` when it is closed, `drawerMenu` (with the WebSocket stream action for an upgrade) when it is open. Their menu groups are the `group` flags on the `ledger.drawer-open` and `ledger.drawer-closed` rows in `catalog.js`, defined in `menuGroups.js`.
 

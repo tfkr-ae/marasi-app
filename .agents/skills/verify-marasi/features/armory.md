@@ -46,7 +46,7 @@ Run `scripts/drive.sh armory` for route proof (`/armory` plus `Templates`).
  {"text":"common-paths.txt"},{"waitSelector":"[aria-label=\"Remove common-paths.txt\"]"},
  {"waitEnabledText":"Launch"},{"text":"Launch"},{"waitText":"Run started"},
  {"waitText":"complete","within":"[role=tree] .badge","timeoutMs":20000},
- {"waitText":"40 items","timeoutMs":20000}]}
+ {"waitText":"8 items","timeoutMs":20000}]}
 ```
 
 Then query `select status, max_concurrent from armory_run`, and check that `request` rows carry `json_extract(metadata,'$.armory_run_id')`.

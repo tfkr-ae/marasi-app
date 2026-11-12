@@ -28,7 +28,7 @@
 				{/if}
 				<span class="min-w-0 flex-1 truncate" {title}>{title}</span>
 				<button
-					class="flex h-5 w-5 flex-none items-center justify-center rounded-sm opacity-0 hover:bg-surface-200-700-token focus-visible:opacity-70 group-hover:opacity-70"
+					class="flex h-5 w-5 flex-none items-center justify-center opacity-0 hover:bg-surface-200-700-token focus-visible:opacity-70 group-hover:opacity-70"
 					title="Unlink"
 					aria-label="Unlink from {kind} {title}"
 					on:click={() => onUnlink(kind, target, title)}><X size={12} /></button

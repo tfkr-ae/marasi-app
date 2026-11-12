@@ -78,13 +78,33 @@ export function projectMatches(projects, input) {
   return projects.filter((p) => p.name.toLowerCase().includes(text) || p.path.toLowerCase().includes(text));
 }
 
+const withoutExt = (text) => text.toLowerCase().replace(/\.marasi$/, "");
+
 /**
- * What the project picker opens: the listed project at `index` in
- * `matches`, else the first match, else the typed `input` (null when
- * blank). `projectTarget` turns it into the open.
+ * The project picker's rows for `input`: a `{kind: "create", text}` row
+ * for typed text that names no listed project (ignoring case and
+ * ".marasi"), then an `{kind: "open", project}` row per match. `selected`
+ * is the row Enter takes: the named project, else the first match, else
+ * the create row (-1 when there are no rows), so searching stays the default.
  */
-export function pickedProject(matches, index, input) {
-  const listed = matches[index] ?? matches[0];
-  if (listed) return listed;
-  return String(input).trim() || null;
+export function pickerRows(projects, input) {
+  const text = String(input).trim();
+  const typed = withoutExt(text);
+  const rows = projectMatches(projects, text).map((project) => ({ kind: "open", project }));
+  const named = rows.findIndex(({ project }) => withoutExt(project.name) === typed || withoutExt(project.path) === typed);
+  if (named >= 0) return { rows, selected: named };
+  if (!text) return { rows, selected: rows.length ? 0 : -1 };
+  return { rows: [{ kind: "create", text }, ...rows], selected: rows.length ? 1 : 0 };
+}
+
+/** What a picker row hands the modal's response; `projectTarget` turns it into the open. */
+export function pickerChoice(row) {
+  return row.kind === "create" ? row.text : row.project;
+}
+
+/** The project a create row makes: its name, and its path when typed as one (else null: the service's projects). */
+export function newProject(text) {
+  const target = projectTarget(text);
+  if (target.name !== undefined) return { name: target.name, path: null };
+  return { name: target.path.split(/[\\/]/).pop().replace(/\.marasi$/, ""), path: target.path };
 }

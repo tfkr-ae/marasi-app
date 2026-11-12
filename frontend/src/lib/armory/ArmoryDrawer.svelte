@@ -7,6 +7,7 @@
 	// expanded column.
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, pairTiming, usesSyntax } from "../ledger/drawer.js";
+	import { RAW_ONLY } from "../../stores/trafficApi.js";
 	import { sameID } from "../ledger/pairs.js";
 	import { pairURL } from "../ledger/rowMenu.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
@@ -35,21 +36,25 @@
 	// The full pair (ledgerStore.getDetails): undefined while it loads, null
 	// when the read failed. It is read again when the response arrives; a
 	// newer pair's read wins.
+	// With Prettify off only the raw text is read; turning it on reads the
+	// pair again in full.
 	let details;
 	let detailsFor = null;
 	let detailsAnswered = false;
+	let detailsFull = false;
 	let read = 0;
 	let reading = Promise.resolve(null);
-	$: loadDetails(pair.ID, hasResponse);
-	function loadDetails(id, answered) {
+	$: loadDetails(pair.ID, hasResponse, $prettify);
+	function loadDetails(id, answered, full) {
 		const moved = !sameID(detailsFor, id);
-		if (!moved && detailsAnswered === answered) return;
+		if (!moved && detailsAnswered === answered && (detailsFull || !full)) return;
 		detailsFor = id;
 		detailsAnswered = answered;
+		detailsFull = full;
 		if (moved) details = undefined;
 		const current = ++read;
 		reading = ledgerStore
-			.getDetails(id)
+			.getDetails(id, full ? undefined : RAW_ONLY)
 			.catch((error) => {
 				console.error("Reading the request failed:", error);
 				return null;

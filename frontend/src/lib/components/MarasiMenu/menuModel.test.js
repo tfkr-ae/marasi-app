@@ -65,22 +65,24 @@ function topLevel(menu) {
   ]);
 }
 
+// Groups are ⌥ + their letter; an action is its own ⌘ key, and one with
+// none (New Note's bare N, which the search field would type) has no menu key.
 test("the top level lists the page's groups and loose actions, then the Marasi section's", () => {
   assert.deepEqual(topLevel(menuFor()), [
     [
       "page",
       [
-        ["Focus", "meta+f"],
-        ["Copy", "meta+c"],
+        ["Focus", "alt+f"],
+        ["Copy", "alt+c"],
         ["Only Child", "meta+o"],
-        ["New Note", "meta+n"],
+        ["New Note", null],
       ],
     ],
     [
       "global",
       [
-        ["Go to", "meta+g"],
-        ["Appearance", "meta+a"],
+        ["Go to", "alt+g"],
+        ["Appearance", "alt+a"],
         ["Jump to Toast", "meta+."],
       ],
     ],
@@ -103,14 +105,12 @@ test("a rebound action's menu key follows the profile", () => {
   assert.equal(groupNamed(menu, "Focus").items[1].menuKey, "meta+shift+y");
 });
 
-test("⌘K, ⌘Q and ⌘H are never menu keys; the fallback letter skips words the group shares", () => {
-  // Copy Quietly is bound to ⌘Q, which is reserved. "Copy" is the group's
-  // own word and every action's, so its letter comes from "Quietly", whose
-  // Q is reserved too.
+test("⌘K, ⌘Q and ⌘H are never menu keys, and an action bound to one has no menu key", () => {
+  // Copy Quietly is bound to ⌘Q, which is reserved for macOS.
   assert.deepEqual(keysIn(groupNamed(menuFor(), "Copy")), [
     ["Copy URL", "meta+shift+c"],
     ["Copy Raw Request", "meta+shift+r"],
-    ["Copy Quietly", "meta+u"],
+    ["Copy Quietly", null],
   ]);
   const menu = menuFor({ overrides: { "global.toggle-light-mode": ["meta+k"], "global.toggle-vim": ["meta+h"] } });
   for (const g of menu.sections.flatMap((s) => s.groups)) {
@@ -127,14 +127,17 @@ test("the menu shortcut, ⌘Q and ⌘H are reserved keys at every level; other �
   assert.ok(isReservedKey(menuFor({ platform: WINDOWS_LINUX }), "ctrl+q"));
 });
 
-test("an action with no ⌘ binding gets a letter from its distinctive words, never from filler", () => {
+test("an action with no ⌘ binding has no menu key, and no letter is made up for it", () => {
   const page = [{ actionId: "page.new-note", name: "To Do Note" }];
-  assert.deepEqual(topLevel(menuFor({ page }))[0], ["page", [["To Do Note", "meta+d"]]]);
+  assert.deepEqual(topLevel(menuFor({ page }))[0], ["page", [["To Do Note", null]]]);
+  // A ⌥ binding alone isn't a menu key either; the dispatcher still runs it.
+  const alt = menuFor({ page, overrides: { "page.new-note": ["alt+shift+n"] } });
+  assert.deepEqual(topLevel(alt)[0], ["page", [["To Do Note", null]]]);
 });
 
 test("a profile's menu letter replaces the factory letter", () => {
   const menu = menuFor({ letters: { "page.copy": "Y" } });
-  assert.equal(groupNamed(menu, "Copy").menuKey, "meta+y");
+  assert.equal(groupNamed(menu, "Copy").menuKey, "alt+y");
 });
 
 // A later release can give a group the letter a profile already uses (the
@@ -142,18 +145,18 @@ test("a profile's menu letter replaces the factory letter", () => {
 // wins, and the factory group falls back to a derived key.
 test("a profile's letter wins over a factory letter it clashes with, and the factory group gets a derived key", () => {
   const menu = menuFor({ letters: { "page.copy": "F" } });
-  assert.equal(groupNamed(menu, "Copy").menuKey, "meta+f");
-  assert.equal(groupNamed(menu, "Focus").menuKey, "meta+o");
-  assert.equal(label(entryForKey(menu, { binding: "meta+f" })), "Copy");
+  assert.equal(groupNamed(menu, "Copy").menuKey, "alt+f");
+  assert.equal(groupNamed(menu, "Focus").menuKey, "alt+o");
+  assert.equal(label(entryForKey(menu, { binding: "alt+f" })), "Copy");
 });
 
-test("on Windows and Linux the menu keys use Ctrl", () => {
+test("on Windows and Linux actions keep their Ctrl keys and groups use Alt", () => {
   const menu = menuFor({ platform: WINDOWS_LINUX });
   assert.deepEqual(topLevel(menu)[1], [
     "global",
     [
-      ["Go to", "ctrl+g"],
-      ["Appearance", "ctrl+a"],
+      ["Go to", "alt+g"],
+      ["Appearance", "alt+a"],
       ["Jump to Toast", "ctrl+."],
     ],
   ]);
@@ -164,10 +167,12 @@ const label = (entry) => (entry ? (entry.kind === "group" ? entry.label : entry.
 
 test("a menu key at the top picks its group or action, and an unknown key picks nothing", () => {
   const menu = menuFor();
-  assert.equal(label(entryForKey(menu, { binding: "meta+g" })), "Go to");
+  assert.equal(label(entryForKey(menu, { binding: "alt+g" })), "Go to");
   assert.equal(label(entryForKey(menu, { binding: "meta+." })), "Jump to Toast");
   assert.equal(label(entryForKey(menu, { binding: "meta+o" })), "Only Child");
   assert.equal(entryForKey(menu, { binding: "meta+x" }), null);
+  // A group's letter is ⌥, never ⌘.
+  assert.equal(entryForKey(menu, { binding: "meta+g" }), null);
   // An action's own key doesn't reach into a closed group.
   assert.equal(entryForKey(menu, { binding: "meta+," }), null);
 });
@@ -176,14 +181,14 @@ test("inside a group a menu key picks that group's action", () => {
   const menu = menuFor();
   assert.equal(label(entryForKey(menu, { group: "global.go", binding: "meta+," })), "Settings");
   assert.equal(label(entryForKey(menu, { group: "page.focus", binding: "meta+shift+\\" })), "Find in Sitemap");
-  assert.equal(entryForKey(menu, { group: "global.go", binding: "meta+g" }), null);
+  assert.equal(entryForKey(menu, { group: "global.go", binding: "alt+g" }), null);
 });
 
 test("menu keys are off while the search has text", () => {
   const menu = menuFor();
-  assert.equal(entryForKey(menu, { query: "se", binding: "meta+g" }), null);
+  assert.equal(entryForKey(menu, { query: "se", binding: "alt+g" }), null);
   assert.equal(entryForKey(menu, { group: "global.go", query: "x", binding: "meta+," }), null);
-  assert.equal(label(entryForKey(menu, { query: "  ", binding: "meta+g" })), "Go to");
+  assert.equal(label(entryForKey(menu, { query: "  ", binding: "alt+g" })), "Go to");
 });
 
 const found = (menu, level) => searchMenu(menu, level).map((entry) => [label(entry), entry.group?.label ?? null]);
@@ -220,17 +225,18 @@ test("a search inside a group searches only that group", () => {
   assert.deepEqual(found(menuFor(), { group: "page.copy", query: "settings" }), []);
 });
 
-test("a page action and a global group never share a menu key", () => {
-  // Bound to ⌘G and ⌘A, the Go to and Appearance letters: the groups keep
-  // their keys and the page actions get others.
-  const menu = menuFor({ overrides: { "page.only": ["meta+g"], "page.new-note": ["meta+a"] } });
-  const top = menu.sections.flatMap((s) => s.rows);
-  assert.equal(groupNamed(menu, "Go to").menuKey, "meta+g");
-  assert.equal(groupNamed(menu, "Appearance").menuKey, "meta+a");
-  const keys = top.map((row) => row.menuKey);
+test("an action keeps its own key over a group's ⌥ letter, and the group moves", () => {
+  // Bound to ⌥G and ⌥A, the Go to and Appearance letters: a conflict a
+  // profile can't save (letter-taken), but a stale saved state can hold one.
+  // With the menu open the dispatcher runs the actions on those keys, so the
+  // groups get other letters (and the actions, with no ⌘ key, none).
+  const menu = menuFor({ overrides: { "page.only": ["alt+g"], "page.new-note": ["alt+a"] } });
+  assert.equal(entryForKey(menu, { binding: "alt+g" }), null);
+  assert.equal(entryForKey(menu, { binding: "alt+a" }), null);
+  assert.match(groupNamed(menu, "Go to").menuKey, /^alt\+[^ga]$/);
+  assert.match(groupNamed(menu, "Appearance").menuKey, /^alt\+[^ga]$/);
+  const keys = menu.sections.flatMap((s) => s.rows).map((row) => row.menuKey).filter(Boolean);
   assert.equal(new Set(keys).size, keys.length, keys.join(" "));
-  assert.equal(label(entryForKey(menu, { binding: "meta+g" })), "Go to");
-  assert.equal(label(entryForKey(menu, { binding: "meta+a" })), "Appearance");
 });
 
 test("a menu with no page entries shows only the Marasi section", () => {

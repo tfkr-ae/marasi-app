@@ -22,11 +22,11 @@
 			on:click={() => pick(option.value)}
 		>
 			<span
-				class="flex h-3.5 w-3.5 flex-none items-center justify-center rounded-sm ring-1 {on
+				class="flex h-3.5 w-3.5 flex-none items-center justify-center ring-1 {on
 					? 'bg-primary-500 text-white ring-primary-500'
 					: 'ring-surface-500/50'}">{#if on}<Check size={10} />{/if}</span
 			>
-			{#if option.mark}<span class="h-2.5 w-2.5 flex-none rounded-sm {option.mark}"></span>{/if}
+			{#if option.mark}<span class="h-2.5 w-2.5 flex-none {option.mark}"></span>{/if}
 			<span class="min-w-0 flex-1 truncate {mono ? 'font-mono text-2xs' : ''}">{option.label ?? option.value}</span>
 			<span class="text-2xs tabular-nums opacity-50">{option.count}</span>
 		</button>

@@ -11,6 +11,7 @@ import { createCheckpointStore } from "./createCheckpointStore.js";
 import { createCheckpointRules, RULES_EXTENSION } from "./checkpointRules.js";
 import { interceptFlag } from "./interceptFlag.js";
 import { projectData } from "./projectData.js";
+import { NO_BODIES, pairQuery } from "./trafficApi.js";
 import { createWebSocketApi } from "./webSocketApi.js";
 
 export {
@@ -44,7 +45,7 @@ const webSocketApi = createWebSocketApi(service);
 // so the page and the abandon toast share it.
 export const checkpointItemContext = createItemContext({
   getRow: async (id) => {
-    const pair = await service.get(`/traffic/${id}`);
+    const pair = await service.get(`/traffic/${id}`, pairQuery(NO_BODIES));
     const request = pair?.request ?? {};
     return { Request: { Number: pair.number, Method: request.method, Host: request.host, Path: request.path } };
   },

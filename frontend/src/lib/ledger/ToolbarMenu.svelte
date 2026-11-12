@@ -1,7 +1,8 @@
 <script>
 	// A Ledger toolbar menu: a button with an icon, a label and an optional
 	// badge, opening a panel under it. A click outside the menu or Esc closes
-	// it. The panel's content is the default slot, which gets `close`.
+	// it. The panel's content is the default slot, which gets `close`. It
+	// dispatches `open` and `close`.
 	import { createEventDispatcher } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { primaryVariant } from "../launchpad/format.js";
@@ -28,6 +29,14 @@
 	let root;
 
 	$: if (disabled) open = false;
+
+	// `close` fires however the menu closes: Esc, a click outside, `disabled`
+	// or a parent's bound `open`.
+	let wasOpen = open;
+	$: if (open !== wasOpen) {
+		wasOpen = open;
+		if (!open) dispatch("close");
+	}
 
 	$: primary = primaryVariant($modeCurrent);
 
@@ -83,7 +92,7 @@
 	{#if open}
 		<div
 			id="{id}Panel"
-			class="card absolute right-0 top-full z-40 mt-1 max-h-[60vh] overflow-auto shadow-xl {panelClass}"
+			class="absolute -right-px top-full z-40 max-h-[60vh] overflow-auto border border-surface-300-600-token bg-surface-100-800-token shadow-xl {panelClass}"
 			role="dialog"
 			aria-label={label}
 		>

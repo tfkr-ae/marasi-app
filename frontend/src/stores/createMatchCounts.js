@@ -1,5 +1,6 @@
-// Match counts for a menu's queries, read in the background so the menu
-// opens with its numbers. The store holds { [query]: count }: { count,
+// Match counts for a menu's queries, read after a project load so the menu
+// opens with numbers, and again while it is open; a change while it is
+// closed only marks them stale until it opens. The store holds { [query]: count }: { count,
 // capped }, { error } for a query Marasi rejects, or null when it couldn't
 // be counted; `stale: true` marks the last run's count while a recount
 // reads its new one. A query without an entry hasn't been counted yet.
@@ -51,17 +52,51 @@ export function createMatchCounts({ queries, count, timers = globalThis, delay =
   }
 
   let pending = null;
+  let scheduledRun = null;
+  let again = false;
   /**
-   * Loads after `delay`, once for a burst of calls: a project load, a
-   * resync, new traffic or another client's change, so the menu opens with
-   * numbers.
+   * Loads after `delay`, once for a burst of calls, such as a project load or
+   * a resync, so the menu opens with numbers. A scheduled load never stops one
+   * already running: a call meanwhile waits for it to finish, then for
+   * `delay` again, so steady traffic can't keep every run from finishing.
    */
   function schedule() {
+    if (scheduledRun) {
+      again = true;
+      return;
+    }
     if (pending !== null) return;
     pending = timers.setTimeout(() => {
       pending = null;
-      load();
+      const thisRun = load();
+      scheduledRun = thisRun;
+      thisRun.finally(() => {
+        if (scheduledRun !== thisRun) return;
+        scheduledRun = null;
+        if (again) {
+          again = false;
+          schedule();
+        }
+      });
     }, delay);
+  }
+
+  let open = false;
+  /** Whether the menu showing the counts is open; only an open menu recounts on a change. */
+  function setOpen(value) {
+    open = Boolean(value);
+  }
+
+  /**
+   * After new traffic or another client's change: every count is marked
+   * stale, and only an open menu recounts. A closed menu recounts when it
+   * opens, so counts nobody is looking at never keep Marasi busy.
+   */
+  function changed() {
+    update((counts) =>
+      Object.fromEntries(Object.entries(counts).map(([q, c]) => [q, c && !c.stale ? { ...c, stale: true } : c])),
+    );
+    if (open) schedule();
   }
 
   /** Forgets every count and stops counting, as a project switch does. */
@@ -69,8 +104,10 @@ export function createMatchCounts({ queries, count, timers = globalThis, delay =
     run++;
     if (pending !== null) timers.clearTimeout(pending);
     pending = null;
+    scheduledRun = null;
+    again = false;
     update(() => ({}));
   }
 
-  return { subscribe, load, schedule, clear };
+  return { subscribe, load, schedule, changed, setOpen, clear };
 }

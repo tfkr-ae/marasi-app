@@ -1,5 +1,6 @@
 <script>
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { primaryVariant } from "../launchpad/format.js";
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
@@ -128,7 +129,7 @@
 					: "Connection Closed"}
 			</span>
 			<button
-				class="btn btn-sm variant-soft-primary"
+				class="btn btn-sm {primaryVariant($modeCurrent)}"
 				disabled={!connectionOpen || injecting}
 				on:click={inject}
 			>

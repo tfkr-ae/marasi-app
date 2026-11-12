@@ -1,12 +1,13 @@
 <script>
 	// The selected sidebar entry's menu groups, above its actions: the group's
-	// tinted icon, label and description, then its menu letter as a button
-	// (click it to record another letter) and Reset in the same positions as
+	// tinted icon, label and description, then its menu key (⌥ + the letter,
+	// Alt on Windows/Linux) as a button (click it to record another letter) and Reset in the same positions as
 	// an action's Add binding and Reset. The global entry's groups are the ones
 	// every Marasi menu shows in its Marasi section, so they are headed Marasi.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { RotateCcw } from "lucide-svelte";
 	import { primaryVariant } from "../../launchpad/format.js";
+	import { formatBinding } from "../../keybindings/keys.js";
 	import { groupIcon, groupTone } from "../MarasiMenu/groupStyle.js";
 	import IconButton from "./IconButton.svelte";
 
@@ -14,6 +15,7 @@
 	export let heading; // "Menu groups", or "Marasi" for the global groups
 	export let onRecord; // (groupId) => void
 	export let onReset; // (groupId) => void
+	export let platform; // the variant on screen, which names the ⌥ key
 </script>
 
 {#if rows.length}
@@ -48,7 +50,7 @@
 							class="btn h-8 min-w-[2rem] rounded-none px-2 text-xs font-semibold {primaryVariant($modeCurrent)}"
 							title="Record a letter"
 							aria-label="Record a letter for {row.group.label}"
-							on:click={() => onRecord(row.id)}>{row.letter}</button
+							on:click={() => onRecord(row.id)}>{formatBinding(`alt+${row.letter.toLowerCase()}`, platform)}</button
 						>
 						<span class="h-8 w-8 shrink-0" aria-hidden="true"></span>
 						<IconButton

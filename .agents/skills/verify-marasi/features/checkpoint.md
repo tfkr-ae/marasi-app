@@ -78,7 +78,7 @@ Hold `/cp-a` and `/cp-b` again. `Drop n` asks; `Drop` on one item doesn't. The r
 {"name":"drop-n","steps":[
  {"waitText":"Drop 2"},
  {"key":"cmd+k"},{"waitSelector":"#commandmenu"},{"click":"#commandmenu"},{"key":"cmd+a"},{"insert":"drop"},
- {"click":"dialog[open] li","hasText":"Drop Picked Items"},{"waitText":"Drop 2 intercepted items?"},
+ {"click":"dialog[open] button","hasText":"Drop Picked Items"},{"waitText":"Drop 2 intercepted items?"},
  {"text":"Drop","within":".modal-footer"},{"waitText":"Dropped 2"},{"waitText":"Nothing intercepted"}]}
 ```
 
@@ -119,7 +119,7 @@ CodeMirror puts `data-language` on `.cm-content`, so `div[data-language=lua] .cm
 
 ### WebSocket upgrade drop
 
-Narrow `interceptResponse` to the upgrade path (`return response:request():path() == "/ws-drop"`), start the upgrade, select its `RES 101` entry, and click `Drop`. The Ledger row then shows the neutral slashed icon titled `Upgrade response dropped` and cannot open a stream (see [ledger.md](ledger.md)). Drop the response, not the request: a dropped request never reaches the response pipeline, so it does not set `dropped`.
+Narrow `interceptResponse` to the upgrade path (`return response:request():path() == "/ws-drop"`), start the upgrade, select its `RES 101` entry, and click `Drop`. The Ledger row then shows the neutral slashed icon titled `Upgrade response dropped` and cannot open a stream (see [ledger/websocket.md](ledger/websocket.md)). Drop the response, not the request: a dropped request never reaches the response pipeline, so it does not set `dropped`.
 
 ### WebSocket messages
 

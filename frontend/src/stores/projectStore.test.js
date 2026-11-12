@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
 import { createProjectStore } from "./createProjectStore.js";
-import { createProjectApi, pickedProject, projectMatches, projectTarget } from "./projectApi.js";
+import { createProjectApi, newProject, pickerChoice, pickerRows, projectMatches, projectTarget } from "./projectApi.js";
 import { openingScreen } from "../lib/openProgress.js";
 import { serviceError } from "../lib/service/errors.js";
 
@@ -299,17 +299,41 @@ test("a listed project the picker gives opens its exact path, whatever its name"
   assert.deepEqual(projectTarget({ name: "acme", path: acme }), { path: acme });
 });
 
-test("the picker gives the highlighted listed project, else the first match, else the typed name", () => {
+test("the picker offers to create the typed name above its matches, and picks the first match", () => {
+  const api = { name: "acme-api", path: `${projects}/acme-api.marasi` };
+  const portal = { name: "acme-portal", path: `${projects}/acme-portal.marasi` };
+  const listed = [api, portal];
+
+  assert.deepEqual(pickerRows(listed, "acme"), {
+    rows: [{ kind: "create", text: "acme" }, { kind: "open", project: api }, { kind: "open", project: portal }],
+    selected: 1,
+  });
+  assert.deepEqual(projectTarget(pickerChoice(pickerRows(listed, "acme").rows[0])), { name: "acme" });
+  assert.deepEqual(projectTarget(pickerChoice(pickerRows(listed, "acme").rows[1])), { path: api.path });
+});
+
+test("with no match the picker picks its create row", () => {
+  assert.deepEqual(pickerRows([], " client-x "), { rows: [{ kind: "create", text: "client-x" }], selected: 0 });
+  assert.deepEqual(projectTarget(pickerChoice({ kind: "create", text: "/tmp/new" })), { path: "/tmp/new.marasi" });
+});
+
+test("the picker offers no create row for a blank field or a listed project's name or path", () => {
   const recent = { name: "engagement", path: "/tmp/engagement.marasi" };
   const named = { name: "engagement", path: `${projects}/engagement.marasi` };
   const listed = [recent, named];
+  const open = (project) => ({ kind: "open", project });
 
-  assert.deepEqual(projectTarget(pickedProject(listed, 0, "")), { path: "/tmp/engagement.marasi" });
-  assert.deepEqual(projectTarget(pickedProject(listed, 1, "eng")), { path: `${projects}/engagement.marasi` });
-  assert.deepEqual(projectTarget(pickedProject(listed, -1, "eng")), { path: "/tmp/engagement.marasi" });
-  assert.deepEqual(projectTarget(pickedProject([], -1, " fresh ")), { name: "fresh" });
-  assert.deepEqual(projectTarget(pickedProject([], -1, "/tmp/new")), { path: "/tmp/new.marasi" });
-  assert.equal(pickedProject([], -1, "  "), null, "nothing to open");
+  assert.deepEqual(pickerRows(listed, "  "), { rows: [open(recent), open(named)], selected: 0 });
+  assert.deepEqual(pickerRows([], ""), { rows: [], selected: -1 }, "nothing to open");
+  assert.deepEqual(pickerRows(listed, "Engagement"), { rows: [open(recent), open(named)], selected: 0 });
+  assert.deepEqual(pickerRows(listed, "engagement.marasi").rows.length, 2);
+  assert.deepEqual(pickerRows(listed, `${projects}/engagement`), { rows: [open(named)], selected: 0 });
+});
+
+test("the create row names the new project and where it goes", () => {
+  assert.deepEqual(newProject("client-x"), { name: "client-x", path: null });
+  assert.deepEqual(newProject("client-x.marasi"), { name: "client-x", path: null });
+  assert.deepEqual(newProject("/tmp/work/new"), { name: "new", path: "/tmp/work/new.marasi" });
 });
 
 test("the picker lists the projects whose name or path holds the typed text", () => {

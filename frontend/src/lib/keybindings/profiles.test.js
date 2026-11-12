@@ -439,6 +439,43 @@ test("a saved letter that can't be a menu letter is ignored on load, and the pro
   assert.deepEqual(seen.letters, { "global.project": "X" });
 });
 
+// In the open menu ⌥ (Alt) + a group's letter opens the group, so no action
+// that a key reaches in that menu may be bound to it: every key the menu
+// shows is the action's real one.
+const takenMessages = (work) => validateKeybindings(groupedCatalog, saved([work]).config).map((p) => p.message);
+const rebound = (platform, action, keys) => ({ ...profile("work", "Work", { [platform]: [{ action, keys }] }), letters: [] });
+
+test("an action may not be bound to ⌥ + the menu letter of a group in its menu, on either platform", () => {
+  assert.deepEqual(takenMessages(rebound(MACOS, "ledger.drawer-closed.open-item", ["alt+p"])), [
+    "Work (macos): alt+p opens Project (global) in the menu but is bound to ledger.drawer-closed.open-item (ledger.drawer-closed)",
+  ]);
+  assert.deepEqual(takenMessages(rebound(WINDOWS_LINUX, "global.go-home", ["alt+g"])), [
+    "Work (windows-linux): alt+g opens Go to (global) in the menu but is bound to global.go-home (global)",
+  ]);
+  // A page group's letter is only taken in its own menu: the drawer states
+  // are separate menus.
+  assert.deepEqual(takenMessages(rebound(MACOS, "ledger.drawer-closed.open-item", ["alt+c"])), []);
+  assert.deepEqual(takenMessages(rebound(MACOS, "ledger.drawer-open.close", ["alt+c"])), [
+    "Work (macos): alt+c opens Copy (ledger.drawer-open) in the menu but is bound to ledger.drawer-open.close (ledger.drawer-open)",
+  ]);
+  // ⌘ + the letter is another key: groups never take ⌘ shortcuts.
+  assert.deepEqual(takenMessages(rebound(MACOS, "ledger.drawer-closed.open-item", ["meta+p"])), []);
+});
+
+test("a moved letter can take an action's key too, and the profile stays live on load", () => {
+  const work = { ...withLetters({ "global.go": "E" }), overrides: { [MACOS]: [{ action: "ledger.drawer-closed.open-item", keys: ["alt+e"] }], [WINDOWS_LINUX]: [] } };
+  assert.deepEqual(takenMessages(work), [
+    "Work (macos): alt+e opens Go to (global) in the menu but is bound to ledger.drawer-closed.open-item (ledger.drawer-closed)",
+  ]);
+  const dispatcher = createDispatcher({ catalog: groupedCatalog, platform: MACOS });
+  let seen;
+  dispatcher.subscribe((snapshot) => (seen = snapshot));
+  dispatcher.configure({ keybindings: saved([work]) });
+  assert.equal(seen.problem, "");
+  assert.deepEqual(seen.letters, { "global.go": "E" });
+  assert.deepEqual(seen.bindingsFor("ledger.drawer-closed.open-item"), ["alt+e"]);
+});
+
 test("the catalog descriptor sent with a save lists every menu group with its factory letter", () => {
   assert.deepEqual(catalogDescriptor(groupedCatalog).groups, [
     { id: "global.go", context: "global", label: "Go to", letter: "G" },

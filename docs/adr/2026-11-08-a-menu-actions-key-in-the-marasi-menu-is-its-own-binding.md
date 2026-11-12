@@ -1,3 +1,7 @@
+---
+status: superseded in part by 2026-11-08-menu-groups-open-on-option-so-every-shortcut-runs-in-the-menu (menu groups and derived menu letters are on ⌥)
+---
+
 # A menu action's key in the Marasi menu is its own binding
 
 With the Marasi menu open, the researcher keeps ⌘ (Ctrl on Windows and Linux) held: ⌘ + a menu group's menu letter opens the group, and a menu action runs on its own binding from the active keybinding profile. ⌘K ⌘G ⌘, opens Settings because Settings is ⌘, everywhere. A key shown in the menu therefore always works outside it too, and the menu teaches the real shortcuts. Only an action whose binding doesn't use ⌘ (a bare key, or a ⌃ binding on macOS) gets a menu letter derived from its label, and ⌘K, ⌘Q and ⌘H are never menu keys.

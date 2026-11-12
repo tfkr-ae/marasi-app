@@ -68,7 +68,7 @@
 			><ArrowLeft size={12} class="mr-1" />Back</button
 		>
 		{#if kind === "finding"}
-			<span class="badge flex-none rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
+			<span class="badge flex-none px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[record.Severity] ?? 'variant-soft'}"
 				>{record.Severity || "None"}</span
 			>
 		{:else}
@@ -93,6 +93,8 @@
 			{#key `${kind}:${record.ID}`}
 				<EvidenceViewer
 					{store}
+					{kind}
+					recordId={record.ID}
 					requests={record.Requests ?? []}
 					artifacts={record.Artifacts ?? []}
 					listWidth={width > 1000 ? 300 : 240}

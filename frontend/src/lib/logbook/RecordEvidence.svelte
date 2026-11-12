@@ -13,6 +13,8 @@
 	import { MAX_ARTIFACT_BYTES, formatSize, previewOf } from "./artifacts.js";
 	import RequestPair from "./RequestPair.svelte";
 	import ArtifactPreview from "./ArtifactPreview.svelte";
+	import { createPairRows } from "./pairRows.js";
+	import { NO_BODIES } from "../../stores/trafficApi.js";
 
 	export let session;
 	export let tab = "requests";
@@ -22,13 +24,21 @@
 	$: original = session.original;
 	$: kept = (id) => draft.Requests.includes(id);
 
-	// Each pair is read once here; the list rows and the viewer share it.
+	// The viewer reads the picked pair in full, once. The list reads rows:
+	// the saved links in one query, a link staged here on its own
+	// (pairRows.js).
 	const pairs = new Map();
 	function readPair(id) {
 		const key = String(id);
 		if (!pairs.has(key)) pairs.set(key, logbookStore.readPair(id).catch(() => null));
 		return pairs.get(key);
 	}
+	const savedId = session.isNew ? null : session.original.ID;
+	const readRow = createPairRows({
+		listLinked: () =>
+			savedId != null ? logbookStore.listLinkedRows(session.kind, savedId, session.original.Requests.length) : [],
+		readPair: (id) => logbookStore.readPair(id, NO_BODIES),
+	});
 
 	// A list row from a pair (GetRawDetails) or a traffic search option.
 	const rowOf = (details) => ({
@@ -51,7 +61,7 @@
 	async function loadRow(id) {
 		if (rows[id]) return;
 		rows[id] = { method: "", url: "…", status: 0, number: null };
-		const details = await readPair(id);
+		const details = await readRow(id);
 		rows[id] = details ? rowOf(details) : { method: "", url: "Couldn't read this request", status: 0, number: null };
 	}
 
@@ -116,7 +126,7 @@
 	const ICONS = { image: ImageIcon, video: Video, text: FileText };
 	const rowClass = (selected) =>
 		`group relative flex items-center gap-2 py-1 pl-2 pr-1 text-2xs ${selected ? "bg-primary-500/20" : "hover:bg-surface-200-700-token"}`;
-	const newBadge = "badge flex-none rounded-sm bg-primary-500/20 px-1 py-0 font-sans text-3xs";
+	const newBadge = "badge flex-none bg-primary-500/20 px-1 py-0 font-sans text-3xs";
 	const rowButton = "flex-none p-0.5 opacity-70 hover:opacity-100";
 </script>
 
@@ -142,7 +152,7 @@
 	{#if tab === "requests"}
 		<div class="flex max-h-[34%] min-h-0 flex-none flex-col gap-1 border-b border-surface-500/30 p-1.5">
 			<div class="relative flex-none">
-				<div class="flex h-8 items-center gap-2 rounded-token bg-surface-200-700-token px-2 focus-within:ring-1 focus-within:ring-primary-500/60">
+				<div class="flex h-8 items-center gap-2 bg-surface-200-700-token px-2 focus-within:ring-1 focus-within:ring-primary-500/60">
 					<Search size={12} class="flex-none opacity-60" />
 					<input
 						class="h-6 min-w-0 flex-1 border-0 bg-transparent p-0 text-xs placeholder:opacity-60 focus:ring-0"
@@ -155,7 +165,7 @@
 					/>
 				</div>
 				{#if searching && q.trim()}
-					<div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-container-token bg-surface-50 py-1 shadow-xl ring-1 ring-surface-500/30 dark:bg-surface-800">
+					<div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto bg-surface-50 py-1 shadow-xl ring-1 ring-surface-500/30 dark:bg-surface-800">
 						{#each hits as option (option.value)}
 							{@const row = optionRow(option)}
 							<button type="button" class="flex w-full items-center gap-2 px-2 py-1 text-left font-mono text-2xs hover:bg-primary-500/15" on:mousedown|preventDefault={() => link(option)}>
@@ -203,7 +213,7 @@
 	{:else}
 		<div class="flex max-h-[34%] min-h-0 flex-none flex-col gap-1 border-b border-surface-500/30 p-1.5">
 			<label
-				class="flex flex-none cursor-pointer items-center justify-center gap-2 rounded-token border border-dashed border-surface-500/50 px-3 py-2 text-2xs {over ? 'bg-primary-500/15' : 'hover:bg-surface-200-700-token'}"
+				class="flex flex-none cursor-pointer items-center justify-center gap-2 border border-dashed border-surface-500/50 px-3 py-2 text-2xs {over ? 'bg-primary-500/15' : 'hover:bg-surface-200-700-token'}"
 				on:dragover|preventDefault={() => (over = true)}
 				on:dragleave={() => (over = false)}
 				on:drop|preventDefault={(e) => {

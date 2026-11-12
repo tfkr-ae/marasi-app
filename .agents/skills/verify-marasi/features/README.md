@@ -1,6 +1,6 @@
 # Marasi verification feature map
 
-Marasi's primary user interface is the Wails desktop app. Verification drives its `-tags server` build from headless Chrome against a real `marasi service` with an isolated config dir, because that runs the same Svelte UI against the real Go shell and service and exposes DOM, console, network, and screenshot evidence. Flows that need a native dialog, the clipboard, the window or the menu bar are listed in [native.md](native.md) with how each is checked. Start with the route matching the change, then cover every entry point named in that feature file. Embedded CyberChef, Excalidraw, and Interactsh pages are secondary network-dependent tools and are outside this map.
+Marasi's primary user interface is the Wails desktop app. Verification drives its `-tags server` build from headless Chrome against a real `marasi service` with an isolated config dir, because that runs the same Svelte UI against the real Go shell and service and exposes DOM, console, network, and screenshot evidence. Flows that need a native dialog, the clipboard, the window or the menu bar are listed in [native.md](native.md) with how each is checked. Start with the route matching the change, then cover every entry point named in that feature file. `ledger.md` and `launchpad.md` are indexes of smaller parts in `ledger/` and `launchpad/`: read the index, its `getting-there.md`, and only the parts the change touches. Add a new fact to the part it belongs to, and split a part that grows past about 12 KB. Embedded CyberChef, Excalidraw, and Interactsh pages are secondary network-dependent tools and are outside this map.
 
 | Feature | File | Primary proof |
 | --- | --- | --- |
@@ -15,4 +15,4 @@ Marasi's primary user interface is the Wails desktop app. Verification drives it
 | Application settings | [settings.md](settings.md) | Settings route opens and a reversible setting persists to isolated config |
 | Native flows | [native.md](native.md) | Each flow's stub, Go test, or check by hand on a native build |
 
-Use `.agents/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. Use `drive.sh <feature> compare "<visible label>" "<shortcut>"` when an in-page control also has a MarasiKeys binding. The feature files describe the additional actions needed for complete behavioral proof.
+Use `.agents/skills/verify-marasi/scripts/drive.sh <feature>` for route-level driving. Use `drive.sh <feature> compare "<visible label>" "<shortcut>"` when an in-page control also has a Marasi menu keybinding. The feature files describe the additional actions needed for complete behavioral proof.

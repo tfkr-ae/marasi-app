@@ -307,7 +307,7 @@
 		if (next?.list !== jump?.list || next?.label !== jump?.label) jump = next;
 	}
 	afterUpdate(updateJump);
-	// Opens the rows holding an entry and scrolls it into view (⌘⇧↓).
+	// Opens the rows holding an entry and scrolls it into view (⌘J).
 	export async function showEntry(launchpadId, entryId) {
 		setAll(revealEntry({ expanded, openGroups, entriesByLaunchpad: state.entriesByLaunchpad, groupByStatus, launchFor }, launchpadId, entryId));
 		await tick();

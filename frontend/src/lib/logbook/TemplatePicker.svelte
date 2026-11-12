@@ -24,7 +24,7 @@
 
 {#if templates.length}
 	{#if open}
-		<div class="rounded-container-token ring-1 ring-tertiary-500/40" data-template-picker>
+		<div class="ring-1 ring-tertiary-500/40" data-template-picker>
 			<div class="flex items-center gap-2 border-b border-surface-500/30 px-2 py-1">
 				<Search size={12} class="opacity-60" />
 				<input

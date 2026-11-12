@@ -16,17 +16,17 @@ Select the rail item titled `Logbook` or press `Command+7`.
 - **Dock** (`.logbook-outline`): `#logbookShown` (`N of M shown`), `#logbookNewFinding`, `#logbookNewTestCase`, the status toggle (`.logbook-status`), and one button per record (`.logbook-outline button` with the title as text).
 - **Toolbar** (`.logbook-toolbar`): `#logbookSearch`, `#logbookKind-findings`, `#logbookKind-testCases`, `#logbookSeverityButton`, `#logbookCategoryButton`, `#logbookTagsButton` (panels `#logbook<Name>Panel`), `#logbookClearFilters` (only while a filter is set) and `#logbookExport`.
 - **Summary** (`.logbook-summary`): severity cards (`.logbook-severity-card`), a Test cases card, and one row per record in `.logbook-summary-findings button` and `.logbook-summary-test-cases button`.
-- **Record view** (`.logbook-record`, in place of the summary): `#logbookBack`, `#logbookNext` (title `Next in progress (N)` with the status toggle on All, else `Next (N)`; the key is the live binding of `logbook.next-record`), `#logbookEdit`, `#logbookDelete`. The checklist is `.logbook-checklist`, with the Required progress in `.logbook-progress` (`1/4`, or `done`). The open fix is `.logbook-fix[data-fix=<item>]` (`WriteUp`, `CVSSVector`, `TreatmentPlan`, `Requests`, `Note`, `Category`, `TestCaseID`) with `[data-fix-save]` and `[data-fix-cancel]`; the requests fix searches with `[data-fix-search]`. The leave prompt is `[data-leave-prompt]`. Evidence: `.logbook-pair` with `.logbook-pair-expand`; the expanded pair is `.logbook-pair-expanded`.
+- **Record view** (`.logbook-record`, in place of the summary): `#logbookBack`, `#logbookNext` (title `Next in progress (⌘⇧])` with the status toggle on All, else `Next (⌘⇧])`; the key is the live binding of `logbook.next-record`), `#logbookEdit`, `#logbookDelete`. The checklist is `.logbook-checklist`, with the Required progress in `.logbook-progress` (`1/4`, or `done`). The open fix is `.logbook-fix[data-fix=<item>]` (`WriteUp`, `CVSSVector`, `TreatmentPlan`, `Requests`, `Note`, `Category`, `TestCaseID`) with `[data-fix-save]` and `[data-fix-cancel]`; the requests fix searches with `[data-fix-search]`. The leave prompt is `[data-leave-prompt]`. Evidence: `.logbook-pair` with `.logbook-pair-expand`; the expanded pair is `.logbook-pair-expanded`.
 - **Modal**: `[data-record-modal=finding]` or `[data-record-modal=testCase]`, header `New finding` or `Edit finding`, title input `input[placeholder='Finding title']` (or `'Test case title'`), test case category `input[data-field=Category]`, text areas `#logbook-WriteUp`, `#logbook-TreatmentPlan`, `#logbook-Note`. `[data-unsaved-mark]` shows while dirty. The footer has `Close without saving` and `Save and close`; the dirty prompt is `[data-close-prompt]` (`Keep editing`, `Discard`, `Save and close`).
 - **Export**: `.logbook-export`, totals `#exportTotals` (`2 findings · 1 test case · …`, or `no test cases`), the review `.logbook-report-review`, the switch `Include test cases`, `#exportReport`.
 
-Shortcuts: every menu shortcut for this feature is a catalog action in context `logbook` in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys. Next Record is `N`, unmodified, so it never runs while a field or editor has focus. Esc (back to the list) is handled by the page, not the menu.
+Shortcuts: every menu shortcut for this feature is a catalog action in context `logbook` in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys. Next Record is `⌘⇧]` (`cmd+shift+]`). Esc (back to the list) is handled by the page, not the menu.
 
 ## Driving it with Chrome CDP
 
 Run `scripts/drive.sh logbook` for route proof; it waits for `In progress`, which the dock's status toggle always paints.
 
-A fresh scratchpad has no records and no traffic. Send a few requests through the proxy first (see `ledger.md`; the recipes below link `/profile`, whose JSON body holds `admin`). Use a unique marker per run (`LB09L` in light, `LB09D` in dark) and change the waits that count records (`1 test case`) to match the project. Run the recipes in this order; each leaves the page as the next one expects. Check light and dark mode: switch with `{"key":"cmd+u"},{"waitSelector":"html.dark"}`.
+A fresh scratchpad has no records and no traffic. Send a few requests through the proxy first (see `ledger/capture-and-query.md`; the recipes below link `/profile`, whose JSON body holds `admin`). Use a unique marker per run (`LB09L` in light, `LB09D` in dark) and change the waits that count records (`1 test case`) to match the project. Run the recipes in this order; each leaves the page as the next one expects. Check light and dark mode: switch with `{"key":"cmd+u"},{"waitSelector":"html.dark"}`.
 
 **Modal: dirty prompt, Discard, Save and close.** X, Esc and a click on the backdrop each ask; Esc on the prompt keeps editing; Discard leaves nothing; Save and close creates the record.
 
@@ -106,7 +106,7 @@ Then turn `Wrap lines` off in a Ledger drawer (`[aria-label="Wrap lines"]`) and 
 
 Before the next recipe, create a test case (`#logbookNewTestCase`, title `<marker> login test`, category `Authentication`) and a second finding (`<marker> XSS in search`) with Save and close.
 
-**Toolbar staying put, filtering, N and Esc.** The hovers record each control's box in `-steps.json`: compare `x` and `width` across the three kinds. The menus and Export keep their boxes, and the one that doesn't apply is `disabled`. The search input narrows by the width of `#logbookClearFilters` once a filter is set; its left edge stays. Any filter change closes the open record.
+**Toolbar staying put, filtering, ⌘⇧] and Esc.** The hovers record each control's box in `-steps.json`: compare `x` and `width` across the three kinds. The menus and Export keep their boxes, and the one that doesn't apply is `disabled`. The search input narrows by the width of `#logbookClearFilters` once a filter is set; its left edge stays. Any filter change closes the open record.
 
 ```json
 {"name":"toolbar-filter-next","steps":[
@@ -117,14 +117,14 @@ Before the next recipe, create a test case (`#logbookNewTestCase`, title `<marke
  {"hover":"#logbookSearch"},{"hover":"#logbookSeverityButton"},{"hover":"#logbookCategoryButton"},{"hover":"#logbookTagsButton"},{"hover":"#logbookExport"},
  {"click":"#logbookClearFilters"},{"waitText":"<marker> XSS in search","within":".logbook-summary"},
  {"click":".logbook-outline button","hasText":"<marker> XSS in search"},{"waitText":"<marker> XSS in search","within":".logbook-record"},
- {"key":"n"},{"waitText":"<marker> login test","within":".logbook-record"},
+ {"key":"cmd+shift+]"},{"waitText":"<marker> login test","within":".logbook-record"},
  {"key":"escape"},{"waitNoSelector":".logbook-record"},{"waitSelector":".logbook-summary"},
  {"click":".logbook-outline button","hasText":"<marker> XSS in search"},{"waitSelector":".logbook-record"},
  {"click":"#logbookSearch"},{"insert":"XSS"},{"waitNoSelector":".logbook-record"},{"waitNoText":"<marker> login test","within":".logbook-summary"},
  {"click":"#logbookClearFilters"},{"waitText":"<marker> login test","within":".logbook-summary"}]}
 ```
 
-N follows the outline's order (findings by severity then title, then test cases) and skips Done records while the status toggle is on All. With records from an earlier run, N lands on the next In progress record in that order, so wait for that title.
+Next Record (⌘⇧]) follows the outline's order (findings by severity then title, then test cases) and skips Done records while the status toggle is on All. With records from an earlier run, it lands on the next In progress record in that order, so wait for that title.
 
 **Export with Include test cases off.** The review drops the test cases; the choice is kept in `reportMetadata`, so the recipe turns it back on.
 

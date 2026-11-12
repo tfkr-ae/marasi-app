@@ -62,7 +62,7 @@
 					>
 						<div class="text-base font-bold tabular-nums">{counts[severity]}</div>
 						<div class="flex items-center justify-center gap-1 text-3xs opacity-70">
-							<span class="h-2 w-2 rounded-sm {SEVERITY_MARK[severity]}"></span>{severity}
+							<span class="h-2 w-2 {SEVERITY_MARK[severity]}"></span>{severity}
 						</div>
 					</button>
 				{/each}
@@ -86,7 +86,7 @@
 						<button class={row} on:click={() => onOpen("finding", finding.ID)}>
 							<span class="w-[5.375rem] flex-none"
 								><span
-									class="badge rounded-sm px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[finding.Severity] ??
+									class="badge px-1.5 py-0.5 text-3xs font-bold {SEVERITY_BADGE[finding.Severity] ??
 										'variant-soft'}">{finding.Severity || "None"}</span
 								></span
 							>
@@ -135,7 +135,7 @@
 								>
 								<span class="flex w-14 flex-none justify-end gap-0.5"
 									>{#each [...(findingsByTestCase.get(testCase.ID) ?? [])].sort((a, b) => rank(a) - rank(b)) as f (f.ID)}<span
-											class="h-2.5 w-2.5 rounded-sm {SEVERITY_MARK[f.Severity] ?? 'bg-surface-400'}"
+											class="h-2.5 w-2.5 {SEVERITY_MARK[f.Severity] ?? 'bg-surface-400'}"
 											title="{f.Severity}: {f.Title}"
 										></span>{/each}</span
 								>

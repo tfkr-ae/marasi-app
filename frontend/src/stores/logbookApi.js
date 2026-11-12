@@ -9,7 +9,7 @@
 // the Go SaveFileAs binding: (title, defaultName, filterName, filterPattern,
 // contentBase64) -> saved path, or "" when cancelled.
 
-import { toDetails } from "./trafficApi.js";
+import { pairQuery, readTraffic, toDetails } from "./trafficApi.js";
 
 /** An artifact's metadata, from the service's artifact. */
 export function toArtifact(a) {
@@ -152,7 +152,19 @@ export function createLogbookApi(client, { saveFile }) {
     listTestCases: () => listFull(client, "testCase", toTestCase),
     getFinding: async (id) => toFinding(await client.get(`/finding/${id}`)),
     getTestCase: async (id) => toTestCase(await client.get(`/test-case/${id}`)),
-    getPair: async (id) => toDetails(await client.get(`/traffic/${id}`)),
+    getPair: async (id, parts) => toDetails(await client.get(`/traffic/${id}`, pairQuery(parts))),
+    // A record's linked pairs as traffic rows, without their bodies: every
+    // type, oldest first, `limit` of them at most.
+    listLinkedRows: async (kind, id, limit) => {
+      const field = kind === "finding" ? "finding" : "test_case";
+      const page = await readTraffic(
+        client,
+        { Query: `${field} = "${id}"`, OrderBy: "number", Direction: "forward", Cursor: "", AsOf: "", Limit: Math.max(1, limit) },
+        null,
+      );
+      if (page.QueryError) throw new Error(page.QueryError.Message);
+      return page.Items;
+    },
     getArtifact: artifactWithBytes,
     async downloadArtifact(id) {
       const artifact = await artifactWithBytes(id);

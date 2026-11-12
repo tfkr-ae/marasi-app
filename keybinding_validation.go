@@ -403,9 +403,11 @@ func validateKeybindings(config KeybindingConfig, actions KeybindingCatalog) err
 		for _, problem := range letterProblems(catalog, actions.Groups, profile) {
 			problems = append(problems, fmt.Errorf("profile %q: %s", profile.Name, problem))
 		}
+		letters := profileLetters(actions.Groups, profile)
 		for _, platform := range keybindingPlatforms {
 			resolved := resolveVariant(catalog, profile, platform)
-			for _, problem := range variantProblems(catalog, resolved) {
+			variant := append(variantProblems(catalog, resolved), letterTakenProblems(catalog, actions, letters, resolved)...)
+			for _, problem := range variant {
 				problems = append(problems, fmt.Errorf("profile %q (%s): %s", profile.Name, platform, problem))
 			}
 		}
@@ -525,6 +527,74 @@ func letterProblems(catalog keybindingCatalog, groups []KeybindingGroup, profile
 				reported[pair] = true
 				problems = append(problems, fmt.Sprintf("%s (%s) and %s (%s) both use menu letter %s",
 					first.Label, first.Context, second.Label, second.Context, letters[first.ID]))
+			}
+		}
+	}
+	return problems
+}
+
+// profileLetters mirrors menuLetters in profiles.js: each group's menu letter
+// in the profile, the factory letter unless a usable override replaces it.
+func profileLetters(groups []KeybindingGroup, profile KeybindingProfile) map[string]string {
+	letters := map[string]string{}
+	for _, group := range groups {
+		letters[group.ID] = group.Letter
+	}
+	for _, override := range profile.Letters {
+		if _, ok := letters[override.Group]; ok && menuLetterProblem(override.Letter) == "" {
+			letters[override.Group] = override.Letter
+		}
+	}
+	return letters
+}
+
+// menuReach mirrors menuReach in profiles.js: for each context's menu, the
+// groups of its top level and every action a key reaches there, those of
+// the global context and of the contexts it conflicts with.
+type menuReachLevel struct {
+	groups  []KeybindingGroup
+	actions []KeybindingAction
+}
+
+func menuReach(catalog keybindingCatalog, described KeybindingCatalog) []menuReachLevel {
+	near := func(context, other string) bool {
+		return other == "global" || (context != "global" && catalog.conflicting(context, other))
+	}
+	var levels []menuReachLevel
+	for _, context := range described.Contexts {
+		var level menuReachLevel
+		for _, group := range described.Groups {
+			if near(context.ID, group.Context) {
+				level.groups = append(level.groups, group)
+			}
+		}
+		for _, action := range catalog.actions {
+			if near(context.ID, action.Context) {
+				level.actions = append(level.actions, action)
+			}
+		}
+		levels = append(levels, level)
+	}
+	return levels
+}
+
+// letterTakenProblems mirrors letterTakenProblems in profiles.js: ⌥ (Alt) +
+// a group's menu letter opens it in the menu, so no action a key reaches in
+// that menu may be bound to it.
+func letterTakenProblems(catalog keybindingCatalog, described KeybindingCatalog, letters map[string]string, resolved map[string][]string) []string {
+	var problems []string
+	reported := map[[2]string]bool{}
+	for _, level := range menuReach(catalog, described) {
+		for _, group := range level.groups {
+			binding := "alt+" + strings.ToLower(letters[group.ID])
+			for _, action := range level.actions {
+				pair := [2]string{group.ID, action.ID}
+				if reported[pair] || !slices.Contains(resolved[action.ID], binding) {
+					continue
+				}
+				reported[pair] = true
+				problems = append(problems, fmt.Sprintf("%s opens %s (%s) in the menu but is bound to %s (%s)",
+					binding, group.Label, group.Context, action.ID, action.Context))
 			}
 		}
 	}

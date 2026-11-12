@@ -270,15 +270,20 @@ func TestARemovedLocalConnectionReachesNoInstance(t *testing.T) {
 
 func TestLocalInstancesListsTheInstancesTheCLIReports(t *testing.T) {
 	cli := (&fakeCLI{}).answer("service list", 0,
-		`{"items":[`+runOf("run-1")+`,{"status":"unhealthy","instance":"broken"},{"status":"running","instance":"work","run_id":"r"}]}`)
+		`{"items":[`+runOf("run-1")+`,{"status":"unhealthy","instance":"broken","proxy_listener":null},{"status":"running","instance":"work","run_id":"r"}]}`)
 	app := quittingApp(t, cli)
 
-	names, err := app.LocalInstances()
+	instances, err := app.LocalInstances()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"default", "broken", "work"}; !slices.Equal(names, want) {
-		t.Fatalf("instances = %v, want %v", names, want)
+	want := []LocalInstance{
+		{Instance: "default", Status: "running", Version: "dev", Project: "/p/scratchpad.marasi", ProxyListener: "127.0.0.1:8080"},
+		{Instance: "broken", Status: "unhealthy"},
+		{Instance: "work", Status: "running"},
+	}
+	if !slices.Equal(instances, want) {
+		t.Fatalf("instances = %+v, want %+v", instances, want)
 	}
 }
 
