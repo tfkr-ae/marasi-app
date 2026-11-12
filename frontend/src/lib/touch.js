@@ -161,12 +161,20 @@ export function installTwoFingerSwipeDown(root, onSwipe) {
  * to keep, so callers use it for touch only.
  */
 export function swallowNextClick(root, ms = 700, { setTimer = setTimeout } = {}) {
+	// `done` as well as removing the listener: Node 20's EventTarget keeps a
+	// capture listener removed by a plain `true` (CI runs it), and a click
+	// must never be swallowed twice.
+	let done = false;
 	const swallow = (event) => {
+		if (done) return;
 		event.preventDefault();
 		event.stopPropagation();
 		stop();
 	};
-	const stop = () => root.removeEventListener("click", swallow, true);
+	const stop = () => {
+		done = true;
+		root.removeEventListener("click", swallow, true);
+	};
 	root.addEventListener("click", swallow, true);
 	setTimer(stop, ms);
 }
