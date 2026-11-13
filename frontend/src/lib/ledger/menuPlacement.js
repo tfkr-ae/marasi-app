@@ -5,9 +5,6 @@
 /** How far a menu stays from the viewport's edges. */
 const EDGE = 4;
 
-/** A submenu panel's border and top padding: its first item starts this far in. */
-const PANEL_INSET = 5;
-
 /**
  * The menu at pointer (`x`, `y`): below the pointer when it fits there,
  * else above it, else as high as it fits; left of the pointer when it would
@@ -30,9 +27,11 @@ export function placeMenu({ x, y, width, height, viewport }) {
  * `parentLeftward`'s side unless it doesn't fit there. It runs down from
  * the row, its first item level with it, when it fits; else up, its last
  * item level with the row; else it takes the roomier side and scrolls
- * (`maxHeight`). Returns { left, top, maxHeight, leftward }.
+ * (`maxHeight`). `inset` is how far the panel's items sit inside its
+ * edges ({ top, bottom }: border plus padding), measured, since the padding
+ * scales with the Text size. Returns { left, top, maxHeight, leftward }.
  */
-export function placeSubmenu({ row, parent, width, height, viewport, levels = 1, parentLeftward = null }) {
+export function placeSubmenu({ row, parent, width, height, viewport, inset, levels = 1, parentLeftward = null }) {
   const fitsRight = parent.right - 1 + width * levels <= viewport.width - EDGE;
   const fitsLeft = parent.left + 1 - width * levels >= EDGE;
   const roomierLeft = parent.left > viewport.width - parent.right;
@@ -42,12 +41,12 @@ export function placeSubmenu({ row, parent, width, height, viewport, levels = 1,
     ? Math.max(EDGE, parent.left + 1 - width)
     : Math.max(EDGE, Math.min(parent.right - 1, viewport.width - EDGE - width));
 
-  const down = row.top - PANEL_INSET;
-  const up = row.bottom + PANEL_INSET - height;
+  const down = row.top - inset.top;
+  const up = row.bottom + inset.bottom - height;
   if (down + height <= viewport.height - EDGE) return { left, top: down, maxHeight: height, leftward };
   if (up >= EDGE) return { left, top: up, maxHeight: height, leftward };
   const roomBelow = viewport.height - EDGE - down;
-  const roomAbove = row.bottom + PANEL_INSET - EDGE;
+  const roomAbove = row.bottom + inset.bottom - EDGE;
   return roomBelow >= roomAbove
     ? { left, top: down, maxHeight: roomBelow, leftward }
     : { left, top: EDGE, maxHeight: roomAbove, leftward };
