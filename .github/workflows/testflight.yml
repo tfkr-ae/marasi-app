@@ -21,12 +21,23 @@ concurrency:
 
 jobs:
   testflight:
-    runs-on: macos-latest
+    # Xcode 27 (preview image): the regular macOS runners stop at Xcode
+    # 26.6 (iOS 26.5 SDK), and iOS runs an app built with an older SDK in
+    # compatibility mode on newer screens, such as the iPhone Duo unfolded.
+    runs-on: xcode-27
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: iOS SDK 27 or later
+        run: |
+          sdk=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "Xcode $(xcodebuild -version | head -1 | awk '{print $2}'), iOS SDK $sdk"
+          if [ "${sdk%%.*}" -lt 27 ]; then
+            echo "::error::iOS SDK $sdk is older than 27: the app would run in compatibility mode on the iPhone Duo"
+            exit 1
+          fi
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
