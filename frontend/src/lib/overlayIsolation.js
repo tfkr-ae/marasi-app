@@ -71,6 +71,22 @@ export function closeTopOverlay() {
   return closeTop();
 }
 
+/**
+ * Resolves once no modal is closing: Skeleton keeps a closed modal's
+ * backdrop for its 150 ms fade, and a modal opened in that time is torn
+ * down when the fade ends. Gives up after `timeoutMs`.
+ */
+export function modalClosed(doc = globalThis.document, timeoutMs = 500) {
+  const end = Date.now() + timeoutMs;
+  return new Promise((resolve) => {
+    const check = () => {
+      if (!doc?.querySelector(".modal-backdrop") || Date.now() > end) resolve();
+      else setTimeout(check, 16);
+    };
+    check();
+  });
+}
+
 export function hasBlockingOverlay(modalStore) {
   return Boolean(
     get(modalStore).length || document.querySelector("dialog[open]"),

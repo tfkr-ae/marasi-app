@@ -1,7 +1,7 @@
 // Under an overlay the app goes inert, but for the mobile app's navigation.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { setAppInert } from "./overlayIsolation.js";
+import { modalClosed, setAppInert } from "./overlayIsolation.js";
 
 // A tiny element tree: el("name", ...children).
 function el(name, ...children) {
@@ -60,4 +60,24 @@ test("closing the overlay makes the page live again", () => {
   setAppInert(root, false, ".nav-rail, .bottom-bar");
   assert.equal(content.inert, false);
   assert.equal(root.inert, false);
+});
+
+test("a modal waits for the one still closing", async () => {
+  // Skeleton tears down a modal opened during the last one's close fade.
+  let backdrop = true;
+  const doc = { querySelector: (s) => (s === ".modal-backdrop" && backdrop ? {} : null) };
+  let done = false;
+  const waiting = modalClosed(doc, 1000).then(() => (done = true));
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(done, false, "still waiting while the backdrop is there");
+  backdrop = false;
+  await waiting;
+  assert.equal(done, true);
+});
+
+test("with no modal closing there is nothing to wait for, and a stuck one stops waiting", async () => {
+  await modalClosed({ querySelector: () => null }, 1000);
+  const started = Date.now();
+  await modalClosed({ querySelector: () => ({}) }, 60);
+  assert.ok(Date.now() - started < 500);
 });
