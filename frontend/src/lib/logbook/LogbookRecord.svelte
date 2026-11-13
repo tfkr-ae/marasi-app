@@ -85,7 +85,10 @@
 			><span class="flex h-5 items-center"><Trash2 size={14} /></span></button
 		>
 	</header>
-	<div bind:this={body} class="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
+	<!-- A modal makes the page inert, and Chrome then drops this pane's
+	     scrollbar; the stable gutter keeps the checklist's buttons where they
+	     were when the modal closes and the scrollbar comes back. -->
+	<div bind:this={body} class="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3 [scrollbar-gutter:stable]">
 		<RecordChecklist {kind} {record} {store} {fix} testCases={$store.testCases} on:save={saveFix} on:leave={onBack} />
 		<div class="mt-5"><LinkedRecords {kind} {links} wide={width > 900} {onOpen} /></div>
 		<h2 class="{heading} mt-5">Evidence</h2>
