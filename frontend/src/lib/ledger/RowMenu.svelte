@@ -234,11 +234,13 @@
 		const index = subs[level]?.index;
 		const row = parent?.querySelector(`[data-menu-index="${index}"]`);
 		if (!panel || !row || !parent) return;
+		const { width, height, inset } = panelBox(panel);
 		const place = placeSubmenu({
 			row: row.getBoundingClientRect(),
 			parent: parent.getBoundingClientRect(),
-			width: panel.offsetWidth,
-			height: panel.scrollHeight + 2,
+			width,
+			height,
+			inset,
 			viewport: viewportSize(),
 			levels: level === 0 ? Math.max(1, subDepth(itemsAt(0)[index])) : 1,
 			parentLeftward: level > 0 ? subs[level - 1].leftward : null,
@@ -248,6 +250,21 @@
 			leftward: place.leftward,
 			style: `left: ${place.left}px; top: ${place.top}px; max-height: ${place.maxHeight}px`,
 		};
+	}
+
+	// A submenu panel's exact size, unrounded and unclipped by an earlier
+	// max-height, and how far its items sit inside its edges. The padding is
+	// in rem, so it changes with the Text size.
+	function panelBox(panel) {
+		const style = getComputedStyle(panel);
+		const inset = {
+			top: parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop),
+			bottom: parseFloat(style.borderBottomWidth) + parseFloat(style.paddingBottom),
+		};
+		const first = panel.firstElementChild?.getBoundingClientRect();
+		const last = panel.lastElementChild?.getBoundingClientRect();
+		const content = first && last ? last.bottom - first.top : 0;
+		return { width: panel.getBoundingClientRect().width, height: inset.top + content + inset.bottom, inset };
 	}
 
 	function choose(item, level = 0, index = -1) {
