@@ -1,0 +1,81 @@
+# Builds the iOS app from main and uploads it to TestFlight. Run it from
+# Actions → TestFlight → Run workflow. App Store Connect then processes the
+# build (5–30 minutes) and offers it to the internal testers; submitting a
+# build for App Store review stays a manual step in App Store Connect.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (DD.MM.YYYY); empty for today"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Wails and asc
+        run: |
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
+          brew install asc
+      # main.go embeds frontend/build, which binding generation needs before
+      # the frontend build fills it.
+      - run: mkdir -p frontend/build && touch frontend/build/.keep
+      # The CI's own Apple Distribution certificate and its App Store
+      # profile ("Marasi App Store CI"), from repository secrets.
+      - uses: Apple-Actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_CERT }}
+          p12-password: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+          keychain-password: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+      - name: Signing files
+        env:
+          PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/signing"
+          printf '%s' "$PROFILE" | base64 --decode > "$RUNNER_TEMP/signing/appstore.mobileprovision"
+          build/ios/scripts/appstore-entitlements.sh "$RUNNER_TEMP/signing/appstore.mobileprovision" "$RUNNER_TEMP/signing/appstore.entitlements"
+      - name: Build
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          # build/ios/scripts/store-version.sh turns DD.MM.YYYY into the
+          # App Store's YYYY.M.D.
+          VERSION=${VERSION:-$(date -u '+%d.%m.%Y')}
+          identity=$(security find-identity -v -p codesigning | awk '/Apple Distribution/ { print $2; exit }')
+          wails3 task ios:package:ipa \
+            IOS_PLATFORM=device \
+            CODESIGN_IDENTITY="$identity" \
+            PROVISIONING_PROFILE="$RUNNER_TEMP/signing/appstore.mobileprovision" \
+            ENTITLEMENTS_FILE="$RUNNER_TEMP/signing/appstore.entitlements" \
+            CHANNEL=release VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER"
+          codesign --verify --strict --verbose=2 bin/marasi-app.app
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+          ASC_APP_ID: ${{ vars.ASC_APP_ID }}
+          ASC_BYPASS_KEYCHAIN: "1"
+        run: asc builds upload --app "$ASC_APP_ID" --ipa bin/marasi-app.ipa --wait

@@ -59,8 +59,12 @@
 		<integer>1</integer>
 		<integer>2</integer>
 	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
+	<!-- A plain launch screen in the system colour. The bundle is built
+	     without Xcode, which would compile LaunchScreen.storyboard; App
+	     Store Connect rejects a UILaunchStoryboardName with no compiled
+	     storyboard in the bundle. -->
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>
