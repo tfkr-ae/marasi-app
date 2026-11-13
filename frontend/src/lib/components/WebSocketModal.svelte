@@ -245,10 +245,9 @@
 					disabled={upgrade.state !== "open" || closing}
 					on:click={closeConnection}
 				>
-					<Unplug size={14} class="mr-1" />
-					<span class="ws-label">{closing
-						? "Closing…"
-						: "Close Connection"}</span>
+					<span class="btn-content"
+						><Unplug size={14} class="mr-1" /><span class="ws-label">{closing ? "Closing…" : "Close Connection"}</span></span
+					>
 				</button>
 				<button
 					class="text-2xl leading-none"
@@ -385,7 +384,7 @@
 		:global(html.mobile .ws-label) {
 			display: none;
 		}
-		:global(html.mobile .ws-close-connection > svg) {
+		:global(html.mobile .ws-close-connection svg) {
 			margin-right: 0;
 		}
 		:global(html.mobile .ws-tabs) {

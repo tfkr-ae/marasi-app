@@ -131,7 +131,7 @@
 </script>
 
 {#if !launchpad}
-	<div class="flex h-full flex-col items-center justify-center px-4 text-center opacity-60">
+	<div class="lp-empty flex h-full flex-col items-center justify-center opacity-60">
 		<h3 class="text-xl font-bold">No launchpad selected</h3>
 		<p class="text-sm">Create one with + in the sidebar, or send a request from the Ledger.</p>
 	</div>
@@ -191,7 +191,7 @@
 					aria-label="Revert draft"
 					on:click={() => store.revertDraft(launchpadId)}
 				>
-					<RotateCcw size={14} class="mr-1" /> <span class="lp-btn-label">Revert draft</span>
+					<span class="btn-content"><RotateCcw size={14} class="mr-1" /> <span class="lp-btn-label">Revert draft</span></span>
 				</button>
 			{/if}
 			<button
@@ -201,8 +201,9 @@
 				title={entries.length < 2 ? "Compare needs at least two entries" : compare ? "Close compare (Esc)" : "Compare the selected entry with another"}
 				on:click={toggleCompare}
 			>
-				<GitCompare size={14} class="mr-1" />
-				<span class="lp-btn-label">{compare ? "Close compare" : "Compare"}</span>
+				<span class="btn-content"
+					><GitCompare size={14} class="mr-1" /><span class="lp-btn-label">{compare ? "Close compare" : "Compare"}</span></span
+				>
 			</button>
 			<div class="lp-https flex items-center gap-2">
 				<span class="text-sm font-bold">HTTPS</span>
@@ -361,7 +362,11 @@
 		:global(html.mobile .lp-btn-label) {
 			display: none;
 		}
-		:global(html.mobile .lp-icon-btn > svg) {
+		:global(html.mobile .lp-empty) {
+			padding: 0 1rem;
+			text-align: center;
+		}
+		:global(html.mobile .lp-icon-btn svg) {
 			margin-right: 0;
 		}
 		:global(html.mobile .lp-topbar > .lp-launch),

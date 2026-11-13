@@ -98,8 +98,10 @@
 					title="Forward and intercept its response"
 					on:click={() => onForward(item.ID, { interceptResponse: true })}
 				>
-					<CornerDownRight size={14} class="mr-1" /><span class="cp-long-label">Forward + intercept response</span
-					><span class="cp-short-label">+ Response</span>
+					<span class="btn-content"
+						><CornerDownRight size={14} class="mr-1" /><span class="cp-long-label">Forward + intercept response</span
+						><span class="cp-short-label">+ Response</span></span
+					>
 				</button>
 			{/if}
 			<button class="cp-drop btn btn-sm {primary}" title="Drop" on:click={() => onDrop(item.ID)}>

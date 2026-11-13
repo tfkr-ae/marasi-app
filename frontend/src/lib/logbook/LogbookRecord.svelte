@@ -77,10 +77,10 @@
 		{/if}
 		<h1 class="min-w-0 flex-1 truncate text-sm font-bold" title={record.Title}>{record.Title}</h1>
 		<button id="logbookNext" class="btn btn-sm flex-none {primary}" disabled={!hasNext} title={nextTitle} on:click={onNext}
-			aria-label="Next"><span class="record-label">Next</span><ArrowRight size={12} class="ml-1" /></button
+			aria-label="Next"><span class="btn-content"><span class="record-label">Next</span><ArrowRight size={12} class="ml-1" /></span></button
 		>
 		<button id="logbookEdit" class="btn btn-sm flex-none {primary}" title="Edit" on:click={onEdit}
-			aria-label="Edit"><Pencil size={12} class="mr-1" /><span class="record-label">Edit</span></button
+			aria-label="Edit"><span class="btn-content"><Pencil size={12} class="mr-1" /><span class="record-label">Edit</span></span></button
 		>
 		<button id="logbookDelete" class="btn btn-sm flex-none px-2.5 {primary}" title="Delete" aria-label="Delete" on:click={onDelete}
 			><span class="flex h-5 items-center"><Trash2 size={14} /></span></button

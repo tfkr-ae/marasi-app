@@ -10,6 +10,15 @@
   border-radius: 0;
 }
 
+/* A button whose label the mobile layout hides wraps its icon and label in
+   one .btn-content. Skeleton's .btn spaces its element children 0.5rem
+   apart, so a bare icon beside a <span> label would sit further off than
+   the icon beside plain text does. */
+.btn-content {
+  display: inline-flex;
+  align-items: center;
+}
+
 body {
   --ctx-menu-background: rgb(var(--color-surface-50));
   --ctx-menu-border: 1px solid rgb(var(--color-primary-500));
