@@ -105,6 +105,19 @@ jobs:
       marasi_ref: ${{ needs.prepare.outputs.marasi }}
     secrets: inherit
 
+  # The iOS app of the same commit and marasi, to TestFlight. It doesn't
+  # hold up the nightly, and a failure leaves the nightly as it is.
+  testflight:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    uses: ./.github/workflows/testflight.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ needs.prepare.outputs.version }}
+      channel: nightly
+      marasi_ref: ${{ needs.prepare.outputs.marasi }}
+    secrets: inherit
+
   publish:
     needs: [prepare, build]
     if: needs.prepare.outputs.publish == 'true'
