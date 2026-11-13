@@ -35,6 +35,13 @@
 	<string>Marasi uses the camera to scan a pairing QR code.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026</string>
+	<!-- Marasi uses neither, but the Wails iOS runtime it is built on
+	     references location and Face ID, and App Store Connect asks for a
+	     purpose string for every such API in the binary (ITMS-90683). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Marasi doesn't use your location.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Marasi doesn't use Face ID.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Marasi connects to the Marasi service on your network to show its traffic.</string>
 	<key>UIApplicationSceneManifest</key>
