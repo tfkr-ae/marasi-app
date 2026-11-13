@@ -5,9 +5,6 @@
 name: TestFlight
 
 on:
-  # TEMP: run once from this branch before merge; removed before merging.
-  push:
-    branches: [ci/testflight]
   workflow_dispatch:
     inputs:
       version:
