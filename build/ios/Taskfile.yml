@@ -185,7 +185,7 @@ tasks:
         PLIST="{{.PLIST}}"
         set_key() { $P -c "Set :$1 $2" "$PLIST" 2>/dev/null || $P -c "Add :$1 string $2" "$PLIST"; }
         if [ -n "{{.VERSION}}" ]; then
-          SHORT=$(printf '%s' "{{.VERSION}}" | sed -E 's/^v//; s/[^0-9.].*$//')
+          SHORT=$(sh build/ios/scripts/store-version.sh "{{.VERSION}}")
           [ -n "$SHORT" ] && set_key CFBundleShortVersionString "$SHORT"
         fi
         BUILD="{{.BUILD_NUMBER}}"
