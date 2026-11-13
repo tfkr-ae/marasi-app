@@ -1,3 +1,9 @@
+<script context="module">
+	// The docks' states the iOS app has collapsed already: each starts
+	// collapsed there, once, so one the researcher opens stays open.
+	const collapsedOnMobile = new WeakSet();
+</script>
+
 <script>
 	// A side dock, shared by the Launchpad and the Ledger: drag the edge to
 	// resize, drag below the snap point to collapse to a strip. The strip has
@@ -11,6 +17,7 @@
 	import { tick } from "svelte";
 	import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-svelte";
 	import { DOCK, dragWidth, settleDrag, toggleDock } from "./dock.js";
+	import { COMPACT_QUERY, mobileCheck } from "../platform.js";
 
 	export let state;
 	export let limits = DOCK;
@@ -37,6 +44,23 @@
 	function setDock(next) {
 		state.set({ ...$state, ...next });
 	}
+
+	// A phone has no room for a sidebar: on iOS each dock starts collapsed.
+	// Narrow (the iPhone Duo folded) the open dock covers the page, so
+	// choosing what it lists (a row marked data-dock-pick) closes it and
+	// shows the choice. A tap with Shift or ⌘ picks more and stays.
+	let onMobile = false;
+	function closeOnPick(event) {
+		if (!onMobile || event.shiftKey || event.metaKey || event.ctrlKey) return;
+		if (!matchMedia(COMPACT_QUERY).matches) return;
+		if (event.target.closest?.("[data-dock-pick]")) collapse();
+	}
+	mobileCheck.then((isMobile) => {
+		onMobile = isMobile;
+		if (!isMobile || collapsedOnMobile.has(state)) return;
+		collapsedOnMobile.add(state);
+		setDock({ collapsed: true });
+	});
 
 	export async function expand(focusSearch = false) {
 		setDock({ collapsed: false });
@@ -114,7 +138,8 @@
 {/if}
 
 {#if !collapsed || dragging || peeking}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- The click only watches for a chosen row (closeOnPick); the rows have their own keys. -->
+	<!-- svelte-ignore a11y-no-static-element-interactions a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
 	<aside
 		class="lp-dock {overlay
 			? 'absolute bottom-0 left-11 top-0 z-20 shadow-2xl'
@@ -122,6 +147,7 @@
 		style="width: {overlay ? width : panelWidth}px"
 		on:mouseenter={() => clearTimeout(peekTimer)}
 		on:mouseleave={() => collapsed && peek(false, 250)}
+		on:click={closeOnPick}
 	>
 		<!-- Content keeps at least the minimum width while dragging narrower. -->
 		<div class="flex h-full min-h-0 flex-col" style="width: {Math.max(overlay ? width : panelWidth, limits.min)}px">
@@ -132,7 +158,7 @@
 					<slot name="header" />
 					{#if !collapsed}
 						<button
-							class="opacity-70 hover:opacity-100"
+							class="dock-collapse opacity-70 hover:opacity-100"
 							title="Collapse"
 							aria-label={collapseLabel}
 							on:click={collapse}
@@ -148,7 +174,7 @@
 		</div>
 		{#if !$$slots.header && !collapsed}
 			<button
-				class="absolute right-1.5 top-1.5 z-20 opacity-50 hover:opacity-100"
+				class="dock-collapse absolute right-1.5 top-1.5 z-20 opacity-50 hover:opacity-100"
 				title="Collapse"
 				aria-label={collapseLabel}
 				on:click={collapse}
@@ -179,3 +205,66 @@
 		></div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	:global(html.mobile .lp-resize) {
+		width: 1.5rem;
+		left: -0.75rem;
+	}
+	/* The mobile dock's collapse button sits above the widened resize handle,
+	   which otherwise covers it at the dock's edge and takes the tap. */
+	:global(html.mobile .dock-collapse) {
+		z-index: 40;
+	}
+	:global(html.mobile .dock-collapse:not(.absolute)) {
+		position: relative;
+	}
+	/* Narrow mobile screens: an open sidebar (Dock) covers the page beside it
+	   instead of squeezing it to a sliver, and a modal's fixed-width parts
+	   fit the screen. */
+	@media (max-width: 40rem) {
+		:global(html.mobile :has(> .lp-dock)) {
+			position: relative;
+		}
+		:global(html.mobile .lp-dock:not(.absolute)) {
+			position: absolute;
+			inset: 0 auto 0 0;
+			z-index: 35;
+			width: 100% !important;
+		}
+		:global(html.mobile .lp-dock:not(.absolute) > div:first-child) {
+			width: 100% !important;
+		}
+		:global(html.mobile .lp-resize) {
+			display: none;
+		}
+	}
+	/* The dock's expand, search and collapse buttons are big enough to tap,
+	   on every page and width on mobile. */
+	:global(html.mobile .lp-strip > .btn) {
+		width: 2.25rem;
+		height: 2.25rem;
+		padding: 0;
+		justify-content: center;
+	}
+	:global(html.mobile .dock-collapse) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.25rem;
+		min-height: 2.25rem;
+		opacity: 0.8;
+	}
+	:global(html.mobile .dock-collapse.absolute) {
+		top: 0;
+		right: 0;
+	}
+	:global(html.mobile .dock-collapse > svg),
+	:global(html.mobile .lp-strip > .btn > svg) {
+		width: 18px;
+		height: 18px;
+	}
+</style>

@@ -181,6 +181,7 @@
 							<div
 								role="treeitem"
 								aria-selected={current}
+								data-dock-pick
 								aria-current={current}
 								class="group relative flex cursor-default select-none items-center gap-2 py-[3px] pl-7 pr-2 font-mono text-2xs {current
 									? 'bg-primary-500/20'

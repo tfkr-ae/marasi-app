@@ -4,6 +4,7 @@
 	// Alt on Windows/Linux) as a button (click it to record another letter) and Reset in the same positions as
 	// an action's Add binding and Reset. The global entry's groups are the ones
 	// every Marasi menu shows in its Marasi section, so they are headed Marasi.
+	import { MOBILE_GROUP_DESCRIPTIONS, mobile } from "../../platform.js";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { RotateCcw } from "lucide-svelte";
 	import { primaryVariant } from "../../launchpad/format.js";
@@ -24,7 +25,7 @@
 		<ul>
 			{#each rows as row (row.id)}
 				<li
-					class="flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {row.status ===
+					class="kb-row flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {row.status ===
 					'conflict'
 						? 'border-l-error-500'
 						: 'border-l-transparent'}"
@@ -34,10 +35,12 @@
 						<span class="flex h-7 w-7 flex-none items-center justify-center {groupTone(row.group).tile}">
 							<svelte:component this={groupIcon(row.group)} size="15" />
 						</span>
-						<div class="flex min-w-0 flex-col">
+						<div class="kb-text flex min-w-0 flex-col">
 							<span>{row.group.label}</span>
 							{#if row.group.description}
-								<span class="text-xs opacity-70">{row.group.description}</span>
+								<span class="kb-desc text-xs opacity-70"
+									>{($mobile && MOBILE_GROUP_DESCRIPTIONS[row.id]) || row.group.description}</span
+								>
 							{/if}
 							{#if row.status === "conflict"}
 								<span class="text-xs text-error-600 dark:text-error-400">{row.problem}</span>
@@ -52,7 +55,7 @@
 							aria-label="Record a letter for {row.group.label}"
 							on:click={() => onRecord(row.id)}>{formatBinding(`alt+${row.letter.toLowerCase()}`, platform)}</button
 						>
-						<span class="h-8 w-8 shrink-0" aria-hidden="true"></span>
+						<span class="kb-spacer h-8 w-8 shrink-0" aria-hidden="true"></span>
 						<IconButton
 							disabled={!row.resettable}
 							title={row.resettable ? `Reset to ${row.factoryLetter}` : "Already the default"}

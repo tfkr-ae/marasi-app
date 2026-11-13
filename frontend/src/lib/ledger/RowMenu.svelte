@@ -46,6 +46,7 @@
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
 	import { plural } from "./counts.js";
 	import { statusText } from "./table.js";
+	import { swallowNextClick } from "../touch.js";
 
 	/** Whether the menu shows. The menu closes itself by setting it false. */
 	export let open = false;
@@ -178,7 +179,14 @@
 		filterBox?.focus({ preventScroll: true });
 	}
 
-	const viewportSize = () => ({ width: innerWidth, height: innerHeight });
+	// The visible width: on iOS the app frame pads out the screen's safe
+	// area (the folded iPhone Duo's right edge), which a menu must not run
+	// under. The padding is 0 elsewhere.
+	const viewportSize = () => {
+		const frame = document.querySelector(".app-frame");
+		const inset = frame ? parseFloat(getComputedStyle(frame).paddingRight) || 0 : 0;
+		return { width: innerWidth - inset, height: innerHeight };
+	};
 
 	// The Text size or the window changed while it was open: the menu and
 	// its submenus are placed again, outermost first, so each stays beside
@@ -306,11 +314,15 @@
 
 	// The pointer on item `index` of `level`: it is highlighted, deeper
 	// submenus close, and its own submenu opens.
+	// A tap sends the mouse events too, before its click: on touch the
+	// click opens the submenu, so it doesn't open under the finger and take
+	// the tap itself (its first item would run).
+	let touching = false;
 	function hover(level, index, item) {
 		setActive(level, index);
 		keyLevel = level;
 		closeFrom(level);
-		if (Array.isArray(item.sub) && !item.disabled) openSub(level, index);
+		if (Array.isArray(item.sub) && !item.disabled && !touching) openSub(level, index);
 	}
 
 	function onKeydown(event) {
@@ -353,8 +365,12 @@
 		}
 	}
 
+	// A press outside closes the menu. A tap's click then goes nowhere: it
+	// would select the row under it and open the drawer.
 	function onPointerDown(event) {
-		if (open && root && !root.contains(event.target)) close(false);
+		if (!open || !root || root.contains(event.target)) return;
+		close(false);
+		if (event.pointerType === "touch") swallowNextClick(window);
 	}
 
 	// The item's current shortcut from the keybinding profile, if it has one.
@@ -380,6 +396,7 @@
 {#if open && summary}
 	<div
 		bind:this={root}
+		on:pointerdown|capture={(event) => (touching = event.pointerType === "touch")}
 		use:followSize
 		tabindex="-1"
 		class="ledger-row-menu fixed z-50 w-72 border border-surface-300-600-token bg-surface-100-800-token text-xs shadow-2xl"
@@ -588,7 +605,7 @@
 				</div>
 			{/each}
 		</div>
-		<div class="flex justify-between border-t border-surface-300-600-token px-3 py-1 text-3xs opacity-50">
+		<div class="key-hints flex justify-between border-t border-surface-300-600-token px-3 py-1 text-3xs opacity-50">
 			<span>↑↓ move · → open · ↵ run</span>
 			{#if extendHint}<span>⇧-click to extend</span>{/if}
 		</div>

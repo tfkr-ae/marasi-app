@@ -26,7 +26,6 @@
 		getModalStore,
 		LightSwitch,
 		modeCurrent,
-		autoModeWatcher,
 	} from "@skeletonlabs/skeleton";
 	initializeStores();
 	import { onMount } from "svelte";
@@ -85,6 +84,11 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
+	import { mobile, mobileCheck, platformCheck } from "../lib/platform.js";
+	import { applyColourScheme } from "../lib/lightMode.js";
+	import { androidBack } from "../lib/androidBack.js";
+	import { installSwipeToClose } from "../lib/swipeToClose.js";
+	import { installLongPress, installTwoFingerSwipeDown, keepKeyboardDown } from "../lib/touch.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
@@ -95,9 +99,11 @@
 		ChefHat,
 		Brush,
 		BookOpenCheckIcon,
+		HomeIcon,
 		PuzzleIcon,
 		Swords,
 	} from "lucide-svelte";
+	import BottomBar from "../lib/components/BottomBar.svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
 	import MetadataModal from "../lib/components/MetadataModal.svelte";
 	import InterfaceModal from "../lib/components/InterfaceModal.svelte";
@@ -106,9 +112,10 @@
 	import ExtensionUI from "../lib/extensions/ExtensionUI.svelte";
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
-	import { isolateOverlays } from "../lib/overlayIsolation.js";
+	import { closeTopOverlay, isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
+	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
@@ -131,6 +138,7 @@
 	import {
 		installMenuShortcuts,
 		menuDispatcher,
+		menuPalettes,
 		websocketTab,
 		armoryDrawer,
 		keybindingCapture,
@@ -196,6 +204,70 @@
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
 	// The Armory icon's runs-in-progress badge (see armoryBadge).
 	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
+	// The narrow iOS bottom bar's pages (BottomBar.svelte), going where the
+	// rail's tiles go: Home and the main four in the bar, the rest under More.
+	$: barPrimary = [
+		{ id: "home", label: "Home", icon: HomeIcon, path: "/", go: () => goto("/") },
+		{ id: "ledger", label: "Ledger", icon: BookIcon, path: "/ledger", go: () => goto("/ledger") },
+		{ id: "checkpoint", label: "Checkpoint", icon: FlagIcon, path: "/checkpoint", badge: heldBadge.label, go: () => goto("/checkpoint") },
+		{ id: "launchpad", label: "Launchpad", icon: SendIcon, path: "/launchpad", go: () => goto("/launchpad") },
+		{ id: "logbook", label: "Logbook", icon: BookOpenCheckIcon, path: "/logbook", go: () => goto("/logbook") },
+	];
+	$: barMore = [
+		{ id: "compass", label: "Compass", icon: CompassIcon, path: "/compass", go: () => goto("/compass") },
+		{ id: "armory", label: "Armory", icon: Swords, path: "/armory", badge: runningBadge.label, go: () => goto("/armory") },
+		{ id: "workshop", label: "Workshop", icon: ToolIcon, path: "/workshop", go: () => goto("/workshop") },
+		{
+			id: "chef",
+			label: "Chef",
+			icon: ChefHat,
+			path: "/sveltechef",
+			go: async () => {
+				await loadSvelteChef();
+				goto("/sveltechef");
+				showChef = true;
+			},
+		},
+		{
+			id: "excalidraw",
+			label: "Excalidraw",
+			icon: Brush,
+			path: "/excalidraw",
+			go: async () => {
+				await loadExcalidraw();
+				goto("/excalidraw");
+				showExcali = true;
+			},
+		},
+		{
+			id: "interact",
+			label: "Interactsh",
+			icon: ZapIcon,
+			path: "/interact",
+			go: async () => {
+				await loadInteract();
+				goto("/interact");
+				showInteract = true;
+			},
+		},
+		...$extensions
+			.filter((extension) => $extensions_ui[extension.Name]?.icon || extension.UICode)
+			.map((extension) => ({
+				id: "extension-" + extension.Name,
+				label: extension.Name,
+				icon: PuzzleIcon,
+				path: "/extension/" + extension.Name,
+				go: () => goto("/extension/" + extension.Name),
+			})),
+		{
+			id: "settings",
+			label: "Settings",
+			icon: SettingsIcon,
+			path: "/settings",
+			dot: settingsIndicator ? (settingsIndicator.kind === "dot" ? dotTones[settingsIndicator.tone].dot : "bg-primary-500") : "",
+			go: () => goto(settingsPath($updateState)),
+		},
+	];
 	// Each held item's context, for the Checkpoint page and the abandon
 	// toast, which shows on any page.
 	$: checkpointItemContext.load($checkpointStore.items);
@@ -237,6 +309,7 @@
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 		ExportReport: { ref: ExportReview },
 		Connections: { ref: ConnectionsModal },
+		Licences: { ref: LicencesModal },
 		QuitQuestion: { ref: QuitQuestionModal },
 	};
 	// Text size sizes the root element, so everything in rem follows it.
@@ -250,7 +323,9 @@
 		stopWaitingForProject = loadedProject.subscribe(
 			(project) => project && resolve(project),
 		);
-		readConfig().then(() => connectionStore.start());
+		readConfig()
+			.then(() => mobileCheck)
+			.then((remoteOnly) => connectionStore.start({ remoteOnly }));
 	});
 	// With no Marasi CLI, the Connections modal opens by itself on its CLI
 	// setup, once per failure (lib/connection/cli.js).
@@ -260,10 +335,46 @@
 		cliSetupOffered = true;
 		openConnections();
 	}
+	// A phone with nothing paired opens Connections on its pairing, once.
+	let pairingOffered = false;
+	$: if ($connectionStore.phase === "unpaired" && !pairingOffered) {
+		pairingOffered = true;
+		openConnections();
+	}
 	// The start screen's Connections… opens the Connections modal over it,
 	// so the researcher can switch before the app has loaded.
 	function openConnections() {
 		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
+	}
+	// Mobile: modals and drawers leave the rail or bottom bar in view and in
+	// use (app.css, overlayIsolation.js). A tap on one of its pages closes
+	// the top one as Escape does; if it stays open (it asks about unsaved
+	// edits first), the tap goes nowhere. More only opens its sheet.
+	const liveNav = () => ($mobile ? ".nav-rail, .bottom-bar, .bottom-bar-backdrop" : null);
+	const openOverlays = () => [$modalStore.length, $modalStore[0], $drawerStore.open];
+	function closeOverlaysForNav(event) {
+		if (!$mobile || !($modalStore.length || $drawerStore.open)) return;
+		const tile = event.target?.closest?.(".nav-rail a, .nav-rail button, .bottom-bar button");
+		if (!tile || tile.closest(".bottom-bar-more")) return;
+		// The Connections tile toggles its modal: with it open, the tap only
+		// closes it (left to reopen it, the modal flickered shut and back).
+		const togglesConnections =
+			$modalStore[0]?.component === "Connections" &&
+			Boolean(tile.closest("[data-testid=bottom-bar-connections], [data-testid=connection-tile]"));
+		// One at a time, as Escape would, until none is left or one stays.
+		for (let i = 0; i < 8 && ($modalStore.length || $drawerStore.open); i++) {
+			const before = openOverlays();
+			closeTopOverlay();
+			if (openOverlays().every((value, j) => value === before[j])) {
+				event.preventDefault();
+				event.stopPropagation();
+				return;
+			}
+		}
+		if (togglesConnections) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
 	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
@@ -285,6 +396,32 @@
 		return menuDispatcher.isModalToggle(event, actionId, shortcutState());
 	}
 	let removeMenuShortcuts = () => {};
+	// Mobile: a swipe down closes the open modal, drawer or menu.
+	onMount(() => {
+		let stop = () => {};
+		mobileCheck.then((isMobile) => {
+			if (isMobile) stop = installSwipeToClose(document, { close: closeTopOverlay, snapshot: openOverlays });
+		});
+		return () => stop();
+	});
+	// Android: the system bars' icons follow the app's colour scheme
+	// (MainActivity's MarasiAndroid.setLightBars); $modeCurrent is true in light.
+	$: if (typeof window !== "undefined") window.MarasiAndroid?.setLightBars?.(Boolean($modeCurrent));
+	// Android: Back asks the page first (MainActivity.handleBack).
+	onMount(() => {
+		platformCheck.then((name) => {
+			if (name !== "android") return;
+			window.marasiBack = () =>
+				androidBack({
+					closeTop: closeTopOverlay,
+					historyIndex: history.state?.["sveltekit:history"] ?? 0,
+					path: get(page).url.pathname,
+					back: () => history.back(),
+					home: () => goto("/"),
+				});
+		});
+		return () => delete window.marasiBack;
+	});
 	onMount(() => {
 		// Opens another client (the Marasi CLI, another app) starts while
 		// the app is connected: the opening screen follows them, and the
@@ -314,7 +451,7 @@
 			if (message) toastStore.trigger({ message });
 		});
 		refreshUpdateState();
-		autoModeWatcher();
+		applyColourScheme();
 		StartupRoutine2.then((project) => {
 			stopWaitingForProject();
 			// The project that opened, which may not be the scratchpad, names
@@ -348,7 +485,25 @@
 				},
 			);
 		});
+		// Touch fixes, on iOS only (lib/touch.js).
+		let stopTouch = () => {};
+		mobileCheck.then((onMobile) => {
+			if (!onMobile) return;
+			const stopLongPress = installLongPress(window);
+			const stopKeyboard = keepKeyboardDown(modalStore, document);
+			// Opens the Marasi menu, not over another dialog.
+			const stopSwipe = installTwoFingerSwipeDown(window, () => {
+				if (document.querySelector("dialog[open]") || $modalStore.length > 0) return;
+				menuPalettes.active()?.toggle();
+			});
+			stopTouch = () => {
+				stopLongPress();
+				stopKeyboard();
+				stopSwipe();
+			};
+		});
 		return () => {
+			stopTouch();
 			stopFollowing();
 			stopReportingDrafts();
 			stopReportingLogbookEdits();
@@ -366,17 +521,18 @@
 </script>
 
 <div
-	class="flex flex-col h-screen"
-	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle }}
+	class="app-frame flex flex-col h-screen safe-area-pad"
+	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle, live: liveNav, quiet: () => $mobile }}
 >
-	<div class="flex flex-1 h-screen">
+	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+	<div class="app-body flex flex-1 h-screen" on:click|capture={closeOverlaysForNav}>
 		{#if $appState.started}
 			<GlobalMenu />
 			<AppRail
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"
 				aspectRatio="py-2.5 px-1.5"
-				width="w-[4.75rem]"
+				width={$mobile ? "w-[var(--mobile-rail-width)]" : "w-[4.75rem]"}
 				spacing="space-y-0.5"
 			>
 				<!-- AppRailTiles -->
@@ -396,7 +552,7 @@
 							class="flex justify-center items-center w-full"
 						>
 							<Logo
-								size="52"
+								size={$mobile ? "36" : "52"}
 								mode={$page.url.pathname ===
 									"/" ||
 								$modeCurrent
@@ -711,9 +867,11 @@
 					<div
 						class="flex justify-center items-center w-full py-2"
 					>
+						<!-- On a phone the rail is 48pt wide: a smaller switch keeps
+						     8pt either side of it. -->
 						<LightSwitch
-							width="w-10"
-							height="h-5"
+							width={$mobile ? "w-8" : "w-10"}
+							height={$mobile ? "h-4" : "h-5"}
 							bgLight="bg-surface-200"
 							bgDark="bg-surface-500"
 							fillLight="fill-surface-50"
@@ -839,6 +997,9 @@
 					/>
 				{/if}
 			</div>
+			{#if $mobile}
+				<BottomBar primary={barPrimary} more={barMore} onConnections={openConnections} />
+			{/if}
 		{:else if !$opening}
 			<div
 				class="flex items-center w-full h-full justify-center"
@@ -892,7 +1053,7 @@
 <!-- The opening screen covers the app rather than replacing it, so the open
      project's pages stay mounted, exactly as they were, if the open fails. -->
 {#if $opening && $openingShown}
-	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token">
+	<div class="fixed inset-0 z-[998] overflow-auto bg-surface-50-900-token safe-area-pad">
 		<OpeningScreen
 			state={$opening}
 			browse={filePickerShown($connectionStore.connection)}
@@ -970,5 +1131,73 @@
 	}
 	:global(.nav-rail::-webkit-scrollbar) {
 		display: none;
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile app rail: icons only, 48pt wide (the layout sets the width and a
+	   smaller logo). Each tile keeps its name as its title. Settings draws its
+	   icon in the label slot, so a label with an icon stays. */
+	:global(html.mobile .nav-rail .app-rail-label:not(:has(svg))),
+	:global(html.mobile .nav-rail .rail-label) {
+		display: none;
+	}
+	/* The mobile frame: every page runs the full height, under the home
+	   indicator too (the frame's bottom inset is dropped, and the body no
+	   longer overflows the screen when a page, such as Compass, is taller).
+	   Only the app rail's tiles move in, clear of the screen's curved corners,
+	   as the drawer rail does when maximised. */
+	:global(html.mobile .app-frame) {
+		padding-bottom: 0;
+	}
+	:global(html.mobile .app-body) {
+		height: auto;
+		min-height: 0;
+		overflow: hidden;
+	}
+	/* The inset is inside the first and last tiles, not around the rail, so
+	   a selected Home or Settings tile fills to the screen's edge, its icon
+	   clear of the curved corner. With the rail in view the frame drops its
+	   top inset and the page takes it instead (pulling the rail up into the
+	   frame's padding would be clipped by the body, as in portrait). */
+	:global(html.mobile .app-frame:has(> .app-body > .nav-rail)) {
+		padding-top: 0;
+	}
+	:global(html.mobile .app-frame:has(> .app-body > .nav-rail) #content) {
+		margin-top: var(--safe-top);
+	}
+	:global(html.mobile .nav-rail .app-bar-default > .app-rail-anchor:first-child > .app-rail-wrapper) {
+		padding-top: calc(0.625rem + max(var(--safe-top), 0.75rem));
+	}
+	:global(html.mobile .nav-rail .app-bar-trail > .app-rail-anchor:last-child > .app-rail-wrapper) {
+		padding-bottom: calc(0.625rem + max(var(--safe-bottom), 1rem));
+	}
+	/* The mobile rail: a tap goes straight to the page, with no grey tap flash
+	   and no hover tint left on the tile (a touch screen's hover sticks after
+	   the tap). The selected tile keeps its colour. */
+	:global(html.mobile .nav-rail),
+	:global(html.mobile .nav-rail *) {
+		-webkit-tap-highlight-color: transparent;
+	}
+	:global(html.mobile .nav-rail .bg-primary-hover-token:hover:not(.bg-primary-active-token)) {
+		background-color: transparent;
+	}
+	@media (max-width: 40rem) {
+		:global(html.mobile .nav-rail) {
+			display: none;
+		}
+		:global(html.mobile .app-body) {
+			flex-direction: column;
+		}
+		:global(html.mobile .app-body > #content) {
+			min-height: 0;
+			margin-left: var(--safe-left);
+			margin-right: var(--safe-right);
+		}
+		:global(html.mobile .app-frame) {
+			padding-left: 0;
+			padding-right: 0;
+		}
 	}
 </style>

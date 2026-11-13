@@ -24,6 +24,7 @@
 	import { followChromeConfig } from "../lib/chromeConfigEvents.js";
 	import { service } from "../lib/service/index.js";
 	import { connectionStore } from "../stores/connectionStore.js";
+	import { mobile, mobileCheck } from "../lib/platform.js";
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -41,7 +42,8 @@
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
 
 	onMount(() => {
-		readChromeProfiles();
+		// The iOS app has no Chrome to start.
+		mobileCheck.then((onMobile) => onMobile || readChromeProfiles());
 		return followChromeConfig(service.on, {
 			connectionKind: () => get(connectionStore).connection.kind,
 			onPaths: () => {},
@@ -52,7 +54,7 @@
 		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));
 </script>
 
-<div class="content">
+<div class="content" class:mobile-home={$mobile}>
 	<div class="no-select dashboard-content">
 		<div class="container mx-auto p-4 space-y-4 text-sm">
 			<div
@@ -108,6 +110,7 @@
 						>
 					</button>
 
+					{#if !$mobile}
 					<div class="relative w-fit">
 						<div
 							class="flex w-full overflow-hidden"
@@ -162,15 +165,19 @@
 							</div>
 						{/if}
 					</div>
+					{/if}
 				</div>
 			</div>
 			<Dashboard />
+			{#if $mobile}<LogTable compact />{/if}
 		</div>
 	</div>
 
+	{#if !$mobile}
 	<div class="log-table-container">
 		<LogTable />
 	</div>
+	{/if}
 </div>
 
 <style>
@@ -218,6 +225,27 @@
 			rgb(var(--color-surface-800));
 	}
 
+	/* The iOS app: one scrolling column, the cards and the log in line
+	   with the header, no split between them. */
+	.mobile-home {
+		height: 100%;
+		overflow-y: auto;
+	}
+	.mobile-home .dashboard-content {
+		flex: none;
+		max-height: none;
+		overflow: visible;
+	}
+	/* Full width, so its edges line up with the connection banner's
+	   (px-4) above the page, as the header does with the cards. */
+	.mobile-home :global(.container) {
+		max-width: none;
+	}
+	.mobile-home :global([data-dashboard]) {
+		padding-left: 0;
+		padding-right: 0;
+	}
+
 	/* Responsive adjustments for small screens */
 	@media (max-height: 700px) {
 		.dashboard-content {
@@ -238,6 +266,27 @@
 		.log-table-container {
 			flex: 0 0 20vh;
 			height: 20vh;
+		}
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	:global(html.mobile .mobile-home .header) {
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	/* ---- Narrow mobile: Home, the dock buttons, CVSS ---- */
+	   /* Home's listener and Open Project, and Download Certificate, each take
+	   the full width, one row each. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .mobile-home .header > *) {
+			flex: 1 1 100%;
+			display: flex;
+		}
+		:global(html.mobile .mobile-home .header > * > .btn) {
+			flex: 1 1 0;
+			justify-content: center;
 		}
 	}
 </style>

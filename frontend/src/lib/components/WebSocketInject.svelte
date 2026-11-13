@@ -87,7 +87,7 @@
 
 <div class="flex h-full min-h-0 w-full flex-col">
 	<div
-		class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
+		class="ws-bar flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 	>
 		<div class="flex items-center gap-2">
 			<label class="flex items-center gap-1.5 text-xs">
@@ -141,7 +141,7 @@
 
 	{#if showSendUncompressed}
 		<label
-			class="flex shrink-0 items-center gap-2 border-b border-surface-500/30 px-3 py-1.5 text-xs"
+			class="ws-bar flex shrink-0 items-center gap-2 border-b border-surface-500/30 px-3 py-1.5 text-xs"
 		>
 			<input
 				type="checkbox"

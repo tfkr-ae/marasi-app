@@ -120,12 +120,12 @@
 		on:click={() => setOpen(!open)}
 	>
 		<FileType size={15} class="opacity-70" />
-		Types
+		<span class="toolbar-label">Types</span>
 		{#if hiddenWithTraffic}
 			<span
 				id="ledgerTypesHiddenCount"
 				class="badge {primary} px-1.5 py-0 text-3xs"
-				title="{$exclusion.length} content-type values hidden in total">{hiddenWithTraffic} hidden</span
+				title="{$exclusion.length} content-type values hidden in total">{hiddenWithTraffic}<span class="toolbar-label"> hidden</span></span
 			>
 		{/if}
 	</button>
@@ -133,7 +133,7 @@
 	{#if open}
 		<div
 			id="ledgerTypesMenu"
-			class="absolute right-0 top-full z-40 flex max-h-[70vh] w-[26rem] flex-col border border-surface-300-600-token bg-surface-100-800-token text-sm shadow-xl"
+			class="toolbar-panel absolute right-0 top-full z-40 flex max-h-[70vh] w-[26rem] flex-col border border-surface-300-600-token bg-surface-100-800-token text-sm shadow-xl"
 			role="dialog"
 			aria-label="Content types"
 		>

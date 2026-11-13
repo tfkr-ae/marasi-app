@@ -444,6 +444,7 @@
 						<button
 							class="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
 							aria-current={isSelected ? "true" : undefined}
+							data-dock-pick
 							on:click={() => pickLaunchpad(launchpad.ID)}
 						>
 							{#if open}
@@ -568,6 +569,7 @@
 									aria-current={active ? "true" : undefined}
 									data-entry={entry.ID}
 									data-tree-row
+									data-dock-pick
 									data-list={row.list ?? undefined}
 									data-last={row.last ? "true" : undefined}
 									data-label={row.label}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="wails_blue">#3574D4</color>
+    <color name="wails_blue_dark">#2C5FB8</color>
+    <color name="wails_background">#1B2636</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <!-- Marasi: the theme's primary and page surfaces (frontend/tfkr-theme.js),
+         so the window behind the page and the splash match the app. -->
+    <color name="marasi_primary">#CF595B</color>
+    <color name="marasi_surface">#FFFFFF</color>
+    <!-- Marasi: the icon's cream, behind its adaptive foreground. -->
+    <color name="ic_launcher_background">#FFFFF0</color>
+</resources>

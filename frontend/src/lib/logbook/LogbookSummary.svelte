@@ -52,7 +52,7 @@
 <div class="logbook-summary h-full overflow-auto pb-20">
 	<div class="space-y-5 px-5 py-4">
 		{#if filters.kind !== "testCases"}
-			<div class="flex gap-2">
+			<div class="logbook-cards flex gap-2">
 				{#each SEVERITIES as severity}
 					{@const on = filters.severities.includes(severity)}
 					<button
@@ -152,3 +152,66 @@
 		{/if}
 	</div>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Logbook summary, short of room (the outline open): the severity
+	   and test case cards go three to a row, so a long name (Informational)
+	   keeps its margin inside the card. */
+	:global(html.mobile .logbook-summary) {
+		container-type: inline-size;
+	}
+	:global(html.mobile .logbook-cards > button) {
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
+	}
+	/* The Logbook summary's lists on a narrow mobile screen: a finding's title
+	   keeps the room, its severity badge takes only its own width, and its
+	   test case (or a test case's tags) goes to a second line, or nowhere when
+	   there is none. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .logbook-summary-findings > button),
+		:global(html.mobile .logbook-summary-test-cases > button) {
+			flex-wrap: wrap;
+			height: auto;
+			min-height: 2.25rem;
+			row-gap: 0.125rem;
+			padding-top: 0.375rem;
+			padding-bottom: 0.375rem;
+		}
+		:global(html.mobile .logbook-summary-findings > button > span:first-child) {
+			width: auto;
+		}
+		:global(html.mobile .logbook-summary-findings > button > span:last-child),
+		:global(html.mobile .logbook-summary-test-cases > button > span:nth-last-child(2)) {
+			order: 1;
+			flex: 1 0 100%;
+			width: auto;
+		}
+		:global(html.mobile .logbook-summary-findings > button > span:last-child:empty),
+		:global(html.mobile .logbook-summary-test-cases > button > span:nth-last-child(2):empty) {
+			display: none;
+		}
+		:global(html.mobile .logbook-summary-findings > button > span:nth-child(2)),
+		:global(html.mobile .logbook-summary-test-cases > button > span:first-child) {
+			white-space: normal;
+			overflow: visible;
+		}
+		:global(html.mobile .logbook-summary-findings > button > span:empty),
+		:global(html.mobile .logbook-summary-test-cases > button > span:empty) {
+			display: none;
+		}
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@container (max-width: 40rem) {
+		:global(html.mobile .logbook-cards) {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+</style>

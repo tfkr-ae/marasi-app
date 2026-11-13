@@ -216,7 +216,7 @@
 			}
 		}}
 	>
-		<header class="flex justify-between items-center gap-3">
+		<header class="ws-header flex justify-between items-center gap-3">
 			<div class="flex min-w-0 items-center gap-2">
 				<RadioIcon size={18} class={upgrade.iconClass} />
 				<h2 class="truncate text-base font-bold">
@@ -239,14 +239,15 @@
 
 			<div class="flex items-center gap-2">
 				<button
-					class="btn btn-sm {primaryVariant($modeCurrent)}"
+					class="ws-close-connection btn btn-sm {primaryVariant($modeCurrent)}"
+					aria-label="Close Connection"
+					title="Close Connection"
 					disabled={upgrade.state !== "open" || closing}
 					on:click={closeConnection}
 				>
-					<Unplug size={14} class="mr-1" />
-					{closing
-						? "Closing…"
-						: "Close Connection"}
+					<span class="btn-content"
+						><Unplug size={14} class="mr-1" /><span class="ws-label">{closing ? "Closing…" : "Close Connection"}</span></span
+					>
 				</button>
 				<button
 					class="text-2xl leading-none"
@@ -259,7 +260,7 @@
 		</header>
 
 		<div class="mt-2 flex w-full justify-center">
-			<TabGroup padding="px-3 py-1" regionList="text-sm">
+			<TabGroup class="ws-tabs" padding="px-3 py-1" regionList="text-sm">
 				<Tab
 					bind:group={openTab}
 					name="stream"
@@ -374,3 +375,45 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .ws-label) {
+			display: none;
+		}
+		:global(html.mobile .ws-close-connection svg) {
+			margin-right: 0;
+		}
+		:global(html.mobile .ws-tabs) {
+			width: 100%;
+		}
+		:global(html.mobile .ws-tabs .tab-list) {
+			display: flex;
+		}
+		:global(html.mobile .ws-tabs .tab-list > *) {
+			flex: 1 1 0;
+			min-width: 0;
+			padding-left: 0.25rem;
+			padding-right: 0.25rem;
+			font-size: 0.75rem;
+			text-align: center;
+		}
+		:global(html.mobile .ws-tabs .tab-list svg) {
+			display: none;
+		}
+		:global(html.mobile .ws-tabs .tab-list div) {
+			justify-content: center;
+		}
+		:global(html.mobile .ws-bar) {
+			flex-wrap: wrap;
+			height: auto;
+			min-height: 2.5rem;
+			padding-top: 0.25rem;
+			padding-bottom: 0.25rem;
+			row-gap: 0.25rem;
+		}
+	}
+</style>

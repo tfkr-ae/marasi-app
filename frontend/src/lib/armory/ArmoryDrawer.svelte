@@ -5,6 +5,7 @@
 	// column) on the left. It fills the box the page gives it, inside the
 	// workspace right of the dock. The `details` slot passes through to the
 	// expanded column.
+	import PaneTabs from "../components/PaneTabs.svelte";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, pairTiming, usesSyntax } from "../ledger/drawer.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
@@ -83,6 +84,8 @@
 	const STACK_BELOW = 480;
 	let panesWidth = Infinity;
 	$: stacked = panesWidth < STACK_BELOW;
+	// The pane on show when the screen is too narrow for both (PaneTabs).
+	let narrowPane = "request";
 </script>
 
 <div class="armory-drawer flex h-full min-h-0 bg-surface-50 text-2xs dark:bg-surface-900">
@@ -103,12 +106,20 @@
 	>
 		<svelte:fragment slot="details"><slot name="details" /></svelte:fragment>
 	</ArmoryDrawerRail>
+	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+	<PaneTabs
+		tabs={[
+			{ id: "request", label: "Request" },
+			{ id: "response", label: "Response" },
+		]}
+		bind:active={narrowPane}
+	/>
 	<div
 		class="armory-drawer-panes flex min-h-0 min-w-0 flex-1 {stacked ? 'flex-col' : ''}"
 		data-stacked={stacked}
 		bind:clientWidth={panesWidth}
 	>
-		<div class="armory-drawer-request {paneBox}">
+		<div class="armory-drawer-request {paneBox}" class:pane-off={narrowPane !== "request"}>
 			{#if details === undefined}
 				<p class={message}>Loading…</p>
 			{:else if details === null}
@@ -125,6 +136,7 @@
 			class="armory-drawer-response {paneBox} flex flex-col border-surface-300-600-token {stacked
 				? 'border-t'
 				: 'border-l'}"
+			class:pane-off={narrowPane !== "response"}
 		>
 			{#if details === undefined}
 				<p class={message}>Loading…</p>
@@ -140,3 +152,15 @@
 		</div>
 	</div>
 </div>
+</div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .armory-drawer-panes) {
+			flex-direction: row !important;
+		}
+	}
+</style>

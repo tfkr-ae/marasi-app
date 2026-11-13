@@ -73,6 +73,7 @@
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
 	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
 	import { isSuperseded } from "../../lib/service/errors.js";
+	import { mobile } from "../../lib/platform.js";
 
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
@@ -752,7 +753,7 @@
 		onDeleteRun={deleteRun}
 	/>
 
-	<div bind:this={workspace} bind:clientHeight={workspaceHeight} class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+	<div bind:this={workspace} bind:clientHeight={workspaceHeight} class="armory-workspace relative flex min-w-0 flex-1 flex-col overflow-hidden">
 		{#if selectedTemplate}
 			<TemplateHeader
 				bind:name
@@ -762,12 +763,12 @@
 				onDelete={deleteTemplate}
 			/>
 			<!-- Editor and Run settings side by side when wide, stacked when narrow. -->
-			<div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+			<div class="armory-editor-area flex min-h-0 flex-1 flex-col lg:flex-row">
 				<section class="min-h-24 min-w-0 flex-1">
 					<TemplateEditor bind:this={templateEditor} bind:value={rawTemplate} />
 				</section>
 				<section
-					class="flex flex-none flex-col border-t border-surface-500/30 lg:border-l lg:border-t-0 {settingsOpen
+					class="armory-run-settings flex flex-none flex-col border-t border-surface-500/30 lg:border-l lg:border-t-0 {settingsOpen
 						? 'lg:w-80'
 						: 'lg:w-9'}"
 				>
@@ -784,7 +785,7 @@
 						<span class={settingsOpen ? "" : "lg:[writing-mode:vertical-rl]"}>Run settings</span>
 					</button>
 					{#if settingsOpen}
-						<div class="flex max-h-80 min-h-0 flex-col lg:max-h-none lg:flex-1">
+						<div class="armory-run-body flex max-h-80 min-h-0 flex-col lg:max-h-none lg:flex-1">
 							<RunSettings
 								bind:attackType
 								bind:useHTTPS
@@ -801,7 +802,7 @@
 				</section>
 			</div>
 			<div
-				class="flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}"
+				class="armory-traffic flex-none border-t border-surface-500/30 {trafficOpen ? 'h-[38%] min-h-36' : ''}"
 				bind:offsetHeight={trafficHeight}
 			>
 				<TrafficRegion
@@ -845,8 +846,10 @@
 				<!-- Over the bottom of the workspace only, so it moves with the
 				     dock. The red top line is drawn over the drawer, as in the
 				     Ledger, so CodeMirror's sticky gutters can't paint over it. -->
+				<!-- On mobile, maximised fills the screen (app.css, .mobile-fullscreen). -->
 				<div
 					class="armory-drawer-box absolute inset-x-0 bottom-0 isolate z-40 {drawerMaximised ? 'top-0' : ''}"
+					class:mobile-fullscreen={$mobile && drawerMaximised}
 					style={drawerMaximised ? "" : `height: ${drawerShare * 100}%`}
 				>
 					{#if !drawerMaximised}
@@ -915,3 +918,46 @@
 	extendHint={false}
 	on:action={(e) => runRowAction(e.detail, rowMenu.target)}
 />
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Armory, stacked on the phone's short screen: Run settings
+	   shrinks and scrolls (RunSettings.svelte) instead of spilling under the
+	   Traffic panel. */
+	:global(html.mobile .armory-run-settings) {
+		flex-shrink: 1;
+		min-height: 0;
+	}
+	@media (max-width: 40rem) {
+		/* The Armory: the template editor and Run settings scroll as one
+		   column above the traffic, each at its own height. */
+		:global(html.mobile .armory-editor-area) {
+			overflow-y: auto;
+		}
+		:global(html.mobile .armory-editor-area > section:first-child) {
+			flex: none;
+			height: 11rem;
+		}
+		:global(html.mobile .armory-run-settings) {
+			flex: none;
+		}
+	}
+	/* The narrow mobile Armory: Run settings shows whole, its Launch and Draft
+	   under it, and the editor area scrolls as one rather than nesting a
+	   second scroll inside it. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .armory-run-body) {
+			max-height: none;
+		}
+		:global(html.mobile .armory-run-body .overflow-y-auto) {
+			overflow: visible;
+		}
+		:global(html.mobile .armory-run-body > *),
+		:global(html.mobile .armory-run-body > * > *) {
+			flex: none;
+			min-height: auto;
+		}
+	}
+</style>

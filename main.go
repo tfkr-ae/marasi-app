@@ -15,7 +15,7 @@ func main() {
 	// Create an instance of the app structure
 	app := NewApp()
 
-	wails := application.New(application.Options{
+	opts := application.Options{
 		Name: "Marasi",
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -26,7 +26,9 @@ func main() {
 		ShouldQuit:   app.shouldQuit,
 		ErrorHandler: handleWailsError,
 		LogLevel:     slog.LevelError,
-	})
+	}
+	modifyOptionsForIOS(&opts)
+	wails := application.New(opts)
 	app.wails = wails
 	quitOnSignal(app)
 	if menu := applicationMenu(); menu != nil {

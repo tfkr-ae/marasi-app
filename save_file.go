@@ -23,6 +23,9 @@ func (a *App) SaveFileAs(title, defaultName, filterName, filterPattern, contentB
 	if err != nil {
 		return "", fmt.Errorf("saving %s: the content is not base64: %w", defaultName, err)
 	}
+	if a.shareFile != nil {
+		return a.shareFile(filepath.Base(defaultName), data)
+	}
 	var filters []fileFilter
 	if filterPattern != "" {
 		filters = append(filters, fileFilter{DisplayName: filterName, Pattern: filterPattern})

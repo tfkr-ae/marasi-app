@@ -177,6 +177,7 @@
 								? 'bg-primary-500/20'
 								: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 							aria-current={on ? "true" : undefined}
+							data-dock-pick
 							on:click={() => onOpen(section.kind, record.ID)}
 						>
 							{#if on}<span class="absolute bottom-0 left-0 top-0 w-[3px] bg-primary-500"></span>{/if}

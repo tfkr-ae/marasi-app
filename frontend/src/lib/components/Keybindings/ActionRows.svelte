@@ -21,14 +21,14 @@
 <ul>
 	{#each rows as row (row.action.id)}
 		<li
-			class="flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {bar[row.status] ?? 'border-l-transparent'}"
+			class="kb-row flex items-center justify-between gap-4 border-b border-l-4 border-b-surface-300 px-3 py-1.5 dark:border-b-surface-600 {bar[row.status] ?? 'border-l-transparent'}"
 			data-action-id={row.action.id}
 			data-unavailable={row.available === false ? "" : undefined}
 		>
-			<div class="flex min-w-0 flex-col {row.available === false ? 'opacity-70' : ''}">
+			<div class="kb-text flex min-w-0 flex-col {row.available === false ? 'opacity-70' : ''}">
 				<span>{row.action.label}</span>
 				{#if row.action.description}
-					<span class="text-xs opacity-70">{row.action.description}</span>
+					<span class="kb-desc text-xs opacity-70">{row.action.description}</span>
 				{/if}
 				{#if row.status === "conflict"}
 					<span class="text-xs text-error-600 dark:text-error-400">{row.problem}</span>

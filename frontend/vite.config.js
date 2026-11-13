@@ -1,9 +1,12 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
+import { openSourceNotices } from './notices.js';
 
 export default defineConfig({
 	plugins: [
-		sveltekit()
+		sveltekit(),
+		openSourceNotices({ repoRoot: fileURLToPath(new URL('..', import.meta.url)) })
 	],
 	//Fix
 	resolve: {

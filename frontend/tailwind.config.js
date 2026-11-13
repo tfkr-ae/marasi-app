@@ -9,6 +9,10 @@ import forms from '@tailwindcss/forms';
 export default {
 	// 2. Opt for dark mode to be handled via the class method
 	darkMode: 'selector',
+	// hover: variants apply only where a pointer can hover: a mouse is
+	// unchanged, and a touch screen (the iOS app) keeps no tint where a
+	// finger last was.
+	future: { hoverOnlyWhenSupported: true },
 	content: [
 		'./src/**/*.{html,js,svelte,ts}',
 		// 3. Append the path to the Skeleton package

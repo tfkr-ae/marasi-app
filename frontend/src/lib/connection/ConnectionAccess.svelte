@@ -183,7 +183,7 @@
 				<p class="text-xs opacity-70">{shared ? `On ${state.control.address}` : "Let another device connect"}</p>
 			</div>
 			<form class="flex items-center gap-2" on:submit|preventDefault={share}>
-				<select class="select h-8 w-56 rounded-none py-1 text-xs" data-testid="share-interface" bind:value={address}>
+				<select class="narrow-full select h-8 w-56 rounded-none py-1 text-xs" data-testid="share-interface" bind:value={address}>
 					{#each interfaceOptions(interfaces) as option (option.address)}
 						<option value={option.address}>{option.label}</option>
 					{/each}
@@ -195,7 +195,7 @@
 			</form>
 		</div>
 		{#if shared}
-			<div class="flex items-start justify-between gap-6 py-3" data-testid="share-details">
+			<div class="settings-row flex items-start justify-between gap-6 py-3" data-testid="share-details">
 				<div class="shrink-0 bg-white p-1">
 					{#if code}
 						<svg viewBox="0 0 {code.size} {code.size}" class="h-40 w-40" shape-rendering="crispEdges" role="img" aria-label="Pairing QR code" data-testid="share-qr">

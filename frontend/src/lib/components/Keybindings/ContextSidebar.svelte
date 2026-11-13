@@ -53,7 +53,7 @@
 </script>
 
 <nav
-	class="w-48 shrink-0 overflow-y-auto [scrollbar-gutter:stable] border-r border-surface-300 dark:border-surface-600"
+	class="kb-nav w-48 shrink-0 overflow-y-auto [scrollbar-gutter:stable] border-r border-surface-300 dark:border-surface-600"
 	aria-label="Page"
 >
 	{#each pages as page (page.page)}
@@ -78,7 +78,7 @@
 </nav>
 
 <nav
-	class="w-48 shrink-0 overflow-y-auto [scrollbar-gutter:stable] border-r border-surface-300 dark:border-surface-600"
+	class="kb-nav w-48 shrink-0 overflow-y-auto [scrollbar-gutter:stable] border-r border-surface-300 dark:border-surface-600"
 	aria-label="State"
 >
 	{#each current?.groups ?? [] as group (group.id)}

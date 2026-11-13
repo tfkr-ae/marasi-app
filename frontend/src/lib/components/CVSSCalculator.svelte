@@ -76,7 +76,7 @@
 </script>
 
 <div class="border border-surface-500/30 bg-white dark:bg-surface-800" data-testid="cvss-calculator">
-	<div class="flex items-center gap-1 pr-1">
+	<div class="cvss-head flex items-center gap-1 pr-1">
 		<button
 			type="button"
 			class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
@@ -144,7 +144,7 @@
 				<div class="space-y-1">
 					<div class="text-3xs font-bold uppercase tracking-wider opacity-50">{group.name}</div>
 					{#each group.metrics as m}
-						<div class="flex items-center gap-2">
+						<div class="cvss-metric flex items-center gap-2">
 							<span class="w-28 flex-none truncate text-2xs opacity-80" title="{m.name} ({m.key})">{m.name}</span>
 							<div class="flex min-w-0 flex-1 gap-px" role="group" aria-label={m.name}>
 								{#each m.options as [value, label]}
@@ -170,3 +170,34 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The CVSS calculator, narrow: a metric's name above its options, the
+	   options sharing the full width as taller buttons with whole labels. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .cvss-metric) {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		:global(html.mobile .cvss-metric > span) {
+			flex: 1 0 100%;
+			width: auto;
+		}
+		:global(html.mobile .cvss-metric > [role="group"]) {
+			flex: 1 0 100%;
+			gap: 2px;
+		}
+		:global(html.mobile .cvss-metric > [role="group"] > button) {
+			padding-top: 0.375rem;
+			padding-bottom: 0.375rem;
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+		:global(html.mobile .cvss-head) {
+			flex-wrap: wrap;
+		}
+	}
+</style>

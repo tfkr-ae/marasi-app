@@ -41,6 +41,10 @@ type App struct {
 	// return the chosen path, "" when the user cancelled. Tests replace them.
 	openFileDialog func(openDialogOptions) (string, error)
 	saveFileDialog func(saveDialogOptions) (string, error)
+	// shareFile, set on iOS only, replaces the save dialog and the write
+	// after it: it shows the share sheet for a file of these bytes and
+	// returns its name, "" when cancelled (share_file_ios.go).
+	shareFile func(name string, data []byte) (string, error)
 	// setClipboardText puts text on the system clipboard. Tests replace it.
 	setClipboardText func(text string) error
 	// The local instance (local_instance.go). runCLI runs the Marasi CLI,
@@ -177,13 +181,16 @@ func newApp(configDir string) *App {
 }
 
 // ServiceStartup is called when Wails starts the app, before the window
-// loads. It saves the app's context and starts the update checks; the
-// frontend connects to the service.
+// loads. It saves the app's context and starts the update checks (not in
+// the mobile apps, which have no updater); the frontend connects to the
+// service.
 func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
 	go a.removeUpdateLeftovers()
 	go a.removeCLILeftovers()
-	a.startUpdateChecks(ctx)
+	if !mobileApp {
+		a.startUpdateChecks(ctx)
+	}
 	return nil
 }
 

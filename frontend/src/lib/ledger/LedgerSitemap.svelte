@@ -199,6 +199,7 @@
 								? `Remove ${sitemapTerm(n.Name)} from the query`
 								: `Narrow the query to ${sitemapTerm(n.Name)}`}
 						aria-current={active ? "true" : undefined}
+						data-dock-pick
 						on:click={() => dispatch("choose", n.Name)}
 					>
 						{origin ? n.Segment : "/" + n.Segment}

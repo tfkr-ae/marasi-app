@@ -1,6 +1,11 @@
 <script>
     import { onMount } from "svelte";
+    import { getDrawerStore } from "@skeletonlabs/skeleton";
+    import { X } from "lucide-svelte";
     import { extensionsStore } from "../../stores/extensionsStore.js";
+    import { mobile } from "../platform.js";
+
+    const drawerStore = getDrawerStore();
 
     export let extensionName = "";
     let logs = [];
@@ -21,8 +26,18 @@
         };
     });
 </script>
-<div class="text-center p-1 text-sm font-bold">
+<!-- On iOS the drawer is a full-screen sheet (app.css) with no backdrop
+     to tap, so its title row carries a close button. -->
+<div class="extension-logs-head relative p-1 text-center text-sm font-bold" class:mobile-logs-head={$mobile}>
     {extensionName} Logs
+    {#if $mobile}
+        <button
+            type="button"
+            class="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center opacity-70"
+            aria-label="Close"
+            on:click={() => drawerStore.close()}><X size={18} /></button
+        >
+    {/if}
 </div>
 {#if logs?.length > 0}
     {#each logs as log}
@@ -38,4 +53,21 @@
                                 )}] - {log.Text.trim()}
         </pre>
     {/each}
+{:else if $mobile}
+    <p class="p-8 text-center text-xs opacity-60">No logs yet</p>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile logs sheet's title row is as tall as a modal header, its close
+	   button clear of the status bar's touch area. */
+	:global(html.mobile .mobile-logs-head) {
+		display: flex;
+		height: 3.5rem;
+		align-items: center;
+		justify-content: center;
+		border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+	}
+</style>

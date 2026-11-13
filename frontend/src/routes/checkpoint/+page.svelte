@@ -275,3 +275,19 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .cp-switch) {
+			padding-top: 0.375rem;
+			padding-bottom: 0.375rem;
+		}
+		:global(html.mobile .cp-switch > button) {
+			flex: 1 1 0;
+			height: 2rem;
+		}
+	}
+</style>

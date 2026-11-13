@@ -25,7 +25,7 @@
 </script>
 
 <div class="h-full overflow-auto p-4 text-sm">
-	<dl class="grid max-w-3xl grid-cols-[12rem_1fr] gap-x-6 gap-y-2">
+	<dl class="ws-conn grid max-w-3xl grid-cols-[12rem_1fr] gap-x-6 gap-y-2">
 		<dt class="opacity-60">URL</dt>
 		<dd class="break-all font-mono">{url}</dd>
 		<dt class="opacity-60">State</dt>
@@ -70,3 +70,16 @@
 		{/each}
 	</dl>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .ws-conn) {
+			grid-template-columns: max-content minmax(0, 1fr);
+			column-gap: 1rem;
+			overflow-wrap: anywhere;
+		}
+	}
+</style>

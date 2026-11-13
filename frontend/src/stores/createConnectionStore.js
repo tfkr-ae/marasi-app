@@ -54,7 +54,10 @@
 // status) → connected, or failed with `error` (Retry begins again). Stop
 // (asking first when the run isn't the app's) reaches `stopped`, which only
 // Start (a local connection: a new session that starts the instance on its
-// project and loads it in full) or Retry leaves. To add an
+// project and loads it in full) or Retry leaves. The mobile apps start
+// remote only (APP_STARTED's remoteOnly): with no remote saved they wait in
+// `unpaired`, without reaching for a local instance they can't run, until
+// one is paired and switched to. To add an
 // event (reconnecting, a refused password, switching connections): add its
 // phase or action to `reduce`, its step to `perform`, and a scenario test.
 // The password passes through steps and never lands in the state.
@@ -267,9 +270,16 @@ function ownedAfter(state, action) {
 
 export function reduce(state, action) {
   switch (action.type) {
-    case "APP_STARTED":
+    case "APP_STARTED": {
       if (state.phase !== "idle") return refuse(state, "The connection has already started.");
-      return begin(state);
+      if (!action.remoteOnly || state.connection.kind !== "local") return begin(state);
+      // A phone runs no local instance: it reaches the first saved remote,
+      // or waits for one to be paired.
+      const remote = state.connections.find((c) => c.kind === "remote");
+      if (!remote) return go(state, { phase: "unpaired" });
+      const next = begin({ ...state, connection: remote });
+      return { ...next, steps: [{ type: "set-active", id: remote.id }, ...next.steps] };
+    }
 
     case "INSTANCE_UP":
       if (state.phase !== "starting") return refuse(state, "The app isn't starting the local instance.");
@@ -989,14 +999,16 @@ export function createConnectionStore(api, timers = globalThis) {
     enterPassword: (password) => dispatch({ type: "ENTER_PASSWORD", password }),
     /**
      * Reads the saved connections, then starts reaching the active one,
-     * once, when the app opens. Without them it reaches the local one.
+     * once, when the app opens. Without them it reaches the local one, or
+     * with `remoteOnly` (the mobile apps) the first remote, else waits
+     * `unpaired`.
      */
-    async start() {
+    async start({ remoteOnly = false } = {}) {
       if (api.appOrigin) dispatch({ type: "APP_ORIGIN", origin: api.appOrigin() });
       if (api.listConnections) {
         await load().catch((err) => console.error("Reading the saved connections failed:", err));
       }
-      return dispatch({ type: "APP_STARTED" });
+      return dispatch({ type: "APP_STARTED", remoteOnly });
     },
     /** Begins again after a failure, or reaches a stopped remote again. */
     retry: () => dispatch({ type: "RETRY" }),

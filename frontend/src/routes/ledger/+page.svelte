@@ -31,6 +31,7 @@
 	import { highlightPalette } from "../../stores/highlightsStore";
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
+	import { mobile } from "../../lib/platform.js";
 	import {
 		ledgerStore,
 		tableRows,
@@ -305,8 +306,10 @@
 				     gutters are composited layers (z-index 200) that WebKit's elastic
 				     scrolling could paint over a border, and a border also made the
 				     page a pixel taller than its box. -->
+				<!-- On mobile, maximised fills the screen (app.css, .mobile-fullscreen). -->
 				<div
 					class="relative isolate min-h-0"
+					class:mobile-fullscreen={$mobile && $drawerLayout.maximised}
 					style="flex: {$drawerLayout.maximised ? 1 : $drawerLayout.split} 1 0"
 				>
 					{#if !$drawerLayout.maximised}
@@ -413,3 +416,19 @@
 	{focusID}
 	{runMenuAction}
 />
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Ledger's status line stays one line, its count shortening, and
+	   the drawer's rail scrolls when its buttons outgrow a short drawer. */
+	:global(html.mobile .ledger-status > span) {
+		white-space: nowrap;
+	}
+	:global(html.mobile .ledger-status #ledgerCount) {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+</style>

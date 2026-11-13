@@ -308,3 +308,32 @@ test("a refused password asks, and the right one connects", async () => {
   assert.equal(fake.passwords["remote-1"], "right");
   assert.deepEqual(fake.calls.at(-1), ["loadProject", "/srv/acme.marasi"]);
 });
+
+test("a phone starts on its first saved remote, not the local instance", () => {
+  const { state, types } = run(saved, { type: "APP_STARTED", remoteOnly: true });
+  assert.equal(state.connection.id, "remote-1");
+  assert.equal(state.phase, "connecting");
+  assert.deepEqual(types, ["set-active", "connect-remote"]);
+});
+
+test("a phone with no remote waits unpaired, reaching for nothing", () => {
+  const { state, types } = run(
+    { type: "CONNECTIONS_LOADED", connections: [local], activeId: "local" },
+    { type: "APP_STARTED", remoteOnly: true },
+  );
+  assert.equal(state.phase, "unpaired");
+  assert.deepEqual(types, []);
+});
+
+test("pairing a remote from unpaired switches to it", () => {
+  const { state, types } = run(
+    { type: "CONNECTIONS_LOADED", connections: [local], activeId: "local" },
+    { type: "APP_STARTED", remoteOnly: true },
+    { type: "CONNECTIONS_LOADED", connections: [local, lab], activeId: "local" },
+    { type: "SWITCH_CONNECTION", id: "remote-1" },
+    { type: "SWITCH_CONFIRMED", id: "remote-1" },
+  );
+  assert.equal(state.connection.id, "remote-1");
+  assert.equal(state.phase, "connecting");
+  assert.ok(types.includes("connect-remote"));
+});

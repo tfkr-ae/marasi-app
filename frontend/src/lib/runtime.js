@@ -21,10 +21,14 @@ export function createRuntime(getRuntime) {
 		emit: (name, data) => getRuntime().Events.Emit(name, data),
 		setWindowTitle: (title) => getRuntime().Window.SetTitle(title),
 		openURL: (url) => getRuntime().Browser.OpenURL(url),
+		// Resolves to Go's OS (runtime.GOOS: "ios", "android", "darwin"…),
+		// for platform.js. It asks Go: Wails gives iOS pages no
+		// window._wails.environment, so System.IsIOS() is always false there.
+		platformOS: () => getRuntime().System.Environment().then((env) => env?.OS ?? ""),
 	};
 }
 
-export const { on, once, off, emit, setWindowTitle, openURL } = createRuntime(() => wails);
+export const { on, once, off, emit, setWindowTitle, openURL, platformOS } = createRuntime(() => wails);
 
 // readAsMessage makes errors of ErrorClass read as their message alone. A
 // failed binding call rejects with a RuntimeError whose message is the Go

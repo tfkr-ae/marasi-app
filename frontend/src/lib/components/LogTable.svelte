@@ -3,7 +3,9 @@
     import { homeStore } from "../../stores/homeStore";
     import Sort from "./datatables/Sort.svelte";
     // The service's log, oldest first, newest shown first; log.added lines
-    // join it live (homeStore).
+    // join it live (homeStore). `compact` (the iOS app's Home) draws it as a
+    // list in a card, sized to a phone, instead of the wide table.
+    export let compact = false;
     $: logItems = $homeStore.logs;
     $: extensionsMap = $homeStore.extensionNames;
     const handler = new DataHandler([], {
@@ -11,8 +13,34 @@
     });
     $: handler.setRows(logItems.toReversed());
     $: rows = handler.getRows();
+    const levelTone = {
+        ERROR: "text-error-600 dark:text-error-400",
+        WARN: "text-warning-700 dark:text-warning-400",
+        WARNING: "text-warning-700 dark:text-warning-400",
+    };
+    const shortTimestamp = (at) =>
+        new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 </script>
 
+{#if compact}
+<section class="card overflow-hidden bg-surface-100-500-token text-surface-900-50-token" data-testid="home-log">
+    <h3 class="border-b border-surface-300 px-3 py-2 text-sm font-bold dark:border-surface-600">Log</h3>
+    {#each logItems.toReversed() as row}
+        <div class="flex items-baseline gap-3 border-b border-surface-300/60 px-3 py-2 text-xs last:border-b-0 dark:border-surface-600/60">
+            <span class="w-10 shrink-0 font-semibold {levelTone[row.Level] ?? 'opacity-60'}">{row.Level}</span>
+            <span class="min-w-0 flex-1 break-words">
+                {row.Message}
+                {#if row.ExtensionID || row.RequestID}
+                    <span class="block opacity-60">{[row.ExtensionID ? extensionsMap[row.ExtensionID] : "", row.RequestID ? `Request ${row.RequestID}` : ""].filter(Boolean).join(" · ")}</span>
+                {/if}
+            </span>
+            <span class="shrink-0 font-mono opacity-60">{shortTimestamp(row.Timestamp)}</span>
+        </div>
+    {:else}
+        <p class="px-3 py-2 text-xs opacity-60">No log lines yet.</p>
+    {/each}
+</section>
+{:else}
 <div class="table-container">
     <table class="table table-dense table-auto w-full">
         <thead>
@@ -62,6 +90,7 @@
         </tbody>
     </table>
 </div>
+{/if}
 
 <style>
     /* Make the header centered and clean */

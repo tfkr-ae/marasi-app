@@ -9,6 +9,7 @@
 	import DrawerEditor from "./DrawerEditor.svelte";
 	import DrawerNote from "./DrawerNote.svelte";
 	import DrawerRail from "./DrawerRail.svelte";
+	import PaneTabs from "../components/PaneTabs.svelte";
 	import { drawerBodies, metadataText, pairTiming, usesSyntax } from "./drawer.js";
 	import { sameID } from "./pairs.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
@@ -126,6 +127,12 @@
 	let responsePaused = false;
 	$: wrapPaused = requestPaused || (pane === null && hasResponse && responsePaused);
 
+	// The pane on show when the screen is too narrow for both (PaneTabs).
+	// Opening the note or the metadata shows the right-hand pane.
+	let narrowPane = "request";
+	$: if (pane) narrowPane = "response";
+	$: rightLabel = pane === "note" ? "Note" : pane === "metadata" ? "Metadata" : "Response";
+
 	const message = "p-3 text-2xs opacity-50";
 	// The panes start a few pixels below the drawer's red top line, on the
 	// editors' own background: WebKit snaps an editor's scrolling layer to
@@ -164,8 +171,15 @@
 		on:pane={(e) => (pane = e.detail)}
 	/>
 	<div class="flex min-w-0 flex-1 flex-col">
+		<PaneTabs
+			tabs={[
+				{ id: "request", label: "Request" },
+				{ id: "response", label: rightLabel },
+			]}
+			bind:active={narrowPane}
+		/>
 		<div class="flex min-h-0 flex-1">
-			<div class="ledger-drawer-request {paneBox}">
+			<div class="ledger-drawer-request {paneBox}" class:pane-off={narrowPane !== "request"}>
 				{#if details === undefined}
 					<p class={message}>Loading…</p>
 				{:else if details === null}
@@ -179,7 +193,10 @@
 					/>
 				{/if}
 			</div>
-			<div class="ledger-drawer-response {paneBox} flex flex-col border-l border-surface-300-600-token">
+			<div
+				class="ledger-drawer-response {paneBox} flex flex-col border-l border-surface-300-600-token"
+				class:pane-off={narrowPane !== "response"}
+			>
 				{#if pane === "note"}
 					{#if note === null}
 						<p class={message}>Loading the note…</p>

@@ -127,11 +127,11 @@
 			<button type="button" class="flex-none p-1 opacity-60 hover:opacity-100" title="Close (Esc)" aria-label="Close" on:click={close}><X size={16} /></button>
 		</header>
 
-		<div class="flex min-h-0 flex-1" class:hidden={!!expanded}>
-			<section class="flex w-[30rem] flex-none flex-col gap-4 overflow-auto border-r border-surface-500/30 p-4">
+		<div class="record-modal-body flex min-h-0 flex-1" class:hidden={!!expanded}>
+			<section class="record-modal-form flex w-[30rem] flex-none flex-col gap-4 overflow-auto border-r border-surface-500/30 p-4">
 				<RecordForm {session} bind:expanded bind:titleInput />
 			</section>
-			<section class="flex min-w-0 flex-1 flex-col">
+			<section class="record-modal-side flex min-w-0 flex-1 flex-col">
 				<RecordEvidence {session} />
 			</section>
 		</div>
@@ -152,7 +152,7 @@
 			</div>
 		{/if}
 
-		<footer class="flex flex-none items-center gap-2 border-t border-surface-500/30 px-3 py-2">
+		<footer class="record-modal-foot flex flex-none items-center gap-2 border-t border-surface-500/30 px-3 py-2">
 			<div class="min-w-0 flex-1 truncate text-2xs" data-unsaved-list>
 				{#if session.error}
 					<span class="text-error-500" title={String(session.error)}>Not saved: {String(session.error)}</span>
@@ -198,3 +198,38 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .record-modal-body) {
+			flex-direction: column;
+			overflow-y: auto;
+		}
+		:global(html.mobile .record-modal-form) {
+			width: auto;
+			overflow: visible;
+			border-right-width: 0;
+		}
+		:global(html.mobile .record-modal-side) {
+			flex: none;
+			min-height: 24rem;
+			border-top: 1px solid rgb(var(--color-surface-500) / 0.3);
+		}
+	}
+	/* The finding and test case modal's foot, narrow: what's unsaved on its
+	   own line, then Close and Save side by side. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .record-modal-foot) {
+			flex-wrap: wrap;
+		}
+		:global(html.mobile .record-modal-foot > [data-unsaved-list]) {
+			flex: 1 0 100%;
+		}
+		:global(html.mobile .record-modal-foot > .btn) {
+			flex: 1 1 0;
+		}
+	}
+</style>

@@ -10,12 +10,51 @@
   border-radius: 0;
 }
 
+/* A button whose label the mobile layout hides wraps its icon and label in
+   one .btn-content. Skeleton's .btn spaces its element children 0.5rem
+   apart, so a bare icon beside a <span> label would sit further off than
+   the icon beside plain text does. */
+.btn-content {
+  display: inline-flex;
+  align-items: center;
+}
+
 body {
   --ctx-menu-background: rgb(var(--color-surface-50));
   --ctx-menu-border: 1px solid rgb(var(--color-primary-500));
   --ctx-menu-hover-bg: rgb(var(--color-primary-200));
   --ctx-menu-font-size: 0.9rem;
   --ctx-menu-padding: 0.375rem 0.5rem;
+}
+
+/* On a phone the web view fills the screen (scene_delegate_ios.m) and the
+   app draws under the status bar and home indicator, so the frame and the
+   fixed overlays keep their content out of those areas. The insets are
+   variables, not env() directly: Android's web view reports env() as 0, so
+   the app sets them there itself. All are 0 on the desktop. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* The mobile app rail's width (routes/+layout.svelte); modals and
+     drawers start right of it. */
+  --mobile-rail-width: 3rem;
+}
+.safe-area-pad {
+  padding: var(--safe-top) var(--safe-right)
+    var(--safe-bottom) var(--safe-left);
+}
+.modal-backdrop {
+  padding: calc(1rem + var(--safe-top))
+    calc(1rem + var(--safe-right))
+    calc(1rem + var(--safe-bottom))
+    calc(1rem + var(--safe-left));
+}
+.snackbar-wrapper,
+.drawer-backdrop {
+  padding: var(--safe-top) var(--safe-right)
+    var(--safe-bottom) var(--safe-left);
 }
 
 /* Thin, theme-coloured scrollbars everywhere. The standard properties
@@ -87,22 +126,312 @@ select[data-overlay-initial-focus]:focus {
   box-shadow: none !important;
 }
 
-html:not(.dark) button.variant-ghost-primary:not(:disabled):hover,
-html:not(.dark) a.variant-ghost-primary:hover,
-html:not(.dark) .btn-group.variant-ghost-primary > button:not(:disabled):hover,
-html:not(.dark) .btn-group.variant-ghost-primary > a:hover {
-  background-color: rgb(var(--color-primary-200)) !important;
-  filter: none !important;
+/* Hover tints only where a pointer can hover, as tailwind.config.js has the
+   hover: variants: a touch screen keeps no tint on the last button tapped. */
+@media (hover: hover) and (pointer: fine) {
+  html:not(.dark) button.variant-ghost-primary:not(:disabled):hover,
+  html:not(.dark) a.variant-ghost-primary:hover,
+  html:not(.dark) .btn-group.variant-ghost-primary > button:not(:disabled):hover,
+  html:not(.dark) .btn-group.variant-ghost-primary > a:hover {
+    background-color: rgb(var(--color-primary-200)) !important;
+    filter: none !important;
+  }
+
+  html:not(.dark) button.variant-ghost-tertiary:not(:disabled):hover,
+  html:not(.dark) a.variant-ghost-tertiary:hover {
+    background-color: rgb(var(--color-tertiary-200)) !important;
+    filter: none !important;
+  }
+
+  html:not(.dark) button.variant-ghost-success:not(:disabled):hover,
+  html:not(.dark) a.variant-ghost-success:hover {
+    background-color: rgb(var(--color-success-200)) !important;
+    filter: none !important;
+  }
 }
 
-html:not(.dark) button.variant-ghost-tertiary:not(:disabled):hover,
-html:not(.dark) a.variant-ghost-tertiary:hover {
-  background-color: rgb(var(--color-tertiary-200)) !important;
-  filter: none !important;
+/* The mobile app (html.mobile, lib/platform.js): a long press opens the app's
+   menu (lib/touch.js), not the system's link and image callout. Fields keep
+   theirs, for paste. */
+html.mobile body {
+	-webkit-touch-callout: none;
+}
+html.mobile input,
+html.mobile textarea,
+html.mobile [contenteditable] {
+	-webkit-touch-callout: default;
+}
+/* Nor does a long press select the text of a label or button: only fields
+   and the editors (request and response text to copy) select. */
+html.mobile body {
+	-webkit-user-select: none;
+	user-select: none;
+}
+html.mobile input,
+html.mobile textarea,
+html.mobile [contenteditable],
+html.mobile .cm-editor,
+html.mobile .cm-editor * {
+	-webkit-user-select: text;
+	user-select: text;
 }
 
-html:not(.dark) button.variant-ghost-success:not(:disabled):hover,
-html:not(.dark) a.variant-ghost-success:hover {
-  background-color: rgb(var(--color-success-200)) !important;
-  filter: none !important;
+/* Touch drags the resize handles (the docks, the Ledger and Armory
+   drawers): without touch-action the page takes the drag as a scroll and
+   cancels it. The handles also grow to a finger's width. */
+html.mobile .lp-resize,
+html.mobile .ledger-drawer-resize,
+html.mobile .armory-drawer-resize {
+	touch-action: none;
 }
+
+html.mobile .ledger-drawer-resize,
+html.mobile .armory-drawer-resize {
+	height: 1.5rem;
+	top: -0.75rem;
+}
+
+/* The mobile Ledger and Armory drawers maximised: the whole screen, over the
+   app rail, the dock and the toolbar, with only the drawer's own rail beside
+   the request and response (routes/ledger and routes/armory). */
+html.mobile .mobile-fullscreen {
+	position: fixed;
+	inset: 0;
+	z-index: 500;
+	padding: var(--safe-top) var(--safe-right) 0 0;
+	background-color: rgb(var(--color-surface-50));
+}
+/* The editors and the rail's edge run the full height, under the home
+   indicator too; only the rail's buttons move in, clear of the screen's
+   curved corners (in landscape the top inset is 0, and the corner cut the
+   first button) and the indicator. */
+html.mobile .mobile-fullscreen .ledger-drawer-rail,
+html.mobile .mobile-fullscreen .ledger-drawer-column,
+html.mobile .mobile-fullscreen .armory-drawer-rail,
+html.mobile .mobile-fullscreen .armory-drawer-column {
+	padding-top: 1.5rem;
+	padding-bottom: max(var(--safe-bottom), 1rem);
+}
+/* The left inset: a highlighted pair's stripe fills it to the screen's
+   edge; without one the rail moves in by it. */
+html.mobile .mobile-fullscreen .ledger-drawer-highlight {
+	width: calc(3px + max(var(--safe-left), 0.5rem));
+}
+html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-rail:first-child,
+html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-column:first-child,
+html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-rail:first-child,
+html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-column:first-child {
+	margin-left: max(var(--safe-left), 0.5rem);
+}
+html.mobile.dark .mobile-fullscreen {
+	background-color: rgb(var(--color-surface-900));
+}
+
+/* The mobile page never moves: only its panes scroll. Sideways drags moved the
+   whole screen (the web view's own bounce is off too, scene_delegate_ios.m). */
+html.mobile,
+html.mobile body {
+	overflow: hidden;
+	overscroll-behavior: none;
+}
+
+/* No keyboard on mobile, so no shortcut hints: the keys in the Marasi menu, the
+   row menus and the drawer rails, and the row menu's key line. Keys named in
+   a sentence stay. */
+html.mobile :not(p) > kbd,
+html.mobile .key-hints {
+	display: none;
+}
+
+/* ---- Narrow mobile screens: the iPhone Duo folded (under 40rem wide) ----
+   Side-by-side layouts become one column (each component's own styles);
+   here, what several share. */
+
+@media (max-width: 40rem) {
+	/* The Ledger and Armory drawers' response tab takes no border beside
+	   the request (they are tabs here, PaneTabs.svelte). */
+	html.mobile .ledger-drawer-response,
+	html.mobile .armory-drawer-response {
+		border-left-width: 0 !important;
+		border-top-width: 0 !important;
+	}
+
+	/* A settings row (Settings and the Connections modal) stacks its label
+	   above its control. */
+	html.mobile .settings-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.5rem;
+	}
+	html.mobile .settings-control {
+		width: 100%;
+	}
+	html.mobile .settings-row > * {
+		flex-wrap: wrap;
+	}
+	html.mobile .narrow-full {
+		width: 100%;
+	}
+
+	/* A colour well stays a square beside its label field. */
+	html.mobile .settings-control:has(> input[type="color"]) {
+		flex-wrap: nowrap;
+	}
+	html.mobile .settings-control > input[type="color"] {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 2rem;
+		height: 2rem;
+	}
+	html.mobile .settings-control > input[type="color"]::-webkit-color-swatch-wrapper {
+		padding: 0;
+	}
+	html.mobile .settings-control > input[type="color"]::-webkit-color-swatch {
+		border: 0;
+		border-radius: 0;
+	}
+}
+
+/* The Ledger and Armory drawers' rails scroll when their buttons outgrow
+   a short drawer. */
+html.mobile .ledger-drawer-rail,
+html.mobile .armory-drawer-rail {
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+/* Mobile: every modal is a full-screen sheet at any width, its parts inside
+   the safe area. Skeleton's backdrop takes the sheet's colour and the
+   modal (a preset's box, or a component's root card) fills it. */
+html.mobile .modal-backdrop,
+html.mobile .logbook-pair-expanded {
+	padding: var(--safe-top) var(--safe-right) var(--safe-bottom)
+		var(--safe-left) !important;
+}
+/* The sheet's colour (a light .card is surface-100), above the
+   layout's light backdrop tint (+layout.svelte). */
+html.mobile:not(.dark) .modal-backdrop,
+html.mobile:not(.dark) .logbook-pair-expanded {
+	background-color: rgb(var(--color-surface-100)) !important;
+}
+html.mobile.dark .modal-backdrop,
+html.mobile.dark .logbook-pair-expanded {
+	background-color: rgb(var(--color-surface-800)) !important;
+}
+html.mobile .modal-transition {
+	height: 100%;
+	min-height: 100%;
+	align-items: stretch;
+}
+html.mobile .modal-transition > .modal:not(.contents),
+html.mobile .modal-transition > .modal.contents > *,
+html.mobile .logbook-pair-expanded > .card {
+	width: 100% !important;
+	max-width: none !important;
+	height: 100% !important;
+	max-height: none !important;
+	margin: 0 !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	overflow-y: auto;
+}
+/* A preset (confirm, alert, prompt) keeps its buttons at the foot. */
+html.mobile .modal-transition > .modal:not(.contents) {
+	display: flex;
+	flex-direction: column;
+}
+html.mobile .modal-transition > .modal:not(.contents) .modal-footer {
+	margin-top: auto;
+}
+
+/* Mobile modal sheets take the page's own surface (the frame's, as the
+   Marasi menu does), not a card's lighter or darker one. */
+html.mobile:not(.dark) .modal-backdrop,
+html.mobile:not(.dark) .logbook-pair-expanded,
+html.mobile:not(.dark) .modal-transition > .modal:not(.contents),
+html.mobile:not(.dark) .modal-transition > .modal.contents > .card,
+html.mobile:not(.dark) .logbook-pair-expanded > .card {
+	background-color: rgb(var(--color-surface-50)) !important;
+}
+html.mobile.dark .modal-backdrop,
+html.mobile.dark .logbook-pair-expanded,
+html.mobile.dark .modal-transition > .modal:not(.contents),
+html.mobile.dark .modal-transition > .modal.contents > .card,
+html.mobile.dark .logbook-pair-expanded > .card {
+	background-color: rgb(var(--color-surface-900)) !important;
+}
+
+/* A stacked settings row's buttons (Settings and the Connections
+   modal), narrow: they share the row's full width equally, so one button
+   spans it and two or three line up as equal halves or thirds. Text
+   beside them (a hidden password) takes an equal share too. */
+@media (max-width: 40rem) {
+	html.mobile .settings-row > .btn:last-child {
+		width: 100%;
+	}
+	html.mobile .settings-row > :last-child:has(> .btn) {
+		display: flex;
+		width: 100%;
+		gap: 0.5rem;
+	}
+	html.mobile .settings-row > :last-child:has(> .btn) > .btn {
+		flex: 1 1 0;
+		justify-content: center;
+	}
+	html.mobile .settings-row > :last-child:has(> .btn) > span {
+		flex: 1 1 0;
+		width: auto;
+	}
+}
+
+/* Mobile drawers (extension logs, extension drawers): a full-screen sheet
+   inside the safe area, like the modals, at any width; long log lines
+   wrap instead of scrolling sideways. */
+html.mobile .drawer-backdrop .drawer {
+	width: 100% !important;
+	height: 100% !important;
+	max-width: none !important;
+	max-height: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+}
+/* The page's surface, as the modal sheets have. */
+html.mobile .drawer-backdrop,
+html.mobile .drawer-backdrop .drawer {
+	background-color: rgb(var(--color-surface-50)) !important;
+}
+html.mobile.dark .drawer-backdrop,
+html.mobile.dark .drawer-backdrop .drawer {
+	background-color: rgb(var(--color-surface-900)) !important;
+}
+html.mobile .drawer pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* Mobile modals, drawers and toasts leave the app's navigation in view: under
+   40rem they stop above the bottom bar (its height in --bottom-bar-height,
+   BottomBar.svelte; not while the keyboard hides it); wider they start
+   right of the rail (w-12, past the left inset). A tap on the bar or the
+   rail still goes through (overlayIsolation.js). */
+@media (max-width: 40rem) {
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .modal-backdrop,
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .logbook-pair-expanded,
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .drawer-backdrop,
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .snackbar-wrapper {
+		bottom: var(--bottom-bar-height, 0px);
+		padding-bottom: 0 !important;
+	}
+}
+@media (min-width: 40.0625rem) {
+	html.mobile:has(.nav-rail) .modal-backdrop,
+	html.mobile:has(.nav-rail) .logbook-pair-expanded,
+	html.mobile:has(.nav-rail) .drawer-backdrop {
+		left: calc(var(--safe-left) + var(--mobile-rail-width));
+		padding-left: 0 !important;
+	}
+	html.mobile:has(.nav-rail) .snackbar-wrapper {
+		left: calc(var(--safe-left) + var(--mobile-rail-width));
+	}
+}
+

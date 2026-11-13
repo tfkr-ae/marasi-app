@@ -1,0 +1,95 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'com.wails.app'
+    compileSdk = 36
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    defaultConfig {
+        applicationId = "ae.tfkr.marasi"
+        // Marasi: 24 for the QR scanner (zxing-android-embedded).
+        minSdk = 24
+        targetSdk = 36
+        // Marasi: VERSION's numbers (1.2.3 from v1.2.3) and BUILD_NUMBER, as
+        // the iOS build stamps them; without BUILD_NUMBER the code is the
+        // minutes since 1970, so each upload is newer.
+        def releaseVersion = (System.getenv("VERSION") ?: "").replaceFirst(/^v/, "").replaceFirst(/[^0-9.].*$/, "")
+        def buildNumber = System.getenv("BUILD_NUMBER")
+        versionCode = buildNumber ? Integer.parseInt(buildNumber) : (int) (System.currentTimeMillis() / 60000L)
+        versionName = releaseVersion ?: "1.0"
+
+        // Configure supported ABIs
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    def keystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+    def hasKeystore = keystoreFile != null && !keystoreFile.trim().isEmpty()
+
+    signingConfigs {
+        // A real keystore can be provided via environment variables; without
+        // one, release builds are signed with the debug keystore so they can
+        // be installed for testing (not suitable for Play Store uploads).
+        release {
+            if (hasKeystore) {
+                storeFile = file(keystoreFile)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Marasi: R8 drops and renames Java the app doesn't reach and
+            // drops unused resources. Go reaches the bridge by name through
+            // JNI, which R8 can't see; proguard-rules.pro keeps it.
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig = hasKeystore ? signingConfigs.release : signingConfigs.debug
+        }
+        debug {
+            debuggable = true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    // Source sets configuration
+    sourceSets {
+        main {
+            // JNI libraries are in jniLibs folder
+            jniLibs.srcDirs = ['src/main/jniLibs']
+            // Assets for the WebView
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+
+    // Packaging options
+    packagingOptions {
+        // Don't strip Go symbols in debug builds
+        doNotStrip '*/arm64-v8a/libwails.so'
+        doNotStrip '*/x86_64/libwails.so'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    // Marasi: the pairing QR scanner (MainActivity.scanQr).
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+}

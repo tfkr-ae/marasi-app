@@ -6,7 +6,7 @@
 	// Export at the far end. A filter that doesn't apply to the
 	// kind on show is disabled in place, and a pressed toggle changes its
 	// background only, so nothing here moves as the filters change.
-	import { Folder, Hash, Search, ShieldAlert, SquareArrowRight, X } from "lucide-svelte";
+	import { BookCheck, Bug, Folder, Hash, Search, ShieldAlert, SquareArrowRight, X } from "lucide-svelte";
 	import ToolbarMenu from "../ledger/ToolbarMenu.svelte";
 	import OptionList from "./OptionList.svelte";
 	import { SEVERITY_MARK } from "./severityColors.js";
@@ -44,7 +44,7 @@
 <div
 	class="logbook-toolbar relative flex min-h-11 flex-none items-stretch border-b border-surface-300-600-token bg-surface-50 dark:bg-surface-900"
 >
-	<div class="flex w-64 flex-none items-center gap-2 pl-3 pr-2">
+	<div class="logbook-search flex w-64 flex-none items-center gap-2 pl-3 pr-2">
 		<Search size={15} class="shrink-0 opacity-70" />
 		<input
 			id="logbookSearch"
@@ -66,13 +66,17 @@
 			>
 		{/if}
 	</div>
-	{#each [["findings", "Findings"], ["testCases", "Test cases"]] as [kind, label]}
+	{#each [["findings", "Findings", Bug], ["testCases", "Test cases", BookCheck]] as [kind, label, icon]}
 		{@const on = filters.kind === kind}
 		<button
 			id="logbookKind-{kind}"
 			class="{item} {on ? 'bg-surface-200-700-token' : 'hover:bg-surface-200-700-token'}"
+			title={label}
 			aria-pressed={on}
-			on:click={() => store.setKind(on ? "all" : kind)}>{label}</button
+			on:click={() => store.setKind(on ? "all" : kind)}
+			><span class="toolbar-icon"><svelte:component this={icon} size={15} class="opacity-70" /></span><span
+				class="toolbar-label">{label}</span
+			></button
 		>
 	{/each}
 	<ToolbarMenu
@@ -116,6 +120,63 @@
 		id="logbookExport"
 		class="{item} {exportDisabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-200-700-token'}"
 		disabled={exportDisabled}
-		on:click={onExport}><SquareArrowRight size={15} class="opacity-70" />Export</button
+		title="Export"
+		on:click={onExport}><SquareArrowRight size={15} class="opacity-70" /><span class="toolbar-label">Export</span></button
 	>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	:global(html.mobile .logbook-toolbar) {
+		container-type: inline-size;
+	}
+	/* The mobile Logbook toolbar at its narrowest: the search takes its own row
+	   above the filters. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .logbook-toolbar) {
+			flex-wrap: wrap;
+		}
+	}
+
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	/* The mobile Logbook toolbar, the Ledger's treatment: short of room (the
+	   outline open) the search narrows and the menus take their own width;
+	   shorter still, every button drops to its icon. Each keeps its title.
+	   The kind toggles' icons (.toolbar-icon) show only then. */
+	:global(.toolbar-icon) {
+		display: none;
+	}
+	@container (max-width: 56rem) {
+		:global(html.mobile .logbook-toolbar .logbook-search) {
+			width: auto;
+			flex: 1 1 0%;
+			min-width: 7rem;
+		}
+		:global(html.mobile .logbook-toolbar .toolbar-menu) {
+			width: auto;
+			flex: none;
+		}
+	}
+	@container (max-width: 44rem) {
+		:global(html.mobile .logbook-toolbar .toolbar-label) {
+			display: none;
+		}
+		:global(html.mobile .logbook-toolbar .toolbar-icon) {
+			display: contents;
+		}
+	}
+	@container (max-width: 30rem) {
+		:global(html.mobile .logbook-toolbar .logbook-search) {
+			flex-basis: 100%;
+			min-height: 2.75rem;
+			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.3);
+		}
+		:global(html.mobile .logbook-toolbar > *) {
+			min-height: 2.75rem;
+		}
+	}
+</style>

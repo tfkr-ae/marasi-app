@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Cable, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { Cable, ChevronLeft, ChevronRight, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		SetFlag,
 		ToggleFlag,
@@ -57,6 +57,7 @@
 	import CLISettings from "../../lib/connection/CLISettings.svelte";
 	import { statusHint } from "../../lib/connection/status.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { MOBILE_HIDDEN_SECTIONS, mobile, mobileCheck } from "../../lib/platform.js";
 	import { followChromeConfig } from "../../lib/chromeConfigEvents.js";
 	import { service } from "../../lib/service/index.js";
 	import { isSuperseded } from "../../lib/service/errors.js";
@@ -93,7 +94,7 @@
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
 		{ id: "updates", name: "Updates", hint: "App and Marasi CLI", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
-	];
+	].filter((entry) => !($mobile && MOBILE_HIDDEN_SECTIONS.has(entry.id)));
 	const syntaxModes = [
 		["disabled", "Disabled"],
 		["auto", "Auto"],
@@ -104,6 +105,10 @@
 		["nightly", "Nightly"],
 	];
 	let section = "appearance";
+	// Narrow iOS screens (the iPhone Duo folded) show the sections list or
+	// one section, not both, as iOS Settings does: choosing a section opens
+	// it, and Back returns to the list (app.css, .settings-listing).
+	let listing = true;
 	// ?section=<id> opens a section, as the update panel's link to the
 	// Channel setting does. Choosing a section puts it in the URL, so that
 	// link switches section even after the researcher moved to another one.
@@ -120,12 +125,14 @@
 	async function openRequested({ section: id, part }, href) {
 		openedHref = href;
 		section = id;
+		listing = false;
 		if (!part) return;
 		await tick();
 		document.getElementById(part)?.scrollIntoView({ block: "start" });
 	}
 	function selectSection(id) {
 		section = id;
+		listing = false;
 		goto(`?section=${id}`, { replaceState: true, noScroll: true, keepFocus: true });
 	}
 
@@ -158,8 +165,8 @@
 	const tableField =
 		"input h-8 w-full bg-white dark:bg-surface-700 border-0 py-1 text-sm ring-0 focus:border-0 focus:ring-0";
 	const row =
-		"flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
-	const control = "flex w-80 shrink-0";
+		"settings-row flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
+	const control = "settings-control flex w-80 shrink-0";
 
 	$: keybindingSummary = (() => {
 		const config = $keybindingState?.config;
@@ -445,8 +452,12 @@
 				automaticChecks = settings.AutomaticChecks;
 			})
 			.catch((error) => toastError(toastStore, "Error reading the update settings", error));
-		readChromePaths();
-		readChromeProfiles();
+		// The iOS app has no Chrome (and no Browser section).
+		mobileCheck.then((onMobile) => {
+			if (onMobile) return;
+			readChromePaths();
+			readChromeProfiles();
+		});
 		// `marasi chrome …` on this machine changes the same file.
 		return followChromeConfig(service.on, {
 			connectionKind: () => get(connectionStore).connection.kind,
@@ -472,7 +483,10 @@
 	}
 </script>
 
-<div class="no-select flex h-full min-h-0 flex-col p-4 text-sm text-surface-900-50-token">
+<div
+	class="settings-page no-select flex h-full min-h-0 flex-col p-4 text-sm text-surface-900-50-token"
+	class:settings-listing={listing}
+>
 	<header class="mb-4 flex items-baseline gap-3">
 		<h2 class="text-base font-bold">Marasi Settings</h2>
 		{#if buildInfo}
@@ -487,9 +501,9 @@
 		{/if}
 	</header>
 
-	<div class="flex min-h-0 flex-1 border-t border-surface-300 dark:border-surface-600">
+	<div class="settings-body flex min-h-0 flex-1 border-t border-surface-300 dark:border-surface-600">
 		<nav
-			class="w-64 shrink-0 overflow-y-auto border-r border-surface-300 py-2 dark:border-surface-600"
+			class="settings-nav w-64 shrink-0 overflow-y-auto border-r border-surface-300 py-2 dark:border-surface-600"
 			aria-label="Settings sections"
 		>
 			{#each sections as entry}
@@ -503,15 +517,19 @@
 					on:click={() => selectSection(entry.id)}
 				>
 					<svelte:component this={entry.icon} size={16} class="shrink-0 opacity-80" />
-					<span class="flex flex-col">
+					<span class="flex min-w-0 flex-1 flex-col">
 						<span>{entry.name}</span>
-						<span class="text-xs opacity-70">{entry.hint}</span>
+						<span class="settings-hint text-xs opacity-70">{entry.hint}</span>
 					</span>
+					<ChevronRight size={16} class="settings-chevron shrink-0 opacity-50" />
 				</button>
 			{/each}
 		</nav>
 
-		<section class="min-w-0 flex-1 overflow-y-auto px-6 py-4">
+		<section class="settings-section min-w-0 flex-1 overflow-y-auto px-6 py-4">
+			<button type="button" class="settings-back mb-2 items-center gap-1 text-sm text-primary-500" on:click={() => (listing = true)}>
+				<ChevronLeft size={16} />Settings
+			</button>
 			{#if section === "connection"}
 				<ConnectionSettings />
 			{:else if section === "appearance"}
@@ -1238,7 +1256,112 @@
 					<p>Build channel</p>
 					<p class="{control} font-mono text-sm">{buildInfo?.Channel ?? "…"}</p>
 				</div>
+				<div class={row}>
+					<div>
+						<p>Open-source licences</p>
+						<p class="text-xs opacity-70">Libraries Marasi includes</p>
+					</div>
+					<div class={control}>
+						<button
+							type="button"
+							class="btn btn-sm w-full {primary}"
+							data-testid="view-licences"
+							on:click={() => modalStore.trigger({ type: "component", component: "Licences" })}>View</button
+						>
+					</div>
+				</div>
 			{/if}
 		</section>
 	</div>
 </div>
+
+<style>
+	/* Hidden but on a narrow mobile screen (below). */
+	:global(.settings-chevron),
+	:global(.settings-back) {
+		display: none;
+	}
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. */
+	@media (max-width: 40rem) {
+		/* Settings: the sections list or one section, full width (the
+		   page's listing flag), and the rows stacked. */
+		:global(html.mobile .settings-page) {
+			padding: 0.75rem;
+		}
+		:global(html.mobile .settings-listing .settings-section),
+		:global(html.mobile .settings-page:not(.settings-listing) .settings-nav),
+		:global(html.mobile .settings-page:not(.settings-listing) > header) {
+			display: none;
+		}
+		:global(html.mobile .settings-nav) {
+			flex: 1 1 0;
+			width: auto;
+			border-right-width: 0;
+		}
+		:global(html.mobile .settings-nav > button) {
+			border-left-width: 0;
+			background: transparent;
+			padding-top: 0.625rem;
+			padding-bottom: 0.625rem;
+		}
+		:global(html.mobile .settings-chevron) {
+			display: block;
+		}
+		:global(html.mobile .settings-back) {
+			display: flex;
+		}
+		:global(html.mobile .settings-section) {
+			padding: 0.75rem 0;
+		}
+		/* A settings table stacks: its head hides, each row is a card whose
+		   values wrap, and the add row is a form, one full-width field to a
+		   line, its placeholders naming the fields. */
+		:global(html.mobile .settings-section table),
+		:global(html.mobile .settings-section table > tbody),
+		:global(html.mobile .settings-section table > tfoot) {
+			display: block;
+			width: 100%;
+		}
+		:global(html.mobile .settings-section table > thead) {
+			display: none;
+		}
+		:global(html.mobile .settings-section table > tbody > tr) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			column-gap: 0.75rem;
+			row-gap: 0.25rem;
+			padding: 0.5rem 0.75rem;
+			border-bottom: 1px solid rgb(var(--color-surface-500) / 0.2);
+		}
+		:global(html.mobile .settings-section table > tbody > tr > td) {
+			display: block;
+			padding: 0 !important;
+			border: 0;
+			overflow-wrap: anywhere;
+		}
+		:global(html.mobile .settings-section table > tbody > tr > td:last-child) {
+			margin-left: auto;
+		}
+		:global(html.mobile .settings-section table > tfoot > tr) {
+			display: flex;
+			flex-direction: column;
+			gap: 0.5rem;
+			padding: 0.75rem;
+		}
+		:global(html.mobile .settings-section table > tfoot > tr > td) {
+			display: block;
+			width: 100%;
+			padding: 0 !important;
+		}
+		:global(html.mobile .settings-section table > tfoot > tr > td:empty) {
+			display: none;
+		}
+		:global(html.mobile .settings-section table > tfoot input),
+		:global(html.mobile .settings-section table > tfoot select) {
+			width: 100%;
+		}
+	}
+</style>
