@@ -141,9 +141,15 @@
 
 	$: if (open) place();
 	$: if (!open) reset();
-	// A new filter starts at its first match.
+	// A new filter starts at its first match. Only a change of the filter
+	// text counts: the items are computed again whenever the context does
+	// (live traffic updates the stores it reads), and that must not close
+	// an open submenu or move the highlight.
+	let lastFilter = filter;
 	$: onFilter(filter, list);
 	function onFilter() {
+		if (filter === lastFilter) return;
+		lastFilter = filter;
 		active = filtered ? step(list, -1, 1) : -1;
 		closeFrom(0);
 	}
