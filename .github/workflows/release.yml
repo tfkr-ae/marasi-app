@@ -38,6 +38,16 @@ jobs:
       version: ${{ github.ref_name }}
     secrets: inherit
 
+  # The iOS app of the same commit, to TestFlight. It doesn't hold up the
+  # desktop release, and a failure leaves the release as it is.
+  testflight:
+    needs: prepare
+    uses: ./.github/workflows/testflight.yml
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ github.ref_name }}
+    secrets: inherit
+
   publish:
     needs: build
     runs-on: ubuntu-latest

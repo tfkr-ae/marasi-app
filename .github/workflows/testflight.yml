@@ -1,7 +1,8 @@
-# Builds the iOS app from main and uploads it to TestFlight. Run it from
-# Actions → TestFlight → Run workflow. App Store Connect then processes the
-# build (5–30 minutes) and offers it to the internal testers; submitting a
-# build for App Store review stays a manual step in App Store Connect.
+# Builds the iOS app and uploads it to TestFlight. release.yml runs it for
+# each release tag; run it by hand from Actions → TestFlight → Run workflow.
+# App Store Connect then processes the build (5–30 minutes) and offers it to
+# the internal testers; submitting a build for App Store review stays a
+# manual step in App Store Connect.
 name: TestFlight
 
 on:
@@ -11,16 +12,25 @@ on:
         description: "Version (DD.MM.YYYY); empty for today"
         required: false
         default: ""
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to build"
+        required: true
+        type: string
+      version:
+        description: "Version (DD.MM.YYYY, the release tag)"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: testflight
-  cancel-in-progress: false
-
 jobs:
   testflight:
+    concurrency:
+      group: testflight
+      cancel-in-progress: false
     # Xcode 27 (preview image): the regular macOS runners stop at Xcode
     # 26.6 (iOS 26.5 SDK), and iOS runs an app built with an older SDK in
     # compatibility mode on newer screens, such as the iPhone Duo unfolded.
@@ -30,6 +40,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - name: iOS SDK 27 or later
         run: |
           sdk=$(xcrun --sdk iphoneos --show-sdk-version)
@@ -69,7 +81,6 @@ jobs:
       - name: Build
         env:
           VERSION: ${{ inputs.version }}
-          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           # build/ios/scripts/store-version.sh turns DD.MM.YYYY into the
           # App Store's YYYY.M.D.
@@ -80,7 +91,7 @@ jobs:
             CODESIGN_IDENTITY="$identity" \
             PROVISIONING_PROFILE="$RUNNER_TEMP/signing/appstore.mobileprovision" \
             ENTITLEMENTS_FILE="$RUNNER_TEMP/signing/appstore.entitlements" \
-            CHANNEL=release VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER"
+            CHANNEL=release VERSION="$VERSION"
           codesign --verify --strict --verbose=2 bin/marasi-app.app
       - name: Upload to TestFlight
         env:
