@@ -1256,6 +1256,20 @@
 					<p>Build channel</p>
 					<p class="{control} font-mono text-sm">{buildInfo?.Channel ?? "…"}</p>
 				</div>
+				<div class={row}>
+					<div>
+						<p>Open-source licences</p>
+						<p class="text-xs opacity-70">Libraries Marasi includes</p>
+					</div>
+					<div class={control}>
+						<button
+							type="button"
+							class="btn btn-sm w-full {primary}"
+							data-testid="view-licences"
+							on:click={() => modalStore.trigger({ type: "component", component: "Licences" })}>View</button
+						>
+					</div>
+				</div>
 			{/if}
 		</section>
 	</div>

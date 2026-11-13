@@ -30,7 +30,7 @@ A new page needs a route, a rail anchor in `+layout.svelte`, and a `global.go-*`
 | Compass, Workshop | `routes/<name>/` | Most of the screen is in the route file. |
 | Chef, Excalidraw, Interactsh | `routes/sveltechef/`, `excalidraw/`, `interact/` | `SvelteChef.svelte`, `Excalidraw.svelte`, `Interact.svelte`, mounted by the layout |
 | Extension pages | `routes/extension/[name]/` | `lib/extensions/` |
-| Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. |
+| Settings | `routes/settings/` | One section per `sections` entry. Keybindings opens `KeybindingsModal.svelte`. About's Open-source licences row opens `lib/LicencesModal.svelte` (registered as `Licences`), which reads the `licences.json` that `frontend/notices.js` (a Vite plugin) writes at build time: the npm packages in the bundle and the Go modules from `go list -deps`, each with its licence text. The dev server has none. |
 | WebSocket stream | the `WebsocketStream` modal | `WebSocketModal.svelte` and its `WebSocket*.svelte` tabs |
 
 ## Mobile (iOS and Android)

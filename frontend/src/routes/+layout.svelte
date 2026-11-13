@@ -115,6 +115,7 @@
 	import { closeTopOverlay, isolateOverlays } from "../lib/overlayIsolation.js";
 	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
+	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
@@ -308,6 +309,7 @@
 		UpstreamProxyCA: { ref: UpstreamProxyCAModal },
 		ExportReport: { ref: ExportReview },
 		Connections: { ref: ConnectionsModal },
+		Licences: { ref: LicencesModal },
 		QuitQuestion: { ref: QuitQuestionModal },
 	};
 	// Text size sizes the root element, so everything in rem follows it.
