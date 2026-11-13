@@ -48,7 +48,7 @@ Drive the listener button (`[data-testid=home-listener]`, `Listener off` when th
  {"text":"Continue"},{"waitText":"Listening on"},{"waitText":":<NP>","within":"[data-testid=home-listener]"}]}
 ```
 
-`lsof -nP -t -iTCP:<NP> -sTCP:LISTEN` must print the service PID (`service.pid`), not the app's. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal shows `No recent projects` until the list loads. `Browse Files...`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
+`lsof -nP -t -iTCP:<NP> -sTCP:LISTEN` must print the service PID (`service.pid`), not the app's. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal's list stays empty until the service's project list arrives. `Browse…`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
 
 Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/dark mode with `Command+U`, and toggle it back. This proves the global shortcut reads the live theme after navigating away from the dashboard.
 
@@ -62,14 +62,14 @@ Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cm
 
 ### Switching projects
 
-`⌘O` or `Open Project` opens `Switch Projects`: a `Search or enter new project name...` field (`input[type=search]`) over the service's named projects (`GET /project/list`, most recent first). Enter or `Open Selected` opens the highlighted project by name, or with no match the typed text: a name opens `<config dir>/projects/<name>.marasi` on the service, and an absolute path (`.marasi` added when missing) opens that file, as `Browse Files...` would. Both go through `POST /project/open`; check the result with `GET /service/status`'s `project`. A slow or failed open covers the app with the opening screen (the project's name and path, steps Lock, Open, Upgrade, Wait, Load, one sentence, and a collapsed `Details` listing the service's `project.*` events); a quick open shows none, so the screen is reached by failing. Proven, opening a new project and switching back:
+`⌘O` or `Open Project` opens `Switch Projects`: a `Find or create a project` field (`input[type=search]`) over the service's named projects (`li.project-item`, `GET /project/list`, most recent first). Typed text that names no listed project (ignoring case and `.marasi`) gets a `Create “<name>”` row (`li.project-item.create`, `New project · Projects folder` or the typed path) above an `Existing projects` header and the matches. Enter, or the button beside `Browse…`, takes the project the text names, else the first match, else the Create row; a click on a row selects it, a double-click opens it, and the button names what it will do (`Open <name>` or `Create “<name>”`). A name opens or creates `<config dir>/projects/<name>.marasi` on the service, and an absolute path (`.marasi` added when missing) opens that file, as `Browse…` would. Both go through `POST /project/open`; check the result with `GET /service/status`'s `project`. A slow or failed open covers the app with the opening screen (the project's name and path, steps Lock, Open, Upgrade, Wait, Load, one sentence, and a collapsed `Details` listing the service's `project.*` events); a quick open shows none, so the screen is reached by failing. Proven, opening a new project and switching back:
 
 ```json
 {"name":"open-second","steps":[
  {"key":"cmd+o"},{"waitText":"Switch Projects"},{"waitText":"scratchpad"},{"click":"input[type=search]"},{"insert":"second"},
- {"waitText":"Create New Project"},{"key":"enter"},{"waitText":"second Project Dashboard","timeoutMs":20000},{"waitText":"Opened second project"}]}
+ {"waitText":"Create “second”"},{"key":"enter"},{"waitText":"second Project Dashboard","timeoutMs":20000},{"waitText":"Opened second project"}]}
 {"name":"back-to-scratchpad","steps":[
- {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"li.project-item","hasText":"scratchpad"},{"text":"Open Selected"},
+ {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"li.project-item","hasText":"scratchpad"},{"text":"Open scratchpad"},
  {"waitText":"scratchpad Project Dashboard","timeoutMs":20000}]}
 ```
 
