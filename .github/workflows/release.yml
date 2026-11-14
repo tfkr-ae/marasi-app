@@ -48,6 +48,18 @@ jobs:
       version: ${{ github.ref_name }}
     secrets: inherit
 
+  # The Android app of the same commit, to a Google Play testing track
+  # (PLAY_RELEASE_TRACK; internal until it is set). Like testflight, it
+  # doesn't hold up the desktop release.
+  play:
+    needs: prepare
+    uses: ./.github/workflows/play.yml
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ github.ref_name }}
+      track: ${{ vars.PLAY_RELEASE_TRACK || 'internal' }}
+    secrets: inherit
+
   publish:
     needs: build
     runs-on: ubuntu-latest

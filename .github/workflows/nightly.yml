@@ -118,6 +118,20 @@ jobs:
       marasi_ref: ${{ needs.prepare.outputs.marasi }}
     secrets: inherit
 
+  # The Android app of the same commit and marasi, to Google Play internal
+  # testing. Like testflight, it doesn't hold up the nightly.
+  play:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    uses: ./.github/workflows/play.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ needs.prepare.outputs.version }}
+      channel: nightly
+      track: internal
+      marasi_ref: ${{ needs.prepare.outputs.marasi }}
+    secrets: inherit
+
   publish:
     needs: [prepare, build]
     if: needs.prepare.outputs.publish == 'true'

@@ -1,0 +1,126 @@
+# Builds the Android app bundle and uploads it to a Google Play testing
+# track. release.yml runs it for each release tag and nightly.yml for each
+# nightly; run it by hand from Actions → Google Play → Run workflow.
+# Nightlies go to internal testing. Releases go to the track the repository
+# variable PLAY_RELEASE_TRACK names (internal until it is set; alpha is
+# closed testing). Promoting to production stays a manual step in Play
+# Console.
+name: Google Play
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (DD.MM.YYYY); empty for today"
+        required: false
+        default: ""
+      channel:
+        description: "release or nightly"
+        required: false
+        type: choice
+        options: [release, nightly]
+        default: release
+      track:
+        description: "internal, alpha (closed) or beta (open)"
+        required: false
+        type: choice
+        options: [internal, alpha, beta]
+        default: internal
+      marasi_ref:
+        description: "marasi commit to build against; empty for go.mod's"
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to build"
+        required: true
+        type: string
+      version:
+        description: "Version (DD.MM.YYYY, the release tag, or a nightly's)"
+        required: true
+        type: string
+      channel:
+        description: "release or nightly"
+        required: false
+        type: string
+        default: release
+      track:
+        description: "internal, alpha (closed) or beta (open)"
+        required: false
+        type: string
+        default: internal
+      marasi_ref:
+        description: "marasi commit to build against (nightly); empty for go.mod's"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    concurrency:
+      group: play
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - if: inputs.marasi_ref != ''
+        env:
+          MARASI_REF: ${{ inputs.marasi_ref }}
+        run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # The Android Gradle plugin needs JDK 17 or 21.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install Wails
+        run: go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
+      # main.go embeds frontend/build, which binding generation needs before
+      # the frontend build fills it.
+      - run: mkdir -p frontend/build && touch frontend/build/.keep
+      - name: Upload key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/signing"
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/signing/upload.p12"
+      - name: Build
+        env:
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel || 'release' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: upload
+        run: |
+          # Without BUILD_NUMBER the version code is the minutes since 1970
+          # (build/android/app/build.gradle), so each upload is newer.
+          # The iOS build number (YYYYMMDDHHMM) is too big for it.
+          export VERSION=${VERSION:-$(date -u '+%d.%m.%Y')}
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/signing/upload.p12"
+          wails3 task android:bundle CHANNEL="$CHANNEL" VERSION="$VERSION"
+      - name: Service account
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON_B64 }}
+        run: printf '%s' "$PLAY_JSON" | base64 --decode > "$RUNNER_TEMP/signing/play.json"
+      - uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ runner.temp }}/signing/play.json
+          packageName: ae.tfkr.marasi
+          releaseFiles: bin/marasi-app.aab
+          releaseName: ${{ inputs.version || github.sha }}
+          track: ${{ inputs.track || 'internal' }}
+          status: completed
+      - if: always()
+        run: rm -rf "$RUNNER_TEMP/signing"
