@@ -79,7 +79,7 @@ jobs:
         run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       # The Android Gradle plugin needs JDK 17 or 21.
       - uses: actions/setup-java@v4
         with:

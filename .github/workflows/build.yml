@@ -75,7 +75,7 @@ jobs:
       - run: go test -v -race ./...
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - run: npm ci
         working-directory: frontend
       - run: npm test
@@ -123,7 +123,7 @@ jobs:
         run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - if: runner.os == 'Linux'
         run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
       - name: Install Wails
