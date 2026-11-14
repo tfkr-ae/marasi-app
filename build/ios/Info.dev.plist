@@ -25,8 +25,14 @@
 	<key>MinimumOSVersion</key>
 	<string>15.0</string>
 	<key>NSAppTransportSecurity</key>
+	<!-- The web view calls the service over plain HTTP at whatever host it
+	     was paired with, often a Tailscale 100.x or LAN IP.
+	     NSAllowsLocalNetworking covers loopback, .local and unqualified names
+	     only, so an IP address failed with NSURLErrorDomain -1022 ("Couldn't
+	     reach"). NSAllowsArbitraryLoadsInWebContent lifts ATS for WKWebView
+	     loads alone; native networking keeps it. -->
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>

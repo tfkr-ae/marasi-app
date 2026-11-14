@@ -82,9 +82,15 @@ func readPlist(t *testing.T, path string) map[string]plistValue {
 
 // The web view reaches a remote Marasi's control API over plain HTTP at any
 // host. Without these ATS exceptions macOS blocks every non-loopback fetch
-// and a remote connection fails (the release plist once had none).
+// and a remote connection fails (the release plist once had none). On iOS,
+// NSAllowsLocalNetworking alone passes a hostname but refuses an IP address
+// such as a Tailscale 100.x one (NSURLErrorDomain -1022), which the release
+// plist once did while the dev plist's NSAllowsArbitraryLoads hid it.
 func TestBundlePlistsAllowPlainHTTPFromTheWebView(t *testing.T) {
-	for _, path := range []string{"build/darwin/Info.plist", "build/darwin/Info.dev.plist"} {
+	for _, path := range []string{
+		"build/darwin/Info.plist", "build/darwin/Info.dev.plist",
+		"build/ios/Info.plist", "build/ios/Info.dev.plist",
+	} {
 		ats, ok := readPlist(t, path)["NSAppTransportSecurity"].(map[string]plistValue)
 		if !ok {
 			t.Errorf("%s: no NSAppTransportSecurity dict", path)
@@ -94,6 +100,11 @@ func TestBundlePlistsAllowPlainHTTPFromTheWebView(t *testing.T) {
 			if ats[key] != true {
 				t.Errorf("%s: NSAppTransportSecurity.%s = %v, want true", path, key, ats[key])
 			}
+		}
+		// Arbitrary loads would lift ATS for native networking too, and
+		// would let a dev build pass what the release refuses.
+		if ats["NSAllowsArbitraryLoads"] == true {
+			t.Errorf("%s: NSAppTransportSecurity.NSAllowsArbitraryLoads = true, want it unset or false", path)
 		}
 	}
 }
