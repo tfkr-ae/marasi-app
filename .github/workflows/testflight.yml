@@ -81,7 +81,7 @@ jobs:
         run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Install Wails and asc
         run: |
           go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
