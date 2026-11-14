@@ -7,6 +7,12 @@
     <!-- Observe network connectivity / type for android:NetworkChanged events -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Marasi: the camera only scans a pairing QR code, and pairing by hand
+         works without one. Without these, Play reads the CAMERA permission as
+         a required camera and hides the app from devices that lack one, such
+         as some tablets and Chromebooks. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <!-- Marasi: the biometric library Wails' template includes asks for these;
          Marasi never asks for a fingerprint or face, so they go. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
