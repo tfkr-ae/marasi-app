@@ -413,24 +413,26 @@ html.mobile .drawer pre {
    40rem they stop above the bottom bar (its height in --bottom-bar-height,
    BottomBar.svelte; not while the keyboard hides it); wider they start
    right of the rail (w-12, past the left inset). A tap on the bar or the
-   rail still goes through (overlayIsolation.js). */
+   rail still goes through (overlayIsolation.js). Over a maximised drawer
+   (.mobile-fullscreen), which covers the bar and the rail, they fill the
+   screen. */
 @media (max-width: 40rem) {
-	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .modal-backdrop,
-	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .logbook-pair-expanded,
-	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .drawer-backdrop,
-	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)) .snackbar-wrapper {
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)):not(:has(.mobile-fullscreen)) .modal-backdrop,
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)):not(:has(.mobile-fullscreen)) .logbook-pair-expanded,
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)):not(:has(.mobile-fullscreen)) .drawer-backdrop,
+	html.mobile:has(.bottom-bar:not(.bottom-bar-hidden)):not(:has(.mobile-fullscreen)) .snackbar-wrapper {
 		bottom: var(--bottom-bar-height, 0px);
 		padding-bottom: 0 !important;
 	}
 }
 @media (min-width: 40.0625rem) {
-	html.mobile:has(.nav-rail) .modal-backdrop,
-	html.mobile:has(.nav-rail) .logbook-pair-expanded,
-	html.mobile:has(.nav-rail) .drawer-backdrop {
+	html.mobile:has(.nav-rail):not(:has(.mobile-fullscreen)) .modal-backdrop,
+	html.mobile:has(.nav-rail):not(:has(.mobile-fullscreen)) .logbook-pair-expanded,
+	html.mobile:has(.nav-rail):not(:has(.mobile-fullscreen)) .drawer-backdrop {
 		left: calc(var(--safe-left) + var(--mobile-rail-width));
 		padding-left: 0 !important;
 	}
-	html.mobile:has(.nav-rail) .snackbar-wrapper {
+	html.mobile:has(.nav-rail):not(:has(.mobile-fullscreen)) .snackbar-wrapper {
 		left: calc(var(--safe-left) + var(--mobile-rail-width));
 	}
 }
