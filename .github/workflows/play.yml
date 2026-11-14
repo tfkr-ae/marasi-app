@@ -106,12 +106,14 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: upload
         run: |
+          # bundle:fat adds x86_64 (Chromebooks) to arm64; Play splits the
+          # bundle per ABI, so each device downloads only its own.
           # Without BUILD_NUMBER the version code is the minutes since 1970
           # (build/android/app/build.gradle), so each upload is newer.
           # The iOS build number (YYYYMMDDHHMM) is too big for it.
           export VERSION=${VERSION:-$(date -u '+%d.%m.%Y')}
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/signing/upload.p12"
-          wails3 task android:bundle CHANNEL="$CHANNEL" VERSION="$VERSION"
+          wails3 task android:bundle:fat CHANNEL="$CHANNEL" VERSION="$VERSION"
       - name: Service account
         env:
           PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON_B64 }}
