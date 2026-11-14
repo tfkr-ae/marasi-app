@@ -85,6 +85,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      # The wails3 CLI links GTK and WebKitGTK on Linux.
+      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
       - name: Install Wails
         run: go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
       # main.go embeds frontend/build, which binding generation needs before
