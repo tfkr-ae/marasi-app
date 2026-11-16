@@ -741,6 +741,10 @@ if (mode === "launch") {
 	else if (action === "theme") await driveTheme(route);
 	else if (action) throw new Error(`unknown action: ${action}`);
 	else await driveRoute(route);
+} else if (mode === "close") {
+	// restart.sh: Chrome writes localStorage to disk lazily, and a TERM drops
+	// what it hasn't written yet; Browser.close writes it first.
+	await send("Browser.close").catch(() => {});
 } else {
 	throw new Error(`unknown mode: ${mode}`);
 }

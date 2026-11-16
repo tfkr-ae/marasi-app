@@ -7,7 +7,7 @@
 - Listener status (live from `listener.*`) and listener reconfiguration
 - Open Project, Download Certificate, and Start Chrome actions
 - Switching projects: the `Switch Projects` picker, the opening screen (steps, a locked project), and the refusal while Checkpoint holds items
-- Global light/dark appearance toggle
+- Global light/dark appearance toggle; the app reopens in the scheme chosen last (`⌘U`, Settings › Appearance › Dark mode), else the system's
 - The Connections modal: the rail's connection tile (`[data-testid=connection-tile]`, the connection's name, `Local`) or `⌘9` (`global.connections`, `Connections…` in the menu)
 
 ## How to get to it (user POV)
@@ -51,6 +51,8 @@ Drive the listener button (`[data-testid=home-listener]`, `Listener off` when th
 `lsof -nP -t -iTCP:<NP> -sTCP:LISTEN` must print the service PID (`service.pid`), not the app's. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal's list stays empty until the service's project list arrives. `Browse…`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
 
 Run `scripts/drive.sh dashboard theme` to leave Home for Settings, toggle light/dark mode with `Command+U`, and toggle it back. This proves the global shortcut reads the live theme after navigating away from the dashboard.
+
+The chosen scheme lives in the page's `localStorage` (`modeUserPrefers`, `false` for dark), not in `marasi_appconfig.yaml`; with no choice yet the app follows the system. Prove it with `{"key":"cmd+u"},{"waitSelector":"html.dark"}`, then `scripts/restart.sh` (which keeps Chrome's profile) and `{"waitSelector":"html.dark"}` on the relaunched page.
 
 Home's counts follow traffic without navigating. Proven, with a request sent through the proxy (`curl -x http://127.0.0.1:<proxy port> …`) a few seconds after the drive starts on a fresh project:
 
