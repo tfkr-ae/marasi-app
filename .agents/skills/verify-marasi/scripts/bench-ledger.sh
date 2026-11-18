@@ -12,4 +12,4 @@ set -eu
 # A fresh launch, so the first visit loads the Ledger's code as a user's would.
 "$SCRIPT_DIR/restart.sh" >/dev/null
 EVIDENCE_DIR=$(evidence_dir)
-exec node "$SCRIPT_DIR/bench-ledger.mjs" "$(cat "$CDP_PORT_FILE")" "$EVIDENCE_DIR/bench-ledger.json"
+exec node "$SCRIPT_DIR/bench-ledger.mjs" "$(cat "$CDP_PORT_FILE")" "$EVIDENCE_DIR/bench-ledger.json" "$STATE_DIR"

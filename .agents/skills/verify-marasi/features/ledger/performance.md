@@ -11,12 +11,12 @@ The app loads the Ledger's code once the project is open (`preloadCode("/ledger"
 | `warmShell`, `warmRows` | 100 | 35–36, 35–36 | Home → Ledger click to the toolbar and the first row, later visits |
 | `longestTask` | 100 | 0 (no task over 50 ms) | Longest main-thread task during a visit |
 | `sortRows` | 300 | 23–26 | A sort header click to the newly sorted first row (a full first-page read) |
-| `firstPage` | 50 | 6–7 | Marasi's QueryTraffic for the live view's first page, alone |
-| `count` | none | 122–124 | Marasi's CountTraffic for the live view; it grows with the project and is reported, not budgeted |
+| `firstPage` | 50 | 6–7 | The service's `GET /traffic` for the newest 200 pairs, alone, from the page and without the content-type exclusion (the 2026-10-17 figure timed the `QueryTraffic` binding, removed in 06db968) |
+| `count` | none | 122–124 | The service's `GET /traffic/count`, alone; it grows with the project and is reported, not budgeted |
 
 Run it:
 
 1. `scripts/launch.sh`, then `scripts/bench-seed.sh` (85,000 requests by default; about 15 minutes; it runs `bench-server.py` on 127.0.0.1:18999 for the upstream).
-2. `scripts/bench-ledger.sh`. It restarts the instance (the project is kept) so `firstVisit` loads the code as a user's first visit does, prints each figure against its budget, writes `<evidence>/bench-ledger.json`, and exits 1 when one is over.
+2. `scripts/bench-ledger.sh`. It restarts the instance (the project is kept) so `firstVisit` loads the code as a user's first visit does, prints each figure against its budget, writes `<evidence>/bench-ledger.json`, and exits 1 when one is over. `scripts/bench-seed.sh 1500` (about a minute) is enough to check the harness itself; its figures don't compare with the budget.
 
 Figures come from headless Chrome against the server build, so they compare runs on one machine, not the WebKit app. Marasi answers one call at a time: anything the Ledger asks for waits behind whatever else is in flight (on a fresh launch, the dashboard's `CountNotes`, about 1.6 s on this project), so measure with the app idle. Since Marasi v0.0.0-20261016190652-f338aa018cfb the dashboard's `CountNotes` is one `DashboardCounts` read (11 ms at 85,000 requests, from 1.6 s), so a fresh launch's first Ledger page arrives about 940 ms after start rather than 2.5 s. On a project's first open after an upgrade, Marasi's background jobs can still hold calls up for about 250 ms each for some 27 s; don't benchmark then.
