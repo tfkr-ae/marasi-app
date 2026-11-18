@@ -47,9 +47,11 @@ if [ -z "$PORT" ] && [ "${MARASI_VERIFY_KEEP_CONFIG:-0}" = 1 ] && [ -f "$APP_CON
 fi
 preflight "Proxy=$PORT" "Server=$SERVER_PORT" "Chrome DevTools=$CDP_PORT"
 resolve_cli
-# The app starts its own instance with a free proxy port (--port 0), read
-# back once the page is ready.
-[ "$SERVICE_MODE" = app ] || [ -n "$PORT" ] || PORT=$(free_port)
+# Both modes take a free proxy port: attach starts the service on it, and in
+# app mode the config below names it as default_port, which the app starts
+# its own instance on (it falls back to any free port only when that one is
+# taken, and the service-status check below then fails).
+[ -n "$PORT" ] || PORT=$(free_port)
 [ -n "$SERVER_PORT" ] || SERVER_PORT=$(free_port)
 [ -z "$PORT" ] || [ "$PORT" != "$SERVER_PORT" ] || {
 	printf 'Proxy and server ports are both %s.\n' "$PORT" >&2

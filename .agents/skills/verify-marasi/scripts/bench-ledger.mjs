@@ -15,16 +15,21 @@
 //   longestTask           The longest main-thread task during a warm visit.
 //   sortRows              A sort header click until the table shows the
 //                         newly sorted first row (a full first-page read).
-//   firstPage             QueryTraffic for the live view's first page alone.
-//   count                 CountTraffic for the live view alone (the status
+//   firstPage             The service's GET /traffic for the newest 200
+//                         pairs alone, from the page (the Ledger's first read,
+//                         without the content-type exclusion).
+//   count                 The service's GET /traffic/count alone (the status
 //                         bar's count; it grows with the project).
 import fs from "node:fs";
+import path from "node:path";
 
-const [port, outFile] = process.argv.slice(2);
-if (!port || !outFile) {
-	console.error("usage: bench-ledger.mjs <cdp-port> <out.json>");
+const [port, outFile, stateDir] = process.argv.slice(2);
+if (!port || !outFile || !stateDir) {
+	console.error("usage: bench-ledger.mjs <cdp-port> <out.json> <state-dir>");
 	process.exit(2);
 }
+const controlUrl = fs.readFileSync(path.join(stateDir, "control-url"), "utf8").trim();
+const servicePassword = fs.readFileSync(path.join(stateDir, "service-password"), "utf8").trim();
 
 // The budget. Change it only with a reason in the commit that changes it.
 const BUDGET = {
@@ -86,12 +91,10 @@ const helpers = `
 		waitFor: (test) => new Promise((ok) => { const tick = () => (test() ? ok(performance.now()) : requestAnimationFrame(tick)); tick(); }),
 	};`;
 
-// Calls an App binding the way the generated bindings do: a POST to the
-// server build's /wails/runtime, by method name.
-const callApp = `((name, ...args) => fetch("/wails/runtime", {
-	method: "POST",
-	headers: { "Content-Type": "application/json", "x-wails-client-id": window._wails.clientId },
-	body: JSON.stringify({ object: 0, method: 0, args: { "call-id": crypto.randomUUID(), methodName: "main.App." + name, args } }),
+// Reads a control API route from the page, as the Ledger's service client
+// does (the app has no traffic bindings since it moved to the service).
+const callService = `((route, params = {}) => fetch(${JSON.stringify(controlUrl)} + route + "?" + new URLSearchParams(params), {
+	headers: { Authorization: "Bearer " + ${JSON.stringify(servicePassword)} },
 }).then(async (response) => {
 	if (!response.ok) throw new Error(await response.text());
 	return response.json();
@@ -128,8 +131,11 @@ results.first = await evaluate(visit);
 // Startup visits: reload on Home and click Ledger as soon as Home shows.
 for (let i = 0; i < 3; i++) {
 	await toHome();
+	// Page.reload answers before the old document unloads, so mark it and
+	// wait for a document without the mark: a click on the old one is lost.
+	await evaluate("window.__benchBeforeReload = true");
 	await send("Page.reload", {});
-	await until(`Boolean(window._wails?.clientId && document.body?.innerText.includes("Project Dashboard") && document.querySelector('[title="Ledger"]'))`, 120000);
+	await until(`Boolean(!window.__benchBeforeReload && window._wails?.clientId && document.body?.innerText.includes("Project Dashboard") && document.querySelector('[title="Ledger"]'))`, 120000);
 	// Timed from here by polling: the page is still settling, and one long
 	// call into it can go unanswered.
 	const start = Date.now();
@@ -164,22 +170,22 @@ for (let i = 0; i < 6; i++) {
 	await sleep(300);
 }
 
-// The two Marasi calls the Ledger waits on most, alone.
+// The two service reads the Ledger waits on most, alone.
 for (let i = 0; i < 5; i++) {
 	const timing = await evaluate(`(async () => {
-		const call = ${callApp};
+		const call = ${callService};
 		let start = performance.now();
-		await call("QueryTraffic", { Query: "", OrderBy: "number desc", Cursor: "", Direction: "forward", AsOf: "", Limit: 200 });
+		await call("/traffic", { order_by: "number desc", direction: "forward", limit: 200 });
 		const firstPage = performance.now() - start;
 		start = performance.now();
-		await call("CountTraffic", "", "", {});
+		await call("/traffic/count");
 		return { firstPage, count: performance.now() - start };
 	})()`);
 	results.firstPage.push(timing.firstPage);
 	results.count.push(timing.count);
 }
 
-const pairs = await evaluate(`${callApp}("CountTraffic", "", "", { IgnoreExclusion: true }).then((r) => r.Count)`);
+const pairs = await evaluate(`${callService}("/traffic/count").then((r) => r.count)`);
 const summary = {
 	pairs,
 	warmShell: median(results.warm.map((r) => r.shell)),

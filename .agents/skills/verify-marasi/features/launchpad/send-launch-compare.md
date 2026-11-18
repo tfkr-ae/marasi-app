@@ -60,14 +60,14 @@ Launches are tracked. `Launch` returns a launch id that is the new entry's UUID;
 
 Prove outcomes persisted with `select r.path, r.status_code, json_extract(r.metadata,'$.launch') from launchpad_request lr join request r on r.id=lr.request_id` (a cancelled launch stores its request with status `-1` and `{"status":"cancelled"}`; a closed port stores `502` with `{"reason":"upstream_error","status":"failed"}`). Switching projects or quitting ends pending launches as `failed` with reason `interrupted`.
 
-Compare, with three entries and entry 3 selected (`Compare` stays disabled below two entries). Entry rows carry `data-compare="A"`/`"B"`; chips are `.lp-chip[data-side=left|right]`. Stored request lines use absolute URLs (`GET http://127.0.0.1:18099/… HTTP/1.1`), so wait on `/path HTTP/1.1`, not `GET /path`. The tab buttons render `capitalize`d lowercase text; match them with `hasText:"equest"`. The diff is a `@codemirror/merge` MergeView inside `.lp-diff`: changed lines carry `.cm-changedLine`, and each collapsed unchanged run is a `.cm-collapsedLines` bar (`⦚ N unchanged lines ⦚`) that expands on click. A 3-line request with one changed line has no collapsed run, so give the entries a longer body or skip that step.
+Compare, with three entries and entry 3 selected (`Compare` stays disabled below two entries). Entry rows carry `data-compare="A"`/`"B"`; chips are `.lp-chip[data-side=left|right]`. Stored request lines use absolute URLs (`GET http://127.0.0.1:18099/… HTTP/1.1`), so wait on `/path HTTP/1.1`, not `GET /path`. The tab buttons render `capitalize`d lowercase text; match them with `hasText:"equest"`. The diff is a `@codemirror/merge` MergeView inside `.lp-diff`: changed lines carry `.cm-changedLine`, and each collapsed unchanged run is a `.cm-collapsedLines` bar (`⦚ N unchanged lines ⦚`) drawn in both panes, so click it with `"nth":1`; one click expands the run in both. Compare opens on the Response tab. Only a long unchanged run collapses (`collapseUnchanged` keeps 3 lines of context beside each change and folds 4 or more), so the proven run launched `/cmp-one`, `/cmp-two` and `/cmp-three` with ten extra headers each (`X-A: 1` … `X-J: 10`), and the recipe switches to the Request tab before the click; with short requests, skip that step.
 
 ```json
 {"name":"compare","steps":[
  {"text":"Compare"},{"waitText":"click any entry in the sidebar"},{"waitSelector":".lp-entry[data-compare=\"A\"]"},
  {"text":"Previous (#2)"},{"waitSelector":".lp-diff"},{"waitSelector":".lp-entry[data-compare=\"B\"]"},
- {"click":".lp-diff .cm-collapsedLines"},{"waitNoSelector":".lp-diff .cm-collapsedLines"},
  {"click":".lp-compare-strip button","hasText":"equest"},
+ {"click":".lp-diff .cm-collapsedLines","nth":1},{"waitNoSelector":".lp-diff .cm-collapsedLines"},
  {"click":".lp-chip[data-side=\"left\"]"},{"waitText":"to use as the new A"},
  {"click":".lp-entry","hasText":"/cmp-one"},{"waitText":"#1","within":".lp-chip[data-side=\"left\"]"},
  {"text":"Swap A and B"},{"waitText":"#1","within":".lp-chip[data-side=\"right\"]"},
