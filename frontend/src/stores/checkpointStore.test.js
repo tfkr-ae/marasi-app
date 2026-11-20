@@ -258,6 +258,22 @@ test("an edit that doesn't parse has a parse error and is not forwarded", async 
   assert.equal(await store.forward("a"), "forwarded");
 });
 
+test("the parse check is told the held item's protocol", async () => {
+  const h2 = { ...request("h"), Raw: b64("GET /h HTTP/2\r\n:authority: x\r\n\r\n") };
+  const { api, store } = await loaded([request("a"), h2]);
+  const seen = [];
+  api.checkParse = async (text, type, protocol) => {
+    seen.push([text, type, protocol]);
+    return "";
+  };
+  await store.edit("a", "GET /x HTTP/1.1\r\n\r\n");
+  await store.edit("h", "GET /x HTTP/2\r\n\r\n");
+  assert.deepEqual(seen, [
+    ["GET /x HTTP/1.1\r\n\r\n", "request", "http/1.1"],
+    ["GET /x HTTP/2\r\n\r\n", "request", "h2"],
+  ]);
+});
+
 // A checkParse whose replies the test releases, in order.
 function heldParses(api) {
   const pending = [];

@@ -5,7 +5,7 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { MergeView } from "@codemirror/merge";
 	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "@codemirror/legacy-modes/mode/http";
+	import { http } from "../httpMode.js";
 	import { EditorState } from "@codemirror/state";
 	import { EditorView } from "@codemirror/view";
 	import { oneDark } from "@codemirror/theme-one-dark";

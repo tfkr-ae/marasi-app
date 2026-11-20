@@ -22,6 +22,10 @@ _Avoid_: index, row number, position
 The size of a pair's response in bytes, as Marasi records it. A pair whose response has not arrived has no length.
 _Avoid_: size, response size, content length
 
+**Protocol**:
+The HTTP version a pair used on one leg, as Marasi records it: `http/1.1` or `h2`. A pair has a client protocol (between the client and Marasi) and an origin protocol (between Marasi and the origin). They differ only when Marasi translated the pair, as for an HTTP/2 client and an HTTP/1.1-only origin. The Ledger's Proto column shows one protocol, or `h2→1.1` for a translated pair. An HTTP/2 message's raw text is Marasi's HTTP/2 text form: `GET /path HTTP/2` or `HTTP/2 200`, then pseudo-header fields such as `:authority` as field lines.
+_Avoid_: HTTP version, transport
+
 **Query**:
 A text expression that narrows the ledger to the request/response pairs that match it, as Marasi defines it. The ledger's current query is not stored; a researcher keeps one by making it a saved query.
 _Avoid_: search, search string, filter, FTS

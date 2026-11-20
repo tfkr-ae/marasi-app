@@ -26,6 +26,7 @@ export const LEDGER_COLUMNS = Object.freeze([
   { key: "status", label: "Status", width: "3.75rem", align: "right", sort: "status_code" },
   { key: "type", label: "Type", width: "7.5rem", sort: "content_type" },
   { key: "size", label: "Size", width: "3.875rem", align: "right", sort: "length" },
+  { key: "protocol", label: "Proto", name: "protocol", width: "3.5rem", sort: "client_protocol" },
 ]);
 
 // Newest first by Marasi's pair number (marasi docs/adr/2026-10-16-pairs-are-numbered-in-capture-order.md): unlike
@@ -54,7 +55,7 @@ export function sortMark(sort, column) {
 /** The header's tooltip. */
 export function sortTitle(sort, column) {
   if (isDefaultSort(sort) && column.sort === DEFAULT_SORT.field) return "Newest first · click for oldest first";
-  return `Sort by ${column.label === "#" ? "number" : column.label.toLowerCase()}`;
+  return `Sort by ${column.name ?? (column.label === "#" ? "number" : column.label.toLowerCase())}`;
 }
 
 /**
@@ -178,6 +179,31 @@ export function shortType(contentType) {
 export function statusText(code) {
   const n = Number(code);
   return n > 0 ? String(n) : "…";
+}
+
+// Marasi's protocol names (marasi domain.ProtocolHTTP1, ProtocolHTTP2) as
+// the table shows them.
+const PROTOCOL_TEXT = { "http/1.1": "1.1", h2: "h2" };
+const protocolShort = (protocol) => PROTOCOL_TEXT[protocol] ?? protocol ?? "";
+
+/**
+ * A pair's protocol for the Proto column: "h2" or "1.1" when both legs
+ * used it, "h2→1.1" when Marasi translated between the client's and the
+ * origin's. Blank for a pair from a Marasi that records none.
+ */
+export function protocolText(row) {
+  const client = protocolShort(row?.ClientProtocol);
+  const origin = protocolShort(row?.OriginProtocol);
+  if (!client) return "";
+  return !origin || origin === client ? client : `${client}→${origin}`;
+}
+
+/** The Proto cell's tooltip: each leg's protocol in full, "" when unknown. */
+export function protocolTitle(row) {
+  const client = row?.ClientProtocol;
+  const origin = row?.OriginProtocol;
+  if (!client) return "";
+  return !origin || origin === client ? client : `client ${client} · origin ${origin}`;
 }
 
 /** A response length for the Size column: "512 B", "2.0 KB", "3.0 MB"; blank for none. */

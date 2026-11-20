@@ -173,3 +173,9 @@ test("a request for suggestions is explicit only where it was made", () => {
   explicit.request(pasted.length);
   assert.equal(explicit.at(true, pasted.length), true);
 });
+
+test("id offers = and !=, and no value, since only a real pair's UUID fits", () => {
+  assert.ok(labels(querySuggestions("i", 1)).includes("id"));
+  assert.deepEqual(labels(querySuggestions("id ", 3)), ["=", "!="]);
+  assert.equal(querySuggestions("id = ", 5), null);
+});

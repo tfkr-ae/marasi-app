@@ -1,0 +1,110 @@
+package marasi
+
+// The recorder for the app's httpParse.cases.json. It is not built in the
+// app: scripts/record-checkpoint-parse-cases.sh copies it into a copy of the
+// pinned marasi module as package marasi, so it reaches the Checkpoint edit
+// path (wireRequestEdit, wireResponseEdit) the proxy runs on Forward.
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/tfkr-ae/marasi/internal/h1"
+)
+
+type checkpointParseCase struct {
+	Type     string `json:"type"`
+	Protocol string `json:"protocol"`
+	Text     string `json:"text"`
+	Error    string `json:"error"`
+}
+
+// checkpointParseError is what Checkpoint's rebuild says of text as the edit
+// of a held message of that type and protocol: "" when it would forward.
+func checkpointParseError(t *testing.T, typ, protocol, text string) string {
+	t.Helper()
+	var edit *checkpointEdit
+	h2Req := &h2Request{fields: h2Fields{
+		{Name: ":method", Value: "GET"}, {Name: ":scheme", Value: "https"},
+		{Name: ":authority", Value: "example.com"}, {Name: ":path", Value: "/"},
+	}}
+	var req *http.Request
+	var reqWire *wireRequest
+	switch protocol {
+	case "h2":
+		req, reqWire = h2Req.request(), &wireRequest{h2: h2Req}
+	case "http/1.1":
+		head, err := h1.ReadRequestHead(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if req, err = head.Request(); err != nil {
+			t.Fatal(err)
+		}
+		req.URL.Scheme, req.URL.Host = "https", "example.com"
+		reqWire = &wireRequest{head: head, body: &h1.Body{}}
+	default:
+		t.Fatalf("unknown protocol %q", protocol)
+	}
+	switch typ {
+	case "request":
+		edit = wireRequestEdit(req, reqWire)
+	case "response":
+		var res *http.Response
+		var resWire *wireResponse
+		if protocol == "h2" {
+			message := &h2Response{fields: h2Fields{{Name: ":status", Value: "200"}, {Name: "content-type", Value: "text/plain"}}}
+			res, resWire = message.response(), &wireResponse{h2: message}
+		} else {
+			head, err := h1.ReadResponseHead(bufio.NewReader(strings.NewReader("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, resWire = head.Response(), &wireResponse{head: head, body: &h1.Body{}}
+		}
+		res.Request = req
+		edit = wireResponseEdit(res, resWire)
+	default:
+		t.Fatalf("unknown type %q", typ)
+	}
+	if err := edit.rebuild([]byte(text)); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+func TestRecordCheckpointParseCases(t *testing.T) {
+	in, out := os.Getenv("CHECKPOINT_PARSE_INPUTS"), os.Getenv("CHECKPOINT_PARSE_OUTPUT")
+	if in == "" || out == "" {
+		t.Skip("run by scripts/record-checkpoint-parse-cases.sh in the app repo")
+	}
+	data, err := os.ReadFile(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []checkpointParseCase
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for i, c := range cases {
+		cases[i].Error = checkpointParseError(t, c.Type, c.Protocol, c.Text)
+	}
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", " ")
+	if err := enc.Encode(struct {
+		Marasi string                `json:"marasi"`
+		Cases  []checkpointParseCase `json:"cases"`
+	}{os.Getenv("MARASI_VERSION"), cases}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(out, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

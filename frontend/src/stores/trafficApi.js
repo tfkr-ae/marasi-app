@@ -32,6 +32,8 @@ export function toRow(item) {
     RespondedAt: item.responded_at ?? null,
     Highlight: item.highlight ?? null,
     Route: toRoute(item.upstream_proxy),
+    ClientProtocol: item.client_protocol ?? "",
+    OriginProtocol: item.origin_protocol ?? "",
   };
 }
 
@@ -47,6 +49,8 @@ export function toRequestEvent(data) {
     Metadata: data.metadata ?? {},
     RequestedAt: data.requested_at,
     SitemapNode: data.sitemap_node,
+    ClientProtocol: data.client_protocol ?? "",
+    OriginProtocol: data.origin_protocol ?? "",
   };
 }
 
@@ -61,6 +65,9 @@ export function toResponseEvent(data) {
     Metadata: data.metadata ?? {},
     RespondedAt: data.responded_at,
     Route: toRoute(data.upstream_proxy),
+    // Left out when the pair never reached the origin, so the request
+    // event's origin protocol stands when the two merge.
+    ...(data.origin_protocol ? { OriginProtocol: data.origin_protocol } : {}),
   };
 }
 
@@ -117,6 +124,8 @@ export function toDetails(pair) {
     Highlight: pair.highlight ?? null,
     Prettified: { Request: pair.prettified?.request ?? "", Response: pair.prettified?.response ?? "" },
     Route: route,
+    ClientProtocol: pair.client_protocol ?? "",
+    OriginProtocol: pair.origin_protocol ?? "",
   };
 }
 

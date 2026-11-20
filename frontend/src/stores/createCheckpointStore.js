@@ -4,11 +4,13 @@
 // checkpointApi.js for the service's), so this module loads under
 // node --test.
 import { get, writable } from "svelte/store";
+import { heldProtocol } from "../lib/checkpoint/httpParse.js";
 import { isCheckpointGone } from "../lib/checkpointHeld.js";
 
 function initialState() {
   // items: Checkpoint items as the api's getItems returns them, each with
-  // `text`, its held raw request or response, or its WebSocket payload.
+  // `text`, its held raw request or response, or its WebSocket payload, and
+  // an HTTP item's `protocol`, "http/1.1" or "h2", read from its held text.
   // editsById: the edited text by item id; parseErrorsById: why an edited
   // HTTP item's text doesn't parse, by item id; checking: ids whose parse
   // check hasn't come back yet.
@@ -75,10 +77,11 @@ function decode(bytes) {
   }
 }
 
-const withText = (item) => ({
-  ...item,
-  text: decode(item.Type === "websocket" ? item.Payload : item.Raw),
-});
+function withText(item) {
+  if (item.Type === "websocket") return { ...item, text: decode(item.Payload) };
+  const text = decode(item.Raw);
+  return { ...item, text, protocol: heldProtocol(text, item.Type) };
+}
 
 // CodeMirror rewrites \r\n to \n, so texts compare without them.
 const normalise = (text) => (text ?? "").replace(/\r\n/g, "\n");
@@ -202,7 +205,8 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
 
   /**
    * Keeps the researcher's text for the item until it leaves, and checks
-   * that an HTTP item's text parses. Resolves once the check is back.
+   * that an HTTP item's text parses as its protocol's edit. Resolves once
+   * the check is back.
    */
   async function edit(id, text) {
     store.update((state) => ({ ...state, editsById: { ...state.editsById, [id]: text } }));
@@ -211,7 +215,7 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
     const seq = (parseSeq[id] = (parseSeq[id] ?? 0) + 1);
     const check = (async () => {
       try {
-        const error = (await api.checkParse(text, item.Type)) ?? "";
+        const error = (await api.checkParse(text, item.Type, item.protocol)) ?? "";
         if (seq !== parseSeq[id] || itemOf(get(store), id)?.Type !== item.Type) return;
         store.update((state) => ({
           ...state,

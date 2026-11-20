@@ -22,15 +22,17 @@ import {
   sortAria,
   sortMark,
   sortTitle,
+  protocolText,
+  protocolTitle,
   statusText,
   visibleRange,
 } from "./table.js";
 import { effectivePalette } from "./highlights.js";
 
-test("the table's columns are # · badges · Time · Method · Host · Path · Status · Type · Size", () => {
+test("the table's columns are # · badges · Time · Method · Host · Path · Status · Type · Size · Proto", () => {
   assert.deepEqual(
     LEDGER_COLUMNS.map((column) => column.label),
-    ["#", "", "Time", "Method", "Host", "Path", "Status", "Type", "Size"],
+    ["#", "", "Time", "Method", "Host", "Path", "Status", "Type", "Size", "Proto"],
   );
   assert.deepEqual(
     LEDGER_COLUMNS.filter((column) => column.align === "right").map((column) => column.label),
@@ -51,6 +53,7 @@ test("every column but the badges sorts by a Marasi field; # by the pair number"
       Status: "status_code",
       Type: "content_type",
       Size: "length",
+      Proto: "client_protocol",
     },
   );
 });
@@ -158,8 +161,17 @@ test("the header is a little taller than a row at every Text size", () => {
 test("every row lays its cells out on the same grid; the path takes the spare width", () => {
   assert.equal(
     rowTemplate(LEDGER_COLUMNS),
-    "3.25rem 2.875rem 4.375rem 5rem 10.625rem minmax(11.25rem,1fr) 3.75rem 7.5rem 3.875rem",
+    "3.25rem 2.875rem 4.375rem 5rem 10.625rem minmax(11.25rem,1fr) 3.75rem 7.5rem 3.875rem 3.5rem",
   );
+});
+
+test("Proto shows one protocol, or the client's and the origin's when Marasi translated", () => {
+  assert.equal(protocolText({ ClientProtocol: "h2", OriginProtocol: "h2" }), "h2");
+  assert.equal(protocolText({ ClientProtocol: "http/1.1", OriginProtocol: "http/1.1" }), "1.1");
+  assert.equal(protocolText({ ClientProtocol: "h2", OriginProtocol: "http/1.1" }), "h2→1.1");
+  assert.equal(protocolText({}), "", "a Marasi that records no protocol");
+  assert.equal(protocolTitle({ ClientProtocol: "h2", OriginProtocol: "http/1.1" }), "client h2 · origin http/1.1");
+  assert.equal(sortTitle({ field: "number", desc: true }, LEDGER_COLUMNS.find((c) => c.key === "protocol")), "Sort by protocol");
 });
 
 test("Type shows a short name for the content type", () => {

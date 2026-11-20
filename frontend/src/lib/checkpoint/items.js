@@ -7,17 +7,21 @@ export const KIND_LABELS = { request: "REQ", response: "RES", websocket: "WS" };
 
 const firstLine = (text) => (text ?? "").split(/\r?\n/, 1)[0];
 
+// A field's value from the head. The name is everything before the first
+// colon after its first character, so an HTTP/2 pseudo-header field such
+// as ":authority" reads as itself, as Marasi's HTTP/2 text form writes it.
 function headerOf(text, name) {
   const head = (text ?? "").split(/\r?\n\r?\n/, 1)[0];
   const wanted = name.toLowerCase();
   for (const line of head.split(/\r?\n/).slice(1)) {
-    const at = line.indexOf(":");
+    const at = line.indexOf(":", 1);
     if (at > 0 && line.slice(0, at).trim().toLowerCase() === wanted) return line.slice(at + 1).trim();
   }
   return "";
 }
 
-// "POST /x HTTP/1.1", or an absolute-form target "GET http://h/x HTTP/1.1".
+// "POST /x HTTP/1.1", "POST /x HTTP/2", or an absolute-form target
+// "GET http://h/x HTTP/1.1".
 function requestLine(text) {
   const [method = "", target = ""] = firstLine(text).split(" ");
   try {
@@ -55,7 +59,9 @@ export function summarize(item, text, context = {}) {
     return { kind, method: request.Method ?? "", path: request.Path ?? "", host: request.Host ?? "", status };
   }
   const line = requestLine(text);
-  return { kind, method: line.method, path: line.path, host: headerOf(text, "host") || line.host, status: 0 };
+  // An HTTP/2 request names its host in :authority; a Host field may stand in.
+  const host = headerOf(text, ":authority") || headerOf(text, "host") || line.host;
+  return { kind, method: line.method, path: line.path, host, status: 0 };
 }
 
 /**

@@ -60,6 +60,8 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 - `lib/armory/TemplateEditor.svelte` holds the Armory request template.
 - Compass and Workshop create their own in the route file.
 
+Raw HTTP is highlighted with `lib/httpMode.js` (`StreamLanguage.define(http)`), CodeMirror's legacy http mode widened for Marasi's HTTP/2 text form (GLOSSARY Protocol). Import it, not `@codemirror/legacy-modes/mode/http`. The Lua editors' autocomplete is `lib/autocomplete/` (see `marasi-service.md`, Marasi source, for keeping it in step with Marasi).
+
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 
 ## Type scale

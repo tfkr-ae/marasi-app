@@ -8,7 +8,8 @@
 export const QUERY_PREAMBLE =
   "Bare text, for example eyJhbGci, matches pairs that contain it in any text part: request, response, note or metadata. " +
   "Text terms need 3 or more characters. " +
-  "Combine conditions with AND, OR, NOT, - and parentheses; a space between them means AND.";
+  "Combine conditions with AND, OR, NOT, - and parentheses; a space between them means AND. " +
+  "Quote a UUID wherever a field takes one.";
 
 /**
  * One entry per field: its name, the operators it accepts, an example that
@@ -17,6 +18,7 @@ export const QUERY_PREAMBLE =
  * it, the example's value is suggested after the example's operator.
  */
 export const QUERY_FIELDS = [
+  { name: "id", ops: ["=", "!="], example: 'id = "01937f5d-351a-7e68-936d-61a7a25661a3"', values: { "=": [], "!=": [] }, help: 'The pair\'s id, a quoted UUID: id = "<uuid>" for one pair, id != "<uuid>" for every other. Any case.' },
   { name: "number", ops: ["=", "!=", "<", "<=", ">", ">="], example: "number = 10", help: "The pair number, a whole number. It follows capture order and never changes." },
   { name: "host", ops: ["=", "!="], example: 'host = "*.acme.test"', help: "Exact case. * at the start or end is a wildcard." },
   { name: "method", ops: ["=", "!="], example: 'method = "POST"', help: "Exact case. * at the start or end is a wildcard." },
@@ -26,6 +28,9 @@ export const QUERY_FIELDS = [
   { name: "status_code", ops: ["=", "!=", "<", "<=", ">", ">="], example: "status_code >= 500", help: "Whole number. In-flight pairs have no status code." },
   { name: "requested_at", ops: ["=", "!=", "<", "<=", ">", ">="], example: 'requested_at > "2026-10-09T10:00:00Z"', help: "RFC 3339 timestamp." },
   { name: "responded_at", ops: ["=", "!=", "<", "<=", ">", ">="], example: 'responded_at < "2026-10-09T10:00:00Z"', help: "RFC 3339 timestamp." },
+  { name: "client_protocol", ops: ["=", "!="], example: 'client_protocol = "h2"', values: { "=": ['"h2"', '"http/1.1"'], "!=": ['"h2"', '"http/1.1"'] }, help: 'The protocol between the client and Marasi: "http/1.1" or "h2".' },
+  { name: "origin_protocol", ops: ["=", "!="], example: 'origin_protocol = "http/1.1"', values: { "=": ['"h2"', '"http/1.1"'], "!=": ['"h2"', '"http/1.1"'] }, help: 'The protocol between Marasi and the origin. It differs from client_protocol only when Marasi translated the pair.' },
+  { name: "upstream_proxy", ops: ["=", "!="], example: 'upstream_proxy = "burp"', help: 'The upstream proxy that carried the pair, by name; upstream_proxy = "" for pairs sent directly. Pairs with no response yet match neither.' },
   { name: "length", ops: ["=", "!=", "<", "<=", ">", ">="], example: "length > 100000", help: "Response size in bytes, a whole number. Pairs with no response have no length." },
   { name: "metadata.<key>", ops: ["=", "!=", ":"], example: 'metadata.extension = "workshop"', values: { ":": ["*"] }, help: "The value at that key, a dotted path: a string, number, true, false or null. metadata.<key>:* for pairs that have the key." },
   { name: "highlight", ops: ["=", "!=", ":"], example: "highlight = 1", values: { ":": ["*"] }, help: "Highlight colour, 1 to 8. highlight:* for any highlighted pair." },

@@ -140,18 +140,23 @@ export function markdownTable(pairs, numberOf) {
 
 const shellQuote = (text) => `'${String(text).replace(/'/g, `'\\''`)}'`;
 
-/** A cURL command for the pair from its raw request. Host comes from the URL. */
+/**
+ * A cURL command for the pair from its raw request. Host comes from the URL.
+ * An HTTP/2 request (Marasi's text form, "GET / HTTP/2") asks curl for
+ * HTTP/2 and leaves out its pseudo-header fields, which curl writes itself.
+ */
 export function curlCommand(pair, raw) {
   const text = String(raw ?? "").replace(/\r\n/g, "\n");
   const split = text.indexOf("\n\n");
   const head = split < 0 ? text : text.slice(0, split);
   const body = split < 0 ? "" : text.slice(split + 2);
-  const headers = head
-    .split("\n")
-    .slice(1)
-    .filter((line) => line && !/^host:/i.test(line) && !/^content-length:/i.test(line));
+  const [requestLine = "", ...fieldLines] = head.split("\n");
+  const http2 = / HTTP\/2$/.test(requestLine);
+  const headers = fieldLines.filter(
+    (line) => line && !line.startsWith(":") && !/^host:/i.test(line) && !/^content-length:/i.test(line),
+  );
   return [
-    `curl -X ${pair.Method} ${shellQuote(pairURL(pair))}`,
+    `curl${http2 ? " --http2" : ""} -X ${pair.Method} ${shellQuote(pairURL(pair))}`,
     ...headers.map((line) => `  -H ${shellQuote(line)}`),
     ...(body ? [`  --data-raw ${shellQuote(body)}`] : []),
   ].join(" \\\n");

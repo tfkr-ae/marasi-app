@@ -67,6 +67,8 @@ export function toPairSummary(pair) {
     RespondedAt: pair.responded_at ?? null,
     Highlight: pair.highlight ?? null,
     UpstreamProxy: pair.upstream_proxy ?? null,
+    ClientProtocol: pair.client_protocol ?? "",
+    OriginProtocol: pair.origin_protocol ?? "",
   };
 }
 
