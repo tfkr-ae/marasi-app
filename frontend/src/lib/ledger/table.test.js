@@ -295,3 +295,47 @@ test("a pair without a response shows a pending status", () => {
   assert.equal(statusText(undefined), "…");
   assert.equal(statusText(204), "204");
 });
+
+// The phone overrides the inline template in LedgerTable.svelte's <style>,
+// per container width, and hides some cells. A cell with no track of its own
+// wraps onto a second line inside the row (the Proto column did, until each
+// template counted it).
+test("each mobile Ledger template has one track per column it shows", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./LedgerTable.svelte", import.meta.url), "utf8");
+  const style = source.slice(source.indexOf("<style>"));
+  const tracks = (template) => {
+    const out = [];
+    let depth = 0;
+    let current = "";
+    for (const ch of template.trim()) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+      if (/\s/.test(ch) && depth === 0) {
+        if (current) out.push(current);
+        current = "";
+      } else current += ch;
+    }
+    if (current) out.push(current);
+    return out;
+  };
+  const templateIn = (block) =>
+    tracks(/html\.mobile \.ledger-table \.lg-row\)\s*\{[^}]*?grid-template-columns:\s*([^;!]+)/.exec(block)[1]);
+  const hiddenIn = (block) => [...block.matchAll(/\[data-col="(\w+)"\]/g)].map((m) => m[1]);
+
+  const containers = [...style.matchAll(/@container \(max-width: ([\d.]+)rem\)\s*\{/g)].map((m) => ({
+    width: Number(m[1]),
+    block: style.slice(m.index, style.indexOf("\n\t}", m.index)),
+  }));
+  const base = style.slice(0, style.indexOf("@container"));
+  const layouts = [{ width: Infinity, template: templateIn(base), hidden: [] }];
+  for (const { width, block } of containers.sort((a, b) => b.width - a.width)) {
+    layouts.push({ width, template: templateIn(block), hidden: [...layouts.at(-1).hidden, ...hiddenIn(block)] });
+  }
+
+  assert.equal(layouts.length, 3, "the wide phone, the narrow one and the narrowest");
+  for (const { width, template, hidden } of layouts) {
+    const shown = LEDGER_COLUMNS.filter((column) => !hidden.includes(column.key)).map((column) => column.key);
+    assert.equal(template.length, shown.length, `under ${width}rem: ${template.join(" ")} for ${shown.join(", ")}`);
+  }
+});
