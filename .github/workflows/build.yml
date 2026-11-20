@@ -65,10 +65,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # Nightlies override go.mod's marasi pin; re-recording the marasi-pinned
+      # fixtures here lets the Go pin checks pass and makes npm test verify
+      # httpParse.js and Lua autocomplete against the marasi commit being built.
       - if: inputs.marasi_ref != ''
         env:
           MARASI_REF: ${{ inputs.marasi_ref }}
-        run: go get "github.com/tfkr-ae/marasi@$MARASI_REF"
+        run: |
+          go get "github.com/tfkr-ae/marasi@$MARASI_REF"
+          ./scripts/record-checkpoint-parse-cases.sh
+          ./scripts/record-lua-reference.sh
       - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
       # main.go embeds frontend/build, which only exists after a frontend build.
       - run: mkdir -p frontend/build && touch frontend/build/.keep
