@@ -14,9 +14,13 @@ cd "$root"
 
 version="$(GOWORK=off go list -m -f '{{.Version}}' github.com/tfkr-ae/marasi)"
 dir="$(GOWORK=off go list -m -f '{{.Dir}}' github.com/tfkr-ae/marasi)"
+if [[ -z "$dir" || ! -d "$dir" ]]; then
+  GOWORK=off go mod download github.com/tfkr-ae/marasi
+  dir="$(GOWORK=off go list -m -f '{{.Dir}}' github.com/tfkr-ae/marasi)"
+fi
 
 work="$(mktemp -d)"
-trap 'chmod -R u+w "$work"; rm -rf "$work"' EXIT
+trap 'chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"' EXIT
 
 # The module cache is read-only; copy the source so a program can sit in it.
 cp -R "$dir/." "$work/marasi"
