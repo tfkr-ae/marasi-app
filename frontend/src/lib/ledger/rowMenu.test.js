@@ -277,6 +277,14 @@ test("copy formats: URL, Markdown table and cURL", () => {
   );
 });
 
+test("cURL for an HTTP/2 request asks for HTTP/2 and leaves out the pseudo-header fields", () => {
+  const raw = "GET /me HTTP/2\r\n:scheme: https\r\n:authority: api.acme.test\r\naccept: */*\r\n\r\n";
+  assert.equal(
+    curlCommand(pair("a", { Method: "GET", Path: "/me" }), raw),
+    ["curl --http2 -X GET 'https://api.acme.test/me'", "  -H 'accept: */*'"].join(" \\\n"),
+  );
+});
+
 test("Note: one pair adds or edits it; several append a note or clear them", () => {
   const menu = menuFor([pair("a"), pair("b")], context());
   assert.equal(item(menu, "note").label, "Note");

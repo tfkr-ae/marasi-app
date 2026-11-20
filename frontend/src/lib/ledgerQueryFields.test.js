@@ -56,3 +56,11 @@ test("the field list documents launchpad membership in its three forms", () => {
     assert.ok(field.help.includes(form), `help mentions ${form}`);
   }
 });
+
+test("the field list documents id with = and != against a quoted UUID", () => {
+  const field = QUERY_FIELDS.find((f) => f.name === "id");
+  assert.ok(field, "id field listed");
+  assert.deepEqual(field.ops, ["=", "!="]);
+  assert.match(field.example, /^id = "[0-9a-f-]{36}"$/);
+  for (const form of ['id = "<uuid>"', 'id != "<uuid>"']) assert.ok(field.help.includes(form), `help mentions ${form}`);
+});

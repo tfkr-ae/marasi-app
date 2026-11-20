@@ -4,7 +4,7 @@
 	// in it.
 	import CodeMirror from "svelte-codemirror-editor";
 	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "@codemirror/legacy-modes/mode/http";
+	import { http } from "../httpMode.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";

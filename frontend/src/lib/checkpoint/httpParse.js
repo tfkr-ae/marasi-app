@@ -1,25 +1,50 @@
-// The Checkpoint editor's malformed warning: why an edited request or
-// response won't be read as HTTP, in the words Go's net/http uses
-// (http.ReadRequest and http.ReadResponse, which the app's Go side ran
-// before, and which Marasi runs on Forward). "" when the text parses.
+// The Checkpoint editor's malformed warning: why Marasi won't forward an
+// edited request or response, in the words of the error its rebuild returns
+// (the service refuses the forward with it, after "cannot rebuild request: "
+// or "cannot rebuild response: "). "" when the edit would forward.
 //
-// A port of the parts of net/http, net/textproto, net/url and net/netip
-// (Go 1.26) those two calls run. They read the start line and the headers,
-// never the body. It works on the text's UTF-8 bytes, held one per char in
-// a "byte string", as Go does; httpParse.cases.json records Go's answers.
+// A port of what Marasi 05b209c runs on a Checkpoint forward. An HTTP/1.1
+// item is read by its own codec: h1engine_checkpoint.go rebuildWireRequest
+// and rebuildWireResponse, internal/h1 ReadRequestHead and ReadResponseHead
+// (head.go, header.go readFields), then RequestHead.Request (view.go
+// parseTarget, url.ParseRequestURI). An HTTP/2 item is read in its text form:
+// h2engine_text.go readH2RequestText and readH2ResponseText, url.Parse for an
+// absolute-form target. The url and netip parts port Go 1.26.
+//
+// Only the head is read, never the body. It works on the text's UTF-8 bytes,
+// held one per char in a "byte string", as Go does.
+// httpParse.cases.json records Marasi's answers
+// (scripts/record-checkpoint-parse-cases.sh).
 
-/** Why `text` doesn't parse as an HTTP `type` ("request" or "response"), or "". */
-export function httpParseError(text, type) {
+/**
+ * Why `text` won't forward as the edit of a held `type` ("request" or
+ * "response") item of `protocol` ("http/1.1" or "h2"), or "".
+ */
+export function httpParseError(text, type, protocol = "http/1.1") {
   if (type !== "request" && type !== "response") return "";
-  const reader = lineReader(toBytes(head(text ?? "")));
   try {
-    if (type === "request") readRequest(reader);
-    else readResponse(reader);
+    if (protocol === "h2") readH2Text(text ?? "", type);
+    else if (type === "request") readH1Request(text ?? "");
+    else readH1Response(text ?? "");
     return "";
   } catch (err) {
     if (err instanceof ParseError) return err.message;
     throw err;
   }
+}
+
+/**
+ * The protocol of a held HTTP item, from its raw text as held: Marasi shows
+ * an HTTP/2 request as `METHOD target HTTP/2` and an HTTP/2 response as
+ * `HTTP/2 <status>`.
+ */
+export function heldProtocol(raw, type) {
+  const text = raw ?? "";
+  const nl = text.indexOf("\n");
+  const line = (nl < 0 ? text : text.slice(0, nl)).replace(/\r$/, "");
+  if (type === "request" && line.endsWith(" HTTP/2")) return "h2";
+  if (type === "response" && line.startsWith("HTTP/2 ")) return "h2";
+  return "http/1.1";
 }
 
 class ParseError extends Error {}
@@ -28,15 +53,6 @@ const fail = (message) => {
   throw new ParseError(message);
 };
 
-const EOF = "EOF";
-const UNEXPECTED_EOF = "unexpected EOF";
-
-// The text up to the blank line after the headers: nothing after it is read.
-function head(text) {
-  const end = /\n\r?\n/.exec(text);
-  return end ? text.slice(0, end.index + end[0].length) : text;
-}
-
 function toBytes(text) {
   const bytes = new TextEncoder().encode(text);
   let out = "";
@@ -44,35 +60,185 @@ function toBytes(text) {
   return out;
 }
 
-const fromBytes = (bytes) => new TextDecoder().decode(Uint8Array.from(bytes, (c) => c.charCodeAt(0)));
+function cut(s, sep) {
+  const at = s.indexOf(sep);
+  return at < 0 ? [s, "", false] : [s.slice(0, at), s.slice(at + sep.length), true];
+}
 
-// bufio.Reader.ReadLine over the bytes: each line without its "\n" or
-// "\r\n" (a "\r" at the very end stays), then null at the end.
-function lineReader(s) {
+const isAlnum = (c) => (c >= "0" && c <= "9") || (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
+
+// --- internal/h1 -----------------------------------------------------------
+
+// h1.MaxHeadBytes: the start line and the header section.
+const MAX_HEAD_BYTES = 1 << 20;
+const MALFORMED = "malformed message head";
+const TCHARS = "!#$%&'*+-.^_`|~";
+const isToken = (s) => s.length > 0 && [...s].every((c) => isAlnum(c) || TCHARS.includes(c));
+
+// The text up to the empty line that ends the head, and at most one byte
+// past MaxHeadBytes: the codec reads no further.
+function h1Head(text, type) {
   let pos = 0;
-  return {
-    readLine() {
-      if (pos >= s.length) return null;
-      const nl = s.indexOf("\n", pos);
-      if (nl < 0) {
-        const line = s.slice(pos);
-        pos = s.length;
-        return line;
-      }
-      const line = s.slice(pos, nl);
-      pos = nl + 1;
-      return line.endsWith("\r") ? line.slice(0, -1) : line;
-    },
-    peek: () => s[pos],
-    skipSpace() {
-      let n = 0;
-      while (s[pos] === " " || s[pos] === "\t") {
-        pos++;
-        n++;
-      }
-      return n;
-    },
+  const lineEnd = (at) => {
+    const nl = text.indexOf("\n", at);
+    return nl < 0 ? text.length : nl + 1;
   };
+  const emptyAt = (at) => (text.startsWith("\n", at) ? 1 : text.startsWith("\r\n", at) ? 2 : 0);
+  // A request may follow empty lines; a response's first line is its status line.
+  if (type === "request") while (pos <= MAX_HEAD_BYTES && emptyAt(pos)) pos += emptyAt(pos);
+  pos = lineEnd(pos);
+  while (pos < text.length && pos <= MAX_HEAD_BYTES && !emptyAt(pos)) pos = lineEnd(pos);
+  pos += emptyAt(pos);
+  return toBytes(text.slice(0, Math.min(pos, MAX_HEAD_BYTES + 1)));
+}
+
+// readLine over the bytes: each line with its LF, and whether the input
+// ended before one. Past MaxHeadBytes in all, ErrHeadTooLarge.
+function h1Lines(s, prefix) {
+  let pos = 0;
+  return () => {
+    const nl = s.indexOf("\n", pos);
+    const end = nl < 0 ? s.length : nl + 1;
+    if (end > MAX_HEAD_BYTES) fail(`${prefix}message head too large`);
+    const line = s.slice(pos, end);
+    pos = end;
+    return { line, eof: nl < 0 };
+  };
+}
+
+// Without a trailing LF or CRLF.
+function trimEOL(line) {
+  const lf = line.endsWith("\n") ? line.slice(0, -1) : line;
+  return lf.endsWith("\r") ? lf.slice(0, -1) : lf;
+}
+const validProto = (p) => p.length === 8 && p.startsWith("HTTP/1.") && p[7] >= "0" && p[7] <= "9";
+// No CR, LF or NUL (RFC 9110 §5.5).
+const validValue = (v) => !/[\r\n\0]/.test(v);
+
+function parseRequestLine(line) {
+  const [m, rest, ok1] = cut(line, " ");
+  const [t, p, ok2] = cut(rest, " ");
+  if (!ok1 || !ok2 || !m || !t || !isToken(m) || !validProto(p)) return null;
+  if ([...t].some((c) => c <= " " || c === "\x7f")) return null;
+  return { method: m, target: t };
+}
+
+// A request line well formed but for a version HTTP/DIGIT.DIGIT whose major
+// version isn't 1. The HTTP/2 preface is not one.
+function otherMajorVersion(line) {
+  if (line === "PRI * HTTP/2.0") return false;
+  const i = line.lastIndexOf(" ");
+  if (i < 0) return false;
+  const p = line.slice(i + 1);
+  const digit = (c) => c >= "0" && c <= "9";
+  if (p.length !== 8 || !p.startsWith("HTTP/") || p[6] !== "." || !digit(p[5]) || !digit(p[7]) || p[5] === "1") {
+    return false;
+  }
+  return parseRequestLine(`${line.slice(0, i + 1)}HTTP/1.1`) !== null;
+}
+
+// readFields: the field lines up to the empty line, each a token name, a
+// colon and a value, or an obsolete fold of the field above.
+function readFields(next, prefix) {
+  let fields = 0;
+  for (;;) {
+    const { line, eof } = next();
+    if (eof) fail(`${prefix}unexpected EOF`);
+    const content = trimEOL(line);
+    if (content === "") return;
+    const bad = (why = "") => fail(`${prefix}parsing field line ${quote(content)}: ${why}${MALFORMED}`);
+    if (content[0] === " " || content[0] === "\t") {
+      if (!fields) bad("continuation without a field: ");
+      if (!validValue(content)) bad();
+      continue;
+    }
+    const [name, value, ok] = cut(content, ":");
+    if (!ok || !isToken(name) || !validValue(value)) bad();
+    fields++;
+  }
+}
+
+function readH1Request(text) {
+  const prefix = "reading the edited request head: ";
+  const next = h1Lines(h1Head(text, "request"), prefix);
+  let line;
+  for (let first = true; ; first = false) {
+    const read = next();
+    if (read.eof) fail(`${prefix}${first ? "EOF" : "unexpected EOF"}`);
+    line = trimEOL(read.line);
+    if (line !== "") break;
+  }
+  const parsed = parseRequestLine(line);
+  if (!parsed) {
+    const why = otherMajorVersion(line) ? "unsupported HTTP major version: " : "";
+    fail(`${prefix}parsing request line ${quote(line)}: ${why}${MALFORMED}`);
+  }
+  readFields(next, prefix);
+  // RequestHead.Request: parseTarget.
+  const { method, target } = parsed;
+  if ((method === "CONNECT" && !target.startsWith("/")) || target === "*") return;
+  const error = parseURL(target, true).error;
+  if (error) {
+    fail(`reading the edited request: parsing request target ${quote(target)}: parse ${quote(target)}: ${error}`);
+  }
+}
+
+function readH1Response(text) {
+  const prefix = "reading the edited response head: ";
+  const next = h1Lines(h1Head(text, "response"), prefix);
+  const { line: raw, eof } = next();
+  if (eof) fail(`${prefix}${raw === "" ? "EOF" : "unexpected EOF"}`);
+  const line = trimEOL(raw);
+  const [p, rest] = cut(line, " ");
+  const [code, reason] = cut(rest, " ");
+  if (!validProto(p) || !/^[0-9]{3}$/.test(code) || Number(code) < 100 || /[\r\0]/.test(reason)) {
+    fail(`${prefix}parsing status line ${quote(line)}: ${MALFORMED}`);
+  }
+  readFields(next, prefix);
+}
+
+// --- h2engine_text.go ------------------------------------------------------
+
+const H2_TEXT = "not an HTTP/2 message in the text form";
+const trimCR = (line) => (line.endsWith("\r") ? line.slice(0, -1) : line);
+
+// readH2RequestText and readH2ResponseText: a start line, then
+// "name: value" lines up to the first blank line (CRLF or LF). The name is
+// everything before the first colon after its first character, so a
+// pseudo-header field reads as itself; nothing else in a field is checked.
+// Text with no blank line is all head. These checks are ASCII, so they run
+// on the text itself; only a quote or a URL needs its bytes.
+function readH2Text(text, type) {
+  const crlf = text.indexOf("\r\n\r\n");
+  const lf = text.indexOf("\n\n");
+  const end = lf >= 0 && (crlf < 0 || lf < crlf) ? lf : crlf;
+  const head = end >= 0 ? text.slice(0, end) : text;
+  const [first, rest] = cut(head, "\n");
+  const line = trimCR(first);
+  let target = null;
+  if (type === "request") {
+    const [, after, ok] = cut(line, " ");
+    const i = after.lastIndexOf(" ");
+    if (!ok || i < 0 || after.slice(i + 1) !== "HTTP/2") {
+      fail(`${H2_TEXT}: the request line ${quote(toBytes(line))} is not METHOD target HTTP/2`);
+    }
+    target = after.slice(0, i);
+  } else if (cut(line, " ")[0] !== "HTTP/2") {
+    fail(`${H2_TEXT}: the status line ${quote(toBytes(line))} is not HTTP/2 <status>`);
+  }
+  for (const raw of rest.split("\n")) {
+    const field = trimCR(raw);
+    if (field !== "" && !field.slice(1).includes(":")) {
+      fail(`${H2_TEXT}: the field line ${quote(toBytes(field))} has no colon`);
+    }
+  }
+  // An absolute-form target names where the request goes, so it must parse
+  // and have a host.
+  if (target !== null && !target.startsWith("/") && target !== "*" && target.includes("://")) {
+    const bytes = toBytes(target);
+    const url = parseURLWithFragment(bytes);
+    if (url.error || !url.host) fail(`${H2_TEXT}: the request target ${quote(bytes)}`);
+  }
 }
 
 // --- strconv.Quote ---------------------------------------------------------
@@ -133,190 +299,47 @@ function quote(s) {
   return `${out}"`;
 }
 
-// %q of a []string: ["a" "b"].
-const quoteList = (list) => `[${list.map(quote).join(" ")}]`;
-
-// --- net/http --------------------------------------------------------------
-
-const TCHARS = "!#$%&'*+-.^_`|~";
-const isAlnum = (c) => (c >= "0" && c <= "9") || (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
-const isTchar = (c) => isAlnum(c) || TCHARS.includes(c);
-const isToken = (s) => s.length > 0 && [...s].every(isTchar);
-
-function cut(s, sep) {
-  const at = s.indexOf(sep);
-  return at < 0 ? [s, "", false] : [s.slice(0, at), s.slice(at + sep.length), true];
-}
-
-// http.ParseHTTPVersion: [major, minor], or null.
-function parseVersion(v) {
-  if (v === "HTTP/1.1") return [1, 1];
-  if (v === "HTTP/1.0") return [1, 0];
-  if (!v.startsWith("HTTP/") || v.length !== 8 || v[6] !== ".") return null;
-  const digit = (c) => (c >= "0" && c <= "9" ? Number(c) : null);
-  const major = digit(v[5]);
-  const minor = digit(v[7]);
-  return major === null || minor === null ? null : [major, minor];
-}
-
-function readRequest(reader) {
-  const line = reader.readLine();
-  if (line === null) fail(EOF);
-  const [method, rest, ok1] = cut(line, " ");
-  const [uri, proto, ok2] = cut(rest, " ");
-  if (!ok1 || !ok2) fail(`malformed HTTP request ${quote(line)}`);
-  if (!isToken(method)) fail(`invalid method ${quote(method)}`);
-  const version = parseVersion(proto);
-  if (!version) fail(`malformed HTTP version ${quote(proto)}`);
-  const raw = method === "CONNECT" && !uri.startsWith("/") ? `http://${uri}` : uri;
-  const urlError = parseRequestURI(raw);
-  if (urlError) fail(`parse ${quote(raw)}: ${urlError}`);
-  const header = readMIMEHeader(reader);
-  if ((header.get("Host") ?? []).length > 1) fail("too many Host headers");
-  readTransfer(header, version);
-}
-
-function readResponse(reader) {
-  const line = reader.readLine();
-  if (line === null) fail(UNEXPECTED_EOF);
-  const [proto, rest, ok] = cut(line, " ");
-  if (!ok) fail(`malformed HTTP response ${quote(line)}`);
-  const status = rest.replace(/^ +/, "");
-  const [code] = cut(status, " ");
-  if (code.length !== 3 || !/^[+-]?[0-9]+$/.test(code) || Number(code) < 0) {
-    fail(`malformed HTTP status code ${quote(code)}`);
-  }
-  const version = parseVersion(proto);
-  if (!version) fail(`malformed HTTP version ${quote(proto)}`);
-  const header = readMIMEHeader(reader);
-  readTransfer(header, version);
-}
-
-// textproto.TrimString: without leading and trailing ASCII space.
-const trimString = (s) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, "");
-
-// http.readTransfer's checks: the body itself is never read.
-function readTransfer(header, [major, minor]) {
-  if (major === 0 && minor === 0) [major, minor] = [1, 1];
-  // parseTransferEncoding
-  let chunked = false;
-  const encodings = header.get("Transfer-Encoding");
-  if (encodings) {
-    header.delete("Transfer-Encoding");
-    if (major > 1 || (major === 1 && minor >= 1)) {
-      if (encodings.length !== 1) fail(`too many transfer encodings: ${quoteList(encodings)}`);
-      if (encodings[0].toLowerCase() !== "chunked" || encodings[0].length !== 7) {
-        fail(`unsupported transfer encoding: ${quote(encodings[0])}`);
-      }
-      chunked = true;
-    }
-  }
-  // fixLength
-  const lengths = header.get("Content-Length") ?? [];
-  if (lengths.length > 1) {
-    const first = trimString(lengths[0]);
-    if (lengths.slice(1).some((l) => trimString(l) !== first)) {
-      fail(`http: message cannot contain multiple Content-Length headers; got ${quoteList(lengths)}`);
-    }
-  }
-  if (lengths.length) {
-    const length = trimString(lengths[0]);
-    if (length === "") fail(`invalid empty Content-Length ${quote(length)}`);
-    if (!/^[0-9]+$/.test(length) || BigInt(length) > 2n ** 63n - 1n) fail(`bad Content-Length ${quote(length)}`);
-  }
-  // fixTrailer
-  const trailers = header.get("Trailer");
-  if (!trailers || !chunked) return;
-  for (const value of trailers) {
-    for (const element of value.split(",")) {
-      const key = canonicalKey(trimString(element));
-      if (key === "") continue;
-      if (key === "Transfer-Encoding" || key === "Trailer" || key === "Content-Length") {
-        fail(`bad trailer key ${quote(key)}`);
-      }
-    }
-  }
-}
-
-// --- net/textproto ---------------------------------------------------------
-
-// The key with its first letter and each letter after "-" upper case, the
-// rest lower case; unchanged when it holds a byte a key can't.
-function canonicalKey(key) {
-  if (![...key].every(isTchar)) return key;
-  let upper = true;
-  let out = "";
-  for (const c of key) {
-    out += upper ? c.toUpperCase() : c.toLowerCase();
-    upper = c === "-";
-  }
-  return out;
-}
-
-const validValueByte = (c) => {
-  const b = c.charCodeAt(0);
-  return b === 0x09 || (b >= 0x20 && b <= 0x7e) || b >= 0x80;
-};
-const trimSpaceTab = (s) => s.replace(/^[ \t]+|[ \t]+$/g, "");
-
-// The header as a Map of key to values. The end of the text before the
-// blank line is an "unexpected EOF".
-function readMIMEHeader(reader) {
-  const header = new Map();
-  const first = reader.peek();
-  if (first === " " || first === "\t") {
-    const line = reader.readLine();
-    if (line.length > 80) fail("message too large");
-    fail(`malformed MIME header initial line: ${fromBytes(line)}`);
-  }
-  for (;;) {
-    const line = reader.readLine();
-    if (line === null) fail(UNEXPECTED_EOF);
-    if (line === "") return header;
-    if (!line.includes(":")) fail(`malformed MIME header: missing colon: ${quote(line)}`);
-    // Lines starting with a space or tab continue this one.
-    let kv = trimSpaceTab(line);
-    while (reader.skipSpace() > 0) {
-      kv += " ";
-      const more = reader.readLine();
-      if (more === null) break;
-      kv += trimSpaceTab(more);
-    }
-    const [k, v] = cut(kv, ":");
-    const malformed = () => fail(`malformed MIME header line: ${fromBytes(kv)}`);
-    if (k === "" || ![...k].every((c) => isTchar(c) || c === " ")) malformed();
-    if (![...v].every(validValueByte)) malformed();
-    // A key with a space is kept as it is.
-    const key = k.includes(" ") ? k : canonicalKey(k);
-    if (!header.has(key)) header.set(key, []);
-    header.get(key).push(v.replace(/^[ \t]+/, ""));
-  }
-}
-
 // --- net/url ---------------------------------------------------------------
 
-// url.ParseRequestURI's error, or "".
-function parseRequestURI(raw) {
+// url.Parse: { error } or { host }.
+function parseURLWithFragment(raw) {
+  const [u, frag] = cut(raw, "#");
+  const url = parseURL(u, false);
+  if (url.error || frag === "") return url;
+  const fragment = unescape(frag, "fragment");
+  return fragment.error ? fragment : url;
+}
+
+// url's parse, as ParseRequestURI (viaRequest) or Parse runs it: { error }
+// or { host }.
+function parseURL(raw, viaRequest) {
   if ([...raw].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)) {
-    return "net/url: invalid control character in URL";
+    return { error: "net/url: invalid control character in URL" };
   }
-  if (raw === "") return "empty url";
-  if (raw === "*") return "";
+  if (raw === "" && viaRequest) return { error: "empty url" };
+  if (raw === "*") return { host: "" };
   const scheme = getScheme(raw);
-  if (scheme.error) return scheme.error;
+  if (scheme.error) return scheme;
   let rest = scheme.rest;
   if (rest.endsWith("?") && rest.split("?").length === 2) rest = rest.slice(0, -1);
   else [rest] = cut(rest, "?");
-  if (!rest.startsWith("/")) return scheme.name ? "" : "invalid URI for request";
-  if (scheme.name && rest.startsWith("//")) {
+  if (!rest.startsWith("/")) {
+    if (scheme.name) return { host: "" };
+    if (viaRequest) return { error: "invalid URI for request" };
+    if (cut(rest, "/")[0].includes(":")) return { error: "first path segment in URL cannot contain colon" };
+  }
+  let host = "";
+  if ((scheme.name || (!viaRequest && !rest.startsWith("///"))) && rest.startsWith("//")) {
     let authority = rest.slice(2);
     const slash = authority.indexOf("/");
     rest = slash >= 0 ? authority.slice(slash) : "";
     if (slash >= 0) authority = authority.slice(0, slash);
-    const error = parseAuthority(scheme.name.toLowerCase(), authority);
-    if (error) return error;
+    const parsed = parseAuthority(scheme.name.toLowerCase(), authority);
+    if (parsed.error) return parsed;
+    host = parsed.host;
   }
-  return unescape(rest, "path").error ?? "";
+  const path = unescape(rest, "path");
+  return path.error ? path : { host };
 }
 
 function getScheme(raw) {
@@ -376,59 +399,61 @@ function unescape(s, mode) {
 
 const USERINFO = "-._:~!$&'()*+,;=%@";
 
+// { error } or { host }.
 function parseAuthority(scheme, authority) {
   const at = authority.lastIndexOf("@");
-  const hostError = parseHost(scheme, at < 0 ? authority : authority.slice(at + 1));
-  if (hostError) return hostError;
-  if (at < 0) return "";
+  const host = parseHost(scheme, at < 0 ? authority : authority.slice(at + 1));
+  if (host.error || at < 0) return host;
   const userinfo = authority.slice(0, at);
-  if (![...userinfo].every((c) => isAlnum(c) || USERINFO.includes(c))) return "net/url: invalid userinfo";
+  if (![...userinfo].every((c) => isAlnum(c) || USERINFO.includes(c))) return { error: "net/url: invalid userinfo" };
   const parts = userinfo.includes(":") ? cut(userinfo, ":").slice(0, 2) : [userinfo];
   for (const part of parts) {
     const { error } = unescape(part, "userinfo");
-    if (error) return error;
+    if (error) return { error };
   }
-  return "";
+  return host;
 }
 
 const validOptionalPort = (port) => port === "" || /^:[0-9]*$/.test(port);
 
+// { error } or { host }, the host as unescaped: empty only when `host` is.
 function parseHost(scheme, host) {
   const open = host.lastIndexOf("[");
   if (open !== -1) {
     const close = host.lastIndexOf("]");
-    if (close < 0) return "missing ']' in host";
+    if (close < 0) return { error: "missing ']' in host" };
     const colonPort = host.slice(close + 1);
-    if (!validOptionalPort(colonPort)) return `invalid port ${quote(colonPort)} after host`;
+    if (!validOptionalPort(colonPort)) return { error: `invalid port ${quote(colonPort)} after host` };
     const port = unescape(colonPort, "host");
-    if (port.error) return port.error;
+    if (port.error) return port;
     const hostname = host.slice(open + 1, close);
     const zoneAt = hostname.indexOf("%25");
     let unescaped;
     if (zoneAt >= 0) {
       const hostPart = unescape(hostname.slice(0, zoneAt), "host");
-      if (hostPart.error) return hostPart.error;
+      if (hostPart.error) return hostPart;
       const zonePart = unescape(hostname.slice(zoneAt), "zone");
-      if (zonePart.error) return zonePart.error;
+      if (zonePart.error) return zonePart;
       unescaped = hostPart.value + zonePart.value;
     } else {
       const all = unescape(hostname, "host");
-      if (all.error) return all.error;
+      if (all.error) return all;
       unescaped = all.value;
     }
     const addr = parseAddr(unescaped);
-    if (addr.error) return `invalid host: ${addr.error}`;
-    if (addr.is4) return "invalid IP-literal";
-    return "";
+    if (addr.error) return { error: `invalid host: ${addr.error}` };
+    if (addr.is4) return { error: "invalid IP-literal" };
+    return { host: `[${unescaped}]${port.value}` };
   }
   const colon = host.indexOf(":");
   if (colon !== -1) {
     const last = host.lastIndexOf(":");
     const at = last !== colon && (scheme === "postgresql" || scheme === "postgres") ? last : colon;
     const colonPort = host.slice(at);
-    if (!validOptionalPort(colonPort)) return `invalid port ${quote(colonPort)} after host`;
+    if (!validOptionalPort(colonPort)) return { error: `invalid port ${quote(colonPort)} after host` };
   }
-  return unescape(host, "host").error ?? "";
+  const unescaped = unescape(host, "host");
+  return unescaped.error ? unescaped : { host: unescaped.value };
 }
 
 // --- net/netip -------------------------------------------------------------

@@ -53,7 +53,7 @@ test("queryTraffic reads a page in display order, as the table's rows", async ()
     "GET /client-settings/marasi-app/ledger.exclusion": notFound,
     // The service lists a page in reverse display order.
     "GET /traffic": {
-      items: [summary(1), summary(2, { highlight: 3, upstream_proxy: { name: "corp", address: "http://10.0.0.1:3128" } })],
+      items: [summary(1), summary(2, { highlight: 3, upstream_proxy: { name: "corp", address: "http://10.0.0.1:3128" }, client_protocol: "h2", origin_protocol: "http/1.1" })],
       next_cursor: "n1",
       prev_cursor: null,
       as_of: "01900002",
@@ -81,6 +81,8 @@ test("queryTraffic reads a page in display order, as the table's rows", async ()
     RespondedAt: "2026-11-06T22:07:49.700000+04:00",
     Highlight: 3,
     Route: { Name: "corp", Address: "http://10.0.0.1:3128" },
+    ClientProtocol: "h2",
+    OriginProtocol: "http/1.1",
   });
   assert.equal(page.NextCursor, "n1");
   assert.equal(page.PrevCursor, null);
@@ -396,13 +398,17 @@ test("createLaunchpad resolves to the new launchpad's id; deleteLaunchpad remove
 
 test("stream events map to the live request, response and upgrade shapes the Ledger patches with", () => {
   assert.deepEqual(
-    toRequestEvent({ id: "a", number: 9, scheme: "https", method: "GET", host: "h", path: "/", metadata: {}, requested_at: "t1", sitemap_node: "https://h/" }),
-    { ID: "a", Number: 9, Scheme: "https", Method: "GET", Host: "h", Path: "/", Metadata: {}, RequestedAt: "t1", SitemapNode: "https://h/" },
+    toRequestEvent({ id: "a", number: 9, scheme: "https", method: "GET", host: "h", path: "/", metadata: {}, requested_at: "t1", sitemap_node: "https://h/", client_protocol: "h2", origin_protocol: "h2" }),
+    { ID: "a", Number: 9, Scheme: "https", Method: "GET", Host: "h", Path: "/", Metadata: {}, RequestedAt: "t1", SitemapNode: "https://h/", ClientProtocol: "h2", OriginProtocol: "h2" },
   );
   assert.deepEqual(
     toResponseEvent({ id: "a", status: "101 Switching Protocols", status_code: 101, content_type: "", length: "0", metadata: { protocol: "websocket" }, responded_at: "t2", upstream_proxy: null }),
     { ID: "a", Status: "101 Switching Protocols", StatusCode: 101, ContentType: "", Length: "0", Metadata: { protocol: "websocket" }, RespondedAt: "t2", Route: null },
   );
+  // A response names the origin's protocol only when the pair reached it,
+  // replacing the request event's.
+  assert.equal(toResponseEvent({ id: "a", origin_protocol: "http/1.1" }).OriginProtocol, "http/1.1");
+  assert.equal("OriginProtocol" in toResponseEvent({ id: "a" }), false);
   assert.deepEqual(
     toUpgradeEvent({ id: "c1", request_id: "a", state: "closed", transport: "http/1.1", close_code: 1000, close_reason: "bye" }),
     { RequestID: "a", State: "closed", Transport: "http/1.1", CloseCode: 1000, CloseReason: "bye" },

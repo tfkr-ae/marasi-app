@@ -16,6 +16,8 @@
 	import {
 		LEDGER_COLUMNS,
 		formatSize,
+		protocolText,
+		protocolTitle,
 		headerHeight,
 		keepRowInPlace,
 		pageDistance,
@@ -87,9 +89,9 @@
 	// Each ghost cell's bar width, as a share of its cell, varied by row so
 	// the ghost reads as rows rather than stripes.
 	const GHOST_WIDTHS = [
-		[0.5, 0, 0.7, 0.5, 0.8, 0.9, 0.5, 0.6, 0.5],
-		[0.4, 0, 0.7, 0.6, 0.6, 0.6, 0.5, 0.5, 0.4],
-		[0.5, 0, 0.7, 0.4, 0.8, 0.75, 0.5, 0.7, 0.6],
+		[0.5, 0, 0.7, 0.5, 0.8, 0.9, 0.5, 0.6, 0.5, 0.5],
+		[0.4, 0, 0.7, 0.6, 0.6, 0.6, 0.5, 0.5, 0.4, 0.5],
+		[0.5, 0, 0.7, 0.4, 0.8, 0.75, 0.5, 0.7, 0.6, 0.4],
 	];
 
 	// The top row in view and how far it is scrolled into, so it can keep
@@ -370,6 +372,7 @@
 							on:mouseleave={() => (typeTip = null)}>{shortType(row.ContentType)}</span
 						>
 						<span class="text-right {dim}" data-col="size">{formatSize(row.Length)}</span>
+						<span class={dim} data-col="protocol" title={protocolTitle(row) || undefined}>{protocolText(row)}</span>
 					</div>
 				{/each}
 			</div>
@@ -393,7 +396,7 @@
 		align-items: center;
 		font-size: 0.6875rem;
 		white-space: nowrap;
-		min-width: 45.875rem;
+		min-width: 49.375rem;
 	}
 	/* Each cell's box is trimmed to its capitals, so the row centres the
 	   text itself rather than a line box whose glyph position depends on

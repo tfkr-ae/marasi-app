@@ -1,0 +1,1507 @@
+[
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\nHost: x\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST /login HTTP/1.1\nHost: x\nContent-Length: 3\n\nabc"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST /login HTTP/1.1\nHost: x\nContent-Length: 30\n\nabc"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": ""
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "BROKEN /admin"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost: x"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\nHost: x\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GE T / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "G(T / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GÉT / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET\t/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/2.0\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.10\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/x.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / http/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1 \n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET  / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET foo HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET * HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /%zz HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a%2 HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a% HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a%41b HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /?q=%zz HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a? HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a#frag HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /café HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /\u0001 HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET :foo HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET mailto:x HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://example.com/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET HTTP://Example.com/a?b HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://ex{ample.com/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://ex%41mple.com/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://ex%C3%A9.com/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://ex%zz.com/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://example.com:abc/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://example.com:/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://example.com:80:90/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1]:8080/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1]x/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1.2.3.4]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::ffff:1.2.3.4]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[fe80::1%25en0]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://u@ser@h/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://us{er@h/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://user:p%zz@h/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://h?x HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http:/a HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http: HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET 1http://h/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "CONNECT example.com:443 HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "CONNECT example.com:abc HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "CONNECT /rpc HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\n Host: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\n\tHost: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\n aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHo st: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHo(st: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\n: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\u0001b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\rb\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: ab\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: café\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nCafé: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n  b\nHost: y\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n\tb\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n   \n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n 1: b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX:\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX:a\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\nY b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost: a\nHost: b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nhost: a\nHOST: b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost : a\nHost: b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://h/ HTTP/1.1\nHost: a\nHost: b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: abc\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length:\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length:   \n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 1\nContent-Length: 2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 5\ncontent-length: 5\n\nhello"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: -1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: +5\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 1_0\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 9223372036854775807\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 9223372036854775808\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 5 \n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: abc\nTransfer-Encoding: gzip\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: gzip\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTransfer-Encoding: chunked\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: Chunked\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked, gzip\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.0\nTransfer-Encoding: gzip\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nContent-Length: abc\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: Content-Length\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: x-a, transfer-encoding\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: X-Sum\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTrailer: Content-Length\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\rHost: x\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html>"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": ""
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "BROKEN"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 20 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 abc OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 -12 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 +12 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 0x1 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1  200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 \n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/9 200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "http/1.1 200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nX y\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\n X: y\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nContent-Length: x\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 204 No Content\nContent-Length: x\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nContent-Length: 1\nContent-Length: 2\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nTransfer-Encoding: br\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\nTrailer: Trailer\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nContent-Type: text/html\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\r\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 999 Custom\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 100 Continue\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nHost: a\nHost: b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[zz]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::g]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1::2::3]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1:2:3:4:5:6:7:8:9]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1%en0]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[fe80::1%25]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[12345::1]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::ffff:1.2.3]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1.2.3.4%25x]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1%25%41]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1%25%20x]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1%25%zz]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1%25a{b]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[%25x]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1::]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::1:2:3:4:5:6:7:8]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1:2:3:4:5:6:7::]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::ffff:1.2.3.04]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[::ffff:1.2.3.256]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1:2:3:4:5:6:1.2.3.4]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1:2::3:4:5:6:7:1.2.3.4]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[fffff::]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1:2:3:4:5:6:7]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[1:]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://[ex%C3]/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://ex%C3.com/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/0.0\nTransfer-Encoding: gzip\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 -00 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 é1 OK\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": " / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http://hé/ HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "G T / HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n   "
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: ,, x-y ,\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: chunked\nTrailer: content length\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost: x\n\nbbbbbbbbbb"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/2\r\n:authority: x\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/3.0\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.9\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET  / HTTP/2.0\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\n:authority: x\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\nHost: x\r\n:path: /\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX[: y\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX/Y: y\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n b\u0000\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\n\tb\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: a\u0000b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nX: ab\u0001c\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET  HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET   HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "CONNECT  HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "CONNECT [::1]:443 HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "CONNECT example.com HTTP/1.1\nHost: example.com\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "OPTIONS * HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET https://example.com/a?b=c HTTP/1.1\r\nHost: example.com\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET https://example.com HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET http:// HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a b HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET /a HTTP/1.1\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\nHost: x\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\nHost: x\r\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "\r\n\r\nGET / HTTP/1.1\r\nHost: x\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "\nGET / HTTP/1.1"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\nHost: x\r\n\r"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "GET / HTTP/1.1\r\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nContent-Length: 1\nTransfer-Encoding: chunked\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "http/1.1",
+  "text": "POST / HTTP/1.1\nTransfer-Encoding: gzip, chunked\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/2 200\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/2.0 200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.9 200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 099 Early\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 1000 X\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 O\u0000K\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\r\r\n\r\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 café\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nX: a\u0000b\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\n:status: 200\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\nX: a\n b\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "\r\nHTTP/1.1 200 OK\r\n\r\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\r\nX: y\r\n"
+ },
+ {
+  "type": "response",
+  "protocol": "http/1.1",
+  "text": "HTTP/1.1 200 OK\r\n\r\nbody without a length"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\r\n:authority: example.com\r\nuser-agent: curl\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\r"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "POST /api HTTP/2\r\ncontent-length: 2\r\n\r\n{}"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2.0\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/1.1\nHost: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / http/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2 \n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET /\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET  HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": " / HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "  HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": ""
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "BROKEN"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET /a b HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "G(T /\u0001 HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://example.com/a?b HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET https://user@example.com:8443/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET foo://x HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http:///a HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://u@/a HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://ex%zz.com/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://a b/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://[::1/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://[::1]:8080/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h:abc/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h/%zz HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h/?q=%zz HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h/#%zz HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h/#ok HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h/\u0001 HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http://h/#\u0001 HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET mailto:x://y HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET a_b://x/ HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET *://x HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET ://x HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET http:x://y HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET /redirect?to=http://x HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET * HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET example.com HTTP/2\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "CONNECT example.com:443 HTTP/2\r\n:authority: example.com:443\r\n\r\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nnocolon\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n:\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n::x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n:authority:x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n:authority\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nx-a:b\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nBad Name(: v\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nx: a\u0000b\rc\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n folded: x\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nx: a\n folded\n\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nHost: x"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nHost: x\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\r\n\r\nbody: no colon needed"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\nx\n\nbody"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n\r\nx: y\n"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\n\r\nnocolon"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "GET / HTTP/2\r\nx: y\r\n\r\n\r\nnocolon"
+ },
+ {
+  "type": "request",
+  "protocol": "h2",
+  "text": "\nGET / HTTP/2\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200\r\ncontent-type: text/html\r\n\r\n<html>"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 \n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 abc\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2  200\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2.0 200\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/1.1 200 OK\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "http/2 200\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": ""
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "BROKEN"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200\nbad\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200\n:status: 500\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200\nx: a\u0000b\n\n"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200\nset-cookie: a=b; Path=/"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "HTTP/2 200\r\n\r\nnot: a field"
+ },
+ {
+  "type": "response",
+  "protocol": "h2",
+  "text": "\r\nHTTP/2 200\r\n\r\n"
+ }
+]

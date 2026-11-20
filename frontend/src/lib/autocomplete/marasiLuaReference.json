@@ -1,0 +1,264 @@
+{
+  "globals": [
+    "extension_id",
+    "print"
+  ],
+  "hooks": [
+    "startup",
+    "processRequest",
+    "processResponse",
+    "processWebSocketMessage",
+    "interceptRequest",
+    "interceptResponse",
+    "interceptWebSocketMessage"
+  ],
+  "libraries": {
+    "marasi": [
+      "builder",
+      "config",
+      "log",
+      "scope"
+    ],
+    "marasi.crypto": [
+      "hmac_sha256",
+      "md5",
+      "sha1",
+      "sha256"
+    ],
+    "marasi.crypto.aes": [
+      "generate_key"
+    ],
+    "marasi.crypto.aes.cbc": [
+      "decrypt",
+      "encrypt",
+      "generate_iv"
+    ],
+    "marasi.crypto.aes.gcm": [
+      "decrypt",
+      "encrypt",
+      "generate_iv"
+    ],
+    "marasi.crypto.ed25519": [
+      "generate_pair",
+      "sign",
+      "verify"
+    ],
+    "marasi.crypto.rsa": [
+      "decrypt",
+      "encrypt",
+      "generate_pair"
+    ],
+    "marasi.encoding.base64": [
+      "decode",
+      "encode"
+    ],
+    "marasi.encoding.hex": [
+      "decode",
+      "encode"
+    ],
+    "marasi.encoding.html": [
+      "escape",
+      "unescape"
+    ],
+    "marasi.encoding.json": [
+      "decode",
+      "encode"
+    ],
+    "marasi.encoding.url": [
+      "decode",
+      "encode"
+    ],
+    "marasi.gui": [
+      "render",
+      "update"
+    ],
+    "marasi.random": [
+      "int",
+      "string"
+    ],
+    "marasi.repo": [
+      "get_details",
+      "get_metadata",
+      "get_note",
+      "get_summary",
+      "search_by_metadata",
+      "set_metadata",
+      "set_note"
+    ],
+    "marasi.settings": [
+      "get",
+      "set"
+    ],
+    "marasi.strings": [
+      "contains",
+      "has_prefix",
+      "has_suffix",
+      "len",
+      "lower",
+      "replace",
+      "reverse",
+      "split",
+      "substring",
+      "trim",
+      "upper"
+    ],
+    "marasi.utils": [
+      "cookie",
+      "sleep",
+      "timestamp",
+      "url",
+      "uuid"
+    ]
+  },
+  "marasi": "v0.0.0-20261120053102-84033ba09fe9",
+  "types": {
+    "RequestBuilder": [
+      "add_header",
+      "body",
+      "cookies",
+      "headers",
+      "metadata",
+      "method",
+      "send",
+      "send_async",
+      "set_body",
+      "set_cookie",
+      "set_cookies",
+      "set_headers",
+      "set_metadata",
+      "set_method",
+      "set_url",
+      "url"
+    ],
+    "cookie": [
+      "domain",
+      "expires",
+      "http_only",
+      "max_age",
+      "name",
+      "path",
+      "same_site",
+      "secure",
+      "serialize",
+      "set_domain",
+      "set_expires",
+      "set_http_only",
+      "set_max_age",
+      "set_name",
+      "set_path",
+      "set_same_site",
+      "set_secure",
+      "set_value",
+      "value"
+    ],
+    "header": [
+      "add",
+      "delete",
+      "get",
+      "has",
+      "set",
+      "to_table",
+      "values"
+    ],
+    "regexp": [
+      "find",
+      "find_all",
+      "find_all_submatches",
+      "find_named_submatch",
+      "find_submatch",
+      "find_submatch_indices",
+      "is_anchored_match",
+      "match",
+      "pattern",
+      "replace",
+      "split"
+    ],
+    "req": [
+      "body",
+      "content_type",
+      "cookie",
+      "cookies",
+      "drop",
+      "headers",
+      "host",
+      "id",
+      "metadata",
+      "method",
+      "path",
+      "proto",
+      "protocol",
+      "remote_addr",
+      "scheme",
+      "set_body",
+      "set_cookie",
+      "set_cookies",
+      "set_host",
+      "set_metadata",
+      "skip",
+      "url"
+    ],
+    "res": [
+      "body",
+      "content_type",
+      "cookie",
+      "cookies",
+      "drop",
+      "headers",
+      "id",
+      "length",
+      "metadata",
+      "method",
+      "protocol",
+      "request",
+      "set_body",
+      "set_cookie",
+      "set_cookies",
+      "set_metadata",
+      "set_status_code",
+      "skip",
+      "status",
+      "status_code",
+      "url"
+    ],
+    "scope": [
+      "add_rule",
+      "clear_rules",
+      "matches",
+      "matches_string",
+      "remove_rule",
+      "set_default_allow"
+    ],
+    "url": [
+      "del_param",
+      "get_param",
+      "host",
+      "path",
+      "query",
+      "scheme",
+      "set_host",
+      "set_param",
+      "set_path",
+      "set_query",
+      "set_scheme",
+      "string"
+    ],
+    "wsmsg": [
+      "compressed",
+      "connection_id",
+      "direction",
+      "drop",
+      "frame_count",
+      "id",
+      "is_binary",
+      "length",
+      "metadata",
+      "opcode",
+      "payload",
+      "request_id",
+      "set_metadata",
+      "set_opcode",
+      "set_payload",
+      "skip"
+    ]
+  }
+}

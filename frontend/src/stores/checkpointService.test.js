@@ -161,10 +161,46 @@ test("the malformed warning comes from the frontend's parse check", async () => 
   const { marasi, store } = await loaded([httpItem("a"), httpItem("r", "response", "HTTP/1.1 200 OK\r\n\r\n")]);
   await store.edit("a", "BROKEN /admin");
   await store.edit("r", "HTTP/1.1 20 OK\n\n");
-  assert.equal(parseErrorOf(get(store), "a"), 'malformed HTTP request "BROKEN /admin"');
-  assert.equal(parseErrorOf(get(store), "r"), 'malformed HTTP status code "20"');
+  assert.equal(parseErrorOf(get(store), "a"), "reading the edited request head: EOF");
+  assert.equal(
+    parseErrorOf(get(store), "r"),
+    'reading the edited response head: parsing status line "HTTP/1.1 20 OK": malformed message head',
+  );
   assert.deepEqual(marasi.calls, []);
   assert.equal(await store.forward("a"), "unparsed");
+});
+
+const h2Request = (id) => httpItem(id, "request", `GET /${id} HTTP/2\r\n:authority: x\r\n\r\n`);
+
+test("an HTTP/2 item's edit is checked in Marasi's HTTP/2 text form", async () => {
+  const { marasi, store } = await loaded([h2Request("a"), h2Request("b"), httpItem("r", "response", "HTTP/2 200\r\n\r\n")]);
+  assert.deepEqual(get(store).items.map((item) => item.protocol), ["h2", "h2", "h2"]);
+  await store.edit("a", "POST /a HTTP/2\r\n:authority: x\r\ncontent-type: text/plain\r\n\r\nhi");
+  await store.edit("b", "GET /b HTTP/1.1\r\nHost: x\r\n\r\n");
+  await store.edit("r", "HTTP/2 404\r\nbroken\r\n\r\n");
+  assert.equal(parseErrorOf(get(store), "a"), "");
+  assert.equal(
+    parseErrorOf(get(store), "b"),
+    'not an HTTP/2 message in the text form: the request line "GET /b HTTP/1.1" is not METHOD target HTTP/2',
+  );
+  assert.equal(
+    parseErrorOf(get(store), "r"),
+    'not an HTTP/2 message in the text form: the field line "broken" has no colon',
+  );
+  assert.deepEqual(marasi.calls, []);
+});
+
+test("bulk forward sends a valid HTTP/2 edit and skips a broken one", async () => {
+  const { marasi, store } = await loaded([h2Request("a"), h2Request("b")]);
+  const edited = "GET /edited HTTP/2\n:authority: x\n\n";
+  await store.edit("a", edited);
+  await store.edit("b", "GET /b HTTP/2.0\n\n");
+  const result = await store.bulk("forward", ["a", "b"]);
+  assert.deepEqual([result.done, result.skipped], [1, 1]);
+  const [[path, body]] = posts(marasi);
+  assert.equal(path, "/checkpoint/a/forward");
+  assert.equal(unb64(body.raw), edited);
+  assert.deepEqual(ids(store), ["b"]);
 });
 
 test("a forward or drop of an item Marasi no longer holds is gone", async () => {

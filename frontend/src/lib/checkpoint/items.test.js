@@ -25,6 +25,11 @@ test("a held request reads its method, path and host from its text", () => {
   });
 });
 
+test("a held HTTP/2 request reads its host from :authority", () => {
+  const item = request("h2", "GET /me HTTP/2\r\n:scheme: https\r\n:authority: api.shop.test\r\naccept: */*\r\n\r\n");
+  assert.deepEqual(summarize(item, item.text), { kind: "REQ", method: "GET", path: "/me", host: "api.shop.test", status: 0 });
+});
+
 test("a held response takes its status from its text and the rest from its request", () => {
   const item = { ID: "b", Type: "response", text: "HTTP/1.1 302 Found\r\nLocation: /\r\n\r\n" };
   const request = { Method: "GET", Path: "/login", Host: "shop.test", Number: 12 };

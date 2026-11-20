@@ -57,7 +57,9 @@ export function createCheckpointApi(client) {
 
   return {
     getItems: async () => ((await read()).items ?? []).map(toCheckpointItem),
-    checkParse: (text, type) => httpParseError(text, type),
+    // Why an edit of a held `type` item of `protocol` ("http/1.1" or "h2")
+    // won't forward, checked in the frontend as Marasi reads it.
+    checkParse: (text, type, protocol) => httpParseError(text, type, protocol),
     forward,
     drop: (id) => client.post(`/checkpoint/${id}/drop`, {}),
     // The bulk route forwards the bytes as held, so each edited item goes

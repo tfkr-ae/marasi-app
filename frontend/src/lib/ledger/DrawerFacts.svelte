@@ -1,10 +1,10 @@
 <script>
-	// The facts at the top of a drawer's details column: method, status and
-	// timing; host and path on one line; content type and size. The Ledger's
+	// The facts at the top of a drawer's details column: method, status,
+	// timing and protocol; host and path on one line; content type and size. The Ledger's
 	// DrawerRail and the Armory's ArmoryDrawerRail both show it; `prefix`
 	// names its classes (`<prefix>-drawer-facts`, `<prefix>-drawer-url`).
 	import { statusClass } from "../launchpad/format.js";
-	import { formatSize, statusText } from "./table.js";
+	import { formatSize, protocolText, protocolTitle, statusText } from "./table.js";
 
 	/** The pair's table row. */
 	export let pair;
@@ -20,6 +20,7 @@
 		<b>{pair.Method ?? ""}</b>
 		<span class={statusClass(pair.StatusCode)}>{hasResponse ? statusText(pair.StatusCode) : "pending"}</span>
 		{#if timing}<span class="opacity-60">{timing}</span>{/if}
+		{#if protocolText(pair)}<span class="opacity-60" title={protocolTitle(pair)}>{protocolText(pair)}</span>{/if}
 	</div>
 	<!-- One line; the whole URL is in the tooltip. -->
 	<div class="{prefix}-drawer-url truncate" title="{pair.Host ?? ''}{pair.Path ?? ''}">

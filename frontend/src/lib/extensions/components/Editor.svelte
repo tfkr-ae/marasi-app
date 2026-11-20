@@ -9,7 +9,7 @@
     import { resolveBind, updateBind } from "./utils";
     import { StreamLanguage } from "@codemirror/language";
     import { javascript } from "@codemirror/lang-javascript";
-    import { http } from "@codemirror/legacy-modes/mode/http";
+    import { http } from "../../httpMode.js";
 
     export let extensionData;
     export let value = { bind: "" };
