@@ -45,7 +45,8 @@ const openMenus = ".ledger-row-menu";
 // card itself, and a one-line confirm is about 130 px tall. The Marasi menu
 // is an open native <dialog>; measure the dialog itself, because its first
 // child is the 48 px search input, and a filtered menu stays under 100 px
-// tall.
+// tall. The WebSocket modal mounts its own closed menu <dialog> before its
+// card, so skip a <dialog> child when looking for the card.
 const overlayPainted = `Boolean((() => {
 	const menu = Array.from(document.querySelectorAll("dialog[open]")).some((dialog) => {
 		const box = dialog.getBoundingClientRect();
@@ -55,7 +56,7 @@ const overlayPainted = `Boolean((() => {
 	const builtIn = document.querySelector("[data-testid='modal']")?.getBoundingClientRect();
 	if (builtIn && builtIn.width > 100 && builtIn.height > 60) return true;
 	const overlay = document.querySelector("[data-testid='modal-component']");
-	const card = overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
+	const card = overlay?.querySelector(".modal-example-form") || Array.from(overlay?.children || []).find((child) => child.tagName !== "DIALOG") || overlay;
 	const box = card?.getBoundingClientRect();
 	return Boolean(box && box.width > 100 && box.height > 100);
 })())`;
@@ -179,7 +180,7 @@ async function waitForTarget(spec, { timeoutMs = defaultTimeoutMs, nth, enabled 
 async function snapshot() {
 	return evaluate(`(() => {
 		const overlay = document.querySelector("dialog[open], [data-testid='modal'], [data-testid='modal-component']");
-		const card = overlay?.matches("[data-testid='modal']") ? overlay : overlay?.querySelector(".modal-example-form") || overlay?.firstElementChild || overlay;
+		const card = overlay?.matches("[data-testid='modal']") ? overlay : overlay?.querySelector(".modal-example-form") || Array.from(overlay?.children || []).find((child) => child.tagName !== "DIALOG") || overlay;
 		const rect = card?.getBoundingClientRect?.();
 		return {
 			url: location.href,
