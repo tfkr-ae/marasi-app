@@ -1,4 +1,4 @@
-// A card drawn light as a PNG, for attachments: an attachment's cards are
+// A card drawn light as a PNG, for a Drawing's Artifact: its cards are
 // always light, whatever mode the app is in (spec: Putting work back). It
 // draws cardContent's model, the one CardView draws on screen, with the
 // colours of the same classes read in light mode from a hidden probe, so a
@@ -7,7 +7,7 @@ import { get } from "svelte/store";
 import { logbookStore } from "../../stores/logbookStore.js";
 import { highlightPalette } from "../../stores/highlightsStore.js";
 import { cardContent } from "./cardContent.js";
-import { pairRows } from "./toolItems.js";
+import { pairRows } from "../../stores/pairRowsStore.js";
 
 const SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";

@@ -19,6 +19,8 @@ import "./stores/sitemapStore";
 import "./stores/savedQueriesStore";
 import "./stores/ledgerMenuCounts";
 import "./stores/jobsStore";
+import "./stores/pairRowsStore";
+import "./stores/trafficListStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";
 import { textSizeFrom } from "./lib/textSize.js";
 import { textSize } from "./stores/textSizeStore.js";

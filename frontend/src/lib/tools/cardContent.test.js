@@ -43,13 +43,13 @@ test("a finding card shows its severity badge, CVSS, title, write-up and counts"
   assert.equal(content.footer, "2 pairs · 1 artifact");
 });
 
-test("a test case card shows its category in the tertiary variant, its tags, and its counts", () => {
+test("a test case card shows its category in the tertiary variant, all its tags, and its counts", () => {
   const testCase = {
     ID: "t1", Title: "Login rate limit", Category: "Authentication", Tags: ["login", "rate", "brute", "extra"],
     Description: "Try 100 logins", Requests: ["a"], Artifacts: [],
   };
   const light = cardContent({ kind: "testCase", id: "t1" }, testCase, { palette, light: true, findingCount: 3 });
-  assert.deepEqual(texts(light), ["Authentication", "#login", "#rate", "#brute"]);
+  assert.deepEqual(texts(light), ["Authentication", "#login", "#rate", "#brute", "#extra"]);
   assert.equal(light.chips[0].classes, tertiaryVariant(true));
   assert.equal(light.footer, "1 pair · 3 findings · 0 artifacts");
   const dark = cardContent({ kind: "testCase", id: "t1" }, testCase, { palette, light: false });

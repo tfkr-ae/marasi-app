@@ -16,7 +16,8 @@
 	import { SEVERITY_BADGE } from "../logbook/severityColors.js";
 	import { formatSize, rowHighlight } from "../ledger/table.js";
 	import { DRAG_TYPE } from "./cards.js";
-	import { trafficList } from "./toolItems.js";
+	import { trafficList } from "../../stores/trafficListStore.js";
+	import { recordName } from "./recordKinds.js";
 
 	export let kinds = ["pair", "finding", "testCase"];
 	export let title = "Insert";
@@ -74,7 +75,7 @@
 			<span class="text-2xs opacity-50">{hint}</span>
 			<div class="flex-1"></div>
 			{#if onClose}
-				<button type="button" class="opacity-60 hover:opacity-100" title="Close" aria-label="Close" on:click={onClose}
+				<button type="button" class="opacity-60" title="Close" aria-label="Close" on:click={onClose}
 					><X size={14} /></button
 				>
 			{/if}
@@ -85,7 +86,7 @@
 					<button
 						type="button"
 						role="tab"
-						class="flex-1 whitespace-nowrap px-2 py-1 {tab === kind ? primary : 'hover:bg-surface-500/10'}"
+						class="flex-1 whitespace-nowrap px-2 py-1 {tab === kind ? primary : ''}"
 						aria-selected={tab === kind}
 						data-testid="insert-tab-{kind}"
 						on:click={() => (tab = kind)}>{label} <span class="opacity-70">{count}</span></button
@@ -144,7 +145,7 @@
 					{#if onPickResponse}
 						<button
 							type="button"
-							class="shrink-0 rounded-none px-1.5 py-0.5 text-2xs opacity-70 hover:bg-surface-500/20 hover:opacity-100"
+							class="shrink-0 rounded-none px-1.5 py-0.5 text-2xs opacity-70"
 							title="Insert the response"
 							on:click|stopPropagation={() => onPickResponse(source, pair)}>Res</button
 						>
@@ -171,7 +172,7 @@
 						<span class="badge shrink-0 rounded-none px-1.5 py-0 text-3xs font-bold {SEVERITY_BADGE[finding.Severity] ?? 'variant-soft'}"
 							>{finding.Severity || "No severity"}</span
 						>
-						<span class="min-w-0 flex-1 truncate font-semibold">{finding.Title || "Untitled finding"}</span>
+						<span class="min-w-0 flex-1 truncate font-semibold">{recordName("finding", finding)}</span>
 					</div>
 					<div class="text-2xs opacity-60">
 						{#if finding.CVSSScore}CVSS {Number(finding.CVSSScore).toFixed(1)} · {/if}{finding.Requests?.length ?? 0} pairs · {finding
@@ -199,7 +200,7 @@
 						{#if testCase.Category}<span class="badge shrink-0 rounded-none px-1.5 py-0 text-3xs font-bold {tertiaryVariant($modeCurrent)}"
 								>{testCase.Category}</span
 							>{/if}
-						<span class="min-w-0 flex-1 truncate font-semibold">{testCase.Title || "Untitled test case"}</span>
+						<span class="min-w-0 flex-1 truncate font-semibold">{recordName("testCase", testCase)}</span>
 					</div>
 					<div class="text-2xs opacity-60">
 						{#each (testCase.Tags ?? []).slice(0, 3) as tag}<span class="mr-1">#{tag}</span>{/each}{testCase.Requests?.length ?? 0} pairs

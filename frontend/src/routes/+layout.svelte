@@ -85,7 +85,7 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
-	import { mobile, mobileCheck, phoneWidth, platformCheck } from "../lib/platform.js";
+	import { chefShown, mobile, mobileCheck, platformCheck } from "../lib/platform.js";
 	import { applyColourScheme } from "../lib/lightMode.js";
 	import { androidBack } from "../lib/androidBack.js";
 	import { installSwipeToClose } from "../lib/swipeToClose.js";
@@ -196,10 +196,10 @@
 		{ id: "compass", label: "Compass", icon: CompassIcon, path: "/compass", go: () => goto("/compass") },
 		{ id: "armory", label: "Armory", icon: Swords, path: "/armory", badge: runningBadge.label, go: () => goto("/armory") },
 		{ id: "workshop", label: "Workshop", icon: ToolIcon, path: "/workshop", go: () => goto("/workshop") },
-		// CyberChef shows from tablet width up, never in a phone's bar.
-		...($phoneWidth
-			? []
-			: [{ id: "cyberchef", label: "CyberChef", icon: ChefHat, path: "/cyberchef", go: () => goto("/cyberchef") }]),
+		// CyberChef only where the app offers it (chefShown).
+		...($chefShown
+			? [{ id: "cyberchef", label: "CyberChef", icon: ChefHat, path: "/cyberchef", go: () => goto("/cyberchef") }]
+			: []),
 		{
 			id: "excalidraw",
 			label: "Excalidraw",
@@ -697,7 +697,7 @@
 					</svelte:fragment>
 					<span>Workshop</span>
 				</AppRailAnchor>
-				{#if !$phoneWidth}
+				{#if $chefShown}
 				<AppRailAnchor
 					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===

@@ -20,7 +20,7 @@
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
 	import { toastError } from "../../lib/toasts.js";
 	import { neutralVariant, primaryVariant } from "../../lib/launchpad/format.js";
-	import { phoneWidth } from "../../lib/platform.js";
+	import { chefShown } from "../../lib/platform.js";
 
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
@@ -30,7 +30,7 @@
 	let frame;
 	let adapter = null;
 	let loading = true;
-	let failed = "";
+	let failed = false;
 
 	// Reads what CyberChef holds into the open recipe before copying or
 	// judging it.
@@ -54,14 +54,12 @@
 		inserting = inserting
 			.then(() => drainInbox(chefInbox, adapter))
 			.then(flush)
-			.catch((err) =>
-				toastStore.trigger({ message: `CyberChef: ${err?.message ?? err}`, background: "variant-filled-error" }),
-			);
+			.catch((err) => toastError(toastStore, "Send to CyberChef failed", err));
 	}
 
 	function onError(event) {
-		failed = event.detail.message;
-		toastStore.trigger({ message: `CyberChef: ${failed}`, background: "variant-filled-error" });
+		failed = true;
+		toastError(toastStore, "CyberChef didn't load", event.detail.error);
 	}
 
 	// Insert: a pair's request, or its response (Res), goes in by the same
@@ -122,7 +120,7 @@
 
 <MarasiMenu paletteTier="page" pageName="CyberChef" pageEntries={menu} />
 
-{#if $phoneWidth}
+{#if !$chefShown}
 	<div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-xs opacity-70">
 		<ChefHat size="24" />
 		CyberChef needs a wider screen.
@@ -160,7 +158,7 @@
 			/>
 			{#if loading || failed}
 				<div class="absolute inset-0 flex items-center justify-center bg-surface-50/80 text-xs dark:bg-surface-900/80">
-					{failed ? `CyberChef didn't load: ${failed}` : "Loading CyberChef…"}
+					{failed ? "CyberChef didn't load" : "Loading CyberChef…"}
 				</div>
 			{/if}
 		</div>

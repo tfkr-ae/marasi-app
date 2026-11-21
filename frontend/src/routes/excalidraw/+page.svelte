@@ -5,6 +5,7 @@
 	// unmounts. Cards are drawn by CardView over the canvas (cardEmbed.js,
 	// cards.js).
 	import { onDestroy } from "svelte";
+	import { get } from "svelte/store";
 	import { goto } from "$app/navigation";
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Copy, FilePlus, Keyboard, Paperclip, PanelRight, Pencil, Replace, Trash2 } from "lucide-svelte";
@@ -18,10 +19,10 @@
 	import { drawingCards, drawings, setCanvasSize } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { drawingKind } from "../../lib/tools/toolDocuments.js";
-	import { DRAG_TYPE, cardSource, newCardElement, placeCard, sourceOfLink } from "../../lib/tools/cards.js";
-	import { sceneView } from "../../lib/tools/drawingCards.js";
+	import { DRAG_TYPE, sourceOfLink } from "../../lib/tools/cards.js";
+	import { createDrawingPage } from "../../lib/tools/drawingPage.js";
 	import { DRAWING_FORMATS, drawingFile } from "../../lib/tools/drawingFile.js";
-	import { pairRows } from "../../lib/tools/toolItems.js";
+	import { pairRows } from "../../stores/pairRowsStore.js";
 	import { neutralVariant, primaryVariant } from "../../lib/launchpad/format.js";
 	import { logbookStore } from "../../stores/logbookStore.js";
 	import { ledgerStore } from "../../stores/ledgerStore.js";
@@ -33,8 +34,6 @@
 	let lib = null;
 	let showInsert = false;
 	let stopApiChange = null;
-	let stopTracking = () => {};
-	let trackedKey = "";
 
 	$: current = $drawings.items.find((d) => d.id === $drawings.openId) ?? $drawings.items[0];
 	// A new drawing gets a fresh Excalidraw.
@@ -56,59 +55,32 @@
 		return box ? { width: box.width, height: box.height } : null;
 	}
 
+	// Card tracking, placement and Open ↗ (drawingPage.js).
+	const drawingPage = createDrawingPage({
+		pairRows: { track: pairRows.track, rows: () => get(pairRows) },
+		drawingCards,
+		setCanvasSize,
+		goto,
+		ledger: ledgerStore,
+		logbook: logbookStore,
+	});
+	const openSource = drawingPage.openSource;
+
 	function onReady(readyApi, readyLib) {
 		api = readyApi;
 		lib = readyLib;
 		stopApiChange?.();
 		stopApiChange = api.onChange((elements, appState) => {
 			cards.noteChange(appState);
-			trackPairs(elements);
+			drawingPage.trackPairs(elements);
 		});
-		trackPairs(api.getSceneElements());
-	}
-
-	// Keeps the rows of the pairs on this drawing live.
-	function trackPairs(elements) {
-		const ids = elements
-			.map(cardSource)
-			.filter((source) => source?.kind === "pair")
-			.map((source) => String(source.id))
-			.sort();
-		const key = ids.join(",");
-		if (key === trackedKey) return;
-		trackedKey = key;
-		const previous = stopTracking;
-		stopTracking = pairRows.track(ids);
-		previous();
+		drawingPage.trackPairs(api.getSceneElements());
 	}
 
 	/** Adds a card for `source` (with a pair's `last` row), centred on `drop` when dropped. */
 	function addCard(source, last = null, drop = null) {
 		if (!api || !lib) return;
-		const size = canvasSize();
-		if (size) setCanvasSize(size);
-		const elements = api.getSceneElementsIncludingDeleted();
-		const at = placeCard({
-			elements,
-			view: sceneView(api.getAppState(), size ?? { width: 1200, height: 800 }),
-			lastId: drawingCards.lastCardId(current.id),
-			drop,
-		});
-		const [element] = lib.restoreElements([newCardElement(source, at, { last })], null);
-		drawingCards.noteAdded(current.id, element.id);
-		api.updateScene({ elements: [...elements, element], captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY });
-	}
-
-	// Open ↗: the pair in the Ledger, or the record in the Logbook.
-	async function openSource(source, last) {
-		if (source.kind === "pair") {
-			const number = $pairRows[String(source.id)]?.Number ?? last?.Number;
-			await goto("/ledger");
-			if (number != null) ledgerStore.goToNumber(number);
-			return;
-		}
-		logbookStore.open(source.kind, source.id);
-		goto("/logbook");
+		drawingPage.addCard({ api, lib, drawingId: current.id, size: canvasSize() }, source, last, drop);
 	}
 
 	// Cards over the canvas (cardEmbed.js).
@@ -172,7 +144,7 @@
 		const size = canvasSize();
 		if (size) setCanvasSize(size);
 		stopApiChange?.();
-		stopTracking();
+		drawingPage.stopTracking();
 	});
 </script>
 

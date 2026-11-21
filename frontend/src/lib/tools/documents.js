@@ -4,7 +4,7 @@
 import { SetOpenToolDocuments } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { loadedProject } from "../../stores/projectStore.js";
 import { createToolDocuments, drawingKind, recipeKind } from "./toolDocuments.js";
-import { createDrawingCards } from "./drawingCards.js";
+import { FALLBACK_VIEWPORT, createDrawingCards } from "./drawingCards.js";
 
 export const toolDocuments = createToolDocuments({ drawing: drawingKind, recipe: recipeKind });
 
@@ -20,10 +20,8 @@ export const setCanvasSize = (size) => {
 
 export const drawingCards = createDrawingCards(drawings, {
   viewport: () =>
-    canvasSize ?? {
-      width: typeof window === "undefined" ? 1200 : window.innerWidth,
-      height: typeof window === "undefined" ? 800 : window.innerHeight,
-    },
+    canvasSize ??
+    (typeof window === "undefined" ? FALLBACK_VIEWPORT : { width: window.innerWidth, height: window.innerHeight }),
 });
 
 loadedProject.subscribe((project) => {

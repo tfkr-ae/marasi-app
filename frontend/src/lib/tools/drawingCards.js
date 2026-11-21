@@ -3,6 +3,9 @@
 // added last on each drawing, so the next goes under it (placeCard).
 import { newCardElement, placeCard } from "./cards.js";
 
+/** The canvas's size in pixels to place cards in when the real one is unknown. */
+export const FALLBACK_VIEWPORT = Object.freeze({ width: 1200, height: 800 });
+
 /** The part of the scene a viewport of `size` shows at `appState`'s scroll and zoom. */
 export function sceneView(appState, size) {
   const zoom = appState?.zoom?.value || 1;

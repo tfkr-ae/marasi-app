@@ -178,12 +178,14 @@ export function suggestedCardIds(appState) {
 }
 
 /**
- * The scene an attachment exports: each card replaced by an image of it
- * (`cardImages`, element id → a PNG data URL drawn light at the card's size
- * on screen), drawn after every other element, as cards sit above the
- * canvas on screen. Returns { elements, files } without changing its input.
+ * The scene a Drawing's Artifact exports: each card replaced by an image of
+ * it (`cardImages`, element id → a PNG data URL drawn light at the card's
+ * size on screen), drawn after every other element, as cards sit above the
+ * canvas on screen. Each image keeps its card's `link` and `customData`, so
+ * the scene embedded in the file still names every card's source. Returns
+ * { elements, files } without changing its input.
  */
-export function attachmentScene(elements, files, cardImages) {
+export function artifactScene(elements, files, cardImages) {
   const outFiles = { ...files };
   const others = [];
   const images = [];
@@ -202,9 +204,7 @@ export function attachmentScene(elements, files, cardImages) {
       status: "saved",
       scale: [1, 1],
       crop: null,
-      link: null,
       backgroundColor: "transparent",
-      customData: undefined,
     });
   }
   return { elements: [...others, ...images], files: outFiles };

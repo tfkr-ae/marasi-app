@@ -70,7 +70,7 @@
 			shownId = next.id;
 			recorded = JSON.stringify({ operations: next.operations ?? [], inputs: next.inputs ?? [""] });
 		} catch (err) {
-			dispatch("error", { message: String(err?.message ?? err) });
+			dispatch("error", { error: err });
 		} finally {
 			dispatch("loading", false);
 		}
@@ -108,7 +108,7 @@
 		try {
 			await next.ready();
 		} catch (err) {
-			dispatch("error", { message: String(err?.message ?? err) });
+			dispatch("error", { error: err });
 			return;
 		}
 		adapter = next;

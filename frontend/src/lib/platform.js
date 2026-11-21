@@ -69,12 +69,20 @@ if (typeof window !== "undefined" && window.matchMedia) {
 	query.addEventListener?.("change", (event) => narrow.set(event.matches));
 }
 
-/**
- * Whether the app is a phone-width mobile layout (`mobile` under
- * COMPACT_QUERY). CyberChef shows only from tablet width up, so it leaves
- * the bottom bar and the Marasi menu here.
- */
+/** Whether the app is a phone-width mobile layout (`mobile` under COMPACT_QUERY). */
 export const phoneWidth = derived([mobile, narrow], ([$mobile, $narrow]) => $mobile && $narrow);
 
-/** ⌘K actions phone-width layouts leave out: CyberChef needs a tablet's width. */
-export const PHONE_HIDDEN_ACTIONS = new Set(["global.go-cyberchef", "global.send-to-cyberchef"]);
+/**
+ * Whether the app offers CyberChef: from tablet width up, never at phone
+ * width. The one place that decides it: the bar, the rail, ⌘K, the Ledger
+ * drawer, the editors' Send to CyberChef and the page itself all read this.
+ */
+export const chefShown = derived(phoneWidth, ($phoneWidth) => !$phoneWidth);
+
+/** ⌘K actions that need CyberChef, left out while chefShown is false. */
+export const CHEF_ACTIONS = new Set(["global.go-cyberchef", "global.send-to-cyberchef"]);
+
+/** Whether ⌘K leaves out `actionId` given `mobile` and `chefShown`. */
+export function hiddenInMenu(actionId, { mobile, chefShown }) {
+	return (mobile && MOBILE_HIDDEN_ACTIONS.has(actionId)) || (!chefShown && CHEF_ACTIONS.has(actionId));
+}

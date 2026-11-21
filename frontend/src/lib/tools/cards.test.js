@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { attachmentScene, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, fitCard, newCardElement, placeCard, sourceOfLink } from "./cards.js";
+import { artifactScene, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, fitCard, newCardElement, placeCard, sourceOfLink } from "./cards.js";
 
 const pairRow = { ID: "p-1", Number: 7, Method: "GET", Path: "/login" };
 
@@ -125,18 +125,19 @@ test("the cards an arrow would bind to, from either form of suggested binding", 
   assert.equal(suggestedCardIds({}).size, 0);
 });
 
-test("an attachment draws each card as an image at its size on screen, after every other element", () => {
+test("an Artifact draws each card as an image at its size on screen, after every other element, keeping its source", () => {
   const a = card("a", 10, 20, 140);
   const arrow = { id: "arrow", type: "arrow", x: 0, y: 0, width: 50, height: 50, isDeleted: false };
   const b = card("b", 500, 20, 120);
-  const { elements, files } = attachmentScene([a, arrow, b], { f0: { id: "f0" } }, {
+  const { elements, files } = artifactScene([a, arrow, b], { f0: { id: "f0" } }, {
     a: "data:image/png;base64,AAA",
     b: "data:image/png;base64,BBB",
   });
   assert.deepEqual(elements.map((e) => e.type), ["arrow", "image", "image"]);
   const image = elements[1];
   assert.deepEqual([image.id, image.x, image.y, image.width, image.height], ["a", 10, 20, CARD_WIDTH, 140]);
-  assert.equal(image.link, null);
+  assert.equal(image.link, "marasi://finding/a");
+  assert.deepEqual(image.customData, { source: { kind: "finding", id: "a" } });
   assert.equal(files[image.fileId].dataURL, "data:image/png;base64,AAA");
   assert.equal(files[image.fileId].mimeType, "image/png");
   assert.ok(files.f0, "the drawing's own files stay");

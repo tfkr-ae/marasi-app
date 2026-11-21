@@ -45,7 +45,7 @@
 				{/if}
 				<button
 					type="button"
-					class="btn-icon btn-icon-sm h-5 w-5 opacity-50 hover:opacity-100"
+					class="btn-icon btn-icon-sm h-5 w-5 opacity-50"
 					title="Delete {noun}"
 					aria-label="Delete {doc.name}"
 					on:click={() => onDelete(doc.id)}><X size="12" /></button
@@ -54,7 +54,7 @@
 		{/each}
 		<button
 			type="button"
-			class="btn-icon btn-icon-sm self-center opacity-70 hover:opacity-100"
+			class="btn-icon btn-icon-sm self-center opacity-70"
 			title="New {noun}"
 			aria-label="New {noun}"
 			data-testid="document-new"

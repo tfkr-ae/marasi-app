@@ -2,12 +2,12 @@
 	// A card on a drawing, drawn by the app over the canvas as an Excalidraw
 	// embeddable, in the app's own classes, so its colours are the Ledger's
 	// and the Logbook's in either mode. It follows its source live: the
-	// Logbook store for records, pairRows for pairs.
+	// Logbook store for records, pairRowsStore for pairs.
 	import { afterUpdate } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { logbookStore } from "../../stores/logbookStore.js";
 	import { highlightPalette } from "../../stores/highlightsStore.js";
-	import { pairRows } from "./toolItems.js";
+	import { pairRows } from "../../stores/pairRowsStore.js";
 	import { cardContent } from "./cardContent.js";
 
 	/** { kind, id } */

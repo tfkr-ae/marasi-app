@@ -1,5 +1,5 @@
 // What a card shows, as the app's own classes: CardView.svelte draws it on
-// screen, and cardImage.js draws it light for an attachment. Plain
+// screen, and cardImage.js draws it light for a Drawing's Artifact. Plain
 // functions, so they load under node.
 //
 // cardContent(source, item, { palette, light, findingCount }) →
@@ -12,8 +12,7 @@
 import { SEVERITY_BADGE } from "../logbook/severityColors.js";
 import { METHOD_CLASS, statusClass, tertiaryVariant } from "../launchpad/format.js";
 import { formatSize, protocolText, shortType } from "../ledger/table.js";
-
-export const CARD_LABEL = { pair: "Pair", finding: "Finding", testCase: "Test case" };
+import { recordLabel, recordName } from "./recordKinds.js";
 
 /** The neutral chip, as the Ledger and Logbook draw a number or tag. */
 export const CHIP = "bg-surface-200 dark:bg-surface-700";
@@ -54,7 +53,7 @@ function findingContent(finding) {
   return {
     accent: { classes: SEVERITY_BADGE[finding.Severity] ?? "bg-surface-400" },
     chips,
-    title: { text: finding.Title || "Untitled finding", mono: false },
+    title: { text: recordName("finding", finding), mono: false },
     lines: finding.WriteUp ? [{ text: oneLine(finding.WriteUp) }] : [],
     footer: [count(finding.Requests?.length ?? 0, "pair"), count(finding.Artifacts?.length ?? 0, "artifact")].join(" · "),
   };
@@ -63,11 +62,11 @@ function findingContent(finding) {
 function testCaseContent(testCase, light, findingCount) {
   const chips = [];
   if (testCase.Category) chips.push({ text: testCase.Category, classes: tertiaryVariant(light), bold: true });
-  for (const tag of (testCase.Tags ?? []).slice(0, 3)) chips.push({ text: `#${tag}`, classes: CHIP });
+  for (const tag of testCase.Tags ?? []) chips.push({ text: `#${tag}`, classes: CHIP });
   return {
     accent: { classes: "bg-tertiary-500" },
     chips,
-    title: { text: testCase.Title || "Untitled test case", mono: false },
+    title: { text: recordName("testCase", testCase), mono: false },
     lines: testCase.Description ? [{ text: oneLine(testCase.Description) }] : [],
     footer: [
       count(testCase.Requests?.length ?? 0, "pair"),
@@ -78,7 +77,7 @@ function testCaseContent(testCase, light, findingCount) {
 }
 
 export function cardContent(source, item, { palette = [], light = true, findingCount = 0 } = {}) {
-  const label = CARD_LABEL[source.kind] ?? source.kind;
+  const label = recordLabel(source.kind);
   if (!item) {
     return {
       label,

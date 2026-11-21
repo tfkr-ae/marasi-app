@@ -174,3 +174,14 @@ test("duplicate copies a document without its Artifacts", () => {
   recipes.open(first.id);
   assert.equal(Object.keys(recipes.current().attached).length, 1, "the original keeps its Artifacts");
 });
+
+test("a binding stays live until the project changes, so a late write can be dropped", () => {
+  const { documents, drawings } = setup();
+  const link = drawings.bind();
+  assert.equal(link.live(), true);
+  documents.useProject("/p/one.marasi");
+  assert.equal(link.live(), true, "the same project (a reconnect) keeps it live");
+  documents.useProject("/p/two.marasi");
+  assert.equal(link.live(), false);
+  assert.equal(drawings.bind().live(), true);
+});

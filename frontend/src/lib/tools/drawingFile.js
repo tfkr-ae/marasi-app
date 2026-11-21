@@ -1,9 +1,9 @@
 // The file Attach… uploads for a Drawing: SVG (the default) or PNG, with
 // the editable scene embedded. Its cards are redrawn light at their size on
-// screen and drawn after every other element (attachmentScene), so an arrow
+// screen and drawn after every other element (artifactScene), so an arrow
 // running under a card is hidden as it is on screen, and the canvas is light
 // whatever mode the app is in.
-import { attachmentScene, isCard } from "./cards.js";
+import { artifactScene, isCard } from "./cards.js";
 import { cardImage } from "./cardImage.js";
 
 export const DRAWING_FORMATS = [
@@ -18,7 +18,7 @@ export async function drawingFile(lib, api, name, format) {
   const elements = api.getSceneElements();
   const images = {};
   for (const element of elements) if (isCard(element)) images[element.id] = await cardImage(element);
-  const scene = attachmentScene(elements, api.getFiles(), images);
+  const scene = artifactScene(elements, api.getFiles(), images);
   const appState = {
     exportEmbedScene: true,
     exportBackground: true,

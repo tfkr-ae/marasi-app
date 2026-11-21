@@ -28,7 +28,7 @@
 
 <script>
 	// Attach… for a tool document: pick a finding or test case, and the
-	// document goes there as an Artifact (attachments.js). Attaching again to
+	// document goes there as an Artifact (documentArtifacts.js). Attaching again to
 	// a record asks "Replace <file> on <record>?" and replaces only the
 	// Artifact this document made. Opened through modalStore with
 	// `component: { ref: AttachDialog, props: { documents, docId, noun,
@@ -37,8 +37,9 @@
 	import { logbookStore } from "../../stores/logbookStore.js";
 	import { primaryVariant, neutralVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
-	import { attachments, recordTitle } from "./toolItems.js";
-	import { recordKey } from "./attachments.js";
+	import { documentArtifacts, recordTitle } from "./toolItems.js";
+	import { recordKey } from "./documentArtifacts.js";
+	import { RECORD_KINDS, recordLabel, recordName, recordsOf } from "./recordKinds.js";
 
 	/** A toolDocuments collection. */
 	export let documents;
@@ -63,27 +64,29 @@
 
 	$: doc = $documents.items.find((d) => d.id === docId);
 	$: needle = filter.trim().toLowerCase();
-	$: rows = [
-		...$logbookStore.findings.map((record) => ({ kind: "finding", record })),
-		...$logbookStore.testCases.map((record) => ({ kind: "testCase", record })),
-	].filter(({ record }) => (record.Title ?? "").toLowerCase().includes(needle));
+	$: rows = Object.keys(RECORD_KINDS)
+		.flatMap((kind) => recordsOf($logbookStore, kind).map((record) => ({ kind, record })))
+		.filter(({ record }) => (record.Title ?? "").toLowerCase().includes(needle));
 	$: if (!rows.some((row) => row.kind === chosen?.kind && String(row.record.ID) === String(chosen?.id))) chosen = null;
 
 	const close = () => modalStore.close();
-	const label = (kind) => (kind === "finding" ? "Finding" : "Test case");
 
 	async function submit() {
 		if (!chosen || !doc || busy) return;
-		const earlier = attachments.previous(doc, chosen);
+		const earlier = documentArtifacts.previous(doc, chosen);
 		if (earlier && !confirming) {
-			confirming = { filename: earlier.filename, record: `${label(chosen.kind)} “${recordTitle(chosen.kind, chosen.id)}”` };
+			confirming = { filename: earlier.filename, record: `${recordLabel(chosen.kind)} “${recordTitle(chosen.kind, chosen.id)}”` };
 			return;
 		}
 		busy = true;
+		// The document's Artifacts are written back to the project it is in.
+		const project = documents.bind();
+		const target = doc;
 		try {
 			const file = await makeFile($format);
-			const attached = await attachments.attach(doc, chosen, file);
-			documents.change(doc.id, { attached });
+			const attached = await documentArtifacts.attach(target, chosen, file);
+			if (!project.live()) return;
+			documents.change(target.id, { attached });
 			toastStore.trigger({ message: `Attached ${file.name}`, background: "variant-filled-success" });
 			close();
 		} catch (err) {
@@ -99,7 +102,7 @@
 	<div class="card w-modal space-y-3 bg-surface-50 p-4 shadow-xl dark:bg-surface-800" data-testid="attach-dialog">
 		<header class="text-base font-bold">Attach “{doc.name}”</header>
 		{#if confirming}
-			<p class="text-sm" data-testid="attach-replace">Replace {confirming.filename} on {confirming.record}?</p>
+			<p class="text-xs" data-testid="attach-replace">Replace {confirming.filename} on {confirming.record}?</p>
 			<div class="flex justify-end gap-2">
 				<button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" on:click={() => (confirming = null)}>Back</button>
 				<button type="button" class="btn btn-sm {primaryVariant($modeCurrent)}" disabled={busy} on:click={submit}>Replace</button>
@@ -132,8 +135,8 @@
 								submit();
 							}}
 						>
-							<span class="w-16 shrink-0 opacity-60">{label(kind)}</span>
-							<span class="min-w-0 flex-1 truncate">{record.Title || `Untitled ${label(kind).toLowerCase()}`}</span>
+							<span class="w-16 shrink-0 opacity-60">{recordLabel(kind)}</span>
+							<span class="min-w-0 flex-1 truncate">{recordName(kind, record)}</span>
 							{#if doc.attached?.[recordKey(kind, record.ID)]}<span class="shrink-0 opacity-60">attached</span>{/if}
 						</button>
 					</li>

@@ -29,7 +29,6 @@ import { lineWrap } from "../../stores";
 import { testCaseStore } from "../../stores/testCaseStore";
 import { findingStore } from "../../stores/findingStore";
 import { ledgerStore, focusedPair } from "../../stores/ledgerStore";
-import { addPairToDrawing } from "../tools/addToDrawing.js";
 
 /**
  * The menus over the page. `table()`, `dock()`, `sitemapFind()` and
@@ -345,12 +344,11 @@ export function createLedgerMenus({
 
 	// The drawer's rail and details column run the same handlers as the
 	// shortcuts, by action id. Only drawer-open and WebSocket actions are in
-	// it, so a rail button with a drawer-closed id does nothing.
-	const drawerHandlers = new Map([
-		...[websocketDrawerMenuItem, ...drawerMenu].map(({ actionId, handler }) => [actionId, handler]),
-		// A global action the rail shows for the drawer's pair.
-		["global.add-to-drawing", () => addPairToDrawing(toastStore, focusedPair(get(ledgerStore)))],
-	]);
+	// it; the page runs a global id (Add to Drawing, Send to CyberChef)
+	// through the dispatcher.
+	const drawerHandlers = new Map(
+		[websocketDrawerMenuItem, ...drawerMenu].map(({ actionId, handler }) => [actionId, handler]),
+	);
 
 	return { ledgerMenu, drawerMenu, websocketDrawerMenuItem, drawerHandlers };
 }

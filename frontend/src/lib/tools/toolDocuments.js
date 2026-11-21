@@ -7,9 +7,11 @@
 //   { noun, blank() → the kind's own fields, isEmpty(doc) }
 // Every document has { id, name, attached } beside those fields. `attached`
 // maps "<record kind>:<record id>" to the Artifact the document made there
-// (attachments.js); a duplicate starts with none. `kind(name)` returns
+// (documentArtifacts.js); a duplicate starts with none. `kind(name)` returns
 // that kind's collection, a Svelte store of { items, openId } with
-// create, open, rename, duplicate, remove and change. `openCounts` is a
+// create, open, rename, duplicate, remove and change, and bind(): a
+// { live() } that turns false once another project's documents replace
+// these, for work that writes back after an await. `openCounts` is a
 // store of { <kind>: number of non-empty documents }, which the app reports
 // to Go so switching the project or quitting can ask first.
 import { derived, get, writable } from "svelte/store";
@@ -40,6 +42,8 @@ function createCollection(kindName, kind, newId) {
     return { items: [first], openId: first.id, made: 1 };
   };
   const store = writable(fresh());
+  // Bumped by reset(), when another project's documents replace these.
+  let epoch = 0;
 
   const update = (fn) => store.update((state) => fn(state) ?? state);
   const replace = (id, fn) =>
@@ -47,7 +51,14 @@ function createCollection(kindName, kind, newId) {
 
   return {
     subscribe: (run) => store.subscribe(({ items, openId }) => run({ items, openId })),
-    reset: () => store.set(fresh()),
+    reset() {
+      epoch++;
+      store.set(fresh());
+    },
+    bind() {
+      const bound = epoch;
+      return { live: () => bound === epoch };
+    },
     current() {
       const { items, openId } = get(store);
       return items.find((doc) => doc.id === openId) ?? items[0];

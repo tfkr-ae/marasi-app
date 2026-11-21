@@ -48,7 +48,7 @@
 	import { updatePanelModal } from "../../updates.js";
 	import { connectionsModal } from "../../connection/modal.js";
 	import { startChrome } from "../../chrome.js";
-	import { MOBILE_HIDDEN_ACTIONS, PHONE_HIDDEN_ACTIONS, mobile, phoneWidth } from "../../platform.js";
+	import { chefShown, hiddenInMenu, mobile } from "../../platform.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
 		extensions,
@@ -82,8 +82,7 @@
 	} from "../../keybindings/catalog.js";
 	import { OPEN_MENU } from "../../keybindings/dispatcher.js";
 	import { page } from "$app/stores";
-	import { ledgerStore, focusedPair } from "../../../stores/ledgerStore";
-	import { addPairToDrawing } from "../../tools/addToDrawing.js";
+	import { addOpenPairToDrawing } from "../../tools/addToDrawing.js";
 	import { platformFromDesktopOS } from "../../keybindings/platform.js";
 	import { sendFocusedToChef, trackEditors } from "../../tools/cyberchef/sendAction.js";
 
@@ -126,10 +125,9 @@
 		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		// The Ledger's open pair, on the last-opened drawing.
-		"global.add-to-drawing": () =>
-			addPairToDrawing(toastStore, get(page).url.pathname.startsWith("/ledger") ? focusedPair(get(ledgerStore)) : null),
-		// CyberChef is hidden on phones (PHONE_HIDDEN_ACTIONS).
-		"global.send-to-cyberchef": () => get(phoneWidth) || sendFocusedToChef(toastStore),
+		"global.add-to-drawing": () => addOpenPairToDrawing(toastStore, get(page).url.pathname),
+		// Without CyberChef (chefShown), its shortcut does nothing.
+		"global.send-to-cyberchef": () => get(chefShown) && sendFocusedToChef(toastStore),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
 		"global.download-certificate": () => downloadCertificate(toastStore),
@@ -288,8 +286,7 @@
 		.filter(
 			(action) =>
 				action.id !== OPEN_MENU &&
-				!($mobile && MOBILE_HIDDEN_ACTIONS.has(action.id)) &&
-				!($phoneWidth && PHONE_HIDDEN_ACTIONS.has(action.id)),
+				!hiddenInMenu(action.id, { mobile: $mobile, chefShown: $chefShown }),
 		)
 		.map((action) =>
 			entry(action, {

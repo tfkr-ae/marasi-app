@@ -6,8 +6,8 @@
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { toastError } from "../toasts.js";
-	import { attachedTo } from "./attachments.js";
-	import { attachments, recordTitle } from "./toolItems.js";
+	import { artifactRecords } from "./documentArtifacts.js";
+	import { documentArtifacts, recordTitle } from "./toolItems.js";
 
 	/** A toolDocuments collection. */
 	export let documents;
@@ -22,14 +22,16 @@
 	let busy = false;
 
 	$: doc = $documents.items.find((d) => d.id === docId);
-	$: records = doc ? attachedTo(doc, recordTitle) : [];
+	$: records = doc ? artifactRecords(doc, recordTitle) : [];
 
 	async function confirm() {
 		if (!doc || busy) return;
 		busy = true;
+		const project = documents.bind();
+		const target = doc;
 		try {
-			if (alsoRemove) await attachments.detachAll(doc);
-			documents.remove(doc.id);
+			if (alsoRemove) await documentArtifacts.detachAll(target);
+			if (project.live()) documents.remove(target.id);
 			modalStore.close();
 		} catch (err) {
 			toastError(toastStore, "Couldn't remove the Artifacts", err);
@@ -42,8 +44,8 @@
 {#if $modalStore[0] && doc}
 	<div class="card w-modal-slim space-y-3 bg-surface-50 p-4 shadow-xl dark:bg-surface-800" data-testid="delete-document">
 		<header class="text-base font-bold">Delete {noun}?</header>
-		<p class="text-sm">Attached to {records.join(", ")}.</p>
-		<label class="flex items-center gap-2 text-sm">
+		<p class="text-xs">Attached to {records.join(", ")}.</p>
+		<label class="flex items-center gap-2 text-xs">
 			<input type="checkbox" class="checkbox" data-testid="delete-also-remove" bind:checked={alsoRemove} />
 			Also remove from {records.length === 1 ? "it" : "them"}
 		</label>
