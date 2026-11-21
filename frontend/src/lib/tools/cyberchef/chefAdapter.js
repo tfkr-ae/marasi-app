@@ -99,8 +99,12 @@ export function chefAdapter(win) {
       return dish ? await output.getDishStr(dish) : "";
     },
 
+    /**
+     * Bakes as CyberChef's Bake button does (and cancels a running bake).
+     * app.bake() would resume from a breakpoint's position instead.
+     */
     bake() {
-      app().bake();
+      app().manager.controls.bakeClick();
     },
 
     /** Shows a recipe: its operations, then each input in its own tab. */

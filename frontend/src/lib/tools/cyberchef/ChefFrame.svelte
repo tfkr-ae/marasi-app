@@ -72,9 +72,19 @@
 		}
 	}
 
-	// CyberChef's Save and Load recipe buttons are the app's Rename and
-	// Switch; its local storage never holds recipes.
-	function interceptRecipeButtons(doc) {
+	// CyberChef's Save and Load recipe buttons, and its Load key (Ctrl+Alt+L),
+	// are the app's Rename and Switch; its local storage never holds recipes.
+	function interceptRecipeButtons(win, doc) {
+		win.addEventListener(
+			"keydown",
+			(event) => {
+				if (!(event.ctrlKey && event.altKey && event.code === "KeyL")) return;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				dispatch("loadRecipe");
+			},
+			true,
+		);
 		doc.addEventListener(
 			"click",
 			(event) => {
@@ -100,7 +110,7 @@
 		adapter = next;
 		stopKeys();
 		stopKeys = forwardMenuShortcuts(win);
-		interceptRecipeButtons(frame.contentDocument);
+		interceptRecipeButtons(win, frame.contentDocument);
 		applyTheme(!$modeCurrent, $textSize.scale);
 		loading = show(recipe);
 		await loading;
