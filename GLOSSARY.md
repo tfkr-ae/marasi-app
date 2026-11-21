@@ -116,6 +116,28 @@ _Avoid_: send, release, continue, accept
 Ending a held item so it never reaches its destination. Marasi drops an item itself when its client leaves.
 _Avoid_: discard, cancel, block, reject
 
+### Logbook
+
+**Artifact**:
+A file attached to exactly one finding or test case, as Marasi defines it, such as a screenshot or a log. It is removed with its record. It is evidence: the Logbook shows it beside the record's linked pairs, and the record's report includes it.
+_Avoid_: artefact, attachment, upload, export
+
+### Excalidraw
+
+**Drawing**:
+A named Excalidraw document in a project. A project can have many, and the researcher switches between them. Attaching a drawing to a finding or test case adds an Artifact of it there, and attaching it again replaces that Artifact. Deleting a drawing leaves its Artifacts unless the researcher asks to remove them.
+_Avoid_: diagram, canvas, scene, board
+
+**Card**:
+A pair, finding or test case placed on a drawing. It shows its source's current details, in the app's own colours, and opens its source. The researcher owns its position and width, and arrows can connect to it. A card whose source is deleted stays on the drawing, marked deleted.
+_Avoid_: element, snapshot, embed
+
+### CyberChef
+
+**Recipe**:
+A named CyberChef document in a project: its operations and its inputs. A project can have many, and the researcher switches between them. Its output is never kept, because CyberChef works it out again. Attaching a recipe to a finding or test case adds an Artifact with its input, operations and output.
+_Avoid_: bake, chef session, saved recipe (CyberChef's own, which the app does not use)
+
 ### Marasi menu keybindings
 
 **Menu action**:
