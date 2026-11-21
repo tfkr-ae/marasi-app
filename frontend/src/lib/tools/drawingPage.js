@@ -8,8 +8,8 @@ import { FALLBACK_VIEWPORT, sceneView } from "./drawingCards.js";
 /**
  * `pairRows` is { track(ids) → stop, rows() → { id: row } }; `drawingCards`
  * the app's (drawingCards.js); `setCanvasSize(size)` records the canvas's
- * size for Add to Drawing; `goto(path)`, `ledger.goToNumber(n)` and
- * `logbook.open(kind, id)` go to a card's source.
+ * size for Add to Drawing; `goto(path)`, `ledger.goToNumber(n)` with
+ * `ledger.selectPair(id)`, and `logbook.open(kind, id)` go to a card's source.
  */
 export function createDrawingPage({ pairRows, drawingCards, setCanvasSize, goto, ledger, logbook }) {
   let trackedKey = null;
@@ -62,7 +62,11 @@ export function createDrawingPage({ pairRows, drawingCards, setCanvasSize, goto,
       if (source.kind === "pair") {
         const number = pairRows.rows()[String(source.id)]?.Number ?? last?.Number;
         await goto("/ledger");
-        if (number != null) ledger.goToNumber(number);
+        if (number == null) return;
+        // goToNumber selects a pair it reads in, but only finds one the
+        // table already shows; select it, so its drawer opens.
+        const { pair } = await ledger.goToNumber(number);
+        if (pair) ledger.selectPair(pair.ID);
         return;
       }
       logbook.open(source.kind, source.id);
