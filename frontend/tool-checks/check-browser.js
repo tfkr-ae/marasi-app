@@ -136,29 +136,31 @@ await report.check("⌘/ opens Excalidraw's help dialog", async () => {
   }
 });
 
-// Cards (issue 02) are embeddables drawn by renderEmbeddable. Until the
-// app's card lands, the check drives Excalidraw's embeddable API with a
-// stand-in card, which is the part a bump can break.
-const CARD = {
-  type: "embeddable",
-  x: 700,
-  y: 300,
-  width: 320,
-  height: 140,
-  link: "marasi://pair/1",
-  customData: { source: { kind: "pair", id: "1" } },
-  backgroundColor: "#ffffff",
-  fillStyle: "solid",
-  roundness: null,
-};
+// A finding as the Logbook store holds it, delivered as its service events
+// would. Its card is the app's own (CardView through cardEmbed.js).
+const FINDING = { ID: 7, Title: "SQL injection in /login", Severity: "High", WriteUp: "", Requests: [], Artifacts: [] };
+const cardEl = `document.querySelector('[data-testid="card"][data-kind="finding"]')`;
+const cardElement = (id) => `harness.cardScene().find((e) => e.id === ${JSON.stringify(id)})`;
+let cardId = null;
 
-await report.check("card embeddable renders, takes an arrow binding, resizes (Excalidraw's embeddable API)", async () => {
-  await page.evaluate(`harness.embeddables({ skeletons: [${JSON.stringify(CARD)}] })`);
-  const card = `document.querySelector('[data-harness-card="marasi://pair/1"]')`;
-  await page.waitFor(card, { message: "renderEmbeddable's card isn't drawn" });
-  const rect = await page.evaluate(`(() => { const r = ${card}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+await report.check("card embeddable renders, accepts an arrow binding, resizes when its content changes", async () => {
+  await page.evaluate(`harness.cards({ findings: [${JSON.stringify(FINDING)}] })`);
+  cardId = await page.evaluate(`harness.addCard({ kind: "finding", id: 7 }, { x: 640, y: 260 })`);
+  await page.waitFor(`${cardEl}?.innerText.includes(${JSON.stringify(FINDING.Title)})`, { message: "the card doesn't show its finding" });
 
-  // Draw an arrow from empty canvas onto the card, as a researcher does.
+  // It fits its content (outside the undo history) and the embeddable
+  // follows: wait for the element's height to settle.
+  let height = 0;
+  for (let i = 0; i < 20; i++) {
+    const now = await page.evaluate(`${cardElement(cardId)}.height`);
+    if (Math.abs(now - height) < 1 && i > 2) break;
+    height = now;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  const rect = await page.evaluate(`(() => { const r = ${cardEl}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+
+  // An arrow drawn from empty canvas onto the card, as a researcher draws it:
+  // the card rings while it would bind, and the arrow binds on release.
   await page.evaluate(`document.querySelector('[data-testid="toolbar-arrow"]').click()`);
   const start = { x: rect.x - 260, y: rect.y + rect.height / 2 };
   const end = { x: rect.x + rect.width * 0.4, y: rect.y + rect.height * 0.6 };
@@ -169,39 +171,50 @@ await report.check("card embeddable renders, takes an arrow binding, resizes (Ex
     const y = start.y + ((end.y - start.y) * i) / 12;
     await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1 });
   }
+  const ringed = await page
+    .waitFor(`${cardEl}?.hasAttribute("data-suggested")`, { timeoutMs: 3000 })
+    .catch(() => false);
   await page.mouse("mouseReleased", end.x, end.y);
-  const binding = await page.waitFor(
-    `(() => {
-      const elements = harness.sceneElements();
-      const card = elements.find((e) => e.type === "embeddable");
-      const arrow = elements.find((e) => e.type === "arrow");
-      return arrow && card && arrow.endBinding?.elementId === card.id ? { card: card.id, arrow: arrow.id } : null;
-    })()`,
+  if (!ringed) throw new Error("the card showed no ring while the arrow would bind");
+  await page.waitFor(
+    `(() => { const arrow = harness.cardScene().find((e) => e.type === "arrow"); return arrow?.endBinding?.elementId === ${JSON.stringify(cardId)}; })()`,
     { timeoutMs: 3000, message: "the arrow drawn onto the card isn't bound to it" },
   );
+  await page.waitFor(`!${cardEl}?.hasAttribute("data-suggested")`, { timeoutMs: 3000, message: "the ring stayed after the arrow bound" });
 
-  // The card's content grew: the embeddable follows the element's size.
-  await page.evaluate(`harness.resizeElement(${JSON.stringify(binding.card)}, { height: ${CARD.height * 2} })`);
-  await page.waitFor(`Math.abs(${card}.getBoundingClientRect().height - ${rect.height * 2}) < 2`, {
-    timeoutMs: 3000,
-    message: `the embeddable didn't follow its element's new height`,
-  });
+  // Its finding gains a write-up elsewhere: the card grows to fit it.
+  await page.evaluate(`harness.changeFinding(${JSON.stringify({ ...FINDING, WriteUp: "The login form passes its username straight into the SQL query. ".repeat(4) })})`);
+  await page.waitFor(`${cardEl}?.innerText.includes("The login form passes")`, { timeoutMs: 3000, message: "the card didn't follow its finding" });
+  await page.waitFor(`${cardElement(cardId)}.height > ${height + 5}`, { timeoutMs: 3000, message: `the card element stayed ${height}px high` });
+  await page.waitFor(
+    `Math.abs(${cardEl}.getBoundingClientRect().height - ${cardElement(cardId)}.height * harness.cardZoom()) < 3`,
+    { timeoutMs: 3000, message: "the card on screen didn't follow its element's new height" },
+  );
+  return `${Math.round(height)}px → ${Math.round(await page.evaluate(`${cardElement(cardId)}.height`))}px`;
 });
-report.pending(
-  "card embeddable: the app's card renders its source and sizes itself to its content",
-  "waits for issue 02 (cards); then mount the island with the app's renderEmbeddable instead of the stand-in",
-);
 
-await report.check("SVG export carries the scene (Excalidraw's export API)", async () => {
-  const { svg, elements } = await page.evaluate("harness.svgRoundTrip()");
-  if (!svg.includes("payload-type:application/vnd.excalidraw+json")) throw new Error("the SVG has no embedded scene");
-  const types = elements.map((e) => e.type).sort().join(",");
-  if (types !== "arrow,embeddable") throw new Error(`the scene loaded back from the SVG holds ${types || "nothing"}`);
+await report.check("SVG export carries the scene and its light card images", async () => {
+  if (!cardId) throw new Error("no card (the card check failed)");
+  // The app in dark mode: the card on screen is dark.
+  await page.evaluate("harness.setDark(true)");
+  await page.waitFor(
+    `(() => { const [r, g, b] = getComputedStyle(${cardEl}).backgroundColor.match(/\\d+/g).map(Number); return r + g + b < 300; })()`,
+    { timeoutMs: 3000, message: "the card on screen didn't turn dark with the app" },
+  );
+  const out = await page.evaluate("harness.attachmentSvg()");
+  await page.evaluate("harness.setDark(false)");
+  if (!out.svg.includes("payload-type:application/vnd.excalidraw+json")) throw new Error("the SVG has no embedded scene");
+  if (/invert\(/.test(out.svg)) throw new Error("the SVG is exported in dark mode");
+  const types = out.elements.map((e) => e.type);
+  const images = types.filter((t) => t === "image").length;
+  if (!types.includes("arrow") || images !== 1 || types.includes("embeddable")) {
+    throw new Error(`the scene loaded back holds ${types.join(", ")}; want the arrow and the card as one image`);
+  }
+  if (types.lastIndexOf("arrow") > types.indexOf("image")) throw new Error("the card image isn't drawn after the arrow");
+  const share = Object.values(out.lightShare)[0];
+  if (!(share > 0.5)) throw new Error(`the card image is dark (${Math.round(share * 100)}% light pixels)`);
+  return `${out.name}, card image ${Math.round(share * 100)}% light`;
 });
-report.pending(
-  "SVG export: cards are light images, drawn after every other element",
-  "waits for issue 02 (Attach); then export through the app's attach code with the app in dark mode",
-);
 
 // ---- CyberChef -----------------------------------------------------------
 

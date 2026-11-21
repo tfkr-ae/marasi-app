@@ -2,9 +2,9 @@
 	// The Excalidraw page: the open project's Drawings as tabs over the
 	// canvas, the Insert panel on the right, and Attach…. Drawings live in
 	// toolDocuments (lib/tools/documents.js), so they stay when the page
-	// unmounts. Cards are drawn by CardView over the canvas (cards.js).
+	// unmounts. Cards are drawn by CardView over the canvas (cardEmbed.js,
+	// cards.js).
 	import { onDestroy } from "svelte";
-	import { writable } from "svelte/store";
 	import { goto } from "$app/navigation";
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Copy, FilePlus, Keyboard, Paperclip, PanelRight, Pencil, Replace, Trash2 } from "lucide-svelte";
@@ -14,19 +14,11 @@
 	import ExcalidrawIsland from "../../lib/tools/ExcalidrawIsland.svelte";
 	import InsertPanel from "../../lib/tools/InsertPanel.svelte";
 	import AttachDialog from "../../lib/tools/AttachDialog.svelte";
-	import CardView from "../../lib/tools/CardView.svelte";
+	import { createCardEmbed } from "../../lib/tools/cardEmbed.js";
 	import { drawingCards, drawings, setCanvasSize } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { drawingKind } from "../../lib/tools/toolDocuments.js";
-	import {
-		DRAG_TYPE,
-		cardSource,
-		fitCard,
-		newCardElement,
-		placeCard,
-		sourceOfLink,
-		suggestedCardIds,
-	} from "../../lib/tools/cards.js";
+	import { DRAG_TYPE, cardSource, newCardElement, placeCard, sourceOfLink } from "../../lib/tools/cards.js";
 	import { sceneView } from "../../lib/tools/drawingCards.js";
 	import { DRAWING_FORMATS, drawingFile } from "../../lib/tools/drawingFile.js";
 	import { pairRows } from "../../lib/tools/toolItems.js";
@@ -40,7 +32,6 @@
 	let api = null;
 	let lib = null;
 	let showInsert = false;
-	const suggested = writable(new Set());
 	let stopApiChange = null;
 	let stopTracking = () => {};
 	let trackedKey = "";
@@ -70,9 +61,7 @@
 		lib = readyLib;
 		stopApiChange?.();
 		stopApiChange = api.onChange((elements, appState) => {
-			const ids = suggestedCardIds(appState);
-			const now = $suggested;
-			if (ids.size !== now.size || [...ids].some((id) => !now.has(id))) suggested.set(ids);
+			cards.noteChange(appState);
 			trackPairs(elements);
 		});
 		trackPairs(api.getSceneElements());
@@ -110,22 +99,6 @@
 		api.updateScene({ elements: [...elements, element], captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY });
 	}
 
-	// A card takes its content's height, outside the undo history, pushing
-	// down the cards it would cover.
-	function fitToContent(id, height) {
-		if (!api || !lib) return;
-		const elements = api.getSceneElementsIncludingDeleted();
-		const fitted = fitCard(elements, id, height);
-		if (!fitted) return;
-		const next = fitted.map((element, i) => {
-			const before = elements[i];
-			return element === before || (element.y === before.y && element.height === before.height)
-				? before
-				: lib.newElementWith(before, { y: element.y, height: element.height });
-		});
-		api.updateScene({ elements: next, captureUpdate: lib.CaptureUpdateAction.NEVER });
-	}
-
 	// Open ↗: the pair in the Ledger, or the record in the Logbook.
 	async function openSource(source, last) {
 		if (source.kind === "pair") {
@@ -138,32 +111,9 @@
 		goto("/logbook");
 	}
 
-	const embed = {
-		accepts: (link) => sourceOfLink(link) !== null,
-		mount(target, element) {
-			let latest = element;
-			const view = new CardView({
-				target,
-				props: {
-					source: cardSource(element) ?? sourceOfLink(element.link),
-					last: element.customData?.last ?? null,
-					suggested: $suggested.has(element.id),
-					onOpen: () => openSource(cardSource(latest) ?? sourceOfLink(latest.link), latest.customData?.last),
-					onSize: (height) => fitToContent(latest.id, height),
-				},
-			});
-			const unsubscribe = suggested.subscribe((ids) => view.$set({ suggested: ids.has(latest.id) }));
-			return {
-				update(next) {
-					latest = next;
-				},
-				destroy() {
-					unsubscribe();
-					view.$destroy();
-				},
-			};
-		},
-	};
+	// Cards over the canvas (cardEmbed.js).
+	const cards = createCardEmbed({ excalidraw: () => (api && lib ? { api, lib } : null), onOpen: openSource });
+	const { embed } = cards;
 
 	function onDragOver(event) {
 		if (event.dataTransfer?.types?.includes(DRAG_TYPE)) {

@@ -7,7 +7,13 @@
 // It is its own Vite app (tool-harness/vite.config.js), outside src/routes,
 // so the app's build never contains it; check-release.js proves that on the
 // release build.
+import "../src/app.css";
+import { modeCurrent } from "@skeletonlabs/skeleton";
 import ExcalidrawIsland from "../src/lib/tools/ExcalidrawIsland.svelte";
+import { createCardEmbed } from "../src/lib/tools/cardEmbed.js";
+import { newCardElement } from "../src/lib/tools/cards.js";
+import { drawingFile } from "../src/lib/tools/drawingFile.js";
+import { logbookStore } from "../src/stores/logbookStore.js";
 import ChefFrame from "../src/lib/tools/cyberchef/ChefFrame.svelte";
 import { installMenuShortcuts, menuDispatcher, menuPalettes, registerMenuActions } from "../src/lib/keybindings/app.js";
 import { MACOS, WINDOWS_LINUX } from "../src/lib/keybindings/platform.js";
@@ -40,7 +46,40 @@ const loadExcalidraw = () => import("@excalidraw/excalidraw");
 
 let island = null;
 let chef = null;
-let raw = null;
+// The cards mode's Excalidraw: { api, lib }.
+let up = null;
+
+// The app's light or dark mode, as the layout sets it: Tailwind's dark
+// class and Skeleton's modeCurrent (true in light).
+function setMode(dark) {
+	document.documentElement.classList.toggle("dark", dark);
+	modeCurrent.set(!dark);
+}
+
+const until = async (check, message, ms = 15000) => {
+	const start = Date.now();
+	while (!check()) {
+		if (Date.now() - start > ms) throw new Error(message);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+};
+
+// The share of near-white pixels in an image (a data URL): a light card is
+// mostly its light surface.
+async function lightShare(dataURL) {
+	const image = new Image();
+	image.src = dataURL;
+	await image.decode();
+	const canvas = document.createElement("canvas");
+	canvas.width = image.naturalWidth;
+	canvas.height = image.naturalHeight;
+	const context = canvas.getContext("2d");
+	context.drawImage(image, 0, 0);
+	const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+	let light = 0;
+	for (let i = 0; i < data.length; i += 4) if (data[i] > 225 && data[i + 1] > 225 && data[i + 2] > 225) light++;
+	return light / (data.length / 4);
+}
 
 window.harness = {
 	events: () => events.map((event) => ({ ...event })),
@@ -83,79 +122,89 @@ window.harness = {
 	},
 
 	setDark(dark) {
+		setMode(dark);
 		island.$set({ dark });
 	},
 
 	/**
-	 * Mounts Excalidraw itself, as the island does, with embeddables passed
-	 * by validateEmbeddable and drawn by renderEmbeddable: the API cards are
-	 * built on (issue 02). Each embeddable draws a stand-in card naming its
-	 * link. Resolves once the API is ready.
+	 * Mounts the island with the app's cards (cardEmbed.js), as the
+	 * Excalidraw page does, over the Logbook's `findings` (as the service's
+	 * events deliver them). Resolves once Excalidraw is up.
 	 */
-	async embeddables({ skeletons = [] } = {}) {
+	async cards({ dark = false, findings = [] } = {}) {
 		reset("/excalidraw");
-		const [react, reactDom, lib] = await Promise.all([
-			import("react"),
-			import("react-dom/client"),
-			loadExcalidraw(),
-			import("@excalidraw/excalidraw/index.css"),
-		]);
-		const React = react.default ?? react;
-		const host = document.createElement("div");
-		host.style.cssText = "position:absolute;inset:0";
-		stage.append(host);
-		const root = (reactDom.default ?? reactDom).createRoot(host);
-		let resolveApi;
-		const ready = new Promise((resolve) => (resolveApi = resolve));
-		root.render(
-			React.createElement(lib.Excalidraw, {
-				initialData: { elements: lib.convertToExcalidrawElements(skeletons), scrollToContent: false },
-				excalidrawAPI: resolveApi,
-				validateEmbeddable: (link) => link.startsWith("marasi://"),
-				renderEmbeddable: (element) =>
-					React.createElement(
-						"div",
-						{ "data-harness-card": element.link, style: { width: "100%", height: "100%", background: "#fff" } },
-						element.link,
-					),
-			}),
-		);
-		raw = { api: await ready, lib };
+		setMode(dark);
+		up = null;
+		for (const finding of findings) logbookStore.applyRecord("finding", finding);
+		const cards = createCardEmbed({ excalidraw: () => up, onOpen: (source) => record("open", source) });
+		let stopChange = () => {};
+		island = new ExcalidrawIsland({
+			target: stage,
+			props: {
+				drawing: { id: "cards", scene: { elements: [] }, files: {} },
+				dark,
+				embed: cards.embed,
+				onReady: (api, lib) => {
+					up = { api, lib };
+					stopChange = api.onChange((_elements, appState) => cards.noteChange(appState));
+				},
+			},
+		});
+		await until(() => up, "Excalidraw didn't come up");
 		teardown = () => {
-			root.unmount();
-			raw = null;
+			stopChange();
+			island.$destroy();
+			island = null;
+			up = null;
 		};
 	},
 
-	/** The mounted embeddables scene, as plain data. */
-	sceneElements() {
-		return raw.api.getSceneElements().map((element) => ({ ...element }));
+	/** Adds a card for `source` at scene point `at`, as Insert does; resolves to its id. */
+	addCard(source, at) {
+		const { api, lib } = up;
+		const [element] = lib.restoreElements([newCardElement(source, at)], null);
+		api.updateScene({
+			elements: [...api.getSceneElementsIncludingDeleted(), element],
+			captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY,
+		});
+		return element.id;
 	},
 
-	/** Sets an element's size, as a card does when its content changes. */
-	resizeElement(id, { width, height }) {
-		const elements = raw.api.getSceneElements().map((element) =>
-			element.id === id
-				? { ...element, width: width ?? element.width, height: height ?? element.height, version: element.version + 1, versionNonce: element.versionNonce + 1 }
-				: element,
-		);
-		raw.api.updateScene({ elements });
+	/** A finding changed elsewhere, as its service event applies it. */
+	changeFinding(fields) {
+		logbookStore.applyRecord("finding", fields);
+	},
+
+	/** The canvas zoom in the cards mode. */
+	cardZoom() {
+		return up.api.getAppState().zoom.value;
+	},
+
+	/** The cards mode's scene, as plain data. */
+	cardScene() {
+		return up.api.getSceneElements().map((element) => ({ ...element }));
 	},
 
 	/**
-	 * Exports the mounted scene as SVG with the scene embedded, then loads it
-	 * back as Excalidraw would load a dropped file.
+	 * The SVG Attach… uploads (drawingFile.js), loaded back as Excalidraw
+	 * loads a dropped file: its text, the elements in drawing order, and how
+	 * light each embedded image is.
 	 */
-	async svgRoundTrip() {
-		const { api, lib } = raw;
-		const svg = await lib.exportToSvg({
-			elements: api.getSceneElements(),
-			appState: { ...api.getAppState(), exportEmbedScene: true, exportBackground: true },
-			files: api.getFiles(),
-		});
-		const text = new XMLSerializer().serializeToString(svg);
+	async attachmentSvg() {
+		const { api, lib } = up;
+		const file = await drawingFile(lib, api, "harness", "svg");
+		const text = await file.text();
 		const loaded = await lib.loadFromBlob(new Blob([text], { type: "image/svg+xml" }), null, null);
-		return { svg: text, elements: loaded.elements.map((element) => ({ id: element.id, type: element.type })) };
+		const images = {};
+		for (const element of loaded.elements) {
+			if (element.type === "image") images[element.id] = await lightShare(loaded.files[element.fileId].dataURL);
+		}
+		return {
+			name: file.name,
+			svg: text,
+			elements: loaded.elements.map(({ id, type }) => ({ id, type })),
+			lightShare: images,
+		};
 	},
 
 	/** Mounts the app's CyberChef frame on `recipe`; resolves once it is ready. */
