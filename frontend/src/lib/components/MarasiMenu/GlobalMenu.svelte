@@ -36,6 +36,7 @@
 		Swords,
 		Sun,
 		ToggleLeft,
+		Brush,
 	} from "lucide-svelte";
 	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -114,6 +115,7 @@
 		"global.go-armory": () => closeAndGoto("/armory"),
 		"global.go-logbook": () => closeAndGoto("/logbook"),
 		"global.go-workshop": () => closeAndGoto("/workshop"),
+		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
@@ -162,6 +164,7 @@
 		"global.go-armory": Swords,
 		"global.go-logbook": BookOpenCheckIcon,
 		"global.go-workshop": ToolIcon,
+		"global.go-excalidraw": Brush,
 		"global.go-settings": Settings,
 		"global.start-chrome": ChromeIcon,
 		"global.download-certificate": Download,

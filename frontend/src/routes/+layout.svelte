@@ -68,6 +68,7 @@
 	} from "../lib/connection/cli.js";
 	import { connectionsModal } from "../lib/connection/modal.js";
 	import { reportUnsavedDrafts } from "../stores/launchpadStore";
+	import { reportOpenToolDocuments } from "../lib/tools/documents.js";
 	import { reportLogbookEdits } from "../stores/logbookStore";
 	import { showExtensionToasts } from "../stores/extensionsStore.js";
 	import { extensionToast } from "../lib/extensions/toast.js";
@@ -145,12 +146,10 @@
 	} from "../lib/keybindings/app.js";
 	let appRailIndex = 0;
 	let showChef = false;
-	let showExcali = false;
 	let showInteract = false;
 
 	// Lazy-loaded components
 	let SvelteChef;
-	let Excalidraw;
 	let Interact;
 
 	// Dynamic imports for heavy components
@@ -160,15 +159,6 @@
 				"../lib/components/SvelteChef.svelte"
 			);
 			SvelteChef = module.default;
-		}
-	};
-
-	const loadExcalidraw = async () => {
-		if (!Excalidraw) {
-			const module = await import(
-				"../lib/components/Excalidraw.svelte"
-			);
-			Excalidraw = module.default;
 		}
 	};
 
@@ -233,11 +223,7 @@
 			label: "Excalidraw",
 			icon: Brush,
 			path: "/excalidraw",
-			go: async () => {
-				await loadExcalidraw();
-				goto("/excalidraw");
-				showExcali = true;
-			},
+			go: () => goto("/excalidraw"),
 		},
 		{
 			id: "interact",
@@ -437,6 +423,7 @@
 		});
 		const stopReportingDrafts = reportUnsavedDrafts();
 		const stopReportingLogbookEdits = reportLogbookEdits();
+		const stopReportingToolDocuments = reportOpenToolDocuments();
 		const stopExtensionToasts = showExtensionToasts((schema) =>
 			toastStore.trigger(extensionToast(schema)),
 		);
@@ -507,6 +494,7 @@
 			stopFollowing();
 			stopReportingDrafts();
 			stopReportingLogbookEdits();
+			stopReportingToolDocuments();
 			removeMenuShortcuts();
 			stopAbandonToasts?.();
 			off("update-available");
@@ -754,11 +742,7 @@
 					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/excalidraw"}
-					on:click={async () => {
-						await loadExcalidraw();
-						goto("/excalidraw");
-						showExcali = true;
-					}}
+					on:click={() => goto("/excalidraw")}
 					bind:group={currentTile}
 					name="Excalidraw"
 					value={appRailIndex++}
@@ -982,12 +966,6 @@
 					<svelte:component
 						this={SvelteChef}
 						isVisible={showChef}
-					/>
-				{/if}
-				{#if Excalidraw && showExcali}
-					<svelte:component
-						this={Excalidraw}
-						isVisible={showExcali}
 					/>
 				{/if}
 				{#if Interact && showInteract}

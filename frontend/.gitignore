@@ -8,3 +8,6 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Excalidraw's fonts, copied from node_modules by excalidrawAssets.js
+/static/excalidraw-assets

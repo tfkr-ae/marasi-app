@@ -74,6 +74,9 @@ type App struct {
 	// unsavedLogbookEdits is whether a Logbook edit session or inline fix
 	// has unsaved input, reported by the frontend.
 	unsavedLogbookEdits atomic.Bool
+	// toolDocs counts the tool pages' in-memory documents
+	// (app_tool_documents.go).
+	toolDocs toolDocuments
 	// activeArmoryRuns is the number of Armory runs active on the service,
 	// reported by the frontend (armory_guard.go). armoryCancelReply waits
 	// for the frontend's answer to a cancel; armoryCancelTimeout bounds it
@@ -337,7 +340,8 @@ func (a *App) SetUnsavedLogbookEdits(unsaved bool) {
 }
 
 // confirmLosingWork asks once before action discards unsaved Launchpad
-// drafts or Logbook edits or cancels active Armory runs, naming whichever
+// drafts, Logbook edits or the tool pages' in-memory documents
+// (app_tool_documents.go), or cancels active Armory runs, naming whichever
 // applies. It returns
 // true when there is nothing to lose, or the user goes ahead and any active
 // Armory runs were cancelled.
@@ -377,6 +381,9 @@ func (a *App) askLosingWork(prompt lossPrompt) (bool, error) {
 	if a.unsavedLogbookEdits.Load() {
 		losses = append(losses, "The Logbook has unsaved edits. "+prompt.action+" will discard them.")
 	}
+	if docs := a.toolDocumentsMessage(prompt.action); docs != "" {
+		losses = append(losses, docs)
+	}
 	hasRuns := a.hasActiveArmoryRuns()
 	if hasRuns {
 		losses = append(losses, prompt.action+" will cancel all active Armory runs.")
@@ -394,9 +401,10 @@ func (a *App) askLosingWork(prompt lossPrompt) (bool, error) {
 }
 
 // hasWorkToLose reports whether closing Marasi now would discard unsaved
-// Launchpad drafts or Logbook edits, or cancel active Armory runs.
+// Launchpad drafts, Logbook edits or tool documents, or cancel active Armory
+// runs.
 func (a *App) hasWorkToLose() bool {
-	return a.unsavedDrafts.Load() > 0 || a.unsavedLogbookEdits.Load() || a.hasActiveArmoryRuns()
+	return a.unsavedDrafts.Load() > 0 || a.unsavedLogbookEdits.Load() || a.hasOpenToolDocuments() || a.hasActiveArmoryRuns()
 }
 
 // draftsMessage describes the unsaved Launchpad drafts, or is empty.
