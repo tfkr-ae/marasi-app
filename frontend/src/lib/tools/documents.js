@@ -1,14 +1,15 @@
 // The app's tool documents (toolDocuments.js): one set per loaded project,
 // reported to Go so switching the project or quitting asks first while any
-// is non-empty. Add a kind here, beside drawings, to give a page its own.
+// is non-empty: drawings and recipes. Add a kind here to give a page its own.
 import { SetOpenToolDocuments } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { loadedProject } from "../../stores/projectStore.js";
-import { createToolDocuments, drawingKind } from "./toolDocuments.js";
+import { createToolDocuments, drawingKind, recipeKind } from "./toolDocuments.js";
 import { createDrawingCards } from "./drawingCards.js";
 
-export const toolDocuments = createToolDocuments({ drawing: drawingKind });
+export const toolDocuments = createToolDocuments({ drawing: drawingKind, recipe: recipeKind });
 
 export const drawings = toolDocuments.kind("drawing");
+export const recipes = toolDocuments.kind("recipe");
 
 // The canvas's size when the Excalidraw page last showed it, for placing a
 // card on a drawing that isn't on screen (Add to Drawing).

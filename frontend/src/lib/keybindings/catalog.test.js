@@ -382,7 +382,7 @@ test("the global menu groups gather Marasi's own actions as the spec lists them"
   );
   assert.deepEqual(inGroup("go"), [
     "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
-    "go-armory", "go-logbook", "go-workshop", "go-excalidraw", "go-settings", "open-extension.port-scanner",
+    "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-settings", "open-extension.port-scanner",
   ]);
   assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener"]);
   assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);

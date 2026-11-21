@@ -60,6 +60,7 @@ export const FACTORY_ACTIONS = [
   action("global.go-armory", "Armory", "Create request templates", "armory,template,attack", primary("6"), { group: "go" }),
   action("global.go-logbook", "Logbook", "Review test cases and findings", "logbook,findings,tests", primary("7"), { group: "go" }),
   action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8"), { group: "go" }),
+  action("global.go-cyberchef", "CyberChef", "Decode, encode and transform data", "cyberchef, chef, decode, encode, recipe", primary("shift+y"), { group: "go" }),
   action("global.go-excalidraw", "Excalidraw", "Draw diagrams", "excalidraw, drawing, diagram, draw", primary("shift+j"), { group: "go" }),
   action("global.go-settings", "Settings", "Configure your settings", "settings", primary(","), { group: "go" }),
   action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"), { group: "browser" }),
@@ -77,6 +78,7 @@ export const FACTORY_ACTIONS = [
   action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0"), { group: "appearance" }),
   action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u"), { group: "project" }),
   action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", primary("9"), { group: "project" }),
+  action("global.send-to-cyberchef", "Send to CyberChef", "Send the selection, or the whole editor, to CyberChef as input", "cyberchef, chef, send, decode, input", primary("e")),
   action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i"), { group: "browser" }),
   ...pageActions("ledger.drawer-closed", [
     ["toggle-settings", "Toggle Query Fields", "Show or hide the query fields and examples", "settings, toggle, query, fields, help", primary("p")],
@@ -221,6 +223,16 @@ export const FACTORY_ACTIONS = [
     ["edit-code", "Edit Workshop", "Jump to code editor", "edit, code", primary("shift+e")],
     ["update-code", "Update Workshop", "Execute Workshop Code", "execute, code", primary("shift+r")],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
+  ]),
+  ...pageActions("cyberchef", [
+    ["bake", "Bake", "Run the recipe on the open input", "bake, run, recipe", primary("shift+enter")],
+    ["new-recipe", "New Recipe", "Start an empty recipe", "new, recipe", primary("shift+n")],
+    ["switch-recipe", "Switch Recipe", "Open another recipe", "switch, open, load, recipe", primary("shift+o")],
+    ["rename-recipe", "Rename Recipe", "Rename the open recipe", "rename, save, recipe", primary("shift+r")],
+    ["duplicate-recipe", "Duplicate Recipe", "Copy the open recipe, to reuse it on new input", "duplicate, copy, recipe", primary("shift+e")],
+    ["insert", "Insert Input…", "Add a pair's request or response as input", "insert, input, pair, request, response", primary("shift+i")],
+    ["attach", "Attach to Finding or Test Case…", "Attach the input, recipe and output as an Artifact", "attach, artifact, finding, test case", primary("shift+a")],
+    ["delete-recipe", "Delete Recipe", "Delete the open recipe", "delete, remove, recipe", primary("shift+d")],
   ]),
   ...pageActions("excalidraw", [
     ["new-drawing", "New Drawing", "Start a new drawing", "new, drawing, create", primary("shift+n")],

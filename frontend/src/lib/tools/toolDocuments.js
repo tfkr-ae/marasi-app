@@ -20,6 +20,14 @@ export const drawingKind = {
   isEmpty: (doc) => !doc.scene?.elements?.some((element) => !element.isDeleted),
 };
 
+// A Recipe keeps CyberChef's operations (its recipe config) and its input
+// tabs, never its output.
+export const recipeKind = {
+  noun: "Recipe",
+  blank: () => ({ operations: [], inputs: [""] }),
+  isEmpty: (doc) => !doc.operations?.length && !(doc.inputs ?? []).some((input) => input.length),
+};
+
 function createCollection(kindName, kind, newId) {
   const blankDocument = (number) => ({
     id: newId(kindName),
@@ -65,6 +73,7 @@ function createCollection(kindName, kind, newId) {
         const index = state.items.findIndex((doc) => doc.id === id);
         if (index === -1) return state;
         const from = state.items[index];
+        // A copy has no Artifacts: those belong to the document that made them.
         made = { ...structuredClone(from), id: newId(kindName), name: `${from.name} copy`, attached: {} };
         const items = [...state.items];
         items.splice(index + 1, 0, made);

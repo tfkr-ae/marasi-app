@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createToolDocuments, drawingKind } from "./toolDocuments.js";
+import { createToolDocuments, drawingKind, recipeKind } from "./toolDocuments.js";
 
 const scene = (count) => ({ elements: Array.from({ length: count }, (_, i) => ({ id: `e${i}` })), appState: {} });
 
@@ -117,4 +117,60 @@ test("a new drawing has no Artifacts, and a copy doesn't take its original's", (
   assert.deepEqual(copy.attached, {});
   const original = get(drawings).items.find((d) => d.id === from.id);
   assert.deepEqual(original.attached, { "finding:f1": artifact });
+});
+
+function recipeSetup() {
+  const documents = createToolDocuments({ drawing: drawingKind, recipe: recipeKind });
+  documents.useProject("/p/one.marasi");
+  return { documents, recipes: documents.kind("recipe") };
+}
+
+test("a recipe starts with no operations and one empty input tab", () => {
+  const { recipes } = recipeSetup();
+  assert.equal(recipes.current().name, "Recipe 1");
+  assert.deepEqual(recipes.current().operations, []);
+  assert.deepEqual(recipes.current().inputs, [""]);
+});
+
+test("two recipes keep their own operations and inputs across switching", () => {
+  const { recipes } = recipeSetup();
+  const first = recipes.current();
+  recipes.change(first.id, { operations: [{ op: "From Base64", args: [] }], inputs: ["aGk=", "eW8="] });
+  const second = recipes.create();
+  recipes.change(second.id, { operations: [{ op: "To Hex", args: [] }], inputs: ["abc"] });
+  recipes.open(first.id);
+  assert.deepEqual(recipes.current().operations, [{ op: "From Base64", args: [] }]);
+  assert.deepEqual(recipes.current().inputs, ["aGk=", "eW8="]);
+  recipes.open(second.id);
+  assert.deepEqual(recipes.current().inputs, ["abc"]);
+});
+
+test("only a recipe with an operation or some input is open work", () => {
+  const { documents, recipes } = recipeSetup();
+  const first = recipes.current();
+  recipes.change(first.id, { operations: [], inputs: ["", ""] });
+  assert.deepEqual(get(documents.openCounts), { drawing: 0, recipe: 0 });
+  recipes.change(first.id, { operations: [], inputs: ["", "x"] });
+  assert.deepEqual(get(documents.openCounts), { drawing: 0, recipe: 1 });
+  const second = recipes.create();
+  recipes.change(second.id, { operations: [{ op: "To Hex", args: [] }], inputs: [""] });
+  assert.deepEqual(get(documents.openCounts), { drawing: 0, recipe: 2 });
+});
+
+test("duplicate copies a document without its Artifacts", () => {
+  const { recipes } = recipeSetup();
+  const first = recipes.current();
+  recipes.change(first.id, {
+    operations: [{ op: "URL Decode", args: [] }],
+    inputs: ["a%20b"],
+    attached: { "finding:7": { artifactId: 12, filename: "Recipe 1.cyberchef.txt" } },
+  });
+  const copy = recipes.duplicate(first.id);
+  assert.equal(recipes.current().id, copy.id);
+  assert.equal(copy.name, "Recipe 1 copy");
+  assert.deepEqual(copy.operations, [{ op: "URL Decode", args: [] }]);
+  assert.deepEqual(copy.inputs, ["a%20b"]);
+  assert.deepEqual(copy.attached, {});
+  recipes.open(first.id);
+  assert.equal(Object.keys(recipes.current().attached).length, 1, "the original keeps its Artifacts");
 });
