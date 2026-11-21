@@ -14,7 +14,7 @@
 	import { recipes } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { recipeKind } from "../../lib/tools/toolDocuments.js";
-	import { chefInbox, drainInbox } from "../../lib/tools/cyberchef/send.js";
+	import { chefInbox, drainInbox, pairText } from "../../lib/tools/cyberchef/send.js";
 	import { recipeFile } from "../../lib/tools/cyberchef/recipeFile.js";
 	import { ledgerStore } from "../../stores/ledgerStore.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
@@ -73,7 +73,7 @@
 				toastStore.trigger({ message: "No response yet", background: "variant-filled-warning" });
 				return;
 			}
-			chefInbox.update((list) => [...list, raw]);
+			chefInbox.update((list) => [...list, pairText(raw)]);
 		} catch (err) {
 			toastError(toastStore, "Insert failed", err);
 		}
@@ -97,7 +97,7 @@
 					makeFile: async () => {
 						await flush();
 						const recipe = get(recipes).items.find((r) => r.id === id);
-						return recipeFile(recipe, { output: await ready.getOutput(), openTab: ready.openTab() });
+						return recipeFile(recipe, { output: await ready.currentOutput(), openTab: ready.openTab() });
 					},
 				},
 			},

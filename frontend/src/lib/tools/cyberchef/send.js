@@ -40,6 +40,16 @@ export function textOfEditor(el, findView) {
   return { text: empty ? view.state.doc.toString() : view.state.sliceDoc(from, to) };
 }
 
+/**
+ * A pair's raw request or response as Insert puts it into CyberChef: with
+ * LF line endings, as the Ledger shows it and Send to CyberChef takes it
+ * from there (CodeMirror rewrites \r\n to \n), so the same pair is the
+ * same input either way.
+ */
+export function pairText(raw) {
+  return String(raw ?? "").replace(/\r\n/g, "\n");
+}
+
 // Texts sent and not yet put into CyberChef, oldest first. The CyberChef
 // page takes them once its frame is ready.
 export const chefInbox = writable([]);
