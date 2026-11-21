@@ -19,6 +19,7 @@ const TYPE_NAMES = {
   regexp: "regexp.Regexp",
   scope: "compass.Scope",
   wsmsg: "websocket.Message",
+  streammsg: "stream.Message",
   RequestBuilder: "RequestBuilder",
 };
 

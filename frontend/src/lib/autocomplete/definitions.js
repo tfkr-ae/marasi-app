@@ -558,6 +558,28 @@ export const TYPE_DEFINITIONS = {
         },
     },
 
+    "stream.Message": {
+        methods: {
+            id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the message's UUID." },
+            pair_id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the UUID of the request/response pair whose body carries the message." },
+            direction: { args: "()", argLabel: "()", returnType: "string", details: "Returns the direction that carries the message: request (from the client) or response (from the origin)." },
+            framing: { args: "()", argLabel: "()", returnType: "string", details: "Returns the direction's message framing, such as grpc." },
+            flags: { args: "()", argLabel: "()", returnType: "number", details: "Returns the envelope's flags byte." },
+            payload: { args: "()", argLabel: "()", returnType: "string", details: "Returns the payload without its envelope, decompressed when compressed() is true and the encoding is gzip or deflate; as it is on the wire when editable() is false." },
+            text: { args: "()", argLabel: "()", returnType: "string", details: "Returns the payload's text form: protoscope text for a protobuf gRPC, gRPC-Web or Connect message, or the JSON text. nil when the message has no text form or editable() is false." },
+            set_payload: { args: '("${1:payload}")', argLabel: "(str)", returnType: "void", details: "Replaces the payload; the envelope's length follows it. An edited compressed message goes out uncompressed. Ignored, with a proxy log, when editable() is false or a declared length would change." },
+            set_text: { args: '("${1:text}")', argLabel: "(str)", returnType: "void", details: "Replaces the payload with what its text form (as text() shows it) encodes to. Raises an error naming the line and column for text that doesn't parse, or for a message with no text form; pcall it to recover." },
+            length: { args: "()", argLabel: "()", returnType: "number", details: "Returns the payload length in bytes." },
+            compressed: { args: "()", argLabel: "()", returnType: "boolean", details: "Returns whether the envelope's compressed flag is set: the message is compressed on the wire with encoding()." },
+            encoding: { args: "()", argLabel: "()", returnType: "string", details: "Returns the per-message encoding from grpc-encoding or connect-content-encoding, such as gzip; empty when the head names none." },
+            editable: { args: "()", argLabel: "()", returnType: "boolean", details: "Returns whether set_payload and set_text can change the message: false when it is compressed with an encoding other than gzip or deflate." },
+            metadata: { args: "()", argLabel: "()", returnType: "table", details: "Returns the message metadata, keyed by extension name." },
+            set_metadata: { args: "(${1:meta_table})", argLabel: "(table)", returnType: "void", details: "Merges a key-value table into this extension's metadata on the message." },
+            drop: { args: "()", argLabel: "()", returnType: "void", details: "Marks the message to be dropped instead of forwarded. Ignored, with a proxy log, on a direction whose head declares a length." },
+            skip: { args: "()", argLabel: "()", returnType: "void", details: "Stops later extension processing while still forwarding the message." },
+        },
+    },
+
     "http.Request": {
         methods: {
             id: { args: "()", argLabel: "()", returnType: "string", details: "Returns the unique identifier for the request." },

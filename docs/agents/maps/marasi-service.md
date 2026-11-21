@@ -43,13 +43,17 @@ After bumping the pin, run `scripts/record-lua-reference.sh`: it records the pin
 `App` holds no Marasi state. `newApp(configDir)` wires the desktop runtime, the local instance and the keychain; `NewApp` adds the app config. What Go keeps, by file:
 
 - Dialogs, clipboard, events and quitting: `desktop.go`, `dialog.go`, `save_file.go`, and the quit and project-switch confirmation in `app.go` (`confirmLosingWork`: unsaved Launchpad drafts from `SetUnsavedDraftCount`, unsaved Logbook edits from `SetUnsavedLogbookEdits`, which `reportLogbookEdits` in `stores/logbookStore.js` keeps current from `hasUnsavedEdits`, and active Armory runs through `armory_guard.go`). Quitting, `ConfirmProjectSwitch` and `ConfirmFollowProject(project)` (`Stay` or `Load <project>`, for a project another client opened) all ask through it; the frontend opens the project on the service.
-- Window and menu: `main.go`, `menu.go`.
+- Window and menu: `main.go`, `menu.go`. The embedded frontend: `assets.go` (see Embedded frontend).
 - App updates: `update*.go`. Update requests skip a system proxy that is the local instance's proxy listener (`isMarasiListener`, reading `proxy_listener` from `service status` through `localProxyListener`, which tests replace).
 - App config: `config.go`, `config_file.go` and one file per section (`keybindings.go`, `highlights.go`, `saved_queries.go`, `content_type_exclusion.go`, `connections.go`, `update_settings.go`, `cli_config.go`).
 - The keychain: `keychain.go`. The Marasi CLI and the local instance: `cli*.go`, `local_instance.go`. Chrome: `chrome.go`, and its settings in Marasi's `marasi_config.yaml`: `chrome_config.go`.
 - `OSUserName` (`os_user_name.go`), `GetBuildInfo` (`build_info.go`), `CopyCertToClipboard` and `OpenFileDialog` (`app.go`), `ReadUpstreamProxyCAFile` (`upstream_proxy.go`).
 
 The Marasi module (`github.com/tfkr-ae/marasi`) is imported only for its `chrome` launcher package; which services the app supports is the API level range (see API level), not this version. Never import its proxy, repositories or `service` package: anything about projects, traffic or settings stored in a project is an API call from the frontend.
+
+## Embedded frontend
+
+`main.go` embeds `frontend/build`, in which `npm run build` (`vite build`, then `frontend/gzipBuild.js`) replaced every file whose extension is in Wails' type table (HTML, JS, CSS, JSON, maps, wasm, SVG, text, fonts other than woff2, icons) with `<name>.gz` when gzip saves at least 10%; PNGs, woff2 and files without an extension stay as they are. `newAssetHandler` (`assets.go`) serves the build through Wails' own `AssetFileServerFS`, over a filesystem that presents `<name>.gz` as `<name>`, so content types (by the original name), Range, HEAD, `dir/` → `index.html`, `/route` → `route.html` and 404s are Wails' own. Only the `-tags server` build passes gzip through (`serverBuild`): a request that accepts gzip gets the stored bytes with `Content-Encoding: gzip`, and every answer there carries `Vary: Accept-Encoding`. Every native web view gets the file decompressed in Go: WKWebView's `wails://` scheme (macOS, iOS) sends no `Accept-Encoding` and hands the body to the page undecoded, Wails' Android path (`serveAssetForAndroid`) drops request and response headers, and WebView2 and WebKitGTK are untested. Tests: `assets_test.go`, `frontend/gzipBuild.test.js`; `check-release.js` (`scripts/check-tools.sh`) checks that the embedded set is the gzipped one.
 
 ## Bindings
 
