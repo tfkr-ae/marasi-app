@@ -64,6 +64,29 @@ test("the bundled tree is what the roots pull in through the lockfile, nested co
   );
 });
 
+test("an optional package that isn't installed is skipped, an installed one is checked, a missing required one is an error", () => {
+  const lock = {
+    packages: {
+      "": { dependencies: { a: "^1" } },
+      "node_modules/a": { version: "1.0.0", license: "MIT", optionalDependencies: { fsevents: "^2", "native-linux": "^1" } },
+      "node_modules/fsevents": { version: "2.3.3", license: "MIT", optional: true, os: ["darwin"] },
+      "node_modules/native-linux": { version: "1.0.0", license: "GPL-3.0", optional: true, os: ["linux"] },
+    },
+  };
+  const onLinux = (at) => at !== "node_modules/fsevents";
+  assert.deepEqual(
+    bundledPackages(lock, ["a"], onLinux).map((p) => p.name),
+    ["a", "native-linux"],
+  );
+  const onMac = (at) => at !== "node_modules/native-linux";
+  assert.deepEqual(
+    bundledPackages(lock, ["a"], onMac).map((p) => p.name),
+    ["a", "fsevents"],
+  );
+  const required = { packages: { ...lock.packages, "node_modules/a": { version: "1.0.0", dependencies: { b: "^1" } }, "node_modules/b": { version: "1.0.0" } } };
+  assert.throws(() => bundledPackages(required, ["a"], (at) => at !== "node_modules/b"), /b \(node_modules\/b\) is in the lockfile but not installed/);
+});
+
 test("a root missing from the lockfile is an error, not an empty tree", () => {
   assert.throws(() => bundledPackages({ packages: { "": {} } }, ["@excalidraw/excalidraw"]), /@excalidraw\/excalidraw is not installed/);
 });

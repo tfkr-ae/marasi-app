@@ -55,14 +55,23 @@ export function licenceProblems(packages, allow) {
  * dependencies, optional and peer dependencies that are installed, each
  * resolved as Node does, from the nearest node_modules up. Dev-only
  * packages are never reached from a root's runtime dependencies.
+ *
+ * `installed(path)` says whether a lockfile path is on disk. A lockfile
+ * entry npm marks `optional` (fsevents, a platform's native binary) is
+ * skipped when it isn't, and checked when it is; any other entry that
+ * isn't installed is an error.
  */
-export function bundledPackages(lock, roots) {
+export function bundledPackages(lock, roots, installed = () => true) {
   const entries = lock.packages ?? {};
   const resolve = (fromPath, name) => {
     let dir = fromPath;
     for (;;) {
       const candidate = `${dir ? `${dir}/` : ""}node_modules/${name}`;
-      if (entries[candidate]) return candidate;
+      if (entries[candidate]) {
+        if (installed(candidate)) return candidate;
+        if (entries[candidate].optional) return null;
+        throw new Error(`${name} (${candidate}) is in the lockfile but not installed`);
+      }
       if (!dir) return null;
       const index = dir.lastIndexOf("/node_modules/");
       dir = index === -1 ? "" : dir.slice(0, index);

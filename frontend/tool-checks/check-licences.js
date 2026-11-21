@@ -34,10 +34,11 @@ const ALLOW = {
 
 function tree(dir, roots) {
   const lock = JSON.parse(fs.readFileSync(path.join(dir, "package-lock.json"), "utf8"));
-  return bundledPackages(lock, roots).map((pkg) => {
+  const installed = (at) => fs.existsSync(path.join(dir, at, "package.json"));
+  return bundledPackages(lock, roots, installed).map((pkg) => {
     // The installed package.json is the truth; lockfiles often omit `license`.
-    const installed = JSON.parse(fs.readFileSync(path.join(dir, pkg.path, "package.json"), "utf8"));
-    return { ...pkg, license: declaredLicence(installed) };
+    const own = JSON.parse(fs.readFileSync(path.join(dir, pkg.path, "package.json"), "utf8"));
+    return { ...pkg, license: declaredLicence(own) };
   });
 }
 
