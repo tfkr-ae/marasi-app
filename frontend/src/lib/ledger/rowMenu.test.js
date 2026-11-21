@@ -49,11 +49,12 @@ const item = (items, id) => {
 };
 const ids = (items) => items.filter((it) => it?.id).map((it) => it.id);
 
-test("one pair: Launchpad, Armory, Browser view, Finding, Test case, Note, Highlight, Copy, Narrow, Select, Metadata, Delete", () => {
+test("one pair: Launchpad, Armory, Drawing, Browser view, Finding, Test case, Note, Highlight, Copy, Narrow, Select, Metadata, Delete", () => {
   const menu = menuFor([pair("a")], context());
   assert.deepEqual(ids(menu), [
     "launchpad",
     "armory",
+    "drawing",
     "browser-view",
     "finding",
     "testcase",
@@ -480,4 +481,14 @@ test("the browser view shortcut says why the menu disables it", () => {
     disabled: true,
     hint: "No response yet",
   });
+});
+
+test("Add to Drawing takes one pair, with the global action's keys", () => {
+  const one = menuFor([pair(1)]);
+  const item = one.find((i) => i?.id === "drawing");
+  assert.deepEqual(item.action, { type: "add-to-drawing", id: 1 });
+  assert.equal(item.actionId, "global.add-to-drawing");
+  assert.equal(item.disabled, false);
+  const two = menuFor([pair(1), pair(2)]).find((i) => i?.id === "drawing");
+  assert.equal(two.disabled, true);
 });

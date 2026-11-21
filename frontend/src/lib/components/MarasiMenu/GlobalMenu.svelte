@@ -35,9 +35,11 @@
 		Settings,
 		Swords,
 		ChefHat,
+		CookingPot,
 		Sun,
 		ToggleLeft,
 		Brush,
+		Shapes,
 	} from "lucide-svelte";
 	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -79,7 +81,11 @@
 		extensionNavigationActionId,
 	} from "../../keybindings/catalog.js";
 	import { OPEN_MENU } from "../../keybindings/dispatcher.js";
+	import { page } from "$app/stores";
+	import { ledgerStore, focusedPair } from "../../../stores/ledgerStore";
+	import { addPairToDrawing } from "../../tools/addToDrawing.js";
 	import { platformFromDesktopOS } from "../../keybindings/platform.js";
+	import { sendFocusedToChef, trackEditors } from "../../tools/cyberchef/sendAction.js";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -119,6 +125,11 @@
 		"global.go-cyberchef": () => closeAndGoto("/cyberchef"),
 		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
 		"global.go-settings": () => closeAndGoto("/settings"),
+		// The Ledger's open pair, on the last-opened drawing.
+		"global.add-to-drawing": () =>
+			addPairToDrawing(toastStore, get(page).url.pathname.startsWith("/ledger") ? focusedPair(get(ledgerStore)) : null),
+		// CyberChef is hidden on phones (PHONE_HIDDEN_ACTIONS).
+		"global.send-to-cyberchef": () => get(phoneWidth) || sendFocusedToChef(toastStore),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
 		"global.download-certificate": () => downloadCertificate(toastStore),
@@ -169,6 +180,8 @@
 		"global.go-cyberchef": ChefHat,
 		"global.go-excalidraw": Brush,
 		"global.go-settings": Settings,
+		"global.add-to-drawing": Shapes,
+		"global.send-to-cyberchef": CookingPot,
 		"global.start-chrome": ChromeIcon,
 		"global.download-certificate": Download,
 		"global.copy-certificate": Copy,
@@ -291,7 +304,9 @@
 		const unregister = Object.entries(handlers).map(([id, handler]) =>
 			menuDispatcher.register(id, handler),
 		);
+		const stopTracking = trackEditors();
 		return () => {
+			stopTracking();
 			unregister.forEach((fn) => fn());
 			unregisterExtensions.forEach((fn) => fn());
 		};

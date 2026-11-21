@@ -11,6 +11,7 @@
 	import { recipes } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { recipeKind } from "../../lib/tools/toolDocuments.js";
+	import { chefInbox, drainInbox } from "../../lib/tools/cyberchef/send.js";
 	import { neutralVariant } from "../../lib/launchpad/format.js";
 	import { phoneWidth } from "../../lib/platform.js";
 
@@ -38,6 +39,18 @@
 		recipes.duplicate(current.id);
 	};
 	const switchRecipe = () => switchDocument(modalStore, recipes, "recipe", "cyberchef.switch-recipe");
+
+	// Texts sent to CyberChef go in once the frame is ready, each by the
+	// empty-tab rule (chefAdapter.insertInput), and are then recorded.
+	let inserting = Promise.resolve();
+	$: if (adapter && $chefInbox.length) {
+		inserting = inserting
+			.then(() => drainInbox(chefInbox, adapter))
+			.then(flush)
+			.catch((err) =>
+				toastStore.trigger({ message: `CyberChef: ${err?.message ?? err}`, background: "variant-filled-error" }),
+			);
+	}
 
 	function onError(event) {
 		failed = event.detail.message;

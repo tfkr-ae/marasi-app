@@ -107,6 +107,18 @@ test("a second document kind sits beside drawings with its own emptiness rule", 
   assert.deepEqual(get(documents.openCounts), { drawing: 0, recipe: 1 });
 });
 
+test("a new drawing has no Artifacts, and a copy doesn't take its original's", () => {
+  const { drawings } = setup();
+  const from = drawings.current();
+  assert.deepEqual(from.attached, {});
+  const artifact = { kind: "finding", recordId: "f1", artifactId: "a1", filename: "Drawing-1.excalidraw.svg" };
+  drawings.change(from.id, { scene: scene(1), attached: { "finding:f1": artifact } });
+  const copy = drawings.duplicate(from.id);
+  assert.deepEqual(copy.attached, {});
+  const original = get(drawings).items.find((d) => d.id === from.id);
+  assert.deepEqual(original.attached, { "finding:f1": artifact });
+});
+
 function recipeSetup() {
   const documents = createToolDocuments({ drawing: drawingKind, recipe: recipeKind });
   documents.useProject("/p/one.marasi");

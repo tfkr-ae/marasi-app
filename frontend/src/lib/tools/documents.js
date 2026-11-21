@@ -4,11 +4,27 @@
 import { SetOpenToolDocuments } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { loadedProject } from "../../stores/projectStore.js";
 import { createToolDocuments, drawingKind, recipeKind } from "./toolDocuments.js";
+import { createDrawingCards } from "./drawingCards.js";
 
 export const toolDocuments = createToolDocuments({ drawing: drawingKind, recipe: recipeKind });
 
 export const drawings = toolDocuments.kind("drawing");
 export const recipes = toolDocuments.kind("recipe");
+
+// The canvas's size when the Excalidraw page last showed it, for placing a
+// card on a drawing that isn't on screen (Add to Drawing).
+let canvasSize = null;
+export const setCanvasSize = (size) => {
+  canvasSize = size;
+};
+
+export const drawingCards = createDrawingCards(drawings, {
+  viewport: () =>
+    canvasSize ?? {
+      width: typeof window === "undefined" ? 1200 : window.innerWidth,
+      height: typeof window === "undefined" ? 800 : window.innerHeight,
+    },
+});
 
 loadedProject.subscribe((project) => {
   if (project) toolDocuments.useProject(project.path);

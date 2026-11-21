@@ -3,6 +3,7 @@
 	// selected entry's response side by side at full width. It reads the
 	// store and calls its methods; confirmations belong to the page.
 	import CodeMirror from "svelte-codemirror-editor";
+	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
 	import { StreamLanguage } from "@codemirror/language";
 	import { http } from "../httpMode.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
@@ -246,15 +247,18 @@
 			/>
 		{/if}
 		<div class="lp-panes grid min-h-0 flex-1 grid-cols-2" class:hidden={comparing}>
-			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "request"}>
+			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "request"} data-chef-pane>
 				<div class="flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900">
 					<span class="lp-request-title font-bold">
 						{dirty ? "Request draft" : "Request"}
 						{#if dirty}<span class="ml-1 text-warning-500" title="Unsaved draft">●</span>{/if}
 					</span>
-					{#if draftPaused}
-						<span class="lp-wrap-suspended opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
-					{/if}
+					<span class="flex items-center gap-3">
+						{#if draftPaused}
+							<span class="lp-wrap-suspended opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
+						{/if}
+						{#if draft}<SendToChefButton />{/if}
+					</span>
 				</div>
 				<!-- svelte-ignore a11y-no-static-element-interactions -->
 				<div class="lp-editor lp-scroll min-h-0 flex-1 overflow-auto dark:bg-[#282c34]" on:focusin={onEditorFocus}>
@@ -272,7 +276,7 @@
 					{/key}
 				</div>
 			</section>
-			<section class="flex min-h-0 min-w-0 flex-col" class:pane-off={narrowPane !== "response"}>
+			<section class="flex min-h-0 min-w-0 flex-col" class:pane-off={narrowPane !== "response"} data-chef-pane>
 				<div class="flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900">
 					<span class="font-bold">
 						Response
@@ -284,6 +288,8 @@
 							<span class="lp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 						{/if}
 					</span>
+					<span class="flex items-center gap-3">
+					{#if details?.Response}<SendToChefButton />{/if}
 					{#if selectedId}
 						<button
 							class="lp-browser-view flex items-center gap-1 opacity-60 hover:opacity-100 disabled:opacity-30"
@@ -294,6 +300,7 @@
 							<Globe size={12} /> Browser view
 						</button>
 					{/if}
+					</span>
 				</div>
 				<div class="lp-response lp-scroll min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
 					{#if endText}

@@ -10,7 +10,7 @@
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { X } from "lucide-svelte";
 	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
-	import { useMenuActions } from "../../lib/keybindings/app.js";
+	import { menuDispatcher, useMenuActions } from "../../lib/keybindings/app.js";
 	import { canOpenDrawerStream } from "../../lib/websocket/presentation.js";
 	import Dock from "../../lib/dock/Dock.svelte";
 	import { LEDGER_DOCK } from "../../lib/dock/dock.js";
@@ -335,7 +335,7 @@
 						on:maximise={() => ledgerStore.toggleDrawerMaximised()}
 						on:close={closeDrawer}
 						on:expand={(e) => ledgerStore.setDrawerExpanded(e.detail)}
-						on:action={(e) => drawerHandlers.get(e.detail)?.()}
+						on:action={(e) => (drawerHandlers.get(e.detail) ?? (() => menuDispatcher.run(e.detail)))()}
 						on:highlight={(e) => highlightFocused(e.detail)}
 					/>
 				</div>
