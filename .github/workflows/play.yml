@@ -59,6 +59,10 @@ on:
 permissions:
   contents: read
 
+# The frontend build (Excalidraw, React) outgrows Node's default heap.
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
 jobs:
   play:
     concurrency:
