@@ -2,6 +2,10 @@ bin
 .task
 node_modules
 frontend/build
+# CyberChef, built from its pinned tag (frontend/cyberchef/build.js)
+frontend/static/tools/cyberchef/
+frontend/static/tools/cyberchef.tmp/
+.cache/
 frontend/src/lib/bindings/
 build/linux/marasi-app.desktop
 *.syso

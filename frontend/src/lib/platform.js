@@ -61,3 +61,20 @@ export const MOBILE_HIDDEN_SECTIONS = new Set(["browser", "updates"]);
  * become tabs. app.css and the components' styles use the same 40rem.
  */
 export const COMPACT_QUERY = "(max-width: 40rem)";
+
+const narrow = writable(false);
+if (typeof window !== "undefined" && window.matchMedia) {
+	const query = window.matchMedia(COMPACT_QUERY);
+	narrow.set(query.matches);
+	query.addEventListener?.("change", (event) => narrow.set(event.matches));
+}
+
+/**
+ * Whether the app is a phone-width mobile layout (`mobile` under
+ * COMPACT_QUERY). CyberChef shows only from tablet width up, so it leaves
+ * the bottom bar and the Marasi menu here.
+ */
+export const phoneWidth = derived([mobile, narrow], ([$mobile, $narrow]) => $mobile && $narrow);
+
+/** ⌘K actions phone-width layouts leave out: CyberChef needs a tablet's width. */
+export const PHONE_HIDDEN_ACTIONS = new Set(["global.go-cyberchef"]);

@@ -84,7 +84,7 @@
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
 	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
-	import { mobile, mobileCheck, platformCheck } from "../lib/platform.js";
+	import { mobile, mobileCheck, phoneWidth, platformCheck } from "../lib/platform.js";
 	import { applyColourScheme } from "../lib/lightMode.js";
 	import { androidBack } from "../lib/androidBack.js";
 	import { installSwipeToClose } from "../lib/swipeToClose.js";
@@ -144,25 +144,14 @@
 		keybindingCapture,
 	} from "../lib/keybindings/app.js";
 	let appRailIndex = 0;
-	let showChef = false;
 	let showExcali = false;
 	let showInteract = false;
 
 	// Lazy-loaded components
-	let SvelteChef;
 	let Excalidraw;
 	let Interact;
 
 	// Dynamic imports for heavy components
-	const loadSvelteChef = async () => {
-		if (!SvelteChef) {
-			const module = await import(
-				"../lib/components/SvelteChef.svelte"
-			);
-			SvelteChef = module.default;
-		}
-	};
-
 	const loadExcalidraw = async () => {
 		if (!Excalidraw) {
 			const module = await import(
@@ -217,17 +206,10 @@
 		{ id: "compass", label: "Compass", icon: CompassIcon, path: "/compass", go: () => goto("/compass") },
 		{ id: "armory", label: "Armory", icon: Swords, path: "/armory", badge: runningBadge.label, go: () => goto("/armory") },
 		{ id: "workshop", label: "Workshop", icon: ToolIcon, path: "/workshop", go: () => goto("/workshop") },
-		{
-			id: "chef",
-			label: "Chef",
-			icon: ChefHat,
-			path: "/sveltechef",
-			go: async () => {
-				await loadSvelteChef();
-				goto("/sveltechef");
-				showChef = true;
-			},
-		},
+		// CyberChef shows from tablet width up, never in a phone's bar.
+		...($phoneWidth
+			? []
+			: [{ id: "cyberchef", label: "CyberChef", icon: ChefHat, path: "/cyberchef", go: () => goto("/cyberchef") }]),
 		{
 			id: "excalidraw",
 			label: "Excalidraw",
@@ -727,19 +709,16 @@
 					</svelte:fragment>
 					<span>Workshop</span>
 				</AppRailAnchor>
+				{#if !$phoneWidth}
 				<AppRailAnchor
 					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
-						"/sveltechef"}
-					on:click={async () => {
-						await loadSvelteChef();
-						goto("/sveltechef");
-						showChef = true;
-					}}
+						"/cyberchef"}
+					on:click={() => goto("/cyberchef")}
 					bind:group={currentTile}
-					name="Chef"
+					name="CyberChef"
 					value={appRailIndex++}
-					title="Chef"
+					title="CyberChef"
 				>
 					<svelte:fragment slot="lead">
 						<div
@@ -750,6 +729,7 @@
 					</svelte:fragment>
 					<span>CyberChef</span>
 				</AppRailAnchor>
+				{/if}
 				<AppRailAnchor
 					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
@@ -978,12 +958,6 @@
 						<slot />
 					{/key}
 				</div>
-				{#if SvelteChef && showChef}
-					<svelte:component
-						this={SvelteChef}
-						isVisible={showChef}
-					/>
-				{/if}
 				{#if Excalidraw && showExcali}
 					<svelte:component
 						this={Excalidraw}

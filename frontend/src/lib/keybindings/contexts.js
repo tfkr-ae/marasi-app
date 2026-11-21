@@ -133,6 +133,7 @@ export const CONTEXTS = [
     ["logbook", "Logbook"],
     ["compass", "Compass"],
     ["workshop", "Workshop"],
+    ["cyberchef", "CyberChef"],
   ].map(([id, label]) => ({
     id,
     tier: "page",

@@ -34,6 +34,7 @@
 		SendIcon,
 		Settings,
 		Swords,
+		ChefHat,
 		Sun,
 		ToggleLeft,
 	} from "lucide-svelte";
@@ -44,7 +45,7 @@
 	import { updatePanelModal } from "../../updates.js";
 	import { connectionsModal } from "../../connection/modal.js";
 	import { startChrome } from "../../chrome.js";
-	import { MOBILE_HIDDEN_ACTIONS, mobile } from "../../platform.js";
+	import { MOBILE_HIDDEN_ACTIONS, PHONE_HIDDEN_ACTIONS, mobile, phoneWidth } from "../../platform.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
 		extensions,
@@ -114,6 +115,7 @@
 		"global.go-armory": () => closeAndGoto("/armory"),
 		"global.go-logbook": () => closeAndGoto("/logbook"),
 		"global.go-workshop": () => closeAndGoto("/workshop"),
+		"global.go-cyberchef": () => closeAndGoto("/cyberchef"),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
@@ -162,6 +164,7 @@
 		"global.go-armory": Swords,
 		"global.go-logbook": BookOpenCheckIcon,
 		"global.go-workshop": ToolIcon,
+		"global.go-cyberchef": ChefHat,
 		"global.go-settings": Settings,
 		"global.start-chrome": ChromeIcon,
 		"global.download-certificate": Download,
@@ -266,7 +269,12 @@
 
 	$: menuOptions = $menuDispatcher.catalog
 		.inContext("global")
-		.filter((action) => action.id !== OPEN_MENU && !($mobile && MOBILE_HIDDEN_ACTIONS.has(action.id)))
+		.filter(
+			(action) =>
+				action.id !== OPEN_MENU &&
+				!($mobile && MOBILE_HIDDEN_ACTIONS.has(action.id)) &&
+				!($phoneWidth && PHONE_HIDDEN_ACTIONS.has(action.id)),
+		)
 		.map((action) =>
 			entry(action, {
 				intercept: $interceptFlag,

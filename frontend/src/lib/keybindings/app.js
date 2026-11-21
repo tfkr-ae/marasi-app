@@ -41,19 +41,43 @@ menuDispatcher.register(OPEN_MENU, () => menuPalettes.active()?.toggle());
 // handling keep precedence. Keys pressed in a CodeMirror editor are
 // dispatched in the bubble phase instead, after the editor handled them.
 export function installMenuShortcuts(getState) {
+	installedState = getState;
+	const stop = listenForMenuShortcuts(window, getState);
+	return () => {
+		if (installedState === getState) installedState = null;
+		stop();
+	};
+}
+
+// The state getter installMenuShortcuts was given, for frames.
+let installedState = null;
+
+// Sends the keydowns of `target` (a window) through the dispatcher in the two
+// passes installMenuShortcuts describes. Returns the remover.
+export function listenForMenuShortcuts(target, getState) {
 	// An open <dialog> is the Marasi menu (gate.js); a shortcut pressed in it
 	// closes it, then runs.
-	const closeMenu = () => document.querySelector("dialog[open]")?.close();
+	const closeMenu = () => globalThis.document?.querySelector("dialog[open]")?.close();
 	const onKeydown = (event) =>
 		menuDispatcher.dispatch(event, getState(), { closeMenu });
 	const afterEditor = (event) =>
 		menuDispatcher.dispatch(event, getState(), { afterEditor: true, closeMenu });
-	window.addEventListener("keydown", onKeydown, true);
-	window.addEventListener("keydown", afterEditor);
+	target.addEventListener("keydown", onKeydown, true);
+	target.addEventListener("keydown", afterEditor);
 	return () => {
-		window.removeEventListener("keydown", onKeydown, true);
-		window.removeEventListener("keydown", afterEditor);
+		target.removeEventListener("keydown", onKeydown, true);
+		target.removeEventListener("keydown", afterEditor);
 	};
+}
+
+// Sends a same-origin frame's keydowns (CyberChef's window) through the
+// dispatcher as the app window's own, so ⌘K and the page's actions work with
+// focus inside it. Keys no action takes, such as CyberChef's Ctrl+Alt ones,
+// stay with the frame. Returns the remover.
+export function forwardMenuShortcuts(frameWindow) {
+	const getState = installedState;
+	if (!getState) return () => {};
+	return listenForMenuShortcuts(frameWindow, getState);
 }
 
 // Registers [{ actionId, handler }] now and returns a function that removes

@@ -644,7 +644,7 @@ function everyContextState() {
     on("/ledger", requestDrawer(websocketUpgrade)),
     on("/armory"),
     armoryDrawerOpen(),
-    ...["launchpad", "checkpoint", "logbook", "compass", "workshop"].map((page) => on(`/${page}`)),
+    ...["launchpad", "checkpoint", "logbook", "compass", "workshop", "cyberchef"].map((page) => on(`/${page}`)),
     { ...on("/launchpad"), launchpadTreeFocused: true },
     on("/extension/Repeater"),
   ];
@@ -693,4 +693,36 @@ test("Connections… bound in a custom profile opens from every menu context", (
       label,
     );
   }
+});
+
+test("the CyberChef page has its own menu, and Go to CyberChef is ⌘⇧Y everywhere", () => {
+  const dispatcher = mac();
+  const chef = on("/cyberchef");
+  assert.equal(dispatcher.resolve(cmdShift("Enter", "Enter"), chef), "cyberchef.bake");
+  assert.equal(dispatcher.resolve(cmdShift("N", "KeyN"), chef), "cyberchef.new-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("O", "KeyO"), chef), "cyberchef.switch-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("R", "KeyR"), chef), "cyberchef.rename-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("E", "KeyE"), chef), "cyberchef.duplicate-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("I", "KeyI"), chef), "cyberchef.insert");
+  assert.equal(dispatcher.resolve(cmdShift("A", "KeyA"), chef), "cyberchef.attach");
+  assert.equal(dispatcher.resolve(cmdShift("D", "KeyD"), chef), "cyberchef.delete-recipe");
+  // The recipe keys are CyberChef's alone.
+  assert.equal(dispatcher.resolve(cmdShift("Enter", "Enter"), on("/")), null);
+  for (const state of [on("/"), on("/ledger"), chef, on("/workshop")]) {
+    assert.equal(dispatcher.resolve(cmdShift("Y", "KeyY"), state), "global.go-cyberchef", state.route);
+  }
+});
+
+test("⌘K and Bake reach the dispatcher from CyberChef's input editor and its search field", () => {
+  const dispatcher = mac();
+  const chef = on("/cyberchef");
+  const editor = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" ? {} : null) };
+  const search = { tagName: "INPUT", id: "search", closest: () => null };
+  for (const target of [editor, search]) {
+    assert.equal(dispatcher.resolve(keydown("k", "KeyK", { metaKey: true }, target), chef), "global.open-menu", target.tagName);
+    assert.equal(dispatcher.resolve(keydown("Enter", "Enter", { metaKey: true, shiftKey: true }, target), chef), "cyberchef.bake", target.tagName);
+  }
+  // CyberChef's own Ctrl+Alt keys stay with it.
+  const ctrlAltB = keydown("∫", "KeyB", { ctrlKey: true, altKey: true }, editor);
+  assert.equal(dispatcher.resolve(ctrlAltB, chef), null);
 });
