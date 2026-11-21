@@ -19,6 +19,12 @@ export const GLOBAL_SNIPPETS = [
     snippetCompletion("function interceptWebSocketMessage(message)\n\treturn ${1:false}\nend", {
         label: "interceptWebSocketMessage", type: "function", info: "Return true to pause a WebSocket message for manual intercept"
     }),
+    snippetCompletion("function processStreamMessage(stream_msg)\n\t${}\nend", {
+        label: "processStreamMessage", type: "function", info: "Process each stream message of a streamed pair, such as a gRPC message, before it is forwarded"
+    }),
+    snippetCompletion("function interceptStreamMessage(stream_msg)\n\treturn ${1:false}\nend", {
+        label: "interceptStreamMessage", type: "function", info: "Return true to hold a stream message for manual intercept"
+    }),
     snippetCompletion("function startup()\n\t${}\nend", {
         label: "startup", type: "function", info: "Function that runs once on startup"
     }),

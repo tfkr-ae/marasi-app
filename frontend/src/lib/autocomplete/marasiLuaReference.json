@@ -8,9 +8,11 @@
     "processRequest",
     "processResponse",
     "processWebSocketMessage",
+    "processStreamMessage",
     "interceptRequest",
     "interceptResponse",
-    "interceptWebSocketMessage"
+    "interceptWebSocketMessage",
+    "interceptStreamMessage"
   ],
   "libraries": {
     "marasi": [
@@ -110,7 +112,7 @@
       "uuid"
     ]
   },
-  "marasi": "v0.0.0-20261120053102-84033ba09fe9",
+  "marasi": "v0.0.0-20261121151446-b33088effabc",
   "types": {
     "RequestBuilder": [
       "add_header",
@@ -227,6 +229,25 @@
       "matches_string",
       "remove_rule",
       "set_default_allow"
+    ],
+    "streammsg": [
+      "compressed",
+      "direction",
+      "drop",
+      "editable",
+      "encoding",
+      "flags",
+      "framing",
+      "id",
+      "length",
+      "metadata",
+      "pair_id",
+      "payload",
+      "set_metadata",
+      "set_payload",
+      "set_text",
+      "skip",
+      "text"
     ],
     "url": [
       "del_param",
