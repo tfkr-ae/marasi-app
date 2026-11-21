@@ -181,7 +181,7 @@
 		position: absolute;
 		inset: 0;
 	}
-	/* No library: its browser opens libraries.excalidraw.com, and its menu
+	/* No library: its browser opens Excalidraw's library site, and its menu
 	   publishes there or loads and saves files. */
 	.excalidraw-host :global(.default-sidebar-trigger),
 	.excalidraw-host :global(.library-menu-browse-button),
