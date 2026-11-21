@@ -304,24 +304,6 @@ await report.check("cyberchef adapter calls work on a known recipe", async () =>
   if (result !== "ok") throw new Error(String(result));
 });
 
-await report.check("cyberchef writes nothing to the app origin's localStorage (load, theme switch, bake)", async () => {
-  // The adapter check above loaded, baked and set the theme; switch the
-  // app's theme through the frame too, and bake once more.
-  await page.evaluate("harness.setDark(true)");
-  await page.evaluate("harness.setDark(false)");
-  await page.evaluate(`harness.chef().load({ operations: [{ op: "To Base64", args: ["A-Za-z0-9+/="] }], inputs: ["stored?"] })`);
-  await page.evaluate("harness.chef().bake()");
-  await page.waitFor(`harness.chef().getOutput().then((text) => text === "c3RvcmVkPw==")`, { timeoutMs: 10000, message: "didn't bake" });
-  const frameStorage = await page.evaluate(`(() => {
-    const own = ${chefWin}.localStorage;
-    return { separate: own !== localStorage, keys: Object.keys(own) };
-  })()`);
-  if (!frameStorage.separate) throw new Error("CyberChef's frame uses the app's localStorage");
-  const after = await page.evaluate(appStorage);
-  if (after !== storageBefore) throw new Error(`the app's localStorage changed: ${storageBefore} → ${after}`);
-  return `CyberChef kept ${frameStorage.keys.join(", ") || "nothing"} in memory`;
-});
-
 await report.check("⌘K inside CyberChef's frame reaches Marasi's dispatcher", async () => {
   await clickInFrame("#input-text .cm-content, #input-text");
   await page.evaluate("harness.clearEvents()");
@@ -352,6 +334,34 @@ await report.check("CyberChef's Save and Load buttons are intercepted", async ()
   for (const id of ["save-modal", "load-modal"]) {
     if (await page.evaluate(shown(id))) throw new Error(`CyberChef's own ${id} opened`);
   }
+});
+
+await report.check("cyberchef writes nothing to the app origin's localStorage (load, theme switch, bake)", async () => {
+  // The checks above loaded, baked and set CyberChef's theme; switch the
+  // app's theme through the frame too, and bake once more.
+  await page.evaluate("harness.setDark(true)");
+  await page.evaluate("harness.setDark(false)");
+  const baked = await page.evaluate(`(async () => {
+    const a = harness.chef();
+    await a.load({ operations: [{ op: "To Base64", args: ["A-Za-z0-9+/="] }], inputs: ["stored?"] });
+    // A bake asked for while CyberChef is still settling the load can be
+    // dropped, so ask again until the output arrives.
+    for (const t = Date.now(); Date.now() - t < 10000; ) {
+      a.bake();
+      await new Promise((r) => setTimeout(r, 250));
+      if ((await a.getOutput()) === "c3RvcmVkPw==") return true;
+    }
+    return false;
+  })()`);
+  if (!baked) throw new Error("didn't bake");
+  const frameStorage = await page.evaluate(`(() => {
+    const own = ${chefWin}.localStorage;
+    return { separate: own !== localStorage, keys: Object.keys(own) };
+  })()`);
+  if (!frameStorage.separate) throw new Error("CyberChef's frame uses the app's localStorage");
+  const after = await page.evaluate(appStorage);
+  if (after !== storageBefore) throw new Error(`the app's localStorage changed: ${storageBefore} → ${after}`);
+  return `CyberChef kept ${frameStorage.keys.join(", ") || "nothing"} in memory`;
 });
 
 await report.check("no request left the app's origin during the run", async () => {
