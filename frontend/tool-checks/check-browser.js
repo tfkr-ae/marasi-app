@@ -54,6 +54,7 @@ const KEYS = {
   l: { key: "l", code: "KeyL", keyCode: 76 },
   slash: { key: "/", code: "Slash", keyCode: 191 },
   space: { key: " ", code: "Space", keyCode: 32 },
+  z: { key: "z", code: "KeyZ", keyCode: 90 },
 };
 
 const chrome = await launchChrome();
@@ -193,6 +194,63 @@ await report.check("card embeddable renders, accepts an arrow binding, resizes w
   return `${Math.round(height)}px → ${Math.round(await page.evaluate(`${cardElement(cardId)}.height`))}px`;
 });
 
+// The arrow above was let go over the card's middle. Excalidraw keeps such a
+// tip where it was let go, under the opaque card, so the app moves a bound
+// end to the card's edge: its head shows. It stays there when the card
+// moves, and the move to the edge is no undo step of its own.
+const arrowOnCard = `(() => {
+  const scene = harness.cardScene();
+  const arrow = scene.find((e) => e.type === "arrow" && !e.isDeleted);
+  const card = scene.find((e) => e.id === ${JSON.stringify("CARD")});
+  if (!arrow || !card) return null;
+  const at = (i) => [arrow.x + arrow.points[i][0], arrow.y + arrow.points[i][1]];
+  const tip = at(arrow.points.length - 1);
+  const back = at(arrow.points.length - 2);
+  const length = Math.hypot(tip[0] - back[0], tip[1] - back[1]);
+  // The head: the last 30 scene px of the shaft, behind the tip.
+  const head = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const k = Math.min(1, (30 * f) / length);
+    return [tip[0] + (back[0] - tip[0]) * k, tip[1] + (back[1] - tip[1]) * k];
+  });
+  const inBox = ([x, y]) => x > card.x && x < card.x + card.width && y > card.y && y < card.y + card.height;
+  const out = (p) => Math.max(card.x - p[0], p[0] - card.x - card.width, card.y - p[1], p[1] - card.y - card.height);
+  return { bound: arrow.endBinding?.elementId === card.id, headInside: head.some(inBox), edge: out(tip), tip, card: [card.x, card.y, card.width, card.height] };
+})()`;
+const onEdge = (state) => state && state.bound && !state.headInside && state.edge > 0 && state.edge < 8;
+
+await report.check("an arrow bound inside a card ends on its edge, its head outside, after a move too", async () => {
+  if (!cardId) throw new Error("no card (the card check failed)");
+  const probe = arrowOnCard.replace('"CARD"', JSON.stringify(cardId));
+  await page.waitFor(`(${onEdge})(${probe})`, { timeoutMs: 3000, message: `the arrow's end isn't on the card's edge: ${JSON.stringify(await page.evaluate(probe))}` });
+  // On screen, the tip isn't under the card.
+  const covered = await page.evaluate(`(() => {
+    const { tip } = ${probe};
+    const { scrollX, scrollY, zoom } = harness.cardAppState();
+    const canvas = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect();
+    const x = canvas.x + (tip[0] + scrollX) * zoom, y = canvas.y + (tip[1] + scrollY) * zoom;
+    return Boolean(document.elementFromPoint(x, y)?.closest('[data-testid="card"]'));
+  })()`);
+  if (covered) throw new Error("the card covers the arrow's tip on screen");
+
+  // The card moves (as a content fit does: no bound-arrow update from Excalidraw).
+  const before = await page.evaluate(probe);
+  await page.evaluate(`harness.moveCard(${JSON.stringify(cardId)}, 60, -40)`);
+  const moved = await page
+    .waitFor(`(() => { const s = ${probe}; return s.card[0] === ${before.card[0] + 60} && (${onEdge})(s) && s; })()`, { timeoutMs: 3000 })
+    .catch(async () => {
+      throw new Error(`after the card moved, the arrow's end isn't on its edge: ${JSON.stringify(await page.evaluate(probe))}`);
+    });
+  if (Math.abs(moved.tip[0] - before.tip[0]) < 30) throw new Error(`the arrow's end didn't follow the card: ${JSON.stringify({ before, moved })}`);
+
+  // One undo takes the arrow away: the move to the edge was no step of its own.
+  await page.evaluate(`document.querySelector(".excalidraw-container").focus()`);
+  await page.press(KEYS.z, [MOD]);
+  await page.waitFor(`!harness.cardScene().some((e) => e.type === "arrow")`, { timeoutMs: 3000, message: "one undo didn't take the arrow away" });
+  await page.press(KEYS.z, [MOD, "shift"]);
+  await page.waitFor(`(${onEdge})(${probe})`, { timeoutMs: 3000, message: `after redo, the arrow's end isn't on the card's edge: ${JSON.stringify(await page.evaluate(probe))}` });
+  return `tip ${moved.edge.toFixed(1)}px outside the card after the move`;
+});
+
 // The Ledger and Logbook draw a GET or a title in the page's text colour,
 // so a card's text is the page's, not a surface shade, in both modes.
 await report.check("a card's text is the page's colour, light and dark", async () => {
@@ -233,6 +291,13 @@ await report.check("SVG export carries the scene and its light card images", asy
   if (image.link !== "marasi://finding/7") throw new Error(`the card image's link is ${JSON.stringify(image.link)}`);
   if (JSON.stringify(image.customData?.source) !== JSON.stringify({ kind: "finding", id: 7 })) {
     throw new Error(`the card image's source is ${JSON.stringify(image.customData)}`);
+  }
+  // The arrow ends on the card's edge in the file too, so its head shows.
+  const arrow = out.elements.find((e) => e.type === "arrow");
+  const [dx, dy] = arrow.points[arrow.points.length - 1];
+  const tip = [arrow.x + dx, arrow.y + dy];
+  if (tip[0] > image.x && tip[0] < image.x + image.width && tip[1] > image.y && tip[1] < image.y + image.height) {
+    throw new Error(`the arrow's tip ${JSON.stringify(tip)} is under the card image`);
   }
   const share = Object.values(out.lightShare)[0];
   if (!(share > 0.5)) throw new Error(`the card image is dark (${Math.round(share * 100)}% light pixels)`);

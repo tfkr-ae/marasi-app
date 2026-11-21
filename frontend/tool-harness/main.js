@@ -147,7 +147,7 @@ window.harness = {
 				embed: cards.embed,
 				onReady: (api, lib) => {
 					up = { api, lib };
-					stopChange = api.onChange((_elements, appState) => cards.noteChange(appState));
+					stopChange = api.onChange((elements, appState) => cards.noteChange(elements, appState));
 				},
 			},
 		});
@@ -174,6 +174,26 @@ window.harness = {
 	/** A finding changed elsewhere, as its service event applies it. */
 	changeFinding(fields) {
 		logbookStore.applyRecord("finding", fields);
+	},
+
+	/**
+	 * Moves card `id` by (dx, dy) outside the undo history, as a content fit
+	 * moves cards: Excalidraw updates no bound arrow for it.
+	 */
+	moveCard(id, dx, dy) {
+		const { api, lib } = up;
+		api.updateScene({
+			elements: api
+				.getSceneElementsIncludingDeleted()
+				.map((element) => (element.id === id ? lib.newElementWith(element, { x: element.x + dx, y: element.y + dy }) : element)),
+			captureUpdate: lib.CaptureUpdateAction.NEVER,
+		});
+	},
+
+	/** The cards mode's scroll and zoom. */
+	cardAppState() {
+		const { scrollX, scrollY, zoom } = up.api.getAppState();
+		return { scrollX, scrollY, zoom: zoom.value };
 	},
 
 	/** The canvas zoom in the cards mode. */
@@ -203,7 +223,17 @@ window.harness = {
 		return {
 			name: file.name,
 			svg: text,
-			elements: loaded.elements.map(({ id, type, link, customData }) => ({ id, type, link, customData })),
+			elements: loaded.elements.map(({ id, type, link, customData, x, y, width, height, points }) => ({
+				id,
+				type,
+				link,
+				customData,
+				x,
+				y,
+				width,
+				height,
+				points,
+			})),
 			lightShare: images,
 		};
 	},

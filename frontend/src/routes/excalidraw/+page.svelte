@@ -71,7 +71,7 @@
 		lib = readyLib;
 		stopApiChange?.();
 		stopApiChange = api.onChange((elements, appState) => {
-			cards.noteChange(appState);
+			cards.noteChange(elements, appState);
 			drawingPage.trackPairs(elements);
 		});
 		drawingPage.trackPairs(api.getSceneElements());

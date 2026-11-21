@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { artifactScene, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, fitCard, newCardElement, placeCard, sourceOfLink } from "./cards.js";
+import { ARROW_GAP, artifactScene, cardArrowEnds, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, fitCard, newCardElement, placeCard, sourceOfLink } from "./cards.js";
 
 const pairRow = { ID: "p-1", Number: 7, Method: "GET", Path: "/login" };
 
@@ -151,4 +151,83 @@ test("when the middle's column is full down past the view, the card goes in a fr
   assert.ok(column.every((c) => !overlaps(placed, c)));
   assert.ok(at.y + CARD_HEIGHT <= view.height, "it stays in view");
   assert.notEqual(at.x, x);
+});
+
+// A card at (100, 100), 200 × 100, and an arrow from `from` to `to`
+// (scene points) with its end bound to it, as Excalidraw leaves one dropped
+// over the card.
+function boundArrow(from, to, { bound = "end" } = {}) {
+  const card = { ...newCardElement({ kind: "finding", id: "f-1" }, { x: 100, y: 100 }, { width: 200, height: 100 }), id: "card" };
+  const binding = { elementId: "card", focus: 0, gap: 40 };
+  const arrow = {
+    id: "arrow",
+    type: "arrow",
+    x: from.x,
+    y: from.y,
+    width: Math.abs(to.x - from.x),
+    height: Math.abs(to.y - from.y),
+    angle: 0,
+    points: [
+      [0, 0],
+      [to.x - from.x, to.y - from.y],
+    ],
+    isDeleted: false,
+    startBinding: bound === "start" ? binding : null,
+    endBinding: bound === "end" ? binding : null,
+    elbowed: false,
+  };
+  return [card, arrow];
+}
+
+const endOf = (arrow) => {
+  const [dx, dy] = arrow.points[arrow.points.length - 1];
+  return [arrow.x + dx, arrow.y + dy];
+};
+
+test("an arrow bound to a point inside a card ends on the card's edge, toward its other point", () => {
+  const [card, arrow] = boundArrow({ x: 0, y: 150 }, { x: 200, y: 150 });
+  const [fixed] = cardArrowEnds([card, arrow]);
+  assert.equal(fixed.id, "arrow");
+  assert.deepEqual(endOf(fixed).map(Math.round), [100 - ARROW_GAP, 150]);
+  assert.deepEqual([fixed.x, fixed.y], [0, 150]);
+  assert.equal(fixed.endBinding.gap, ARROW_GAP);
+});
+
+test("an arrow's start bound inside a card moves to the edge facing its end, and its end stays", () => {
+  const [card, arrow] = boundArrow({ x: 250, y: 180 }, { x: 250, y: 400 }, { bound: "start" });
+  const [fixed] = cardArrowEnds([card, arrow]);
+  assert.deepEqual([fixed.x, fixed.y].map(Math.round), [250, 200 + ARROW_GAP]);
+  assert.deepEqual(endOf(fixed).map(Math.round), [250, 400]);
+  assert.equal(fixed.startBinding.gap, ARROW_GAP);
+});
+
+test("an arrow already on its card's edge, or bound to no card, is left alone", () => {
+  const [card, arrow] = boundArrow({ x: 0, y: 150 }, { x: 200, y: 150 });
+  const [fixed] = cardArrowEnds([card, arrow]);
+  assert.deepEqual(cardArrowEnds([card, fixed]), []);
+  const rectangle = { ...card, type: "rectangle", customData: undefined };
+  assert.deepEqual(cardArrowEnds([rectangle, arrow]), []);
+  // Under a card but bound to nothing: it stays hidden under the card.
+  assert.deepEqual(cardArrowEnds([card, { ...arrow, endBinding: null }]), []);
+});
+
+test("after its card moves away, a bound arrow's end goes back to the card's edge", () => {
+  const [card, arrow] = boundArrow({ x: 0, y: 150 }, { x: 200, y: 150 });
+  const [onEdge] = cardArrowEnds([card, arrow]);
+  const moved = { ...card, x: 300, y: 120 };
+  const [fixed] = cardArrowEnds([moved, onEdge]);
+  // The line from (0, 150) through the old tip still meets the moved card.
+  assert.deepEqual(endOf(fixed).map(Math.round), [300 - ARROW_GAP, 150]);
+  // A card moved off that line: the end aims at the card's middle.
+  const far = { ...card, x: 100, y: 400 };
+  const [aimed] = cardArrowEnds([far, onEdge]);
+  const [ex, ey] = endOf(aimed);
+  assert.ok(ey <= 400 - ARROW_GAP + 0.5 && ey >= 400 - ARROW_GAP - 0.5, `end y ${ey}`);
+  assert.ok(ex > 100 && ex < 300, `end x ${ex}`);
+  assert.equal(aimed.endBinding.focus, 0);
+});
+
+test("an arrow whose other point is on the card itself is left alone", () => {
+  const [card, arrow] = boundArrow({ x: 150, y: 150 }, { x: 200, y: 150 });
+  assert.deepEqual(cardArrowEnds([card, arrow]), []);
 });

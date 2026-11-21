@@ -209,3 +209,105 @@ export function artifactScene(elements, files, cardImages) {
   }
   return { elements: [...others, ...images], files: outFiles };
 }
+
+/** How far outside a card's edge a bound arrow's tip sits, so its head shows. */
+export const ARROW_GAP = 4;
+
+const rotate = ([x, y], [cx, cy], angle) => {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos];
+};
+
+// Where the ray from `from` along `dir` first meets `box`, or null.
+function rayEntry(from, dir, box) {
+  let near = 0;
+  let far = Infinity;
+  for (const [axis, min, max] of [
+    [0, box.x, box.x + box.width],
+    [1, box.y, box.y + box.height],
+  ]) {
+    if (Math.abs(dir[axis]) < 1e-9) {
+      if (from[axis] < min || from[axis] > max) return null;
+      continue;
+    }
+    let t1 = (min - from[axis]) / dir[axis];
+    let t2 = (max - from[axis]) / dir[axis];
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    near = Math.max(near, t1);
+    far = Math.min(far, t2);
+  }
+  return near <= far ? [from[0] + dir[0] * near, from[1] + dir[1] * near] : null;
+}
+
+// The scene point an arrow end bound to `card` belongs at, given the end's
+// point now and the arrow's point next to it: where the line from that
+// point toward the end meets the card's edge, ARROW_GAP outside it (toward
+// the card's middle when the line misses it). Null when the other point is
+// on the card itself. `aimed` says whether the line hit.
+function edgePoint(card, end, other) {
+  const centre = [card.x + card.width / 2, card.y + card.height / 2];
+  const angle = card.angle ?? 0;
+  const from = rotate(other, centre, -angle);
+  const to = rotate(end, centre, -angle);
+  const box = { x: card.x - ARROW_GAP, y: card.y - ARROW_GAP, width: card.width + 2 * ARROW_GAP, height: card.height + 2 * ARROW_GAP };
+  const inside = from[0] >= box.x && from[0] <= box.x + box.width && from[1] >= box.y && from[1] <= box.y + box.height;
+  if (inside) return null;
+  let aimed = true;
+  let hit = rayEntry(from, [to[0] - from[0], to[1] - from[1]], box);
+  if (!hit) {
+    aimed = false;
+    hit = rayEntry(from, [centre[0] - from[0], centre[1] - from[1]], box);
+  }
+  return hit ? { point: rotate(hit, centre, angle), aimed } : null;
+}
+
+/**
+ * The arrows whose ends bound to a card aren't on its edge, each with those
+ * ends moved there. Excalidraw keeps the tip where it was let go, which over
+ * a card is under it, hiding the head; on the edge it shows, on screen and
+ * in an Artifact. Elbow arrows (which Excalidraw snaps itself) and arrows
+ * bound to no card are left alone. The caller applies the result outside
+ * the undo history.
+ */
+export function cardArrowEnds(elements) {
+  const cards = new Map(elements.filter(isCard).map((card) => [card.id, card]));
+  if (!cards.size) return [];
+  const fixed = [];
+  for (const arrow of elements) {
+    if (arrow.type !== "arrow" || arrow.isDeleted || arrow.elbowed || arrow.points.length < 2) continue;
+    const global = arrow.points.map(([px, py]) => [arrow.x + px, arrow.y + py]);
+    const bindings = {};
+    let changed = false;
+    for (const [key, index, other] of [
+      ["startBinding", 0, 1],
+      ["endBinding", global.length - 1, global.length - 2],
+    ]) {
+      const binding = arrow[key];
+      const card = binding && cards.get(binding.elementId);
+      if (!card) continue;
+      const edge = edgePoint(card, global[index], global[other]);
+      if (!edge) continue;
+      const moved = Math.hypot(edge.point[0] - global[index][0], edge.point[1] - global[index][1]) > 0.5;
+      if (!moved && binding.gap === ARROW_GAP) continue;
+      if (moved) global[index] = edge.point;
+      bindings[key] = { ...binding, gap: ARROW_GAP, ...(edge.aimed ? {} : { focus: 0 }) };
+      changed = true;
+    }
+    if (!changed) continue;
+    const [x, y] = global[0];
+    const points = global.map(([gx, gy]) => [gx - x, gy - y]);
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    fixed.push({
+      ...arrow,
+      ...bindings,
+      x,
+      y,
+      points,
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
+    });
+  }
+  return fixed;
+}
