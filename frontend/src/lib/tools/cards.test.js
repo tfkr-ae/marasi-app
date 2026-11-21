@@ -41,7 +41,7 @@ test("only marasi links name a source", () => {
   assert.deepEqual(sourceOfLink("marasi://pair/01937f5d-35"), { kind: "pair", id: "01937f5d-35" });
   assert.deepEqual(sourceOfLink("marasi://testCase/12"), { kind: "testCase", id: "12" });
   assert.equal(sourceOfLink("marasi://launchpad/1"), null);
-  assert.equal(sourceOfLink("https://excalidraw.com"), null);
+  assert.equal(sourceOfLink("https://example.com/drawing"), null);
   assert.equal(sourceOfLink(undefined), null);
 });
 

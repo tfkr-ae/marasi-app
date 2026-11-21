@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { licenceOf, licenceTextIn, npmNotices, packageRootOf } from "./notices.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { licenceOf, licenceTextIn, npmNotices, packageRootOf, toolNotices } from "./notices.js";
 
 test("a bundled module's package root, scoped or not", () => {
 	assert.equal(packageRootOf("/app/node_modules/svelte/src/index.js"), "/app/node_modules/svelte");
@@ -41,4 +44,39 @@ test("a licence text reads as its SPDX id", () => {
 	assert.equal(licenceOf("Redistribution and use in source and binary forms ... used to endorse or promote products"), "BSD-3-Clause");
 	assert.equal(licenceOf("Redistribution and use in source and binary forms, with or without"), "BSD-2-Clause");
 	assert.equal(licenceOf("Some custom terms"), "");
+});
+
+function frontendWithTools({ cyberchef = true } = {}) {
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "notices-"));
+	const write = (rel, text) => {
+		fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+		fs.writeFileSync(path.join(root, rel), text);
+	};
+	write("node_modules/@excalidraw/excalidraw/package.json", JSON.stringify({ name: "@excalidraw/excalidraw", version: "0.18.1" }));
+	if (cyberchef) {
+		write("static/tools/cyberchef/.marasi-build.json", JSON.stringify({ tag: "v11.6.0" }));
+		write("static/tools/cyberchef/MARASI-NOTICE.txt", "CyberChef v11.6.0, Crown Copyright, Apache-2.0 (see LICENSE).");
+		write("static/tools/cyberchef/LICENSE", "Apache License\nVersion 2.0, January 2004");
+	}
+	return root;
+}
+
+test("the tools credit CyberChef under Apache-2.0 and Excalidraw under MIT with its fonts' OFL", () => {
+	const [chef, excalidraw] = toolNotices(frontendWithTools());
+
+	assert.equal(chef.name, "CyberChef");
+	assert.equal(chef.version, "v11.6.0");
+	assert.equal(chef.licence, "Apache-2.0");
+	assert.match(chef.text, /Crown Copyright/);
+	assert.match(chef.text, /Apache License/);
+
+	assert.equal(excalidraw.name, "Excalidraw");
+	assert.equal(excalidraw.version, "0.18.1");
+	assert.equal(excalidraw.licence, "MIT, fonts OFL-1.1");
+	assert.match(excalidraw.text, /Copyright \(c\) 2020 Excalidraw/);
+	assert.match(excalidraw.text, /SIL OPEN FONT LICENSE Version 1\.1/);
+});
+
+test("without a CyberChef build only Excalidraw is listed", () => {
+	assert.deepEqual(toolNotices(frontendWithTools({ cyberchef: false })).map((entry) => entry.name), ["Excalidraw"]);
 });

@@ -24,6 +24,7 @@ Maps live in `docs/agents/maps/`. Read the map there before you change or ask ab
 - `project-open.md`: startup, the scratchpad, opening or switching a project, or the opening screen.
 - `updates.md`: checking for, installing or relaunching into an update, channels, signing, or the release workflows.
 - `ui.md`: which component draws a screen, the app rail, the Marasi menu, a modal or an editor, which text size to use, or the mobile (iOS and Android) layout.
+- `tools.md`: the CyberChef or Excalidraw page, the CyberChef adapter, the Excalidraw island, cards, Drawings and Recipes (`toolDocuments`), or the tools' licences.
 - `marasi-service.md`: the service client, the connection store, the Go shell and its Wails bindings, events, coded errors, app or per-project settings, or the Marasi CLI, the local instance and Marasi's source.
 
 ## Agent skills

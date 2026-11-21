@@ -26,3 +26,15 @@ test("the fonts land under static/excalidraw-assets/fonts, replacing a stale cop
 test("a missing package says to install it", () => {
 	assert.throws(() => copyExcalidrawFonts({ packageDir: tempDir(), staticDir: tempDir() }), /npm install/);
 });
+
+test("the fonts' licence text ships beside them", () => {
+	const packageDir = tempDir();
+	const staticDir = tempDir();
+	fs.mkdirSync(path.join(packageDir, "dist", "prod", "fonts", "Virgil"), { recursive: true });
+
+	copyExcalidrawFonts({ packageDir, staticDir });
+
+	const licence = fs.readFileSync(path.join(staticDir, "excalidraw-assets", "fonts", "LICENSE.txt"), "utf8");
+	assert.match(licence, /SIL OPEN FONT LICENSE Version 1\.1/);
+	assert.match(licence, /Virgil: Copyright \(c\) 2011 by Your Own Font Foundry/);
+});
