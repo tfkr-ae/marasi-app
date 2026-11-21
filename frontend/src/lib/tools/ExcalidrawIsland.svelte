@@ -16,6 +16,16 @@
 	 * 250 ms and on unmount. The id is the one this island mounted with.
 	 */
 	export let onChange = (_id, _content) => {};
+	/** Called once Excalidraw is up, with its imperative API and the library module. */
+	export let onReady = (_api, _lib) => {};
+	/**
+	 * Embeddables the app draws itself (cards): { accepts(link), mount(target,
+	 * element) → { update(element), destroy() } }. Excalidraw's own embeds
+	 * (YouTube and the like) stay off.
+	 */
+	export let embed = null;
+	/** Called with a marasi:// link Excalidraw would open. */
+	export let onOpenLink = (_link) => {};
 	const drawingId = drawing.id;
 
 	let host;
@@ -27,6 +37,23 @@
 	let pending = null;
 	let destroyed = false;
 	let failed = "";
+	let EmbedView = null;
+
+	// A React component that hosts one app-drawn embeddable in a div.
+	function embedView() {
+		return function AppEmbed({ element }) {
+			const ref = React.useRef(null);
+			const view = React.useRef(null);
+			React.useEffect(() => {
+				view.current = embed.mount(ref.current, element);
+				return () => view.current?.destroy();
+			}, [element.id]);
+			React.useEffect(() => {
+				view.current?.update(element);
+			}, [element]);
+			return React.createElement("div", { ref, style: { width: "100%", height: "100%" } });
+		};
+	}
 
 	/** Opens Excalidraw's help dialog, its list of shortcuts. */
 	export function openHelp() {
@@ -60,8 +87,15 @@
 					scrollToContent: false,
 				},
 				excalidrawAPI: (excalidrawApi) => {
+					if (api === excalidrawApi) return;
 					api = excalidrawApi;
+					onReady(api, lib);
 				},
+				validateEmbeddable: (link) => Boolean(embed?.accepts(link)),
+				renderEmbeddable: (element) =>
+					EmbedView && embed?.accepts(element.link)
+						? React.createElement(EmbedView, { element, key: element.id })
+						: null,
 				aiEnabled: false,
 				isCollaborating: false,
 				UIOptions: {
@@ -73,8 +107,12 @@
 					},
 					tools: { image: true },
 				},
-				// Links on shapes open nothing outside the app.
-				onLinkOpen: (_element, event) => event.preventDefault(),
+				// Links on shapes open nothing outside the app; a card's opens
+				// its source in Marasi.
+				onLinkOpen: (element, event) => {
+					event.preventDefault();
+					if (element.link?.startsWith("marasi://")) onOpenLink(element.link);
+				},
 				onChange: (elements, appState, files) => {
 					pending = { elements, appState, files };
 					clearTimeout(saveTimer);
@@ -115,6 +153,7 @@
 			if (destroyed) return;
 			React = react.default ?? react;
 			lib = excalidraw;
+			if (embed) EmbedView = embedView();
 			root = (reactDom.default ?? reactDom).createRoot(host);
 			render();
 		} catch (err) {

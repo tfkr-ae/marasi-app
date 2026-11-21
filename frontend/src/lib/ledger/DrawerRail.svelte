@@ -27,6 +27,7 @@
 		Sparkles,
 		StickyNote,
 		Swords,
+		Shapes,
 		WrapText,
 		X,
 	} from "lucide-svelte";
@@ -78,6 +79,7 @@
 		null,
 		{ label: "Send to Launchpad", icon: Send, actionId: `${DRAWER}.send-to-launchpad` },
 		{ label: "Send to Armory", icon: Swords, actionId: `${DRAWER}.send-to-armory` },
+		{ label: "Add to Drawing", icon: Shapes, actionId: "global.add-to-drawing" },
 		{ label: "Create finding", icon: ShieldAlert, actionId: `${DRAWER}.create-finding` },
 		{ label: "Create test case", icon: BookCheck, actionId: `${DRAWER}.create-test-case` },
 	];

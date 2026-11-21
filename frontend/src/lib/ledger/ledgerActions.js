@@ -21,6 +21,7 @@ import { highlightPalette } from "../../stores/highlightsStore";
 import { findingStore } from "../../stores/findingStore";
 import { RAW_ONLY } from "../../stores/trafficApi.js";
 import { newRecord } from "../logbook/recordEditor.js";
+import { addPairToDrawing } from "../tools/addToDrawing.js";
 import {
 	ledgerStore,
 	tableRows,
@@ -427,6 +428,8 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 				return removeFromLaunchpad(target, action.id, action.name);
 			case "armory":
 				return sendToArmory(pairs);
+			case "add-to-drawing":
+				return addPairToDrawing(toastStore, pairs.find((pair) => sameID(pair.ID, action.id)) ?? pairs[0]);
 			case "new-finding":
 				return createFinding(ids);
 			case "new-test-case":

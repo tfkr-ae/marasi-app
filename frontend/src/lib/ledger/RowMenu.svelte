@@ -24,6 +24,7 @@
 		Filter,
 		FolderInput,
 		Globe,
+		Shapes,
 		Highlighter,
 		Link,
 		ListChecks,
@@ -95,6 +96,7 @@
 		down: ArrowDown,
 		bottom: ArrowDownToLine,
 		globe: Globe,
+		shapes: Shapes,
 	};
 	const SEVERITY_CLASS = {
 		Critical: "bg-red-600 text-white",

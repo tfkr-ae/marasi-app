@@ -752,3 +752,9 @@ test("Excalidraw keeps Ctrl versions of its keys on Windows/Linux", () => {
   assert.equal(dispatcher.resolve(event, on("/excalidraw")), null);
   assert.equal(dispatcher.resolve({ ...event, target: { tagName: "BODY" } }, on("/excalidraw")), "global.download-certificate");
 });
+
+test("Add to Drawing is ⌘⇧; from the Ledger, drawer open or closed", () => {
+  const dispatcher = mac();
+  assert.equal(dispatcher.resolve(cmdShift(":", "Semicolon"), on("/ledger", requestDrawer())), "global.add-to-drawing");
+  assert.equal(dispatcher.resolve(cmdShift(":", "Semicolon"), on("/ledger")), "global.add-to-drawing");
+});

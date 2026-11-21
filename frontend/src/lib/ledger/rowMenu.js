@@ -412,6 +412,15 @@ export function menuFor(
       action: { type: "armory" },
     },
     {
+      id: "drawing",
+      label: "Add to Drawing",
+      icon: "shapes",
+      actionId: "global.add-to-drawing",
+      disabled: !one,
+      hint: "One request at a time",
+      action: { type: "add-to-drawing", id: pairs[0].ID },
+    },
+    {
       id: "browser-view",
       label: "Copy browser view URL",
       icon: "globe",

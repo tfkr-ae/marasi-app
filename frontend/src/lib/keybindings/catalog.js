@@ -65,6 +65,8 @@ export const FACTORY_ACTIONS = [
   action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"), { group: "browser" }),
   action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d"), { group: "browser" }),
   action("global.copy-certificate", "Copy Certificate", "Copy Certificate", "certificate,copy", primary("shift+,"), { group: "browser" }),
+  // Adds the Ledger drawer's pair to the last-opened drawing as a card.
+  action("global.add-to-drawing", "Add to Drawing", "Add the open pair to the last-opened drawing", "drawing, excalidraw, card, add, pair", primary("shift+;")),
   action("global.jump-to-toast", "Jump to Toast", "Jump to the active toast", "toast", primary(".")),
   action("global.open-project", "Open Project", "Open a project", "open project", primary("o"), { group: "project" }),
   action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l"), { group: "project" }),

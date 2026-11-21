@@ -14,6 +14,7 @@
     "global.start-chrome": {"macos":["meta+`"],"windows-linux":["ctrl+`"]},
     "global.download-certificate": {"macos":["meta+d"],"windows-linux":["ctrl+d"]},
     "global.copy-certificate": {"macos":["meta+shift+,"],"windows-linux":["ctrl+shift+,"]},
+    "global.add-to-drawing": {"macos":["meta+shift+;"],"windows-linux":["ctrl+shift+;"]},
     "global.jump-to-toast": {"macos":["meta+."],"windows-linux":["ctrl+."]},
     "global.open-project": {"macos":["meta+o"],"windows-linux":["ctrl+o"]},
     "global.setup-listener": {"macos":["meta+l"],"windows-linux":["ctrl+l"]},

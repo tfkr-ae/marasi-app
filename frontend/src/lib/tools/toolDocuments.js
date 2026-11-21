@@ -5,7 +5,9 @@
 //
 // A kind describes one document type:
 //   { noun, blank() → the kind's own fields, isEmpty(doc) }
-// Every document has { id, name } beside those fields. `kind(name)` returns
+// Every document has { id, name, attached } beside those fields. `attached`
+// maps "<record kind>:<record id>" to the Artifact the document made there
+// (attachments.js); a duplicate starts with none. `kind(name)` returns
 // that kind's collection, a Svelte store of { items, openId } with
 // create, open, rename, duplicate, remove and change. `openCounts` is a
 // store of { <kind>: number of non-empty documents }, which the app reports
@@ -19,7 +21,12 @@ export const drawingKind = {
 };
 
 function createCollection(kindName, kind, newId) {
-  const blankDocument = (number) => ({ id: newId(kindName), name: `${kind.noun} ${number}`, ...kind.blank() });
+  const blankDocument = (number) => ({
+    id: newId(kindName),
+    name: `${kind.noun} ${number}`,
+    attached: {},
+    ...kind.blank(),
+  });
   const fresh = () => {
     const first = blankDocument(1);
     return { items: [first], openId: first.id, made: 1 };
@@ -58,7 +65,7 @@ function createCollection(kindName, kind, newId) {
         const index = state.items.findIndex((doc) => doc.id === id);
         if (index === -1) return state;
         const from = state.items[index];
-        made = { ...structuredClone(from), id: newId(kindName), name: `${from.name} copy` };
+        made = { ...structuredClone(from), id: newId(kindName), name: `${from.name} copy`, attached: {} };
         const items = [...state.items];
         items.splice(index + 1, 0, made);
         return { ...state, items, openId: made.id };

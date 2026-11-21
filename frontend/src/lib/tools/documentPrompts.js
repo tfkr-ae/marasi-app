@@ -2,6 +2,7 @@
 // collection. `noun` is "drawing" or "recipe".
 import { get } from "svelte/store";
 import DocumentSwitcher from "./DocumentSwitcher.svelte";
+import DeleteDocument from "./DeleteDocument.svelte";
 
 const capitalised = (noun) => noun.charAt(0).toUpperCase() + noun.slice(1);
 
@@ -28,10 +29,18 @@ export function renameDocument(modalStore, documents, id, noun) {
   });
 }
 
-// An empty document goes at once; one with content asks first.
+// An empty document goes at once; one with content asks first, and one
+// with Artifacts asks whether to remove them too (DeleteDocument.svelte).
 export function deleteDocument(modalStore, documents, id, noun, isEmpty) {
   const doc = get(documents).items.find((d) => d.id === id);
   if (!doc) return;
+  if (Object.keys(doc.attached ?? {}).length) {
+    modalStore.trigger({
+      type: "component",
+      component: { ref: DeleteDocument, props: { documents, docId: id, noun } },
+    });
+    return;
+  }
   if (isEmpty(doc)) {
     documents.remove(id);
     return;

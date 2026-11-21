@@ -37,6 +37,7 @@
 		Sun,
 		ToggleLeft,
 		Brush,
+		Shapes,
 	} from "lucide-svelte";
 	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -78,6 +79,9 @@
 		extensionNavigationActionId,
 	} from "../../keybindings/catalog.js";
 	import { OPEN_MENU } from "../../keybindings/dispatcher.js";
+	import { page } from "$app/stores";
+	import { ledgerStore, focusedPair } from "../../../stores/ledgerStore";
+	import { addPairToDrawing } from "../../tools/addToDrawing.js";
 	import { platformFromDesktopOS } from "../../keybindings/platform.js";
 
 	const drawerStore = getDrawerStore();
@@ -117,6 +121,9 @@
 		"global.go-workshop": () => closeAndGoto("/workshop"),
 		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
 		"global.go-settings": () => closeAndGoto("/settings"),
+		// The Ledger's open pair, on the last-opened drawing.
+		"global.add-to-drawing": () =>
+			addPairToDrawing(toastStore, get(page).url.pathname.startsWith("/ledger") ? focusedPair(get(ledgerStore)) : null),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
 		"global.download-certificate": () => downloadCertificate(toastStore),
@@ -166,6 +173,7 @@
 		"global.go-workshop": ToolIcon,
 		"global.go-excalidraw": Brush,
 		"global.go-settings": Settings,
+		"global.add-to-drawing": Shapes,
 		"global.start-chrome": ChromeIcon,
 		"global.download-certificate": Download,
 		"global.copy-certificate": Copy,
