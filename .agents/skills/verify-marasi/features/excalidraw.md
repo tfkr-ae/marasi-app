@@ -56,4 +56,5 @@ A wait can't count cards: check the screenshot, where the new card sits under th
 - Drawings live in memory per project; a relaunch starts at `Drawing 1`. Add to Drawing goes to the last-opened drawing, so the toast names it.
 - The canvas keeps ⌘D, ⌘=, ⌘-, ⌘0, ⌘G and ⌘⇧G while it has focus (gate.js); every other key, ⌘K included, reaches Marasi.
 - Excalidraw reads its asset path when its module first loads. Anything that imports `@excalidraw/excalidraw` before the island sets `EXCALIDRAW_ASSET_PATH` sends the fonts to esm.sh; check-tools.sh fails on that. In this map, look for `esm.sh` in a drive's `-network.json`.
+- The fonts' OFL text is served at `/excalidraw-assets/fonts/LICENSE.txt`, and Settings → About's Licences list credits Excalidraw (MIT, the fonts' OFL); check-tools.sh proves both ship.
 - Attach… needs a finding or test case (logbook.md). Check the Artifact's file: an SVG with the scene embedded (`payload-type:application/vnd.excalidraw+json`) and each card as a light image drawn last, even with the app in dark mode.

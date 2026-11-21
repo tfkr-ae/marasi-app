@@ -2,7 +2,7 @@ name: Tools
 
 # The tool contract checks (scripts/check-tools.sh): the pinned Excalidraw
 # and CyberChef driven in headless Chrome through the test-only harness, their
-# licences, and the release build. On pull requests that touch a pin, the
+# licences and notices, and the release build. On pull requests that touch a pin, the
 # adapter, the tool pages or the harness, and from the nightly (nightly.yml).
 on:
   pull_request:
@@ -11,6 +11,8 @@ on:
       - frontend/package-lock.json
       - frontend/cyberchef/**
       - frontend/excalidrawAssets.js
+      - frontend/notices.js
+      - frontend/licences/**
       - frontend/src/lib/tools/**
       - frontend/src/routes/cyberchef/**
       - frontend/src/routes/excalidraw/**

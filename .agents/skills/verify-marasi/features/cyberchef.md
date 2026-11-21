@@ -13,6 +13,7 @@ The pin's contract (offline load, every adapter call, ⌘K in the frame, Ctrl+Al
 ## How to get to it (user POV)
 
 - **Rail**: the item titled `CyberChef`. `drive.sh cyberchef` proves the route (`/cyberchef`, text `Recipe 1`, a fresh project's first recipe).
+- **Old links**: `/sveltechef` redirects to `/cyberchef` (`frontend/src/routes/sveltechef/+page.js`).
 - **Go to**: `⌘⇧Y`, or `⌘K`, `⌥G`, `CyberChef`. `drive.sh dashboard compare "CyberChef" "cmd+shift+y"` proves both land on the same page.
 - **Bottom bar More**: phone layouts only, where CyberChef is hidden (it shows from tablet width up, `PHONE_HIDDEN_ACTIONS` in `frontend/src/lib/platform.js`). The server build always reports a desktop OS, so check an iPad simulator for the More entry and an iPhone for its absence (README, out of scope here).
 - **⌘K actions**: context `cyberchef` in `frontend/src/lib/keybindings/catalog.js` (Bake `⌘⇧↩`, New `⌘⇧N`, Switch `⌘⇧O`, Rename `⌘⇧R`, Duplicate `⌘⇧E`, Insert Input… `⌘⇧I`, Attach… `⌘⇧A`, Delete `⌘⇧D`).
@@ -61,3 +62,4 @@ The screenshot shows the pair's response in the empty input tab. A row click (no
 - CyberChef's Save and Load recipe buttons (and Ctrl+Alt+L) open Rename and Switch; its local storage never holds recipes. Its own shortcuts are Ctrl+Alt+letter on every platform: Ctrl+Alt+Space bakes, and Ctrl+Alt+B toggles a breakpoint (v11.6.0).
 - `{"key":"ctrl+alt+space"}` reaches the frame when it has focus, but the result is only visible in a screenshot; check-tools.sh proves the bake.
 - Attach… needs a finding or test case to attach to (logbook.md); the Artifact is one text file with the input, the operations and the output.
+- Settings → About's Licences list credits CyberChef (Apache-2.0, Crown Copyright, its LICENSE and notice); check-tools.sh proves the texts ship.

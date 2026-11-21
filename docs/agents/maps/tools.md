@@ -18,8 +18,13 @@ How the CyberChef and Excalidraw pages are built, and where a change to them goe
 ## Excalidraw: the island and cards
 
 - `ExcalidrawIsland.svelte` mounts the `@excalidraw/excalidraw` React component straight into the Svelte page, with no frame, lazy-loaded on first open (ADR `2026-11-21-excalidraw-is-a-react-island-and-cards-are-the-apps-own-markup.md`). Every feature that reaches the network is off. Its fonts are copied from the npm package into `static/excalidraw-assets` by `frontend/excalidrawAssets.js`.
-- A **card** is an Excalidraw embeddable whose link is `marasi://<kind>/<id>` (`cards.js`). The app draws its face with `CardView.svelte` in its own classes, from `cardContent.js`, live from `pairRows.js` and `logbookStore`. Card geometry (`placeCard`, `fitCard`) and the light attachment image (`cardImage.js`, `drawingFile.js`) stay in those modules.
+- A **card** is an Excalidraw embeddable whose link is `marasi://<kind>/<id>` (`cards.js`). The app draws its face with `CardView.svelte` in its own classes, from `cardContent.js`, live from `pairRows.js` and `logbookStore`. `cardEmbed.js` is the `embed` the island takes: a `CardView` per card, fitting each to its content outside the undo history, and the ring while an arrow would bind. Card geometry (`placeCard`, `fitCard`) and the light attachment image (`cardImage.js`, `drawingFile.js`) stay in those modules.
+- Import `@excalidraw/excalidraw` only after the island has set `EXCALIDRAW_ASSET_PATH`: Excalidraw builds its font URLs when its module loads, with esm.sh as the fallback.
 
 ## Licences
 
 The Licences modal (`lib/LicencesModal.svelte`) reads `licences.json`, which `frontend/notices.js` writes at build time. Its Tools group (`toolNotices`) credits CyberChef from its build's `LICENSE` and `MARASI-NOTICE.txt`, and Excalidraw from `frontend/licences/`, which also holds its fonts' OFL text. `excalidrawAssets.js` copies that text beside the fonts. When a pin changes, check those files still match what ships.
+
+## Contract checks
+
+`scripts/check-tools.sh` drives the real pinned builds in headless Chrome through `frontend/tool-harness`, a Vite app of its own that mounts the island (with `cardEmbed.js`), `ChefFrame` and the real dispatcher. It is outside `src/routes`, so the app's build never holds it. `frontend/tool-checks/` holds the runners: `check-browser.js` (one named check per contract), `check-licences.js` (no GPL or AGPL package in either tool's tree, and every package declares a licence or has an allow-list reason) and `check-release.js` (no harness in the release build, and the notices above ship). A change to the adapter, the island, the cards or a pin gets a check there, and a bump must pass it.
