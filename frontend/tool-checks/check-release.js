@@ -1,13 +1,16 @@
 // The release-build checks of scripts/check-tools.sh, on frontend/build,
 // which the app binary embeds (main.go, `//go:embed all:frontend/build`):
+// the files that compress well are stored only as <name>.gz (gzipBuild.js),
 // the tool harness is absent, and the tools' notices ship (frontend/licences,
 // toolNotices in notices.js).
 //
 //   node frontend/tool-checks/check-release.js   (after `npm run build`)
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { createReport } from "./report.js";
+import { COMPRESSIBLE } from "../gzipBuild.js";
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const build = path.join(frontend, "build");
@@ -30,13 +33,46 @@ function* files(dir) {
 const TEXT = /\.(html|js|mjs|css|json|txt|svg)$/;
 const report = createReport("release");
 
-if (!fs.existsSync(path.join(build, "index.html"))) {
-  report.fail("release build exists", "no frontend/build/index.html; run npm run build");
+// A file as the app serves it: <file> itself, or <file>.gz decompressed.
+const stored = (file) => (fs.existsSync(file) ? file : `${file}.gz`);
+const exists = (file) => fs.existsSync(file) || fs.existsSync(`${file}.gz`);
+function read(file) {
+  const at = stored(file);
+  const data = fs.readFileSync(at);
+  return (at.endsWith(".gz") ? zlib.gunzipSync(data) : data).toString("utf8");
+}
+
+if (!exists(path.join(build, "index.html"))) {
+  report.fail("release build exists", "no frontend/build/index.html(.gz); run npm run build");
   process.exit(report.finish());
 }
 
-const texts = [...files(build)].filter((file) => TEXT.test(file) || path.basename(file) === "LICENSE");
-const read = (file) => fs.readFileSync(file, "utf8");
+const all = [...files(build)];
+const served = all.map((file) => file.replace(/\.gz$/, ""));
+const texts = served.filter((file) => TEXT.test(file) || path.basename(file) === "LICENSE");
+
+await report.check("the embedded set is the gzipped one", () => {
+  const problems = [];
+  for (const file of all) {
+    const name = path.relative(build, file);
+    if (file.endsWith(".gz")) {
+      if (fs.existsSync(file.slice(0, -3))) problems.push(`${name} beside its original`);
+      continue;
+    }
+    if (!COMPRESSIBLE.test(file)) continue;
+    const data = fs.readFileSync(file);
+    // gzipBuild.js keeps a file only when gzip saves less than 10%.
+    if (zlib.gzipSync(data, { level: 9 }).length <= data.length * 0.9) problems.push(`${name} not gzipped`);
+  }
+  for (const name of ["index.html", "tools/cyberchef/index.html"]) {
+    if (!fs.existsSync(path.join(build, `${name}.gz`))) problems.push(`no ${name}.gz`);
+  }
+  if (problems.length) throw new Error(problems.slice(0, 10).join(", ") + (problems.length > 10 ? `, … ${problems.length} in all` : ""));
+  const size = (list) => list.reduce((sum, file) => sum + fs.statSync(file).size, 0);
+  const gz = all.filter((file) => file.endsWith(".gz"));
+  const mib = (n) => `${(n / 1024 / 1024).toFixed(1)} MiB`;
+  return `${gz.length} of ${all.length} files gzipped, ${mib(size(all))} embedded`;
+});
 
 await report.check("the tool harness is absent from the release build", () => {
   const found = [];
@@ -44,21 +80,21 @@ await report.check("the tool harness is absent from the release build", () => {
     const text = read(file);
     for (const marker of HARNESS_MARKERS) if (text.includes(marker)) found.push(`${path.relative(build, file)} (${marker})`);
   }
-  const paths = [...files(build)].filter((file) => /tool-harness/.test(path.relative(build, file)));
+  const paths = all.filter((file) => /tool-harness/.test(path.relative(build, file)));
   if (found.length || paths.length) throw new Error([...found, ...paths].join(", "));
   return `${texts.length} text files searched`;
 });
 
 await report.check("CyberChef's LICENSE and notice ship beside it", () => {
   const licence = path.join(build, "tools/cyberchef/LICENSE");
-  if (!fs.existsSync(licence) || !APACHE.test(read(licence))) throw new Error("no Apache-2.0 LICENSE at tools/cyberchef/LICENSE");
+  if (!exists(licence) || !APACHE.test(read(licence))) throw new Error("no Apache-2.0 LICENSE at tools/cyberchef/LICENSE");
   const notice = path.join(build, "tools/cyberchef/MARASI-NOTICE.txt");
-  if (!fs.existsSync(notice) || !/Crown Copyright/.test(read(notice))) throw new Error("no tools/cyberchef/MARASI-NOTICE.txt");
+  if (!exists(notice) || !/Crown Copyright/.test(read(notice))) throw new Error("no tools/cyberchef/MARASI-NOTICE.txt");
 });
 
 await report.check("the OFL text ships beside Excalidraw's fonts", () => {
   const licence = path.join(build, "excalidraw-assets/fonts/LICENSE.txt");
-  if (!fs.existsSync(licence) || !OFL.test(read(licence))) throw new Error("no OFL-1.1 text at excalidraw-assets/fonts/LICENSE.txt");
+  if (!exists(licence) || !OFL.test(read(licence))) throw new Error("no OFL-1.1 text at excalidraw-assets/fonts/LICENSE.txt");
 });
 
 // The Licences modal (Settings → About) reads licences.json's tools.

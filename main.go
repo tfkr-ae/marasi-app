@@ -2,12 +2,16 @@ package main
 
 import (
 	"embed"
+	"io/fs"
 	"log/slog"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
+// The frontend build, its compressible files stored only as <name>.gz
+// (frontend/gzipBuild.js); newAssetHandler serves them.
+//
 //go:embed all:frontend/build
 var assets embed.FS
 
@@ -15,10 +19,15 @@ func main() {
 	// Create an instance of the app structure
 	app := NewApp()
 
+	build, err := fs.Sub(assets, "frontend/build")
+	if err != nil {
+		panic(err)
+	}
+
 	opts := application.Options{
 		Name: "Marasi",
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
+			Handler: newAssetHandler(build, serverBuild),
 		},
 		Services: []application.Service{
 			application.NewService(app),
