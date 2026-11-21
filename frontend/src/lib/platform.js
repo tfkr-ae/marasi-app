@@ -77,4 +77,4 @@ if (typeof window !== "undefined" && window.matchMedia) {
 export const phoneWidth = derived([mobile, narrow], ([$mobile, $narrow]) => $mobile && $narrow);
 
 /** ⌘K actions phone-width layouts leave out: CyberChef needs a tablet's width. */
-export const PHONE_HIDDEN_ACTIONS = new Set(["global.go-cyberchef"]);
+export const PHONE_HIDDEN_ACTIONS = new Set(["global.go-cyberchef", "global.send-to-cyberchef"]);

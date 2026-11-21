@@ -713,6 +713,26 @@ test("the CyberChef page has its own menu, and Go to CyberChef is ⌘⇧Y everyw
   }
 });
 
+test("Send to CyberChef is ⌘E from any editor, the Ledger query editor included", () => {
+  const dispatcher = mac();
+  const inEditor = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" ? {} : null) };
+  // The query editor gets the key too: the handler refuses it with a toast.
+  const inQuery = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" || s === ".ledger-query" ? {} : null) };
+  const states = [
+    on("/ledger", requestDrawer()),
+    on("/ledger"),
+    on("/launchpad"),
+    on("/checkpoint"),
+    on("/logbook"),
+    on("/"),
+  ];
+  for (const state of states) {
+    assert.equal(dispatcher.resolve(keydown("e", "KeyE", { metaKey: true }, inEditor), state), "global.send-to-cyberchef", state.route);
+    assert.equal(dispatcher.resolve(cmd("e", "KeyE"), state), "global.send-to-cyberchef", state.route);
+  }
+  assert.equal(dispatcher.resolve(keydown("e", "KeyE", { metaKey: true }, inQuery), on("/ledger")), "global.send-to-cyberchef");
+});
+
 test("⌘K and Bake reach the dispatcher from CyberChef's input editor and its search field", () => {
   const dispatcher = mac();
   const chef = on("/cyberchef");

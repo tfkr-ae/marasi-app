@@ -5,6 +5,7 @@
 	// the stored request a held response answers, or a WebSocket message's
 	// connection. Confirmations and toasts belong to the page.
 	import CodeMirror from "svelte-codemirror-editor";
+	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
 	import { StreamLanguage } from "@codemirror/language";
 	import { http } from "../httpMode.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
@@ -120,7 +121,7 @@
 	{#key item.Type + item.ID}
 		<div class="cp-panes grid min-h-0 flex-1 grid-cols-2">
 			<!-- Left: the request, or a WebSocket message's connection. -->
-			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "left"}>
+			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "left"} data-chef-pane>
 				{#if item.Type === "websocket"}
 					<div class={head}><span class="font-bold">Connection</span></div>
 					<dl class="cp-connection grid grid-cols-[6rem_1fr] gap-y-1 p-3 font-mono text-2xs">
@@ -143,9 +144,12 @@
 								<span class="cp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 							{/if}
 						</span>
-						{#if heldLeft && dirty}
-							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
-						{/if}
+						<span class="flex items-center gap-3">
+							{#if heldLeft || request}<SendToChefButton />{/if}
+							{#if heldLeft && dirty}
+								<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
+							{/if}
+						</span>
 					</div>
 					<div class="cp-request min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
 						{#if heldLeft}
@@ -182,7 +186,7 @@
 			</section>
 
 			<!-- Right: the response, or the WebSocket message. -->
-			<section class="flex min-h-0 min-w-0 flex-col" class:pane-off={narrowPane !== "right"}>
+			<section class="flex min-h-0 min-w-0 flex-col" class:pane-off={narrowPane !== "right"} data-chef-pane>
 				{#if item.Type === "request"}
 					<div class={head}><span class="font-bold">Response</span></div>
 					<p class="p-4 text-xs opacity-60">Not sent yet</p>
@@ -197,9 +201,12 @@
 								<span class="cp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 							{/if}
 						</span>
-						{#if dirty}
-							<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
-						{/if}
+						<span class="flex items-center gap-3">
+							<SendToChefButton />
+							{#if dirty}
+								<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
+							{/if}
+						</span>
 					</div>
 					<div class="cp-response min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
 						<CodeMirror

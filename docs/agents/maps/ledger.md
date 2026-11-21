@@ -24,7 +24,7 @@ The page has three entry points, and all of them lead to `runMenuAction`:
 
 - **Row menu.** `menuFor` builds the items (`LedgerRowMenu.svelte` passes it `rowMenuContext`). Choosing one calls `runMenuAction`, which switches on the item's `action.type`.
 - **Shortcut.** An entry in `drawerMenu` calls `runShortcut`, which finds the row-menu item with the same `actionId` (`menuAction`) and runs it as if it had been chosen.
-- **Drawer rail.** `DrawerRail.svelte` sends an action id, and `LedgerDrawer.svelte` passes it on to `drawerHandlers`.
+- **Drawer rail.** `DrawerRail.svelte` sends an action id, and `LedgerDrawer.svelte` passes it on to `drawerHandlers`. An id `drawerHandlers` lacks, such as `global.send-to-cyberchef`, runs through `menuDispatcher.run`.
 
 To add a row-menu action:
 1. Add the item to `menuFor`, with an `actionId` if it has a shortcut, and `disabled` when it can't run on a ⌘A selection.
