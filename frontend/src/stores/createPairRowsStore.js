@@ -2,7 +2,8 @@
 // service's traffic events. A store of { <pair id>: row, or null once the
 // pair is deleted }; an id not read yet is absent, and its card shows the
 // row it carries (customData.last). The page tracks the ids on its drawing;
-// with nothing tracked, events read nothing.
+// with nothing tracked, events read nothing, but the rows they may have
+// changed are read again once tracked.
 //
 // `createPairRowsStore(api)` takes createToolTrafficApi's api; the app's
 // instance, its events and its projectData entry are in pairRowsStore.js.
@@ -18,6 +19,9 @@ export function createPairRowsStore(api, { settleMs = 150 } = {}) {
   let timer = null;
   let pendingAll = false;
   const pendingIds = new Set();
+  // Rows kept while no card tracked them, through an event that may have
+  // changed them: read again when next tracked.
+  const stale = new Set();
   // Bumped by clear(), so a read under way for the last project writes nothing.
   let generation = 0;
 
@@ -39,7 +43,10 @@ export function createPairRowsStore(api, { settleMs = 150 } = {}) {
       if (mine !== generation) return;
       const byId = new Map(found.map((row) => [String(row.ID), row]));
       rows = { ...rows };
-      for (const id of chunk) rows[id] = byId.get(String(id)) ?? null;
+      for (const id of chunk) {
+        rows[id] = byId.get(String(id)) ?? null;
+        stale.delete(id);
+      }
       store.set(rows);
     }
   }
@@ -67,7 +74,7 @@ export function createPairRowsStore(api, { settleMs = 150 } = {}) {
     track(ids) {
       const mine = new Set(ids.map(String));
       trackers.add(mine);
-      const unread = [...mine].filter((id) => !(id in rows));
+      const unread = [...mine].filter((id) => !(id in rows) || stale.has(id));
       if (unread.length) readRows(unread);
       return () => {
         trackers.delete(mine);
@@ -77,12 +84,16 @@ export function createPairRowsStore(api, { settleMs = 150 } = {}) {
 
     /** traffic.changed: any tracked pair may have changed or gone. */
     onTrafficChanged() {
+      const now = tracked();
+      for (const id of Object.keys(rows)) if (!now.has(id)) stale.add(id);
       if (trackers.size) refresh();
     },
 
     /** traffic.response, metadata.updated, note.updated and note.deleted, for one pair. */
     onPairEvent({ id } = {}) {
-      if (id != null && tracked().has(String(id))) refresh([id]);
+      if (id == null) return;
+      if (tracked().has(String(id))) refresh([id]);
+      else if (String(id) in rows) stale.add(String(id));
     },
 
     /** Forgets the last project's rows. */
@@ -91,6 +102,7 @@ export function createPairRowsStore(api, { settleMs = 150 } = {}) {
       clearTimeout(timer);
       pendingAll = false;
       pendingIds.clear();
+      stale.clear();
       rows = {};
       store.set(rows);
     },

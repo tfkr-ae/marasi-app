@@ -22,7 +22,10 @@ function fakes({ rows = {} } = {}) {
     },
     setCanvasSize: (size) => calls.push(["canvas", size]),
     goto: async (path) => calls.push(["goto", path]),
-    ledger: { goToNumber: (n) => calls.push(["number", n]) },
+    ledger: {
+      goToNumber: async (n) => (calls.push(["number", n]), {}),
+      selectPair: (id) => calls.push(["select", id]),
+    },
     logbook: { open: (kind, id) => calls.push(["open", kind, id]) },
   });
   return { page, calls, tracked };
@@ -101,4 +104,52 @@ test("Open goes to a finding or test case in the Logbook", async () => {
   const { page, calls } = fakes();
   await page.openSource({ kind: "testCase", id: "t" }, null);
   assert.deepEqual(calls, [["open", "testCase", "t"], ["goto", "/logbook"]]);
+});
+
+// The Ledger store as Open ↗ meets it: goToNumber selects a pair it has to
+// read in, but only returns one the table already shows, for the caller to
+// select (as the Ledger's own Open request does).
+function fakeLedger(shown) {
+  const ledger = {
+    selected: null,
+    async goToNumber(number) {
+      const pair = shown.find((row) => row.Number === number);
+      if (pair) return { pair };
+      const outside = { ID: `outside-${number}`, Number: number };
+      ledger.selected = outside.ID;
+      return { pair: outside };
+    },
+    selectPair(id) {
+      ledger.selected = String(id);
+    },
+  };
+  return ledger;
+}
+
+test("Open on a pair the Ledger already shows selects it, so its drawer opens", async () => {
+  const ledger = fakeLedger([{ ID: "p", Number: 4 }]);
+  const page = createDrawingPage({
+    pairRows: { track: () => () => {}, rows: () => ({}) },
+    drawingCards: {},
+    setCanvasSize: () => {},
+    goto: async () => {},
+    ledger,
+    logbook: {},
+  });
+  await page.openSource({ kind: "pair", id: "p" }, { ID: "p", Number: 4 });
+  assert.equal(ledger.selected, "p");
+});
+
+test("Open on a pair the Ledger has to read in leaves it selected", async () => {
+  const ledger = fakeLedger([]);
+  const page = createDrawingPage({
+    pairRows: { track: () => () => {}, rows: () => ({ q: { ID: "q", Number: 7 } }) },
+    drawingCards: {},
+    setCanvasSize: () => {},
+    goto: async () => {},
+    ledger,
+    logbook: {},
+  });
+  await page.openSource({ kind: "pair", id: "q" }, null);
+  assert.equal(ledger.selected, "outside-7");
 });

@@ -83,6 +83,32 @@ test("with nothing tracked, events read nothing", async () => {
   assert.equal(service.reads.length, reads);
 });
 
+test("a pair that changed while nothing tracked it is read again once tracked", async () => {
+  const { service, store } = setup({ a: { highlight: null }, b: { highlight: null } });
+  store.track(["a", "b"])();
+  await settle();
+  service.pairs.a = { highlight: 7 };
+  store.onTrafficChanged({ change: "highlight" });
+  service.pairs.b = { highlight: null, status_code: 404 };
+  store.onPairEvent({ id: "b" });
+  await settle();
+  const stop = store.track(["a", "b"]);
+  await settle();
+  assert.equal(get(store).a.Highlight, 7);
+  assert.equal(get(store).b.StatusCode, 404);
+  stop();
+});
+
+test("a pair read and unchanged since is not read again when tracked again", async () => {
+  const { service, store } = setup({ a: {} });
+  store.track(["a"])();
+  await settle();
+  const reads = service.reads.length;
+  store.track(["a"])();
+  await settle();
+  assert.equal(service.reads.length, reads);
+});
+
 test("a failed read keeps the rows it had", async () => {
   let fail = false;
   const service = trafficService({ a: {} });

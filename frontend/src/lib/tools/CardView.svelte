@@ -3,6 +3,8 @@
 	// embeddable, in the app's own classes, so its colours are the Ledger's
 	// and the Logbook's in either mode. It follows its source live: the
 	// Logbook store for records, pairRowsStore for pairs.
+	// Its text is the page's (text-token), as the Ledger and Logbook inherit
+	// it, so a GET or a title is the colour they draw it.
 	import { afterUpdate } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { logbookStore } from "../../stores/logbookStore.js";
@@ -43,7 +45,7 @@
 </script>
 
 <div
-	class="marasi-card relative h-full w-full overflow-hidden rounded-none border bg-surface-50 text-surface-900 dark:bg-surface-800 dark:text-surface-50 {content.deleted
+	class="marasi-card relative h-full w-full overflow-hidden rounded-none border bg-surface-50 text-token dark:bg-surface-800 {content.deleted
 		? 'border-dashed border-surface-400'
 		: 'border-surface-300 dark:border-surface-600'} {suggested ? 'ring-2 ring-primary-500' : ''}"
 	data-testid="card"

@@ -14,8 +14,8 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const SCALE = 2;
 
 // The colours `classes` give in light mode: `dark:` classes are dropped,
-// and a class that sets no text colour inherits the light card's, not the
-// page's (which is light text in dark mode).
+// and a class that sets no text colour inherits the page's light text
+// (the theme's base font colour), not its dark-mode text.
 const probes = new Map();
 let probeParent = null;
 function lightColours(classes) {
@@ -28,8 +28,7 @@ function lightColours(classes) {
     .join(" ");
   if (!probeParent?.isConnected) {
     probeParent = document.createElement("div");
-    probeParent.className = "text-surface-900";
-    probeParent.style.cssText = "position:fixed;left:-9999px;top:-9999px;";
+    probeParent.style.cssText = "position:fixed;left:-9999px;top:-9999px;color:rgba(var(--theme-font-color-base));";
     probeParent.setAttribute("aria-hidden", "true");
     document.body.appendChild(probeParent);
   }
@@ -105,7 +104,7 @@ export async function cardImage(element) {
   // Text size scales the root font; the card on screen scales with it.
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1;
   const px = (n) => n * rem;
-  const surface = lightColours("bg-surface-50 text-surface-900");
+  const surface = lightColours("bg-surface-50");
   const border = lightColours("bg-surface-300").bg;
   const muted = lightColours("text-surface-600").fg;
   const left = px(16);
