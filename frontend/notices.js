@@ -2,10 +2,14 @@
 // library the app ships, with its licence text. A Vite plugin writes them
 // to licences.json next to the app at build time: the npm packages in the
 // client bundle and the Go modules the app binary links (`go list -deps`),
-// plus Go itself. The dev server has no file, and the list says so.
+// plus Go itself, and the tools built beside the bundle (CyberChef and
+// Excalidraw with its fonts). The dev server has no file, and the list says so.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const LICENCES_DIR = fileURLToPath(new URL("./licences/", import.meta.url));
 
 const LICENCE_FILE = /^(licen[cs]e|copying|notice)([.-][a-z0-9-]+)?(\.(md|txt|markdown))?$/i;
 
@@ -104,8 +108,41 @@ export function goNotices(repoRoot) {
 	return [{ name: "Go", version: goVersion, licence: "BSD-3-Clause", text: licenceTextIn(goroot) }, ...modules];
 }
 
+function readOr(file, fallback = "") {
+	try {
+		return fs.readFileSync(file, "utf8").trim();
+	} catch {
+		return fallback;
+	}
+}
+
+/**
+ * The integrated tools under `frontendRoot`: CyberChef from its build in
+ * static/tools/cyberchef (frontend/cyberchef/build.js), when it was built,
+ * and Excalidraw, whose npm package ships neither its MIT text nor its
+ * fonts' (both committed in licences/).
+ */
+export function toolNotices(frontendRoot) {
+	const tools = [];
+	const chefDir = path.join(frontendRoot, "static", "tools", "cyberchef");
+	const chefLicence = readOr(path.join(chefDir, "LICENSE"));
+	if (chefLicence) {
+		const tag = JSON.parse(readOr(path.join(chefDir, ".marasi-build.json"), "{}")).tag ?? "";
+		const notice = readOr(path.join(chefDir, "MARASI-NOTICE.txt"));
+		tools.push({ name: "CyberChef", version: tag, licence: "Apache-2.0", text: [notice, chefLicence].filter(Boolean).join("\n\n") });
+	}
+	const excalidrawPkg = JSON.parse(readOr(path.join(frontendRoot, "node_modules", "@excalidraw", "excalidraw", "package.json"), "{}"));
+	tools.push({
+		name: "Excalidraw",
+		version: excalidrawPkg.version ?? "",
+		licence: "MIT, fonts OFL-1.1",
+		text: [readOr(path.join(LICENCES_DIR, "excalidraw-LICENSE.txt")), readOr(path.join(LICENCES_DIR, "excalidraw-fonts-LICENSE.txt"))].join("\n\n"),
+	});
+	return tools;
+}
+
 /** The Vite plugin: writes licences.json into the client build. */
-export function openSourceNotices({ repoRoot }) {
+export function openSourceNotices({ repoRoot, frontendRoot = path.join(repoRoot, "frontend") }) {
 	let ssr = false;
 	return {
 		name: "marasi-open-source-notices",
@@ -115,7 +152,9 @@ export function openSourceNotices({ repoRoot }) {
 		},
 		generateBundle() {
 			if (ssr) return;
-			const notices = { go: goNotices(repoRoot), npm: npmNotices(this.getModuleIds()) };
+			// Excalidraw is credited once, under Tools, with its fonts.
+			const npm = npmNotices(this.getModuleIds()).filter((entry) => entry.name !== "@excalidraw/excalidraw");
+			const notices = { go: goNotices(repoRoot), npm, tools: toolNotices(frontendRoot) };
 			this.emitFile({ type: "asset", fileName: "licences.json", source: JSON.stringify(notices) });
 		},
 	};
