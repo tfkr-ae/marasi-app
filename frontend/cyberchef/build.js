@@ -44,6 +44,15 @@ export function allowedUaParser(pkg) {
   return /^1\./.test(pkg?.version ?? "") && pkg?.license === "MIT";
 }
 
+/**
+ * tar's arguments to unpack source.tar.gz into extract/, run from the work
+ * directory. The names are relative because GNU tar (Git Bash on Windows)
+ * reads "D:\…" as host "D" and fails with "Cannot connect to D".
+ */
+export function tarExtractArgs() {
+  return ["-xzf", "source.tar.gz", "-C", "extract"];
+}
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
 const outDir = path.join(repoRoot, "frontend/static/tools/cyberchef");
@@ -81,7 +90,7 @@ async function fetchSource(workDir) {
   const extractDir = path.join(workDir, "extract");
   fs.rmSync(extractDir, { recursive: true, force: true });
   fs.mkdirSync(extractDir);
-  run("tar", ["-xzf", archive, "-C", extractDir], workDir);
+  run("tar", tarExtractArgs(), workDir);
   const [top] = fs.readdirSync(extractDir);
   fs.rmSync(srcDir, { recursive: true, force: true });
   fs.renameSync(path.join(extractDir, top), srcDir);
