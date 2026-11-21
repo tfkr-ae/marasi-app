@@ -24,8 +24,14 @@ function chromeBinary() {
   return found;
 }
 
-/** Launches Chrome and opens one page. Resolves to { page, requests, close }. */
-export async function launchChrome({ width = 1600, height = 900 } = {}) {
+/**
+ * Launches Chrome and opens one page. Resolves to { page, requests, close }.
+ * `cpuThrottle` (default TOOL_CHECKS_CPU_THROTTLE, e.g. 6) slows every
+ * target's main thread that many times, and `cores` (TOOL_CHECKS_CORES)
+ * is the navigator.hardwareConcurrency pages see: together they stand in
+ * for a slow CI runner (GitHub's Linux runner has 4).
+ */
+export async function launchChrome({ width = 1600, height = 900, cpuThrottle = Number(process.env.TOOL_CHECKS_CPU_THROTTLE) || 1, cores = Number(process.env.TOOL_CHECKS_CORES) || 0 } = {}) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "marasi-tool-checks-"));
   const args = [
     "--headless=new",
@@ -39,7 +45,9 @@ export async function launchChrome({ width = 1600, height = 900 } = {}) {
     "--disable-component-update",
     "--disable-sync",
     "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
-    ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+    // CI's Linux runner: no user namespace for Chrome's sandbox, and
+    // /dev/shm can be too small for the renderer and CyberChef's workers.
+    ...(process.platform === "linux" ? ["--no-sandbox", "--disable-dev-shm-usage"] : []),
     "about:blank",
   ];
   const child = spawn(chromeBinary(), args, { stdio: ["ignore", "ignore", "pipe"] });
@@ -96,6 +104,8 @@ export async function launchChrome({ width = 1600, height = 900 } = {}) {
       const child = params.sessionId;
       await send("Network.enable", {}, child).catch(() => {});
       await send("Page.enable", {}, child).catch(() => {});
+      if (cpuThrottle > 1) await send("Emulation.setCPUThrottlingRate", { rate: cpuThrottle }, child).catch(() => {});
+      if (cores) await send("Emulation.setHardwareConcurrencyOverride", { hardwareConcurrency: cores }, child).catch(() => {});
       sessions.set(params.targetInfo.targetId, child);
       await send("Target.setAutoAttach", autoAttach, child).catch(() => {});
       await send("Runtime.runIfWaitingForDebugger", {}, child).catch(() => {});

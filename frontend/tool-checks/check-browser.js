@@ -255,7 +255,6 @@ await report.check("cyberchef adapter calls work on a known recipe", async () =>
   const result = await page.evaluate(`(async () => {
     const a = harness.chef();
     const root = () => document.querySelector("[data-testid=cyberchef-frame]").contentDocument.documentElement;
-    const until = async (fn, ms = 10000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, 50)); } return null; };
     const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
     const step = async (name, fn) => { try { await fn(); } catch (err) { throw new Error(name + ": " + (err?.message ?? err)); } };
     await step("ready", () => a.ready(5000));
@@ -285,8 +284,17 @@ await report.check("cyberchef adapter calls work on a known recipe", async () =>
     });
     await step("bake/getOutput", async () => {
       if ((await a.getOutput()) === "d29ybGQ=") throw new Error("baked before bake()");
-      a.bake();
-      if (!(await until(async () => (await a.getOutput()) === "d29ybGQ="))) throw new Error("output " + JSON.stringify(await a.getOutput()));
+      const baked = await a.bake();
+      if (baked !== "d29ybGQ=") throw new Error("bake resolved to " + JSON.stringify(baked));
+      if ((await a.getOutput()) !== "d29ybGQ=") throw new Error("output " + JSON.stringify(await a.getOutput()));
+    });
+    await step("two bakes at once share one, and CyberChef isn't left baking", async () => {
+      a.setRecipe([{ op: "To Hex", args: ["Space", 0] }]);
+      const both = await Promise.all([a.bake(), a.bake()]);
+      if (!same(both, ["77 6f 72 6c 64", "77 6f 72 6c 64"])) throw new Error("bakes resolved to " + JSON.stringify(both));
+      const w = document.querySelector("[data-testid=cyberchef-frame]").contentWindow;
+      if (w.app.baking) throw new Error("CyberChef still says it is baking");
+      a.setRecipe([{ op: "To Base64", args: ["A-Za-z0-9+/="] }]);
     });
     await step("setTheme", async () => {
       a.setTheme("dark");
@@ -314,10 +322,37 @@ await report.check("⌘K inside CyberChef's frame reaches Marasi's dispatcher", 
 await report.check("Ctrl+Alt+Space still bakes in CyberChef", async () => {
   await page.evaluate(`harness.chef().load({ operations: [{ op: "To Base64", args: ["A-Za-z0-9+/="] }], inputs: ["bake me"] })`);
   const output = `harness.chef().getOutput()`;
+  // getOutput waits for any bake to end, so the key meets a CyberChef at
+  // rest: pressed during a bake, CyberChef's own Bake cancels it instead.
   if ((await page.evaluate(output)) === "YmFrZSBtZQ==") throw new Error("baked before the key");
   await clickInFrame("#input-text .cm-content, #input-text");
   await page.press(KEYS.space, ["ctrl", "alt"]);
-  await page.waitFor(`${output}.then((text) => text === "YmFrZSBtZQ==")`, { timeoutMs: 10000, message: "Ctrl+Alt+Space didn't bake" });
+  await page.waitFor(`${output}.then((text) => text === "YmFrZSBtZQ==")`, { timeoutMs: 30000, message: "Ctrl+Alt+Space didn't bake" });
+});
+
+await report.check("Insert bakes with Auto Bake on, in LF, and Attach's output is current", async () => {
+  const autoBake = `${chefDoc}.getElementById("auto-bake").checked`;
+  await page.evaluate(`harness.chef().load({ operations: [{ op: "To Hex", args: ["None", 0] }], inputs: [""] })`);
+  if (!(await page.evaluate(autoBake))) await clickInFrame("#auto-bake-label");
+  await page.waitFor(autoBake, { timeoutMs: 3000, message: "Auto Bake didn't turn on" });
+  await page.evaluate(`harness.chef().settled()`);
+  // A request as the service hands it over, in CRLF.
+  await page.evaluate(`harness.insertPair("GET / HTTP/1.1\\r\\nHost: a\\r\\n\\r\\n")`);
+  const hex = Buffer.from("GET / HTTP/1.1\nHost: a\n\n").toString("hex");
+  const inputs = await page.evaluate(`harness.chef().getInputs()`);
+  if (JSON.stringify(inputs) !== JSON.stringify(["GET / HTTP/1.1\nHost: a\n\n"])) throw new Error(`inserted ${JSON.stringify(inputs)}`);
+  // Auto Bake runs on its own; nothing here asks for a bake.
+  await page.waitFor(`harness.chef().getOutput().then((text) => text === ${JSON.stringify(hex)})`, {
+    timeoutMs: 30000,
+    message: "the inserted input didn't bake",
+  });
+  // Auto Bake off: a second insert leaves the output stale, and Attach's
+  // currentOutput bakes it before it reads.
+  await clickInFrame("#auto-bake-label");
+  if (await page.evaluate(autoBake)) throw new Error("Auto Bake didn't turn off");
+  await page.evaluate(`harness.insertPair("x")`);
+  const out = await page.evaluate(`harness.chef().currentOutput()`);
+  if (out !== "78") throw new Error(`currentOutput gave ${JSON.stringify(out)}`);
 });
 
 await report.check("CyberChef's Save and Load buttons are intercepted", async () => {
@@ -344,16 +379,9 @@ await report.check("cyberchef writes nothing to the app origin's localStorage (l
   const baked = await page.evaluate(`(async () => {
     const a = harness.chef();
     await a.load({ operations: [{ op: "To Base64", args: ["A-Za-z0-9+/="] }], inputs: ["stored?"] });
-    // A bake asked for while CyberChef is still settling the load can be
-    // dropped, so ask again until the output arrives.
-    for (const t = Date.now(); Date.now() - t < 10000; ) {
-      a.bake();
-      await new Promise((r) => setTimeout(r, 250));
-      if ((await a.getOutput()) === "c3RvcmVkPw==") return true;
-    }
-    return false;
+    return a.bake();
   })()`);
-  if (!baked) throw new Error("didn't bake");
+  if (baked !== "c3RvcmVkPw==") throw new Error(`baked ${JSON.stringify(baked)}`);
   const frameStorage = await page.evaluate(`(() => {
     const own = ${chefWin}.localStorage;
     return { separate: own !== localStorage, keys: Object.keys(own) };

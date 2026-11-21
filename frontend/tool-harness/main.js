@@ -15,6 +15,7 @@ import { newCardElement } from "../src/lib/tools/cards.js";
 import { drawingFile } from "../src/lib/tools/drawingFile.js";
 import { logbookStore } from "../src/stores/logbookStore.js";
 import ChefFrame from "../src/lib/tools/cyberchef/ChefFrame.svelte";
+import { chefInbox, drainInbox, pairText } from "../src/lib/tools/cyberchef/send.js";
 import { installMenuShortcuts, menuDispatcher, menuPalettes, registerMenuActions } from "../src/lib/keybindings/app.js";
 import { MACOS, WINDOWS_LINUX } from "../src/lib/keybindings/platform.js";
 
@@ -229,6 +230,12 @@ window.harness = {
 
 	/** The adapter ChefFrame made, for the adapter checks. */
 	chef: () => chef?.adapter,
+
+	/** Inserts a pair's raw text as the CyberChef page's Insert does: through the inbox. */
+	async insertPair(raw) {
+		chefInbox.update((list) => [...list, pairText(raw)]);
+		await drainInbox(chefInbox, chef.adapter);
+	},
 };
 
 window.harnessReady = true;
