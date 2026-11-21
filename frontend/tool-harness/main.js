@@ -123,7 +123,7 @@ window.harness = {
 
 	setDark(dark) {
 		setMode(dark);
-		island.$set({ dark });
+		island?.$set({ dark });
 	},
 
 	/**
@@ -202,7 +202,7 @@ window.harness = {
 		return {
 			name: file.name,
 			svg: text,
-			elements: loaded.elements.map(({ id, type }) => ({ id, type })),
+			elements: loaded.elements.map(({ id, type, link, customData }) => ({ id, type, link, customData })),
 			lightShare: images,
 		};
 	},
@@ -217,7 +217,7 @@ window.harness = {
 				chef.adapter = event.detail.adapter;
 				resolve();
 			});
-			frame.$on("error", (event) => reject(new Error(event.detail.message)));
+			frame.$on("error", (event) => reject(event.detail.error));
 		});
 		for (const name of ["saveRecipe", "loadRecipe", "error"]) frame.$on(name, (event) => record(name, event.detail ?? null));
 		teardown = () => {

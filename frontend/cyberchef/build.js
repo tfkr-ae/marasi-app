@@ -5,7 +5,10 @@
 // - pins ua-parser-js to 1.x (MIT): CyberChef's "Parse User Agent" asks for
 //   2.x, which is AGPL-3.0, and the build stops if any 2.x is installed;
 // - drops the precompressed .gz and .br copies and the bundle report;
-// - ships GCHQ's LICENSE beside the files, whose headers it keeps.
+// - ships GCHQ's LICENSE beside the files, whose headers it keeps;
+// - puts an in-memory localStorage first in index.html's <head>
+//   (memoryStorage.js), so nothing CyberChef stores reaches the app's origin,
+//   and says so in MARASI-NOTICE.txt.
 // It does nothing when the output already matches this pin.
 //
 //   node frontend/cyberchef/build.js
@@ -19,13 +22,14 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withMemoryStorage } from "./memoryStorage.js";
 
 export const CYBERCHEF_TAG = "v11.6.0";
 const SOURCE_URL = `https://github.com/gchq/CyberChef/archive/refs/tags/${CYBERCHEF_TAG}.tar.gz`;
 const SOURCE_SHA256 = "2cba92752364e7d82fcdc1ad00f7c0b1501953ed9a689180de11748f279132c1";
 export const UA_PARSER_VERSION = "1.0.41";
 // Bump when the build's steps change, so existing output is rebuilt.
-const BUILD_REVISION = 1;
+const BUILD_REVISION = 2;
 
 const DROPPED = [/\.gz$/, /\.br$/, /\.zip$/, /^BundleAnalyzerReport\.html$/];
 
@@ -137,12 +141,17 @@ function publish(srcDir) {
     recursive: true,
     filter: (from) => from === prod || shipsFile(path.relative(prod, from)),
   });
+  const index = path.join(staging, "index.html");
+  fs.writeFileSync(index, withMemoryStorage(fs.readFileSync(index, "utf8")));
   fs.copyFileSync(path.join(srcDir, "LICENSE"), path.join(staging, "LICENSE"));
   fs.writeFileSync(
     path.join(staging, "MARASI-NOTICE.txt"),
     `CyberChef ${CYBERCHEF_TAG}, Crown Copyright, Apache-2.0 (see LICENSE).\n` +
-      `Built by the Marasi app from GCHQ's release tag, unmodified except that ua-parser-js is\n` +
-      `pinned to ${UA_PARSER_VERSION} (MIT) for the "Parse User Agent" operation. GCHQ does not endorse Marasi.\n`,
+      `Built by the Marasi app from GCHQ's release tag, with two changes by Marasi:\n` +
+      `- ua-parser-js is pinned to ${UA_PARSER_VERSION} (MIT) for the "Parse User Agent" operation;\n` +
+      `- index.html starts with a script (data-marasi="memory-storage") that gives the page an\n` +
+      `  in-memory localStorage, so CyberChef's options stay out of the app's storage.\n` +
+      `GCHQ does not endorse Marasi.\n`,
   );
   fs.writeFileSync(path.join(staging, ".marasi-build.json"), `${JSON.stringify(stamp)}\n`);
   fs.rmSync(outDir, { recursive: true, force: true });

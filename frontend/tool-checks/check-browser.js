@@ -211,6 +211,12 @@ await report.check("SVG export carries the scene and its light card images", asy
     throw new Error(`the scene loaded back holds ${types.join(", ")}; want the arrow and the card as one image`);
   }
   if (types.lastIndexOf("arrow") > types.indexOf("image")) throw new Error("the card image isn't drawn after the arrow");
+  // The scene embedded in the file still names the card's source.
+  const image = out.elements.find((e) => e.type === "image");
+  if (image.link !== "marasi://finding/7") throw new Error(`the card image's link is ${JSON.stringify(image.link)}`);
+  if (JSON.stringify(image.customData?.source) !== JSON.stringify({ kind: "finding", id: 7 })) {
+    throw new Error(`the card image's source is ${JSON.stringify(image.customData)}`);
+  }
   const share = Object.values(out.lightShare)[0];
   if (!(share > 0.5)) throw new Error(`the card image is dark (${Math.round(share * 100)}% light pixels)`);
   return `${out.name}, card image ${Math.round(share * 100)}% light`;
@@ -219,6 +225,10 @@ await report.check("SVG export carries the scene and its light card images", asy
 // ---- CyberChef -----------------------------------------------------------
 
 const chefDoc = `document.querySelector("[data-testid=cyberchef-frame]").contentDocument`;
+const chefWin = `document.querySelector("[data-testid=cyberchef-frame]").contentWindow`;
+// The app origin's localStorage, as entries, before CyberChef first loads.
+const appStorage = `JSON.stringify(Object.keys(localStorage).sort().map((key) => [key, localStorage.getItem(key)]))`;
+const storageBefore = await page.evaluate(appStorage);
 
 await report.check("cyberchef loads with no request outside the app, and keeps the recipe it opened on", async () => {
   const from = requests.length;
@@ -292,6 +302,24 @@ await report.check("cyberchef adapter calls work on a known recipe", async () =>
     return "ok";
   })()`);
   if (result !== "ok") throw new Error(String(result));
+});
+
+await report.check("cyberchef writes nothing to the app origin's localStorage (load, theme switch, bake)", async () => {
+  // The adapter check above loaded, baked and set the theme; switch the
+  // app's theme through the frame too, and bake once more.
+  await page.evaluate("harness.setDark(true)");
+  await page.evaluate("harness.setDark(false)");
+  await page.evaluate(`harness.chef().load({ operations: [{ op: "To Base64", args: ["A-Za-z0-9+/="] }], inputs: ["stored?"] })`);
+  await page.evaluate("harness.chef().bake()");
+  await page.waitFor(`harness.chef().getOutput().then((text) => text === "c3RvcmVkPw==")`, { timeoutMs: 10000, message: "didn't bake" });
+  const frameStorage = await page.evaluate(`(() => {
+    const own = ${chefWin}.localStorage;
+    return { separate: own !== localStorage, keys: Object.keys(own) };
+  })()`);
+  if (!frameStorage.separate) throw new Error("CyberChef's frame uses the app's localStorage");
+  const after = await page.evaluate(appStorage);
+  if (after !== storageBefore) throw new Error(`the app's localStorage changed: ${storageBefore} → ${after}`);
+  return `CyberChef kept ${frameStorage.keys.join(", ") || "nothing"} in memory`;
 });
 
 await report.check("⌘K inside CyberChef's frame reaches Marasi's dispatcher", async () => {
