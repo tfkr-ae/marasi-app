@@ -41,17 +41,20 @@
 		style.textContent = theme.css;
 	}
 
-	// Records the shown recipe's operations and inputs when they changed.
+	// Records what CyberChef holds for the recipe it shows, when that changed.
+	// It is keyed on the shown recipe, not the `recipe` prop: the tabs open
+	// another recipe first, and the one being left is recorded on the way.
+	let recorded = "";
 	async function snapshot() {
-		if (!adapter || shownId !== recipe.id) return;
 		const id = shownId;
+		if (!adapter || !id) return;
 		try {
 			const operations = adapter.getRecipe();
 			const inputs = await adapter.getInputs();
-			if (id !== shownId) return;
-			if (JSON.stringify(operations) !== JSON.stringify(recipe.operations) || JSON.stringify(inputs) !== JSON.stringify(recipe.inputs)) {
-				dispatch("change", { id, operations, inputs });
-			}
+			const now = JSON.stringify({ operations, inputs });
+			if (id !== shownId || now === recorded) return;
+			recorded = now;
+			dispatch("change", { id, operations, inputs });
 		} catch {
 			// The frame is going away.
 		}
@@ -65,6 +68,7 @@
 		try {
 			await adapter.load(next);
 			shownId = next.id;
+			recorded = JSON.stringify({ operations: next.operations ?? [], inputs: next.inputs ?? [""] });
 		} catch (err) {
 			dispatch("error", { message: String(err?.message ?? err) });
 		} finally {

@@ -2,9 +2,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { openSourceNotices } from './notices.js';
+import { excalidrawAssets } from './excalidrawAssets.js';
 
 export default defineConfig({
 	plugins: [
+		excalidrawAssets({ root: fileURLToPath(new URL('.', import.meta.url)) }),
 		sveltekit(),
 		openSourceNotices({ repoRoot: fileURLToPath(new URL('..', import.meta.url)) })
 	],

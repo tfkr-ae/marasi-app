@@ -1,97 +1,59 @@
 <script>
-	// The CyberChef page: the project's Recipes as tabs over CyberChef's own
-	// UI (lib/tools/cyberchef). Recipes live in memory per project
-	// (lib/tools/recipes.js), so they survive leaving the page.
-	import { get } from "svelte/store";
-	import { getModalStore, getToastStore } from "@skeletonlabs/skeleton";
-	import { ChefHat, Copy, FolderOpen, PenLine, Play, Plus, Trash2 } from "lucide-svelte";
+	// The CyberChef page: the open project's Recipes as tabs over CyberChef's
+	// own UI (lib/tools/cyberchef). Recipes live in toolDocuments
+	// (lib/tools/documents.js), so they stay when the page unmounts.
+	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { ChefHat, Copy, FilePlus, Paperclip, PanelRight, Pencil, Play, Replace, Trash2 } from "lucide-svelte";
 	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
+	import DocumentTabs from "../../lib/tools/DocumentTabs.svelte";
 	import ChefFrame from "../../lib/tools/cyberchef/ChefFrame.svelte";
-	import RecipeTabs from "../../lib/tools/cyberchef/RecipeTabs.svelte";
-	import RecipePicker from "../../lib/tools/cyberchef/RecipePicker.svelte";
-	import { isEmptyRecipe, recipes } from "../../lib/tools/recipes.js";
-	import { loadedProject } from "../../stores/projectStore.js";
+	import { recipes } from "../../lib/tools/documents.js";
+	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
+	import { recipeKind } from "../../lib/tools/toolDocuments.js";
+	import { neutralVariant } from "../../lib/launchpad/format.js";
 	import { phoneWidth } from "../../lib/platform.js";
 
-	const toastStore = getToastStore();
 	const modalStore = getModalStore();
+	const toastStore = getToastStore();
 
-	$: recipes.forProject($loadedProject?.path ?? null);
-	$: current = $recipes.items.find((recipe) => recipe.id === $recipes.currentId) ?? $recipes.items[0];
+	$: current = $recipes.items.find((r) => r.id === $recipes.openId) ?? $recipes.items[0];
 
 	let frame;
 	let adapter = null;
 	let loading = true;
 	let failed = "";
-	let picking = false;
 
+	// Reads what CyberChef holds into the open recipe before copying or
+	// judging it.
 	const flush = () => frame?.flush();
-	const byId = (id) => get(recipes).items.find((recipe) => recipe.id === id);
 
-	async function create() {
+	const rename = (id) => renameDocument(modalStore, recipes, id, "recipe");
+	const remove = async (id) => {
 		await flush();
-		recipes.create();
-	}
-
-	async function open(id) {
-		picking = false;
-		await flush();
-		recipes.open(id);
-	}
-
-	async function duplicate() {
+		deleteDocument(modalStore, recipes, id, "recipe", recipeKind.isEmpty);
+	};
+	const duplicate = async () => {
 		await flush();
 		recipes.duplicate(current.id);
-	}
-
-	function rename(id = current.id) {
-		const recipe = byId(id);
-		if (!recipe) return;
-		modalStore.trigger({
-			type: "prompt",
-			title: "Rename recipe",
-			value: recipe.name,
-			valueAttr: { type: "text", required: true },
-			buttonTextSubmit: "Rename",
-			toggleAction: "cyberchef.rename-recipe",
-			response: (name) => typeof name === "string" && recipes.rename(id, name),
-		});
-	}
-
-	// An empty recipe goes at once; one with operations or input asks first.
-	async function remove(id = current.id) {
-		await flush();
-		const recipe = byId(id);
-		if (!recipe) return;
-		if (isEmptyRecipe(recipe)) return recipes.remove(id);
-		modalStore.trigger({
-			type: "confirm",
-			title: "Delete recipe?",
-			body: `${recipe.name} and its input are lost.`,
-			buttonTextConfirm: "Delete",
-			toggleAction: "cyberchef.delete-recipe",
-			response: (yes) => yes && recipes.remove(id),
-		});
-	}
-
-	function onChange(event) {
-		const { id, operations, inputs } = event.detail;
-		recipes.change(id, { operations, inputs });
-	}
+	};
+	const switchRecipe = () => switchDocument(modalStore, recipes, "recipe", "cyberchef.switch-recipe");
 
 	function onError(event) {
 		failed = event.detail.message;
 		toastStore.trigger({ message: `CyberChef: ${failed}`, background: "variant-filled-error" });
 	}
 
+	// Insert Input… and Attach… arrive with their panels (issue 04).
 	const menu = [
 		{ actionId: "cyberchef.bake", icon: Play, handler: () => adapter?.bake() },
-		{ actionId: "cyberchef.new-recipe", icon: Plus, handler: create },
-		{ actionId: "cyberchef.switch-recipe", icon: FolderOpen, handler: () => (picking = !picking) },
-		{ actionId: "cyberchef.rename-recipe", icon: PenLine, handler: () => rename() },
+		{ actionId: "cyberchef.new-recipe", icon: FilePlus, handler: () => recipes.create() },
+		{ actionId: "cyberchef.switch-recipe", icon: Replace, handler: switchRecipe },
+		{ actionId: "cyberchef.rename-recipe", icon: Pencil, handler: () => rename(current.id) },
 		{ actionId: "cyberchef.duplicate-recipe", icon: Copy, handler: duplicate },
-		{ actionId: "cyberchef.delete-recipe", icon: Trash2, handler: () => remove() },
+		{ actionId: "cyberchef.insert", icon: PanelRight, handler: () => {} },
+		{ actionId: "cyberchef.attach", icon: Paperclip, handler: () => {} },
+		{ actionId: "cyberchef.delete-recipe", icon: Trash2, handler: () => remove(current.id) },
 	];
 	useMenuActions(menu);
 </script>
@@ -105,38 +67,26 @@
 	</div>
 {:else}
 	<div class="flex h-full min-h-0 flex-col" data-testid="cyberchef-page">
-		<RecipeTabs
-			items={$recipes.items}
-			currentId={current.id}
-			on:open={(event) => open(event.detail)}
-			on:rename={(event) => rename(event.detail)}
-			on:delete={(event) => remove(event.detail)}
-			on:create={create}
-			on:duplicate={duplicate}
-		/>
+		<DocumentTabs documents={recipes} noun="recipe" onRename={rename} onDelete={remove}>
+			<button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" on:click={duplicate}>Duplicate</button>
+			<button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" disabled>Insert</button>
+			<button type="button" class="btn btn-sm {neutralVariant($modeCurrent)}" disabled>Attach…</button>
+		</DocumentTabs>
 		<div class="relative min-h-0 flex-1">
 			<ChefFrame
 				bind:this={frame}
 				recipe={current}
 				on:ready={(event) => (adapter = event.detail.adapter)}
 				on:loading={(event) => (loading = event.detail)}
-				on:change={onChange}
+				on:change={(event) => recipes.change(event.detail.id, { operations: event.detail.operations, inputs: event.detail.inputs })}
 				on:error={onError}
-				on:saveRecipe={() => rename()}
-				on:loadRecipe={() => (picking = true)}
+				on:saveRecipe={() => rename(current.id)}
+				on:loadRecipe={switchRecipe}
 			/>
 			{#if loading || failed}
 				<div class="absolute inset-0 flex items-center justify-center bg-surface-50/80 text-xs dark:bg-surface-900/80">
 					{failed ? `CyberChef didn't load: ${failed}` : "Loading CyberChef…"}
 				</div>
-			{/if}
-			{#if picking}
-				<RecipePicker
-					items={$recipes.items}
-					currentId={current.id}
-					on:open={(event) => open(event.detail)}
-					on:close={() => (picking = false)}
-				/>
 			{/if}
 		</div>
 	</div>

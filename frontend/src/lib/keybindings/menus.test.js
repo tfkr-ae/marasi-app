@@ -644,7 +644,7 @@ function everyContextState() {
     on("/ledger", requestDrawer(websocketUpgrade)),
     on("/armory"),
     armoryDrawerOpen(),
-    ...["launchpad", "checkpoint", "logbook", "compass", "workshop", "cyberchef"].map((page) => on(`/${page}`)),
+    ...["launchpad", "checkpoint", "logbook", "compass", "workshop", "cyberchef", "excalidraw"].map((page) => on(`/${page}`)),
     { ...on("/launchpad"), launchpadTreeFocused: true },
     on("/extension/Repeater"),
   ];
@@ -725,4 +725,62 @@ test("⌘K and Bake reach the dispatcher from CyberChef's input editor and its s
   // CyberChef's own Ctrl+Alt keys stay with it.
   const ctrlAltB = keydown("∫", "KeyB", { ctrlKey: true, altKey: true }, editor);
   assert.equal(dispatcher.resolve(ctrlAltB, chef), null);
+});
+
+// The Excalidraw canvas: a target inside Excalidraw's own `.excalidraw` root.
+const onCanvas = { tagName: "CANVAS", closest: (s) => (s.includes(".excalidraw") ? {} : null) };
+const onCanvasCmd = (key, code, mods = {}) => keydown(key, code, { metaKey: true, ...mods }, onCanvas);
+
+test("the Excalidraw page's actions run on their keys, on the canvas too", () => {
+  const dispatcher = mac();
+  const page = on("/excalidraw");
+  const expected = [
+    [cmdShift("N", "KeyN"), "excalidraw.new-drawing"],
+    [cmdShift("O", "KeyO"), "excalidraw.switch-drawing"],
+    [cmdShift("R", "KeyR"), "excalidraw.rename-drawing"],
+    [cmdShift("E", "KeyE"), "excalidraw.duplicate-drawing"],
+    [cmdShift("D", "KeyD"), "excalidraw.delete-drawing"],
+    [cmdShift("I", "KeyI"), "excalidraw.insert"],
+    [cmdShift("A", "KeyA"), "excalidraw.attach"],
+    [cmd("/", "Slash"), "excalidraw.shortcuts"],
+  ];
+  for (const [event, id] of expected) {
+    assert.equal(dispatcher.resolve(event, page), id, id);
+    assert.equal(dispatcher.resolve({ ...event, target: onCanvas }, page), id, `${id} on the canvas`);
+  }
+  assert.equal(dispatcher.resolve(cmd("/", "Slash"), on("/ledger")), null, "⌘/ is Excalidraw's alone");
+});
+
+test("Go to Excalidraw is ⌘⇧J from every page", () => {
+  const dispatcher = mac();
+  for (const state of [on("/"), on("/ledger"), on("/excalidraw")]) {
+    assert.equal(dispatcher.resolve(cmdShift("J", "KeyJ"), state), "global.go-excalidraw", state.route);
+  }
+});
+
+test("Excalidraw keeps its editing keys while focus is on the canvas", () => {
+  const dispatcher = mac();
+  const page = on("/excalidraw");
+  const kept = [
+    onCanvasCmd("d", "KeyD"),
+    onCanvasCmd("=", "Equal"),
+    onCanvasCmd("-", "Minus"),
+    onCanvasCmd("0", "Digit0"),
+    onCanvasCmd("g", "KeyG"),
+    onCanvasCmd("G", "KeyG", { shiftKey: true }),
+  ];
+  for (const event of kept) assert.equal(dispatcher.resolve(event, page), null, event.key);
+  // Off the canvas, the same keys are Marasi's.
+  assert.equal(dispatcher.resolve(cmd("d", "KeyD"), page), "global.download-certificate");
+  assert.equal(dispatcher.resolve(cmd("0", "Digit0"), page), "global.reset-text-size");
+  // ⌘K and the rest still reach Marasi from the canvas.
+  assert.equal(dispatcher.resolve(onCanvasCmd("k", "KeyK"), page), "global.open-menu");
+  assert.equal(dispatcher.resolve(onCanvasCmd("2", "Digit2"), page), "global.go-ledger");
+});
+
+test("Excalidraw keeps Ctrl versions of its keys on Windows/Linux", () => {
+  const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX });
+  const event = keydown("d", "KeyD", { ctrlKey: true }, onCanvas);
+  assert.equal(dispatcher.resolve(event, on("/excalidraw")), null);
+  assert.equal(dispatcher.resolve({ ...event, target: { tagName: "BODY" } }, on("/excalidraw")), "global.download-certificate");
 });

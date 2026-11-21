@@ -37,6 +37,7 @@
 		ChefHat,
 		Sun,
 		ToggleLeft,
+		Brush,
 	} from "lucide-svelte";
 	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -116,6 +117,7 @@
 		"global.go-logbook": () => closeAndGoto("/logbook"),
 		"global.go-workshop": () => closeAndGoto("/workshop"),
 		"global.go-cyberchef": () => closeAndGoto("/cyberchef"),
+		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
@@ -165,6 +167,7 @@
 		"global.go-logbook": BookOpenCheckIcon,
 		"global.go-workshop": ToolIcon,
 		"global.go-cyberchef": ChefHat,
+		"global.go-excalidraw": Brush,
 		"global.go-settings": Settings,
 		"global.start-chrome": ChromeIcon,
 		"global.download-certificate": Download,
