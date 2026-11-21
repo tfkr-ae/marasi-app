@@ -9,12 +9,12 @@ LABEL=${3:-}
 SHORTCUT=${4:-}
 
 usage() {
-	printf 'Usage: %s {dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|settings} [compare <label> <shortcut>|steps <json>|theme]\n' "$0" >&2
+	printf 'Usage: %s {dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|cyberchef|excalidraw|settings} [compare <label> <shortcut>|steps <json>|theme]\n' "$0" >&2
 	exit 2
 }
 
 case "$FEATURE" in
-	dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|settings) ;;
+	dashboard|ledger|compass|checkpoint|launchpad|armory|logbook|workshop|cyberchef|excalidraw|settings) ;;
 	*) usage ;;
 esac
 

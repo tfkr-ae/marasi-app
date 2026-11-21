@@ -6,6 +6,8 @@ Run Go commands as `GOWORK=off go …`. Agent worktrees can sit inside a checkou
 
 Run `scripts/check.sh` before you commit; CI runs the same script. It runs `go vet`, the Go tests, `npm test` and `npm run check` (svelte-check, errors only).
 
+`scripts/check-tools.sh` is separate: the tool contract checks for the pinned CyberChef and Excalidraw, in headless Chrome through a test-only harness (`frontend/tool-harness`), plus their licences. Run it before bumping either pin and after changing the adapter, the tool pages or the cards; CI runs it on such pull requests and nightly (`.github/workflows/tools.yml`).
+
 ## Building the app
 
 The app runs on Wails v3, built through its Taskfile scaffold (`Taskfile.yml` and `build/`); there is no `wails.json`. `wails3 build` builds `bin/marasi-app`, and on macOS `wails3 package` builds `bin/marasi-app.app`. Set `CHANNEL`, `VERSION` and `SIGNING_PUBLIC_KEY` in the environment for a release build; without them it is a development build. Pass extra build tags with `wails3 build -tags a,b`. Don't run `wails3 update build-assets`: it overwrites the hand-kept `build/darwin/Info.plist` and the Windows assets.

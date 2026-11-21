@@ -1,0 +1,71 @@
+name: Tools
+
+# The tool contract checks (scripts/check-tools.sh): the pinned Excalidraw
+# and CyberChef driven in headless Chrome through the test-only harness, their
+# licences, and the release build. On pull requests that touch a pin, the
+# adapter, the tool pages or the harness, and from the nightly (nightly.yml).
+on:
+  pull_request:
+    paths:
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/cyberchef/**
+      - frontend/excalidrawAssets.js
+      - frontend/src/lib/tools/**
+      - frontend/src/routes/cyberchef/**
+      - frontend/src/routes/excalidraw/**
+      - frontend/src/lib/keybindings/app.js
+      - frontend/src/lib/keybindings/gate.js
+      - frontend/tool-harness/**
+      - frontend/tool-checks/**
+      - build/Taskfile.yml
+      - scripts/check-tools.sh
+      - .github/workflows/tools.yml
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to check
+        required: false
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tools-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  check-tools:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: sudo apt-get -yq update && sudo apt-get -yq install libgtk-4-dev libwebkitgtk-6.0-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - run: sh scripts/bootstrap.sh
+      # CyberChef's pinned source with its install, and its build: a bump
+      # changes build.js (the tag, checksum and revision), so it misses.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/cyberchef-*
+            frontend/static/tools/cyberchef
+          key: cyberchef-${{ runner.os }}-${{ hashFiles('frontend/cyberchef/build.js') }}
+      - name: Chrome
+        run: echo "CHROME_BIN=$(command -v google-chrome || command -v chromium)" >> "$GITHUB_ENV"
+      - run: sh scripts/check-tools.sh

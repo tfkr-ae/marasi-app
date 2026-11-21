@@ -92,6 +92,15 @@ jobs:
             echo "version=$(date -u '+%d.%m.%Y') (nightly ${sha:0:7})"
           } >> "$GITHUB_OUTPUT"
 
+  # The tool contract checks on the same commit (tools.yml). They don't hold
+  # up the nightly; a failure shows on the run.
+  tools:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    uses: ./.github/workflows/tools.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+
   # Each build carries its platform's Marasi CLI, the latest CLI release on
   # this channel, verified (build.yml, "Carry the Marasi CLI").
   build:

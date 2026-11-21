@@ -27,6 +27,9 @@ const routes = {
 	armory: { selector: '[title="Armory"], [title^="Armory · "]', path: "/armory", expected: "Templates" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "In progress" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
+	// A fresh project's first document; the tab strip is the page's own.
+	cyberchef: { selector: '[title="CyberChef"]', path: "/cyberchef", expected: "Recipe 1" },
+	excalidraw: { selector: '[title="Excalidraw"]', path: "/excalidraw", expected: "Drawing 1" },
 	// The icon's title gains " · <update state>" while an update waits.
 	settings: { selector: '[title="Settings"], [title^="Settings · "]', path: "/settings", expected: "Marasi Settings" },
 };
@@ -324,6 +327,9 @@ function keyEvent(key) {
 		"[": { key: "[", code: "BracketLeft", keyCode: 219 },
 		"]": { key: "]", code: "BracketRight", keyCode: 221 },
 		"\\": { key: "\\", code: "Backslash", keyCode: 220 },
+		"/": { key: "/", code: "Slash", keyCode: 191 },
+		";": { key: ";", code: "Semicolon", keyCode: 186 },
+		space: { key: " ", code: "Space", keyCode: 32 },
 		up: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
 		down: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
 		left: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
