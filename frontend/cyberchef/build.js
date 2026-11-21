@@ -12,6 +12,8 @@
 //
 // CYBERCHEF_WORK_DIR moves the download and its node_modules (default
 // .cache/cyberchef-<tag> in the repo, gitignored), so a rebuild reuses them.
+// prepareSource() is the download and install alone: the licence check
+// (frontend/tool-checks/licences.js) reads the installed tree from it.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -147,15 +149,21 @@ function publish(srcDir) {
   fs.renameSync(staging, outDir);
 }
 
+/** Downloads and installs CyberChef's pinned source (no build); resolves to its directory. */
+export async function prepareSource() {
+  const workDir = path.resolve(process.env.CYBERCHEF_WORK_DIR || path.join(repoRoot, ".cache", `cyberchef-${CYBERCHEF_TAG}`));
+  fs.mkdirSync(workDir, { recursive: true });
+  const srcDir = await fetchSource(workDir);
+  install(srcDir);
+  return srcDir;
+}
+
 async function main() {
   if (upToDate()) {
     log(`${CYBERCHEF_TAG} is up to date`);
     return;
   }
-  const workDir = path.resolve(process.env.CYBERCHEF_WORK_DIR || path.join(repoRoot, ".cache", `cyberchef-${CYBERCHEF_TAG}`));
-  fs.mkdirSync(workDir, { recursive: true });
-  const srcDir = await fetchSource(workDir);
-  install(srcDir);
+  const srcDir = await prepareSource();
   build(srcDir);
   publish(srcDir);
   log(`built ${CYBERCHEF_TAG} into ${path.relative(repoRoot, outDir)}`);
