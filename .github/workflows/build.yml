@@ -87,8 +87,37 @@ jobs:
       - run: npm test
         working-directory: frontend
 
+  # CyberChef, built once on Linux and handed to every platform's build.
+  # Its output is the same on every platform, but its webpack config doesn't
+  # build on Windows (loaders keyed on "/" paths). build.js skips the build
+  # when the downloaded output's stamp matches the pin.
+  cyberchef:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/cyberchef-*
+            frontend/static/tools/cyberchef
+          key: cyberchef-${{ runner.os }}-${{ hashFiles('frontend/cyberchef/build.js') }}
+      - run: node frontend/cyberchef/build.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cyberchef
+          path: frontend/static/tools/cyberchef
+          # The build stamp, .marasi-build.json, lets build.js skip the build.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
   build:
-    needs: test
+    needs: [test, cyberchef]
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +166,10 @@ jobs:
       # main.go embeds frontend/build, which binding generation needs before
       # the frontend build fills it.
       - run: mkdir -p frontend/build && touch frontend/build/.keep
+      - uses: actions/download-artifact@v4
+        with:
+          name: cyberchef
+          path: frontend/static/tools/cyberchef
       # Release and nightly builds carry their platform's Marasi CLI, gzipped
       # (docs/adr/2026-11-08-the-app-carries-a-compressed-cli-it-installs-once.md):
       # the latest CLI release on the app's channel, verified against the
