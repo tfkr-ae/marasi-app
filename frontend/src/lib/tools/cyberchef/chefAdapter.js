@@ -92,6 +92,11 @@ export function chefAdapter(win) {
       return out;
     },
 
+    /** The open input tab's number, as its tab shows it. */
+    openTab() {
+      return activeTab() > 0 ? activeTab() : 1;
+    },
+
     /** The open tab's output as text, or "" before a bake. */
     async getOutput() {
       const output = app().manager.output;
