@@ -48,7 +48,8 @@ function statusAccent(code) {
 }
 
 function findingContent(finding) {
-  const chips = [{ text: finding.Severity || "No severity", classes: SEVERITY_BADGE[finding.Severity] ?? CHIP, bold: true }];
+  // No severity is the Logbook's soft badge.
+  const chips = [{ text: finding.Severity || "No severity", classes: SEVERITY_BADGE[finding.Severity] ?? "variant-soft", bold: true }];
   if (finding.CVSSScore) chips.push({ text: `CVSS ${Number(finding.CVSSScore).toFixed(1)}`, classes: CHIP });
   return {
     accent: { classes: SEVERITY_BADGE[finding.Severity] ?? "bg-surface-400" },

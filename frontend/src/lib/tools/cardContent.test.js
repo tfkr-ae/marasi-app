@@ -43,6 +43,13 @@ test("a finding card shows its severity badge, CVSS, title, write-up and counts"
   assert.equal(content.footer, "2 pairs · 1 artifact");
 });
 
+test("a finding with no severity has the Logbook's no-severity badge", () => {
+  const content = cardContent({ kind: "finding", id: "f2" }, { ID: "f2", Title: "Open redirect", Severity: "" });
+  assert.equal(content.chips[0].text, "No severity");
+  // As LogbookSummary, LogbookRecord and RecordChecklist draw it.
+  assert.equal(content.chips[0].classes, "variant-soft");
+});
+
 test("a test case card shows its category in the tertiary variant, all its tags, and its counts", () => {
   const testCase = {
     ID: "t1", Title: "Login rate limit", Category: "Authentication", Tags: ["login", "rate", "brute", "extra"],

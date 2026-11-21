@@ -193,6 +193,23 @@ await report.check("card embeddable renders, accepts an arrow binding, resizes w
   return `${Math.round(height)}px → ${Math.round(await page.evaluate(`${cardElement(cardId)}.height`))}px`;
 });
 
+// The Ledger and Logbook draw a GET or a title in the page's text colour,
+// so a card's text is the page's, not a surface shade, in both modes.
+await report.check("a card's text is the page's colour, light and dark", async () => {
+  if (!cardId) throw new Error("no card (the card check failed)");
+  const colours = `(() => ({ page: getComputedStyle(document.body).color, card: getComputedStyle(${cardEl}.querySelector('[data-testid="card-title"]')).color }))()`;
+  const seen = [];
+  for (const dark of [false, true]) {
+    await page.evaluate(`harness.setDark(${dark})`);
+    await page.waitFor(`document.documentElement.classList.contains("dark") === ${dark}`, { timeoutMs: 3000 });
+    const { page: text, card } = await page.evaluate(colours);
+    if (card !== text) throw new Error(`${dark ? "dark" : "light"}: the card's text is ${card}, the page's ${text}`);
+    seen.push(card);
+  }
+  await page.evaluate("harness.setDark(false)");
+  return seen.join(" / ");
+});
+
 await report.check("SVG export carries the scene and its light card images", async () => {
   if (!cardId) throw new Error("no card (the card check failed)");
   // The app in dark mode: the card on screen is dark.
