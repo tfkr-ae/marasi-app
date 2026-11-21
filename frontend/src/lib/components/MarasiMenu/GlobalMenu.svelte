@@ -34,8 +34,12 @@
 		SendIcon,
 		Settings,
 		Swords,
+		ChefHat,
+		CookingPot,
 		Sun,
 		ToggleLeft,
+		Brush,
+		Shapes,
 	} from "lucide-svelte";
 	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -44,7 +48,7 @@
 	import { updatePanelModal } from "../../updates.js";
 	import { connectionsModal } from "../../connection/modal.js";
 	import { startChrome } from "../../chrome.js";
-	import { MOBILE_HIDDEN_ACTIONS, mobile } from "../../platform.js";
+	import { chefShown, hiddenInMenu, mobile } from "../../platform.js";
 	import { checkForUpdatesAndShowResult } from "../../../stores/updateStore";
 	import {
 		extensions,
@@ -77,7 +81,10 @@
 		extensionNavigationActionId,
 	} from "../../keybindings/catalog.js";
 	import { OPEN_MENU } from "../../keybindings/dispatcher.js";
+	import { page } from "$app/stores";
+	import { addOpenPairToDrawing } from "../../tools/addToDrawing.js";
 	import { platformFromDesktopOS } from "../../keybindings/platform.js";
+	import { sendFocusedToChef, trackEditors } from "../../tools/cyberchef/sendAction.js";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -114,7 +121,13 @@
 		"global.go-armory": () => closeAndGoto("/armory"),
 		"global.go-logbook": () => closeAndGoto("/logbook"),
 		"global.go-workshop": () => closeAndGoto("/workshop"),
+		"global.go-cyberchef": () => closeAndGoto("/cyberchef"),
+		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
 		"global.go-settings": () => closeAndGoto("/settings"),
+		// The Ledger's open pair, on the last-opened drawing.
+		"global.add-to-drawing": () => addOpenPairToDrawing(toastStore, get(page).url.pathname),
+		// Without CyberChef (chefShown), its shortcut does nothing.
+		"global.send-to-cyberchef": () => get(chefShown) && sendFocusedToChef(toastStore),
 		"global.start-chrome": () =>
 			startChrome().catch(chromeError(toastStore, "Error starting Chrome")),
 		"global.download-certificate": () => downloadCertificate(toastStore),
@@ -162,7 +175,11 @@
 		"global.go-armory": Swords,
 		"global.go-logbook": BookOpenCheckIcon,
 		"global.go-workshop": ToolIcon,
+		"global.go-cyberchef": ChefHat,
+		"global.go-excalidraw": Brush,
 		"global.go-settings": Settings,
+		"global.add-to-drawing": Shapes,
+		"global.send-to-cyberchef": CookingPot,
 		"global.start-chrome": ChromeIcon,
 		"global.download-certificate": Download,
 		"global.copy-certificate": Copy,
@@ -266,7 +283,11 @@
 
 	$: menuOptions = $menuDispatcher.catalog
 		.inContext("global")
-		.filter((action) => action.id !== OPEN_MENU && !($mobile && MOBILE_HIDDEN_ACTIONS.has(action.id)))
+		.filter(
+			(action) =>
+				action.id !== OPEN_MENU &&
+				!hiddenInMenu(action.id, { mobile: $mobile, chefShown: $chefShown }),
+		)
 		.map((action) =>
 			entry(action, {
 				intercept: $interceptFlag,
@@ -280,7 +301,9 @@
 		const unregister = Object.entries(handlers).map(([id, handler]) =>
 			menuDispatcher.register(id, handler),
 		);
+		const stopTracking = trackEditors();
 		return () => {
+			stopTracking();
 			unregister.forEach((fn) => fn());
 			unregisterExtensions.forEach((fn) => fn());
 		};

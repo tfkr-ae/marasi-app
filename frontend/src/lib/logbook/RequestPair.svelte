@@ -13,6 +13,7 @@
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
+	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
 
 	/** The pair's ID. */
 	export let id;
@@ -64,7 +65,7 @@
 
 <div class="logbook-pair grid h-full min-h-0 gap-px bg-surface-500/30 {stack ? 'grid-rows-2' : 'grid-cols-2'}">
 	{#each [["Request", bodies.request], ["Response", bodies.response]] as [label, text], i (label)}
-		<div class="flex min-h-0 min-w-0 flex-col bg-surface-50 dark:bg-surface-900">
+		<div class="flex min-h-0 min-w-0 flex-col bg-surface-50 dark:bg-surface-900" data-chef-pane>
 			<div
 				class="flex h-7 flex-none items-center gap-3 border-b border-surface-500/30 px-2 text-3xs font-bold uppercase tracking-wider"
 			>
@@ -72,6 +73,7 @@
 				{#if paused[i]}
 					<span class="logbook-wrap-suspended font-normal normal-case tracking-normal opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
 				{/if}
+				{#if details}<SendToChefButton />{/if}
 				{#if i === 1}
 					{#if !expanded}<button
 							type="button"

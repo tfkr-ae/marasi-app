@@ -93,6 +93,8 @@ Use the executable driver with one mapped route:
 .agents/skills/verify-marasi/scripts/drive.sh armory
 .agents/skills/verify-marasi/scripts/drive.sh logbook
 .agents/skills/verify-marasi/scripts/drive.sh workshop
+.agents/skills/verify-marasi/scripts/drive.sh cyberchef
+.agents/skills/verify-marasi/scripts/drive.sh excalidraw
 .agents/skills/verify-marasi/scripts/drive.sh settings
 .agents/skills/verify-marasi/scripts/drive.sh dashboard theme
 ```
@@ -136,7 +138,7 @@ For behavioral actions beyond navigation, use a named sequence of real UI inputs
 | `{"wheel": "<css>", "deltaY": n}` | One real wheel turn of `n` px over the one actionable match (same rules and scoping as `click`), for scrolling a container, for example when sticky rows cover the control to click. The driver does not wait for the hidden page to acknowledge it, so wait for the scrolled state next. |
 | `{"text": "<label>"}` | Click the one actionable button, link, switch, tab, label, or summary whose normalized text, `aria-label`, or `title` equals the label. Wrappers around a matching control collapse to the control. `within` and `nth` apply. |
 | `{"hover": "<css>"}` | Move the pointer onto the one actionable match (same rules and `hasText`/`within`/`nth` as `click`, except that a disabled match counts), for controls shown only on hover, such as a saved query's Rename, Move and Delete buttons. The pointer stays there until the next click. `-steps.json` records the match's box, so hovers prove a control kept its place. |
-| `{"key": "cmd+shift+r"}` | Shortcut, same syntax as compare. Also `escape`, `enter`, `tab`, `backspace`, `[`, `]`, `\` (escaped as `\\` in JSON), `up`, `down`, `left`, `right`, `f10`, `contextmenu` (the ContextMenu key), with `alt` or `shift` as well (`alt+shift+up`, `shift+f10`). A bare character without `cmd`, `ctrl`, or `alt` (for example `{"key":"l"}`) types itself, so a focused `<select>` jumps to the first option that starts with it. Letters sent within about a second join into one search (`m` then `w` matches nothing), so leave about a second of other steps between them. |
+| `{"key": "cmd+shift+r"}` | Shortcut, same syntax as compare. Also `escape`, `enter`, `tab`, `backspace`, `space`, `[`, `]`, `/`, `;`, `\` (escaped as `\\` in JSON), `up`, `down`, `left`, `right`, `f10`, `contextmenu` (the ContextMenu key), with `alt` or `shift` as well (`alt+shift+up`, `shift+f10`). A bare character without `cmd`, `ctrl`, or `alt` (for example `{"key":"l"}`) types itself, so a focused `<select>` jumps to the first option that starts with it. Letters sent within about a second join into one search (`m` then `w` matches nothing), so leave about a second of other steps between them. |
 | `{"insert": "<text>"}` | Waits for a focused input or editor, inserts, then waits until the text is in that field. |
 | `{"waitText": "…"}`, `{"waitNoText": "…"}` | Visible `innerText` contains or lacks the text. Add `within` to read only matching roots, so text the editor already holds cannot satisfy the wait. |
 | `{"waitEnabledText": "<label>"}` | The labelled control is actionable and enabled. |

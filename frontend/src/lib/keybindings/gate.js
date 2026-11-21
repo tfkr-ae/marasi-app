@@ -21,9 +21,9 @@ export const NON_BLOCKING_MODALS = new Set(["WebsocketStream"]);
 
 // Routes where modified shortcuts also fire from inside form fields, such as
 // the Marasi menu from the Launchpad search, rename and create fields, or
-// ⌘U from a Settings field.
+// ⌘U from a Settings field, or ⌘K from CyberChef's operation search.
 // Actions that yield to editors still leave their keys to the field.
-const FORM_FIELD_ROUTES = new Set(["/ledger", "/logbook", "/launchpad", "/settings"]);
+const FORM_FIELD_ROUTES = new Set(["/ledger", "/logbook", "/launchpad", "/settings", "/cyberchef"]);
 const FORM_FIELD_TAGS = new Set(["INPUT", "SELECT", "TEXTAREA"]);
 // The Marasi menu's own search field.
 const MENU_SEARCH_ID = "commandmenu";
@@ -73,12 +73,33 @@ function unmodifiedKeyBelongsToPage(event) {
   return isReservedBinding(binding) || isEditable(event.target);
 }
 
+// Embedded tools that keep some modified keys while focus is inside them,
+// over any Marasi binding: Excalidraw's canvas keeps duplicate (⌘D), zoom
+// (⌘=, ⌘-, ⌘0) and group (⌘G, ⌘⇧G). Every other key, ⌘K included, still
+// reaches Marasi. A runtime rule only: profiles may still bind these keys,
+// which then work everywhere else.
+const KEPT_BY_EMBEDS = [
+  {
+    selector: ".excalidraw",
+    keys: ["d", "=", "-", "0", "g", "shift+g"].flatMap((key) => [`meta+${key}`, `ctrl+${key}`]),
+  },
+];
+
+function keptByEmbed(event) {
+  const binding = bindingFromEvent(event);
+  if (!binding) return false;
+  return KEPT_BY_EMBEDS.some(
+    ({ selector, keys }) => keys.includes(binding) && Boolean(event.target?.closest?.(selector)),
+  );
+}
+
 export function shortcutGate(event, state) {
   // The keybindings settings modal is recording a shortcut.
   if (state.capturing) return "blocked";
   if (state.modal && !NON_BLOCKING_MODALS.has(state.modal)) return "blocked";
   if (blockedByFormField(event, state)) return "blocked";
   if (unmodifiedKeyBelongsToPage(event)) return "blocked";
+  if (keptByEmbed(event)) return "blocked";
   // An open <dialog> without a modal is the Marasi menu itself.
   if (!state.modal && state.dialogOpen) return "menu-open";
   return "open";

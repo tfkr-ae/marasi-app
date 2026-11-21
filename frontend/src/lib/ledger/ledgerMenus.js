@@ -344,7 +344,8 @@ export function createLedgerMenus({
 
 	// The drawer's rail and details column run the same handlers as the
 	// shortcuts, by action id. Only drawer-open and WebSocket actions are in
-	// it, so a rail button with a drawer-closed id does nothing.
+	// it; the page runs a global id (Add to Drawing, Send to CyberChef)
+	// through the dispatcher.
 	const drawerHandlers = new Map(
 		[websocketDrawerMenuItem, ...drawerMenu].map(({ actionId, handler }) => [actionId, handler]),
 	);

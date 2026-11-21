@@ -644,7 +644,7 @@ function everyContextState() {
     on("/ledger", requestDrawer(websocketUpgrade)),
     on("/armory"),
     armoryDrawerOpen(),
-    ...["launchpad", "checkpoint", "logbook", "compass", "workshop"].map((page) => on(`/${page}`)),
+    ...["launchpad", "checkpoint", "logbook", "compass", "workshop", "cyberchef", "excalidraw"].map((page) => on(`/${page}`)),
     { ...on("/launchpad"), launchpadTreeFocused: true },
     on("/extension/Repeater"),
   ];
@@ -693,4 +693,120 @@ test("Connections… bound in a custom profile opens from every menu context", (
       label,
     );
   }
+});
+
+test("the CyberChef page has its own menu, and Go to CyberChef is ⌘⇧Y everywhere", () => {
+  const dispatcher = mac();
+  const chef = on("/cyberchef");
+  assert.equal(dispatcher.resolve(cmdShift("Enter", "Enter"), chef), "cyberchef.bake");
+  assert.equal(dispatcher.resolve(cmdShift("N", "KeyN"), chef), "cyberchef.new-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("O", "KeyO"), chef), "cyberchef.switch-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("R", "KeyR"), chef), "cyberchef.rename-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("E", "KeyE"), chef), "cyberchef.duplicate-recipe");
+  assert.equal(dispatcher.resolve(cmdShift("I", "KeyI"), chef), "cyberchef.insert");
+  assert.equal(dispatcher.resolve(cmdShift("A", "KeyA"), chef), "cyberchef.attach");
+  assert.equal(dispatcher.resolve(cmdShift("D", "KeyD"), chef), "cyberchef.delete-recipe");
+  // The recipe keys are CyberChef's alone.
+  assert.equal(dispatcher.resolve(cmdShift("Enter", "Enter"), on("/")), null);
+  for (const state of [on("/"), on("/ledger"), chef, on("/workshop")]) {
+    assert.equal(dispatcher.resolve(cmdShift("Y", "KeyY"), state), "global.go-cyberchef", state.route);
+  }
+});
+
+test("Send to CyberChef is ⌘E from any editor, the Ledger query editor included", () => {
+  const dispatcher = mac();
+  const inEditor = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" ? {} : null) };
+  // The query editor gets the key too: the handler refuses it with a toast.
+  const inQuery = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" || s === ".ledger-query" ? {} : null) };
+  const states = [
+    on("/ledger", requestDrawer()),
+    on("/ledger"),
+    on("/launchpad"),
+    on("/checkpoint"),
+    on("/logbook"),
+    on("/"),
+  ];
+  for (const state of states) {
+    assert.equal(dispatcher.resolve(keydown("e", "KeyE", { metaKey: true }, inEditor), state), "global.send-to-cyberchef", state.route);
+    assert.equal(dispatcher.resolve(cmd("e", "KeyE"), state), "global.send-to-cyberchef", state.route);
+  }
+  assert.equal(dispatcher.resolve(keydown("e", "KeyE", { metaKey: true }, inQuery), on("/ledger")), "global.send-to-cyberchef");
+});
+
+test("⌘K and Bake reach the dispatcher from CyberChef's input editor and its search field", () => {
+  const dispatcher = mac();
+  const chef = on("/cyberchef");
+  const editor = { tagName: "DIV", isContentEditable: true, closest: (s) => (s === ".cm-editor" ? {} : null) };
+  const search = { tagName: "INPUT", id: "search", closest: () => null };
+  for (const target of [editor, search]) {
+    assert.equal(dispatcher.resolve(keydown("k", "KeyK", { metaKey: true }, target), chef), "global.open-menu", target.tagName);
+    assert.equal(dispatcher.resolve(keydown("Enter", "Enter", { metaKey: true, shiftKey: true }, target), chef), "cyberchef.bake", target.tagName);
+  }
+  // CyberChef's own Ctrl+Alt keys stay with it.
+  const ctrlAltB = keydown("∫", "KeyB", { ctrlKey: true, altKey: true }, editor);
+  assert.equal(dispatcher.resolve(ctrlAltB, chef), null);
+});
+
+// The Excalidraw canvas: a target inside Excalidraw's own `.excalidraw` root.
+const onCanvas = { tagName: "CANVAS", closest: (s) => (s.includes(".excalidraw") ? {} : null) };
+const onCanvasCmd = (key, code, mods = {}) => keydown(key, code, { metaKey: true, ...mods }, onCanvas);
+
+test("the Excalidraw page's actions run on their keys, on the canvas too", () => {
+  const dispatcher = mac();
+  const page = on("/excalidraw");
+  const expected = [
+    [cmdShift("N", "KeyN"), "excalidraw.new-drawing"],
+    [cmdShift("O", "KeyO"), "excalidraw.switch-drawing"],
+    [cmdShift("R", "KeyR"), "excalidraw.rename-drawing"],
+    [cmdShift("E", "KeyE"), "excalidraw.duplicate-drawing"],
+    [cmdShift("D", "KeyD"), "excalidraw.delete-drawing"],
+    [cmdShift("I", "KeyI"), "excalidraw.insert"],
+    [cmdShift("A", "KeyA"), "excalidraw.attach"],
+    [cmd("/", "Slash"), "excalidraw.shortcuts"],
+  ];
+  for (const [event, id] of expected) {
+    assert.equal(dispatcher.resolve(event, page), id, id);
+    assert.equal(dispatcher.resolve({ ...event, target: onCanvas }, page), id, `${id} on the canvas`);
+  }
+  assert.equal(dispatcher.resolve(cmd("/", "Slash"), on("/ledger")), null, "⌘/ is Excalidraw's alone");
+});
+
+test("Go to Excalidraw is ⌘⇧J from every page", () => {
+  const dispatcher = mac();
+  for (const state of [on("/"), on("/ledger"), on("/excalidraw")]) {
+    assert.equal(dispatcher.resolve(cmdShift("J", "KeyJ"), state), "global.go-excalidraw", state.route);
+  }
+});
+
+test("Excalidraw keeps its editing keys while focus is on the canvas", () => {
+  const dispatcher = mac();
+  const page = on("/excalidraw");
+  const kept = [
+    onCanvasCmd("d", "KeyD"),
+    onCanvasCmd("=", "Equal"),
+    onCanvasCmd("-", "Minus"),
+    onCanvasCmd("0", "Digit0"),
+    onCanvasCmd("g", "KeyG"),
+    onCanvasCmd("G", "KeyG", { shiftKey: true }),
+  ];
+  for (const event of kept) assert.equal(dispatcher.resolve(event, page), null, event.key);
+  // Off the canvas, the same keys are Marasi's.
+  assert.equal(dispatcher.resolve(cmd("d", "KeyD"), page), "global.download-certificate");
+  assert.equal(dispatcher.resolve(cmd("0", "Digit0"), page), "global.reset-text-size");
+  // ⌘K and the rest still reach Marasi from the canvas.
+  assert.equal(dispatcher.resolve(onCanvasCmd("k", "KeyK"), page), "global.open-menu");
+  assert.equal(dispatcher.resolve(onCanvasCmd("2", "Digit2"), page), "global.go-ledger");
+});
+
+test("Excalidraw keeps Ctrl versions of its keys on Windows/Linux", () => {
+  const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX });
+  const event = keydown("d", "KeyD", { ctrlKey: true }, onCanvas);
+  assert.equal(dispatcher.resolve(event, on("/excalidraw")), null);
+  assert.equal(dispatcher.resolve({ ...event, target: { tagName: "BODY" } }, on("/excalidraw")), "global.download-certificate");
+});
+
+test("Add to Drawing is ⌘⇧; from the Ledger, drawer open or closed", () => {
+  const dispatcher = mac();
+  assert.equal(dispatcher.resolve(cmdShift(":", "Semicolon"), on("/ledger", requestDrawer())), "global.add-to-drawing");
+  assert.equal(dispatcher.resolve(cmdShift(":", "Semicolon"), on("/ledger")), "global.add-to-drawing");
 });

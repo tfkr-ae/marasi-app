@@ -12,6 +12,7 @@
 		Braces,
 		ChevronDown,
 		ChevronUp,
+		CookingPot,
 		Copy,
 		FileOutput,
 		Globe,
@@ -27,6 +28,7 @@
 		Sparkles,
 		StickyNote,
 		Swords,
+		Shapes,
 		WrapText,
 		X,
 	} from "lucide-svelte";
@@ -35,6 +37,7 @@
 	import DrawerFacts from "./DrawerFacts.svelte";
 	import DrawerLinked from "./DrawerLinked.svelte";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
+	import { chefShown } from "../platform.js";
 
 	/** The focused pair's table row, and its request number. */
 	export let pair;
@@ -78,6 +81,9 @@
 		null,
 		{ label: "Send to Launchpad", icon: Send, actionId: `${DRAWER}.send-to-launchpad` },
 		{ label: "Send to Armory", icon: Swords, actionId: `${DRAWER}.send-to-armory` },
+		{ label: "Add to Drawing", icon: Shapes, actionId: "global.add-to-drawing" },
+		// A global action: the selection, or the whole editor, last focused.
+		...($chefShown ? [{ label: "Send to CyberChef", icon: CookingPot, actionId: "global.send-to-cyberchef" }] : []),
 		{ label: "Create finding", icon: ShieldAlert, actionId: `${DRAWER}.create-finding` },
 		{ label: "Create test case", icon: BookCheck, actionId: `${DRAWER}.create-test-case` },
 	];

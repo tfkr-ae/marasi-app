@@ -1,6 +1,6 @@
 <script>
-	// The open-source licences, from Settings → About's View: the libraries
-	// the app ships, from the licences.json the build writes
+	// The open-source licences, from Settings → About's View: the tools and
+	// libraries the app ships, from the licences.json the build writes
 	// (frontend/notices.js). Each row opens to its licence text. Registered
 	// as "Licences" (routes/+layout.svelte).
 	import { getModalStore } from "@skeletonlabs/skeleton";
@@ -23,6 +23,7 @@
 
 	$: groups = notices
 		? [
+				{ name: "Tools", entries: notices.tools ?? [] },
 				{ name: "Go", entries: notices.go ?? [] },
 				{ name: "JavaScript", entries: notices.npm ?? [] },
 			]
@@ -39,7 +40,7 @@
 			<button type="button" aria-label="Close" on:click={modalStore.close}><X size={16} /></button>
 		</header>
 		<div class="licences-body max-h-[70vh] overflow-y-auto px-5 py-4">
-			<p class="mb-3 text-xs opacity-70">Marasi includes these open-source libraries.</p>
+			<p class="mb-3 text-xs opacity-70">Marasi includes these open-source tools and libraries.</p>
 			{#if missing}
 				<p class="text-sm opacity-70" data-testid="licences-missing">Licences are listed in built apps only.</p>
 			{:else if !notices}

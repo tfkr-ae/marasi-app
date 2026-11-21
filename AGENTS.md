@@ -6,6 +6,8 @@ Run Go commands as `GOWORK=off go …`. Agent worktrees can sit inside a checkou
 
 Run `scripts/check.sh` before you commit; CI runs the same script. It runs `go vet`, the Go tests, `npm test` and `npm run check` (svelte-check, errors only).
 
+`scripts/check-tools.sh` is separate: the tool contract checks for the pinned CyberChef and Excalidraw, in headless Chrome through a test-only harness (`frontend/tool-harness`), plus their licences. Run it before bumping either pin and after changing the adapter, the tool pages or the cards; CI runs it on such pull requests and nightly (`.github/workflows/tools.yml`).
+
 ## Building the app
 
 The app runs on Wails v3, built through its Taskfile scaffold (`Taskfile.yml` and `build/`); there is no `wails.json`. `wails3 build` builds `bin/marasi-app`, and on macOS `wails3 package` builds `bin/marasi-app.app`. Set `CHANNEL`, `VERSION` and `SIGNING_PUBLIC_KEY` in the environment for a release build; without them it is a development build. Pass extra build tags with `wails3 build -tags a,b`. Don't run `wails3 update build-assets`: it overwrites the hand-kept `build/darwin/Info.plist` and the Windows assets.
@@ -22,6 +24,7 @@ Maps live in `docs/agents/maps/`. Read the map there before you change or ask ab
 - `project-open.md`: startup, the scratchpad, opening or switching a project, or the opening screen.
 - `updates.md`: checking for, installing or relaunching into an update, channels, signing, or the release workflows.
 - `ui.md`: which component draws a screen, the app rail, the Marasi menu, a modal or an editor, which text size to use, or the mobile (iOS and Android) layout.
+- `tools.md`: the CyberChef or Excalidraw page, the CyberChef adapter, the Excalidraw island, cards, Drawings and Recipes (`toolDocuments`), or the tools' licences.
 - `marasi-service.md`: the service client, the connection store, the Go shell and its Wails bindings, events, coded errors, app or per-project settings, or the Marasi CLI, the local instance and Marasi's source.
 
 ## Agent skills

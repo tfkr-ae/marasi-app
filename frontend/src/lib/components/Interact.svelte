@@ -11,7 +11,7 @@
 
 {#if isVisible}
     <div class="iframe-container">
-        <iframe id="interact" class="cyberchef-iframe" src={url} title="InteractSH">
+        <iframe id="interact" class="interact-iframe" src={url} title="InteractSH">
             <!-- Fallback content for browsers that do not support iframes -->
             <p>Your browser does not support iframes.</p>
         </iframe>
@@ -30,7 +30,7 @@
     visibility: visible;
     transition: opacity 0.3s, visibility 0.3s;
 }
-.cyberchef-iframe {
+.interact-iframe {
     width: 100%;   /* Full width of the container */
     height: 100%;
     border: none;  /* Optional: removes iframe border */
