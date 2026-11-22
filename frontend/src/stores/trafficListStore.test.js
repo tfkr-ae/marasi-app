@@ -84,6 +84,19 @@ test("new and changed traffic read the list again while it is shown, and not aft
   assert.equal(service.reads.length, reads);
 });
 
+test("steady traffic still refreshes the list once the longest wait passes", async () => {
+  const service = trafficService();
+  const list = createTrafficListStore(createToolTrafficApi(service.client), { settleMs: 40, maxWaitMs: 80 });
+  const stop = list.start();
+  await settle();
+  const reads = service.reads.length;
+  const busy = setInterval(() => list.onTraffic(), 10);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  clearInterval(busy);
+  assert.ok(service.reads.length > reads, "the list never read again while traffic kept arriving");
+  stop();
+});
+
 test("a read the connection moved past writes nothing", async () => {
   const service = trafficService();
   let live = true;
