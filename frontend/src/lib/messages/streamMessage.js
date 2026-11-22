@@ -49,7 +49,7 @@ export function endingKind(message) {
 
 /** The message's size, or that it was too large for its event. */
 export function messageSize(message) {
-  if (message.PayloadTruncated) return `over ${EVENT_PAYLOAD_LIMIT}`;
+  if (message.PayloadTruncated && !message.Payload) return `> ${EVENT_PAYLOAD_LIMIT}`;
   return formatSize(bytesOf(message.Payload).length);
 }
 
@@ -61,7 +61,7 @@ const clip = (text) => (text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_C
  * readable strings in it, else its first bytes in hex.
  */
 export function messagePreview(message) {
-  if (message.PayloadTruncated) return "Select to load the payload";
+  if (message.PayloadTruncated && !message.Payload) return "Select to load the payload";
   const bytes = bytesOf(message.Payload);
   if (endingKind(message)) return clip(oneLine(new TextDecoder().decode(bytes)));
   const text = textOf(bytes);

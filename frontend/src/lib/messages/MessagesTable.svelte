@@ -278,7 +278,7 @@
 									}}
 								>
 									{#each row.getVisibleCells() as cell}
-										<td class="overflow-hidden">
+										<td class="overflow-hidden" class:whitespace-nowrap={cell.column.id !== lastColumn}>
 											{#if cell.column.id === "ID"}
 												{numberOf(row.original, i)}
 											{:else if cell.column.id === "Direction"}

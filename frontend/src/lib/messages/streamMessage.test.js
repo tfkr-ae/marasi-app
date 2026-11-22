@@ -64,7 +64,12 @@ test("a message with no text form shows as UTF-8 text, or read-only hex when it 
 
 test("a payload the event left out is marked, and once read in full says so", () => {
   const m = msg({ PayloadTruncated: true });
-  assert.equal(messageSize(m), "over 64 KB");
+  assert.equal(messageSize(m), "> 64 KB");
+  assert.equal(messagePreview(m), "Select to load the payload");
+  // Once read in full, the row shows it.
+  const read = msg({ PayloadTruncated: true, Payload: b64(Buffer.from("y".repeat(70_000))) });
+  assert.equal(messageSize(read), "68.4 KB");
+  assert.match(messagePreview(read), /^y{160}…$/);
   assert.ok(messageChips(m).some((c) => c.label === "Large"));
   assert.equal(detailOf(m, undefined, "text").note, "Loading the full payload…");
   const whole = b64(Buffer.from("x".repeat(70_000)));

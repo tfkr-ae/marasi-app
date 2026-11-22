@@ -38,7 +38,7 @@
 	$: detailExtensions = (message, v) => languageExtensions(detailOf(message, details[message.ID], v).language);
 
 	const columns = [
-		{ id: "time", header: "Time", width: "w-24", cell: (m) => messageTime(m.CreatedAt) },
+		{ id: "time", header: "Time", width: "w-28", cell: (m) => messageTime(m.CreatedAt) },
 		{ id: "size", header: "Size", width: "w-20", cell: (m) => messageSize(m) },
 		{ id: "message", header: "Message", cell: (m) => messagePreview(m) },
 	];

@@ -229,7 +229,13 @@ export function createStreamedPairStore(api) {
     try {
       const action = actionFor();
       const detail = await action.step(() => api.message(pairId, id, action.link));
-      if (current(pairId, view.token)) setDetail(pairId, id, { ...detail, Full: Boolean(message?.PayloadTruncated) });
+      if (!current(pairId, view.token)) return;
+      const full = Boolean(message?.PayloadTruncated);
+      setDetail(pairId, id, { ...detail, Full: full });
+      // The row shows the whole payload from now on.
+      if (full) {
+        patch(pairId, (v) => ({ messages: v.messages.map((m) => (m.ID === id ? { ...m, Payload: detail.Payload } : m)) }));
+      }
     } catch (err) {
       if (!current(pairId, view.token)) return;
       // A connection switch stopped it: selecting again reads it anew.

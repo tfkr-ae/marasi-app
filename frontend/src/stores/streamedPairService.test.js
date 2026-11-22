@@ -154,6 +154,9 @@ test("a message whose event left its payload out shows the payload read on selec
 
   await store.select("p1", idOf(1));
   assert.deepEqual(view().details[idOf(1)], { Text: null, Payload: whole, Full: true });
+  // The row shows the whole payload from then on, still marked as too large for its event.
+  assert.equal(view().messages[0].Payload, whole);
+  assert.equal(view().messages[0].PayloadTruncated, true);
 });
 
 test("a failed read on selection is shown, and selecting again retries it", async () => {
