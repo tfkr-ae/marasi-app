@@ -11,10 +11,11 @@ import { isSuperseded } from "../lib/service/errors.js";
 
 export const READ_FAILED = "Couldn't read traffic";
 
-export function createTrafficListStore(api, { settleMs = 300 } = {}) {
+export function createTrafficListStore(api, { settleMs = 300, maxWaitMs = 1000 } = {}) {
   const store = writable({ query: "", pairs: [], loading: false, error: "" });
   let users = 0;
   let timer = null;
+  let deadline = 0;
   // Bumped by every read and by clear(), so only the newest read writes.
   let generation = 0;
 
@@ -42,10 +43,22 @@ export function createTrafficListStore(api, { settleMs = 300 } = {}) {
     store.update((state) => ({ ...state, pairs, loading: false, error: "" }));
   }
 
+  // Each call restarts the settle wait, but never past maxWaitMs from the
+  // first call, so steady traffic still refreshes the list.
   const later = () => {
+    const now = Date.now();
+    if (!timer) deadline = now + maxWaitMs;
     clearTimeout(timer);
-    timer = setTimeout(load, settleMs);
+    timer = setTimeout(fire, Math.max(0, Math.min(settleMs, deadline - now)));
   };
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  function fire() {
+    timer = null;
+    load();
+  }
 
   return {
     subscribe: store.subscribe,
@@ -62,7 +75,7 @@ export function createTrafficListStore(api, { settleMs = 300 } = {}) {
         if (stopped) return;
         stopped = true;
         users -= 1;
-        if (users === 0) clearTimeout(timer);
+        if (users === 0) cancel();
       };
     },
     /** traffic.request, traffic.response and traffic.changed: read again while shown. */
@@ -72,7 +85,7 @@ export function createTrafficListStore(api, { settleMs = 300 } = {}) {
     /** Forgets the last project's pairs; the query stays. */
     clear() {
       generation++;
-      clearTimeout(timer);
+      cancel();
       store.update((state) => ({ ...state, pairs: [], loading: false, error: "" }));
     },
     /** Reads the list afresh while it is shown. */
