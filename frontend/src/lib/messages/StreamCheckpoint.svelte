@@ -96,12 +96,14 @@
 				{#each held as item (item.ID)}
 					<li>
 						<button
-							class="flex w-full items-center gap-2 border-b border-surface-500/20 px-2 py-1.5 text-left font-mono text-2xs hover:bg-primary-500/10"
-							class:!bg-primary-500={item.ID === selected?.ID}
-							class:bg-opacity-15={item.ID === selected?.ID}
+							class="relative flex w-full items-center gap-2 border-b border-surface-500/20 px-2 py-1.5 text-left font-mono text-2xs {item.ID ===
+							selected?.ID
+								? 'bg-primary-500/20'
+								: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
 							aria-current={item.ID === selected?.ID}
 							on:click={() => (selectedId = item.ID)}
 						>
+							{#if item.ID === selected?.ID}<span class="absolute bottom-0 left-0 top-0 w-[3px] bg-primary-500"></span>{/if}
 							<span class={item.Direction === "request" ? "text-primary-500" : "text-surface-600 dark:text-secondary-500"}
 								>{ARROWS[item.Direction] ?? ""}</span
 							>
