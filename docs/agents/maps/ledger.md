@@ -33,7 +33,7 @@ To add a row-menu action:
 3. Add a `case` to `runMenuAction` in `ledgerActions.js`.
 4. Add a store method (bulk actions go in `stores/ledger/bulk.js`), map its API name to a service call in `ledgerApi.js`, and add it to the tests' fake APIs.
 
-For a shortcut, also follow `keybindings-and-menus.md`. ⌘K opens `MarasiMenu` with `menuOptions`, which follow the drawer: `ledgerMenu` when it is closed, `drawerMenu` (with the WebSocket stream action for an upgrade) when it is open. Their menu groups are the `group` flags on the `ledger.drawer-open` and `ledger.drawer-closed` rows in `catalog.js`, defined in `menuGroups.js`.
+For a shortcut, also follow `keybindings-and-menus.md`. ⌘K opens `MarasiMenu` with `menuOptions`, which follow the drawer: `ledgerMenu` when it is closed, `drawerMenu` (with Open messages, `ledger.drawer-open.websocket.open-stream`, for a WebSocket upgrade or a streamed pair: `canOpenDrawerMessages` in `lib/messages/open.js`, which reads the drawer meta's `streamed`) when it is open. Open messages (`openWebSocketStream` in `ledgerActions.js`) opens the Messages modal's stream kind for a streamed pair, else the WebSocket kind. Their menu groups are the `group` flags on the `ledger.drawer-open` and `ledger.drawer-closed` rows in `catalog.js`, defined in `menuGroups.js`.
 
 ## Bulk changes
 
