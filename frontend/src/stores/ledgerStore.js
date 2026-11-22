@@ -13,7 +13,7 @@ import { armoryStore } from "./armoryStore";
 import { relinked } from "./relinked.js";
 import { createExclusion } from "./contentTypeExclusion.js";
 import { createLedgerApi, toUpgradeEvent } from "./ledgerApi.js";
-import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
+import { STREAMED_PAIR_EVENTS, toRequestEvent, toResponseEvent, toStreamedEvent } from "./trafficApi.js";
 import { createLedgerStore, FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
 import { projectData } from "./projectData.js";
 import { followCountChanges } from "./countChanges.js";
@@ -70,6 +70,10 @@ projectData.register("ledger", {
 
 service.on("traffic.request", (data) => ledgerStore.onRequest(toRequestEvent(data)));
 service.on("traffic.response", (data) => ledgerStore.onResponse(toResponseEvent(data)));
+// A streamed pair's row follows its streamed state from the moment it starts.
+for (const name of STREAMED_PAIR_EVENTS) {
+  service.on(name, (data) => ledgerStore.onStreamedPair(toStreamedEvent(data)));
+}
 // An upgrade's row follows its connection; a handshake that failed or was
 // dropped opens none, so only its row changes.
 service.on("websocket.opened", (conn) => ledgerStore.patchWebSocketMetadata(toUpgradeEvent(conn)));

@@ -259,6 +259,7 @@ export function createLedgerStore(api) {
     onResponse: live.onResponse,
     flush: live.flush,
     patchWebSocketMetadata: live.patchWebSocketMetadata,
+    onStreamedPair: live.onStreamedPair,
     patchMetadata: live.patchMetadata,
 
     setQueryText: query.setQueryText,

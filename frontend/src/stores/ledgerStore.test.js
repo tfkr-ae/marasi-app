@@ -1307,6 +1307,55 @@ test("metadata.updated replaces the pair's metadata in its row and the drawer", 
   assert.deepEqual(tableRows(state).find((row) => row.ID === idOf(1)).Metadata, { tag: "old", has_note: 0 });
 });
 
+test("streamed_pair events replace a row's streamed state, in the table and the drawer", async () => {
+  const api = fakeApi({ traffic: pairs(3, () => ({ Streamed: null })) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  store.clickRow(idOf(2));
+  const row = (id) => tableRows(get(store)).find((r) => r.ID === id);
+
+  const started = { request: { framing: "grpc", ending: null }, response: null };
+  store.onStreamedPair({ ID: idOf(2), Streamed: started });
+  assert.deepEqual(row(idOf(2)).Streamed, started);
+  assert.deepEqual(focusedPair(get(store)).Streamed, started);
+
+  const updated = { request: { framing: "grpc", ending: null }, response: { framing: "grpc", ending: null } };
+  store.onStreamedPair({ ID: idOf(2), Streamed: updated });
+  assert.deepEqual(row(idOf(2)).Streamed, updated);
+
+  const ended = { request: { framing: "grpc", ending: "complete" }, response: { framing: "grpc", ending: "reset" } };
+  store.onStreamedPair({ ID: idOf(2), Streamed: ended });
+  assert.deepEqual(row(idOf(2)).Streamed, ended);
+  assert.equal(row(idOf(1)).Streamed, null, "other rows stay");
+});
+
+test("a streamed pair's traffic.response replaces its streamed state; an ordinary response leaves it", async () => {
+  const live = { request: { framing: "sse", ending: null }, response: null };
+  const api = fakeApi({ traffic: pairs(2, (n) => ({ Streamed: n === 1 ? live : null })) });
+  const store = createLedgerStore(api);
+  await store.populate();
+  const row = (id) => tableRows(get(store)).find((r) => r.ID === id);
+
+  const ended = { request: { framing: "sse", ending: "cancelled" }, response: null };
+  store.onResponse({ ID: idOf(1), StatusCode: 200, Streamed: ended });
+  store.onResponse({ ID: idOf(2), StatusCode: 204 });
+  store.flush();
+  assert.deepEqual(row(idOf(1)).Streamed, ended);
+  assert.equal(row(idOf(2)).Streamed, null);
+});
+
+test("streamed_pair.started right after traffic.request marks the new row when it joins", async () => {
+  const api = fakeApi({ traffic: pairs(2) });
+  const store = createLedgerStore(api);
+  await store.populate();
+
+  const started = { request: { framing: "grpc", ending: null }, response: null };
+  store.onRequest(pair(3, { StatusCode: 0 }));
+  store.onStreamedPair({ ID: idOf(3), Streamed: started });
+  store.flush();
+  assert.deepEqual(tableRows(get(store)).find((r) => r.ID === idOf(3)).Streamed, started);
+});
+
 test("note events mark whether the pair has a note, as a new row the drawer reads again", async () => {
   const api = fakeApi({ traffic: pairs(2, () => ({ Metadata: {} })) });
   const store = createLedgerStore(api);

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fakeServiceClient as fakeClient } from "./fakeServiceClient.js";
 import { createLedgerApi, toUpgradeEvent } from "./ledgerApi.js";
-import { NO_BODIES, RAW_ONLY, toRequestEvent, toResponseEvent } from "./trafficApi.js";
+import { NO_BODIES, RAW_ONLY, toRequestEvent, toResponseEvent, toStreamedEvent } from "./trafficApi.js";
 import { createExclusion } from "./contentTypeExclusion.js";
 
 const notFound = { status: 404, body: { error: "not_found" } };
@@ -83,12 +83,30 @@ test("queryTraffic reads a page in display order, as the table's rows", async ()
     Route: { Name: "corp", Address: "http://10.0.0.1:3128" },
     ClientProtocol: "h2",
     OriginProtocol: "http/1.1",
+    // A service before streamed state sends none: no streamed pair.
+    Streamed: null,
   });
   assert.equal(page.NextCursor, "n1");
   assert.equal(page.PrevCursor, null);
   assert.equal(page.AsOf, "01900002");
   assert.equal(page.IndexComplete, false);
   assert.equal(page.QueryError, null);
+});
+
+test("queryTraffic rows carry each direction's streamed framing and ending, null for an ordinary pair", async () => {
+  const live = { request: { framing: "grpc", ending: null }, response: null };
+  const { api } = setup({
+    "GET /client-settings/marasi-app/ledger.exclusion": notFound,
+    "GET /traffic": {
+      items: [summary(1, { streamed: null }), summary(2, { streamed: live })],
+      next_cursor: null,
+      prev_cursor: null,
+      as_of: "01900002",
+    },
+  });
+  const page = await api.queryTraffic({ Query: "", OrderBy: "", Cursor: "", Direction: "forward", AsOf: "", Limit: 200 });
+  assert.deepEqual(page.Items[0].Streamed, { request: { framing: "grpc", ending: null }, response: null });
+  assert.equal(page.Items[1].Streamed, null);
 });
 
 test("queryTraffic leaves out the project's exclusion, or the app default it follows", async () => {
@@ -409,6 +427,13 @@ test("stream events map to the live request, response and upgrade shapes the Led
   // replacing the request event's.
   assert.equal(toResponseEvent({ id: "a", origin_protocol: "http/1.1" }).OriginProtocol, "http/1.1");
   assert.equal("OriginProtocol" in toResponseEvent({ id: "a" }), false);
+  // A streamed pair's response carries its streamed state; any other
+  // pair's leaves it out, so the row's stands.
+  const ended = { request: { framing: "grpc", ending: "complete" }, response: { framing: "grpc", ending: "complete" } };
+  assert.deepEqual(toResponseEvent({ id: "a", streamed: ended }).Streamed, ended);
+  assert.equal("Streamed" in toResponseEvent({ id: "a" }), false);
+  assert.deepEqual(toStreamedEvent({ pair_id: "a", framings: { request: "sse" }, streamed: ended }), { ID: "a", Streamed: ended });
+  assert.deepEqual(toStreamedEvent({ pair_id: "a" }), { ID: "a", Streamed: null });
   assert.deepEqual(
     toUpgradeEvent({ id: "c1", request_id: "a", state: "closed", transport: "http/1.1", close_code: 1000, close_reason: "bye" }),
     { RequestID: "a", State: "closed", Transport: "http/1.1", CloseCode: 1000, CloseReason: "bye" },

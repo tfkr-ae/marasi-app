@@ -72,6 +72,52 @@ test("traffic changes, a tracked pair's response and its metadata read it again"
   stop();
 });
 
+test("rows carry the streamed state; a service without it gives null", async () => {
+  const live = { request: { framing: "grpc", ending: null }, response: null };
+  const { store } = setup({ a: { streamed: live }, b: {} });
+  const stop = store.track(["a", "b"]);
+  await settle();
+  assert.deepEqual(get(store).a.Streamed, live);
+  assert.equal(get(store).b.Streamed, null);
+  stop();
+});
+
+test("each streamed_pair event replaces a held row's streamed state without a read", async () => {
+  const { service, store } = setup({ a: { streamed: null }, b: {} });
+  const stop = store.track(["a", "b"]);
+  await settle();
+  const reads = service.reads.length;
+  const states = [
+    { request: { framing: "grpc", ending: null }, response: null },
+    { request: { framing: "grpc", ending: null }, response: { framing: "grpc", ending: null } },
+    { request: { framing: "grpc", ending: "complete" }, response: { framing: "grpc", ending: "cancelled" } },
+  ];
+  for (const streamed of states) {
+    const before = get(store).a;
+    store.onStreamedPair({ ID: "a", Streamed: streamed });
+    assert.deepEqual(get(store).a.Streamed, streamed);
+    assert.notEqual(get(store).a, before, "a new row, so its card redraws");
+  }
+  assert.equal(get(store).b.Streamed, null, "other rows stay");
+  store.onStreamedPair({ ID: "unknown", Streamed: states[0] });
+  assert.equal("unknown" in get(store), false, "a pair not held is not added");
+  await settle();
+  assert.equal(service.reads.length, reads);
+  stop();
+});
+
+test("a streamed pair's traffic.response reads its row again, ending included", async () => {
+  const { service, store } = setup({ a: { streamed: { request: { framing: "sse", ending: null }, response: null } } });
+  const stop = store.track(["a"]);
+  await settle();
+  const ended = { request: { framing: "sse", ending: "reset" }, response: null };
+  service.pairs.a = { streamed: ended };
+  store.onPairEvent({ id: "a" });
+  await settle();
+  assert.deepEqual(get(store).a.Streamed, ended);
+  stop();
+});
+
 test("with nothing tracked, events read nothing", async () => {
   const { service, store } = setup({ a: {} });
   store.track(["a"])();

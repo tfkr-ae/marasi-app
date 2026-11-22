@@ -34,6 +34,9 @@ export function toRow(item) {
     Route: toRoute(item.upstream_proxy),
     ClientProtocol: item.client_protocol ?? "",
     OriginProtocol: item.origin_protocol ?? "",
+    // The streamed state (GLOSSARY Streamed pair): null for an ordinary
+    // pair, and from a Marasi before 3cf721d, which sends none.
+    Streamed: item.streamed ?? null,
   };
 }
 
@@ -68,7 +71,22 @@ export function toResponseEvent(data) {
     // Left out when the pair never reached the origin, so the request
     // event's origin protocol stands when the two merge.
     ...(data.origin_protocol ? { OriginProtocol: data.origin_protocol } : {}),
+    // Only a streamed pair's response carries its streamed state; any
+    // other leaves the row's.
+    ...(data.streamed ? { Streamed: data.streamed } : {}),
   };
+}
+
+/** The events that carry a streamed pair's streamed state. */
+export const STREAMED_PAIR_EVENTS = ["streamed_pair.started", "streamed_pair.updated", "streamed_pair.ended"];
+
+/**
+ * A streamed_pair.started, .updated or .ended event as the patch the
+ * stores apply: the pair's id and its streamed state, which replaces the
+ * row's.
+ */
+export function toStreamedEvent(data) {
+  return { ID: data.pair_id, Streamed: data.streamed ?? null };
 }
 
 /**
