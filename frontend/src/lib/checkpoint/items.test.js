@@ -8,6 +8,7 @@ import {
   groupByHost,
   interceptedFor,
   itemTitle,
+  streamedHead,
   summarize,
   treeOrder,
 } from "./items.js";
@@ -131,4 +132,31 @@ test("an abandoned item is named by its pair number once stored, else by its tit
   const response = { ID: "r", Type: "response", text: "HTTP/1.1 200 OK\r\n\r\n" };
   assert.equal(abandonLabel(response, { request: { Number: 412, Method: "GET", Path: "/x" } }), "#412");
   assert.equal(abandonLabel(request("a", "POST /login HTTP/1.1\r\nHost: shop.test\r\n\r\n")), "POST /login");
+});
+
+test("a stream message and a trailer block show their direction and their pair's host and path", () => {
+  const request = { Method: "POST", Path: "/chat.v1.ChatService/Converse", Host: "127.0.0.1:50051", Number: 7 };
+  const message = { ID: "s", Type: "stream", Direction: "request", PairID: "p", text: "1:VARINT 1" };
+  const trailer = { ID: "t", Type: "trailer", Direction: "response", PairID: "p", text: "grpc-status: 0" };
+  const summary = summarize(message, message.text, { request });
+  assert.deepEqual(summary, { kind: "STREAM", method: "C→S", path: "/chat.v1.ChatService/Converse", host: "127.0.0.1:50051", status: 0 });
+  assert.equal(itemTitle(summary, 7), "STREAM C→S · 127.0.0.1:50051/chat.v1.ChatService/Converse");
+  assert.equal(itemTitle(summarize(trailer, trailer.text, { request })), "TRAILER S→C · 127.0.0.1:50051/chat.v1.ChatService/Converse");
+  assert.equal(summarize(trailer, trailer.text).host, "");
+});
+
+test("a held head whose content type Marasi streams names its framing", () => {
+  const grpc = request("a", "POST /chat.v1.ChatService/Say HTTP/2\r\n:authority: x\r\ncontent-type: application/grpc+proto\r\n\r\n");
+  const web = request("b", "POST /x HTTP/1.1\r\nHost: x\r\nContent-Type: application/grpc-web-text\r\n\r\n");
+  const sse = { ID: "c", Type: "response", text: "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\n\r\n" };
+  const sseRequest = request("d", "POST /x HTTP/1.1\r\nContent-Type: text/event-stream\r\n\r\n");
+  const json = request("e", "POST /x HTTP/1.1\r\nContent-Type: application/json\r\n\r\n{}");
+  const connect = { ID: "f", Type: "response", text: "HTTP/2 200\r\ncontent-type: application/connect+json\r\n\r\n" };
+  assert.equal(streamedHead(grpc, grpc.text), "grpc");
+  assert.equal(streamedHead(web, web.text), "grpc-web");
+  assert.equal(streamedHead(sse, sse.text), "sse");
+  assert.equal(streamedHead(sseRequest, sseRequest.text), "");
+  assert.equal(streamedHead(json, json.text), "");
+  assert.equal(streamedHead(connect, connect.text), "connect");
+  assert.equal(streamedHead({ ID: "w", Type: "websocket", text: "" }, ""), "");
 });

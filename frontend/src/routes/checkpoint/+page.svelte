@@ -55,7 +55,7 @@
 			item,
 			context,
 			summary: summarize(item, item.text, context),
-			launch: item.Type === "websocket" ? null : launchpadNameOf(item.ID, lp),
+			launch: item.Type === "request" || item.Type === "response" ? launchpadNameOf(item.ID, lp) : null,
 		};
 	}
 
@@ -78,11 +78,15 @@
 	// A forward or drop of an item that had already left removes it.
 	const GONE = "Already gone";
 
+	// Marasi refused the edit or the drop; the workspace shows its reason.
+	const REFUSED = "Refused by Marasi";
+
 	async function forward(id, options = {}) {
 		if (!id) return;
 		try {
 			const result = await store.forward(id, options);
 			if (result === "unparsed") toast("Edit doesn't parse", "variant-filled-warning");
+			if (result === "refused") toast(REFUSED, "variant-filled-warning");
 			if (result === "gone") toast(GONE);
 		} catch (err) {
 			failed("Forward", err);
@@ -92,7 +96,9 @@
 	async function drop(id) {
 		if (!id) return;
 		try {
-			if ((await store.drop(id)) === "gone") toast(GONE);
+			const result = await store.drop(id);
+			if (result === "refused") toast(REFUSED, "variant-filled-warning");
+			if (result === "gone") toast(GONE);
 		} catch (err) {
 			failed("Drop", err);
 		}
@@ -126,6 +132,14 @@
 			await store.toggleIntercept();
 		} catch (err) {
 			failed("Intercept all", err);
+		}
+	}
+
+	async function toggleStreamIntercept() {
+		try {
+			await store.toggleStreamIntercept();
+		} catch (err) {
+			failed("Stream intercept", err);
 		}
 	}
 
@@ -236,7 +250,7 @@
 <MarasiMenu paletteTier="page" pageName="Checkpoint" pageEntries={checkpointMenu} />
 
 <div class="cp-page relative flex h-full min-h-0">
-	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} />
+	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} onToggleStreamIntercept={toggleStreamIntercept} />
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		<!-- py-0.5 keeps this row as tall as the dock's header, so their borders line up. -->

@@ -18,7 +18,8 @@
 	const LABELS = { request: "↑ Request", response: "↓ Response" };
 	const TEXT_FORM = new Set(["grpc", "grpc-web", "connect"]);
 
-	// The text error Marasi named for the last inject: { line, column, message }.
+	// The text error Marasi named for the last inject: { line, column, message,
+	// text }, kept while the draft is still the text it was named for.
 	let refusal = null;
 
 	$: pair = $streamedPairStore.pairs[pairId];
@@ -31,18 +32,15 @@
 	$: pending = pair?.inject.pending ?? false;
 	$: held = pair?.inject.held ?? false;
 
-	let text = "";
-	$: syncFromDraft(draft.text);
-	function syncFromDraft(next) {
-		if (next !== text) {
-			text = next;
-			refusal = null;
-		}
-	}
-	$: if (pair && text !== draft.text) changeText(text);
-	function changeText(next) {
-		streamedPairStore.setDraft(pairId, { text: next });
+	// An edit, or Copy to Inject filling the draft, clears the last error.
+	function changeText(text) {
+		if (text === draft.text) return;
+		streamedPairStore.setDraft(pairId, { text });
 		refusal = null;
+	}
+	$: clearStale(draft.text);
+	function clearStale(text) {
+		if (refusal && refusal.text !== text) refusal = null;
 	}
 
 	const setDirection = (value) => streamedPairStore.setDraft(pairId, { direction: value });
@@ -55,6 +53,7 @@
 	export async function inject() {
 		if (!direction || pending) return;
 		refusal = null;
+		const text = draft.text;
 		const outcome = await streamedPairStore.inject(pairId, {
 			direction,
 			text,
@@ -70,7 +69,7 @@
 		}
 		if (outcome.superseded || outcome.busy) return;
 		if (outcome.line) {
-			refusal = outcome;
+			refusal = { ...outcome, text };
 			return;
 		}
 		toastStore.trigger({
@@ -138,6 +137,11 @@
 	{/if}
 
 	<div class="min-h-0 flex-1 overflow-auto">
-		<MessageEditor bind:value={text} language={textForm ? "protobuf" : null} marker={refusal} />
+		<MessageEditor
+			value={draft.text}
+			language={textForm ? "protobuf" : null}
+			errorAt={refusal}
+			on:change={(event) => changeText(event.detail)}
+		/>
 	</div>
 </div>

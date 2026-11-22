@@ -4,7 +4,7 @@
 </script>
 
 <script>
-	// The Checkpoint dock: Intercept all, Forward n / Drop n, and the
+	// The Checkpoint dock: Intercept all, Stream intercept, Forward n / Drop n, and the
 	// intercepted items in a tree grouped by host, in hold order within each
 	// host. A click selects; ⌘-click and shift-click pick.
 	import { writable } from "svelte/store";
@@ -25,6 +25,7 @@
 	export let now = Date.now();
 	export let onBulk = (kind, ids) => {};
 	export let onToggleIntercept = () => {};
+	export let onToggleStreamIntercept = () => {};
 	/** Hosts the researcher collapsed; the page reads it for ↑/↓. */
 	export let collapsed = new Set();
 
@@ -78,6 +79,16 @@
 			<div class="cp-intercept-all" title="Intercept every request and response, whatever the rules say">
 				<SlideToggle name="Intercept all" size="sm" active="bg-success-500" checked={$interceptFlag} on:change={onToggleIntercept}
 					><span class="whitespace-nowrap text-xs">Intercept all</span></SlideToggle
+				>
+			</div>
+			<div class="cp-stream-intercept" title="Hold every stream message and trailer block">
+				<SlideToggle
+					name="Stream intercept"
+					size="sm"
+					active="bg-success-500"
+					checked={state.streamIntercept}
+					on:change={onToggleStreamIntercept}
+					><span class="whitespace-nowrap text-xs">Stream intercept</span></SlideToggle
 				>
 			</div>
 			<span class="flex-1"></span>
@@ -148,7 +159,7 @@
 								<KindTag type={item.Type} />
 								{#if item.Type === "response"}
 									<span class="w-10 flex-none {statusClass(summary.status)}">{summary.status || ""}</span>
-								{:else if item.Type === "websocket"}
+								{:else if item.Type === "websocket" || item.Type === "stream" || item.Type === "trailer"}
 									<span class="w-10 flex-none opacity-70">{summary.method}</span>
 								{:else}
 									<span class="w-10 flex-none truncate {METHOD_CLASS[summary.method] ?? ''}">{summary.method}</span>
@@ -177,7 +188,8 @@
 	   against Skeleton's and Tailwind's classes. */
 	/* The mobile Checkpoint dock: Intercept all on its own row, then Forward n
 	   and Drop n side by side, equal widths, rather than wrapping unevenly. */
-	:global(html.mobile .cp-bulk > .cp-intercept-all) {
+	:global(html.mobile .cp-bulk > .cp-intercept-all),
+	:global(html.mobile .cp-bulk > .cp-stream-intercept) {
 		flex-basis: 100%;
 	}
 	:global(html.mobile .cp-bulk > .flex-1) {

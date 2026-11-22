@@ -18,6 +18,7 @@ export {
   isChecking,
   isDirty,
   parseErrorOf,
+  refusalOf,
   pickedIds,
   textOf,
 } from "./createCheckpointStore.js";
