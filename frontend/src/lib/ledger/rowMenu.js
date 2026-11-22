@@ -357,7 +357,7 @@ export function menuFor(
       ? [
           {
             id: "websocket",
-            label: "Open WebSocket stream",
+            label: "Open messages",
             icon: "radio",
             actionId: "ledger.drawer-open.websocket.open-stream",
             action: { type: "websocket", id: one.ID },

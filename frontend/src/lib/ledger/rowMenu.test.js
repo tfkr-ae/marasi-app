@@ -72,9 +72,11 @@ test("one pair: Launchpad, Armory, Drawing, Browser view, Finding, Test case, No
   assert.equal(item(menu, "lp-each"), undefined, "one each needs several pairs");
 });
 
-test("a WebSocket upgrade row offers its stream", () => {
+test("a WebSocket upgrade row offers Open messages", () => {
   const ws = pair("a", { StatusCode: 101, Metadata: { protocol: "websocket" } });
   assert.deepEqual(ids(menuFor([ws], context())).slice(0, 2), ["websocket", "launchpad"]);
+  assert.equal(item(menuFor([ws], context()), "websocket").label, "Open messages");
+  assert.equal(item(menuFor([ws], context()), "websocket").actionId, "ledger.drawer-open.websocket.open-stream");
   assert.equal(item(menuFor([ws, pair("b")], context()), "websocket"), undefined);
 });
 
