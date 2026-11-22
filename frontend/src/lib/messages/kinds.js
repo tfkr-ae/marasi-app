@@ -1,0 +1,83 @@
+// The Messages modal's kinds: what each kind of message source (for now a
+// WebSocket connection) gives the shared modal that the keybinding layer
+// also needs. Pure JS, so contexts.js and `node --test` can use it; the
+// kind's components, icons and handlers are in its Svelte-side definition
+// (lib/messages/<kind>/kind.js).
+//
+// A kind names its menu contexts: one shared by every tab (`context`) and
+// one per tab (`<context>.<tab>`). Context and action ids never change once
+// shipped (docs/adr/2026-10-11-websocket-action-ids-keep-frame.md).
+
+// The modal's registered name (`modalRegistery` in +layout.svelte). Kept from
+// when the modal showed only WebSocket connections.
+export const MESSAGES_MODAL = "WebsocketStream";
+
+export const MESSAGE_KINDS = {
+  websocket: {
+    id: "websocket",
+    // The menu's page heading and the contexts' page name.
+    page: "WebSocket",
+    context: "websocket",
+    // Where the dispatcher state carries the open tab (app.js publishes it).
+    tabState: "websocketTab",
+    tabs: [
+      { id: "stream", label: "Stream" },
+      { id: "checkpoint", label: "Checkpoint" },
+      { id: "inject", label: "Inject" },
+      { id: "connection", label: "Connection" },
+    ],
+  },
+};
+
+// The kind a modal's meta asks for. A modal opened without one (every
+// opener before the modal took kinds) shows a WebSocket connection.
+export function kindOf(meta) {
+  return MESSAGE_KINDS[meta?.kind] ?? MESSAGE_KINDS.websocket;
+}
+
+// The tab `step` places after `tab` among the kind's tabs (negative steps go
+// back), wrapping around: what the previous-tab and next-tab actions move to.
+export function stepTab(kind, tab, step) {
+  const ids = kind.tabs.map((t) => t.id);
+  const index = Math.max(ids.indexOf(tab), 0);
+  return ids[(((index + step) % ids.length) + ids.length) % ids.length];
+}
+
+// The kind's menu contexts: actions shared by every tab, then one context per
+// tab. Each tab is eligible together with the shared context in the same
+// tier, so they overlap (one collision domain); the tabs never co-occur, so
+// they may reuse keys. Beneath the modal only the global context stays
+// eligible: that is shadowing across tiers and needs no declaration.
+export function kindContexts(kind) {
+  // Only one kind exists so far, so the modal being open is enough.
+  const open = (state) => state.modal === MESSAGES_MODAL;
+  return [
+    {
+      id: kind.context,
+      tier: "overlay",
+      label: kind.page,
+      page: kind.page,
+      state: "Every tab",
+      isEligible: open,
+    },
+    ...kind.tabs.map((tab) => ({
+      id: `${kind.context}.${tab.id}`,
+      tier: "overlay",
+      label: `${kind.page} ${tab.label} tab`,
+      page: kind.page,
+      state: `${tab.label} tab`,
+      overlaps: [kind.context],
+      isEligible: (state) => open(state) && state[kind.tabState] === tab.id,
+    })),
+  ];
+}
+
+// A message row's direction arrow: up for the request (client) direction,
+// down for the response (server) one. Response arrows are surface-coloured
+// in light mode, where secondary is too pale to see, and secondary in dark
+// mode. Literal strings so Tailwind's content scan keeps them.
+export function directionArrow(outgoing) {
+  return outgoing
+    ? { up: true, class: "text-primary-500" }
+    : { up: false, class: "text-surface-600 dark:text-secondary-500" };
+}
