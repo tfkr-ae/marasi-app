@@ -8,6 +8,7 @@
 	import { Send } from "lucide-svelte";
 	import { isSuperseded } from "../service/errors.js";
 	import { marasiConfig, lineWrap } from "../../stores";
+	import { appKeys } from "../editorKeys.js";
 	import { longStrings } from "../longStrings.js";
 	import {
 		webSocketStore,
@@ -87,7 +88,7 @@
 
 <div class="flex h-full min-h-0 w-full flex-col">
 	<div
-		class="ws-bar flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
+		class="msg-bar flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 	>
 		<div class="flex items-center gap-2">
 			<label class="flex items-center gap-1.5 text-xs">
@@ -141,7 +142,7 @@
 
 	{#if showSendUncompressed}
 		<label
-			class="ws-bar flex shrink-0 items-center gap-2 border-b border-surface-500/30 px-3 py-1.5 text-xs"
+			class="msg-bar flex shrink-0 items-center gap-2 border-b border-surface-500/30 px-3 py-1.5 text-xs"
 		>
 			<input
 				type="checkbox"
@@ -169,7 +170,7 @@
 			class="h-full w-full text-xs"
 			bind:value={payloadText}
 			theme={$modeCurrent ? githubLight : oneDark}
-			extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
+			extensions={[appKeys, ...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 		/>
 	</div>
 </div>

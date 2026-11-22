@@ -2,8 +2,11 @@
 	// The selected intercepted item: a top bar with its title and actions,
 	// then the request | response split. The intercepted side is editable and
 	// marked; the other side is context: "Not sent yet" for a held request,
-	// the stored request a held response answers, or a WebSocket message's
-	// connection. Confirmations and toasts belong to the page.
+	// the stored request a held response answers, a WebSocket message's
+	// connection, or a stream message's or trailer block's pair. A stream
+	// message or trailer block edits in MessageEditor; a head whose body
+	// Marasi carries as stream messages says so. Confirmations and toasts
+	// belong to the page.
 	import CodeMirror from "svelte-codemirror-editor";
 	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
 	import { StreamLanguage } from "@codemirror/language";
@@ -14,13 +17,14 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerDownRight, Forward, X } from "lucide-svelte";
 	import { lineWrap, marasiConfig } from "../../stores";
-	import { isChecking, isDirty, parseErrorOf, textOf } from "../../stores/checkpointStore";
+	import { isChecking, isDirty, parseErrorOf, refusalOf, textOf } from "../../stores/checkpointStore";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import { longStrings } from "../longStrings.js";
 	import { usesSyntax } from "../ledger/drawer.js";
 	import { primaryVariant, statusClass } from "../launchpad/format.js";
-	import { interceptedFor, itemTitle } from "./items.js";
+	import { interceptedFor, itemTitle, offersInterceptResponse, streamedHead } from "./items.js";
 	import PaneTabs from "../components/PaneTabs.svelte";
+	import MessageEditor from "../messages/MessageEditor.svelte";
 
 	export let store;
 	/** { item, summary, launch, context } for the selected item. */
@@ -38,7 +42,13 @@
 	$: connection = entry.context?.connection;
 	$: text = textOf(state, item.ID);
 	$: dirty = isDirty(state, item.ID);
+	// Why the edit won't forward: the frontend's parse check, else Marasi's
+	// refusal of the last Forward or Drop.
+	$: refusal = refusalOf(state, item.ID);
 	$: error = parseErrorOf(state, item.ID);
+	$: problem = error || refusal?.message || "";
+	$: isStream = item.Type === "stream" || item.Type === "trailer";
+	$: framing = streamedHead(item, item.text);
 	// Forward waits for the edit's parse check, so it greys out meanwhile.
 	$: checking = isChecking(state, item.ID);
 	$: primary = primaryVariant($modeCurrent);
@@ -63,17 +73,19 @@
 		item.ID;
 		narrowPane = heldLeft ? "left" : "right";
 	}
-	$: leftLabel = item.Type === "websocket" ? "Connection" : "Request";
-	$: rightLabel = item.Type === "websocket" ? "Message" : "Response";
+	$: leftLabel = item.Type === "websocket" ? "Connection" : isStream ? "Pair" : "Request";
+	$: rightLabel = item.Type === "trailer" ? "Trailers" : item.Type === "websocket" || item.Type === "stream" ? "Message" : "Response";
 	const head =
 		"flex items-center justify-between border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-xs dark:bg-surface-900";
 	const heldHead = "!bg-primary-500/10 shadow-[inset_3px_0_0_rgb(var(--color-primary-500))]";
 	const chip = "cp-chip ml-1 bg-primary-500 px-1 py-px text-3xs font-bold uppercase text-white";
 
 	let editor;
+	let messageEditor;
 	/** Focuses the intercepted pane's editor. */
 	export function focusEditor() {
-		editor?.focus();
+		if (isStream) messageEditor?.focus();
+		else editor?.focus();
 	}
 	const revert = () => store.edit(item.ID, item.text);
 	const edit = (event) => store.edit(item.ID, event.detail);
@@ -92,7 +104,7 @@
 			<button class="cp-forward btn btn-sm {primary}" disabled={!!error || checking} title="Forward" on:click={() => onForward(item.ID)}>
 				<Forward size={14} class="mr-1" />Forward
 			</button>
-			{#if item.Type === "request"}
+			{#if offersInterceptResponse(item)}
 				<button
 					class="cp-forward-intercept btn btn-sm {primary}"
 					disabled={!!error || checking}
@@ -122,7 +134,25 @@
 		<div class="cp-panes grid min-h-0 flex-1 grid-cols-2">
 			<!-- Left: the request, or a WebSocket message's connection. -->
 			<section class="flex min-h-0 min-w-0 flex-col border-r border-surface-500/30" class:pane-off={narrowPane !== "left"} data-chef-pane>
-				{#if item.Type === "websocket"}
+				{#if isStream}
+					<div class={head}><span class="font-bold">Pair</span></div>
+					<dl class="cp-pair grid grid-cols-[6rem_1fr] gap-y-1 p-3 font-mono text-2xs">
+						<dt class="opacity-60">Host</dt>
+						<dd class="truncate">{request?.Host ?? "…"}</dd>
+						<dt class="opacity-60">Path</dt>
+						<dd class="truncate">{request?.Path ?? "…"}</dd>
+						<dt class="opacity-60">Direction</dt>
+						<dd>{item.Direction === "request" ? "Client → server" : "Server → client"}</dd>
+						<dt class="opacity-60">Framing</dt>
+						<dd>{item.Framing ?? ""}</dd>
+						{#if item.Type === "stream"}
+							<dt class="opacity-60">Flags</dt>
+							<dd>{item.Flags ?? "none"}</dd>
+							<dt class="opacity-60">Compressed</dt>
+							<dd>{item.Compressed ? item.Metadata?.encoding || "yes" : "no"}</dd>
+						{/if}
+					</dl>
+				{:else if item.Type === "websocket"}
 					<div class={head}><span class="font-bold">Connection</span></div>
 					<dl class="cp-connection grid grid-cols-[6rem_1fr] gap-y-1 p-3 font-mono text-2xs">
 						<dt class="opacity-60">Host</dt>
@@ -151,6 +181,9 @@
 							{/if}
 						</span>
 					</div>
+					{#if heldLeft && framing}
+						<div class="cp-streamed-note border-b border-surface-500/30 px-3 py-1 text-2xs opacity-70">Body arrives as messages · {framing}</div>
+					{/if}
 					<div class="cp-request min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
 						{#if heldLeft}
 							<CodeMirror
@@ -179,8 +212,8 @@
 							<p class="p-4 text-xs opacity-60">Loading…</p>
 						{/if}
 					</div>
-					{#if heldLeft && error}
-						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-2xs text-error-500">{error}</div>
+					{#if heldLeft && problem}
+						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-2xs text-error-500">{problem}</div>
 					{/if}
 				{/if}
 			</section>
@@ -193,7 +226,7 @@
 				{:else}
 					<div class="{head} {heldHead}">
 						<span class="font-bold">
-							{item.Type === "websocket" ? "Message" : "Response"}
+							{rightLabel}
 							<span class={chip}>Intercepted</span>
 							{#if summary.status}· <span class={statusClass(summary.status)}>{summary.status}</span>{/if}
 							{#if dirty}<span class="ml-1 text-warning-500" title="Edited">●</span>{/if}
@@ -202,27 +235,44 @@
 							{/if}
 						</span>
 						<span class="flex items-center gap-3">
-							<SendToChefButton />
+							{#if item.editable !== false}<SendToChefButton />{/if}
 							{#if dirty}
 								<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
 							{/if}
 						</span>
 					</div>
+					{#if framing}
+						<div class="cp-streamed-note border-b border-surface-500/30 px-3 py-1 text-2xs opacity-70">Body arrives as messages · {framing}</div>
+					{:else if item.Type === "stream" && !item.editable}
+						<div class="cp-hex-note border-b border-surface-500/30 px-3 py-1 text-2xs opacity-70">No text form; shown as hex, read-only</div>
+					{/if}
 					<div class="cp-response min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
-						<CodeMirror
-							value={text}
-							nodebounce
-							on:change={edit}
-							on:ready={(event) => (editor = event.detail)}
-							class="text-xs"
-							styles={{ "&": { fontSize: "0.6875rem" } }}
-							lang={item.Type === "websocket" ? undefined : lang(text)}
-							{theme}
-							extensions={editExtensions}
-						/>
+						{#if isStream}
+							<MessageEditor
+								bind:this={messageEditor}
+								bind:wrapSuspended={paused}
+								value={text}
+								language={item.language ?? null}
+								readonly={!item.editable}
+								errorAt={refusal}
+								on:change={edit}
+							/>
+						{:else}
+							<CodeMirror
+								value={text}
+								nodebounce
+								on:change={edit}
+								on:ready={(event) => (editor = event.detail)}
+								class="text-xs"
+								styles={{ "&": { fontSize: "0.6875rem" } }}
+								lang={item.Type === "websocket" ? undefined : lang(text)}
+								{theme}
+								extensions={editExtensions}
+							/>
+						{/if}
 					</div>
-					{#if error}
-						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-2xs text-error-500">{error}</div>
+					{#if problem}
+						<div class="cp-parse-error border-t border-surface-500/30 px-3 py-1 text-2xs text-error-500">{problem}</div>
 					{/if}
 				{/if}
 			</section>

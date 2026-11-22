@@ -11,6 +11,7 @@ import {
   isDrawerOpen,
   tableRows,
 } from "./createLedgerStore.js";
+import { canOpenDrawerMessages, canOpenRowMessages } from "../lib/messages/open.js";
 
 // One page of the live view (oldest first in `liveView`, listed newest
 // first without the excluded types), or of a query's `results`.
@@ -182,8 +183,36 @@ test("the keybinding drawer state says whether the drawer is open and what the p
       metadata: { protocol: "websocket" },
       response: { StatusCode: 101, ContentType: "" },
       incomingResponse: null,
+      streamed: null,
     },
   });
+});
+
+test("the keybinding drawer state carries a streamed pair's streamed state", async () => {
+  const streamed = { request: { framing: "grpc", ending: null }, response: null };
+  const store = await storeWith([pair("a", { Streamed: streamed })]);
+  store.selectPair("a");
+  assert.deepEqual(drawerKeybindingState(get(store)).meta.streamed, streamed);
+});
+
+test("from a service without streamed on rows, Open messages waits for the pair's full read to show its streamed metadata", async () => {
+  // An older service: the row carries no streamed state.
+  const store = await storeWith([pair("a"), pair("b")]);
+  store.selectPair("a");
+  assert.equal(canOpenDrawerMessages(drawerKeybindingState(get(store)).meta), false);
+
+  // A full read without streamed metadata changes nothing.
+  store.noteFullRead("a", { Metadata: {} });
+  assert.equal(canOpenDrawerMessages(drawerKeybindingState(get(store)).meta), false);
+
+  store.noteFullRead("a", { Metadata: { streamed: { response: { framing: "grpc", messages: 2, ending: "complete" } } } });
+  assert.equal(canOpenDrawerMessages(drawerKeybindingState(get(store)).meta), true);
+  assert.equal(canOpenRowMessages(focusedPair(get(store)), { streamedRead: get(store).streamedRead }), true);
+
+  // Another pair's read is its own.
+  store.selectPair("b");
+  assert.equal(canOpenDrawerMessages(drawerKeybindingState(get(store)).meta), false);
+  assert.equal(canOpenRowMessages(focusedPair(get(store)), { streamedRead: get(store).streamedRead }), false);
 });
 
 test("the drawer's details column starts collapsed and stays as left across closing, reopening and a project switch", async () => {

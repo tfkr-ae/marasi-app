@@ -16,7 +16,7 @@ VIEWPORT_WIDTH=1600
 VIEWPORT_HEIGHT=900
 # The server build binds this loopback address. Chrome opens the same
 # literal, which the server's Host check accepts.
-SERVER_HOST=127.0.0.1
+SERVER_HOST=${MARASI_VERIFY_SERVER_HOST:-127.0.0.1}
 PID_FILE=$STATE_DIR/app.pid
 PORT_FILE=$STATE_DIR/proxy-port
 SERVER_PORT_FILE=$STATE_DIR/server-port

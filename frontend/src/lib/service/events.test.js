@@ -31,12 +31,14 @@ function sourceFiles(dir) {
 const withoutComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 const EVENT_NAME = String.raw`[a-z][a-z_-]*(?:\.[a-z_-]+)+`;
+// A name given straight to on() may have no dot, such as stream_message.
+const ON_NAME = String.raw`[a-z][a-z_-]*(?:\.[a-z_-]+)*`;
 
 /** The event names a source text subscribes to. */
 export function subscribedNames(text) {
   const code = withoutComments(text);
   const names = new Set();
-  for (const [, name] of code.matchAll(new RegExp(String.raw`\.on\(\s*["'\`](${EVENT_NAME})["'\`]`, "g"))) {
+  for (const [, name] of code.matchAll(new RegExp(String.raw`\.on\(\s*["'\`](${ON_NAME})["'\`]`, "g"))) {
     names.add(name);
   }
   if (/\.on\(\s*[A-Za-z_$]/.test(code)) {

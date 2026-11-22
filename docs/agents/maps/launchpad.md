@@ -16,7 +16,7 @@ Which files work together on the Launchpad page, how a launch travels through Go
 
 ## A launch
 
-1. `launch` on the page calls the store's `launch`, which posts `/launchpad/{id}/launch` (`launchpadApi.js`). Its launch id is also the new entry's pair id.
+1. `launch` on the page calls the store's `launch`, which posts `/launchpad/{id}/launch` (`launchpadApi.js`). Its launch id is also the new entry's pair id. A streamed pair's stored request has an empty body, so `getRawDetails` reads the request Marasi joins from its messages (`GET /traffic/{id}/request/joined`); while the request is still streaming that refuses with `stream_request_open`, the details keep the stored request marked `RequestStreaming`, and the store's `launch` reads it again and throws the same code when it still is (`lib/launchpad/streamRequestOpen.js`; the page toasts "Request still streaming").
 2. The service publishes `launch.started` and then `launch.completed`, `launch.cancelled` or `launch.failed`. `launchpadStore.js` passes them to `onLaunchStarted` and `onLaunchFinished`.
 3. The new entry arrives as a `request` event (`onRequest` in the store).
 

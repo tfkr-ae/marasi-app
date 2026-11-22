@@ -23,6 +23,12 @@ export const SERVICE_EVENTS = [
   "websocket.handshake_ended",
   "websocket.progress",
   "websocket.message",
+  // Streamed pairs
+  "streamed_pair.started",
+  "streamed_pair.updated",
+  "streamed_pair.ended",
+  "stream_message",
+  "stream_message.progress",
   // Launchpads and launches
   "launchpad.created",
   "launchpad.updated",

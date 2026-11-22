@@ -1,7 +1,8 @@
 // Menu contexts: Marasi-defined pages and interface states that decide which
 // menu actions are eligible. Each context has a tier; when several eligible
 // contexts bind the same key, the most specific tier wins.
-import { canOpenDrawerStream } from "../websocket/presentation.js";
+import { canOpenDrawerMessages } from "../messages/open.js";
+import { kindContexts, MESSAGE_KINDS, MESSAGES_MODAL, stepTab } from "../messages/kinds.js";
 
 export const TIERS = ["overlay", "drawer", "page", "global"];
 
@@ -17,18 +18,14 @@ const ledgerDrawerOpen = (state) => Boolean(state.ledgerDrawer?.open);
 // `state.armoryDrawer` ({ open }).
 const armoryDrawerOpen = (state) => Boolean(state.armoryDrawer?.open);
 
-export const WEBSOCKET_MODAL = "WebsocketStream";
-// The WebSocket modal's tabs, in tab order. The modal publishes the open one
-// as `state.websocketTab`.
-export const WEBSOCKET_TABS = ["stream", "checkpoint", "inject", "connection"];
-// The tab `step` places after `tab` (negative steps go back), wrapping
-// around: what the previous-tab and next-tab actions move to.
+// The Messages modal (lib/messages/kinds.js), and its WebSocket kind's tabs
+// in tab order. The modal publishes the open one as `state.websocketTab`.
+export const WEBSOCKET_MODAL = MESSAGES_MODAL;
+export const WEBSOCKET_TABS = MESSAGE_KINDS.websocket.tabs.map((tab) => tab.id);
+// The WebSocket tab `step` places after `tab`, wrapping around.
 export function stepWebSocketTab(tab, step) {
-  const count = WEBSOCKET_TABS.length;
-  const index = Math.max(WEBSOCKET_TABS.indexOf(tab), 0);
-  return WEBSOCKET_TABS[(((index + step) % count) + count) % count];
+  return stepTab(MESSAGE_KINDS.websocket, tab, step);
 }
-const websocketModalOpen = (state) => state.modal === WEBSOCKET_MODAL;
 
 // `page` and `state` name the context for people (the keybinding settings
 // sidebar shows the page with the state beneath it); `label` is the short
@@ -51,34 +48,11 @@ export const CONTEXTS = [
     state: "Every page",
     isEligible: () => true,
   },
-  // The WebSocket modal: actions shared by every tab, then one context per
-  // tab. Each tab is eligible together with the shared context in the same
-  // tier, so they overlap (one collision domain); the tabs never co-occur,
-  // so they may reuse keys. Beneath the modal only the global context stays
-  // eligible (pages and drawers are not, see onRoute): that is shadowing
-  // across tiers and needs no declaration.
-  {
-    id: "websocket",
-    tier: "overlay",
-    label: "WebSocket",
-    page: "WebSocket",
-    state: "Every tab",
-    isEligible: websocketModalOpen,
-  },
-  ...[
-    ["stream", "Stream"],
-    ["checkpoint", "Checkpoint"],
-    ["inject", "Inject"],
-    ["connection", "Connection"],
-  ].map(([tab, name]) => ({
-    id: `websocket.${tab}`,
-    tier: "overlay",
-    label: `WebSocket ${name} tab`,
-    page: "WebSocket",
-    state: `${name} tab`,
-    overlaps: ["websocket"],
-    isEligible: (state) => websocketModalOpen(state) && state.websocketTab === tab,
-  })),
+  // The Messages modal: per kind, a context shared by every tab and one per
+  // tab (kindContexts). Pages and drawers beneath it are not eligible (see
+  // onRoute).
+  ...kindContexts(MESSAGE_KINDS.websocket),
+  ...kindContexts(MESSAGE_KINDS.stream),
   {
     id: "ledger.drawer-closed",
     tier: "page",
@@ -92,14 +66,14 @@ export const CONTEXTS = [
   {
     id: "ledger.drawer-open.websocket",
     tier: "drawer",
-    label: "Ledger drawer (WebSocket upgrade)",
+    label: "Ledger drawer (WebSocket upgrade or streamed pair)",
     page: "Ledger",
-    state: "Drawer open (WebSocket)",
+    state: "Drawer open (messages)",
     overlaps: ["ledger.drawer-open"],
     isEligible: (state) =>
       onRoute("/ledger")(state) &&
       ledgerDrawerOpen(state) &&
-      canOpenDrawerStream(state.ledgerDrawer.meta),
+      canOpenDrawerMessages(state.ledgerDrawer.meta),
   },
   {
     id: "ledger.drawer-open",

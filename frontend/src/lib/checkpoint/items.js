@@ -3,7 +3,11 @@
 // act on. Pure, so they load under node --test.
 
 /** An item's kind tag by Type, as the dock and KindTag show it. */
-export const KIND_LABELS = { request: "REQ", response: "RES", websocket: "WS" };
+export const KIND_LABELS = { request: "REQ", response: "RES", websocket: "WS", stream: "STREAM", trailer: "TRAILER" };
+
+// Kinds that belong to a connection or a streamed pair, titled by kind,
+// direction, host and path.
+const MESSAGE_KINDS = new Set(["WS", "STREAM", "TRAILER"]);
 
 const firstLine = (text) => (text ?? "").split(/\r?\n/, 1)[0];
 
@@ -53,6 +57,16 @@ export function summarize(item, text, context = {}) {
       status: 0,
     };
   }
+  if (item.Type === "stream" || item.Type === "trailer") {
+    const request = context.request ?? {};
+    return {
+      kind,
+      method: item.Direction === "request" ? "C→S" : "S→C",
+      path: request.Path ?? "",
+      host: request.Host ?? "",
+      status: 0,
+    };
+  }
   if (item.Type === "response") {
     const request = context.request ?? {};
     const status = Number(firstLine(text).split(" ")[1]) || 0;
@@ -62,6 +76,36 @@ export function summarize(item, text, context = {}) {
   // An HTTP/2 request names its host in :authority; a Host field may stand in.
   const host = headerOf(text, ":authority") || headerOf(text, "host") || line.host;
   return { kind, method: line.method, path: line.path, host, status: 0 };
+}
+
+// The media type is `base` or `base+codec`.
+const suffixed = (mediaType, base) => mediaType === base || mediaType.startsWith(`${base}+`);
+
+/**
+ * The message framing a held request's or response's head names, as
+ * Marasi decides it (stream.FramingOf): only the Content-Type counts, and
+ * server-sent events and NDJSON stream only in a response. "" for a head
+ * whose body isn't carried as stream messages, or any other kind.
+ */
+export function streamedHead(item, text) {
+  if (item?.Type !== "request" && item?.Type !== "response") return "";
+  const mediaType = headerOf(text, "content-type").split(";", 1)[0].trim().toLowerCase();
+  if (suffixed(mediaType, "application/grpc-web") || suffixed(mediaType, "application/grpc-web-text")) return "grpc-web";
+  if (suffixed(mediaType, "application/grpc")) return "grpc";
+  if (mediaType.startsWith("application/connect+")) return "connect";
+  if (item.Type !== "response") return "";
+  if (mediaType === "text/event-stream") return "sse";
+  if (mediaType === "application/x-ndjson" || mediaType === "application/jsonl") return "ndjson";
+  return "";
+}
+
+/**
+ * Whether Forward + intercept response applies to the item: a held request
+ * whose body isn't carried as stream messages. A streamed pair's messages
+ * are held by Stream intercept instead.
+ */
+export function offersInterceptResponse(item) {
+  return item?.Type === "request" && !streamedHead(item, item.text);
 }
 
 /**
@@ -81,10 +125,11 @@ export function groupByHost(items, hostOf) {
 /**
  * The top bar's title: "#412 · GET /login", without the number while
  * Marasi hasn't stored the pair (a held request), or a WebSocket message's
- * connection.
+ * connection or a stream message's or trailer block's pair:
+ * "STREAM C→S · host/path".
  */
 export function itemTitle(summary, number = 0) {
-  if (summary.kind === "WS") return `WS ${summary.method} · ${summary.host}${summary.path}`;
+  if (MESSAGE_KINDS.has(summary.kind)) return `${summary.kind} ${summary.method} · ${summary.host}${summary.path}`;
   const line = `${summary.method} ${summary.path}`.trim();
   return number ? `#${number} · ${line}` : line;
 }
@@ -94,7 +139,8 @@ export function itemTitle(summary, number = 0) {
  * pair, else its title. `context` is the item's, as for summarize.
  */
 export function abandonLabel(item, context) {
-  const number = context?.request?.Number;
+  // A stream message's context is its pair, whose number isn't the item's.
+  const number = item.Type === "request" || item.Type === "response" ? context?.request?.Number : 0;
   return number ? `#${number}` : itemTitle(summarize(item, item.text, context ?? {}));
 }
 

@@ -6,7 +6,7 @@
 	// confirmations, the toasts and the checkpoint.* shortcuts.
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
-	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
+	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft, Waves } from "lucide-svelte";
 	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { checkpointItemContext as itemContext, checkpointRules, checkpointStore } from "../../stores/checkpointStore";
@@ -17,8 +17,8 @@
 	import ItemWorkspace from "../../lib/checkpoint/ItemWorkspace.svelte";
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
 	import { keyOf } from "../../lib/checkpoint/itemContext.js";
-	import { bulkTargets, dropTitle, groupByHost, summarize, treeOrder } from "../../lib/checkpoint/items.js";
-	import { isSuperseded } from "../../lib/service/errors.js";
+	import { bulkTargets, dropTitle, groupByHost, offersInterceptResponse, summarize, treeOrder } from "../../lib/checkpoint/items.js";
+	import { reportFailure, settleItem } from "../../lib/checkpoint/settle.js";
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -55,7 +55,7 @@
 			item,
 			context,
 			summary: summarize(item, item.text, context),
-			launch: item.Type === "websocket" ? null : launchpadNameOf(item.ID, lp),
+			launch: item.Type === "request" || item.Type === "response" ? launchpadNameOf(item.ID, lp) : null,
 		};
 	}
 
@@ -68,34 +68,14 @@
 	function toast(message, background = "variant-filled-surface") {
 		toastStore.trigger({ message, background, timeout: 3000 });
 	}
-	// A connection switch stopped it (superseded): nothing to report.
-	function failed(what, err) {
-		if (isSuperseded(err)) return;
-		console.error(`${what} failed:`, err);
-		toast(`${what} failed`, "variant-filled-error");
-	}
-
-	// A forward or drop of an item that had already left removes it.
-	const GONE = "Already gone";
+	const failed = (what, err) => reportFailure(what, err, toast);
 
 	async function forward(id, options = {}) {
-		if (!id) return;
-		try {
-			const result = await store.forward(id, options);
-			if (result === "unparsed") toast("Edit doesn't parse", "variant-filled-warning");
-			if (result === "gone") toast(GONE);
-		} catch (err) {
-			failed("Forward", err);
-		}
+		if (id) await settleItem("Forward", () => store.forward(id, options), toast);
 	}
 
 	async function drop(id) {
-		if (!id) return;
-		try {
-			if ((await store.drop(id)) === "gone") toast(GONE);
-		} catch (err) {
-			failed("Drop", err);
-		}
+		if (id) await settleItem("Drop", () => store.drop(id), toast);
 	}
 
 	async function runBulk(kind, ids) {
@@ -126,6 +106,14 @@
 			await store.toggleIntercept();
 		} catch (err) {
 			failed("Intercept all", err);
+		}
+	}
+
+	async function toggleStreamIntercept() {
+		try {
+			await store.toggleStreamIntercept();
+		} catch (err) {
+			failed("Stream intercept", err);
 		}
 	}
 
@@ -198,7 +186,12 @@
 		{
 			actionId: "checkpoint.forward-intercept-response",
 			icon: CornerDownRight,
-			handler: () => selected?.item.Type === "request" && forward(selected.ID, { interceptResponse: true }),
+			handler: () => offersInterceptResponse(selected?.item) && forward(selected.ID, { interceptResponse: true }),
+		},
+		{
+			actionId: "checkpoint.toggle-stream-intercept",
+			icon: Waves,
+			handler: toggleStreamIntercept,
 		},
 		{
 			actionId: "checkpoint.forward-picked",
@@ -236,7 +229,7 @@
 <MarasiMenu paletteTier="page" pageName="Checkpoint" pageEntries={checkpointMenu} />
 
 <div class="cp-page relative flex h-full min-h-0">
-	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} />
+	<CheckpointDock {store} {groups} {now} bind:collapsed onBulk={bulk} onToggleIntercept={toggleIntercept} onToggleStreamIntercept={toggleStreamIntercept} />
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		<!-- py-0.5 keeps this row as tall as the dock's header, so their borders line up. -->

@@ -69,6 +69,7 @@
         toastLaunchingRefusal,
         warnLaunching,
     } from "../../lib/launchPending.js";
+    import { isStreamRequestOpen, STREAM_REQUEST_OPEN_TEXT } from "../../lib/launchpad/streamRequestOpen.js";
     import { UNTITLED_LAUNCHPAD } from "../../lib/launchpad/format.js";
     import { latestRequest } from "../../lib/latestRequest.js";
     import { handoffBackground, toastError } from "../../lib/toasts.js";
@@ -503,6 +504,10 @@
                 background: "variant-filled-success",
             });
         } catch (err) {
+            if (isStreamRequestOpen(err)) {
+                toastStore.trigger({ message: STREAM_REQUEST_OPEN_TEXT, background: "variant-filled-warning" });
+                return;
+            }
             console.error("Launchpad error:", err);
             toastStore.trigger({
                 message: "Failed to launch the request",

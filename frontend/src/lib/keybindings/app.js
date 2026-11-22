@@ -24,6 +24,10 @@ export const globalMenuEntries = writable([]);
 // `state.websocketTab`.
 export const websocketTab = writable(null);
 
+// The Messages modal's open tab on a streamed pair (MESSAGE_KINDS.stream),
+// or null while it shows none. Its contexts read it as `state.streamTab`.
+export const streamTab = writable(null);
+
 // Whether the Armory page's request drawer is open. The page publishes it;
 // the armory contexts read it as `state.armoryDrawer` ({ open }).
 export const armoryDrawer = writable({ open: false });

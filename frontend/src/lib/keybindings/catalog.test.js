@@ -420,6 +420,13 @@ test("the Ledger with its drawer open groups its actions as the spec lists them"
   assert.equal(catalog.get("ledger.drawer-open.websocket.open-stream").group, undefined);
 });
 
+test("Open Messages keeps the WebSocket stream action's id and ⇧G", () => {
+  const open = buildCatalog().get("ledger.drawer-open.websocket.open-stream");
+  assert.equal(open.label, "Open Messages");
+  assert.match(open.keywords, /messages/);
+  assert.deepEqual(open.defaults, { [MACOS]: ["meta+shift+g"], [WINDOWS_LINUX]: ["ctrl+shift+g"] });
+});
+
 test("the Ledger with its drawer closed groups only Focus", () => {
   const catalog = buildCatalog();
   assert.deepEqual(groupsOf(catalog, "ledger.drawer-closed"), [
@@ -456,7 +463,7 @@ test("the Armory page groups Templates and Runs, with the rest loose", () => {
 test("the Checkpoint groups Held items under I, since H is reserved, and Rules", () => {
   const catalog = buildCatalog();
   assert.deepEqual(groupsOf(catalog, "checkpoint"), [
-    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked"]],
+    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked", "toggle-stream-intercept"]],
     ["rules", "Rules", "R", ["edit-rules", "update-rules"]],
   ]);
   assert.equal(catalog.get("checkpoint.toggle-settings").group, undefined);

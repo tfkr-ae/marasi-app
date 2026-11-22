@@ -227,6 +227,44 @@ test("badges mark the WebSocket upgrade, launchpads, Armory, interception, edits
   for (const badge of rowBadges(row)) assert.ok(badge.label, `${badge.key} has a label`);
 });
 
+const streamedBadge = (streamed) => rowBadges({ Metadata: {}, Streamed: streamed }).find((b) => b.key === "streamed");
+
+test("an ordinary pair, or one from a service without streamed state, has no streamed badge", () => {
+  assert.equal(streamedBadge(null), undefined);
+  assert.equal(streamedBadge(undefined), undefined);
+  assert.equal(streamedBadge({ request: null, response: null }), undefined);
+});
+
+test("a streamed pair's badge names each streamed direction's framing", () => {
+  const badge = streamedBadge({ request: { framing: "grpc", ending: null }, response: { framing: "grpc-web", ending: null } });
+  assert.match(badge.label, /request grpc/);
+  assert.match(badge.label, /response grpc-web/);
+  const sse = streamedBadge({ request: null, response: { framing: "sse", ending: null } });
+  assert.match(sse.label, /response sse/);
+  assert.doesNotMatch(sse.label, /request/);
+  for (const framing of ["connect", "ndjson"]) {
+    assert.match(streamedBadge({ request: { framing, ending: null }, response: null }).label, new RegExp(`request ${framing}`));
+  }
+});
+
+test("a streamed pair's badge looks live, ended, or cancelled and reset", () => {
+  const live = streamedBadge({ request: { framing: "grpc", ending: "complete" }, response: { framing: "grpc", ending: null } });
+  const ended = streamedBadge({ request: { framing: "grpc", ending: "complete" }, response: { framing: "grpc", ending: "complete" } });
+  const cancelled = streamedBadge({ request: { framing: "grpc", ending: "cancelled" }, response: { framing: "grpc", ending: "cancelled" } });
+  const reset = streamedBadge({ request: { framing: "grpc", ending: "complete" }, response: { framing: "grpc", ending: "reset" } });
+  const cutShort = streamedBadge({ request: null, response: { framing: "sse", ending: "cut short" } });
+  assert.match(live.label, /live/);
+  assert.match(ended.label, /ended/);
+  assert.match(cancelled.label, /cancelled/);
+  assert.match(reset.label, /reset/);
+  assert.match(cutShort.label, /cut short/);
+  // Three looks: live is coloured, ended is plain, a cancel or reset is slashed.
+  assert.ok(live.tone && !live.slashed);
+  assert.ok(!ended.tone && !ended.slashed);
+  assert.ok(cancelled.slashed && reset.slashed && cutShort.slashed);
+  assert.notEqual(live.tone, cancelled.tone);
+});
+
 test("a failed upgrade's badge is slashed and says why", () => {
   const [badge] = rowBadges({ Metadata: { protocol: "websocket", "websocket.state": "failed" } });
   assert.equal(badge.key, "websocket");

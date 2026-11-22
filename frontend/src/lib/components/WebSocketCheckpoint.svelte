@@ -15,6 +15,7 @@
 		ToggleRight,
 	} from "lucide-svelte";
 	import { marasiConfig, lineWrap } from "../../stores";
+	import { appKeys } from "../editorKeys.js";
 	import { longStrings } from "../longStrings.js";
 	import { webSocketStore } from "../../stores/webSocketStore";
 	import WebSocketMessageProperties from "./WebSocketMessageProperties.svelte";
@@ -101,7 +102,7 @@
 
 <div class="flex h-full min-h-0 w-full flex-col">
 	<div
-		class="ws-bar flex h-10 shrink-0 items-center justify-between gap-3 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
+		class="msg-bar flex h-10 shrink-0 items-center justify-between gap-3 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 	>
 		<span class="chip variant-soft-surface text-xs">
 			{queue.length === 1
@@ -153,7 +154,7 @@
 
 	{#if intercepted}
 		<div
-			class="ws-bar flex h-10 shrink-0 items-center gap-3 border-b border-surface-500/30 px-3 font-mono text-xs"
+			class="msg-bar flex h-10 shrink-0 items-center gap-3 border-b border-surface-500/30 px-3 font-mono text-xs"
 		>
 			<span class="inline-flex items-center gap-1.5">
 				{#if intercepted.Direction === "client"}
@@ -177,7 +178,7 @@
 				class="h-full w-full text-xs"
 				bind:value={payloadText}
 				theme={$modeCurrent ? githubLight : oneDark}
-				extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
+				extensions={[appKeys, ...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 			/>
 		</div>
 	{:else if loading}

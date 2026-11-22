@@ -6,7 +6,8 @@
 // The mapper for launch stream events (toLaunch; traffic events use
 // trafficApi.js's toRequestEvent and toResponseEvent) is
 // exported for launchpadStore.js.
-import { encodeBase64Text } from "../lib/service/bytes.js";
+import { decodeBase64Text, encodeBase64Text } from "../lib/service/bytes.js";
+import { isStreamRequestOpen } from "../lib/launchpad/streamRequestOpen.js";
 import { pairQuery, RAW_ONLY, toDetails } from "./trafficApi.js";
 
 /** A launchpad from GET /launchpad, in the store's fields. */
@@ -98,11 +99,29 @@ export function createLaunchpadApi(client) {
       const launchpad = await client.get(`/launchpad/${id}`);
       return (launchpad.items ?? []).map(toEntry);
     },
-    // Null for a pair the service can't find, as the binding gave.
+    // Null for a pair the service can't find, as the binding gave. A
+    // streamed request is stored with an empty body, so its request is the
+    // one Marasi joins from its messages, ready to launch. While the
+    // request is still streaming Marasi refuses to join it
+    // (stream_request_open): the stored request stays, marked
+    // RequestStreaming, and the store refuses to launch it.
     async getRawDetails(id) {
+      let pair;
       try {
-        return toLaunchpadDetails(await client.get(`/traffic/${id}`, pairQuery(RAW_ONLY)));
+        pair = await client.get(`/traffic/${id}`, pairQuery(RAW_ONLY));
       } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+      const details = { ...toLaunchpadDetails(pair), RequestStreaming: false };
+      if (!pair.streamed?.request) return details;
+      try {
+        const joined = await client.get(`/traffic/${id}/request/joined`);
+        // RawBase64 keeps the bytes, which a protobuf body's text can't.
+        const Request = { ...details.Request, Raw: decodeBase64Text(joined.raw), RawBase64: joined.raw };
+        return { ...details, Request };
+      } catch (err) {
+        if (isStreamRequestOpen(err)) return { ...details, RequestStreaming: true };
         if (isNotFound(err)) return null;
         throw err;
       }
@@ -124,10 +143,11 @@ export function createLaunchpadApi(client) {
     updateLaunchpad: (id, name, description) => client.post(`/launchpad/${id}`, { name, description }),
     deleteLaunchpad: (id) => client.del(`/launchpad/${id}`),
 
-    // Returns the launch id, which is also the new entry's id.
-    async launch(raw, launchpadId, useHttps) {
+    // Returns the launch id, which is also the new entry's id. `rawBase64`,
+    // when given, is the request's own bytes, sent in place of the text.
+    async launch(raw, launchpadId, useHttps, rawBase64) {
       const started = await client.post(`/launchpad/${launchpadId}/launch`, {
-        raw: encodeBase64Text(raw),
+        raw: rawBase64 || encodeBase64Text(raw),
         scheme: useHttps ? "https" : "http",
       });
       return started.launch_id;

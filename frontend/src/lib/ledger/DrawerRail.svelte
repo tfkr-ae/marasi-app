@@ -72,7 +72,7 @@
 	// The pair actions, in groups; null separates them.
 	$: actions = [
 		...(canOpenStream
-			? [{ label: "Open WebSocket stream", icon: Radio, actionId: `${DRAWER}.websocket.open-stream` }, null]
+			? [{ label: "Open messages", icon: Radio, actionId: `${DRAWER}.websocket.open-stream` }, null]
 			: []),
 		{ label: "Copy request", icon: Copy, actionId: `${DRAWER}.copy-raw-request` },
 		{ label: "Copy response", icon: FileOutput, actionId: `${DRAWER}.copy-raw-response` },

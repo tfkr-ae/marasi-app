@@ -116,7 +116,8 @@
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
 	import { closeTopOverlay, isolateOverlays } from "../lib/overlayIsolation.js";
-	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
+	import MessagesModal from "../lib/messages/MessagesModal.svelte";
+	import { kindOf, MESSAGES_MODAL } from "../lib/messages/kinds.js";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
@@ -143,6 +144,7 @@
 		installMenuShortcuts,
 		menuDispatcher,
 		websocketTab,
+		streamTab,
 		armoryDrawer,
 		keybindingCapture,
 	} from "../lib/keybindings/app.js";
@@ -269,7 +271,7 @@
 		// The finding and test case modal (lib/logbook/recordEditor.js).
 		LogbookRecord: { ref: RecordModal },
 		SelectTestCase: { ref: SelectTestCaseModal },
-		WebsocketStream: { ref: WebSocketModal },
+		WebsocketStream: { ref: MessagesModal },
 		SelectFinding: { ref: SelectFindingModal },
 		SelectWordlist: { ref: SelectWordlistModal },
 		"extension-modal": { ref: ModalWrapper },
@@ -363,13 +365,17 @@
 	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
+		const modal = get(modalStore)[0];
 		return {
 			route: get(page).url.pathname,
-			modal: get(modalStore)[0]?.component ?? null,
+			modal: modal?.component ?? null,
+			// The Messages modal's kind, from its meta as soon as it opens.
+			messagesKind: modal?.component === MESSAGES_MODAL ? kindOf(modal.meta).id : null,
 			dialogOpen: Boolean(document.querySelector("dialog[open]")),
 			drawer: get(drawerStore),
 			ledgerDrawer: drawerKeybindingState(get(ledgerStore)),
 			websocketTab: get(websocketTab),
+			streamTab: get(streamTab),
 			armoryDrawer: get(armoryDrawer),
 			launchpadTreeFocused: Boolean(document.activeElement?.closest?.("[data-launchpad-tree]")),
 			capturing: get(keybindingCapture),

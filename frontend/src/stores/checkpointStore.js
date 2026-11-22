@@ -6,7 +6,7 @@ import { writable } from "svelte/store";
 import { service } from "../lib/service/index.js";
 import { createItemContext } from "../lib/checkpoint/itemContext.js";
 import { loadSignals } from "../lib/openProgress.js";
-import { createCheckpointApi, toSettled } from "./checkpointApi.js";
+import { createCheckpointApi, toCheckpointFlags, toSettled } from "./checkpointApi.js";
 import { createCheckpointStore } from "./createCheckpointStore.js";
 import { createCheckpointRules, RULES_EXTENSION } from "./checkpointRules.js";
 import { interceptFlag } from "./interceptFlag.js";
@@ -15,9 +15,11 @@ import { NO_BODIES, pairQuery } from "./trafficApi.js";
 import { createWebSocketApi } from "./webSocketApi.js";
 
 export {
+  heldOfPair,
   isChecking,
   isDirty,
   parseErrorOf,
+  refusalOf,
   pickedIds,
   textOf,
 } from "./createCheckpointStore.js";
@@ -81,4 +83,4 @@ function onLeft(event) {
 }
 service.on("checkpoint.forwarded", onLeft);
 service.on("checkpoint.dropped", onLeft);
-service.on("checkpoint.updated", checkpointStore.onUpdated);
+service.on("checkpoint.updated", (event) => checkpointStore.onUpdated(toCheckpointFlags(event)));

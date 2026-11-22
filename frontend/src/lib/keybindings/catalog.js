@@ -91,7 +91,7 @@ export const FACTORY_ACTIONS = [
     ["focus-sitemap", "Find in Sitemap", "Jump to the sitemap's find box, expanding the sidebar", "sitemap, find, search, host, path", primary("shift+\\"), { group: "focus" }],
   ]),
   ...pageActions("ledger.drawer-open.websocket", [
-    ["open-stream", "Open WebSocket Stream", "Open the upgraded connection stream", "open websocket upgrade stream messages", primary("shift+g")],
+    ["open-stream", "Open Messages", "Open the messages of a WebSocket connection or streamed pair", "open messages websocket upgrade stream streamed grpc sse", primary("shift+g")],
   ]),
   ...pageActions("ledger.drawer-open", [
     // Search, Filter and Open request work with the drawer open too: it no
@@ -198,6 +198,7 @@ export const FACTORY_ACTIONS = [
     ["forward-picked", "Forward Picked Items", "Forward the picked items, or every item when none are picked", "forward, bulk, picked, all, intercept", primary("shift+a"), { group: "held" }],
     ["drop-picked", "Drop Picked Items", "Drop the picked items, or every item when none are picked", "drop, bulk, picked, all, intercept", primary("shift+x"), { group: "held" }],
     ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("shift+s"), { group: "held" }],
+    ["toggle-stream-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream, intercept, toggle, grpc, messages", primary("shift+t"), { group: "held" }],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
   // Esc, which goes back to the list, is reserved for the page (gate.js),
@@ -260,6 +261,30 @@ export const FACTORY_ACTIONS = [
     ["toggle-intercept", "Toggle WebSocket Intercept", "Enable or disable WebSocket interception", "websocket checkpoint intercept toggle", primary("shift+i")],
     ["forward-frame", "Forward WebSocket Message", "Forward the current intercepted message", "websocket checkpoint forward message", primary("shift+f")],
     ["drop-frame", "Drop WebSocket Message", "Drop the current intercepted message", "websocket checkpoint drop message", primary("shift+d")],
+  ]),
+  // The Messages modal on a streamed pair: the same default keys as the
+  // WebSocket counterparts, with ids that say "message".
+  ...pageActions("stream", [
+    ["previous-tab", "Previous Messages Tab", "Move to the previous tab of the streamed pair", "stream previous tab messages pair grpc", primary("[")],
+    ["next-tab", "Next Messages Tab", "Move to the next tab of the streamed pair", "stream next tab messages pair grpc", primary("]")],
+    ["cancel-pair", "Cancel Streamed Pair", "Cancel the live call", "stream cancel stop call grpc", primary("shift+x")],
+  ]),
+  ...pageActions("stream.messages", [
+    ["previous-message", "Previous Stream Message", "Select the previous stream message", "stream previous message grpc", primary("shift+[")],
+    ["next-message", "Next Stream Message", "Select the next stream message", "stream next message grpc", primary("shift+]")],
+    ["jump-to-bottom", "Jump to Bottom", "Jump to the newest message and resume auto-scroll", "stream messages bottom newest follow auto-scroll", primary("j")],
+    ["toggle-message-metadata", "Toggle Message Metadata", "Switch between the message and its metadata", "stream message metadata", primary("shift+m")],
+    ["toggle-raw", "Toggle Raw Message", "Switch between the message's text form and its raw payload", "stream message raw payload text form protobuf", primary("shift+r")],
+    ["copy-message-to-inject", "Copy Message to Inject", "Copy the selected message into the Inject tab", "stream message copy inject resend", primary("shift+i")],
+  ]),
+  ...pageActions("stream.checkpoint", [
+    ["toggle-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream checkpoint intercept toggle grpc", primary("shift+i")],
+    ["forward-message", "Forward Intercepted Message", "Forward the selected intercepted message or trailer block", "stream checkpoint forward message trailers", primary("shift+f")],
+    ["drop-message", "Drop Intercepted Message", "Drop the selected intercepted message or trailer block", "stream checkpoint drop message trailers", primary("shift+d")],
+  ]),
+  ...pageActions("stream.inject", [
+    ["toggle-direction", "Toggle Inject Direction", "Switch between the open directions", "stream inject direction request response", primary("shift+d")],
+    ["inject-message", "Inject Message", "Send the message into the chosen direction", "stream inject send message grpc", primary("shift+enter")],
   ]),
   ...pageActions("websocket.inject", [
     ["toggle-direction", "Toggle Inject Direction", "Switch the injected message direction", "websocket inject direction client server", primary("shift+d")],

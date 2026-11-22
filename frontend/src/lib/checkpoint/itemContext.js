@@ -1,13 +1,16 @@
 // What an intercepted item doesn't carry itself, read once per item: the
-// stored request a held response answers (GET /traffic/{id}), and a
-// WebSocket message's connection. A held request has neither:
-// Marasi stores it only once it is forwarded.
+// stored request a held response answers (GET /traffic/{id}), a stream
+// message's or trailer block's pair (read once per pair), and a WebSocket
+// message's connection. A held request has neither: Marasi stores it only
+// once it is forwarded.
 import { writable } from "svelte/store";
 
 const ZERO_ID = "00000000-0000-0000-0000-000000000000";
 const isId = (id) => typeof id === "string" && id !== "" && id !== ZERO_ID;
 
 const RETRIES = 3;
+
+const isStreamItem = (item) => item.Type === "stream" || item.Type === "trailer";
 const RETRY_MS = 500;
 
 /**
@@ -22,8 +25,8 @@ export function createItemContext(api) {
   async function read(item, key, attempt = 0) {
     let context = null;
     try {
-      if (item.Type === "response") {
-        const row = await api.getRow(item.ID);
+      if (item.Type === "response" || isStreamItem(item)) {
+        const row = await api.getRow(isStreamItem(item) ? item.PairID : item.ID);
         if (row?.Request) context = { request: row.Request };
       } else {
         // The stored connection is found by its upgrade request's id, a
@@ -58,5 +61,8 @@ export function createItemContext(api) {
   return { subscribe: store.subscribe, load };
 }
 
-/** The context store's key for an item; a held response reuses its request's id. */
-export const keyOf = (item) => `${item.Type}:${item.ID}`;
+/**
+ * The context store's key for an item; a held response reuses its request's
+ * id, and a pair's stream messages and trailer blocks share the pair's key.
+ */
+export const keyOf = (item) => (isStreamItem(item) ? `pair:${item.PairID}` : `${item.Type}:${item.ID}`);

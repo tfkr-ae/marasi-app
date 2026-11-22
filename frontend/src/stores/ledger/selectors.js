@@ -175,6 +175,10 @@ export function drawerKeybindingState(state) {
       metadata: pair.Metadata ?? {},
       response: { StatusCode: pair.StatusCode, ContentType: pair.ContentType },
       incomingResponse: state.selection.incomingResponse,
+      // A streamed pair's streamed state, which opens its messages; from a
+      // service without it on rows, an empty one once the pair's full read
+      // showed streamed metadata.
+      streamed: pair.Streamed ?? (sameID(state.streamedRead, pair.ID) ? { request: null, response: null } : null),
     },
   };
 }

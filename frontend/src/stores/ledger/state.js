@@ -120,6 +120,10 @@ export function initialState(runID = 0, layout = initialLayout(), sort = DEFAULT
     querying: false,
     query: emptyQueryState(runID),
     results: emptyResults(),
+    // The last pair whose full read (the drawer's) showed streamed metadata,
+    // as a string id: from a service without `streamed` on rows, it opens
+    // its messages all the same (lib/messages/open.js).
+    streamedRead: null,
   };
 }
 

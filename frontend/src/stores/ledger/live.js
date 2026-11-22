@@ -194,6 +194,14 @@ export function createLive(core, api, win, { setSelection }) {
       responseBuffer.set(res.ID, res);
       if (responseBuffer.size > MAX_BUFFERED) flush();
     },
+    // A streamed_pair.* event replaces its row's streamed state. The
+    // pair's request may still wait in the buffer, as started follows
+    // traffic.request straight away, so a buffered request takes it too.
+    onStreamedPair: ({ ID, Streamed } = {}) => {
+      if (ID == null) return;
+      requestBuffer = requestBuffer.map((req) => (sameID(req.ID, ID) ? { ...req, Streamed } : req));
+      patchPairs([String(ID)], (item) => ({ ...item, Streamed }));
+    },
     // A ws-open, ws-close or ws-state event changes its upgrade row.
     patchWebSocketMetadata: (conn) => {
       if (!conn?.RequestID) return;

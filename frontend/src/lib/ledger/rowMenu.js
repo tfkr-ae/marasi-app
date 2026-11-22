@@ -15,7 +15,7 @@
 // `icon` is a key into RowMenu.svelte's icon map.
 // The highlight item has `swatches` instead of `sub`: one action item per
 // highlight, then None, each with a `color` (null for None) and `checked`.
-import { upgradeFromLedgerRow, upgradePresentation } from "../websocket/presentation.js";
+import { canOpenRowMessages } from "../messages/open.js";
 import { shortType } from "./table.js";
 import { effectivePalette } from "./highlights.js";
 import { LAUNCHPADS_EACH_MAX } from "./pairs.js";
@@ -294,7 +294,8 @@ const launchingCount = (pairs, pendingLaunches, launchpadId = null) =>
  * order. `context` holds what the app already knows: { launchpads,
  * findings, testCases, palette (the effective highlight
  * palette), pendingLaunches (the launchpad store's, each { ID, LaunchpadID }
- * with its pair's ID), all, count }. `all` marks a ⌘A selection, whose
+ * with its pair's ID), all, count, streamedRead (the pair whose full read
+ * showed streamed metadata, lib/messages/open.js) }. `all` marks a ⌘A selection, whose
  * `count` pairs (null until counted) can be more than the loaded ones;
  * actions that need each pair are disabled then, and Delete and Remove from
  * launchpad stay enabled for Marasi to refuse what is still launching.
@@ -309,6 +310,7 @@ export function menuFor(
     pendingLaunches = [],
     all = false,
     count = null,
+    streamedRead = null,
   } = {},
 ) {
   if (pairs.length === 0) return [];
@@ -322,7 +324,7 @@ export function menuFor(
   const types = unique(pairs.map((pair) => pair.ContentType).filter(Boolean));
   const statuses = unique(pairs.map((pair) => Number(pair.StatusCode) || 0));
   const highlights = unique(pairs.map(highlightOf).filter(Boolean)).sort((a, b) => a - b);
-  const websocket = one && upgradePresentation(upgradeFromLedgerRow(one)).canOpen;
+  const websocket = one && canOpenRowMessages(one, { streamedRead });
   const finding = linkMenu({
     key: "f",
     noun: "finding",
@@ -357,7 +359,7 @@ export function menuFor(
       ? [
           {
             id: "websocket",
-            label: "Open WebSocket stream",
+            label: "Open messages",
             icon: "radio",
             actionId: "ledger.drawer-open.websocket.open-stream",
             action: { type: "websocket", id: one.ID },

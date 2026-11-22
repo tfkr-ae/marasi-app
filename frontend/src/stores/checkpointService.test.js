@@ -5,8 +5,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get, writable } from "svelte/store";
 import { serviceError, superseded } from "../lib/service/errors.js";
-import { createCheckpointApi, toCheckpointItem, toSettled } from "./checkpointApi.js";
-import { createCheckpointStore, isDirty, parseErrorOf, textOf } from "./createCheckpointStore.js";
+import { createCheckpointApi, toCheckpointFlags, toCheckpointItem, toSettled } from "./checkpointApi.js";
+import { createCheckpointStore, heldOfPair, isDirty, parseErrorOf, refusalOf, textOf } from "./createCheckpointStore.js";
 
 const b64 = (text) => Buffer.from(text).toString("base64");
 const unb64 = (data) => Buffer.from(data, "base64").toString();
@@ -36,13 +36,21 @@ const wsItem = (id, requestId = "up1") => ({
 // two flags. A route on an item no longer held answers 404 not_found, as
 // Marasi does; `failing` ids answer 500.
 function fakeCheckpoint(held = []) {
-  const state = { held, intercept: false, websocket_intercept: false, failing: new Set(), calls: [] };
-  const list = () => ({ items: state.held.map((item) => ({ ...item })), intercept: state.intercept, websocket_intercept: state.websocket_intercept });
-  const refuse = (method, path, status, error) => {
-    throw serviceError({ method, path, status, body: { error } });
+  const state = { held, intercept: false, websocket_intercept: false, stream_intercept: false, failing: new Set(), calls: [] };
+  const list = () => ({
+    items: state.held.map((item) => ({ ...item })),
+    intercept: state.intercept,
+    websocket_intercept: state.websocket_intercept,
+    stream_intercept: state.stream_intercept,
+  });
+  const refuse = (method, path, status, error, message) => {
+    throw serviceError({ method, path, status, body: message ? { error, message } : { error } });
   };
+  // `refusing` maps an id to the reason Marasi refuses its edit with.
+  state.refusing = {};
   const resolve = (method, path, id) => {
     if (state.failing.has(id)) refuse(method, path, 500, "internal_server_error");
+    if (state.refusing[id]) refuse(method, path, 400, "invalid_checkpoint_request", state.refusing[id]);
     if (!state.held.some((item) => item.id === id)) refuse(method, path, 404, "not_found");
     state.held = state.held.filter((item) => item.id !== id);
   };
@@ -74,6 +82,10 @@ function fakeCheckpoint(held = []) {
       }
       if (path === "/checkpoint/intercept") {
         state.intercept = body.intercept;
+        return list();
+      }
+      if (path === "/checkpoint/stream-intercept") {
+        state.stream_intercept = body.stream_intercept;
         return list();
       }
       refuse("POST", path, 404, "not_found");
@@ -262,7 +274,7 @@ test("Intercept all turns the service's flag over", async () => {
 
 test("checkpoint.updated keeps Intercept all in step with other clients", async () => {
   const { store, interceptFlag } = await loaded([]);
-  store.onUpdated({ intercept: true, websocket_intercept: false });
+  store.onUpdated(toCheckpointFlags({ intercept: true, websocket_intercept: false }));
   assert.equal(get(interceptFlag), true);
 });
 
@@ -324,4 +336,166 @@ test("bulk forward stops at the item a connection switch overtook, sending the r
   );
   assert.equal(result.done, 1);
   assert.equal(result.failed, 0);
+});
+
+// Stream messages and trailer blocks, as GET /checkpoint lists them.
+const PROTO_TEXT = '1:VARINT 1\n3:LEN {"hi"}';
+const streamItem = (id, { text = PROTO_TEXT, payload = b64("\x08\x01\x1a\x02hi"), framing = "grpc", direction = "request", pair = "pair1" } = {}) => ({
+  id,
+  type: "stream",
+  payload,
+  text,
+  direction,
+  framing,
+  pair_id: pair,
+  flags: 0,
+  compressed: false,
+  metadata: {},
+  intercepted_at: "2026-11-22T10:00:00Z",
+});
+const trailerItem = (id, raw = "grpc-status: 0\r\ngrpc-message: ok\r\n", pair = "pair1") => ({
+  id,
+  type: "trailer",
+  raw: b64(raw),
+  direction: "response",
+  framing: "grpc",
+  pair_id: pair,
+  metadata: {},
+  intercepted_at: "2026-11-22T10:00:01Z",
+});
+
+test("held stream messages and trailer blocks list in hold order with their text", async () => {
+  const sse = streamItem("e", { text: null, payload: b64("data: tick\n\n"), framing: "sse", direction: "response" });
+  const binary = streamItem("x", { text: null, payload: Buffer.from([0, 0xff, 1]).toString("base64") });
+  const { store } = await loaded([httpItem("a"), streamItem("s"), trailerItem("t"), sse, binary]);
+  const state = get(store);
+  assert.deepEqual(ids(store), ["a", "s", "t", "e", "x"]);
+  const [, s, t, e, x] = state.items;
+  assert.deepEqual(
+    [s.Type, s.PairID, s.Direction, s.Framing, s.Flags, s.Compressed],
+    ["stream", "pair1", "request", "grpc", 0, false],
+  );
+  assert.deepEqual([t.Type, t.PairID, t.Direction, t.Framing], ["trailer", "pair1", "response", "grpc"]);
+  assert.equal(textOf(state, "s"), PROTO_TEXT);
+  assert.deepEqual([s.textForm, s.editable], [true, true]);
+  assert.equal(textOf(state, "t"), "grpc-status: 0\r\ngrpc-message: ok\r\n");
+  assert.equal(textOf(state, "e"), "data: tick\n\n");
+  assert.deepEqual([e.textForm, e.editable], [false, true]);
+  assert.equal(textOf(state, "x"), "00 ff 01");
+  assert.equal(x.editable, false);
+});
+
+test("a pair's held items are its stream messages and trailer blocks, oldest first, and leave as the page forwards them", async () => {
+  const other = streamItem("o", { pair: "pair2" });
+  const head = httpItem("pair1", "request", "POST /chat.v1.ChatService/Converse HTTP/2\r\ncontent-type: application/grpc\r\n\r\n");
+  const { store } = await loaded([head, streamItem("s"), other, trailerItem("t"), streamItem("u", { direction: "response" })]);
+  const held = (pair) => heldOfPair(get(store), pair).map((item) => item.ID);
+  assert.deepEqual(held("pair1"), ["s", "t", "u"]);
+  assert.deepEqual(held("pair2"), ["o"]);
+  assert.deepEqual(held("nope"), []);
+  await store.forward("s");
+  assert.deepEqual(held("pair1"), ["t", "u"]);
+  await store.drop("u");
+  assert.deepEqual(held("pair1"), ["t"]);
+});
+
+test("a stream message forwards an edited text form as text, else as payload; a trailer block as raw", async () => {
+  const sse = streamItem("e", { text: null, payload: b64("data: tick\n\n"), framing: "sse", direction: "response" });
+  const { marasi, store } = await loaded([streamItem("s"), sse, trailerItem("t"), streamItem("u")]);
+  const edited = "1:VARINT 7\n3:LEN {\"EDITED\"}";
+  await store.edit("s", edited);
+  await store.edit("e", "data: tock\n\n");
+  await store.edit("t", "grpc-status: 5\ngrpc-message: rewritten\n");
+  assert.equal(parseErrorOf(get(store), "s"), "");
+
+  for (const id of ["s", "e", "t", "u"]) assert.equal(await store.forward(id), "forwarded");
+  const sent = posts(marasi);
+  assert.deepEqual(sent[0], ["/checkpoint/s/forward", { text: edited }]);
+  assert.deepEqual(Object.keys(sent[1][1]), ["payload"]);
+  assert.equal(unb64(sent[1][1].payload), "data: tock\n\n");
+  assert.deepEqual(Object.keys(sent[2][1]), ["raw"]);
+  assert.equal(unb64(sent[2][1].raw), "grpc-status: 5\ngrpc-message: rewritten\n");
+  assert.deepEqual(sent[3], ["/checkpoint/u/forward", {}]);
+  assert.deepEqual(ids(store), []);
+});
+
+test("a refused edit stays held with Marasi's reason and its line and column, until it is edited again", async () => {
+  const { marasi, store } = await loaded([streamItem("s"), trailerItem("t")]);
+  await store.edit("s", "1:VARINT 7\n3:LEN {\"oops");
+  marasi.refusing.s = "s: the text form cannot be encoded: line 2 column 8: unterminated string: text form syntax error";
+
+  assert.equal(await store.forward("s"), "refused");
+  assert.deepEqual(ids(store), ["s", "t"]);
+  assert.deepEqual(refusalOf(get(store), "s"), {
+    message: "the text form cannot be encoded: line 2 column 8: unterminated string: text form syntax error",
+    line: 2,
+    column: 8,
+  });
+  assert.equal(isDirty(get(store), "s"), true);
+
+  await store.edit("s", "1:VARINT 7");
+  assert.equal(refusalOf(get(store), "s"), null);
+
+  marasi.refusing.t = "t: the trailer block does not parse: \"oops\" is not a \"name: value\" line";
+  await store.edit("t", "oops");
+  assert.equal(await store.forward("t"), "refused");
+  assert.deepEqual(refusalOf(get(store), "t"), {
+    message: "the trailer block does not parse: \"oops\" is not a \"name: value\" line",
+    line: 0,
+    column: 0,
+  });
+});
+
+test("a stream message and a trailer block drop; a drop the direction can't carry stays held", async () => {
+  const { marasi, store } = await loaded([streamItem("s"), trailerItem("t"), streamItem("n")]);
+  marasi.refusing.n = "n: the direction's head declares a length: the request head declares a length, so a drop cannot be carried";
+  assert.equal(await store.drop("s"), "dropped");
+  assert.equal(await store.drop("t"), "dropped");
+  assert.equal(await store.drop("n"), "refused");
+  assert.deepEqual(posts(marasi), [
+    ["/checkpoint/s/drop", {}],
+    ["/checkpoint/t/drop", {}],
+    ["/checkpoint/n/drop", {}],
+  ]);
+  assert.deepEqual(ids(store), ["n"]);
+  assert.match(refusalOf(get(store), "n").message, /^the direction.s head declares a length/);
+});
+
+test("Stream intercept comes from the list and checkpoint.updated, and turns over on the service", async () => {
+  const marasi = fakeCheckpoint([]);
+  marasi.stream_intercept = true;
+  const store = createCheckpointStore(createCheckpointApi(marasi.client));
+  await store.populate();
+  assert.equal(get(store).streamIntercept, true);
+
+  assert.equal(await store.toggleStreamIntercept(), false);
+  assert.deepEqual(posts(marasi), [["/checkpoint/stream-intercept", { stream_intercept: false }]]);
+  assert.equal(get(store).streamIntercept, false);
+
+  store.onUpdated(toCheckpointFlags({ intercept: false, websocket_intercept: false, stream_intercept: true }));
+  assert.equal(get(store).streamIntercept, true);
+  // An older service sends no stream_intercept: the switch stays as it was.
+  store.onUpdated(toCheckpointFlags({ intercept: true }));
+  assert.equal(get(store).streamIntercept, true);
+});
+
+test("bulk Forward and Drop cover stream messages and trailer blocks with every other kind", async () => {
+  const held = () => [httpItem("a"), wsItem("w"), streamItem("s"), trailerItem("t"), streamItem("u")];
+  const { marasi, store } = await loaded(held());
+  await store.edit("s", "1:VARINT 9");
+  await store.edit("t", "grpc-status: 5\n");
+  const result = await store.bulk("forward", ["a", "w", "s", "t", "u"]);
+  const sent = posts(marasi);
+  assert.deepEqual(sent[0], ["/checkpoint/s/forward", { text: "1:VARINT 9" }]);
+  assert.equal(sent[1][0], "/checkpoint/t/forward");
+  assert.equal(unb64(sent[1][1].raw), "grpc-status: 5\n");
+  assert.deepEqual(sent[2], ["/checkpoint/forward", { ids: ["a", "w", "u"] }]);
+  assert.equal(result.text, "Forwarded 5");
+  assert.deepEqual(ids(store), []);
+
+  marasi.held = held();
+  await store.populate();
+  marasi.calls.length = 0;
+  assert.equal((await store.bulk("drop", ["a", "w", "s", "t", "u"])).text, "Dropped 5");
+  assert.deepEqual(posts(marasi), [["/checkpoint/drop", { ids: ["a", "w", "s", "t", "u"] }]]);
 });

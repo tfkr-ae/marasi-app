@@ -38,6 +38,7 @@ import { writable } from "svelte/store";
 import { searchRequests } from "../lib/requestPicker.js";
 import { select } from "../lib/storeSelect.js";
 import { sameID } from "../lib/ledger/pairs.js";
+import { fullReadStreamed } from "../lib/messages/open.js";
 import {
   clampDrawerSplit,
   emptySelection,
@@ -259,6 +260,7 @@ export function createLedgerStore(api) {
     onResponse: live.onResponse,
     flush: live.flush,
     patchWebSocketMetadata: live.patchWebSocketMetadata,
+    onStreamedPair: live.onStreamedPair,
     patchMetadata: live.patchMetadata,
 
     setQueryText: query.setQueryText,
@@ -283,6 +285,15 @@ export function createLedgerStore(api) {
     /** The request pickers' options: the newest pairs matching `text`. */
     searchRequests: (text) => searchRequests(api.queryTraffic, text),
     getDetails: (id, parts) => api.getRawDetails(id, parts),
+    /**
+     * The drawer read pair `id` in full (`details`, toDetails): streamed
+     * metadata there lets it open its messages from a service without
+     * `streamed` on rows.
+     */
+    noteFullRead(id, details) {
+      if (!fullReadStreamed(details) || sameID(current.streamedRead, id)) return;
+      update((state) => ({ ...state, streamedRead: String(id) }));
+    },
     getMetadata: (id) => api.getMetadata(id),
     getNote: (id) => api.getNote(id),
     saveNote: bulk.saveNote,

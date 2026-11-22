@@ -7,6 +7,7 @@ import { entrySearchQuery } from "../lib/launchpad/entrySearch.js";
 import * as selecting from "../lib/launchpad/entrySelection.js";
 import { leavesOrder, marasiMoveRefusal } from "../lib/launchpad/entryMove.js";
 import { launchingIds, pendingLaunchIDs } from "../lib/launchPending.js";
+import { streamRequestOpenError } from "../lib/launchpad/streamRequestOpen.js";
 
 // Entry search through Marasi: `matches` holds entry ids by launchpad id,
 // `status` is idle, loading, done or error.
@@ -974,11 +975,30 @@ export function createLaunchpadStore(api) {
     // id, which is the new entry's UUID, or throws when the launch could not
     // start. The launch stays pending until onLaunchFinished; its entry is
     // selected when it arrives. Returns the launch id.
+    // A draft seeded from a streamed request that was still streaming reads
+    // it again first: still streaming refuses with stream_request_open;
+    // ended, an unedited draft takes the request Marasi joined.
     launch: async (launchpadId) => {
-      const draft = current.draftsByLaunchpad[launchpadId];
+      let draft = current.draftsByLaunchpad[launchpadId];
       if (!draft) return null;
       const version = projectStateVersion;
-      const id = await api.launch(draft.raw, launchpadId, draft.useHttps);
+      const source = draft.seededFrom;
+      if (source && current.detailsById[source]?.RequestStreaming) {
+        const edited = isDraftDirty(current, launchpadId);
+        await refreshDetails(source);
+        if (version !== projectStateVersion) return null;
+        const details = current.detailsById[source];
+        if (details?.RequestStreaming) throw streamRequestOpenError(source);
+        if (!edited) updateDraftFields(launchpadId, { raw: details?.Request?.Raw ?? draft.raw });
+        draft = current.draftsByLaunchpad[launchpadId];
+        if (!draft) return null;
+      }
+      // An unedited draft whose request came as bytes (a joined streamed
+      // request) launches those bytes, which its text may not carry whole.
+      const bytes = isDraftDirty(current, launchpadId)
+        ? undefined
+        : current.detailsById[draft.seededFrom]?.Request?.RawBase64;
+      const id = await api.launch(draft.raw, launchpadId, draft.useHttps, bytes);
       if (version !== projectStateVersion || !id) return id;
       update((state) =>
         recordLaunch(state, { ID: id, LaunchpadID: launchpadId, Status: "pending" }),

@@ -1,0 +1,164 @@
+<script>
+	// The streamed pair kind's Inject tab: a message for one open, streamed
+	// direction, written as the protobuf text form for gRPC, gRPC-Web and
+	// Connect and as UTF-8 text otherwise, with Send uncompressed. The draft
+	// lives in streamedPairStore, so it survives switching tabs and Copy to
+	// Inject can fill it. An inject Checkpoint intercepts shows "Intercepted
+	// in Checkpoint" until it is forwarded or dropped; the rest of the modal
+	// stays usable meanwhile.
+	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { Send } from "lucide-svelte";
+	import { primaryVariant } from "../launchpad/format.js";
+	import { toastError } from "../toasts.js";
+	import { openDirections, streamedPairStore } from "../../stores/streamedPairStore.js";
+	import MessageEditor from "./MessageEditor.svelte";
+	import { TEXT_FORM_FRAMINGS } from "./streamMessage.js";
+
+	export let pairId;
+
+	const toastStore = getToastStore();
+	const LABELS = { request: "↑ Request", response: "↓ Response" };
+
+	// The text error Marasi named for the last inject: { line, column, message,
+	// text }, kept while the draft is still the text it was named for.
+	let refusal = null;
+
+	$: pair = $streamedPairStore.pairs[pairId];
+	$: open = openDirections(pair?.directions);
+	$: draft = pair?.draft ?? { direction: null, text: "", neverCompress: false };
+	// The chosen direction, or the first open one when it isn't open.
+	$: direction = open.includes(draft.direction) ? draft.direction : (open[0] ?? null);
+	$: framing = (direction && pair?.directions[direction]?.Framing) || "";
+	$: textForm = TEXT_FORM_FRAMINGS.has(framing);
+	// A +json codec's text form is the JSON itself.
+	$: language = textForm ? (pair?.codecs?.[direction] === "json" ? "json" : "protobuf") : null;
+	$: pending = pair?.inject.pending ?? false;
+	$: held = pair?.inject.held ?? false;
+
+	// An edit, or Copy to Inject filling the draft, clears the last error.
+	function changeText(text) {
+		if (text === draft.text) return;
+		streamedPairStore.setDraft(pairId, { text });
+		refusal = null;
+	}
+	$: clearStale(draft.text);
+	function clearStale(text) {
+		if (refusal && refusal.text !== text) refusal = null;
+	}
+
+	const setDirection = (value) => streamedPairStore.setDraft(pairId, { direction: value });
+
+	export function toggleDirection() {
+		if (open.length < 2) return;
+		setDirection(open[(open.indexOf(direction) + 1) % open.length]);
+	}
+
+	export async function inject() {
+		if (!direction || pending) return;
+		refusal = null;
+		const text = draft.text;
+		const outcome = await streamedPairStore.inject(pairId, {
+			direction,
+			text,
+			neverCompress: draft.neverCompress,
+		});
+		if (outcome.ok) {
+			const dropped = outcome.message?.Metadata?.dropped;
+			toastStore.trigger({
+				message: dropped ? "Injected message dropped" : "Message injected",
+				background: dropped ? "variant-filled-warning" : "variant-filled-success",
+			});
+			return;
+		}
+		if (outcome.superseded || outcome.busy) return;
+		if (outcome.line) {
+			refusal = { ...outcome, text };
+			return;
+		}
+		toastError(toastStore, outcome.toast ?? "Inject failed", outcome.toast ? undefined : outcome.error);
+	}
+</script>
+
+<div class="flex h-full min-h-0 w-full flex-col">
+	<div
+		class="msg-bar flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
+	>
+		<div class="si-fields flex items-center gap-2">
+			<label class="flex items-center gap-1.5 text-xs">
+				<span class="opacity-60">Direction</span>
+				<select
+					class="select select-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0"
+					value={direction ?? ""}
+					disabled={!open.length}
+					on:change={(event) => setDirection(event.currentTarget.value)}
+				>
+					{#each open as name (name)}
+						<option value={name}>{LABELS[name]}</option>
+					{:else}
+						<option value="">No open direction</option>
+					{/each}
+				</select>
+			</label>
+			{#if framing}
+				<span class="chip variant-soft-surface text-xs">{framing}</span>
+			{/if}
+			<label class="flex items-center gap-1.5 text-xs">
+				<input
+					type="checkbox"
+					class="checkbox"
+					checked={draft.neverCompress}
+					on:change={(event) => streamedPairStore.setDraft(pairId, { neverCompress: event.currentTarget.checked })}
+				/>
+				Send uncompressed
+			</label>
+		</div>
+
+		<div class="flex items-center gap-1">
+			{#if held}
+				<span class="chip variant-soft-warning text-xs" title="Forward or drop it in Checkpoint">Intercepted in Checkpoint</span>
+			{:else if !open.length && pair && !pair.loading}
+				<span class="chip variant-soft-error text-xs">Stream closed</span>
+			{/if}
+			<button
+				class="btn btn-sm {primaryVariant($modeCurrent)}"
+				disabled={!direction || pending}
+				on:click={inject}
+			>
+				<Send size={14} class="mr-1" />
+				{pending ? "Injecting…" : "Inject"}
+			</button>
+		</div>
+	</div>
+
+	{#if refusal}
+		<div class="shrink-0 border-b border-error-500/30 bg-error-500/10 px-3 py-1.5 text-xs text-error-500">
+			Line {refusal.line}, column {refusal.column}: {refusal.message}
+		</div>
+	{/if}
+
+	<div class="min-h-0 flex-1 overflow-auto">
+		<MessageEditor
+			value={draft.text}
+			{language}
+			errorAt={refusal}
+			on:change={(event) => changeText(event.detail)}
+		/>
+	</div>
+</div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. The fields wrap rather than
+	   squeeze the Direction select. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .si-fields) {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		:global(html.mobile .si-fields select) {
+			width: auto;
+			flex-shrink: 0;
+		}
+	}
+</style>

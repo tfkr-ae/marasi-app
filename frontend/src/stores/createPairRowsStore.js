@@ -96,6 +96,18 @@ export function createPairRowsStore(api, { settleMs = 150 } = {}) {
       else if (String(id) in rows) stale.add(String(id));
     },
 
+    /**
+     * streamed_pair.started, .updated or .ended ({ ID, Streamed }): the
+     * event carries the pair's whole streamed state, so a held row takes it
+     * without a read.
+     */
+    onStreamedPair({ ID, Streamed } = {}) {
+      const id = String(ID);
+      if (ID == null || !rows[id]) return;
+      rows = { ...rows, [id]: { ...rows[id], Streamed } };
+      store.set(rows);
+    },
+
     /** Forgets the last project's rows. */
     clear() {
       generation++;

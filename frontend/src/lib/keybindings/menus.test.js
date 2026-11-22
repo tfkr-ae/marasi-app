@@ -144,6 +144,17 @@ test("⌘⇧G opens the WebSocket stream only from an upgrade request's drawer",
   );
 });
 
+test("⌘⇧G opens a streamed pair's messages from its drawer, a live one whose response hasn't started too", () => {
+  const dispatcher = mac();
+  const press = () => cmdShift("G", "KeyG");
+  const live = { streamed: { request: { framing: "grpc", ending: null }, response: null } };
+  const ended = { streamed: { request: null, response: { framing: "sse", ending: "complete" } } };
+  for (const meta of [live, ended]) {
+    assert.equal(dispatcher.resolve(press(), on("/ledger", requestDrawer(meta))), "ledger.drawer-open.websocket.open-stream");
+  }
+  assert.equal(dispatcher.resolve(press(), on("/ledger", requestDrawer({ streamed: null }))), null);
+});
+
 test("⌘⇧G does not open a stream for a failed or dropped upgrade", () => {
   const dispatcher = mac();
   const press = () => cmdShift("G", "KeyG");
@@ -196,6 +207,12 @@ test("Next Record is ⌘⇧] (Ctrl+Shift+]) on both platforms, and Esc stays wit
   assert.deepEqual(catalog.get("logbook.next-record").defaults, { [MACOS]: ["meta+shift+]"], [WINDOWS_LINUX]: ["ctrl+shift+]"] });
   assert.equal(catalog.get("logbook.toggle-settings"), undefined);
   assert.equal(mac().resolve(keydown("Escape", "Escape"), on("/logbook")), null);
+});
+
+test("the Checkpoint page turns Stream intercept over on ⌘⇧T", () => {
+  const dispatcher = mac();
+  assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), on("/checkpoint")), "checkpoint.toggle-stream-intercept");
+  assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), on("/ledger")), null);
 });
 
 test("Checkpoint forwards picked items on ⌘⇧A, drops them on ⌘⇧X and intercepts the response on ⌘⇧S", () => {
@@ -367,6 +384,54 @@ test("the WebSocket modal keeps global actions but not the drawer or page beneat
   const armory = { ...websocketModal("checkpoint"), route: "/armory" };
   assert.equal(dispatcher.resolve(cmdShift("F", "KeyF"), armory), "websocket.checkpoint.forward-frame");
   assert.equal(dispatcher.resolve(cmdShift("[", "BracketLeft"), armory), null);
+});
+
+const streamModal = (streamTab) => ({
+  ...on("/ledger", requestDrawer()),
+  modal: "WebsocketStream",
+  streamTab,
+  websocketTab: null,
+});
+
+test("the streamed pair modal's actions take their WebSocket counterparts' keys", () => {
+  const dispatcher = mac();
+  const expected = [
+    ["messages", cmdShift("{", "BracketLeft"), "stream.messages.previous-message"],
+    ["messages", cmdShift("}", "BracketRight"), "stream.messages.next-message"],
+    ["messages", cmd("j", "KeyJ"), "stream.messages.jump-to-bottom"],
+    ["messages", cmdShift("M", "KeyM"), "stream.messages.toggle-message-metadata"],
+    ["messages", cmdShift("R", "KeyR"), "stream.messages.toggle-raw"],
+    ["messages", cmdShift("I", "KeyI"), "stream.messages.copy-message-to-inject"],
+    ["messages", cmdShift("Enter", "Enter"), null],
+    ["checkpoint", cmdShift("I", "KeyI"), "stream.checkpoint.toggle-intercept"],
+    ["checkpoint", cmdShift("F", "KeyF"), "stream.checkpoint.forward-message"],
+    ["checkpoint", cmdShift("D", "KeyD"), "stream.checkpoint.drop-message"],
+    ["checkpoint", cmdShift("M", "KeyM"), null],
+    ["inject", cmdShift("D", "KeyD"), "stream.inject.toggle-direction"],
+    ["inject", cmdShift("Enter", "Enter"), "stream.inject.inject-message"],
+    ["inject", cmdShift("I", "KeyI"), null],
+    ["pair", cmdShift("M", "KeyM"), null],
+  ];
+  for (const [tab, event, actionId] of expected) {
+    assert.equal(dispatcher.resolve(event, streamModal(tab)), actionId, `${tab} ${event.key}`);
+  }
+  for (const tab of ["messages", "checkpoint", "inject", "pair"]) {
+    assert.equal(dispatcher.resolve(cmd("[", "BracketLeft"), streamModal(tab)), "stream.previous-tab");
+    assert.equal(dispatcher.resolve(cmd("]", "BracketRight"), streamModal(tab)), "stream.next-tab");
+    assert.equal(dispatcher.resolve(cmd("1", "Digit1"), streamModal(tab)), "global.go-home");
+    // Cancel takes Close Connection's key, on every tab.
+    assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), streamModal(tab)), "stream.cancel-pair");
+  }
+});
+
+test("stream actions say message, never frame, and the WebSocket ids are unchanged", () => {
+  const catalog = buildCatalog();
+  const streamActions = catalog.actions.filter((a) => a.context === "stream" || a.context.startsWith("stream."));
+  assert.ok(streamActions.length >= 7);
+  for (const a of streamActions) {
+    assert.doesNotMatch(`${a.id} | ${a.label} | ${a.description} | ${a.keywords}`, /frame|websocket/i, a.id);
+  }
+  for (const id of websocketMessageActions) assert.ok(catalog.get(id), id);
 });
 
 // Marasi stores whole WebSocket messages, so menu text says "message" while
@@ -639,6 +704,7 @@ function everyContextState() {
   return [
     on("/"),
     ...["stream", "checkpoint", "inject", "connection"].map((tab) => websocketModal(tab)),
+    ...["messages", "checkpoint", "inject", "pair"].map((tab) => streamModal(tab)),
     on("/ledger"),
     on("/ledger", requestDrawer()),
     on("/ledger", requestDrawer(websocketUpgrade)),

@@ -34,7 +34,7 @@ function fakeApi(held = []) {
     calls,
     held,
     getItems: async () => api.held.map((item) => ({ ...item })),
-    getInterceptFlag: async () => false,
+    getFlags: async () => ({ intercept: false, streamIntercept: false }),
     toggleIntercept: async () => true,
     forward: async (id, body, interceptResponse) => {
       calls.push(["forward", id, body, interceptResponse]);
@@ -415,7 +415,7 @@ test("bulk drop drops edits that don't parse too", async () => {
 test("Intercept all reads and toggles the shared intercept flag", async () => {
   const api = fakeApi();
   let flag = true;
-  api.getInterceptFlag = async () => flag;
+  api.getFlags = async () => ({ intercept: flag, streamIntercept: false });
   api.toggleIntercept = async () => (flag = !flag);
   const interceptFlag = writable(false);
   const store = createCheckpointStore(api, { interceptFlag });

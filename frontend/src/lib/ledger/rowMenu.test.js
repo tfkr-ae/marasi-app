@@ -72,9 +72,26 @@ test("one pair: Launchpad, Armory, Drawing, Browser view, Finding, Test case, No
   assert.equal(item(menu, "lp-each"), undefined, "one each needs several pairs");
 });
 
-test("a WebSocket upgrade row offers its stream", () => {
+test("a streamed pair's row offers Open messages, a live one whose response hasn't started too", () => {
+  const live = pair("a", { Streamed: { request: { framing: "grpc", ending: null }, response: null } });
+  assert.deepEqual(ids(menuFor([live], context())).slice(0, 2), ["websocket", "launchpad"]);
+  assert.equal(item(menuFor([live], context()), "websocket").label, "Open messages");
+  assert.deepEqual(item(menuFor([live], context()), "websocket").action, { type: "websocket", id: "a" });
+  assert.equal(item(menuFor([pair("b", { Streamed: null })], context()), "websocket"), undefined);
+});
+
+test("from a service without streamed on rows, a row offers Open messages once its full read showed streamed metadata", () => {
+  const older = pair("a");
+  assert.equal(item(menuFor([older], context()), "websocket"), undefined);
+  assert.equal(item(menuFor([older], context({ streamedRead: "a" })), "websocket").label, "Open messages");
+  assert.equal(item(menuFor([pair("b")], context({ streamedRead: "a" })), "websocket"), undefined);
+});
+
+test("a WebSocket upgrade row offers Open messages", () => {
   const ws = pair("a", { StatusCode: 101, Metadata: { protocol: "websocket" } });
   assert.deepEqual(ids(menuFor([ws], context())).slice(0, 2), ["websocket", "launchpad"]);
+  assert.equal(item(menuFor([ws], context()), "websocket").label, "Open messages");
+  assert.equal(item(menuFor([ws], context()), "websocket").actionId, "ledger.drawer-open.websocket.open-stream");
   assert.equal(item(menuFor([ws, pair("b")], context()), "websocket"), undefined);
 });
 

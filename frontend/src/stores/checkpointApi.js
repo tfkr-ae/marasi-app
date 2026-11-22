@@ -17,6 +17,24 @@ export function encodeText(text) {
 /** A held item, from GET /checkpoint or checkpoint.held. */
 export function toCheckpointItem(item) {
   const common = { ID: item.id, Type: item.type, InterceptedAt: item.intercepted_at };
+  // A stream message or trailer block belongs to a streamed pair.
+  const stream = {
+    PairID: item.pair_id,
+    Direction: item.direction,
+    Framing: item.framing,
+    Metadata: item.metadata ?? {},
+  };
+  if (item.type === "stream") {
+    return {
+      ...common,
+      ...stream,
+      Payload: item.payload ?? "",
+      Text: item.text ?? null,
+      Flags: item.flags ?? null,
+      Compressed: item.compressed === true,
+    };
+  }
+  if (item.type === "trailer") return { ...common, ...stream, Raw: item.raw ?? "" };
   if (item.type !== "websocket") return { ...common, Raw: item.raw ?? "" };
   return {
     ...common,
@@ -39,11 +57,24 @@ export const toSettled = (event) => ({
   Reason: event.reason,
 });
 
-// The forward body: `raw` for an HTTP item, `payload` for a WebSocket
-// message, nothing for an unedited item. Marasi refuses an empty body.
-function forwardBody(type, body, interceptResponse) {
+/**
+ * checkpoint.updated: the flags it carries. A flag the event leaves out (an
+ * older service sends no stream_intercept) is undefined.
+ */
+export const toCheckpointFlags = (event) => ({
+  intercept: event?.intercept,
+  streamIntercept: event?.stream_intercept,
+});
+
+// The forward body: `raw` for an HTTP item or a trailer block, `payload`
+// for a WebSocket message, `text` for a stream message edited as its text
+// form and `payload` for one edited as its bytes (never both), nothing for
+// an unedited item. Marasi refuses an empty body. `kind` is the item's
+// { Type, TextForm }.
+function forwardBody({ Type: type, TextForm: textForm } = {}, body, interceptResponse) {
   const out = {};
-  if (body) out[type === "websocket" ? "payload" : "raw"] = encodeText(body);
+  if (body && type === "stream" && textForm) out.text = body;
+  else if (body) out[type === "websocket" || type === "stream" ? "payload" : "raw"] = encodeText(body);
   if (interceptResponse && type === "request") out.intercept_response = true;
   return out;
 }
@@ -52,8 +83,15 @@ const counts = (result) => ({ Done: result?.done ?? 0, Gone: result?.gone ?? 0, 
 
 export function createCheckpointApi(client) {
   const read = () => client.get("/checkpoint");
-  const forward = (id, body, interceptResponse, type, link = client) =>
-    link.post(`/checkpoint/${id}/forward`, forwardBody(type, body, interceptResponse));
+  // `kind` is the item's { Type, TextForm }.
+  const forward = (id, body, interceptResponse, kind, link = client) =>
+    link.post(`/checkpoint/${id}/forward`, forwardBody(kind, body, interceptResponse));
+  // Turns the list's boolean `field` over through `path`.
+  async function toggleFlag(field, path) {
+    const link = client.bind?.() ?? client;
+    const current = (await link.get("/checkpoint"))[field] === true;
+    return (await link.post(path, { [field]: !current }))[field] === true;
+  }
 
   return {
     getItems: async () => ((await read()).items ?? []).map(toCheckpointItem),
@@ -71,7 +109,7 @@ export function createCheckpointApi(client) {
       const total = { Done: 0, Gone: 0, Failed: 0 };
       for (const item of items.filter((i) => i.Body)) {
         try {
-          await forward(item.ID, item.Body, false, item.Type, link);
+          await forward(item.ID, item.Body, false, item, link);
           total.Done++;
         } catch (err) {
           if (isSuperseded(err)) return total;
@@ -96,12 +134,13 @@ export function createCheckpointApi(client) {
       return total;
     },
     dropMany: async (ids) => counts(await client.post("/checkpoint/drop", { ids })),
-    getInterceptFlag: async () => (await read()).intercept === true,
-    // The flag is turned over on the connection it was read from.
-    async toggleIntercept() {
-      const link = client.bind?.() ?? client;
-      const { intercept } = await link.get("/checkpoint");
-      return (await link.post("/checkpoint/intercept", { intercept: !intercept })).intercept === true;
+    // Intercept all and Stream intercept, from one read of the list.
+    async getFlags() {
+      const list = await read();
+      return { intercept: list.intercept === true, streamIntercept: list.stream_intercept === true };
     },
+    // A flag is turned over on the connection it was read from.
+    toggleIntercept: () => toggleFlag("intercept", "/checkpoint/intercept"),
+    toggleStreamIntercept: () => toggleFlag("stream_intercept", "/checkpoint/stream-intercept"),
   };
 }

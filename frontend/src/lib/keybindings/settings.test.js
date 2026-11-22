@@ -321,7 +321,7 @@ test("the real catalog's factory draft lists every page and state with nothing u
     "Extensions / Open extension pages",
     "Ledger / Drawer closed",
     "Ledger / Drawer open",
-    "Ledger / Drawer open (WebSocket)",
+    "Ledger / Drawer open (messages)",
     "WebSocket / Inject tab",
     "Armory / Request drawer open",
     "Repeater / Extension page",

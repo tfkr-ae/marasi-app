@@ -33,7 +33,7 @@ To add a row-menu action:
 3. Add a `case` to `runMenuAction` in `ledgerActions.js`.
 4. Add a store method (bulk actions go in `stores/ledger/bulk.js`), map its API name to a service call in `ledgerApi.js`, and add it to the tests' fake APIs.
 
-For a shortcut, also follow `keybindings-and-menus.md`. ⌘K opens `MarasiMenu` with `menuOptions`, which follow the drawer: `ledgerMenu` when it is closed, `drawerMenu` (with the WebSocket stream action for an upgrade) when it is open. Their menu groups are the `group` flags on the `ledger.drawer-open` and `ledger.drawer-closed` rows in `catalog.js`, defined in `menuGroups.js`.
+For a shortcut, also follow `keybindings-and-menus.md`. ⌘K opens `MarasiMenu` with `menuOptions`, which follow the drawer: `ledgerMenu` when it is closed, `drawerMenu` (with Open messages, `ledger.drawer-open.websocket.open-stream`, for a WebSocket upgrade or a streamed pair: `canOpenDrawerMessages` in `lib/messages/open.js`, which reads the drawer meta's `streamed`) when it is open. Open messages (`openWebSocketStream` in `ledgerActions.js`) opens the Messages modal's stream kind for a streamed pair, else the WebSocket kind. From a service without `streamed` on rows, a pair counts as streamed once the drawer's full read shows `metadata.streamed` (`noteFullRead`, the state's `streamedRead`, which `drawerKeybindingState` and the row menu read). Their menu groups are the `group` flags on the `ledger.drawer-open` and `ledger.drawer-closed` rows in `catalog.js`, defined in `menuGroups.js`.
 
 ## Bulk changes
 
@@ -45,7 +45,7 @@ A count of zero is reported by `unchanged`, with its text from `unchangedText` i
 
 ## Live traffic and project switches
 
-`ledgerStore.js` and `sitemapStore.js` follow the service's `traffic.request` and `traffic.response` events (`toRequestEvent`, `toResponseEvent` in `trafficApi.js`). The Ledger shows new rows when it next flushes (`flush`). `websocket.opened`, `websocket.closed` and `websocket.handshake_ended` patch rows through `patchWebSocketMetadata`.
+`ledgerStore.js` and `sitemapStore.js` follow the service's `traffic.request` and `traffic.response` events (`toRequestEvent`, `toResponseEvent` in `trafficApi.js`). The Ledger shows new rows when it next flushes (`flush`). `websocket.opened`, `websocket.closed` and `websocket.handshake_ended` patch rows through `patchWebSocketMetadata`. A row's `Streamed` (Marasi's `streamed`, GLOSSARY Streamed pair; `toRow`, null from a Marasi before 3cf721d) is replaced by `streamed_pair.started`, `.updated` and `.ended` (`STREAMED_PAIR_EVENTS`, `toStreamedEvent`, the store's `onStreamedPair`, which also marks a request still in the buffer) and by a streamed pair's `traffic.response`; the cards' `pairRows` takes the same events. `streamedBadge` in `table.js` draws its badge: live coloured, ended plain, cancelled, reset or cut short slashed, with each direction's framing in the label.
 
 Another client's changes show without a resync:
 - `metadata.updated` replaces the pair's `Metadata` (`onMetadataUpdated`), and `note.updated` and `note.deleted` set `has_note` (`onNoteUpdated`, `onNoteDeleted`). Each makes a new row object. `LedgerDrawer.svelte` reads the note and an open metadata pane again whenever its row changes. While the note pane is open, the new text replaces it only when nothing typed waits to save, and `noteVersion` restarts the editor.

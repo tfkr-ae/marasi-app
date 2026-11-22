@@ -253,6 +253,62 @@ test("launch sends the draft, stays pending under its launch id, and the arrivin
   assert.equal(launchOf(state, "d")?.Status, "completed");
 });
 
+// A launchpad whose one entry is a streamed pair: its request reads as
+// still streaming (the stored, empty-bodied request) until `api.ended()`,
+// then as Marasi joins it.
+function streamedLaunchpad() {
+  const stored = "POST /svc/Call HTTP/1.1\r\nHost: x\r\n\r\n";
+  const joined = "POST /svc/Call HTTP/1.1\r\nHost: x\r\nContent-Length: 7\r\n\r\n\u0000\u0000\u0000\u0000\u0002hi";
+  const api = fakeApi({ launchpads: [{ ID: "lp1", Name: "gRPC", Description: "" }], entries: { lp1: [entry("s")] } });
+  let streaming = true;
+  api.getRawDetails = async (id) => {
+    api.calls.push(["getRawDetails", id]);
+    const request = streaming ? { ID: id, Raw: stored } : { ID: id, Raw: joined, RawBase64: "Sk9JTkVE" };
+    return { Request: request, Response: null, RequestStreaming: streaming };
+  };
+  api.ended = () => (streaming = false);
+  api.launch = async (raw, id, useHttps, rawBase64) => {
+    api.calls.push(["launch", raw, id, useHttps, rawBase64]);
+    return api.nextLaunchIds.shift();
+  };
+  return { api, joined };
+}
+
+test("launching a request that is still streaming is refused with stream_request_open, sending nothing", async () => {
+  const { api } = streamedLaunchpad();
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  await assert.rejects(store.launch("lp1"), (err) => err.code === "stream_request_open");
+  assert.ok(!api.calls.some((call) => call[0] === "launch"));
+  assert.equal(pendingLaunchOf(get(store), "lp1"), null);
+});
+
+test("once its request ended, a streamed entry launches its joined request", async () => {
+  const { api, joined } = streamedLaunchpad();
+  api.nextLaunchIds.push("d");
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  api.ended();
+  assert.equal(await store.launch("lp1"), "d");
+  // Unedited, it launches the bytes Marasi joined, which the text may not
+  // carry whole.
+  assert.deepEqual(api.calls.find((call) => call[0] === "launch"), ["launch", joined, "lp1", true, "Sk9JTkVE"]);
+  const state = get(store);
+  assert.equal(state.draftsByLaunchpad.lp1.raw, joined, "the draft shows what was launched");
+  assert.equal(isDraftDirty(state, "lp1"), false);
+});
+
+test("an edited draft of a streamed entry launches its text", async () => {
+  const { api } = streamedLaunchpad();
+  api.ended();
+  api.nextLaunchIds.push("d");
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "POST /svc/Other HTTP/2\r\n\r\n");
+  await store.launch("lp1");
+  assert.deepEqual(api.calls.find((call) => call[0] === "launch"), ["launch", "POST /svc/Other HTTP/2\r\n\r\n", "lp1", true, undefined]);
+});
+
 test("an entry that arrives before the launch binding returns is still selected", async () => {
   const api = twoLaunchpads();
   const store = createLaunchpadStore(api);
