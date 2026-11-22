@@ -249,13 +249,14 @@
 					<slot name="listEnd" />
 				</div>
 				{#if !autoScroll && messages.length > 0}
-					<button
-						class="btn btn-sm {primaryVariant($modeCurrent)} absolute bottom-3 left-1/2 z-20 -translate-x-1/2 shadow-lg"
-						on:click={jumpToBottom}
-					>
-						<ArrowDown size={14} />
-						Jump to bottom
-					</button>
+					<!-- An opaque backing: the light theme's ghost button would let
+					     the rows show through. -->
+					<div class="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 bg-surface-50-900-token shadow-lg">
+						<button class="btn btn-sm {primaryVariant($modeCurrent)}" on:click={jumpToBottom}>
+							<ArrowDown size={14} />
+							Jump to bottom
+						</button>
+					</div>
 				{/if}
 			</div>
 
