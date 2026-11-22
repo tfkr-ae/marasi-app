@@ -5,7 +5,13 @@
 import { service } from "../lib/service/index.js";
 import { createStreamedPairStore } from "./createStreamedPairStore.js";
 import { projectData } from "./projectData.js";
-import { createStreamedPairApi, toStreamedPairEvent, toStreamMessage, toStreamProgress } from "./streamedPairApi.js";
+import {
+  createStreamedPairApi,
+  toHeldStreamItem,
+  toStreamedPairEvent,
+  toStreamMessage,
+  toStreamProgress,
+} from "./streamedPairApi.js";
 import { STREAMED_PAIR_EVENTS } from "./trafficApi.js";
 
 export const streamedPairStore = createStreamedPairStore(createStreamedPairApi(service));
@@ -17,6 +23,8 @@ projectData.register("streamed-pairs", {
 
 service.on("stream_message", (message) => streamedPairStore.onMessage(toStreamMessage(message)));
 service.on("stream_message.progress", (progress) => streamedPairStore.onProgress(toStreamProgress(progress)));
+// An inject Checkpoint holds shows "Held in Checkpoint" in the Inject tab.
+service.on("checkpoint.held", (item) => streamedPairStore.onCheckpointHeld(toHeldStreamItem(item)));
 for (const name of STREAMED_PAIR_EVENTS) {
   service.on(name, (event) => streamedPairStore.onStreamedPair(toStreamedPairEvent(event)));
 }

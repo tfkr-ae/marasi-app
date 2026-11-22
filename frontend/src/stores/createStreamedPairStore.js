@@ -13,12 +13,51 @@
 //                ResetCode, Trailers }; Ending and Messages are null while live
 //   progress     { [direction]: { Bytes, Framing } } while a message arrives
 //   details      the single read of each selected message, by id
+//   inject       { pending, held }: an inject on its way, and whether
+//                Checkpoint holds it
+//   draft        the Inject tab's { direction, text, neverCompress }
 import { get, writable } from "svelte/store";
 import { boundAction } from "../lib/service/boundAction.js";
 import { isSuperseded } from "../lib/service/errors.js";
 import { MESSAGE_CAP } from "./streamedPairApi.js";
 
 const DIRECTIONS = ["request", "response"];
+
+// The framings whose messages Marasi takes as a protobuf text form (or, for
+// a +json codec, as the JSON itself). The others inject UTF-8 text.
+const TEXT_FORM_FRAMINGS = new Set(["grpc", "grpc-web", "connect"]);
+
+function utf8Base64(text) {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+const live = (direction) => Boolean(direction) && !direction.Ending;
+
+/** The directions an inject can go into: streamed and not yet ended. */
+export const openDirections = (directions) => DIRECTIONS.filter((name) => live(directions?.[name]));
+
+/** Whether Cancel is offered: some streamed direction hasn't ended. */
+export const canCancel = (directions) => openDirections(directions).length > 0;
+
+// Why an inject was refused: { code, message }, plus the line and column
+// for a text form Marasi couldn't encode ("line 2 column 5: …"), and
+// { superseded } after a connection switch.
+export function injectRefusal(err) {
+  if (isSuperseded(err)) return { superseded: true };
+  const code = err?.code ?? "";
+  const message = err?.body?.message ?? String(err);
+  if (code === "stream_not_open") return { code, message, toast: "Stream closed" };
+  if (code === "stream_inject_refused") return { code, message, toast: "Length is fixed" };
+  const at = code === "invalid_stream_request" && message.match(TEXT_ERROR);
+  if (at) return { code, line: Number(at[1]), column: Number(at[2]), message: at[3] };
+  return { code, message };
+}
+
+// protoscope's syntax error, after Marasi's prefix: "line L column C: why:
+// syntax error". The column counts bytes.
+const TEXT_ERROR = /line (\d+) column (\d+): (.*?)(?:: syntax error)?$/;
 
 let tokens = 0;
 
@@ -34,6 +73,10 @@ const emptyPair = () => ({
   directions: { request: null, response: null },
   progress: {},
   details: {},
+  inject: { pending: false, held: false },
+  // The Inject tab's editor, kept while the modal is open: direction null
+  // until one is chosen.
+  draft: { direction: null, text: "", neverCompress: false },
   // Set once a streamed_pair event lands, so a slower head read can't undo it.
   eventSeen: false,
 });
@@ -131,10 +174,17 @@ export function createStreamedPairStore(api) {
     }));
   }
 
+  // Each open pair's action, bound to the connection its view was loaded
+  // from: inject and cancel go through it, so after a switch they send
+  // nothing until the view loads again.
+  const actions = new Map();
+  const actionOf = (pairId) => actions.get(pairId) ?? actionFor();
+
   // Loads the pair's head and its messages from the start.
   async function load(pairId) {
     const { token } = viewOf(pairId);
     const action = actionFor();
+    actions.set(pairId, action);
     patch(pairId, { loading: true, error: "" });
     try {
       await Promise.all([readHead(pairId, token, action), readPages(pairId, token, null, action)]);
@@ -164,6 +214,7 @@ export function createStreamedPairStore(api) {
       return;
     }
     openCounts.delete(pairId);
+    actions.delete(pairId);
     update((state) => {
       const { [pairId]: _released, ...rest } = state.pairs;
       return { ...state, pairs: rest };
@@ -244,12 +295,77 @@ export function createStreamedPairStore(api) {
     }
   }
 
+  /**
+   * Injects `text` into `direction`: as the text form for gRPC, gRPC-Web
+   * and Connect, otherwise as the payload, its UTF-8 bytes. neverCompress
+   * sends it uncompressed. The call stays pending while Checkpoint holds
+   * the message. Resolves to { ok: true, message } or { ok: false, ...why }
+   * (injectRefusal); a connection switch resolves { ok: false, superseded }.
+   */
+  async function inject(pairId, { direction, text, neverCompress = false }) {
+    const view = viewOf(pairId);
+    if (!view || view.inject.pending) return { ok: false, busy: true };
+    const framing = view.directions[direction]?.Framing ?? "";
+    const body = {
+      direction,
+      ...(TEXT_FORM_FRAMINGS.has(framing) ? { text } : { payload: utf8Base64(text) }),
+      compress: neverCompress ? "never" : "auto",
+    };
+    const action = actionOf(pairId);
+    patch(pairId, { inject: { pending: true, held: false } });
+    try {
+      const message = await action.step(() => api.inject(pairId, body, action.link));
+      if (current(pairId, view.token)) onMessage(message);
+      return { ok: true, message };
+    } catch (err) {
+      return { ok: false, ...injectRefusal(err) };
+    } finally {
+      if (current(pairId, view.token)) patch(pairId, { inject: { pending: false, held: false } });
+    }
+  }
+
+  /**
+   * checkpoint.held (toHeldStreamItem): an injected message of a pair with
+   * an inject on its way is that inject, held until it is forwarded or
+   * dropped.
+   */
+  function onCheckpointHeld(item) {
+    const view = viewOf(item?.PairID);
+    if (!view?.inject.pending || !item.Injected) return;
+    patch(item.PairID, { inject: { ...view.inject, held: true } });
+  }
+
+  /**
+   * Cancels the live call (POST /stream/{pair}/cancel); its endings come
+   * with streamed_pair.ended. Resolves to { ok: true } or { ok: false,
+   * ...why } as inject does.
+   */
+  async function cancel(pairId) {
+    if (!viewOf(pairId)) return { ok: false };
+    const action = actionOf(pairId);
+    try {
+      await action.step(() => api.cancel(pairId, action.link));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, ...injectRefusal(err) };
+    }
+  }
+
+  /** Changes the Inject tab's draft: some of { direction, text, neverCompress }. */
+  function setDraft(pairId, change) {
+    patch(pairId, (view) => ({ draft: { ...view.draft, ...change } }));
+  }
+
   return {
     subscribe,
     open,
+    onCheckpointHeld,
+    setDraft,
+    cancel,
     close,
     loadMore,
     select,
+    inject,
     onMessage,
     onProgress,
     onStreamedPair,

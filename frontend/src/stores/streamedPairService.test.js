@@ -13,8 +13,9 @@ import {
   toStreamedPairEvent,
   toStreamMessage,
   toStreamProgress,
+  toHeldStreamItem,
 } from "./streamedPairApi.js";
-import { createStreamedPairStore } from "./createStreamedPairStore.js";
+import { canCancel, createStreamedPairStore, openDirections } from "./createStreamedPairStore.js";
 
 const b64 = (text) => Buffer.from(text).toString("base64");
 
@@ -301,4 +302,188 @@ test("while older messages are left to load, live ones wait for Load more instea
 
   await store.loadMore("p1");
   assert.deepEqual(ids().slice(-2), [idOf(MESSAGE_CAP + 1), idOf(MESSAGE_CAP + 2)]);
+});
+
+// Inject and cancel.
+
+const injected = (overrides = {}) =>
+  message(9, { direction: "request", metadata: { injected: true }, payload: b64("injected"), ...overrides });
+
+test("injecting into a gRPC direction posts the text form and shows the message marked injected", async () => {
+  const { store, view, ids, calls } = setup({
+    count: 0,
+    routes: { "POST /stream/p1/inject": () => injected() },
+  });
+  await store.open("p1");
+  const outcome = await store.inject("p1", { direction: "request", text: '3:LEN {"hi"}' });
+  assert.deepEqual(
+    calls("/stream/p1/inject").map((c) => c.body),
+    [{ direction: "request", text: '3:LEN {"hi"}', compress: "auto" }],
+  );
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(ids(), [idOf(9)]);
+  assert.equal(view().messages[0].Metadata.injected, true);
+  assert.equal(view().inject.pending, false);
+});
+
+test("an SSE direction takes the text as its UTF-8 payload, and Send uncompressed sends compress never", async () => {
+  const { store, calls } = setup({
+    count: 0,
+    pair: pairRead({ streamed: { request: null, response: { framing: "sse", ending: null } } }),
+    routes: { "POST /stream/p1/inject": () => injected({ direction: "response", framing: "sse" }) },
+  });
+  await store.open("p1");
+  await store.inject("p1", { direction: "response", text: "data: é\n\n", neverCompress: true });
+  assert.deepEqual(
+    calls("/stream/p1/inject").map((c) => c.body),
+    [{ direction: "response", payload: b64("data: é\n\n"), compress: "never" }],
+  );
+});
+
+test("an inject Checkpoint holds stays pending, marked held, until it is forwarded", async () => {
+  let forward;
+  const { store, view, ids } = setup({
+    count: 0,
+    routes: { "POST /stream/p1/inject": () => new Promise((resolve) => (forward = resolve)) },
+  });
+  await store.open("p1");
+  const injecting = store.inject("p1", { direction: "request", text: "1:VARINT 1" });
+  assert.deepEqual(view().inject, { pending: true, held: false });
+
+  // Another pair's hold, or one that isn't an inject, isn't this one.
+  store.onCheckpointHeld(toHeldStreamItem({ type: "stream", pair_id: "p2", direction: "request", metadata: { injected: true } }));
+  store.onCheckpointHeld(toHeldStreamItem({ type: "stream", pair_id: "p1", direction: "request", metadata: {} }));
+  assert.equal(view().inject.held, false);
+  store.onCheckpointHeld(toHeldStreamItem({ type: "stream", pair_id: "p1", direction: "request", metadata: { injected: true } }));
+  assert.deepEqual(view().inject, { pending: true, held: true });
+
+  // The rest of the store keeps working while it is held.
+  store.onMessage(toStreamMessage(message(2)));
+  assert.deepEqual(ids(), [idOf(2)]);
+
+  forward(injected({ metadata: { injected: true, intercepted: true } }));
+  assert.equal((await injecting).ok, true);
+  assert.deepEqual(view().inject, { pending: false, held: false });
+  assert.deepEqual(ids(), [idOf(2), idOf(9)]);
+});
+
+// A refusal as the service words it (writeRefusal: { error, message }).
+const refused = (status, error, message) => () => ({ status, body: { error, message } });
+
+test("each inject refusal maps to its editor marker or toast, and the draft is kept", async () => {
+  const cases = [
+    [
+      refused(400, "invalid_stream_request", "the text form cannot be encoded: line 2 column 5: unknown token \"x\": syntax error"),
+      { code: "invalid_stream_request", line: 2, column: 5, message: "unknown token \"x\"" },
+    ],
+    [refused(409, "stream_not_open", "request: the direction has ended"), { code: "stream_not_open", toast: "Stream closed" }],
+    [
+      refused(409, "stream_inject_refused", "the request head declares a length"),
+      { code: "stream_inject_refused", toast: "Length is fixed" },
+    ],
+  ];
+  for (const [answer, expected] of cases) {
+    const { store, view } = setup({ count: 0, routes: { "POST /stream/p1/inject": answer } });
+    await store.open("p1");
+    store.setDraft("p1", { direction: "request", text: "1:VARINT 1\n3:LEN x" });
+    const outcome = await store.inject("p1", view().draft);
+    assert.deepEqual(
+      Object.fromEntries(Object.keys(expected).map((key) => [key, outcome[key]])),
+      expected,
+      expected.code,
+    );
+    assert.equal(outcome.ok, false);
+    assert.deepEqual(view().draft, { direction: "request", text: "1:VARINT 1\n3:LEN x", neverCompress: false });
+    assert.deepEqual(view().inject, { pending: false, held: false });
+  }
+});
+
+test("only streamed, open directions take an inject, and the choice follows as directions start and end", async () => {
+  const { store, view } = setup({
+    count: 0,
+    pair: pairRead({ streamed: { request: { framing: "grpc", ending: null }, response: null } }),
+  });
+  await store.open("p1");
+  assert.deepEqual(openDirections(view().directions), ["request"]);
+
+  const streamed = (request, response) => toStreamedPairEvent({ pair_id: "p1", streamed: { request, response } });
+  store.onStreamedPair(streamed({ framing: "grpc", ending: null }, { framing: "grpc", ending: null }));
+  assert.deepEqual(openDirections(view().directions), ["request", "response"]);
+  store.onStreamedPair(streamed({ framing: "grpc", ending: "complete" }, { framing: "grpc", ending: null }));
+  assert.deepEqual(openDirections(view().directions), ["response"]);
+  store.onStreamedPair(streamed({ framing: "grpc", ending: "complete" }, { framing: "grpc", ending: "complete" }));
+  assert.deepEqual(openDirections(view().directions), []);
+});
+
+test("cancel posts once with no confirmation, and is offered only until both directions have ended", async () => {
+  const { store, view, calls } = setup({
+    count: 0,
+    routes: { "POST /stream/p1/cancel": { pair_id: "p1", cancelled: true } },
+  });
+  await store.open("p1");
+  assert.equal(canCancel(view().directions), true);
+  assert.deepEqual(await store.cancel("p1"), { ok: true });
+  assert.equal(calls("/stream/p1/cancel").length, 1);
+
+  store.onStreamedPair(
+    toStreamedPairEvent({
+      pair_id: "p1",
+      streamed: { request: { framing: "grpc", ending: "cancelled" }, response: { framing: "grpc", ending: null } },
+    }),
+  );
+  assert.equal(canCancel(view().directions), true);
+  store.onStreamedPair(
+    toStreamedPairEvent({
+      pair_id: "p1",
+      streamed: { request: { framing: "grpc", ending: "cancelled" }, response: { framing: "grpc", ending: "cancelled" } },
+    }),
+  );
+  assert.equal(canCancel(view().directions), false);
+  // An SSE call, whose request isn't streamed, is live while its response is.
+  assert.equal(canCancel({ request: null, response: { Framing: "sse", Ending: null } }), true);
+});
+
+test("a cancel the service refuses because the call already ended shows Stream closed", async () => {
+  const { store } = setup({
+    count: 0,
+    routes: { "POST /stream/p1/cancel": refused(409, "stream_not_open", "the pair is not a streamed pair being carried") },
+  });
+  await store.open("p1");
+  const outcome = await store.cancel("p1");
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.toast, "Stream closed");
+});
+
+test("after a connection switch, inject and cancel send nothing to the next connection until the pair reloads", async () => {
+  const service = switchingService({
+    "GET /traffic/p1": pairRead(),
+    "GET /stream/p1/message": { items: [], next_cursor: null },
+    "POST /stream/p1/inject": injected(),
+    "POST /stream/p1/cancel": { pair_id: "p1", cancelled: true },
+  });
+  const store = createStreamedPairStore(createStreamedPairApi(service.client));
+  await store.open("p1");
+  service.switchNow();
+  assert.deepEqual(await store.inject("p1", { direction: "request", text: "1:VARINT 1" }), { ok: false, superseded: true });
+  assert.deepEqual(await store.cancel("p1"), { ok: false, superseded: true });
+  assert.deepEqual(service.onB(), []);
+  assert.deepEqual(get(store).pairs.p1.inject, { pending: false, held: false });
+
+  // Once the pair loads from the next connection, they go there.
+  await store.resync();
+  assert.equal((await store.cancel("p1")).ok, true);
+  assert.ok(service.onB().includes("POST /stream/p1/cancel"));
+});
+
+test("an inject whose answer lands after a connection switch is dropped quietly", async () => {
+  const service = switchingService({
+    "GET /traffic/p1": pairRead(),
+    "GET /stream/p1/message": { items: [], next_cursor: null },
+    "POST /stream/p1/inject": injected(),
+  });
+  const store = createStreamedPairStore(createStreamedPairApi(service.client));
+  await store.open("p1");
+  service.switchWhen("POST /stream/p1/inject");
+  assert.deepEqual(await store.inject("p1", { direction: "request", text: "1:VARINT 1" }), { ok: false, superseded: true });
+  assert.deepEqual(get(store).pairs.p1.messages, []);
 });

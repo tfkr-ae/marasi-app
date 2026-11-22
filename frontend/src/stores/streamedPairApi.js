@@ -61,6 +61,15 @@ export const toStreamedPairEvent = (e) => ({
   Directions: toDirections(e.directions),
 });
 
+/**
+ * checkpoint.held, as the streamed pair store reads it: a held stream
+ * message, null for any other kind of item.
+ */
+export const toHeldStreamItem = (item) =>
+  item?.type === "stream"
+    ? { PairID: item.pair_id, Direction: item.direction, Injected: Boolean(item.metadata?.injected) }
+    : null;
+
 /** The single-message read: the text form (null when none) and the whole payload. */
 export const toStreamMessageDetail = (m) => ({
   Text: m.text ?? null,
@@ -100,6 +109,18 @@ export function createStreamedPairApi(client) {
     },
     async message(pairId, id, link = client) {
       return toStreamMessageDetail(await link.get(`/stream/${pairId}/message/${id}`));
+    },
+    /**
+     * POST /stream/{pair}/inject: `body` is { direction, text | payload,
+     * compress }. Answers once the message went out, so it waits while
+     * Checkpoint holds it.
+     */
+    async inject(pairId, body, link = client) {
+      return toStreamMessage(await link.post(`/stream/${pairId}/inject`, body));
+    },
+    /** POST /stream/{pair}/cancel. */
+    async cancel(pairId, link = client) {
+      await link.post(`/stream/${pairId}/cancel`, {});
     },
   };
 }

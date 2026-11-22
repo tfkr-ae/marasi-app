@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detailOf, messageChips, messagePreview, messageSize, pairTrailers } from "./streamMessage.js";
+import { detailOf, injectDraftOf, messageChips, messagePreview, messageSize, pairTrailers } from "./streamMessage.js";
 
 const b64 = (bytes) => Buffer.from(bytes).toString("base64");
 const msg = (overrides = {}) => ({
@@ -101,4 +101,16 @@ test("a gRPC-Web or Connect pair's trailers come from its trailer message", () =
     { Name: "grpc-message", Value: "done" },
   ]);
   assert.deepEqual(pairTrailers(messages, "request"), []);
+});
+
+test("Copy to Inject takes the message's direction and its text form, or its UTF-8 text", () => {
+  const grpc = msg({ Direction: "request", Payload: b64(proto) });
+  assert.deepEqual(injectDraftOf(grpc, { Text: '1:VARINT 1\n2:LEN {"server"}', Payload: grpc.Payload }), {
+    direction: "request",
+    text: '1:VARINT 1\n2:LEN {"server"}',
+  });
+  const sse = msg({ Framing: "sse", Flags: null, Payload: b64(Buffer.from("data: hi\n\n")) });
+  assert.deepEqual(injectDraftOf(sse, { Text: null, Payload: sse.Payload }), { direction: "response", text: "data: hi\n\n" });
+  // Not read yet: the payload the row has.
+  assert.deepEqual(injectDraftOf(sse, undefined), { direction: "response", text: "data: hi\n\n" });
 });

@@ -154,6 +154,19 @@ export function detailOf(message, detail, view) {
   return shown;
 }
 
+/**
+ * Copy to Inject: the Inject tab's { direction, text } for `message`, from
+ * its text form where Marasi gave one, else its payload as UTF-8 text.
+ * `detail` is its single read, if any.
+ */
+export function injectDraftOf(message, detail) {
+  const text =
+    detail?.Text != null && !endingKind(message)
+      ? detail.Text
+      : new TextDecoder().decode(bytesOf(detail?.Payload || message.Payload));
+  return { direction: message.Direction, text };
+}
+
 // "name: value" lines, as a trailer message carries them.
 function trailerLines(text) {
   return text
