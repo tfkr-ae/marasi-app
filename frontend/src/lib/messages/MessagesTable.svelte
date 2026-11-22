@@ -315,6 +315,11 @@
 			padding: 0 !important;
 			visibility: hidden;
 		}
+		/* Skeleton's .table hides its overflow, which pins the sticky header
+		   to the table instead of the scroller. */
+		:global(html.mobile .msg-table) {
+			overflow: visible;
+		}
 		:global(html.mobile .msg-panes > div) {
 			width: 100%;
 			border-right-width: 0;
