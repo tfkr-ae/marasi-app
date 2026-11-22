@@ -12,6 +12,7 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { createEventDispatcher } from "svelte";
 	import { lineWrap, marasiConfig } from "../../stores";
+	import { appKeys } from "../editorKeys.js";
 	import { longStrings } from "../longStrings.js";
 	import { languageExtensions } from "./protobufText.js";
 	import { markerOffset } from "./messageEditor.js";
@@ -63,6 +64,7 @@
 
 	$: theme = $modeCurrent ? githubLight : oneDark;
 	$: extensions = [
+		appKeys,
 		...($marasiConfig.VimEnabled && !readonly ? [vim()] : []),
 		...languageExtensions(language),
 		longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: (on) => (wrapSuspended = on) }),

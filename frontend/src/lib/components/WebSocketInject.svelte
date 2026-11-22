@@ -8,6 +8,7 @@
 	import { Send } from "lucide-svelte";
 	import { isSuperseded } from "../service/errors.js";
 	import { marasiConfig, lineWrap } from "../../stores";
+	import { appKeys } from "../editorKeys.js";
 	import { longStrings } from "../longStrings.js";
 	import {
 		webSocketStore,
@@ -169,7 +170,7 @@
 			class="h-full w-full text-xs"
 			bind:value={payloadText}
 			theme={$modeCurrent ? githubLight : oneDark}
-			extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
+			extensions={[appKeys, ...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
 		/>
 	</div>
 </div>
