@@ -373,7 +373,19 @@ test("getRawDetails gives a streamed pair's request joined from its messages, re
   });
   const details = await createLaunchpadApi(client).getRawDetails("0190s");
   assert.equal(details.Request.Raw, joined);
+  assert.equal(details.Request.RawBase64, b64(joined), "the bytes as Marasi joined them, for a launch");
   assert.equal(details.RequestStreaming, false);
+});
+
+test("launch sends the request's own bytes when given them, the draft's text otherwise", async () => {
+  // A protobuf varint is not UTF-8: as text it would come back as U+FFFD.
+  const bytes = Buffer.from([0x50, 0x4f, 0x53, 0x54, 0x0d, 0x0a, 0x0d, 0x0a, 0xad, 0x9c, 0xf5]).toString("base64");
+  const client = fakeServiceClient({ "POST /launchpad/lp1/launch": { launch_id: "l1" } });
+  const api = createLaunchpadApi(client);
+  await api.launch("POST\r\n\r\n�", "lp1", false, bytes);
+  assert.deepEqual(client.calls.at(-1).body, { raw: bytes, scheme: "http" });
+  await api.launch("GET / HTTP/1.1\r\n\r\n", "lp1", true);
+  assert.deepEqual(client.calls.at(-1).body, { raw: b64("GET / HTTP/1.1\r\n\r\n"), scheme: "https" });
 });
 
 test("getRawDetails marks a streamed pair whose request is still streaming, keeping its stored request", async () => {

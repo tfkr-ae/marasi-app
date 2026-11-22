@@ -993,7 +993,12 @@ export function createLaunchpadStore(api) {
         draft = current.draftsByLaunchpad[launchpadId];
         if (!draft) return null;
       }
-      const id = await api.launch(draft.raw, launchpadId, draft.useHttps);
+      // An unedited draft whose request came as bytes (a joined streamed
+      // request) launches those bytes, which its text may not carry whole.
+      const bytes = isDraftDirty(current, launchpadId)
+        ? undefined
+        : current.detailsById[draft.seededFrom]?.Request?.RawBase64;
+      const id = await api.launch(draft.raw, launchpadId, draft.useHttps, bytes);
       if (version !== projectStateVersion || !id) return id;
       update((state) =>
         recordLaunch(state, { ID: id, LaunchpadID: launchpadId, Status: "pending" }),

@@ -117,7 +117,9 @@ export function createLaunchpadApi(client) {
       if (!pair.streamed?.request) return details;
       try {
         const joined = await client.get(`/traffic/${id}/request/joined`);
-        return { ...details, Request: { ...details.Request, Raw: decodeBase64Text(joined.raw) } };
+        // RawBase64 keeps the bytes, which a protobuf body's text can't.
+        const Request = { ...details.Request, Raw: decodeBase64Text(joined.raw), RawBase64: joined.raw };
+        return { ...details, Request };
       } catch (err) {
         if (isStreamRequestOpen(err)) return { ...details, RequestStreaming: true };
         if (isNotFound(err)) return null;
@@ -141,10 +143,11 @@ export function createLaunchpadApi(client) {
     updateLaunchpad: (id, name, description) => client.post(`/launchpad/${id}`, { name, description }),
     deleteLaunchpad: (id) => client.del(`/launchpad/${id}`),
 
-    // Returns the launch id, which is also the new entry's id.
-    async launch(raw, launchpadId, useHttps) {
+    // Returns the launch id, which is also the new entry's id. `rawBase64`,
+    // when given, is the request's own bytes, sent in place of the text.
+    async launch(raw, launchpadId, useHttps, rawBase64) {
       const started = await client.post(`/launchpad/${launchpadId}/launch`, {
-        raw: encodeBase64Text(raw),
+        raw: rawBase64 || encodeBase64Text(raw),
         scheme: useHttps ? "https" : "http",
       });
       return started.launch_id;

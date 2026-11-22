@@ -263,9 +263,14 @@ function streamedLaunchpad() {
   let streaming = true;
   api.getRawDetails = async (id) => {
     api.calls.push(["getRawDetails", id]);
-    return { Request: { ID: id, Raw: streaming ? stored : joined }, Response: null, RequestStreaming: streaming };
+    const request = streaming ? { ID: id, Raw: stored } : { ID: id, Raw: joined, RawBase64: "Sk9JTkVE" };
+    return { Request: request, Response: null, RequestStreaming: streaming };
   };
   api.ended = () => (streaming = false);
+  api.launch = async (raw, id, useHttps, rawBase64) => {
+    api.calls.push(["launch", raw, id, useHttps, rawBase64]);
+    return api.nextLaunchIds.shift();
+  };
   return { api, joined };
 }
 
@@ -285,10 +290,23 @@ test("once its request ended, a streamed entry launches its joined request", asy
   await store.populate();
   api.ended();
   assert.equal(await store.launch("lp1"), "d");
-  assert.deepEqual(api.calls.find((call) => call[0] === "launch"), ["launch", joined, "lp1", true]);
+  // Unedited, it launches the bytes Marasi joined, which the text may not
+  // carry whole.
+  assert.deepEqual(api.calls.find((call) => call[0] === "launch"), ["launch", joined, "lp1", true, "Sk9JTkVE"]);
   const state = get(store);
   assert.equal(state.draftsByLaunchpad.lp1.raw, joined, "the draft shows what was launched");
   assert.equal(isDraftDirty(state, "lp1"), false);
+});
+
+test("an edited draft of a streamed entry launches its text", async () => {
+  const { api } = streamedLaunchpad();
+  api.ended();
+  api.nextLaunchIds.push("d");
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  store.updateDraft("lp1", "POST /svc/Other HTTP/2\r\n\r\n");
+  await store.launch("lp1");
+  assert.deepEqual(api.calls.find((call) => call[0] === "launch"), ["launch", "POST /svc/Other HTTP/2\r\n\r\n", "lp1", true, undefined]);
 });
 
 test("an entry that arrives before the launch binding returns is still selected", async () => {
