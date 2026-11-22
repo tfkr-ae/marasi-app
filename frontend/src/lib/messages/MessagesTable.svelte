@@ -132,7 +132,13 @@
 	$: headers = [
 		{ id: "ID", header: "#", width: "w-12", sortable: true },
 		{ id: "Direction", header: "Dir", width: "w-10", sortable: true },
-		...columns.map((column) => ({ id: column.id, header: column.header, width: column.width || "", sortable: false })),
+		...columns.map((column, i) => ({
+			id: column.id,
+			header: column.header,
+			width: column.width || "",
+			sortable: false,
+			extra: i !== columns.length - 1,
+		})),
 	];
 
 	$: rows = sortMessages(messages, sorting, directionOf);
@@ -186,11 +192,11 @@
 					class="overflow-y-auto overflow-x-hidden {$$slots.listBar ? 'h-[calc(100%-2.5rem)]' : 'h-full'}"
 					on:scroll={handleTableScroll}
 				>
-					<table class="table table-hover table-compact w-full table-fixed">
+					<table class="msg-table table table-hover table-compact w-full table-fixed">
 						<thead class="sticky top-0 z-10 bg-surface-100-800-token">
 							<tr class="h-10">
 								{#each headers as header (header.id)}
-									<th class="!py-2 {header.width}">
+									<th class="!py-2 {header.width}" class:msg-extra={header.extra}>
 										<div
 											class="inline-flex items-center gap-1 whitespace-nowrap outline-none focus:outline-none"
 											class:cursor-pointer={header.sortable}
@@ -300,6 +306,15 @@
 	   global, as app.css's shared mobile rules are, so they weigh the same
 	   against Skeleton's and Tailwind's classes. */
 	@media (max-width: 40rem) {
+		/* The list keeps #, Dir and the kind's last column (the preview),
+		   so the preview is readable; the detail shows the message's time.
+		   The others collapse to no width rather than leave the table, so the
+		   gap row's colspan still matches its columns. */
+		:global(html.mobile .msg-table .msg-extra) {
+			width: 0;
+			padding: 0 !important;
+			visibility: hidden;
+		}
 		:global(html.mobile .msg-panes > div) {
 			width: 100%;
 			border-right-width: 0;

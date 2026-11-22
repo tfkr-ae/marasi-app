@@ -39,7 +39,7 @@
 		{/if}
 	</td>
 	{#each columns as column, i (column.id)}
-		<td class="overflow-hidden" class:whitespace-nowrap={i !== last}>
+		<td class="overflow-hidden" class:whitespace-nowrap={i !== last} class:msg-extra={i !== last}>
 			{#if i === last}
 				<div class="flex min-w-0 items-center gap-1">
 					{#each rowChips(message) as chip (chip.label)}
