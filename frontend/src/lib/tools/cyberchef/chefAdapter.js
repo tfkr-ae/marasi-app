@@ -217,6 +217,15 @@ export function chefAdapter(win) {
       app().manager.options.changeTheme(name);
     },
 
+    /**
+     * Sets the widths of CyberChef's Operations, Recipe and Input/Output
+     * columns, as percentages (chefColumns in chefTheme.js).
+     */
+    setColumns(sizes) {
+      app().columnSplitter.setSizes(sizes);
+      app().adjustComponentSizes();
+    },
+
     /** The recipe's operations, as CyberChef's recipe config. */
     getRecipe() {
       return app().getRecipeConfig();

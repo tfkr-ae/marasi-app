@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chefTheme } from "./chefTheme.js";
+import { chefColumns, chefTheme } from "./chefTheme.js";
 
 // The app's palette as document.body's computed style gives it: Skeleton's
 // space-separated RGB channels.
@@ -51,4 +51,28 @@ test("the theme hides CyberChef's GitHub and Download links", () => {
 test("text size scales CyberChef's panes", () => {
   assert.match(chefTheme(read, { dark: true, scale: 1.25 }).css, /html\s*\{\s*zoom:\s*1\.25;/);
   assert.match(chefTheme(read, { dark: true }).css, /html\s*\{\s*zoom:\s*1;/);
+});
+
+const near = (actual, expected) =>
+  assert.deepEqual(actual.map((n) => Math.round(n * 10) / 10), expected);
+
+test("columns keep CyberChef's widths where its least widths fit", () => {
+  // 1508 px of room: 20% and 30% are over their least widths.
+  near(chefColumns(1516), [20, 30, 50]);
+  // 1008 px of room: Operations and Recipe at their least, Input/Output the rest.
+  near(chefColumns(1016), [23.8, 30.8, 45.4]);
+});
+
+test("columns share a frame too narrow for CyberChef's least widths", () => {
+  // A tablet's frame at X-Large: 1030 / 1.25 leaves 816 px, under 1000.
+  const sizes = chefColumns(1030, 1.25);
+  near(sizes, [24, 31, 45]);
+  assert.equal(Math.round(sizes.reduce((a, b) => a + b, 0)), 100);
+  // The Recipe column keeps its share, not what the other two left.
+  assert.ok((sizes[1] / 100) * (1030 / 1.25 - 8) > 250);
+});
+
+test("a larger Text size leaves less room for the same frame", () => {
+  near(chefColumns(1300, 1), [20, 30, 50]);
+  near(chefColumns(1300, 1.25), [23.3, 30, 46.7]);
 });

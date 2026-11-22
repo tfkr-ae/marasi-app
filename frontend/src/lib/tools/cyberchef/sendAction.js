@@ -34,6 +34,9 @@ function send(result, toastStore) {
   return true;
 }
 
+/** Sends `text` as it is, as a menu that already has the text does. */
+export const sendTextToChef = (text, toastStore) => send({ text }, toastStore);
+
 /** Sends from the last focused editor (global.send-to-cyberchef). */
 export const sendFocusedToChef = (toastStore) => send(tracker.text(), toastStore);
 

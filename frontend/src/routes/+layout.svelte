@@ -89,7 +89,8 @@
 	import { applyColourScheme } from "../lib/lightMode.js";
 	import { androidBack } from "../lib/androidBack.js";
 	import { installSwipeToClose } from "../lib/swipeToClose.js";
-	import { installLongPress, installTwoFingerSwipeDown, keepKeyboardDown } from "../lib/touch.js";
+	import { installLongPress, keepKeyboardDown } from "../lib/touch.js";
+	import { installMenuSwipe } from "../lib/menuSwipe.js";
 	import AppDrawer from "../lib/components/AppDrawer.svelte";
 	import NotesModal from "../lib/components/NotesModal.svelte";
 	import RecordModal from "../lib/logbook/RecordModal.svelte";
@@ -118,6 +119,7 @@
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
+	import SelectionChefButton from "../lib/tools/cyberchef/SelectionChefButton.svelte";
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
 	import UpstreamProxyCAModal from "../lib/components/UpstreamProxyCAModal.svelte";
@@ -139,7 +141,6 @@
 	import {
 		installMenuShortcuts,
 		menuDispatcher,
-		menuPalettes,
 		websocketTab,
 		armoryDrawer,
 		keybindingCapture,
@@ -461,10 +462,7 @@
 			const stopLongPress = installLongPress(window);
 			const stopKeyboard = keepKeyboardDown(modalStore, document);
 			// Opens the Marasi menu, not over another dialog.
-			const stopSwipe = installTwoFingerSwipeDown(window, () => {
-				if (document.querySelector("dialog[open]") || $modalStore.length > 0) return;
-				menuPalettes.active()?.toggle();
-			});
+			const stopSwipe = installMenuSwipe(window, modalStore);
 			stopTouch = () => {
 				stopLongPress();
 				stopKeyboard();
@@ -498,6 +496,7 @@
 	<div class="app-body flex flex-1 h-screen" on:click|capture={closeOverlaysForNav}>
 		{#if $appState.started}
 			<GlobalMenu />
+			{#if $mobile && $chefShown}<SelectionChefButton />{/if}
 			<AppRail
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"

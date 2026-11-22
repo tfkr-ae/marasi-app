@@ -86,3 +86,25 @@ export function chefTheme(read, { dark, scale = 1 }) {
   ].join("\n");
   return { themeClass: dark ? "dark" : "classic", css };
 }
+
+// CyberChef's Operations, Recipe and Input/Output columns: its own widths,
+// in percent, and the least it lets each shrink to, in px, plus the two
+// 4 px gutters between them (App.initialiseSplitter, v11.6.0).
+const CHEF_SIZES = [20, 30, 50];
+const CHEF_MIN_PX = [240, 310, 450];
+const CHEF_GUTTERS_PX = 8;
+
+/**
+ * The column widths, in percent, for a frame `width` px wide at the Text
+ * size `scale`. CyberChef's own split holds each column at its least width,
+ * so where the three don't fit (a tablet, or a larger Text size) the Recipe
+ * column took what the other two left. There, the columns share the width
+ * in proportion to those least widths instead.
+ */
+export function chefColumns(width, scale = 1) {
+  const room = width / scale - CHEF_GUTTERS_PX;
+  const least = CHEF_MIN_PX.reduce((sum, px) => sum + px, 0);
+  if (!(room > 0) || room < least) return CHEF_MIN_PX.map((px) => (px / least) * 100);
+  const [operations, recipe] = CHEF_SIZES.map((percent, i) => Math.max(CHEF_MIN_PX[i], (percent / 100) * room));
+  return [operations, recipe, room - operations - recipe].map((px) => (px / room) * 100);
+}
