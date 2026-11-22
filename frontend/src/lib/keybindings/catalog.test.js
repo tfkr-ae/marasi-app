@@ -420,6 +420,13 @@ test("the Ledger with its drawer open groups its actions as the spec lists them"
   assert.equal(catalog.get("ledger.drawer-open.websocket.open-stream").group, undefined);
 });
 
+test("Open Messages keeps the WebSocket stream action's id and ⇧G", () => {
+  const open = buildCatalog().get("ledger.drawer-open.websocket.open-stream");
+  assert.equal(open.label, "Open Messages");
+  assert.match(open.keywords, /messages/);
+  assert.deepEqual(open.defaults, { [MACOS]: ["meta+shift+g"], [WINDOWS_LINUX]: ["ctrl+shift+g"] });
+});
+
 test("the Ledger with its drawer closed groups only Focus", () => {
   const catalog = buildCatalog();
   assert.deepEqual(groupsOf(catalog, "ledger.drawer-closed"), [

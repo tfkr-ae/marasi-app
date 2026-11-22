@@ -91,7 +91,7 @@ export const FACTORY_ACTIONS = [
     ["focus-sitemap", "Find in Sitemap", "Jump to the sitemap's find box, expanding the sidebar", "sitemap, find, search, host, path", primary("shift+\\"), { group: "focus" }],
   ]),
   ...pageActions("ledger.drawer-open.websocket", [
-    ["open-stream", "Open WebSocket Stream", "Open the upgraded connection stream", "open websocket upgrade stream messages", primary("shift+g")],
+    ["open-stream", "Open Messages", "Open the messages of a WebSocket connection", "open messages websocket upgrade stream", primary("shift+g")],
   ]),
   ...pageActions("ledger.drawer-open", [
     // Search, Filter and Open request work with the drawer open too: it no
