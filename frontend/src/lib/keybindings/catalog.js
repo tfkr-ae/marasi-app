@@ -261,6 +261,19 @@ export const FACTORY_ACTIONS = [
     ["forward-frame", "Forward WebSocket Message", "Forward the current intercepted message", "websocket checkpoint forward message", primary("shift+f")],
     ["drop-frame", "Drop WebSocket Message", "Drop the current intercepted message", "websocket checkpoint drop message", primary("shift+d")],
   ]),
+  // The Messages modal on a streamed pair: the same default keys as the
+  // WebSocket counterparts, with ids that say "message".
+  ...pageActions("stream", [
+    ["previous-tab", "Previous Messages Tab", "Move to the previous tab of the streamed pair", "stream previous tab messages pair grpc", primary("[")],
+    ["next-tab", "Next Messages Tab", "Move to the next tab of the streamed pair", "stream next tab messages pair grpc", primary("]")],
+  ]),
+  ...pageActions("stream.messages", [
+    ["previous-message", "Previous Stream Message", "Select the previous stream message", "stream previous message grpc", primary("shift+[")],
+    ["next-message", "Next Stream Message", "Select the next stream message", "stream next message grpc", primary("shift+]")],
+    ["jump-to-bottom", "Jump to Bottom", "Jump to the newest message and resume auto-scroll", "stream messages bottom newest follow auto-scroll", primary("j")],
+    ["toggle-message-metadata", "Toggle Message Metadata", "Switch between the message and its metadata", "stream message metadata", primary("shift+m")],
+    ["toggle-raw", "Toggle Raw Message", "Switch between the message's text form and its raw payload", "stream message raw payload text form protobuf", primary("shift+r")],
+  ]),
   ...pageActions("websocket.inject", [
     ["toggle-direction", "Toggle Inject Direction", "Switch the injected message direction", "websocket inject direction client server", primary("shift+d")],
     ["cycle-opcode", "Cycle Inject Opcode", "Select the next WebSocket opcode", "websocket inject opcode cycle", primary("shift+o")],

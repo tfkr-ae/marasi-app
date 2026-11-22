@@ -52,6 +52,7 @@ export const CONTEXTS = [
   // tab (kindContexts). Pages and drawers beneath it are not eligible (see
   // onRoute).
   ...kindContexts(MESSAGE_KINDS.websocket),
+  ...kindContexts(MESSAGE_KINDS.stream),
   {
     id: "ledger.drawer-closed",
     tier: "page",

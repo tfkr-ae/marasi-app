@@ -156,6 +156,13 @@
     "websocket.checkpoint.toggle-intercept": {"macos":["meta+shift+i"],"windows-linux":["ctrl+shift+i"]},
     "websocket.checkpoint.forward-frame": {"macos":["meta+shift+f"],"windows-linux":["ctrl+shift+f"]},
     "websocket.checkpoint.drop-frame": {"macos":["meta+shift+d"],"windows-linux":["ctrl+shift+d"]},
+    "stream.previous-tab": {"macos":["meta+["],"windows-linux":["ctrl+["]},
+    "stream.next-tab": {"macos":["meta+]"],"windows-linux":["ctrl+]"]},
+    "stream.messages.previous-message": {"macos":["meta+shift+["],"windows-linux":["ctrl+shift+["]},
+    "stream.messages.next-message": {"macos":["meta+shift+]"],"windows-linux":["ctrl+shift+]"]},
+    "stream.messages.jump-to-bottom": {"macos":["meta+j"],"windows-linux":["ctrl+j"]},
+    "stream.messages.toggle-message-metadata": {"macos":["meta+shift+m"],"windows-linux":["ctrl+shift+m"]},
+    "stream.messages.toggle-raw": {"macos":["meta+shift+r"],"windows-linux":["ctrl+shift+r"]},
     "websocket.inject.toggle-direction": {"macos":["meta+shift+d"],"windows-linux":["ctrl+shift+d"]},
     "websocket.inject.cycle-opcode": {"macos":["meta+shift+o"],"windows-linux":["ctrl+shift+o"]},
     "websocket.inject.inject-frame": {"macos":["meta+shift+enter"],"windows-linux":["ctrl+shift+enter"]}

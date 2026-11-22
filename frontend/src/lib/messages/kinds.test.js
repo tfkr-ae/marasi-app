@@ -49,6 +49,41 @@ test("a kind gets one shared menu context and one per tab, eligible only while i
   assert.equal(contexts[0].isEligible({ modal: "WebsocketStream" }), true);
 });
 
+const stream = MESSAGE_KINDS.stream;
+
+test("a modal opened with the stream kind shows a streamed pair, with Messages and Pair tabs", () => {
+  assert.equal(kindOf({ kind: "stream", pairId: "p1" }), stream);
+  assert.deepEqual(
+    stream.tabs.map((tab) => [tab.id, tab.label]),
+    [
+      ["messages", "Messages"],
+      ["pair", "Pair"],
+    ],
+  );
+});
+
+test("each kind's contexts are eligible only while the modal shows that kind", () => {
+  const [streamShared, streamMessages] = kindContexts(stream);
+  const [websocketShared] = kindContexts(websocket);
+  assert.deepEqual(
+    kindContexts(stream).map((c) => [c.id, c.label]),
+    [
+      ["stream", "Streamed pair"],
+      ["stream.messages", "Streamed pair Messages tab"],
+      ["stream.pair", "Streamed pair Pair tab"],
+    ],
+  );
+  const showingStream = { modal: "WebsocketStream", streamTab: "messages", websocketTab: null };
+  assert.equal(streamShared.isEligible(showingStream), true);
+  assert.equal(streamMessages.isEligible(showingStream), true);
+  assert.equal(websocketShared.isEligible(showingStream), false);
+
+  const showingWebSocket = { modal: "WebsocketStream", websocketTab: "stream", streamTab: null };
+  assert.equal(streamShared.isEligible(showingWebSocket), false);
+  assert.equal(websocketShared.isEligible(showingWebSocket), true);
+  assert.equal(streamShared.isEligible({ modal: "Finding", streamTab: "messages" }), false);
+});
+
 test("request arrows are primary; response arrows are surface in light mode and secondary in dark", () => {
   assert.deepEqual(directionArrow(true), { up: true, class: "text-primary-500" });
   assert.deepEqual(directionArrow(false), { up: false, class: "text-surface-600 dark:text-secondary-500" });

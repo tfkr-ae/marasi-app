@@ -1,5 +1,5 @@
-// The Messages modal's kinds: what each kind of message source (for now a
-// WebSocket connection) gives the shared modal that the keybinding layer
+// The Messages modal's kinds: what each kind of message source (a WebSocket
+// connection or a streamed pair) gives the shared modal that the keybinding layer
 // also needs. Pure JS, so contexts.js and `node --test` can use it; the
 // kind's components, icons and handlers are in its Svelte-side definition
 // (lib/messages/<kind>/kind.js).
@@ -27,12 +27,32 @@ export const MESSAGE_KINDS = {
       { id: "connection", label: "Connection" },
     ],
   },
+  // A streamed pair (GLOSSARY Streamed pair). Its action ids say "message".
+  stream: {
+    id: "stream",
+    page: "Streamed pair",
+    context: "stream",
+    tabState: "streamTab",
+    tabs: [
+      { id: "messages", label: "Messages" },
+      { id: "pair", label: "Pair" },
+    ],
+  },
 };
 
 // The kind a modal's meta asks for. A modal opened without one (every
 // opener before the modal took kinds) shows a WebSocket connection.
 export function kindOf(meta) {
   return MESSAGE_KINDS[meta?.kind] ?? MESSAGE_KINDS.websocket;
+}
+
+// Whether the Messages modal shows `kind`: the modal publishes the open tab
+// in the kind's tabState. A modal with no other kind's tab published shows a
+// WebSocket connection, as kindOf does.
+function kindShown(kind, state) {
+  if (state.modal !== MESSAGES_MODAL) return false;
+  if (state[kind.tabState] != null) return true;
+  return kind === MESSAGE_KINDS.websocket && Object.values(MESSAGE_KINDS).every((k) => state[k.tabState] == null);
 }
 
 // The tab `step` places after `tab` among the kind's tabs (negative steps go
@@ -49,8 +69,7 @@ export function stepTab(kind, tab, step) {
 // they may reuse keys. Beneath the modal only the global context stays
 // eligible: that is shadowing across tiers and needs no declaration.
 export function kindContexts(kind) {
-  // Only one kind exists so far, so the modal being open is enough.
-  const open = (state) => state.modal === MESSAGES_MODAL;
+  const open = (state) => kindShown(kind, state);
   return [
     {
       id: kind.context,

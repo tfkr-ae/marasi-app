@@ -369,6 +369,45 @@ test("the WebSocket modal keeps global actions but not the drawer or page beneat
   assert.equal(dispatcher.resolve(cmdShift("[", "BracketLeft"), armory), null);
 });
 
+const streamModal = (streamTab) => ({
+  ...on("/ledger", requestDrawer()),
+  modal: "WebsocketStream",
+  streamTab,
+  websocketTab: null,
+});
+
+test("the streamed pair modal's actions take their WebSocket counterparts' keys", () => {
+  const dispatcher = mac();
+  const expected = [
+    ["messages", cmdShift("{", "BracketLeft"), "stream.messages.previous-message"],
+    ["messages", cmdShift("}", "BracketRight"), "stream.messages.next-message"],
+    ["messages", cmd("j", "KeyJ"), "stream.messages.jump-to-bottom"],
+    ["messages", cmdShift("M", "KeyM"), "stream.messages.toggle-message-metadata"],
+    ["messages", cmdShift("R", "KeyR"), "stream.messages.toggle-raw"],
+    ["pair", cmdShift("M", "KeyM"), null],
+  ];
+  for (const [tab, event, actionId] of expected) {
+    assert.equal(dispatcher.resolve(event, streamModal(tab)), actionId, `${tab} ${event.key}`);
+  }
+  for (const tab of ["messages", "pair"]) {
+    assert.equal(dispatcher.resolve(cmd("[", "BracketLeft"), streamModal(tab)), "stream.previous-tab");
+    assert.equal(dispatcher.resolve(cmd("]", "BracketRight"), streamModal(tab)), "stream.next-tab");
+    assert.equal(dispatcher.resolve(cmd("1", "Digit1"), streamModal(tab)), "global.go-home");
+  }
+  // The WebSocket actions stay out of a streamed pair's modal.
+  assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), streamModal("messages")), null);
+});
+
+test("stream actions say message, never frame, and the WebSocket ids are unchanged", () => {
+  const catalog = buildCatalog();
+  const streamActions = catalog.actions.filter((a) => a.context === "stream" || a.context.startsWith("stream."));
+  assert.ok(streamActions.length >= 7);
+  for (const a of streamActions) {
+    assert.doesNotMatch(`${a.id} | ${a.label} | ${a.description} | ${a.keywords}`, /frame|websocket/i, a.id);
+  }
+  for (const id of websocketMessageActions) assert.ok(catalog.get(id), id);
+});
+
 // Marasi stores whole WebSocket messages, so menu text says "message" while
 // action ids keep "frame" (docs/adr/2026-10-11-websocket-action-ids-keep-frame.md).
 const websocketMessageActions = [
@@ -639,6 +678,7 @@ function everyContextState() {
   return [
     on("/"),
     ...["stream", "checkpoint", "inject", "connection"].map((tab) => websocketModal(tab)),
+    ...["messages", "pair"].map((tab) => streamModal(tab)),
     on("/ledger"),
     on("/ledger", requestDrawer()),
     on("/ledger", requestDrawer(websocketUpgrade)),
