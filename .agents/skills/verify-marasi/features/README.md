@@ -5,7 +5,7 @@ Marasi's primary user interface is the Wails desktop app. Verification drives it
 | Feature | File | Primary proof |
 | --- | --- | --- |
 | Dashboard, listener, and appearance | [dashboard.md](dashboard.md) | Home shows the isolated service's dashboard and live log, the proxy port is owned by the service, a dropped stream reconnects and resyncs, and the global theme shortcut remains live after navigation |
-| Traffic ledger | [ledger.md](ledger.md) | Ledger route opens, captured traffic is visible after a real proxied request, and each WebSocket upgrade state shows its icon |
+| Traffic ledger | [ledger.md](ledger.md) | Ledger route opens, captured traffic is visible after a real proxied request, each WebSocket upgrade state shows its icon, and a real gRPC call opens in the Messages modal |
 | Scope management | [compass.md](compass.md) | Compass route opens and saved Lua scope changes affect traffic capture |
 | Request interception | [checkpoint.md](checkpoint.md) | Checkpoint route opens and a real proxied request reaches an observable forward/drop state |
 | Request replay | [launchpad.md](launchpad.md) | Launchpad route opens and replay produces a response plus persisted request data |

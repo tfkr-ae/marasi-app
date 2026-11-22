@@ -4,6 +4,7 @@
 
 - HTTP request/response rows, and WebSocket upgrade rows whose badges column shows the upgrade state
 - The WebSocket modal opened from an upgrade: Stream, Checkpoint, Inject, and Connection tabs
+- Streamed pairs (gRPC, gRPC-Web, Connect, SSE, NDJSON): their badge and the Messages modal's Messages, Checkpoint, Inject, and Pair tabs
 - Indexed query search, content-type exclusions, and loading older query pages on scroll
 - Request detail in the drawer, notes, highlights, and handoff to Launchpad, Armory, or Logbook
 
@@ -18,5 +19,6 @@ Read `getting-there.md` for every Ledger change: it names the entry points a pro
 | [drawer.md](ledger/drawer.md) | Handoff from a row, the drawer and its rail, long strings, notes, a refused ⌘A change |
 | [selection-and-row-menu.md](ledger/selection-and-row-menu.md) | Click, drag, ⌘/⇧ selection, ⌘A, the row menu and its submenus, highlights, bulk changes, browser view URL, shortcuts with a selection |
 | [websocket.md](ledger/websocket.md) | Upgrade states and icons, the WebSocket modal: Stream, flags, Inject, Connection |
+| [streamed-pairs.md](ledger/streamed-pairs.md) | Getting a gRPC call (the `grpc-harness`), the streamed badge and query fields, the Messages modal: Messages, Checkpoint, Inject, Pair, Cancel |
 | [performance.md](ledger/performance.md) | The performance budget and `bench-seed.sh`/`bench-ledger.sh` |
 | [gotchas.md](ledger/gotchas.md) | The Types, Saved queries, Marks and Highlights menus, exclusions, live-view batching, sitemap, delete and prompt quirks, reconnect |

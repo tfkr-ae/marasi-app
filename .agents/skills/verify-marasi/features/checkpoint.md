@@ -3,12 +3,13 @@
 ## Sub-features
 
 - Lua interception rules for requests, responses and WebSocket messages
-- The Intercept all toggle
+- The Intercept all toggle, and the Stream intercept switch for stream messages and trailer blocks
 - The dock: every intercepted item, grouped by host, with picks and `Forward n` / `Drop n`
 - The item workspace: edit, Forward, Forward + intercept response, Drop
 - Items whose client left
 - HTTP intercepted items, including dropped WebSocket upgrade responses
 - The WebSocket modal's Checkpoint tab: a separate per-connection message queue
+- Stream messages and trailer blocks of streamed pairs (`STREAM`, `TRAILER`), also listed in the Messages modal's Checkpoint tab
 
 ## How to get to it (user POV)
 
@@ -16,8 +17,8 @@ Select the Checkpoint rail item or press `Command+4`. With items held, the rail 
 
 The page is a dock and a workspace:
 
-- **Dock.** The header reads `Intercepted n`; collapsed, the strip reads `Intercepted`. Below it sit the `Intercept all` toggle and `Forward n` / `Drop n`, where n counts the picked items, or every item when none are picked. The tree groups entries (`.cp-entry`) by host. Each shows `REQ`/`RES`/`WS`, the method, status or direction, the path, ● (title `Edited`) when edited, `!` on a parse error, and how long it has been intercepted. A click selects; ⌘-click and shift-click pick (`N picked`, `Clear`). With nothing held, the tree reads `Nothing intercepted`.
-- **Workspace.** An `Items | Rules` switch at the top. Items shows the title (`#pair · METHOD path`, or `METHOD path` for a held request, which has no pair number yet), the line `host · intercepted 1m ago · item i of n`, and `Forward`, `Forward + intercept response` (requests only) and `Drop`. Below is the request | response split: the intercepted side is marked `Intercepted` and editable, with `Revert` once edited. A held request's response side reads `Not sent yet`. With nothing held, Items shows `Nothing intercepted` and an `Edit rules` button. Rules shows the full-width Lua editor and `Update rules`, with `Not applied` (and ● on the Rules tab) until the editor matches the applied rules.
+- **Dock.** The header reads `Intercepted n`; collapsed, the strip reads `Intercepted`. Below it sit the `Intercept all` and `Stream intercept` toggles and `Forward n` / `Drop n`, where n counts the picked items, or every item when none are picked. The tree groups entries (`.cp-entry`) by host. Each shows `REQ`/`RES`/`WS`/`STREAM`/`TRAILER`, the method, status or direction, the path, ● (title `Edited`) when edited, `!` on a parse error, and how long it has been intercepted. A click selects; ⌘-click and shift-click pick (`N picked`, `Clear`). With nothing held, the tree reads `Nothing intercepted`.
+- **Workspace.** An `Items | Rules` switch at the top. Items shows the title (`#pair · METHOD path`, or `METHOD path` for a held request, which has no pair number yet), the line `host · intercepted 1m ago · item i of n`, and `Forward`, `Forward + intercept response` (requests only, and not a request whose body arrives as messages) and `Drop`. Below is the request | response split: the intercepted side is marked `Intercepted` and editable, with `Revert` once edited. A held request's response side reads `Not sent yet`. With nothing held, Items shows `Nothing intercepted` and an `Edit rules` button. Rules shows the full-width Lua editor and `Update rules`, with `Not applied` (and ● on the Rules tab) until the editor matches the applied rules.
 
 Palette commands and shortcuts:
 
@@ -30,6 +31,7 @@ Palette commands and shortcuts:
 | `Forward Intercepted Item` | `⌘⇧F` |
 | `Drop Intercepted Item` | `⌘⇧D` |
 | `Forward + Intercept Response` | `⌘⇧S` |
+| `Toggle Stream Intercept` | `⌘⇧T` |
 | `Forward Picked Items` | `⌘⇧A` |
 | `Drop Picked Items` | `⌘⇧X` |
 | `Show Logs` | `⌘⇧L` |
@@ -154,6 +156,14 @@ Send one message, then forward it from the modal. The rail badge clears with the
 ```
 
 Then on the Checkpoint page, send another and forward it with `{"waitSelector":".cp-entry","hasText":"WS"}`, `{"click":".cp-forward"}`, `{"waitText":"Nothing intercepted"}`. Back in the Ledger, reopen the modal's `Checkpoint` tab: it reads `Queue empty`, not `1 message queued`. `Drop` in the modal clears the badge the same way, and the upstream never logs the dropped message.
+
+### Stream messages and trailer blocks
+
+Get a gRPC call with the harness in [ledger/streamed-pairs.md](ledger/streamed-pairs.md). Turn on `Stream intercept` in the dock (or `⌘⇧T`, or `Toggle Stream Intercept` in `⌘K`); it holds every stream message and trailer block, of every streamed pair, in turn. A held message is a `STREAM` entry (`C→S` or `S→C`) whose workspace shows the pair (host, path, direction, framing, flags, compressed) on the left and the message's protobuf text form on the right; a trailer block is a `TRAILER` entry edited as `name: value` lines. A refused text form keeps the item held, toasts `Refused by Marasi` and marks the line and column. Dropping a trailer block ends that direction with no trailers. Turning Stream intercept off does not release what is held.
+
+The same items show in the Messages modal's Checkpoint tab for their pair, from the same store: an edit made in one view shows in the other, and either can forward it. Proven: rewrite a held trailer block to `grpc-status: 5` in the modal, open the `TRAILER` entry here (it shows the edit and ● `Edited`), click `.cp-forward`, and the client ends `grpc-status 5`.
+
+With `Intercept all` on, a gRPC call's request head is held as an ordinary `REQ` item with the note `Body arrives as messages · grpc`, and no `Forward + intercept response` (`⌘⇧S` does nothing on it).
 
 ## Gotchas
 
