@@ -7,8 +7,11 @@
 // A pair's view:
 //   messages     loaded so far from the start, in arrival order
 //   cursor       the last loaded id while older messages are left (hasMore)
-//   tail         while older messages are left, the live ones that arrived
-//                since opening, after the gap Load more fills
+//   tail         live messages past the loaded ones: at most MESSAGE_CAP,
+//                the newest; while older messages are left (hasMore), after
+//                the gap Load more fills
+//   trimmed      the tail dropped older live messages since the last read
+//                began, so they lie in the gap
 //   pair         { ID, Number, Method, Host, Path }, once its head is read
 //   codecs       { request, response }: each direction's codec (codecOf),
 //                null when unknown, once its head is read
@@ -79,6 +82,7 @@ const emptyPair = () => ({
   token: ++tokens,
   messages: [],
   tail: [],
+  trimmed: false,
   cursor: null,
   hasMore: false,
   loading: true,
@@ -103,21 +107,64 @@ const byArrival = (a, b) => (a.ID < b.ID ? -1 : a.ID > b.ID ? 1 : 0);
 
 // `list` with `items` added or replacing those with their id, in arrival order.
 function merge(list, items) {
+  // A live message usually comes after all the others: append it.
+  if (items.length === 1 && !(list.length && items[0].ID <= list[list.length - 1].ID)) return [...list, items[0]];
   const byId = new Map(list.map((m) => [m.ID, m]));
   for (const item of items) byId.set(item.ID, item);
   return [...byId.values()].sort(byArrival);
 }
 
+// The tail kept to its newest MESSAGE_CAP: the older ones go to the gap.
+function capTail(tail) {
+  if (tail.length <= MESSAGE_CAP) return { tail };
+  return { tail: tail.slice(-MESSAGE_CAP), trimmed: true };
+}
+
 // The loaded messages and the live tail once a read settles: while older
-// messages are left (a cursor), what lies past the last one loaded goes to
-// the tail, after the gap; once none are left, the tail joins the messages.
+// messages are left (a cursor, or a tail that dropped some since the read
+// began), what lies past the last one loaded goes to the tail, after the
+// gap; once none are left, the tail joins the messages.
 function splitAtCursor(view) {
-  if (!view.cursor) return { messages: merge(view.messages, view.tail), tail: [] };
-  const past = (m) => m.ID > view.cursor;
+  if (!view.cursor && !view.trimmed) return { messages: merge(view.messages, view.tail), tail: [], hasMore: false };
+  const cursor = view.cursor ?? view.messages[view.messages.length - 1]?.ID ?? null;
+  const past = (m) => cursor === null || m.ID > cursor;
   return {
+    cursor,
+    hasMore: true,
     messages: view.messages.filter((m) => !past(m)),
-    tail: merge(view.tail.filter(past), view.messages.filter(past)),
+    ...capTail(merge(view.tail.filter(past), view.messages.filter(past))),
+    ...(view.trimmed ? { trimmed: true } : {}),
   };
+}
+
+// A live message in a pair's view. It appends to the loaded messages while
+// they hold the whole call and fewer than MESSAGE_CAP; otherwise it goes to
+// the tail (while pages load, too, so the loaded list holds only what was
+// read). A tail past MESSAGE_CAP drops its oldest into the gap. The message
+// has arrived, so its direction's progress goes.
+function withMessage(view, message) {
+  const { [message.Direction]: _arrived, ...progress } = view.progress;
+  const reading = view.loading || view.loadingMore;
+  if (!view.hasMore && !reading && view.tail.length === 0 && view.messages.length < MESSAGE_CAP) {
+    return { ...view, progress, messages: merge(view.messages, [message]) };
+  }
+  const next = { ...view, progress, ...capTail(merge(view.tail, [message])) };
+  // Outside a read, the dropped messages open a gap after the loaded ones.
+  if (next.trimmed && !reading && !next.hasMore) {
+    next.hasMore = true;
+    next.cursor = view.messages[view.messages.length - 1]?.ID ?? null;
+  }
+  return next;
+}
+
+const withProgress = (view, progress) => ({
+  ...view,
+  progress: { ...view.progress, [progress.Direction]: { Bytes: progress.Bytes, Framing: progress.Framing } },
+});
+
+function withStreamedPair(view, event) {
+  const directions = directionsFrom(view.directions, event.Streamed, event.Directions);
+  return { ...view, directions, progress: liveProgress(view.progress, directions), eventSeen: true };
 }
 
 // The directions from a streamed state ({request, response} of {framing,
@@ -174,8 +221,9 @@ export function createStreamedPairStore(api) {
     return { step: action.step, link: link ?? undefined };
   }
 
-  // Reads pages after `cursor` until MESSAGE_CAP more messages are in or
-  // none are left, and adds them.
+  // Reads pages after `cursor` until MESSAGE_CAP more messages are in, none
+  // are left, or the read meets the live tail: the tail holds every live
+  // message from its first on, so the gap is closed.
   async function readPages(pairId, token, cursor, action) {
     let loaded = 0;
     let next = cursor;
@@ -184,7 +232,15 @@ export function createStreamedPairStore(api) {
       if (!current(pairId, token)) return;
       loaded += page.items.length;
       next = page.cursor;
-      patch(pairId, (view) => ({ messages: merge(view.messages, page.items), cursor: next, hasMore: Boolean(next) }));
+      const first = viewOf(pairId).tail[0]?.ID;
+      const metTail = Boolean(first) && page.items.some((m) => m.ID >= first);
+      if (metTail) next = null;
+      patch(pairId, (view) => ({
+        messages: merge(view.messages, page.items),
+        cursor: next,
+        hasMore: Boolean(next),
+        ...(metTail ? { trimmed: false } : {}),
+      }));
     } while (next && loaded < MESSAGE_CAP);
     patch(pairId, splitAtCursor);
   }
@@ -256,7 +312,8 @@ export function createStreamedPairStore(api) {
   async function loadMore(pairId) {
     const view = viewOf(pairId);
     if (!view?.hasMore || view.loadingMore) return;
-    patch(pairId, { loadingMore: true });
+    // Whatever the tail dropped before now is stored, so this read meets it.
+    patch(pairId, { loadingMore: true, trimmed: false });
     try {
       await readPages(pairId, view.token, view.cursor, actionFor());
     } catch (err) {
@@ -267,39 +324,37 @@ export function createStreamedPairStore(api) {
   }
 
   /**
-   * stream_message, for an open pair: appended after the loaded messages,
-   * or to the tail while pages load or older ones are left to load (after
-   * the gap), so the loaded list holds only what was read. A read that
-   * reaches the end joins the tail to it (splitAtCursor). The message has
-   * arrived, so its direction's progress goes.
+   * Live events in one store update, in order: each { message }
+   * (stream_message), { progress } (stream_message.progress) or
+   * { streamedPair } (streamed_pair.started, .updated or .ended,
+   * toStreamedPairEvent). Events of a pair without an open modal are
+   * dropped.
    */
-  function onMessage(message) {
-    const view = viewOf(message?.PairID);
-    if (!view) return;
-    const { [message.Direction]: _arrived, ...progress } = view.progress;
-    patch(message.PairID, (v) =>
-      v.hasMore || v.loading || v.loadingMore
-        ? { progress, tail: merge(v.tail, [message]) }
-        : { progress, messages: merge(v.messages, [message]) },
-    );
-  }
-
-  /** stream_message.progress: a message is arriving in a direction. */
-  function onProgress(progress) {
-    if (!viewOf(progress?.PairID)) return;
-    patch(progress.PairID, (view) => ({
-      progress: { ...view.progress, [progress.Direction]: { Bytes: progress.Bytes, Framing: progress.Framing } },
-    }));
-  }
-
-  /** streamed_pair.started, .updated or .ended (toStreamedPairEvent). */
-  function onStreamedPair(event) {
-    if (!viewOf(event?.PairID)) return;
-    patch(event.PairID, (view) => {
-      const directions = directionsFrom(view.directions, event.Streamed, event.Directions);
-      return { directions, progress: liveProgress(view.progress, directions), eventSeen: true };
+  function onEvents(events) {
+    const state = get(store);
+    if (!events.some((e) => state.pairs[(e.message ?? e.progress ?? e.streamedPair)?.PairID])) return;
+    update((current) => {
+      const pairs = { ...current.pairs };
+      for (const { message, progress, streamedPair } of events) {
+        const pairId = (message ?? progress ?? streamedPair)?.PairID;
+        const view = pairs[pairId];
+        if (!view) continue;
+        if (message) pairs[pairId] = withMessage(view, message);
+        else if (progress) pairs[pairId] = withProgress(view, progress);
+        else pairs[pairId] = withStreamedPair(view, streamedPair);
+      }
+      return { ...current, pairs };
     });
   }
+
+  /** stream_message, for an open pair (withMessage). */
+  const onMessage = (message) => onEvents([{ message }]);
+
+  /** stream_message.progress: a message is arriving in a direction. */
+  const onProgress = (progress) => onEvents([{ progress }]);
+
+  /** streamed_pair.started, .updated or .ended (toStreamedPairEvent). */
+  const onStreamedPair = (streamedPair) => onEvents([{ streamedPair }]);
 
   // Each message's single read, by id: { Text, Payload, Full } once read,
   // { Loading } on its way, { Error: true } when it failed (a later select
@@ -408,6 +463,7 @@ export function createStreamedPairStore(api) {
     loadMore,
     select,
     inject,
+    onEvents,
     onMessage,
     onProgress,
     onStreamedPair,

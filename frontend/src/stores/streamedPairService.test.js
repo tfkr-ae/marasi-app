@@ -373,7 +373,8 @@ test("while older messages are left to load, live ones gather in a tail after th
   assert.equal(new Set(ids()).size, ids().length);
   // With the gap closed, live messages append as usual.
   live(MESSAGE_CAP + 4);
-  assert.equal(ids().at(-1), idOf(MESSAGE_CAP + 4));
+  assert.equal(view().hasMore, false);
+  assert.equal(shownIds(view()).at(-1), idOf(MESSAGE_CAP + 4));
 });
 
 test("a Load more that leaves older messages keeps the live tail after the gap", async () => {
@@ -617,4 +618,88 @@ test("an inject whose answer lands after a connection switch is dropped quietly"
   service.switchWhen("POST /stream/p1/inject");
   assert.deepEqual(await store.inject("p1", { direction: "request", text: "1:VARINT 1" }), { ok: false, superseded: true });
   assert.deepEqual(get(store).pairs.p1.messages, []);
+});
+
+// The live tail's bound.
+
+// The messages the list shows: the loaded ones, then the live tail.
+const shownIds = (view) => [...view.messages, ...view.tail].map((m) => m.ID);
+const idsFrom = (first, last) => Array.from({ length: last - first + 1 }, (_, i) => idOf(first + i));
+
+test("live messages past a full first load gather in a tail of at most 5,000; older ones join the gap Load more fills", async () => {
+  const { store, view, service } = setup({ count: MESSAGE_CAP });
+  await store.open("p1");
+  assert.equal(view().hasMore, false);
+  const live = (n) => {
+    service.messages.push(message(n));
+    store.onMessage(toStreamMessage(message(n)));
+  };
+  // A live message after a full load shows after it: no gap yet.
+  live(MESSAGE_CAP + 1);
+  assert.equal(view().hasMore, false);
+  assert.equal(view().messages.length, MESSAGE_CAP);
+  assert.deepEqual(shownIds(view()).slice(-2), [idOf(MESSAGE_CAP), idOf(MESSAGE_CAP + 1)]);
+
+  for (let n = MESSAGE_CAP + 2; n <= 2 * MESSAGE_CAP + 10; n++) live(n);
+  assert.equal(view().messages.length, MESSAGE_CAP);
+  assert.deepEqual(
+    view().tail.map((m) => m.ID),
+    idsFrom(MESSAGE_CAP + 11, 2 * MESSAGE_CAP + 10),
+  );
+  // The ten pushed out lie in the gap.
+  assert.equal(view().hasMore, true);
+
+  await store.loadMore("p1");
+  assert.deepEqual(shownIds(view()), idsFrom(1, 2 * MESSAGE_CAP + 10));
+  assert.equal(view().hasMore, false);
+});
+
+test("a tail that overflows while older messages are left keeps its newest 5,000, and Load more reads the rest", async () => {
+  const { store, view, service } = setup({ count: MESSAGE_CAP + 3 });
+  await store.open("p1");
+  for (let n = MESSAGE_CAP + 4; n <= 2 * MESSAGE_CAP + 6; n++) {
+    service.messages.push(message(n));
+    store.onMessage(toStreamMessage(message(n)));
+  }
+  assert.deepEqual(
+    view().tail.map((m) => m.ID),
+    idsFrom(MESSAGE_CAP + 7, 2 * MESSAGE_CAP + 6),
+  );
+
+  await store.loadMore("p1");
+  assert.deepEqual(shownIds(view()), idsFrom(1, 2 * MESSAGE_CAP + 6));
+});
+
+test("a tail that overflows while the first pages load leaves a gap when the read ends before it", async () => {
+  const service = fakeService({ count: 3 });
+  const store = createStreamedPairStore(createStreamedPairApi(service.client));
+  const opening = store.open("p1");
+  // Stored after the page was read: the read never sees them.
+  for (let n = 4; n <= MESSAGE_CAP + 5; n++) store.onMessage(toStreamMessage(message(n)));
+  await opening;
+  const view = get(store).pairs.p1;
+  assert.deepEqual(view.messages.map((m) => m.ID), idsFrom(1, 3));
+  assert.deepEqual(view.tail.map((m) => m.ID), idsFrom(6, MESSAGE_CAP + 5));
+  assert.equal(view.hasMore, true);
+});
+
+test("a batch of live events lands in one store update, applied in order", async () => {
+  const { store, view } = setup({ count: 2 });
+  await store.open("p1");
+  let updates = 0;
+  const stop = store.subscribe(() => updates++);
+  updates = 0;
+  store.onEvents([
+    { progress: toStreamProgress({ pair_id: "p1", direction: "request", framing: "grpc", bytes: 10 }) },
+    { message: toStreamMessage(message(3)) },
+    { message: toStreamMessage(message(4)) },
+    { progress: toStreamProgress({ pair_id: "p1", direction: "response", framing: "grpc", bytes: 7 }) },
+    { message: toStreamMessage(message(9, { pair_id: "elsewhere" })) },
+  ]);
+  stop();
+  assert.equal(updates, 1);
+  assert.deepEqual(shownIds(view()), idsFrom(1, 4));
+  // Message 3 is a request: it landed after its direction's progress, so
+  // that goes; the response's progress came after its message 4.
+  assert.deepEqual(view().progress, { response: { Bytes: 7, Framing: "grpc" } });
 });
