@@ -144,7 +144,9 @@ export function detailOf(message, detail, view) {
     if (view === "text" && detail?.Text != null) {
       return { text: detail.Text, language: looksLikeJSON(detail.Text) ? "json" : "protobuf", note: "" };
     }
-    return payloadView(bytes);
+    const payload = payloadView(bytes);
+    // Raw asks for the bytes, so hex there needs no note.
+    return view === "raw" ? { ...payload, note: "" } : payload;
   })();
   if (detail?.Error) return { ...shown, note: `Couldn't read the message: ${detail.Error}` };
   if (waiting) return { text: "", language: null, note: "Loading the full payload…" };

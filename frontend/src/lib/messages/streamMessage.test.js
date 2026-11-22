@@ -59,7 +59,10 @@ test("a message with no text form shows as UTF-8 text, or read-only hex when it 
     language: null,
     note: "No text form; shown as hex",
   });
-  assert.equal(detailOf(msg({ Payload: b64(proto) }), { Text: "1:VARINT 1", Payload: b64(proto) }, "raw").text.startsWith("08 01 12 06"), true);
+  // Raw shows the payload's bytes, as hex when they aren't text, with no note.
+  const raw = detailOf(msg({ Payload: b64(proto) }), { Text: "1:VARINT 1", Payload: b64(proto) }, "raw");
+  assert.equal(raw.text.startsWith("08 01 12 06"), true);
+  assert.equal(raw.note, "");
 });
 
 test("a payload the event left out is marked, and once read in full says so", () => {
