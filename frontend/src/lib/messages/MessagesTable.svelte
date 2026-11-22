@@ -48,6 +48,12 @@
 	export let selected = null;
 	/** The kind's detail view name (bindable); detailText reads it. */
 	export let view = "";
+	/** A row's number in the # column; by default its place in the list. */
+	export let numberOf = (_message, index) => index + 1;
+	/** Chips shown before the last column's text: [{ label, class, title? }]. */
+	export let rowChips = () => [];
+	/** The selected message's editor extensions, such as a highlighter. */
+	export let detailExtensions = () => [];
 
 	let narrowPane = "list";
 	let sorting = [{ id: "ID", desc: false }];
@@ -214,9 +220,16 @@
 				class="no-select relative min-h-0 w-1/2 min-w-0 border-r border-surface-500/30 font-mono text-xs"
 				class:pane-off={narrowPane !== "list"}
 			>
+				{#if $$slots.listBar}
+					<div
+						class="msg-list-bar flex h-10 shrink-0 items-center gap-1 border-b border-surface-500/30 bg-surface-100-800-token px-2 font-sans"
+					>
+						<slot name="listBar" />
+					</div>
+				{/if}
 				<div
 					bind:this={tableScroller}
-					class="h-full overflow-y-auto overflow-x-hidden"
+					class="overflow-y-auto overflow-x-hidden {$$slots.listBar ? 'h-[calc(100%-2.5rem)]' : 'h-full'}"
 					on:scroll={handleTableScroll}
 				>
 					<table class="table table-hover table-compact w-full table-fixed">
@@ -267,7 +280,7 @@
 									{#each row.getVisibleCells() as cell}
 										<td class="overflow-hidden">
 											{#if cell.column.id === "ID"}
-												{i + 1}
+												{numberOf(row.original, i)}
 											{:else if cell.column.id === "Direction"}
 												{@const arrow = directionArrow(isOutgoing(row.original))}
 												{#if arrow.up}
@@ -276,13 +289,20 @@
 													<ArrowDownLeft size={14} class={arrow.class} />
 												{/if}
 											{:else if cell.column.id === lastColumn}
-												<div
-													class="truncate"
-													class:text-tertiary-500={isInjected(row.original)}
-												>
-													<svelte:component
-														this={flexRender(cell.column.columnDef.cell, cell.getContext())}
-													/>
+												<div class="flex min-w-0 items-center gap-1">
+													{#each rowChips(row.original) as chip (chip.label)}
+														<span class="chip shrink-0 !px-1 !py-0 text-3xs {chip.class}" title={chip.title ?? ""}
+															>{chip.label}</span
+														>
+													{/each}
+													<div
+														class="min-w-0 truncate"
+														class:text-tertiary-500={isInjected(row.original)}
+													>
+														<svelte:component
+															this={flexRender(cell.column.columnDef.cell, cell.getContext())}
+														/>
+													</div>
 												</div>
 											{:else}
 												<svelte:component
@@ -301,6 +321,7 @@
 							{/each}
 						</tbody>
 					</table>
+					<slot name="listEnd" />
 				</div>
 				{#if !autoScroll && messages.length > 0}
 					<button
@@ -341,7 +362,11 @@
 							class="text-xs h-full w-full"
 							bind:value={payloadText}
 							theme={$modeCurrent ? githubLight : oneDark}
-							extensions={[...($marasiConfig.VimEnabled ? [vim()] : []), longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode })]}
+							extensions={[
+								...($marasiConfig.VimEnabled ? [vim()] : []),
+								longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode }),
+								...detailExtensions(selected, view),
+							]}
 							readonly={true}
 						/>
 					{/if}
@@ -360,6 +385,7 @@
 			width: 100%;
 			border-right-width: 0;
 		}
+		:global(html.mobile .msg-list-bar),
 		:global(html.mobile .msg-detail-bar) {
 			flex-wrap: wrap;
 			height: auto;

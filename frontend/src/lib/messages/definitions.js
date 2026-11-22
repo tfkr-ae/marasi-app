@@ -3,9 +3,11 @@
 // MessagesModal.svelte, needs no change.
 import { kindOf } from "./kinds.js";
 import { websocketKind } from "./websocket.js";
+import { streamKind } from "./stream.js";
 
 const DEFINITIONS = {
 	websocket: websocketKind,
+	stream: streamKind,
 };
 
 // The definition for a modal's meta.

@@ -14,6 +14,7 @@
 	} from "@skeletonlabs/skeleton";
 	import { ChevronLeft, ChevronRight, Loader, XIcon } from "lucide-svelte";
 	import { onDestroy } from "svelte";
+	import { readable } from "svelte/store";
 	import { primaryVariant } from "../launchpad/format.js";
 	import MarasiMenu from "../components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../keybindings/app.js";
@@ -33,7 +34,9 @@
 		},
 	});
 	const { header, tabProps } = session;
-	const actionEnabled = session.action.enabled;
+	// The kind's header action (Close Connection), or none.
+	const action = session.action;
+	const actionEnabled = action?.enabled ?? readable(false);
 
 	// Each tab's component instance, for its menu actions.
 	const instances = {};
@@ -48,10 +51,10 @@
 	}
 
 	async function runAction() {
-		if (!$actionEnabled || busy) return;
+		if (!action || !$actionEnabled || busy) return;
 		busy = true;
 		try {
-			await session.action.run();
+			await action.run();
 		} finally {
 			busy = false;
 		}
@@ -64,7 +67,7 @@
 	const commonMenu = [
 		{ actionId: kind.previousTabAction, icon: ChevronLeft, handler: previousTab },
 		{ actionId: kind.nextTabAction, icon: ChevronRight, handler: nextTab },
-		{ actionId: session.action.actionId, icon: session.action.icon, handler: runAction },
+		...(action ? [{ actionId: action.actionId, icon: action.icon, handler: runAction }] : []),
 	];
 	const tabMenus = Object.fromEntries(
 		kind.tabs.map((tab) => [
@@ -80,7 +83,10 @@
 	useMenuActions([...commonMenu, ...Object.values(tabMenus).flat()]);
 
 	$: kind.tabStore.set(openTab);
-	onDestroy(() => kind.tabStore.set(null));
+	onDestroy(() => {
+		kind.tabStore.set(null);
+		session.destroy?.();
+	});
 
 	$: pageEntries = [...commonMenu, ...tabMenus[openTab]];
 	$: shown = kind.tabs.find((tab) => tab.id === openTab);
@@ -114,19 +120,21 @@
 			</div>
 
 			<div class="flex items-center gap-2">
-				<button
-					class="msg-header-action btn btn-sm {primaryVariant($modeCurrent)}"
-					aria-label={session.action.label}
-					title={session.action.label}
-					disabled={!$actionEnabled || busy}
-					on:click={runAction}
-				>
-					<span class="btn-content"
-						><svelte:component this={session.action.icon} size={14} class="mr-1" /><span class="msg-label"
-							>{busy ? session.action.busyLabel : session.action.label}</span
-						></span
+				{#if action}
+					<button
+						class="msg-header-action btn btn-sm {primaryVariant($modeCurrent)}"
+						aria-label={action.label}
+						title={action.label}
+						disabled={!$actionEnabled || busy}
+						on:click={runAction}
 					>
-				</button>
+						<span class="btn-content"
+							><svelte:component this={action.icon} size={14} class="mr-1" /><span class="msg-label"
+								>{busy ? action.busyLabel : action.label}</span
+							></span
+						>
+					</button>
+				{/if}
 				<button class="text-2xl leading-none" aria-label="Close modal" on:click={modalStore.close}>
 					<XIcon size={16} />
 				</button>

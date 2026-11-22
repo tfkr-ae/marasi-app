@@ -143,6 +143,7 @@
 		installMenuShortcuts,
 		menuDispatcher,
 		websocketTab,
+		streamTab,
 		armoryDrawer,
 		keybindingCapture,
 	} from "../lib/keybindings/app.js";
@@ -370,6 +371,7 @@
 			drawer: get(drawerStore),
 			ledgerDrawer: drawerKeybindingState(get(ledgerStore)),
 			websocketTab: get(websocketTab),
+			streamTab: get(streamTab),
 			armoryDrawer: get(armoryDrawer),
 			launchpadTreeFocused: Boolean(document.activeElement?.closest?.("[data-launchpad-tree]")),
 			capturing: get(keybindingCapture),
