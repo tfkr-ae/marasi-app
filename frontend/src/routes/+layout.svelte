@@ -116,7 +116,7 @@
 	import ModalWrapper from "../lib/extensions/components/ExtensionModalWrapper.svelte";
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
 	import { closeTopOverlay, isolateOverlays } from "../lib/overlayIsolation.js";
-	import WebSocketModal from "../lib/components/WebSocketModal.svelte";
+	import MessagesModal from "../lib/messages/MessagesModal.svelte";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
@@ -269,7 +269,7 @@
 		// The finding and test case modal (lib/logbook/recordEditor.js).
 		LogbookRecord: { ref: RecordModal },
 		SelectTestCase: { ref: SelectTestCaseModal },
-		WebsocketStream: { ref: WebSocketModal },
+		WebsocketStream: { ref: MessagesModal },
 		SelectFinding: { ref: SelectFindingModal },
 		SelectWordlist: { ref: SelectWordlistModal },
 		"extension-modal": { ref: ModalWrapper },
