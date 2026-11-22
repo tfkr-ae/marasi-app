@@ -154,6 +154,23 @@ export function detailOf(message, detail, view) {
   return shown;
 }
 
+/**
+ * How a held stream message edits: its protobuf text form when Marasi gives
+ * one (textForm), else its payload as UTF-8 text, else read-only hex.
+ * `message` is { Payload, Text }. Returns { text, textForm, editable,
+ * language }, where language is "protobuf", "json" or null.
+ */
+export function editableText(message) {
+  if (message?.Text != null) {
+    const language = looksLikeJSON(message.Text) ? "json" : "protobuf";
+    return { text: message.Text, textForm: true, editable: true, language };
+  }
+  const bytes = bytesOf(message?.Payload);
+  const text = textOf(bytes);
+  if (text !== null) return { text, textForm: false, editable: true, language: null };
+  return { text: hexOf(bytes), textForm: false, editable: false, language: null };
+}
+
 // "name: value" lines, as a trailer message carries them.
 function trailerLines(text) {
   return text
