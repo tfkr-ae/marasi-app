@@ -32,3 +32,13 @@ func TestAnUnreadableAppDefaultExclusionFallsBackToTheSeededList(t *testing.T) {
 
 	assertStrings(t, seededContentTypeExclusion, got)
 }
+
+func TestDefaultExclusionShowsApplicationOctetStream(t *testing.T) {
+	dir := t.TempDir()
+
+	got := loadConfigApp(t, dir).GetDefaultContentTypeExclusion()
+
+	if slices.Contains(got, "application/octet-stream") {
+		t.Fatalf("expected application/octet-stream to be shown by default, but it was in the default exclusion")
+	}
+}
