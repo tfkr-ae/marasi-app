@@ -107,6 +107,19 @@ export function messageChips(message) {
   return chips;
 }
 
+/**
+ * The codec a gRPC, gRPC-Web or Connect content type names after its +:
+ * "json", or "proto" for +proto or none (a port of Marasi's stream.codecOf).
+ * null for an empty or other content type, whose codec isn't known.
+ */
+export function codecOf(contentType) {
+  const media = String(contentType ?? "").split(";", 1)[0].trim().toLowerCase();
+  const [type, suffix = ""] = media.split("+", 2);
+  if (!/^application\/(grpc|grpc-web|connect)$/.test(type)) return null;
+  if (suffix === "json") return "json";
+  return suffix === "" || suffix === "proto" ? "proto" : null;
+}
+
 const looksLikeJSON = (text) => {
   if (!/^\s*[[{]/.test(text)) return false;
   try {
@@ -116,6 +129,13 @@ const looksLikeJSON = (text) => {
     return false;
   }
 };
+
+/** A text form's highlighting: by its codec, else by whether it parses as JSON. */
+export function textLanguage(text, codec) {
+  if (codec === "json") return "json";
+  if (codec === "proto") return "protobuf";
+  return looksLikeJSON(text) ? "json" : "protobuf";
+}
 
 // The payload as text, or as hex with a note when it isn't text.
 function payloadView(bytes) {
@@ -128,10 +148,11 @@ function payloadView(bytes) {
 /**
  * The detail pane's { text, language, note } for `view`: "text" (the text
  * form, else the payload), "raw" (the payload) or "metadata". `detail` is
- * the message's single read (the store's details entry), if any. language
- * is "protobuf", "json" or null.
+ * the message's single read (the store's details entry), if any; `codec`
+ * its direction's codec (codecOf), null when unknown. language is
+ * "protobuf", "json" or null.
  */
-export function detailOf(message, detail, view) {
+export function detailOf(message, detail, view, codec = null) {
   if (view === "metadata") {
     const metadata = {
       direction: message.Direction,
@@ -149,7 +170,7 @@ export function detailOf(message, detail, view) {
   const shown = (() => {
     if (endingKind(message)) return { text: new TextDecoder().decode(bytes), language: null, note: "" };
     if (view === "text" && detail?.Text != null) {
-      return { text: detail.Text, language: looksLikeJSON(detail.Text) ? "json" : "protobuf", note: "" };
+      return { text: detail.Text, language: textLanguage(detail.Text, codec), note: "" };
     }
     const payload = payloadView(bytes);
     // Raw asks for the bytes, so hex there needs no note.
@@ -177,12 +198,13 @@ export function injectDraftOf(message, detail) {
 /**
  * How a held stream message edits: its protobuf text form when Marasi gives
  * one (textForm), else its payload as UTF-8 text, else read-only hex.
- * `message` is { Payload, Text }. Returns { text, textForm, editable,
- * language }, where language is "protobuf", "json" or null.
+ * `message` is { Payload, Text }; `codec` its direction's codec (codecOf),
+ * null when unknown. Returns { text, textForm, editable, language }, where
+ * language is "protobuf", "json" or null.
  */
-export function editableText(message) {
+export function editableText(message, codec = null) {
   if (message?.Text != null) {
-    const language = looksLikeJSON(message.Text) ? "json" : "protobuf";
+    const language = textLanguage(message.Text, codec);
     return { text: message.Text, textForm: true, editable: true, language };
   }
   const bytes = bytesOf(message?.Payload);

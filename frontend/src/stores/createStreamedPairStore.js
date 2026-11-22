@@ -10,6 +10,8 @@
 //   tail         while older messages are left, the live ones that arrived
 //                since opening, after the gap Load more fills
 //   pair         { ID, Number, Method, Host, Path }, once its head is read
+//   codecs       { request, response }: each direction's codec (codecOf),
+//                null when unknown, once its head is read
 //   directions   { request, response }: null for a direction not streamed
 //                (or not yet known), else { Framing, Ending, Messages,
 //                ResetCode, Trailers }; Ending and Messages are null while live
@@ -83,6 +85,7 @@ const emptyPair = () => ({
   loadingMore: false,
   error: "",
   pair: null,
+  codecs: { request: null, response: null },
   directions: { request: null, response: null },
   progress: {},
   details: {},
@@ -191,6 +194,7 @@ export function createStreamedPairStore(api) {
     if (!current(pairId, token)) return;
     patch(pairId, (view) => ({
       pair: read.pair,
+      codecs: read.Codecs ?? { request: null, response: null },
       directions: view.eventSeen ? view.directions : directionsFrom(view.directions, read.Streamed, read.Directions),
     }));
   }

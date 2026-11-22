@@ -42,10 +42,13 @@
 	$: gapBefore = shownTail[0]?.ID ?? null;
 	$: details = pair?.details ?? {};
 	$: if (selected) streamedPairStore.select(pairId, selected.ID);
-	$: shown = selected ? detailOf(selected, details[selected.ID], view) : null;
+	// Each direction's codec, from the pair's content types (null: unknown).
+	$: codecs = pair?.codecs ?? {};
+	$: detailFor = (message, v) => detailOf(message, details[message.ID], v, codecs[message.Direction] ?? null);
+	$: shown = selected ? detailFor(selected, view) : null;
 	// New functions when the detail changes, so the table redraws it.
-	$: detailText = (message, v) => detailOf(message, details[message.ID], v).text;
-	$: detailExtensions = (message, v) => languageExtensions(detailOf(message, details[message.ID], v).language);
+	$: detailText = (message, v) => detailFor(message, v).text;
+	$: detailExtensions = (message, v) => languageExtensions(detailFor(message, v).language);
 
 	const columns = [
 		{ id: "time", header: "Time", width: "w-28", cell: (m) => messageTime(m.CreatedAt) },

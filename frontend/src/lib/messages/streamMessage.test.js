@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detailOf, injectDraftOf, messageChips, messagePreview, messageSize, pairTrailers } from "./streamMessage.js";
+import { codecOf, detailOf, editableText, injectDraftOf, messageChips, messagePreview, messageSize, pairTrailers } from "./streamMessage.js";
 
 const b64 = (bytes) => Buffer.from(bytes).toString("base64");
 const msg = (overrides = {}) => ({
@@ -44,6 +44,27 @@ test("a protobuf message shows its text form, highlighted as protobuf, or as JSO
   });
   assert.equal(detailOf(m, { Text: '{"seq":1}', Payload: m.Payload }, "text").language, "json");
   assert.equal(messagePreview(m), "server · echo: hi");
+});
+
+test("the codec a content type names decides the highlighting; the text decides only when it names none", () => {
+  assert.equal(codecOf("application/grpc"), "proto");
+  assert.equal(codecOf("application/grpc+proto"), "proto");
+  assert.equal(codecOf("application/grpc-web+json; charset=utf-8"), "json");
+  assert.equal(codecOf("Application/Connect+JSON"), "json");
+  assert.equal(codecOf(""), null);
+  assert.equal(codecOf("text/event-stream"), null);
+
+  const m = msg({ Payload: b64(proto) });
+  // A protobuf text form that happens to parse as JSON stays protobuf under a proto codec.
+  assert.equal(detailOf(m, { Text: "[1]", Payload: m.Payload }, "text", "proto").language, "protobuf");
+  // A +json message whose text isn't an object or array is still JSON.
+  assert.equal(detailOf(m, { Text: '"hi"', Payload: m.Payload }, "text", "json").language, "json");
+  // Unknown codec: the text decides.
+  assert.equal(detailOf(m, { Text: "[1]", Payload: m.Payload }, "text", null).language, "json");
+
+  assert.equal(editableText({ Text: "[1]" }, "proto").language, "protobuf");
+  assert.equal(editableText({ Text: '"hi"' }, "json").language, "json");
+  assert.equal(editableText({ Text: "[1]" }).language, "json");
 });
 
 test("a message with no text form shows as UTF-8 text, or read-only hex when it isn't text", () => {

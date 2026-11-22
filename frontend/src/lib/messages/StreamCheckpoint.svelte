@@ -8,7 +8,8 @@
 	import { CornerLeftDown, Forward } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import { directionArrow } from "./kinds.js";
-	import { messageTime } from "./streamMessage.js";
+	import { messageTime, textLanguage } from "./streamMessage.js";
+	import { streamedPairStore } from "../../stores/streamedPairStore.js";
 	import { checkpointStore, heldOfPair, isDirty, refusalOf, textOf } from "../../stores/checkpointStore";
 	import KindTag from "../checkpoint/KindTag.svelte";
 	import { reportFailure, settleItem } from "../checkpoint/settle.js";
@@ -28,6 +29,10 @@
 	// The selected item, else the oldest once it leaves.
 	$: selected = held.find((item) => item.ID === selectedId) ?? held[0] ?? null;
 	$: refusal = selected ? refusalOf(state, selected.ID) : null;
+	// A text form's highlighting by the pair's codec where the modal read it;
+	// Checkpoint alone knows no codec and goes by the text.
+	$: codec = $streamedPairStore.pairs[pairId]?.codecs?.[selected?.Direction] ?? null;
+	$: language = selected?.textForm && codec ? textLanguage(selected.text, codec) : (selected?.language ?? null);
 	$: primary = primaryVariant($modeCurrent);
 
 	function toast(message, background = "variant-filled-surface") {
@@ -121,7 +126,7 @@
 					<div class="min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
 						<MessageEditor
 							value={textOf(state, selected.ID)}
-							language={selected.language ?? null}
+							{language}
 							readonly={!selected.editable}
 							errorAt={refusal}
 							on:change={(event) => store.edit(selected.ID, event.detail)}

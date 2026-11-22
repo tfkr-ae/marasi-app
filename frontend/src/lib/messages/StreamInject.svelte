@@ -30,6 +30,8 @@
 	$: direction = open.includes(draft.direction) ? draft.direction : (open[0] ?? null);
 	$: framing = (direction && pair?.directions[direction]?.Framing) || "";
 	$: textForm = TEXT_FORM_FRAMINGS.has(framing);
+	// A +json codec's text form is the JSON itself.
+	$: language = textForm ? (pair?.codecs?.[direction] === "json" ? "json" : "protobuf") : null;
 	$: pending = pair?.inject.pending ?? false;
 	$: held = pair?.inject.held ?? false;
 
@@ -137,7 +139,7 @@
 	<div class="min-h-0 flex-1 overflow-auto">
 		<MessageEditor
 			value={draft.text}
-			language={textForm ? "protobuf" : null}
+			{language}
 			errorAt={refusal}
 			on:change={(event) => changeText(event.detail)}
 		/>

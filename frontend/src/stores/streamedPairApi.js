@@ -2,6 +2,8 @@
 // Streamed pair, Stream message), and the mappers for the stream_message,
 // stream_message.progress and streamed_pair.* events. The API's snake_case
 // shapes become the PascalCase ones the store and the Messages modal read.
+import { codecOf } from "../lib/messages/streamMessage.js";
+import { decodeBase64Text } from "../lib/service/bytes.js";
 
 /** The most messages a page of GET /stream/{pair}/message holds. */
 export const MESSAGE_PAGE = 500;
@@ -76,10 +78,31 @@ export const toStreamMessageDetail = (m) => ({
   Payload: m.payload ?? "",
 });
 
+// The Content-Type of a stored head (an HTTP/2 head writes its
+// pseudo-header fields as lines too), or "".
+function headContentType(raw) {
+  const head = decodeBase64Text(raw ?? "").split(/\r?\n\r?\n/, 1)[0];
+  for (const line of head.split(/\r?\n/).slice(1)) {
+    const at = line.indexOf(":", 1);
+    if (at > 0 && line.slice(0, at).trim().toLowerCase() === "content-type") return line.slice(at + 1).trim();
+  }
+  return "";
+}
+
+/**
+ * Each direction's codec (codecOf), as Marasi reads its messages: the
+ * request's by its head's content type, the response's by the stored
+ * response's, else the request's while it streams.
+ */
+function codecsOf(p) {
+  const request = headContentType(p.request?.raw);
+  return { request: codecOf(request), response: codecOf(p.response?.content_type || request) };
+}
+
 /**
  * GET /traffic/{id} as what the modal reads of the pair: its head for the
- * header, its streamed state, and each direction's ending, count and
- * trailers once it ended (metadata.streamed).
+ * header, its streamed state, each direction's codec, and each direction's
+ * ending, count and trailers once it ended (metadata.streamed).
  */
 export function toStreamedPair(p) {
   return {
@@ -91,6 +114,7 @@ export function toStreamedPair(p) {
       Path: p.request?.path ?? "",
     },
     Streamed: p.streamed ?? null,
+    Codecs: codecsOf(p),
     Directions: toDirections(p.metadata?.streamed),
   };
 }
@@ -105,7 +129,9 @@ export function createStreamedPairApi(client) {
       return { items: (page.items ?? []).map(toStreamMessage), cursor: page.next_cursor ?? null };
     },
     async pair(pairId, link = client) {
-      return toStreamedPair(await link.get(`/traffic/${pairId}`, { raw: false, prettified: false }));
+      // The raw heads name the content types; a streamed pair's bodies are
+      // its messages, so they carry little else.
+      return toStreamedPair(await link.get(`/traffic/${pairId}`, { prettified: false }));
     },
     async message(pairId, id, link = client) {
       return toStreamMessageDetail(await link.get(`/stream/${pairId}/message/${id}`));

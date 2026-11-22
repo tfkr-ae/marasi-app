@@ -279,6 +279,28 @@ test("a connection switch while the pages load reads no further page from the ne
   assert.equal(get(store).pairs.p1.error, "");
 });
 
+test("each direction's codec comes from the pair's content types, the response's falling back to the request's", async () => {
+  const head = (type) => b64(`POST /chat.v1.ChatService/Converse HTTP/2\r\n:authority: chat.test\r\nContent-Type: ${type}\r\n\r\n`);
+  const live = setup({
+    count: 0,
+    pair: pairRead({ request: { ...pairRead().request, raw: head("application/grpc+json") }, response: { status_code: -1, content_type: "" } }),
+  });
+  await live.store.open("p1");
+  assert.deepEqual(live.view().codecs, { request: "json", response: "json" });
+
+  const stored = setup({
+    count: 0,
+    pair: pairRead({ request: { ...pairRead().request, raw: head("application/grpc") }, response: { content_type: "application/grpc+json" } }),
+  });
+  await stored.store.open("p1");
+  assert.deepEqual(stored.view().codecs, { request: "proto", response: "json" });
+
+  // An SSE pair, or a read without a head, names no codec.
+  const sse = setup({ count: 0, pair: pairRead({ response: { content_type: "text/event-stream" } }) });
+  await sse.store.open("p1");
+  assert.deepEqual(sse.view().codecs, { request: null, response: null });
+});
+
 test("a failed messages read says so in the list, without the service's text", async () => {
   const { store, view } = setup({
     routes: { "GET /stream/p1/message": () => ({ status: 500, body: { error: "internal_server_error" } }) },
