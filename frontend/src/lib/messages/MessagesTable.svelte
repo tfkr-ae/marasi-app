@@ -5,25 +5,20 @@
 	// editor under the kind's detail bar. On a narrow phone screen the list
 	// and the detail are pane tabs (PaneTabs); tapping a message opens it.
 	// The kind supplies its columns and formatting through props and slots.
+	// Rows are keyed MessageRow components, so a live message adds a row
+	// rather than redrawing the list.
 	import { tick } from "svelte";
-	import { writable } from "svelte/store";
-	import {
-		createSvelteTable,
-		getCoreRowModel,
-		getSortedRowModel,
-		flexRender,
-		createColumnHelper,
-	} from "@tanstack/svelte-table";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { primaryVariant } from "../launchpad/format.js";
 	import CodeMirror from "svelte-codemirror-editor";
 	import { vim } from "@replit/codemirror-vim";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
-	import { ArrowDown, ArrowDownLeft, ArrowUpRight } from "lucide-svelte";
+	import { ArrowDown } from "lucide-svelte";
 	import { marasiConfig, lineWrap } from "../../stores";
 	import { longStrings } from "../longStrings.js";
-	import { directionArrow } from "./kinds.js";
+	import { sortMessages, toggleSort } from "./messageSort.js";
+	import MessageRow from "./MessageRow.svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
 
 	/** The messages, in the order the kind keeps them. */
@@ -61,7 +56,7 @@
 	export let gapBefore = null;
 
 	let narrowPane = "list";
-	let sorting = [{ id: "ID", desc: false }];
+	let sorting = { id: "ID", desc: false };
 	let payloadText = "";
 	let tableScroller;
 	let autoScroll = true;
@@ -94,7 +89,7 @@
 
 	async function selectAtIndex(rows, index) {
 		if (index < 0 || index >= rows.length) return;
-		select(rows[index].original);
+		select(rows[index]);
 		if (index === rows.length - 1) {
 			jumpToBottom();
 			return;
@@ -123,81 +118,35 @@
 	}
 
 	export function selectPrevious() {
-		const rows = $table?.getRowModel()?.rows || [];
-		const index = rows.findIndex((row) => row.original.ID === selected?.ID);
+		const index = rows.findIndex((row) => row.ID === selected?.ID);
 		selectAtIndex(rows, index - 1);
 	}
 
 	export function selectNext() {
-		const rows = $table?.getRowModel()?.rows || [];
-		const index = rows.findIndex((row) => row.original.ID === selected?.ID);
+		const index = rows.findIndex((row) => row.ID === selected?.ID);
 		if (index >= 0) selectAtIndex(rows, index + 1);
 	}
 
-	const columnHelper = createColumnHelper();
-	const tableColumns = [
-		columnHelper.accessor("ID", {
-			header: "#",
-			cell: () => "",
-			sortingFn: "text",
-		}),
-		columnHelper.accessor((message) => directionOf(message), {
-			id: "Direction",
-			header: "Dir",
-		}),
-		...columns.map((column) =>
-			columnHelper.display({
-				id: column.id,
-				header: column.header,
-				cell: (info) => column.cell(info.row.original),
-				enableSorting: false,
-			}),
-		),
+	// The header: # and Dir sort (by id, by direction); the kind's columns
+	// don't.
+	$: headers = [
+		{ id: "ID", header: "#", width: "w-12", sortable: true },
+		{ id: "Direction", header: "Dir", width: "w-10", sortable: true },
+		...columns.map((column) => ({ id: column.id, header: column.header, width: column.width || "", sortable: false })),
 	];
-	const widths = {
-		ID: "w-12",
-		Direction: "w-10",
-		...Object.fromEntries(columns.map((column) => [column.id, column.width || ""])),
+
+	$: rows = sortMessages(messages, sorting, directionOf);
+
+	const onSelect = (message) => {
+		narrowPane = "detail";
+		select(message);
 	};
-	const lastColumn = tableColumns[tableColumns.length - 1].id;
-
-	const setSorting = (updater) => {
-		sorting =
-			typeof updater === "function"
-				? updater(sorting)
-				: updater;
-		options.update((old) => ({
-			...old,
-			state: { ...old.state, sorting },
-		}));
-	};
-
-	const options = writable({
-		data: [],
-		columns: tableColumns,
-		state: { sorting },
-		onSortingChange: setSorting,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-	});
-
-	$: options.update((old) => ({
-		...old,
-		data: messages,
-		state: { ...old.state, sorting },
-	}));
-
-	$: table = createSvelteTable(options);
 
 	$: {
-		const rows = $table?.getRowModel()?.rows || [];
 		if (rows.length === 0) {
 			select(null);
-		} else if (
-			!selected ||
-			!rows.some((r) => r.original.ID === selected.ID)
-		) {
-			select(rows[0].original);
+		} else if (!selected || !rows.some((r) => r.ID === selected.ID)) {
+			select(rows[0]);
 		}
 	}
 
@@ -239,92 +188,49 @@
 				>
 					<table class="table table-hover table-compact w-full table-fixed">
 						<thead class="sticky top-0 z-10 bg-surface-100-800-token">
-							{#each $table.getHeaderGroups() as headerGroup}
-								<tr class="h-10">
-									{#each headerGroup.headers as header}
-										<th colspan={header.colSpan} class="!py-2 {widths[header.column.id]}">
-											{#if !header.isPlaceholder}
-												<div
-													class="inline-flex items-center gap-1 whitespace-nowrap outline-none focus:outline-none"
-													class:cursor-pointer={header.column.getCanSort()}
-													class:select-none={header.column.getCanSort()}
-													on:click={header.column.getToggleSortingHandler()}
-													on:keydown
-													role="button"
-													tabindex="-1"
-												>
-													<span>
-														<svelte:component
-															this={flexRender(header.column.columnDef.header, header.getContext())}
-														/>
-													</span>
-													{#if header.column.getIsSorted() === "asc"}
-														<span>&uarr;</span>
-													{:else if header.column.getIsSorted() === "desc"}
-														<span>&darr;</span>
-													{/if}
-												</div>
+							<tr class="h-10">
+								{#each headers as header (header.id)}
+									<th class="!py-2 {header.width}">
+										<div
+											class="inline-flex items-center gap-1 whitespace-nowrap outline-none focus:outline-none"
+											class:cursor-pointer={header.sortable}
+											class:select-none={header.sortable}
+											on:click={() => header.sortable && (sorting = toggleSort(sorting, header.id))}
+											on:keydown
+											role="button"
+											tabindex="-1"
+										>
+											<span>{header.header}</span>
+											{#if sorting?.id === header.id}
+												<span>{sorting.desc ? "↓" : "↑"}</span>
 											{/if}
-										</th>
-									{/each}
-								</tr>
-							{/each}
+										</div>
+									</th>
+								{/each}
+							</tr>
 						</thead>
 						<tbody>
-							{#each $table.getRowModel().rows as row, i (row.original.ID)}
-								{#if gap && row.original.ID === gapBefore}
+							{#each rows as message, i (message.ID)}
+								{#if gap && message.ID === gapBefore}
 									<tr data-gap>
-										<td colspan={tableColumns.length} class="p-0 font-sans"><slot name="gap" /></td>
+										<td colspan={headers.length} class="p-0 font-sans"><slot name="gap" /></td>
 									</tr>
 								{/if}
-								<tr
-									class="cursor-pointer {selected?.ID === row.original.ID
-										? 'bg-surface-500/20 outline outline-1 outline-offset-[-1px] outline-primary-500'
-										: ''} {rowClass(row.original)}"
-									title={rowTitle(row.original)}
-									on:click={() => {
-										narrowPane = "detail";
-										select(row.original);
-									}}
-								>
-									{#each row.getVisibleCells() as cell}
-										<td class="overflow-hidden" class:whitespace-nowrap={cell.column.id !== lastColumn}>
-											{#if cell.column.id === "ID"}
-												{numberOf(row.original, i)}
-											{:else if cell.column.id === "Direction"}
-												{@const arrow = directionArrow(isOutgoing(row.original))}
-												{#if arrow.up}
-													<ArrowUpRight size={14} class={arrow.class} />
-												{:else}
-													<ArrowDownLeft size={14} class={arrow.class} />
-												{/if}
-											{:else if cell.column.id === lastColumn}
-												<div class="flex min-w-0 items-center gap-1">
-													{#each rowChips(row.original) as chip (chip.label)}
-														<span class="chip shrink-0 !px-1 !py-0 text-3xs {chip.class}" title={chip.title ?? ""}
-															>{chip.label}</span
-														>
-													{/each}
-													<div
-														class="min-w-0 truncate"
-														class:text-tertiary-500={isInjected(row.original)}
-													>
-														<svelte:component
-															this={flexRender(cell.column.columnDef.cell, cell.getContext())}
-														/>
-													</div>
-												</div>
-											{:else}
-												<svelte:component
-													this={flexRender(cell.column.columnDef.cell, cell.getContext())}
-												/>
-											{/if}
-										</td>
-									{/each}
-								</tr>
+								<MessageRow
+									{message}
+									number={numberOf(message, i)}
+									selected={selected?.ID === message.ID}
+									{columns}
+									{rowClass}
+									{rowTitle}
+									{isInjected}
+									{isOutgoing}
+									{rowChips}
+									{onSelect}
+								/>
 							{:else}
 								<tr>
-									<td colspan={tableColumns.length} class="p-4 text-center opacity-60">
+									<td colspan={headers.length} class="p-4 text-center opacity-60">
 										No messages yet
 									</td>
 								</tr>
