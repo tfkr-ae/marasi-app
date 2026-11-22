@@ -61,7 +61,7 @@
 			on:click={() => documents.create()}><Plus size="14" /></button
 		>
 	</div>
-	<div class="flex shrink-0 items-center gap-1 px-2">
+	<div class="flex shrink-0 items-center gap-2 px-3 py-1.5">
 		<slot />
 	</div>
 </div>

@@ -32,7 +32,7 @@ var seededContentTypeExclusion = []string{
 	"application/vnd.oasis.opendocument.spreadsheet",
 	"application/vnd.oasis.opendocument.text", "application/vnd.visio",
 	"application/vnd.mozilla.xul+xml", "application/javascript",
-	"application/octet-stream", "binary/octet-stream", "image/x-icon",
+	"binary/octet-stream", "image/x-icon",
 	"image/vnd.djvu", "image/x-portable-pixmap", "image/x-portable-bitmap",
 	"audio/basic", "audio/aiff", "audio/x-aiff", "audio/x-wav",
 	"audio/x-mpegurl", "audio/x-ms-wma", "video/quicktime", "video/x-flv",
