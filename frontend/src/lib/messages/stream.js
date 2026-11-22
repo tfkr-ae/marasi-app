@@ -4,11 +4,24 @@
 // MESSAGE_KINDS.stream in kinds.js. Its messages live in streamedPairStore
 // only while the modal is open.
 import { derived } from "svelte/store";
-import { ArrowDown, Binary, Braces, ChevronLeft, ChevronRight, Info, ListIcon, Waves } from "lucide-svelte";
+import {
+	ArrowDown,
+	ArrowLeftRight,
+	Binary,
+	Braces,
+	ChevronLeft,
+	ChevronRight,
+	Info,
+	ListIcon,
+	OctagonX,
+	SendIcon,
+	Waves,
+} from "lucide-svelte";
 import { streamTab } from "../keybindings/app.js";
-import { streamedPairStore } from "../../stores/streamedPairStore.js";
+import { canCancel, streamedPairStore } from "../../stores/streamedPairStore.js";
 import { formatSize } from "../websocket/presentation.js";
 import { MESSAGE_KINDS } from "./kinds.js";
+import StreamInject from "./StreamInject.svelte";
 import StreamMessages from "./StreamMessages.svelte";
 import StreamPair from "./StreamPair.svelte";
 
@@ -26,6 +39,15 @@ const TABS = {
 			{ actionId: "stream.messages.jump-to-bottom", icon: ArrowDown, run: (tab) => tab.jumpToBottom() },
 			{ actionId: "stream.messages.toggle-message-metadata", icon: Braces, run: (tab) => tab.toggleMetadata() },
 			{ actionId: "stream.messages.toggle-raw", icon: Binary, run: (tab) => tab.toggleRaw() },
+			{ actionId: "stream.messages.copy-message-to-inject", icon: SendIcon, run: (tab) => tab.copyToInject() },
+		],
+	},
+	inject: {
+		icon: SendIcon,
+		component: StreamInject,
+		menu: [
+			{ actionId: "stream.inject.toggle-direction", icon: ArrowLeftRight, run: (tab) => tab.toggleDirection() },
+			{ actionId: "stream.inject.inject-message", icon: SendIcon, run: (tab) => tab.inject() },
 		],
 	},
 	// Read-only: only the shared modal actions.
@@ -49,7 +71,7 @@ export const streamKind = {
 	previousTabAction: "stream.previous-tab",
 	nextTabAction: "stream.next-tab",
 	// One open modal's view of its pair. `meta` is { kind: "stream", pairId }.
-	session({ meta }) {
+	session({ meta, toastStore, openTab }) {
 		const pairId = meta?.pairId;
 		if (pairId) streamedPairStore.open(pairId);
 		const view = derived(streamedPairStore, ($s) => $s.pairs[pairId]);
@@ -67,10 +89,25 @@ export const streamKind = {
 					chipTitle: "A message is still arriving; it appears in Messages once it is whole",
 				};
 			}),
-			// Cancel comes with the Inject tab.
-			action: null,
+			// Cancel: no confirmation; offered until both directions have ended.
+			action: {
+				actionId: "stream.cancel-pair",
+				label: "Cancel",
+				busyLabel: "Cancelling…",
+				icon: OctagonX,
+				enabled: derived(view, (v) => Boolean(pairId) && canCancel(v?.directions)),
+				async run() {
+					const outcome = await streamedPairStore.cancel(pairId);
+					if (outcome.ok || outcome.superseded) return;
+					toastStore.trigger({
+						message: outcome.toast ?? `Unable to cancel: ${outcome.message}`,
+						background: "variant-filled-error",
+					});
+				},
+			},
 			tabProps: derived(view, () => ({
-				messages: pairId && { pairId },
+				messages: pairId && { pairId, onOpenInject: () => openTab("inject") },
+				inject: pairId && { pairId },
 				pair: pairId && { pairId },
 			})),
 			missing: "No pair",

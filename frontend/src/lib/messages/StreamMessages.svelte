@@ -5,14 +5,16 @@
 	// message, Load more, and a detail pane showing the protobuf text form
 	// (or UTF-8 text, or read-only hex) with Raw and Metadata toggles.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { Binary, Braces, ChevronsDown } from "lucide-svelte";
+	import { Binary, Braces, ChevronsDown, Send } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
 	import { streamedPairStore } from "../../stores/streamedPairStore.js";
 	import MessagesTable from "./MessagesTable.svelte";
-	import { detailOf, messageChips, messagePreview, messageSize, messageTime } from "./streamMessage.js";
+	import { detailOf, injectDraftOf, messageChips, messagePreview, messageSize, messageTime } from "./streamMessage.js";
 	import { languageExtensions } from "./protobufText.js";
 
 	export let pairId;
+	// Opens the Inject tab (Copy to Inject).
+	export let onOpenInject = () => {};
 
 	const FILTERS = [
 		{ id: "all", label: "All" },
@@ -59,6 +61,12 @@
 
 	export function toggleMetadata() {
 		if (selected) view = view === "metadata" ? "text" : "metadata";
+	}
+
+	export function copyToInject() {
+		if (!selected) return;
+		streamedPairStore.setDraft(pairId, injectDraftOf(selected, details[selected.ID]));
+		onOpenInject();
 	}
 
 	export function toggleRaw() {
@@ -121,6 +129,10 @@
 		>
 			<Binary size={14} class="mr-1" />
 			{view === "raw" ? "Text form" : "Raw"}
+		</button>
+		<button class="btn btn-sm {primaryVariant($modeCurrent)}" disabled={!selected} on:click={copyToInject}>
+			<Send size={14} class="mr-1" />
+			Copy to Inject
 		</button>
 		<button class="btn btn-sm {primaryVariant($modeCurrent)}" disabled={!selected} on:click={toggleMetadata}>
 			<Braces size={14} class="mr-1" />

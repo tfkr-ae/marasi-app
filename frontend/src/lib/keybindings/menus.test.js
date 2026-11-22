@@ -395,18 +395,23 @@ test("the streamed pair modal's actions take their WebSocket counterparts' keys"
     ["messages", cmd("j", "KeyJ"), "stream.messages.jump-to-bottom"],
     ["messages", cmdShift("M", "KeyM"), "stream.messages.toggle-message-metadata"],
     ["messages", cmdShift("R", "KeyR"), "stream.messages.toggle-raw"],
+    ["messages", cmdShift("I", "KeyI"), "stream.messages.copy-message-to-inject"],
+    ["messages", cmdShift("Enter", "Enter"), null],
+    ["inject", cmdShift("D", "KeyD"), "stream.inject.toggle-direction"],
+    ["inject", cmdShift("Enter", "Enter"), "stream.inject.inject-message"],
+    ["inject", cmdShift("I", "KeyI"), null],
     ["pair", cmdShift("M", "KeyM"), null],
   ];
   for (const [tab, event, actionId] of expected) {
     assert.equal(dispatcher.resolve(event, streamModal(tab)), actionId, `${tab} ${event.key}`);
   }
-  for (const tab of ["messages", "pair"]) {
+  for (const tab of ["messages", "inject", "pair"]) {
     assert.equal(dispatcher.resolve(cmd("[", "BracketLeft"), streamModal(tab)), "stream.previous-tab");
     assert.equal(dispatcher.resolve(cmd("]", "BracketRight"), streamModal(tab)), "stream.next-tab");
     assert.equal(dispatcher.resolve(cmd("1", "Digit1"), streamModal(tab)), "global.go-home");
+    // Cancel takes Close Connection's key, on every tab.
+    assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), streamModal(tab)), "stream.cancel-pair");
   }
-  // The WebSocket actions stay out of a streamed pair's modal.
-  assert.equal(dispatcher.resolve(cmdShift("X", "KeyX"), streamModal("messages")), null);
 });
 
 test("stream actions say message, never frame, and the WebSocket ids are unchanged", () => {
@@ -689,7 +694,7 @@ function everyContextState() {
   return [
     on("/"),
     ...["stream", "checkpoint", "inject", "connection"].map((tab) => websocketModal(tab)),
-    ...["messages", "pair"].map((tab) => streamModal(tab)),
+    ...["messages", "inject", "pair"].map((tab) => streamModal(tab)),
     on("/ledger"),
     on("/ledger", requestDrawer()),
     on("/ledger", requestDrawer(websocketUpgrade)),

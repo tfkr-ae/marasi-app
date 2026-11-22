@@ -266,6 +266,7 @@ export const FACTORY_ACTIONS = [
   ...pageActions("stream", [
     ["previous-tab", "Previous Messages Tab", "Move to the previous tab of the streamed pair", "stream previous tab messages pair grpc", primary("[")],
     ["next-tab", "Next Messages Tab", "Move to the next tab of the streamed pair", "stream next tab messages pair grpc", primary("]")],
+    ["cancel-pair", "Cancel Streamed Pair", "Cancel the live call", "stream cancel stop call grpc", primary("shift+x")],
   ]),
   ...pageActions("stream.messages", [
     ["previous-message", "Previous Stream Message", "Select the previous stream message", "stream previous message grpc", primary("shift+[")],
@@ -273,6 +274,11 @@ export const FACTORY_ACTIONS = [
     ["jump-to-bottom", "Jump to Bottom", "Jump to the newest message and resume auto-scroll", "stream messages bottom newest follow auto-scroll", primary("j")],
     ["toggle-message-metadata", "Toggle Message Metadata", "Switch between the message and its metadata", "stream message metadata", primary("shift+m")],
     ["toggle-raw", "Toggle Raw Message", "Switch between the message's text form and its raw payload", "stream message raw payload text form protobuf", primary("shift+r")],
+    ["copy-message-to-inject", "Copy Message to Inject", "Copy the selected message into the Inject tab", "stream message copy inject resend", primary("shift+i")],
+  ]),
+  ...pageActions("stream.inject", [
+    ["toggle-direction", "Toggle Inject Direction", "Switch between the open directions", "stream inject direction request response", primary("shift+d")],
+    ["inject-message", "Inject Message", "Send the message into the chosen direction", "stream inject send message grpc", primary("shift+enter")],
   ]),
   ...pageActions("websocket.inject", [
     ["toggle-direction", "Toggle Inject Direction", "Switch the injected message direction", "websocket inject direction client server", primary("shift+d")],

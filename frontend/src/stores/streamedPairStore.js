@@ -4,6 +4,8 @@
 // the stream_message, stream_message.progress and streamed_pair.* events.
 import { service } from "../lib/service/index.js";
 import { createStreamedPairStore } from "./createStreamedPairStore.js";
+
+export { canCancel, openDirections } from "./createStreamedPairStore.js";
 import { projectData } from "./projectData.js";
 import {
   createStreamedPairApi,
