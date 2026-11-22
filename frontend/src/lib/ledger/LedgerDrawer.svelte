@@ -16,7 +16,7 @@
 	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
 
-	/** The Ledger store: getDetails, getNote, getMetadata and saveNote. */
+	/** The Ledger store: getDetails, noteFullRead, getNote, getMetadata and saveNote. */
 	export let store;
 	/** The focused pair's table row. */
 	export let pair;
@@ -63,6 +63,7 @@
 			console.error("Reading the request failed:", error);
 			return null;
 		});
+		if (row) store.noteFullRead?.(id, row);
 		if (sameID(detailsFor, id) && detailsFull === full) details = row ?? null;
 	}
 

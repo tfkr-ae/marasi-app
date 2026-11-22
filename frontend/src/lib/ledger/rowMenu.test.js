@@ -80,6 +80,13 @@ test("a streamed pair's row offers Open messages, a live one whose response hasn
   assert.equal(item(menuFor([pair("b", { Streamed: null })], context()), "websocket"), undefined);
 });
 
+test("from a service without streamed on rows, a row offers Open messages once its full read showed streamed metadata", () => {
+  const older = pair("a");
+  assert.equal(item(menuFor([older], context()), "websocket"), undefined);
+  assert.equal(item(menuFor([older], context({ streamedRead: "a" })), "websocket").label, "Open messages");
+  assert.equal(item(menuFor([pair("b")], context({ streamedRead: "a" })), "websocket"), undefined);
+});
+
 test("a WebSocket upgrade row offers Open messages", () => {
   const ws = pair("a", { StatusCode: 101, Metadata: { protocol: "websocket" } });
   assert.deepEqual(ids(menuFor([ws], context())).slice(0, 2), ["websocket", "launchpad"]);

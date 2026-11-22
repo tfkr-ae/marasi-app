@@ -61,6 +61,8 @@
 		pendingLaunches: Object.values($launchpadStore.launchesById ?? {}).filter((launch) => launch.Status === "pending"),
 		all: Boolean(rowMenu.target?.all),
 		count: rowMenu.target?.all ? $liveSize : null,
+		// A pair whose full read showed streamed metadata (an older service).
+		streamedRead: $ledgerStore.streamedRead,
 	};
 
 	// A shortcut runs its row menu item on the selection, exactly as choosing
