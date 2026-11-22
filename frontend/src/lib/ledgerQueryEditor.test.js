@@ -24,7 +24,7 @@ test("ready-made queries open on request only once the box holds text elsewhere"
 
 test("field names match by prefix only", () => {
   assert.deepEqual(labels(querySuggestions("sta", 3)), ["status_code"]);
-  assert.deepEqual(labels(querySuggestions("request_", 8)), ["request_head", "request_body"]);
+  assert.deepEqual(labels(querySuggestions("request_", 8)), ["request_framing", "request_head", "request_body"]);
   assert.deepEqual(labels(querySuggestions("met", 3)), ["method", "metadata.", "metadata"]);
 });
 
@@ -108,6 +108,24 @@ test("link fields offer * after the colon, and no made-up uuid after =", () => {
     assert.deepEqual(labels(querySuggestions(`${field}:`, field.length + 1)), ["*"]);
     assert.equal(querySuggestions(`${field} = `, field.length + 3), null);
   }
+});
+
+test("streamed takes only :*, which NOT negates", () => {
+  assert.deepEqual(labels(querySuggestions("stre", 4)), ["streamed"]);
+  assert.deepEqual(labels(querySuggestions("streamed ", 9)), [":"]);
+  assert.deepEqual(labels(querySuggestions("streamed:", 9)), ["*"]);
+  assert.deepEqual(labels(querySuggestions("NOT streamed:", 13)), ["*"]);
+  assert.equal(querySuggestions("streamed:*", 10), null);
+});
+
+test("request_framing and response_framing offer each framing, and * for any", () => {
+  for (const field of ["request_framing", "response_framing"]) {
+    assert.deepEqual(labels(querySuggestions(`${field} `, field.length + 1)), ["=", "!="]);
+    const values = labels(querySuggestions(`${field} = `, field.length + 3));
+    assert.deepEqual(values, ['"grpc"', '"grpc-web"', '"connect"', '"sse"', '"ndjson"', '"*"']);
+    assert.deepEqual(labels(querySuggestions(`${field} != `, field.length + 4)), values);
+  }
+  assert.deepEqual(labels(querySuggestions("response_", 9)), ["response_framing", "response_head", "response_body"]);
 });
 
 test("sitemap takes a quoted node name", () => {

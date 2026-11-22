@@ -11,6 +11,10 @@ export const QUERY_PREAMBLE =
   "Combine conditions with AND, OR, NOT, - and parentheses; a space between them means AND. " +
   "Quote a UUID wherever a field takes one.";
 
+// A streamed direction's message framings (GLOSSARY Message framing), then
+// "*" for any.
+const FRAMING_VALUES = ['"grpc"', '"grpc-web"', '"connect"', '"sse"', '"ndjson"', '"*"'];
+
 /**
  * One entry per field: its name, the operators it accepts, an example that
  * can be inserted into the query box, and one line of help. `values`, when
@@ -38,6 +42,9 @@ export const QUERY_FIELDS = [
   { name: "launchpad", ops: ["=", "!=", ":"], example: "launchpad:*", values: { "=": [], "!=": [] }, help: 'Launchpad membership: launchpad = "<uuid>" for one launchpad, launchpad != "<uuid>" for pairs outside it, launchpad:* for pairs in any launchpad.' },
   { name: "finding", ops: ["=", "!=", ":"], example: "finding:*", values: { "=": [], "!=": [] }, help: 'Linked to a finding: finding = "<uuid>" for one finding, finding != "<uuid>" for pairs not linked to it, finding:* for pairs linked to any finding.' },
   { name: "test_case", ops: ["=", "!=", ":"], example: "test_case:*", values: { "=": [], "!=": [] }, help: 'Linked to a test case: test_case = "<uuid>" for one test case, test_case != "<uuid>" for pairs not linked to it, test_case:* for pairs linked to any test case.' },
+  { name: "streamed", ops: [":"], example: "streamed:*", values: { ":": ["*"] }, help: "streamed:* for streamed pairs (gRPC, gRPC-Web, Connect, SSE, NDJSON), NOT streamed:* for every other pair." },
+  { name: "request_framing", ops: ["=", "!="], example: 'request_framing = "grpc"', values: { "=": FRAMING_VALUES, "!=": FRAMING_VALUES }, help: 'The request\'s message framing: "grpc", "grpc-web", "connect", "sse" or "ndjson". = "*" for any streamed request; != also matches a request that isn\'t streamed.' },
+  { name: "response_framing", ops: ["=", "!="], example: 'response_framing = "sse"', values: { "=": FRAMING_VALUES, "!=": FRAMING_VALUES }, help: 'The response\'s message framing, as for request_framing. = "*" for any streamed response; != also matches a response that isn\'t streamed.' },
   { name: "request_head", ops: [":"], example: 'request_head:"authorization"', help: "Contains, ignoring case. Request line plus headers." },
   { name: "request_body", ops: [":"], example: 'request_body:"password"', help: "Contains, ignoring case. Binary bodies never match." },
   { name: "response_head", ops: [":"], example: 'response_head:"set-cookie"', help: "Contains, ignoring case. Status line plus headers." },
