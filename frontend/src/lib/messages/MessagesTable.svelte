@@ -54,6 +54,11 @@
 	export let rowChips = () => [];
 	/** The selected message's editor extensions, such as a highlighter. */
 	export let detailExtensions = () => [];
+	/** Whether messages are left unloaded: the `gap` slot shows before the
+	 * message `gapBefore` names (the first one past them), or after the
+	 * list when it names none. */
+	export let gap = false;
+	export let gapBefore = null;
 
 	let narrowPane = "list";
 	let sorting = [{ id: "ID", desc: false }];
@@ -98,7 +103,7 @@
 		autoScroll = false;
 		await tick();
 		tableScroller
-			?.querySelectorAll("tbody tr")
+			?.querySelectorAll("tbody tr:not([data-gap])")
 			[index]?.scrollIntoView({ block: "nearest" });
 	}
 
@@ -267,6 +272,11 @@
 						</thead>
 						<tbody>
 							{#each $table.getRowModel().rows as row, i (row.original.ID)}
+								{#if gap && row.original.ID === gapBefore}
+									<tr data-gap>
+										<td colspan={tableColumns.length} class="p-0 font-sans"><slot name="gap" /></td>
+									</tr>
+								{/if}
 								<tr
 									class="cursor-pointer {selected?.ID === row.original.ID
 										? 'bg-surface-500/20 outline outline-1 outline-offset-[-1px] outline-primary-500'
@@ -321,6 +331,9 @@
 							{/each}
 						</tbody>
 					</table>
+					{#if gap && gapBefore == null}
+						<div class="font-sans"><slot name="gap" /></div>
+					{/if}
 					<slot name="listEnd" />
 				</div>
 				{#if !autoScroll && messages.length > 0}

@@ -2,7 +2,8 @@
 	// The streamed pair kind's Messages tab: the shared message table
 	// (MessagesTable.svelte) over the pair's stream messages in arrival
 	// order, with a direction filter, chips for what happened to each
-	// message, Load more, and a detail pane showing the protobuf text form
+	// message, Load more (in the gap before the live tail, when one arrived
+	// past the loaded messages), and a detail pane showing the protobuf text form
 	// (or UTF-8 text, or read-only hex) with Raw and Metadata toggles.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { Binary, Braces, ChevronsDown, Send } from "lucide-svelte";
@@ -28,10 +29,17 @@
 	let table;
 
 	$: pair = $streamedPairStore.pairs[pairId];
-	$: all = pair?.messages ?? [];
-	// Each message's number in the whole call, whatever the filter shows.
-	$: numbers = new Map(all.map((m, i) => [m.ID, i + 1]));
-	$: messages = filter === "all" ? all : all.filter((m) => m.Direction === filter);
+	$: head = pair?.messages ?? [];
+	// Live messages past the gap Load more fills, while older ones are left.
+	$: tail = pair?.tail ?? [];
+	// Each loaded message's number in the whole call, whatever the filter
+	// shows. A tail message's place isn't known until the gap is filled.
+	$: numbers = new Map(head.map((m, i) => [m.ID, i + 1]));
+	$: shownOf = (list) => (filter === "all" ? list : list.filter((m) => m.Direction === filter));
+	$: shownTail = shownOf(tail);
+	$: messages = [...shownOf(head), ...shownTail];
+	// Load more sits in the gap before the tail, or at the list's end.
+	$: gapBefore = shownTail[0]?.ID ?? null;
 	$: details = pair?.details ?? {};
 	$: if (selected) streamedPairStore.select(pairId, selected.ID);
 	$: shown = selected ? detailOf(selected, details[selected.ID], view) : null;
@@ -89,7 +97,9 @@
 	directionOf={(m) => m.Direction}
 	isOutgoing={(m) => m.Direction === "request"}
 	isInjected={(m) => Boolean(m.Metadata?.injected)}
-	numberOf={(m) => numbers.get(m.ID)}
+	numberOf={(m) => numbers.get(m.ID) ?? ""}
+	gap={pair?.hasMore ?? false}
+	{gapBefore}
 	rowChips={messageChips}
 >
 	<svelte:fragment slot="listBar">
@@ -101,19 +111,17 @@
 			>
 		{/each}
 	</svelte:fragment>
-	<svelte:fragment slot="listEnd">
-		{#if pair?.hasMore}
-			<div class="flex justify-center p-2 font-sans">
-				<button
-					class="btn btn-sm {primaryVariant($modeCurrent)}"
-					disabled={pair.loadingMore}
-					on:click={() => streamedPairStore.loadMore(pairId)}
-				>
-					<ChevronsDown size={14} class="mr-1" />
-					{pair.loadingMore ? "Loading…" : "Load more"}
-				</button>
-			</div>
-		{/if}
+	<svelte:fragment slot="gap">
+		<div class="stream-load-more flex justify-center p-2">
+			<button
+				class="btn btn-sm {primaryVariant($modeCurrent)}"
+				disabled={pair.loadingMore}
+				on:click={() => streamedPairStore.loadMore(pairId)}
+			>
+				<ChevronsDown size={14} class="mr-1" />
+				{pair.loadingMore ? "Loading…" : "Load more"}
+			</button>
+		</div>
 	</svelte:fragment>
 	<svelte:fragment slot="summary" let:selected={message}>
 		<span class="chip variant-soft-surface text-xs">{message.Framing}</span>

@@ -307,15 +307,51 @@ test("a selection made after a connection switch reads nothing from the next con
   assert.equal(get(store).pairs.p1.details[idOf(1)], undefined);
 });
 
-test("while older messages are left to load, live ones wait for Load more instead of leaving a gap", async () => {
-  const { store, ids, service } = setup({ count: MESSAGE_CAP + 1 });
+test("while older messages are left to load, live ones gather in a tail after the gap, and Load more closes it", async () => {
+  const { store, ids, view, service } = setup({ count: MESSAGE_CAP + 1 });
   await store.open("p1");
-  service.messages.push(message(MESSAGE_CAP + 2));
-  store.onMessage(toStreamMessage(message(MESSAGE_CAP + 2)));
+  const live = (n) => {
+    service.messages.push(message(n));
+    store.onMessage(toStreamMessage(message(n)));
+  };
+  live(MESSAGE_CAP + 3);
+  live(MESSAGE_CAP + 2);
   assert.equal(ids().length, MESSAGE_CAP);
+  assert.deepEqual(
+    view().tail.map((m) => m.ID),
+    [idOf(MESSAGE_CAP + 2), idOf(MESSAGE_CAP + 3)],
+  );
 
   await store.loadMore("p1");
-  assert.deepEqual(ids().slice(-2), [idOf(MESSAGE_CAP + 1), idOf(MESSAGE_CAP + 2)]);
+  assert.equal(view().hasMore, false);
+  assert.deepEqual(view().tail, []);
+  assert.deepEqual(ids().slice(-3), [idOf(MESSAGE_CAP + 1), idOf(MESSAGE_CAP + 2), idOf(MESSAGE_CAP + 3)]);
+  assert.equal(new Set(ids()).size, ids().length);
+  // With the gap closed, live messages append as usual.
+  live(MESSAGE_CAP + 4);
+  assert.equal(ids().at(-1), idOf(MESSAGE_CAP + 4));
+});
+
+test("a Load more that leaves older messages keeps the live tail after the gap", async () => {
+  const { store, ids, view, service } = setup({ count: 2 * MESSAGE_CAP + 5 });
+  await store.open("p1");
+  service.messages.push(message(2 * MESSAGE_CAP + 6));
+  store.onMessage(toStreamMessage(message(2 * MESSAGE_CAP + 6)));
+  await store.loadMore("p1");
+  assert.equal(ids().length, 2 * MESSAGE_CAP);
+  assert.equal(view().hasMore, true);
+  assert.deepEqual(view().tail.map((m) => m.ID), [idOf(2 * MESSAGE_CAP + 6)]);
+});
+
+test("a live message landing while a long stream's first pages load joins the tail", async () => {
+  const service = fakeService({ count: MESSAGE_CAP + 2 });
+  const store = createStreamedPairStore(createStreamedPairApi(service.client));
+  const opening = store.open("p1");
+  store.onMessage(toStreamMessage(message(MESSAGE_CAP + 3)));
+  await opening;
+  const view = get(store).pairs.p1;
+  assert.equal(view.messages.length, MESSAGE_CAP);
+  assert.deepEqual(view.tail.map((m) => m.ID), [idOf(MESSAGE_CAP + 3)]);
 });
 
 // Inject and cancel.

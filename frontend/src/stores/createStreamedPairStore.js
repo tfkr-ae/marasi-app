@@ -5,8 +5,10 @@
 // (streamedPairApi.js), so this module loads under node --test.
 //
 // A pair's view:
-//   messages     loaded so far, in arrival order
+//   messages     loaded so far from the start, in arrival order
 //   cursor       the last loaded id while older messages are left (hasMore)
+//   tail         while older messages are left, the live ones that arrived
+//                since opening, after the gap Load more fills
 //   pair         { ID, Number, Method, Host, Path }, once its head is read
 //   directions   { request, response }: null for a direction not streamed
 //                (or not yet known), else { Framing, Ending, Messages,
@@ -74,6 +76,7 @@ let tokens = 0;
 const emptyPair = () => ({
   token: ++tokens,
   messages: [],
+  tail: [],
   cursor: null,
   hasMore: false,
   loading: true,
@@ -102,9 +105,17 @@ function merge(list, items) {
   return [...byId.values()].sort(byArrival);
 }
 
-// While older messages are left to load, nothing past the last one loaded
-// is kept: Load more reads it in its place.
-const upToCursor = (messages, cursor) => (cursor ? messages.filter((m) => m.ID <= cursor) : messages);
+// The loaded messages and the live tail once a read settles: while older
+// messages are left (a cursor), what lies past the last one loaded goes to
+// the tail, after the gap; once none are left, the tail joins the messages.
+function splitAtCursor(view) {
+  if (!view.cursor) return { messages: merge(view.messages, view.tail), tail: [] };
+  const past = (m) => m.ID > view.cursor;
+  return {
+    messages: view.messages.filter((m) => !past(m)),
+    tail: merge(view.tail.filter(past), view.messages.filter(past)),
+  };
+}
 
 // The directions from a streamed state ({request, response} of {framing,
 // ending}) and the ended directions' details, where an event or read has
@@ -172,7 +183,7 @@ export function createStreamedPairStore(api) {
       next = page.cursor;
       patch(pairId, (view) => ({ messages: merge(view.messages, page.items), cursor: next, hasMore: Boolean(next) }));
     } while (next && loaded < MESSAGE_CAP);
-    patch(pairId, (view) => ({ messages: upToCursor(view.messages, view.cursor) }));
+    patch(pairId, splitAtCursor);
   }
 
   async function readHead(pairId, token, action) {
@@ -252,15 +263,19 @@ export function createStreamedPairStore(api) {
   }
 
   /**
-   * stream_message: kept only for an open pair whose loaded messages reach
-   * the live tail. The message has arrived, so its direction's progress goes.
+   * stream_message, for an open pair: appended after the loaded messages,
+   * or to the tail after the gap while older ones are left to load. The
+   * message has arrived, so its direction's progress goes.
    */
   function onMessage(message) {
     const view = viewOf(message?.PairID);
     if (!view) return;
     const { [message.Direction]: _arrived, ...progress } = view.progress;
-    const keep = !view.hasMore || view.loading || view.loadingMore;
-    patch(message.PairID, (v) => ({ progress, ...(keep ? { messages: merge(v.messages, [message]) } : {}) }));
+    patch(message.PairID, (v) =>
+      v.hasMore && !v.loading && !v.loadingMore
+        ? { progress, tail: merge(v.tail, [message]) }
+        : { progress, messages: merge(v.messages, [message]) },
+    );
   }
 
   /** stream_message.progress: a message is arriving in a direction. */
@@ -292,7 +307,7 @@ export function createStreamedPairStore(api) {
     const view = viewOf(pairId);
     const known = view?.details[id];
     if (!view || (known && !known.Error)) return;
-    const message = view.messages.find((m) => m.ID === id);
+    const message = [...view.messages, ...view.tail].find((m) => m.ID === id);
     setDetail(pairId, id, { Loading: true });
     try {
       const action = actionFor();
@@ -302,7 +317,8 @@ export function createStreamedPairStore(api) {
       setDetail(pairId, id, { ...detail, Full: full });
       // The row shows the whole payload from now on.
       if (full) {
-        patch(pairId, (v) => ({ messages: v.messages.map((m) => (m.ID === id ? { ...m, Payload: detail.Payload } : m)) }));
+        const whole = (list) => list.map((m) => (m.ID === id ? { ...m, Payload: detail.Payload } : m));
+        patch(pairId, (v) => ({ messages: whole(v.messages), tail: whole(v.tail) }));
       }
     } catch (err) {
       if (!current(pairId, view.token)) return;

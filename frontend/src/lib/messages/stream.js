@@ -97,7 +97,7 @@ export const streamKind = {
 		return {
 			header: derived(view, (v) => {
 				const pair = v?.pair;
-				const count = v?.messages.length ?? 0;
+				const count = (v?.messages.length ?? 0) + (v?.tail.length ?? 0);
 				return {
 					icon: Waves,
 					iconClass: isLive(v) ? "text-success-500" : "opacity-60",
