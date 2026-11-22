@@ -95,7 +95,7 @@ _Avoid_: edit, buffer, saved request
 ### Checkpoint
 
 **Checkpoint item**:
-A request, response or WebSocket message that Checkpoint holds, as Marasi defines it. The app lists every held item in hold order, oldest first, and the researcher can forward or drop any of them in any order.
+A request, response, WebSocket message, stream message or trailer block that Checkpoint holds, as Marasi defines it. A streamed pair's head is held as an ordinary request or response. The app lists every held item in hold order, oldest first, and the researcher can forward or drop any of them in any order.
 _Avoid_: intercepted item, intercept, queue item, paused request
 _Note_: The UI copy says "Intercepted" by design, and the time an item was held is named `InterceptedAt`; elsewhere, say Checkpoint item.
 
@@ -115,6 +115,28 @@ _Avoid_: send, release, continue, accept
 **Drop**:
 Ending a held item so it never reaches its destination. Marasi drops an item itself when its client leaves.
 _Avoid_: discard, cancel, block, reject
+
+### Streams
+
+**Streamed pair**:
+A request/response pair whose body, in one or both directions, Marasi carries as stream messages as they arrive, as Marasi defines it. It is still a pair, with its own row in the Ledger; its stored body is empty and its stream messages hold the content.
+_Avoid_: stream, gRPC call, streaming request
+
+**Stream message**:
+One unit of a streamed pair's body in one direction: a gRPC, gRPC-Web or Connect envelope, a server-sent event, or an NDJSON line, as Marasi defines it.
+_Avoid_: message on its own, frame, chunk, event, WebSocket message
+
+**Message framing**:
+How a direction of a streamed pair is cut into stream messages: `grpc`, `grpc-web`, `connect`, `sse` or `ndjson`, as Marasi defines it.
+_Avoid_: codec, protocol, content type
+
+**Trailer block**:
+The trailers that end one direction of a streamed pair, such as `grpc-status`, which Checkpoint can hold and the researcher can edit as `name: value` lines.
+_Avoid_: trailers item, footer
+
+**Protobuf text form**:
+A gRPC, gRPC-Web or Connect stream message's protobuf payload as protoscope-compatible text, as Marasi defines it; editing it and forwarding gives back exact bytes.
+_Avoid_: protoscope text, prototext, decoded payload
 
 ### Logbook
 
