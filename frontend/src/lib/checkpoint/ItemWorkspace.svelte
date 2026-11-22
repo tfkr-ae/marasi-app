@@ -22,7 +22,7 @@
 	import { longStrings } from "../longStrings.js";
 	import { usesSyntax } from "../ledger/drawer.js";
 	import { primaryVariant, statusClass } from "../launchpad/format.js";
-	import { interceptedFor, itemTitle, streamedHead } from "./items.js";
+	import { interceptedFor, itemTitle, offersInterceptResponse, streamedHead } from "./items.js";
 	import PaneTabs from "../components/PaneTabs.svelte";
 	import MessageEditor from "../messages/MessageEditor.svelte";
 
@@ -104,7 +104,7 @@
 			<button class="cp-forward btn btn-sm {primary}" disabled={!!error || checking} title="Forward" on:click={() => onForward(item.ID)}>
 				<Forward size={14} class="mr-1" />Forward
 			</button>
-			{#if item.Type === "request"}
+			{#if offersInterceptResponse(item)}
 				<button
 					class="cp-forward-intercept btn btn-sm {primary}"
 					disabled={!!error || checking}

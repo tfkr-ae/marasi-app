@@ -100,6 +100,15 @@ export function streamedHead(item, text) {
 }
 
 /**
+ * Whether Forward + intercept response applies to the item: a held request
+ * whose body isn't carried as stream messages. A streamed pair's messages
+ * are held by Stream intercept instead.
+ */
+export function offersInterceptResponse(item) {
+  return item?.Type === "request" && !streamedHead(item, item.text);
+}
+
+/**
  * The dock's tree: [{ host, items }] with hosts in the order their first
  * item was intercepted, and hold order within each host.
  */

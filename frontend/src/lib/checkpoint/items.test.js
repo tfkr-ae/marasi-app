@@ -8,6 +8,7 @@ import {
   groupByHost,
   interceptedFor,
   itemTitle,
+  offersInterceptResponse,
   streamedHead,
   summarize,
   treeOrder,
@@ -159,4 +160,13 @@ test("a held head whose content type Marasi streams names its framing", () => {
   assert.equal(streamedHead(json, json.text), "");
   assert.equal(streamedHead(connect, connect.text), "connect");
   assert.equal(streamedHead({ ID: "w", Type: "websocket", text: "" }, ""), "");
+});
+
+test("Forward + intercept response is offered on a held request, but not on one whose body arrives as messages", () => {
+  const plain = request("p", "POST /login HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n\r\n{}");
+  const grpc = request("g", "POST /chat.v1.ChatService/Converse HTTP/2\r\n:authority: x\r\ncontent-type: application/grpc\r\n\r\n");
+  assert.equal(offersInterceptResponse(plain), true);
+  assert.equal(offersInterceptResponse(grpc), false);
+  assert.equal(offersInterceptResponse({ ID: "r", Type: "response", text: "HTTP/1.1 200 OK\r\n\r\n" }), false);
+  assert.equal(offersInterceptResponse(null), false);
 });
