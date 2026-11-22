@@ -215,6 +215,33 @@ export function formatSize(length) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// The order a streamed pair's endings rank in when its directions differ:
+// a cancel or reset tells more than a direction that completed.
+const ENDING_RANK = ["complete", "cut short", "reset", "cancelled"];
+
+/**
+ * A streamed pair's badge (GLOSSARY Streamed pair) from its row's
+ * `Streamed`, or null for an ordinary pair and a row from a Marasi without
+ * streamed state. The label names each streamed direction's framing and
+ * whether the pair is live, ended, cancelled, reset or cut short; live is
+ * coloured, ended plain, and any other ending slashed.
+ */
+export function streamedBadge(streamed) {
+  const directions = [
+    ["request", streamed?.request],
+    ["response", streamed?.response],
+  ].filter(([, d]) => d);
+  if (!directions.length) return null;
+  const framings = directions.map(([name, d]) => `${name} ${d.framing}`).join(", ");
+  const endings = directions.map(([, d]) => d.ending ?? null);
+  if (endings.includes(null)) {
+    return { key: "streamed", label: `Streamed: ${framings} · live`, tone: "text-success-500" };
+  }
+  const ending = endings.reduce((a, b) => (ENDING_RANK.indexOf(b) > ENDING_RANK.indexOf(a) ? b : a));
+  if (ending === "complete") return { key: "streamed", label: `Streamed: ${framings} · ended` };
+  return { key: "streamed", label: `Streamed: ${framings} · ${ending}`, tone: "text-error-500", slashed: true };
+}
+
 /**
  * The badges a row shows, in slot order: { key, label, tone?, slashed? }.
  * `label` is the badge's tooltip and its line in the "+N" list; `tone` is a
@@ -232,6 +259,8 @@ export function rowBadges(row) {
       slashed: Boolean(upgrade.slashed),
     });
   }
+  const streamed = streamedBadge(row?.Streamed);
+  if (streamed) badges.push(streamed);
   if (meta.launchpad) badges.push({ key: "launchpad", label: "In a launchpad" });
   if (meta.armory_run_id) badges.push({ key: "armory", label: "From Armory" });
   if (meta.intercepted) {

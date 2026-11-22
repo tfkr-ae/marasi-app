@@ -3,13 +3,14 @@
 	// badges line up. Past three, the third slot reads "+N"; hovering it
 	// lists every badge with its label in a fixed-positioned tooltip, so the
 	// table cell doesn't clip it.
-	import { Edit2Icon, EditIcon, FlagIcon, Radio, Replace, SendIcon, Swords } from "lucide-svelte";
+	import { Edit2Icon, EditIcon, FlagIcon, Radio, Replace, SendIcon, Swords, Waves } from "lucide-svelte";
 	import { badgeSlots, rowBadges } from "./table.js";
 
 	export let row;
 
 	const ICONS = {
 		websocket: Radio,
+		streamed: Waves,
 		launchpad: SendIcon,
 		armory: Swords,
 		intercepted: FlagIcon,
