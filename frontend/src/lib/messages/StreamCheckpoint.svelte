@@ -68,7 +68,13 @@
 		class="msg-bar flex h-10 shrink-0 items-center justify-between gap-3 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 	>
 		<div class="flex items-center gap-3">
-			<span class="chip variant-soft-surface text-xs">{held.length ? `${held.length} intercepted` : "Nothing intercepted"}</span>
+			<!-- As wide as its longest label, so the switch stays put. -->
+			<span class="chip variant-soft-surface text-xs">
+				<span class="grid">
+					<span class="invisible col-start-1 row-start-1" aria-hidden="true">Nothing intercepted</span>
+					<span class="col-start-1 row-start-1 text-center">{held.length ? `${held.length} intercepted` : "Nothing intercepted"}</span>
+				</span>
+			</span>
 			<StreamInterceptToggle class="stream-intercept" checked={state.streamIntercept} onToggle={toggleIntercept} />
 		</div>
 		<div class="flex shrink-0 items-center gap-1">
