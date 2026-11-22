@@ -3,7 +3,7 @@
 // The shell is MessagesModal.svelte; the pure parts (tab ids, contexts) are
 // MESSAGE_KINDS.stream in kinds.js. Its messages live in streamedPairStore
 // only while the modal is open.
-import { derived } from "svelte/store";
+import { derived, readable } from "svelte/store";
 import {
 	ArrowDown,
 	ArrowLeftRight,
@@ -122,12 +122,13 @@ export const streamKind = {
 			},
 			// The Checkpoint tab's count of the pair's held items.
 			tabCounts: derived(checkpointStore, ($cp) => ({ checkpoint: pairId ? heldOfPair($cp, pairId).length : 0 })),
-			tabProps: derived(view, () => ({
+			// The same props for the modal's life, so a live message changes none.
+			tabProps: readable({
 				messages: pairId && { pairId, onOpenInject: () => openTab("inject") },
 				checkpoint: pairId && { pairId },
 				inject: pairId && { pairId },
 				pair: pairId && { pairId },
-			})),
+			}),
 			missing: "No pair",
 			destroy: () => pairId && streamedPairStore.close(pairId),
 		};

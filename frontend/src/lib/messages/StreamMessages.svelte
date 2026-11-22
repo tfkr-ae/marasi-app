@@ -1,3 +1,5 @@
+<svelte:options immutable />
+
 <script>
 	// The streamed pair kind's Messages tab: the shared message table
 	// (MessagesTable.svelte) over the pair's stream messages in arrival
@@ -5,6 +7,8 @@
 	// message, Load more (in the gap before the live tail, when one arrived
 	// past the loaded messages), and a detail pane showing the protobuf text form
 	// (or UTF-8 text, or read-only hex) with Raw and Metadata toggles.
+	// Immutable: the store replaces what changes, so a live message doesn't
+	// redraw the detail pane.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { Binary, Braces, ChevronsDown, Send } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
@@ -30,11 +34,14 @@
 
 	$: pair = $streamedPairStore.pairs[pairId];
 	$: head = pair?.messages ?? [];
-	// Live messages past the gap Load more fills, while older ones are left.
+	// Live messages past the loaded ones, after the gap Load more fills
+	// while older ones are left.
 	$: tail = pair?.tail ?? [];
-	// Each loaded message's number in the whole call, whatever the filter
-	// shows. A tail message's place isn't known until the gap is filled.
+	$: hasMore = pair?.hasMore ?? false;
+	// Each message's number in the whole call, whatever the filter shows. A
+	// tail message's place isn't known while a gap is before it.
 	$: numbers = new Map(head.map((m, i) => [m.ID, i + 1]));
+	$: tailNumbers = hasMore ? new Map() : new Map(tail.map((m, i) => [m.ID, head.length + i + 1]));
 	$: shownOf = (list) => (filter === "all" ? list : list.filter((m) => m.Direction === filter));
 	$: shownTail = shownOf(tail);
 	$: messages = [...shownOf(head), ...shownTail];
@@ -100,8 +107,8 @@
 	directionOf={(m) => m.Direction}
 	isOutgoing={(m) => m.Direction === "request"}
 	isInjected={(m) => Boolean(m.Metadata?.injected)}
-	numberOf={(m) => numbers.get(m.ID) ?? ""}
-	gap={pair?.hasMore ?? false}
+	numberOf={(m) => numbers.get(m.ID) ?? tailNumbers.get(m.ID) ?? ""}
+	gap={hasMore}
 	{gapBefore}
 	rowChips={messageChips}
 >
