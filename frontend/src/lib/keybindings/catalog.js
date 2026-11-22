@@ -198,7 +198,7 @@ export const FACTORY_ACTIONS = [
     ["forward-picked", "Forward Picked Items", "Forward the picked items, or every item when none are picked", "forward, bulk, picked, all, intercept", primary("shift+a"), { group: "held" }],
     ["drop-picked", "Drop Picked Items", "Drop the picked items, or every item when none are picked", "drop, bulk, picked, all, intercept", primary("shift+x"), { group: "held" }],
     ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("shift+s"), { group: "held" }],
-    ["toggle-stream-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream, intercept, toggle, grpc, messages", primary("shift+t")],
+    ["toggle-stream-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream, intercept, toggle, grpc, messages", primary("shift+t"), { group: "held" }],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
   // Esc, which goes back to the list, is reserved for the page (gate.js),

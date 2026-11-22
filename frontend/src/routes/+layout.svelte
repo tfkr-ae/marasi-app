@@ -117,6 +117,7 @@
 	import SelectTestCaseModal from "../lib/components/SelectTestCaseModal.svelte";
 	import { closeTopOverlay, isolateOverlays } from "../lib/overlayIsolation.js";
 	import MessagesModal from "../lib/messages/MessagesModal.svelte";
+	import { kindOf, MESSAGES_MODAL } from "../lib/messages/kinds.js";
 	import KeybindingsModal from "../lib/components/Keybindings/KeybindingsModal.svelte";
 	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
@@ -364,9 +365,12 @@
 	}
 	// The state menu contexts and the shortcut gate are resolved against.
 	function shortcutState() {
+		const modal = get(modalStore)[0];
 		return {
 			route: get(page).url.pathname,
-			modal: get(modalStore)[0]?.component ?? null,
+			modal: modal?.component ?? null,
+			// The Messages modal's kind, from its meta as soon as it opens.
+			messagesKind: modal?.component === MESSAGES_MODAL ? kindOf(modal.meta).id : null,
 			dialogOpen: Boolean(document.querySelector("dialog[open]")),
 			drawer: get(drawerStore),
 			ledgerDrawer: drawerKeybindingState(get(ledgerStore)),

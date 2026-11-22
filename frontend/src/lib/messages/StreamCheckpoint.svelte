@@ -4,13 +4,15 @@
 	// MessageEditor and Forward and Drop. Everything lives in checkpointStore,
 	// as on the Checkpoint page, so an edit, a Forward or a Drop in either
 	// view shows in the other. The Stream intercept switch is the dock's.
-	import { getToastStore, modeCurrent, SlideToggle } from "@skeletonlabs/skeleton";
+	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { CornerLeftDown, Forward } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
-	import { isSuperseded } from "../service/errors.js";
+	import { directionArrow } from "./kinds.js";
 	import { messageTime } from "./streamMessage.js";
 	import { checkpointStore, heldOfPair, isDirty, refusalOf, textOf } from "../../stores/checkpointStore";
 	import KindTag from "../checkpoint/KindTag.svelte";
+	import { reportFailure, settleItem } from "../checkpoint/settle.js";
+	import StreamInterceptToggle from "../checkpoint/StreamInterceptToggle.svelte";
 	import MessageEditor from "./MessageEditor.svelte";
 
 	export let pairId;
@@ -36,15 +38,9 @@
 	async function settle(what, run) {
 		if (!selected || busy) return;
 		busy = true;
+		const id = selected.ID;
 		try {
-			const result = await run(selected.ID);
-			if (result === "refused") toast("Refused by Marasi", "variant-filled-warning");
-			if (result === "gone") toast("Already gone");
-		} catch (err) {
-			if (!isSuperseded(err)) {
-				console.error(`${what} failed:`, err);
-				toast(`${what} failed`, "variant-filled-error");
-			}
+			await settleItem(what, () => run(id), toast);
 		} finally {
 			busy = false;
 		}
@@ -57,11 +53,9 @@
 		try {
 			await store.toggleStreamIntercept();
 		} catch (err) {
-			if (!isSuperseded(err)) toast("Stream intercept failed", "variant-filled-error");
+			reportFailure("Stream intercept", err, toast);
 		}
 	}
-
-	const ARROWS = { request: "↑", response: "↓" };
 </script>
 
 <div class="flex h-full min-h-0 w-full flex-col">
@@ -70,15 +64,7 @@
 	>
 		<div class="flex items-center gap-3">
 			<span class="chip variant-soft-surface text-xs">{held.length ? `${held.length} intercepted` : "Nothing intercepted"}</span>
-			<div class="stream-intercept" title="Intercept every stream message and trailer block">
-				<SlideToggle
-					name="Stream intercept"
-					size="sm"
-					active="bg-success-500"
-					checked={state.streamIntercept}
-					on:change={toggleIntercept}><span class="whitespace-nowrap text-xs">Stream intercept</span></SlideToggle
-				>
-			</div>
+			<StreamInterceptToggle class="stream-intercept" checked={state.streamIntercept} onToggle={toggleIntercept} />
 		</div>
 		<div class="flex shrink-0 items-center gap-1">
 			<button class="btn btn-sm {primary}" disabled={!selected || busy} on:click={forward}>
@@ -94,6 +80,7 @@
 		<div class="sc-panes grid min-h-0 flex-1 grid-cols-[16rem_1fr]">
 			<ul class="sc-list min-h-0 overflow-auto border-r border-surface-500/30" aria-label="Intercepted messages">
 				{#each held as item (item.ID)}
+					{@const arrow = directionArrow(item.Direction === "request")}
 					<li>
 						<button
 							class="relative flex w-full items-center gap-2 border-b border-surface-500/20 px-2 py-1.5 text-left font-mono text-2xs {item.ID ===
@@ -104,9 +91,7 @@
 							on:click={() => (selectedId = item.ID)}
 						>
 							{#if item.ID === selected?.ID}<span class="absolute bottom-0 left-0 top-0 w-[3px] bg-primary-500"></span>{/if}
-							<span class={item.Direction === "request" ? "text-primary-500" : "text-surface-600 dark:text-secondary-500"}
-								>{ARROWS[item.Direction] ?? ""}</span
-							>
+							<span class={arrow.class}>{arrow.glyph}</span>
 							<KindTag type={item.Type} />
 							<span class="flex-1 truncate opacity-70">{item.Framing ?? ""}</span>
 							{#if isDirty(state, item.ID)}<span class="text-warning-500" title="Edited">●</span>{/if}

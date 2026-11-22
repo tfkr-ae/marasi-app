@@ -17,6 +17,7 @@
 	import { interceptFlag } from "../../stores/interceptFlag.js";
 	import { bulkTargets, interceptedFor, treeOrder } from "./items.js";
 	import KindTag from "./KindTag.svelte";
+	import StreamInterceptToggle from "./StreamInterceptToggle.svelte";
 
 	export let store;
 	/** [{ host, items: [{ ID, item, summary, launch }] }] in tree order. */
@@ -81,16 +82,7 @@
 					><span class="whitespace-nowrap text-xs">Intercept all</span></SlideToggle
 				>
 			</div>
-			<div class="cp-stream-intercept" title="Intercept every stream message and trailer block">
-				<SlideToggle
-					name="Stream intercept"
-					size="sm"
-					active="bg-success-500"
-					checked={state.streamIntercept}
-					on:change={onToggleStreamIntercept}
-					><span class="whitespace-nowrap text-xs">Stream intercept</span></SlideToggle
-				>
-			</div>
+			<StreamInterceptToggle class="cp-stream-intercept" checked={state.streamIntercept} onToggle={onToggleStreamIntercept} />
 			<span class="flex-1"></span>
 			<button
 				class="cp-forward-n btn btn-sm {primary}"

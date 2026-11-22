@@ -88,7 +88,21 @@ test("each kind's contexts are eligible only while the modal shows that kind", (
   assert.equal(streamShared.isEligible({ modal: "Finding", streamTab: "messages" }), false);
 });
 
+test("a stream modal that hasn't published its tab yet never makes the WebSocket contexts eligible", () => {
+  const [streamShared, streamMessages] = kindContexts(stream);
+  const [websocketShared] = kindContexts(websocket);
+  const opening = { modal: "WebsocketStream", messagesKind: "stream", streamTab: null, websocketTab: null };
+  assert.equal(websocketShared.isEligible(opening), false);
+  assert.equal(streamShared.isEligible(opening), true);
+  assert.equal(streamMessages.isEligible(opening), false);
+  assert.equal(streamMessages.isEligible({ ...opening, streamTab: "messages" }), true);
+  // A WebSocket modal names its kind too.
+  const webSocket = { modal: "WebsocketStream", messagesKind: "websocket", streamTab: null, websocketTab: null };
+  assert.equal(websocketShared.isEligible(webSocket), true);
+  assert.equal(streamShared.isEligible(webSocket), false);
+});
+
 test("request arrows are primary; response arrows are surface in light mode and secondary in dark", () => {
-  assert.deepEqual(directionArrow(true), { up: true, class: "text-primary-500" });
-  assert.deepEqual(directionArrow(false), { up: false, class: "text-surface-600 dark:text-secondary-500" });
+  assert.deepEqual(directionArrow(true), { up: true, glyph: "↑", class: "text-primary-500" });
+  assert.deepEqual(directionArrow(false), { up: false, glyph: "↓", class: "text-surface-600 dark:text-secondary-500" });
 });

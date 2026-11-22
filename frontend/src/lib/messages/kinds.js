@@ -2,7 +2,7 @@
 // connection or a streamed pair) gives the shared modal that the keybinding layer
 // also needs. Pure JS, so contexts.js and `node --test` can use it; the
 // kind's components, icons and handlers are in its Svelte-side definition
-// (lib/messages/<kind>/kind.js).
+// (lib/messages/<kind>.js, such as stream.js, listed in definitions.js).
 //
 // A kind names its menu contexts: one shared by every tab (`context`) and
 // one per tab (`<context>.<tab>`). Context and action ids never change once
@@ -48,11 +48,14 @@ export function kindOf(meta) {
   return MESSAGE_KINDS[meta?.kind] ?? MESSAGE_KINDS.websocket;
 }
 
-// Whether the Messages modal shows `kind`: the modal publishes the open tab
-// in the kind's tabState. A modal with no other kind's tab published shows a
-// WebSocket connection, as kindOf does.
+// Whether the Messages modal shows `kind`. The dispatcher state names the
+// open modal's kind (`messagesKind`, from its meta through kindOf) from the
+// moment it opens, before the modal publishes its open tab. Without it, the
+// kind is the one whose tabState is published, and a modal with no other
+// kind's tab published shows a WebSocket connection, as kindOf does.
 function kindShown(kind, state) {
   if (state.modal !== MESSAGES_MODAL) return false;
+  if (state.messagesKind) return state.messagesKind === kind.id;
   if (state[kind.tabState] != null) return true;
   return kind === MESSAGE_KINDS.websocket && Object.values(MESSAGE_KINDS).every((k) => state[k.tabState] == null);
 }
@@ -97,8 +100,9 @@ export function kindContexts(kind) {
 // down for the response (server) one. Response arrows are surface-coloured
 // in light mode, where secondary is too pale to see, and secondary in dark
 // mode. Literal strings so Tailwind's content scan keeps them.
+// `glyph` is the arrow as text, for a label or a chip.
 export function directionArrow(outgoing) {
   return outgoing
-    ? { up: true, class: "text-primary-500" }
-    : { up: false, class: "text-surface-600 dark:text-secondary-500" };
+    ? { up: true, glyph: "↑", class: "text-primary-500" }
+    : { up: false, glyph: "↓", class: "text-surface-600 dark:text-secondary-500" };
 }

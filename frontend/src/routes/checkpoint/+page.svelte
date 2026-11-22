@@ -18,7 +18,7 @@
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
 	import { keyOf } from "../../lib/checkpoint/itemContext.js";
 	import { bulkTargets, dropTitle, groupByHost, offersInterceptResponse, summarize, treeOrder } from "../../lib/checkpoint/items.js";
-	import { isSuperseded } from "../../lib/service/errors.js";
+	import { reportFailure, settleItem } from "../../lib/checkpoint/settle.js";
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -68,40 +68,14 @@
 	function toast(message, background = "variant-filled-surface") {
 		toastStore.trigger({ message, background, timeout: 3000 });
 	}
-	// A connection switch stopped it (superseded): nothing to report.
-	function failed(what, err) {
-		if (isSuperseded(err)) return;
-		console.error(`${what} failed:`, err);
-		toast(`${what} failed`, "variant-filled-error");
-	}
-
-	// A forward or drop of an item that had already left removes it.
-	const GONE = "Already gone";
-
-	// Marasi refused the edit or the drop; the workspace shows its reason.
-	const REFUSED = "Refused by Marasi";
+	const failed = (what, err) => reportFailure(what, err, toast);
 
 	async function forward(id, options = {}) {
-		if (!id) return;
-		try {
-			const result = await store.forward(id, options);
-			if (result === "unparsed") toast("Edit doesn't parse", "variant-filled-warning");
-			if (result === "refused") toast(REFUSED, "variant-filled-warning");
-			if (result === "gone") toast(GONE);
-		} catch (err) {
-			failed("Forward", err);
-		}
+		if (id) await settleItem("Forward", () => store.forward(id, options), toast);
 	}
 
 	async function drop(id) {
-		if (!id) return;
-		try {
-			const result = await store.drop(id);
-			if (result === "refused") toast(REFUSED, "variant-filled-warning");
-			if (result === "gone") toast(GONE);
-		} catch (err) {
-			failed("Drop", err);
-		}
+		if (id) await settleItem("Drop", () => store.drop(id), toast);
 	}
 
 	async function runBulk(kind, ids) {

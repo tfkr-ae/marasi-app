@@ -26,7 +26,7 @@ import { canCancel, streamedPairStore } from "../../stores/streamedPairStore.js"
 import { checkpointStore, heldOfPair } from "../../stores/checkpointStore";
 import { toastError } from "../toasts.js";
 import { formatSize } from "../websocket/presentation.js";
-import { MESSAGE_KINDS } from "./kinds.js";
+import { directionArrow, MESSAGE_KINDS } from "./kinds.js";
 import StreamCheckpoint from "./StreamCheckpoint.svelte";
 import StreamInject from "./StreamInject.svelte";
 import StreamMessages from "./StreamMessages.svelte";
@@ -70,11 +70,11 @@ const TABS = {
 	pair: { icon: Info, component: StreamPair, menu: [] },
 };
 
-const ARROWS = { request: "↑", response: "↓" };
-
 // The header chip while a message arrives: each direction's bytes so far.
 function progressChip(progress) {
-	const parts = Object.entries(progress ?? {}).map(([direction, p]) => `${ARROWS[direction] ?? ""} ${formatSize(p.Bytes)}`);
+	const parts = Object.entries(progress ?? {}).map(
+		([direction, p]) => `${directionArrow(direction === "request").glyph} ${formatSize(p.Bytes)}`,
+	);
 	return parts.length ? `receiving ${parts.join(" · ")}` : null;
 }
 
@@ -102,7 +102,7 @@ export const streamKind = {
 					title: pair ? `${pair.Method} ${pair.Host}${pair.Path}` : "Streamed pair",
 					count: `${pair ? `#${pair.Number} · ` : ""}${count.toLocaleString()}${v?.hasMore ? "+" : ""} messages`,
 					chip: progressChip(v?.progress),
-					chipTitle: "A message is still arriving; it appears in Messages once it is whole",
+					chipTitle: "Message arriving",
 				};
 			}),
 			// Cancel: no confirmation; offered until both directions have ended.

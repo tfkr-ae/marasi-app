@@ -10,6 +10,13 @@
 // text instead.
 import { formatSize } from "../websocket/presentation.js";
 
+/**
+ * The framings whose messages Marasi reads and writes as a text form: the
+ * protobuf text form, or for a +json codec the JSON itself. The others
+ * (SSE, NDJSON) are UTF-8 text.
+ */
+export const TEXT_FORM_FRAMINGS = new Set(["grpc", "grpc-web", "connect"]);
+
 /** The most payload a stream_message event carries (Marasi's limit). */
 const EVENT_PAYLOAD_LIMIT = "64 KB";
 

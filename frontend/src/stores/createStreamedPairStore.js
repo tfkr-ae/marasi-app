@@ -19,13 +19,11 @@
 import { get, writable } from "svelte/store";
 import { boundAction } from "../lib/service/boundAction.js";
 import { isSuperseded } from "../lib/service/errors.js";
+import { TEXT_FORM_FRAMINGS } from "../lib/messages/streamMessage.js";
 import { MESSAGE_CAP } from "./streamedPairApi.js";
 
 const DIRECTIONS = ["request", "response"];
 
-// The framings whose messages Marasi takes as a protobuf text form (or, for
-// a +json codec, as the JSON itself). The others inject UTF-8 text.
-const TEXT_FORM_FRAMINGS = new Set(["grpc", "grpc-web", "connect"]);
 
 function utf8Base64(text) {
   let binary = "";

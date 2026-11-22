@@ -463,7 +463,7 @@ test("the Armory page groups Templates and Runs, with the rest loose", () => {
 test("the Checkpoint groups Held items under I, since H is reserved, and Rules", () => {
   const catalog = buildCatalog();
   assert.deepEqual(groupsOf(catalog, "checkpoint"), [
-    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked"]],
+    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked", "toggle-stream-intercept"]],
     ["rules", "Rules", "R", ["edit-rules", "update-rules"]],
   ]);
   assert.equal(catalog.get("checkpoint.toggle-settings").group, undefined);

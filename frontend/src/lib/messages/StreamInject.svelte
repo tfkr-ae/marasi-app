@@ -12,12 +12,12 @@
 	import { toastError } from "../toasts.js";
 	import { openDirections, streamedPairStore } from "../../stores/streamedPairStore.js";
 	import MessageEditor from "./MessageEditor.svelte";
+	import { TEXT_FORM_FRAMINGS } from "./streamMessage.js";
 
 	export let pairId;
 
 	const toastStore = getToastStore();
 	const LABELS = { request: "↑ Request", response: "↓ Response" };
-	const TEXT_FORM = new Set(["grpc", "grpc-web", "connect"]);
 
 	// The text error Marasi named for the last inject: { line, column, message,
 	// text }, kept while the draft is still the text it was named for.
@@ -29,7 +29,7 @@
 	// The chosen direction, or the first open one when it isn't open.
 	$: direction = open.includes(draft.direction) ? draft.direction : (open[0] ?? null);
 	$: framing = (direction && pair?.directions[direction]?.Framing) || "";
-	$: textForm = TEXT_FORM.has(framing);
+	$: textForm = TEXT_FORM_FRAMINGS.has(framing);
 	$: pending = pair?.inject.pending ?? false;
 	$: held = pair?.inject.held ?? false;
 
