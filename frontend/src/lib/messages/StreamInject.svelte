@@ -83,7 +83,7 @@
 	<div
 		class="msg-bar flex h-10 shrink-0 items-center justify-between gap-2 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 	>
-		<div class="flex items-center gap-2">
+		<div class="si-fields flex items-center gap-2">
 			<label class="flex items-center gap-1.5 text-xs">
 				<span class="opacity-60">Direction</span>
 				<select
@@ -145,3 +145,20 @@
 		/>
 	</div>
 </div>
+
+<style>
+	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
+	   global, as app.css's shared mobile rules are, so they weigh the same
+	   against Skeleton's and Tailwind's classes. The fields wrap rather than
+	   squeeze the Direction select. */
+	@media (max-width: 40rem) {
+		:global(html.mobile .si-fields) {
+			flex-wrap: wrap;
+			row-gap: 0.25rem;
+		}
+		:global(html.mobile .si-fields select) {
+			width: auto;
+			flex-shrink: 0;
+		}
+	}
+</style>
