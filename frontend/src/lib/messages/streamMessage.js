@@ -148,7 +148,7 @@ export function detailOf(message, detail, view) {
     // Raw asks for the bytes, so hex there needs no note.
     return view === "raw" ? { ...payload, note: "" } : payload;
   })();
-  if (detail?.Error) return { ...shown, note: `Couldn't read the message: ${detail.Error}` };
+  if (detail?.Error) return { ...shown, note: "Couldn't read the message" };
   if (waiting) return { text: "", language: null, note: "Loading the full payload…" };
   if (detail?.Full) return { ...shown, note: "Full payload loaded: too large for the live event" };
   return shown;

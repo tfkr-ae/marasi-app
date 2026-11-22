@@ -41,23 +41,26 @@ export const openDirections = (directions) => DIRECTIONS.filter((name) => live(d
 /** Whether Cancel is offered: some streamed direction hasn't ended. */
 export const canCancel = (directions) => openDirections(directions).length > 0;
 
-// Why an inject was refused: { code, message }, plus the line and column
-// for a text form Marasi couldn't encode ("line 2 column 5: …"), and
-// { superseded } after a connection switch.
+// Why an inject was refused: { code, error }, with the toast for a refusal
+// the app names, or the line, column and Marasi's reason for a text form it
+// couldn't encode ("line 2 column 5: …"); { superseded } after a connection
+// switch. Any other refusal's error goes to toastError.
 export function injectRefusal(err) {
   if (isSuperseded(err)) return { superseded: true };
   const code = err?.code ?? "";
-  const message = err?.body?.message ?? String(err);
-  if (code === "stream_not_open") return { code, message, toast: "Stream closed" };
-  if (code === "stream_inject_refused") return { code, message, toast: "Length is fixed" };
-  const at = code === "invalid_stream_request" && message.match(TEXT_ERROR);
-  if (at) return { code, line: Number(at[1]), column: Number(at[2]), message: at[3] };
-  return { code, message };
+  if (code === "stream_not_open") return { code, error: err, toast: "Stream closed" };
+  if (code === "stream_inject_refused") return { code, error: err, toast: "Length is fixed" };
+  const at = code === "invalid_stream_request" && String(err?.body?.message ?? "").match(TEXT_ERROR);
+  if (at) return { code, error: err, line: Number(at[1]), column: Number(at[2]), message: at[3] };
+  return { code, error: err };
 }
 
 // protoscope's syntax error, after Marasi's prefix: "line L column C: why:
 // syntax error". The column counts bytes.
 const TEXT_ERROR = /line (\d+) column (\d+): (.*?)(?:: syntax error)?$/;
+
+/** The list's line when the messages couldn't be read. */
+export const READ_FAILED = "Couldn't read the messages";
 
 let tokens = 0;
 
@@ -174,6 +177,12 @@ export function createStreamedPairStore(api) {
     }));
   }
 
+  // A failed messages read: the list says so; the cause goes to the console.
+  function failedRead(pairId, err) {
+    console.error("Reading stream messages failed:", err);
+    patch(pairId, { error: READ_FAILED });
+  }
+
   // Each open pair's action, bound to the connection its view was loaded
   // from: inject and cancel go through it, so after a switch they send
   // nothing until the view loads again.
@@ -189,7 +198,7 @@ export function createStreamedPairStore(api) {
     try {
       await Promise.all([readHead(pairId, token, action), readPages(pairId, token, null, action)]);
     } catch (err) {
-      if (!isSuperseded(err) && current(pairId, token)) patch(pairId, { error: String(err) });
+      if (!isSuperseded(err) && current(pairId, token)) failedRead(pairId, err);
     } finally {
       if (current(pairId, token)) patch(pairId, { loading: false });
     }
@@ -229,7 +238,7 @@ export function createStreamedPairStore(api) {
     try {
       await readPages(pairId, view.token, view.cursor, actionFor());
     } catch (err) {
-      if (!isSuperseded(err) && current(pairId, view.token)) patch(pairId, { error: String(err) });
+      if (!isSuperseded(err) && current(pairId, view.token)) failedRead(pairId, err);
     } finally {
       if (current(pairId, view.token)) patch(pairId, { loadingMore: false });
     }
@@ -265,7 +274,8 @@ export function createStreamedPairStore(api) {
   }
 
   // Each message's single read, by id: { Text, Payload, Full } once read,
-  // { Loading } on its way, { Error } when it failed (a later select retries).
+  // { Loading } on its way, { Error: true } when it failed (a later select
+  // retries).
   function setDetail(pairId, id, detail) {
     patch(pairId, (view) => ({ details: { ...view.details, [id]: detail } }));
   }
@@ -291,7 +301,10 @@ export function createStreamedPairStore(api) {
       if (!current(pairId, view.token)) return;
       // A connection switch stopped it: selecting again reads it anew.
       if (isSuperseded(err)) setDetail(pairId, id, undefined);
-      else setDetail(pairId, id, { Error: String(err) });
+      else {
+        console.error("Reading a stream message failed:", err);
+        setDetail(pairId, id, { Error: true });
+      }
     }
   }
 

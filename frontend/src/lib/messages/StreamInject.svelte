@@ -9,6 +9,7 @@
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Send } from "lucide-svelte";
 	import { primaryVariant } from "../launchpad/format.js";
+	import { toastError } from "../toasts.js";
 	import { openDirections, streamedPairStore } from "../../stores/streamedPairStore.js";
 	import MessageEditor from "./MessageEditor.svelte";
 
@@ -72,10 +73,7 @@
 			refusal = { ...outcome, text };
 			return;
 		}
-		toastStore.trigger({
-			message: outcome.toast ?? `Unable to inject: ${outcome.message}`,
-			background: "variant-filled-error",
-		});
+		toastError(toastStore, outcome.toast ?? "Inject failed", outcome.toast ? undefined : outcome.error);
 	}
 </script>
 

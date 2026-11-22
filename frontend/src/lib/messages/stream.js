@@ -24,6 +24,7 @@ import {
 import { streamTab } from "../keybindings/app.js";
 import { canCancel, streamedPairStore } from "../../stores/streamedPairStore.js";
 import { checkpointStore, heldOfPair } from "../../stores/checkpointStore";
+import { toastError } from "../toasts.js";
 import { formatSize } from "../websocket/presentation.js";
 import { MESSAGE_KINDS } from "./kinds.js";
 import StreamCheckpoint from "./StreamCheckpoint.svelte";
@@ -114,10 +115,7 @@ export const streamKind = {
 				async run() {
 					const outcome = await streamedPairStore.cancel(pairId);
 					if (outcome.ok || outcome.superseded) return;
-					toastStore.trigger({
-						message: outcome.toast ?? `Unable to cancel: ${outcome.message}`,
-						background: "variant-filled-error",
-					});
+					toastError(toastStore, outcome.toast ?? "Cancel failed", outcome.toast ? undefined : outcome.error);
 				},
 			},
 			// The Checkpoint tab's count of the pair's held items.

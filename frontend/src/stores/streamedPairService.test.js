@@ -15,7 +15,7 @@ import {
   toStreamProgress,
   toHeldStreamItem,
 } from "./streamedPairApi.js";
-import { canCancel, createStreamedPairStore, openDirections } from "./createStreamedPairStore.js";
+import { canCancel, createStreamedPairStore, openDirections, READ_FAILED } from "./createStreamedPairStore.js";
 
 const b64 = (text) => Buffer.from(text).toString("base64");
 
@@ -171,7 +171,7 @@ test("a failed read on selection is shown, and selecting again retries it", asyn
   });
   await store.open("p1");
   await store.select("p1", idOf(1));
-  assert.match(view().details[idOf(1)].Error, /internal_server_error/);
+  assert.equal(view().details[idOf(1)].Error, true);
   fail = false;
   await store.select("p1", idOf(1));
   assert.equal(view().details[idOf(1)].Text, "1:VARINT 1");
@@ -277,6 +277,20 @@ test("a connection switch while the pages load reads no further page from the ne
   await store.open("p1");
   assert.deepEqual(service.onB(), []);
   assert.equal(get(store).pairs.p1.error, "");
+});
+
+test("a failed messages read says so in the list, without the service's text", async () => {
+  const { store, view } = setup({
+    routes: { "GET /stream/p1/message": () => ({ status: 500, body: { error: "internal_server_error" } }) },
+  });
+  const logged = console.error;
+  console.error = () => {};
+  try {
+    await store.open("p1");
+  } finally {
+    console.error = logged;
+  }
+  assert.equal(view().error, READ_FAILED);
 });
 
 test("a selection made after a connection switch reads nothing from the next connection", async () => {
