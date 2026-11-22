@@ -83,7 +83,8 @@
 	import { keyOf } from "../lib/checkpoint/itemContext.js";
 	import { abandonLabel, abandonText } from "../lib/checkpoint/items.js";
 	import { drawerKeybindingState, ledgerStore } from "../stores/ledgerStore";
-	import { applyTextSize, textSize } from "../stores/textSizeStore.js";
+	import { applyTextSize, systemTextScale, textSize } from "../stores/textSizeStore.js";
+	import { watchSystemTextScale } from "../lib/systemTextScale.js";
 	import { off, on, setWindowTitle } from "../lib/runtime.js";
 	import { chefShown, mobile, mobileCheck, platformCheck } from "../lib/platform.js";
 	import { applyColourScheme } from "../lib/lightMode.js";
@@ -282,8 +283,23 @@
 		QuitQuestion: { ref: QuitQuestionModal },
 	};
 	// Text size sizes the root element, so everything in rem follows it.
-	// readConfig sets it before startup draws any text.
-	$: applyTextSize($textSize);
+	// readConfig sets it before startup draws any text. On a phone, the
+	// phone's own text size scales it too (lib/systemTextScale.js).
+	$: applyTextSize($textSize, $systemTextScale);
+	onMount(() => {
+		let stop = () => {};
+		let stopped = false;
+		const watch = (name) => {
+			if (!stopped) stop = watchSystemTextScale(name, (scale) => systemTextScale.set(scale));
+		};
+		// Android's bridge is there from the first frame, before Go answers.
+		if (window.MarasiAndroid) watch("android");
+		else platformCheck.then(watch);
+		return () => {
+			stopped = true;
+			stop();
+		};
+	});
 	// Startup reaches the Marasi service (the local instance, started or
 	// attached to by the connection store), and carries on once the
 	// service's project has loaded. It resolves to that project.

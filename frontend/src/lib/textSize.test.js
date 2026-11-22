@@ -72,3 +72,10 @@ test("a Ledger row is 22px at Default and a whole pixel count at every size", ()
     assert.ok(Number.isInteger(ledgerRowHeight(size)), size.id);
   }
 });
+
+test("the phone's text scale multiplies the root font size and the Ledger row", () => {
+  assert.equal(rootFontSize(textSizeFrom("default"), 1.3), "20.8px");
+  assert.equal(rootFontSize(textSizeFrom("large"), 1.15), "20.7px");
+  assert.equal(ledgerRowHeight(textSizeFrom("default"), 1.3), 29);
+  assert.equal(ledgerRowHeight(textSizeFrom("default"), 1), 22);
+});

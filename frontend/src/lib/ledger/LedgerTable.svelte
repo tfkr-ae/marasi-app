@@ -11,7 +11,7 @@
 	// was, so nothing moves under the researcher.
 	import { afterUpdate, createEventDispatcher } from "svelte";
 	import RowBadges from "./RowBadges.svelte";
-	import { textSize } from "../../stores/textSizeStore.js";
+	import { systemTextScale, textSize } from "../../stores/textSizeStore.js";
 	import { ledgerRowHeight } from "../textSize.js";
 	import {
 		LEDGER_COLUMNS,
@@ -74,7 +74,7 @@
 	let height = 600;
 
 	// Rows grow with the Text size; every scroll and row-position helper takes this height.
-	$: rowHeight = ledgerRowHeight($textSize);
+	$: rowHeight = ledgerRowHeight($textSize, $systemTextScale);
 	$: headerPx = headerHeight(rowHeight);
 	$: rowsHeight = Math.max(0, height - headerPx);
 	$: range = visibleRange({
@@ -99,7 +99,7 @@
 	let anchor = { id: null, offset: 0 };
 	let laidOut = rows;
 	let laidOutReset = resetKey;
-	let laidOutRowHeight = ledgerRowHeight($textSize);
+	let laidOutRowHeight = ledgerRowHeight($textSize, $systemTextScale);
 	let reported = "";
 
 	// Records the top row in view and reports the rows in view when they

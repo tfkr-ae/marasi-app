@@ -10,7 +10,7 @@
 	import { chefAdapter } from "./chefAdapter.js";
 	import { chefColumns, chefTheme } from "./chefTheme.js";
 	import { forwardMenuShortcuts } from "../../keybindings/app.js";
-	import { textSize } from "../../../stores/textSizeStore.js";
+	import { textScale } from "../../../stores/textSizeStore.js";
 	import { mobileCheck } from "../../platform.js";
 	import { installMenuSwipe } from "../../menuSwipe.js";
 
@@ -56,7 +56,7 @@
 	// CyberChef's columns, refit when the frame's width or the Text size
 	// changes, so the Recipe column keeps its share on a narrow frame.
 	let fitted = "";
-	function fitColumns(scale = $textSize.scale) {
+	function fitColumns(scale = $textScale) {
 		const width = frame?.clientWidth;
 		if (!adapter || !width) return;
 		const key = `${width}:${scale}`;
@@ -151,7 +151,7 @@
 			if (onMobile && adapter === next) stopSwipe = installMenuSwipe(win, modalStore);
 		});
 		fitted = "";
-		applyTheme(!$modeCurrent, $textSize.scale);
+		applyTheme(!$modeCurrent, $textScale);
 		resizes?.disconnect();
 		resizes = new ResizeObserver(() => fitColumns());
 		resizes.observe(frame);
@@ -162,7 +162,7 @@
 		dispatch("ready", { adapter });
 	}
 
-	$: applyTheme(!$modeCurrent, $textSize.scale);
+	$: applyTheme(!$modeCurrent, $textScale);
 	$: if (adapter && recipe) loading = loading.then(() => show(recipe));
 
 	/** Records what CyberChef holds now, before something reads the recipe. */

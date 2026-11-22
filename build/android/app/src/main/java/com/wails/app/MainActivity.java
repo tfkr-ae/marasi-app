@@ -21,7 +21,9 @@ import android.graphics.BitmapFactory;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.TypedValue;
 import android.webkit.ConsoleMessage;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -163,6 +165,11 @@ public class MainActivity extends AppCompatActivity {
         // The page stays https, a secure context (crypto.randomUUID, the
         // clipboard).
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // Marasi: the web view's text zoom follows the phone's Font size, but
+        // it grows only the text, not the space around it. It stays at 100%,
+        // and the page scales its root font size instead
+        // (MarasiAndroid.textScale, lib/systemTextScale.js).
+        settings.setTextZoom(100);
 
         // Enable debugging in debug builds
         if (DEBUG) {
@@ -989,6 +996,17 @@ public class MainActivity extends AppCompatActivity {
                 options.setOrientationLocked(false);
                 qrLauncher.launch(options);
             });
+        }
+
+        // How much the phone's Font size grows 16sp text, the page's root
+        // font size at Default. Android 14's non-linear font scaling grows
+        // large text less than small text, so it is measured at 16sp rather
+        // than read from fontScale. The activity restarts when Font size
+        // changes, so the page reads it once per load.
+        @JavascriptInterface
+        public float textScale() {
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16f, metrics) / (16f * metrics.density);
         }
 
         // The status and navigation bars' icons follow the app's own colour
