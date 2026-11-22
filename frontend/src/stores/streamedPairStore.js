@@ -1,9 +1,11 @@
 // The app's streamed pair messages store over the service client. The logic
 // lives in createStreamedPairStore.js and the API shapes in
 // streamedPairApi.js; this file binds them to the app's client and routes
-// the stream_message, stream_message.progress and streamed_pair.* events.
+// the stream_message, stream_message.progress and streamed_pair.* events,
+// batched (eventBatch.js).
 import { service } from "../lib/service/index.js";
 import { createStreamedPairStore } from "./createStreamedPairStore.js";
+import { eventBatch } from "./eventBatch.js";
 
 export { canCancel, openDirections } from "./createStreamedPairStore.js";
 import { projectData } from "./projectData.js";
@@ -23,10 +25,12 @@ projectData.register("streamed-pairs", {
   load: streamedPairStore.resync,
 });
 
-service.on("stream_message", (message) => streamedPairStore.onMessage(toStreamMessage(message)));
-service.on("stream_message.progress", (progress) => streamedPairStore.onProgress(toStreamProgress(progress)));
+// A fast stream's events land in the store a batch at a time, in order.
+const live = eventBatch(streamedPairStore.onEvents);
+service.on("stream_message", (message) => live({ message: toStreamMessage(message) }));
+service.on("stream_message.progress", (progress) => live({ progress: toStreamProgress(progress) }));
 // An inject Checkpoint intercepts shows "Intercepted in Checkpoint" in the Inject tab.
 service.on("checkpoint.held", (item) => streamedPairStore.onCheckpointHeld(toHeldStreamItem(item)));
 for (const name of STREAMED_PAIR_EVENTS) {
-  service.on(name, (event) => streamedPairStore.onStreamedPair(toStreamedPairEvent(event)));
+  service.on(name, (event) => live({ streamedPair: toStreamedPairEvent(event) }));
 }
