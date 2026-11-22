@@ -1,7 +1,7 @@
 // Menu contexts: Marasi-defined pages and interface states that decide which
 // menu actions are eligible. Each context has a tier; when several eligible
 // contexts bind the same key, the most specific tier wins.
-import { canOpenDrawerStream } from "../websocket/presentation.js";
+import { canOpenDrawerMessages } from "../messages/open.js";
 import { kindContexts, MESSAGE_KINDS, MESSAGES_MODAL, stepTab } from "../messages/kinds.js";
 
 export const TIERS = ["overlay", "drawer", "page", "global"];
@@ -66,14 +66,14 @@ export const CONTEXTS = [
   {
     id: "ledger.drawer-open.websocket",
     tier: "drawer",
-    label: "Ledger drawer (WebSocket upgrade)",
+    label: "Ledger drawer (WebSocket upgrade or streamed pair)",
     page: "Ledger",
-    state: "Drawer open (WebSocket)",
+    state: "Drawer open (messages)",
     overlaps: ["ledger.drawer-open"],
     isEligible: (state) =>
       onRoute("/ledger")(state) &&
       ledgerDrawerOpen(state) &&
-      canOpenDrawerStream(state.ledgerDrawer.meta),
+      canOpenDrawerMessages(state.ledgerDrawer.meta),
   },
   {
     id: "ledger.drawer-open",

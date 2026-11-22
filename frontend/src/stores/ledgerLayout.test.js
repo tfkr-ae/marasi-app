@@ -182,8 +182,16 @@ test("the keybinding drawer state says whether the drawer is open and what the p
       metadata: { protocol: "websocket" },
       response: { StatusCode: 101, ContentType: "" },
       incomingResponse: null,
+      streamed: null,
     },
   });
+});
+
+test("the keybinding drawer state carries a streamed pair's streamed state", async () => {
+  const streamed = { request: { framing: "grpc", ending: null }, response: null };
+  const store = await storeWith([pair("a", { Streamed: streamed })]);
+  store.selectPair("a");
+  assert.deepEqual(drawerKeybindingState(get(store)).meta.streamed, streamed);
 });
 
 test("the drawer's details column starts collapsed and stays as left across closing, reopening and a project switch", async () => {

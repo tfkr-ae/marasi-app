@@ -144,6 +144,17 @@ test("⌘⇧G opens the WebSocket stream only from an upgrade request's drawer",
   );
 });
 
+test("⌘⇧G opens a streamed pair's messages from its drawer, a live one whose response hasn't started too", () => {
+  const dispatcher = mac();
+  const press = () => cmdShift("G", "KeyG");
+  const live = { streamed: { request: { framing: "grpc", ending: null }, response: null } };
+  const ended = { streamed: { request: null, response: { framing: "sse", ending: "complete" } } };
+  for (const meta of [live, ended]) {
+    assert.equal(dispatcher.resolve(press(), on("/ledger", requestDrawer(meta))), "ledger.drawer-open.websocket.open-stream");
+  }
+  assert.equal(dispatcher.resolve(press(), on("/ledger", requestDrawer({ streamed: null }))), null);
+});
+
 test("⌘⇧G does not open a stream for a failed or dropped upgrade", () => {
   const dispatcher = mac();
   const press = () => cmdShift("G", "KeyG");

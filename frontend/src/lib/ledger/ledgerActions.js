@@ -2,7 +2,7 @@
 import { goto } from "$app/navigation";
 import { get } from "svelte/store";
 import { modeCurrent } from "@skeletonlabs/skeleton";
-import { canOpenDrawerStream } from "../websocket/presentation.js";
+import { canOpenDrawerMessages } from "../messages/open.js";
 import { curlCommand, markdownTable, narrowQuery, pairURL, similarIDs } from "./rowMenu.js";
 import { linkedText, plural, requestCount, unchangedText } from "./counts.js";
 import { LAUNCHPADS_EACH_MAX, sameID } from "./pairs.js";
@@ -120,8 +120,20 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 		return focused ? ledgerStore.getDetails(focused.ID, RAW_ONLY) : Promise.reject(new Error("no pair"));
 	}
 
+	// Opens the focused pair's messages: a streamed pair's stream messages,
+	// or a WebSocket upgrade's connection.
 	async function openWebSocketStream() {
-		if (!isDrawerOpen() || !canOpenDrawerStream(drawerKeybindingState(get(ledgerStore)).meta) || get(modalStore)[0]) return;
+		const meta = drawerKeybindingState(get(ledgerStore)).meta;
+		if (!isDrawerOpen() || !canOpenDrawerMessages(meta) || get(modalStore)[0]) return;
+		if (meta.streamed) {
+			modalStore.trigger({
+				type: "component",
+				component: "WebsocketStream",
+				toggleAction: "ledger.drawer-open.websocket.open-stream",
+				meta: { kind: "stream", pairId: focusedPair(get(ledgerStore)).ID },
+			});
+			return;
+		}
 		const details = await focusedDetails();
 		modalStore.trigger({
 			type: "component",

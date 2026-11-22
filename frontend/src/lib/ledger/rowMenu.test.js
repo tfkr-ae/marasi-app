@@ -72,6 +72,14 @@ test("one pair: Launchpad, Armory, Drawing, Browser view, Finding, Test case, No
   assert.equal(item(menu, "lp-each"), undefined, "one each needs several pairs");
 });
 
+test("a streamed pair's row offers Open messages, a live one whose response hasn't started too", () => {
+  const live = pair("a", { Streamed: { request: { framing: "grpc", ending: null }, response: null } });
+  assert.deepEqual(ids(menuFor([live], context())).slice(0, 2), ["websocket", "launchpad"]);
+  assert.equal(item(menuFor([live], context()), "websocket").label, "Open messages");
+  assert.deepEqual(item(menuFor([live], context()), "websocket").action, { type: "websocket", id: "a" });
+  assert.equal(item(menuFor([pair("b", { Streamed: null })], context()), "websocket"), undefined);
+});
+
 test("a WebSocket upgrade row offers Open messages", () => {
   const ws = pair("a", { StatusCode: 101, Metadata: { protocol: "websocket" } });
   assert.deepEqual(ids(menuFor([ws], context())).slice(0, 2), ["websocket", "launchpad"]);

@@ -11,7 +11,7 @@
 	import { X } from "lucide-svelte";
 	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { menuDispatcher, useMenuActions } from "../../lib/keybindings/app.js";
-	import { canOpenDrawerStream } from "../../lib/websocket/presentation.js";
+	import { canOpenDrawerMessages } from "../../lib/messages/open.js";
 	import Dock from "../../lib/dock/Dock.svelte";
 	import { LEDGER_DOCK } from "../../lib/dock/dock.js";
 	import LedgerToolbar from "../../lib/ledger/LedgerToolbar.svelte";
@@ -207,7 +207,7 @@
 	// the catalog says, then the Marasi section.
 	$: menuOptions = !$drawerKeys.open
 		? ledgerMenu
-		: canOpenDrawerStream($drawerKeys.meta)
+		: canOpenDrawerMessages($drawerKeys.meta)
 			? [websocketDrawerMenuItem, ...drawerMenu]
 			: drawerMenu;
 
@@ -330,7 +330,7 @@
 						palette={$highlightPalette}
 						findings={linkedTo($focused.ID, $findingStore)}
 						testCases={linkedTo($focused.ID, $testCaseStore)}
-						canOpenStream={canOpenDrawerStream($drawerKeys.meta)}
+						canOpenStream={canOpenDrawerMessages($drawerKeys.meta)}
 						on:step={(e) => ledgerStore.stepSelection(e.detail)}
 						on:maximise={() => ledgerStore.toggleDrawerMaximised()}
 						on:close={closeDrawer}

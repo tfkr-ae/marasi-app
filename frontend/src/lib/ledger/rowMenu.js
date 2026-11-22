@@ -15,7 +15,7 @@
 // `icon` is a key into RowMenu.svelte's icon map.
 // The highlight item has `swatches` instead of `sub`: one action item per
 // highlight, then None, each with a `color` (null for None) and `checked`.
-import { upgradeFromLedgerRow, upgradePresentation } from "../websocket/presentation.js";
+import { canOpenRowMessages } from "../messages/open.js";
 import { shortType } from "./table.js";
 import { effectivePalette } from "./highlights.js";
 import { LAUNCHPADS_EACH_MAX } from "./pairs.js";
@@ -322,7 +322,7 @@ export function menuFor(
   const types = unique(pairs.map((pair) => pair.ContentType).filter(Boolean));
   const statuses = unique(pairs.map((pair) => Number(pair.StatusCode) || 0));
   const highlights = unique(pairs.map(highlightOf).filter(Boolean)).sort((a, b) => a - b);
-  const websocket = one && upgradePresentation(upgradeFromLedgerRow(one)).canOpen;
+  const websocket = one && canOpenRowMessages(one);
   const finding = linkMenu({
     key: "f",
     noun: "finding",
