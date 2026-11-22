@@ -301,6 +301,28 @@ test("each direction's codec comes from the pair's content types, the response's
   assert.deepEqual(sse.view().codecs, { request: null, response: null });
 });
 
+test("live messages wait in the tail while the pages load, so the loaded list never grows past what was read", async () => {
+  const live = toStreamMessage(message(MESSAGE_CAP + 9));
+  const seen = [];
+  let store;
+  const service = fakeService({ count: MESSAGE_CAP + 2 });
+  const stored = service.client;
+  const pages = { ...stored };
+  pages.get = async (path, query) => {
+    const page = await stored.get(path, query);
+    if (path === "/stream/p1/message" && query.cursor) {
+      store.onMessage(live);
+      seen.push(get(store).pairs.p1.messages.some((m) => m.ID === live.ID));
+    }
+    return page;
+  };
+  store = createStreamedPairStore(createStreamedPairApi(pages));
+  await store.open("p1");
+  assert.ok(seen.length > 0);
+  assert.deepEqual(seen.filter(Boolean), []);
+  assert.deepEqual(get(store).pairs.p1.tail.map((m) => m.ID), [live.ID]);
+});
+
 test("a failed messages read says so in the list, without the service's text", async () => {
   const { store, view } = setup({
     routes: { "GET /stream/p1/message": () => ({ status: 500, body: { error: "internal_server_error" } }) },

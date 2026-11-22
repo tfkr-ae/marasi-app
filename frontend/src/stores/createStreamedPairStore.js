@@ -222,7 +222,7 @@ export function createStreamedPairStore(api) {
     } catch (err) {
       if (!isSuperseded(err) && current(pairId, token)) failedRead(pairId, err);
     } finally {
-      if (current(pairId, token)) patch(pairId, { loading: false });
+      if (current(pairId, token)) patch(pairId, (view) => ({ loading: false, ...splitAtCursor(view) }));
     }
   }
 
@@ -262,21 +262,23 @@ export function createStreamedPairStore(api) {
     } catch (err) {
       if (!isSuperseded(err) && current(pairId, view.token)) failedRead(pairId, err);
     } finally {
-      if (current(pairId, view.token)) patch(pairId, { loadingMore: false });
+      if (current(pairId, view.token)) patch(pairId, (v) => ({ loadingMore: false, ...splitAtCursor(v) }));
     }
   }
 
   /**
    * stream_message, for an open pair: appended after the loaded messages,
-   * or to the tail after the gap while older ones are left to load. The
-   * message has arrived, so its direction's progress goes.
+   * or to the tail while pages load or older ones are left to load (after
+   * the gap), so the loaded list holds only what was read. A read that
+   * reaches the end joins the tail to it (splitAtCursor). The message has
+   * arrived, so its direction's progress goes.
    */
   function onMessage(message) {
     const view = viewOf(message?.PairID);
     if (!view) return;
     const { [message.Direction]: _arrived, ...progress } = view.progress;
     patch(message.PairID, (v) =>
-      v.hasMore && !v.loading && !v.loadingMore
+      v.hasMore || v.loading || v.loadingMore
         ? { progress, tail: merge(v.tail, [message]) }
         : { progress, messages: merge(v.messages, [message]) },
     );
