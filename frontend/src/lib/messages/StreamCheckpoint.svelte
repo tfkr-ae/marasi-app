@@ -69,8 +69,8 @@
 		class="msg-bar flex h-10 shrink-0 items-center justify-between gap-3 border-b border-surface-500/30 bg-surface-100-800-token px-2 text-xs"
 	>
 		<div class="flex items-center gap-3">
-			<span class="chip variant-soft-surface text-xs">{held.length ? `${held.length} held` : "Nothing held"}</span>
-			<div class="stream-intercept" title="Hold every stream message and trailer block">
+			<span class="chip variant-soft-surface text-xs">{held.length ? `${held.length} intercepted` : "Nothing intercepted"}</span>
+			<div class="stream-intercept" title="Intercept every stream message and trailer block">
 				<SlideToggle
 					name="Stream intercept"
 					size="sm"
@@ -92,7 +92,7 @@
 
 	{#if held.length}
 		<div class="sc-panes grid min-h-0 flex-1 grid-cols-[16rem_1fr]">
-			<ul class="sc-list min-h-0 overflow-auto border-r border-surface-500/30" aria-label="Held messages">
+			<ul class="sc-list min-h-0 overflow-auto border-r border-surface-500/30" aria-label="Intercepted messages">
 				{#each held as item (item.ID)}
 					<li>
 						<button
@@ -150,8 +150,8 @@
 		</div>
 	{:else}
 		<div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 text-xs opacity-60">
-			<span>No held messages for this pair</span>
-			<span>{state.streamIntercept ? "Stream intercept is on" : "Turn on Stream intercept to hold its messages"}</span>
+			<span>No intercepted messages for this pair</span>
+			<span>{state.streamIntercept ? "Stream intercept is on" : "Turn on Stream intercept to intercept its messages"}</span>
 		</div>
 	{/if}
 </div>

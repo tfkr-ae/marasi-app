@@ -34,7 +34,7 @@
 		},
 	});
 	const { header, tabProps } = session;
-	// A count beside a tab's label (the Checkpoint tab's held items), by tab id.
+	// A count beside a tab's label (the Checkpoint tab's intercepted items), by tab id.
 	const tabCounts = session.tabCounts ?? readable({});
 	// The kind's header action (Close Connection), or none.
 	const action = session.action;
@@ -151,7 +151,7 @@
 							<svelte:component this={tab.icon} size={14} />
 							<span>{tab.label}</span>
 							{#if $tabCounts[tab.id]}
-								<span class="badge variant-filled-warning px-1.5 py-0 text-3xs" title="{$tabCounts[tab.id]} held"
+								<span class="badge variant-filled-warning px-1.5 py-0 text-3xs" title="{$tabCounts[tab.id]} intercepted"
 									>{$tabCounts[tab.id]}</span
 								>
 							{/if}

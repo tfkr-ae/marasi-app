@@ -84,7 +84,7 @@ test("rows are marked injected, edited, held, dropped, compressed, too large or 
   const labels = (metadata, extra = {}) => messageChips(msg({ Metadata: metadata, ...extra })).map((c) => c.label);
   assert.deepEqual(labels({ injected: true }), ["Injected"]);
   assert.deepEqual(labels({ intercepted: true, edited: true }), ["Edited"]);
-  assert.deepEqual(labels({ intercepted: true }), ["Held"]);
+  assert.deepEqual(labels({ intercepted: true }), ["Intercepted"]);
   assert.deepEqual(labels({ intercepted: true, dropped: true }), ["Dropped"]);
   assert.deepEqual(labels({ encoding: "gzip" }, { Compressed: true }), ["gzip"]);
   assert.deepEqual(labels({ too_large: true, size_seen: 10 }), ["Too large"]);

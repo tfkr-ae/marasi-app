@@ -91,7 +91,7 @@ export function messageChips(message) {
   if (m.injected) add("Injected", "tertiary", "Injected from Marasi");
   if (m.dropped) add("Dropped", "error", "Dropped in Checkpoint; the other side never saw it");
   else if (m.edited) add("Edited", "tertiary", "Edited before it was forwarded");
-  else if (m.intercepted) add("Held", "warning", "Held in Checkpoint, then forwarded unchanged");
+  else if (m.intercepted) add("Intercepted", "warning", "Intercepted in Checkpoint, then forwarded unchanged");
   if (message.Compressed) add(m.encoding || "compressed", "surface", `Compressed (${m.encoding || "unknown encoding"})`);
   if (m.too_large) add("Too large", "error", `Over the size limit: ${formatSize(m.size_seen)} seen`);
   if (m.inflate_error) add("Corrupt", "error", `Could not decompress: ${m.inflate_error}`);

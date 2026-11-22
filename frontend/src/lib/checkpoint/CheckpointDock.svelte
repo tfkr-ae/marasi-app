@@ -81,7 +81,7 @@
 					><span class="whitespace-nowrap text-xs">Intercept all</span></SlideToggle
 				>
 			</div>
-			<div class="cp-stream-intercept" title="Hold every stream message and trailer block">
+			<div class="cp-stream-intercept" title="Intercept every stream message and trailer block">
 				<SlideToggle
 					name="Stream intercept"
 					size="sm"

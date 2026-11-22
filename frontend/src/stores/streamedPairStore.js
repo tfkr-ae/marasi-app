@@ -25,7 +25,7 @@ projectData.register("streamed-pairs", {
 
 service.on("stream_message", (message) => streamedPairStore.onMessage(toStreamMessage(message)));
 service.on("stream_message.progress", (progress) => streamedPairStore.onProgress(toStreamProgress(progress)));
-// An inject Checkpoint holds shows "Held in Checkpoint" in the Inject tab.
+// An inject Checkpoint intercepts shows "Intercepted in Checkpoint" in the Inject tab.
 service.on("checkpoint.held", (item) => streamedPairStore.onCheckpointHeld(toHeldStreamItem(item)));
 for (const name of STREAMED_PAIR_EVENTS) {
   service.on(name, (event) => streamedPairStore.onStreamedPair(toStreamedPairEvent(event)));

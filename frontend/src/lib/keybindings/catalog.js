@@ -279,8 +279,8 @@ export const FACTORY_ACTIONS = [
   ]),
   ...pageActions("stream.checkpoint", [
     ["toggle-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream checkpoint intercept toggle grpc", primary("shift+i")],
-    ["forward-message", "Forward Held Message", "Forward the selected held message or trailer block", "stream checkpoint forward message trailers", primary("shift+f")],
-    ["drop-message", "Drop Held Message", "Drop the selected held message or trailer block", "stream checkpoint drop message trailers", primary("shift+d")],
+    ["forward-message", "Forward Intercepted Message", "Forward the selected intercepted message or trailer block", "stream checkpoint forward message trailers", primary("shift+f")],
+    ["drop-message", "Drop Intercepted Message", "Drop the selected intercepted message or trailer block", "stream checkpoint drop message trailers", primary("shift+d")],
   ]),
   ...pageActions("stream.inject", [
     ["toggle-direction", "Toggle Inject Direction", "Switch between the open directions", "stream inject direction request response", primary("shift+d")],

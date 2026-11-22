@@ -3,8 +3,8 @@
 	// direction, written as the protobuf text form for gRPC, gRPC-Web and
 	// Connect and as UTF-8 text otherwise, with Send uncompressed. The draft
 	// lives in streamedPairStore, so it survives switching tabs and Copy to
-	// Inject can fill it. An inject Checkpoint holds shows "Held in
-	// Checkpoint" until it is forwarded or dropped; the rest of the modal
+	// Inject can fill it. An inject Checkpoint intercepts shows "Intercepted
+	// in Checkpoint" until it is forwarded or dropped; the rest of the modal
 	// stays usable meanwhile.
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { Send } from "lucide-svelte";
@@ -115,7 +115,7 @@
 
 		<div class="flex items-center gap-1">
 			{#if held}
-				<span class="chip variant-soft-warning text-xs" title="Forward or drop it in Checkpoint">Held in Checkpoint</span>
+				<span class="chip variant-soft-warning text-xs" title="Forward or drop it in Checkpoint">Intercepted in Checkpoint</span>
 			{:else if !open.length && pair && !pair.loading}
 				<span class="chip variant-soft-error text-xs">Stream closed</span>
 			{/if}
