@@ -276,9 +276,20 @@
 		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
+	/* When the phone's text size leaves no room for the listener and Open
+	   Project side by side, Open Project wraps under the listener. */
+	:global(html.mobile .mobile-home .header > .btn-group) {
+		flex-wrap: wrap;
+		max-width: 100%;
+	}
+	:global(html.mobile .mobile-home .header > .btn-group > .btn) {
+		flex: 1 1 0;
+		min-width: max-content;
+		justify-content: center;
+	}
 	/* ---- Narrow mobile: Home, the dock buttons, CVSS ---- */
-	   /* Home's listener and Open Project, and Download Certificate, each take
-	   the full width, one row each. */
+	/* Home's listener and Open Project, and Download Certificate, each take
+	   the full width. */
 	@media (max-width: 40rem) {
 		:global(html.mobile .mobile-home .header > *) {
 			flex: 1 1 100%;

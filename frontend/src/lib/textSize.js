@@ -35,18 +35,22 @@ export function smallerTextSize(size) {
 /** The root font size at Default, which rem sizes are written against. */
 const ROOT_FONT_PX = 16;
 
-/** The root element's font size at `size`, as a CSS length. */
-export function rootFontSize(size) {
-  return `${ROOT_FONT_PX * size.scale}px`;
+/**
+ * The root element's font size at `size`, as a CSS length. `system` is the
+ * phone's own text scale (lib/systemTextScale.js), 1 on the desktop.
+ */
+export function rootFontSize(size, system = 1) {
+  return `${Math.round(ROOT_FONT_PX * size.scale * system * 100) / 100}px`;
 }
 
 /** A Ledger row's height at Default. */
 const LEDGER_ROW_PX = 22;
 
 /**
- * A Ledger row's height in px at `size`. It is rounded to a whole pixel,
- * because the Ledger's scroll helpers compare exact integer offsets.
+ * A Ledger row's height in px at `size` and the phone's text scale `system`.
+ * It is rounded to a whole pixel, because the Ledger's scroll helpers compare
+ * exact integer offsets.
  */
-export function ledgerRowHeight(size) {
-  return Math.round(LEDGER_ROW_PX * size.scale);
+export function ledgerRowHeight(size, system = 1) {
+  return Math.round(LEDGER_ROW_PX * size.scale * system);
 }
