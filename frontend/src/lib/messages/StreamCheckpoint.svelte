@@ -156,9 +156,12 @@
 	@media (max-width: 40rem) {
 		:global(html.mobile .sc-panes) {
 			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: minmax(0, 10rem) minmax(0, 1fr);
+			grid-template-rows: auto minmax(0, 1fr);
 		}
+		/* As tall as its items, up to 10rem, so the editor sits high and
+		   iOS scrolls the page less to keep the caret above the keyboard. */
 		:global(html.mobile .sc-list) {
+			max-height: 10rem;
 			border-right-width: 0;
 			border-bottom-width: 1px;
 		}
