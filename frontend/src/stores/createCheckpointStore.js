@@ -57,6 +57,14 @@ function refusal(id, err) {
   return { message, line: at ? Number(at[1]) : 0, column: at ? Number(at[2]) : 0 };
 }
 
+/**
+ * The streamed pair's held stream messages and trailer blocks, oldest
+ * first: what the Messages modal's Checkpoint tab lists.
+ */
+export function heldOfPair(state, pairId) {
+  return state.items.filter((item) => (item.Type === "stream" || item.Type === "trailer") && item.PairID === pairId);
+}
+
 /** True while the item's latest edit is being checked. */
 export function isChecking(state, id) {
   return state.checking.includes(id);

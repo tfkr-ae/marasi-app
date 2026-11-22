@@ -51,12 +51,13 @@ test("a kind gets one shared menu context and one per tab, eligible only while i
 
 const stream = MESSAGE_KINDS.stream;
 
-test("a modal opened with the stream kind shows a streamed pair, with Messages, Inject and Pair tabs", () => {
+test("a modal opened with the stream kind shows a streamed pair, with Messages, Checkpoint, Inject and Pair tabs", () => {
   assert.equal(kindOf({ kind: "stream", pairId: "p1" }), stream);
   assert.deepEqual(
     stream.tabs.map((tab) => [tab.id, tab.label]),
     [
       ["messages", "Messages"],
+      ["checkpoint", "Checkpoint"],
       ["inject", "Inject"],
       ["pair", "Pair"],
     ],
@@ -71,6 +72,7 @@ test("each kind's contexts are eligible only while the modal shows that kind", (
     [
       ["stream", "Streamed pair"],
       ["stream.messages", "Streamed pair Messages tab"],
+      ["stream.checkpoint", "Streamed pair Checkpoint tab"],
       ["stream.inject", "Streamed pair Inject tab"],
       ["stream.pair", "Streamed pair Pair tab"],
     ],

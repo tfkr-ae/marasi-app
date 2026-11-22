@@ -198,6 +198,7 @@ export const FACTORY_ACTIONS = [
     ["forward-picked", "Forward Picked Items", "Forward the picked items, or every item when none are picked", "forward, bulk, picked, all, intercept", primary("shift+a"), { group: "held" }],
     ["drop-picked", "Drop Picked Items", "Drop the picked items, or every item when none are picked", "drop, bulk, picked, all, intercept", primary("shift+x"), { group: "held" }],
     ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("shift+s"), { group: "held" }],
+    ["toggle-stream-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream, intercept, toggle, grpc, messages", primary("shift+t")],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
   // Esc, which goes back to the list, is reserved for the page (gate.js),
@@ -275,6 +276,11 @@ export const FACTORY_ACTIONS = [
     ["toggle-message-metadata", "Toggle Message Metadata", "Switch between the message and its metadata", "stream message metadata", primary("shift+m")],
     ["toggle-raw", "Toggle Raw Message", "Switch between the message's text form and its raw payload", "stream message raw payload text form protobuf", primary("shift+r")],
     ["copy-message-to-inject", "Copy Message to Inject", "Copy the selected message into the Inject tab", "stream message copy inject resend", primary("shift+i")],
+  ]),
+  ...pageActions("stream.checkpoint", [
+    ["toggle-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream checkpoint intercept toggle grpc", primary("shift+i")],
+    ["forward-message", "Forward Held Message", "Forward the selected held message or trailer block", "stream checkpoint forward message trailers", primary("shift+f")],
+    ["drop-message", "Drop Held Message", "Drop the selected held message or trailer block", "stream checkpoint drop message trailers", primary("shift+d")],
   ]),
   ...pageActions("stream.inject", [
     ["toggle-direction", "Toggle Inject Direction", "Switch between the open directions", "stream inject direction request response", primary("shift+d")],

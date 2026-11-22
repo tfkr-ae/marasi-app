@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { get, writable } from "svelte/store";
 import { serviceError, superseded } from "../lib/service/errors.js";
 import { createCheckpointApi, toCheckpointItem, toSettled } from "./checkpointApi.js";
-import { createCheckpointStore, isDirty, parseErrorOf, refusalOf, textOf } from "./createCheckpointStore.js";
+import { createCheckpointStore, heldOfPair, isDirty, parseErrorOf, refusalOf, textOf } from "./createCheckpointStore.js";
 
 const b64 = (text) => Buffer.from(text).toString("base64");
 const unb64 = (data) => Buffer.from(data, "base64").toString();
@@ -340,26 +340,26 @@ test("bulk forward stops at the item a connection switch overtook, sending the r
 
 // Stream messages and trailer blocks, as GET /checkpoint lists them.
 const PROTO_TEXT = '1:VARINT 1\n3:LEN {"hi"}';
-const streamItem = (id, { text = PROTO_TEXT, payload = b64("\x08\x01\x1a\x02hi"), framing = "grpc", direction = "request" } = {}) => ({
+const streamItem = (id, { text = PROTO_TEXT, payload = b64("\x08\x01\x1a\x02hi"), framing = "grpc", direction = "request", pair = "pair1" } = {}) => ({
   id,
   type: "stream",
   payload,
   text,
   direction,
   framing,
-  pair_id: "pair1",
+  pair_id: pair,
   flags: 0,
   compressed: false,
   metadata: {},
   intercepted_at: "2026-11-22T10:00:00Z",
 });
-const trailerItem = (id, raw = "grpc-status: 0\r\ngrpc-message: ok\r\n") => ({
+const trailerItem = (id, raw = "grpc-status: 0\r\ngrpc-message: ok\r\n", pair = "pair1") => ({
   id,
   type: "trailer",
   raw: b64(raw),
   direction: "response",
   framing: "grpc",
-  pair_id: "pair1",
+  pair_id: pair,
   metadata: {},
   intercepted_at: "2026-11-22T10:00:01Z",
 });
@@ -383,6 +383,20 @@ test("held stream messages and trailer blocks list in hold order with their text
   assert.deepEqual([e.textForm, e.editable], [false, true]);
   assert.equal(textOf(state, "x"), "00 ff 01");
   assert.equal(x.editable, false);
+});
+
+test("a pair's held items are its stream messages and trailer blocks, oldest first, and leave as the page forwards them", async () => {
+  const other = streamItem("o", { pair: "pair2" });
+  const head = httpItem("pair1", "request", "POST /chat.v1.ChatService/Converse HTTP/2\r\ncontent-type: application/grpc\r\n\r\n");
+  const { store } = await loaded([head, streamItem("s"), other, trailerItem("t"), streamItem("u", { direction: "response" })]);
+  const held = (pair) => heldOfPair(get(store), pair).map((item) => item.ID);
+  assert.deepEqual(held("pair1"), ["s", "t", "u"]);
+  assert.deepEqual(held("pair2"), ["o"]);
+  assert.deepEqual(held("nope"), []);
+  await store.forward("s");
+  assert.deepEqual(held("pair1"), ["t", "u"]);
+  await store.drop("u");
+  assert.deepEqual(held("pair1"), ["t"]);
 });
 
 test("a stream message forwards an edited text form as text, else as payload; a trailer block as raw", async () => {

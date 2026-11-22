@@ -15,6 +15,7 @@ import { NO_BODIES, pairQuery } from "./trafficApi.js";
 import { createWebSocketApi } from "./webSocketApi.js";
 
 export {
+  heldOfPair,
   isChecking,
   isDirty,
   parseErrorOf,

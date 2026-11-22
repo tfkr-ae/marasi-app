@@ -35,6 +35,7 @@ export const MESSAGE_KINDS = {
     tabState: "streamTab",
     tabs: [
       { id: "messages", label: "Messages" },
+      { id: "checkpoint", label: "Checkpoint" },
       { id: "inject", label: "Inject" },
       { id: "pair", label: "Pair" },
     ],

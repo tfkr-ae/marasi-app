@@ -209,6 +209,12 @@ test("Next Record is ⌘⇧] (Ctrl+Shift+]) on both platforms, and Esc stays wit
   assert.equal(mac().resolve(keydown("Escape", "Escape"), on("/logbook")), null);
 });
 
+test("the Checkpoint page turns Stream intercept over on ⌘⇧T", () => {
+  const dispatcher = mac();
+  assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), on("/checkpoint")), "checkpoint.toggle-stream-intercept");
+  assert.equal(dispatcher.resolve(cmdShift("T", "KeyT"), on("/ledger")), null);
+});
+
 test("Checkpoint forwards picked items on ⌘⇧A, drops them on ⌘⇧X and intercepts the response on ⌘⇧S", () => {
   const dispatcher = mac();
   const page = on("/checkpoint");
@@ -397,6 +403,10 @@ test("the streamed pair modal's actions take their WebSocket counterparts' keys"
     ["messages", cmdShift("R", "KeyR"), "stream.messages.toggle-raw"],
     ["messages", cmdShift("I", "KeyI"), "stream.messages.copy-message-to-inject"],
     ["messages", cmdShift("Enter", "Enter"), null],
+    ["checkpoint", cmdShift("I", "KeyI"), "stream.checkpoint.toggle-intercept"],
+    ["checkpoint", cmdShift("F", "KeyF"), "stream.checkpoint.forward-message"],
+    ["checkpoint", cmdShift("D", "KeyD"), "stream.checkpoint.drop-message"],
+    ["checkpoint", cmdShift("M", "KeyM"), null],
     ["inject", cmdShift("D", "KeyD"), "stream.inject.toggle-direction"],
     ["inject", cmdShift("Enter", "Enter"), "stream.inject.inject-message"],
     ["inject", cmdShift("I", "KeyI"), null],
@@ -405,7 +415,7 @@ test("the streamed pair modal's actions take their WebSocket counterparts' keys"
   for (const [tab, event, actionId] of expected) {
     assert.equal(dispatcher.resolve(event, streamModal(tab)), actionId, `${tab} ${event.key}`);
   }
-  for (const tab of ["messages", "inject", "pair"]) {
+  for (const tab of ["messages", "checkpoint", "inject", "pair"]) {
     assert.equal(dispatcher.resolve(cmd("[", "BracketLeft"), streamModal(tab)), "stream.previous-tab");
     assert.equal(dispatcher.resolve(cmd("]", "BracketRight"), streamModal(tab)), "stream.next-tab");
     assert.equal(dispatcher.resolve(cmd("1", "Digit1"), streamModal(tab)), "global.go-home");
@@ -694,7 +704,7 @@ function everyContextState() {
   return [
     on("/"),
     ...["stream", "checkpoint", "inject", "connection"].map((tab) => websocketModal(tab)),
-    ...["messages", "inject", "pair"].map((tab) => streamModal(tab)),
+    ...["messages", "checkpoint", "inject", "pair"].map((tab) => streamModal(tab)),
     on("/ledger"),
     on("/ledger", requestDrawer()),
     on("/ledger", requestDrawer(websocketUpgrade)),

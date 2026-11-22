@@ -6,7 +6,7 @@
 	// confirmations, the toasts and the checkpoint.* shortcuts.
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
-	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft } from "lucide-svelte";
+	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft, Waves } from "lucide-svelte";
 	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { checkpointItemContext as itemContext, checkpointRules, checkpointStore } from "../../stores/checkpointStore";
@@ -17,7 +17,7 @@
 	import ItemWorkspace from "../../lib/checkpoint/ItemWorkspace.svelte";
 	import RulesEditor from "../../lib/checkpoint/RulesEditor.svelte";
 	import { keyOf } from "../../lib/checkpoint/itemContext.js";
-	import { bulkTargets, dropTitle, groupByHost, summarize, treeOrder } from "../../lib/checkpoint/items.js";
+	import { bulkTargets, dropTitle, groupByHost, offersInterceptResponse, summarize, treeOrder } from "../../lib/checkpoint/items.js";
 	import { isSuperseded } from "../../lib/service/errors.js";
 
 	const toastStore = getToastStore();
@@ -212,7 +212,12 @@
 		{
 			actionId: "checkpoint.forward-intercept-response",
 			icon: CornerDownRight,
-			handler: () => selected?.item.Type === "request" && forward(selected.ID, { interceptResponse: true }),
+			handler: () => offersInterceptResponse(selected?.item) && forward(selected.ID, { interceptResponse: true }),
+		},
+		{
+			actionId: "checkpoint.toggle-stream-intercept",
+			icon: Waves,
+			handler: toggleStreamIntercept,
 		},
 		{
 			actionId: "checkpoint.forward-picked",

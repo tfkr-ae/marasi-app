@@ -11,16 +11,22 @@ import {
 	Braces,
 	ChevronLeft,
 	ChevronRight,
+	CornerLeftDown,
+	FlagIcon,
+	Forward,
 	Info,
 	ListIcon,
 	OctagonX,
 	SendIcon,
+	ToggleLeft,
 	Waves,
 } from "lucide-svelte";
 import { streamTab } from "../keybindings/app.js";
 import { canCancel, streamedPairStore } from "../../stores/streamedPairStore.js";
+import { checkpointStore, heldOfPair } from "../../stores/checkpointStore";
 import { formatSize } from "../websocket/presentation.js";
 import { MESSAGE_KINDS } from "./kinds.js";
+import StreamCheckpoint from "./StreamCheckpoint.svelte";
 import StreamInject from "./StreamInject.svelte";
 import StreamMessages from "./StreamMessages.svelte";
 import StreamPair from "./StreamPair.svelte";
@@ -40,6 +46,15 @@ const TABS = {
 			{ actionId: "stream.messages.toggle-message-metadata", icon: Braces, run: (tab) => tab.toggleMetadata() },
 			{ actionId: "stream.messages.toggle-raw", icon: Binary, run: (tab) => tab.toggleRaw() },
 			{ actionId: "stream.messages.copy-message-to-inject", icon: SendIcon, run: (tab) => tab.copyToInject() },
+		],
+	},
+	checkpoint: {
+		icon: FlagIcon,
+		component: StreamCheckpoint,
+		menu: [
+			{ actionId: "stream.checkpoint.toggle-intercept", icon: ToggleLeft, run: (tab) => tab.toggleIntercept() },
+			{ actionId: "stream.checkpoint.forward-message", icon: Forward, run: (tab) => tab.forward() },
+			{ actionId: "stream.checkpoint.drop-message", icon: CornerLeftDown, run: (tab) => tab.drop() },
 		],
 	},
 	inject: {
@@ -105,8 +120,11 @@ export const streamKind = {
 					});
 				},
 			},
+			// The Checkpoint tab's count of the pair's held items.
+			tabCounts: derived(checkpointStore, ($cp) => ({ checkpoint: pairId ? heldOfPair($cp, pairId).length : 0 })),
 			tabProps: derived(view, () => ({
 				messages: pairId && { pairId, onOpenInject: () => openTab("inject") },
+				checkpoint: pairId && { pairId },
 				inject: pairId && { pairId },
 				pair: pairId && { pairId },
 			})),
