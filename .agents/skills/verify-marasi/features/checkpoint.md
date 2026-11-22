@@ -140,7 +140,7 @@ Open the modal and turn interception on:
 ```json
 {"name":"ws-on","steps":[
  {"click":".ledger-row","hasText":"/socket"},{"waitSelector":".ledger-drawer"},
- {"click":"[aria-label=\"Open WebSocket stream\"]"},{"waitText":"Connection"},
+ {"click":"[aria-label=\"Open messages\"]"},{"waitText":"Connection"},
  {"text":"Checkpoint"},{"waitText":"Queue empty"},{"text":"Intercept Off"},{"waitText":"Intercept On"}]}
 ```
 
