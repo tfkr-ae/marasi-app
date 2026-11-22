@@ -2,7 +2,8 @@
 // shape of the Ledger's row menu (ledger/rowMenu.js), so RowMenu.svelte
 // renders it and menuAction runs its shortcuts. Every item is a Move, to the
 // end of another launchpad or to a new place in this one, a removal,
-// copying one entry's browser view URL, or a Finding or Test case item.
+// copying one entry's browser view URL, Add to Drawing or Send to
+// CyberChef with one entry, or a Finding or Test case item.
 // The launchpad menu (launchpadMenu.js) shares recordItems. Plain
 // functions, so they load under node.
 //
@@ -11,6 +12,8 @@
 //   { type: "reorder", before }        within the launchpad; before null is the end
 //   { type: "remove" }                 unlink from the launchpad
 //   { type: "browser-view", id }       copy the entry's browser view URL
+//   { type: "add-to-drawing", id }     the entry's pair as a card on the drawing
+//   { type: "send-to-chef", id }       the entry's request into CyberChef
 //   { type: "new-finding" }            a new finding with the entries' pairs
 //   { type: "new-test-case" }          a new test case with the entries' pairs
 //   { type: "link-finding", id, title }      also unlink-finding,
@@ -98,7 +101,8 @@ const ORDER_ITEMS = [
  * entries whose launch is pending, and `findings` and `testCases` the
  * project's records for the Finding and Test case items. Reordering is off
  * while the tree is `grouped` by status or `searching`; moving to another
- * launchpad's end is not.
+ * launchpad's end is not. `chef` is whether the app offers CyberChef
+ * (chefShown); without it, Send to CyberChef is left out.
  */
 export function entryMenuFor({
   launchpadId,
@@ -111,6 +115,7 @@ export function entryMenuFor({
   testCases = [],
   grouped = false,
   searching = false,
+  chef = true,
 }) {
   const order = entries.map((entry) => entry.ID);
   const picked = order.filter((id) => ids.includes(id));
@@ -169,6 +174,24 @@ export function entryMenuFor({
       ...(viewOff ? { disabled: true, hint: viewOff } : {}),
       action: { type: "browser-view", id: picked[0] },
     },
+    {
+      id: "drawing",
+      label: "Add to Drawing",
+      icon: "shapes",
+      ...(one ? {} : { disabled: true, hint: "One entry at a time" }),
+      action: { type: "add-to-drawing", id: picked[0] },
+    },
+    ...(chef
+      ? [
+          {
+            id: "chef",
+            label: "Send to CyberChef",
+            icon: "cooking-pot",
+            ...(one ? {} : { disabled: true, hint: "One entry at a time" }),
+            action: { type: "send-to-chef", id: picked[0] },
+          },
+        ]
+      : []),
     "sep",
     ...recordItems(
       entries.filter((entry) => picked.includes(entry.ID)),

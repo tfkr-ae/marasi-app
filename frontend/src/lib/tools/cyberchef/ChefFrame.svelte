@@ -6,16 +6,25 @@
 	// open Rename and Switch. chefAdapter is the only code that reaches into
 	// CyberChef itself.
 	import { createEventDispatcher, onDestroy } from "svelte";
-	import { modeCurrent } from "@skeletonlabs/skeleton";
+	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { chefAdapter } from "./chefAdapter.js";
-	import { chefTheme } from "./chefTheme.js";
+	import { chefColumns, chefTheme } from "./chefTheme.js";
 	import { forwardMenuShortcuts } from "../../keybindings/app.js";
 	import { textSize } from "../../../stores/textSizeStore.js";
+	import { mobileCheck } from "../../platform.js";
+	import { installMenuSwipe } from "../../menuSwipe.js";
 
 	/** The open recipe ({ id, operations, inputs }). */
 	export let recipe;
 
 	const dispatch = createEventDispatcher();
+	// Skeleton's modal store, which the tool harness doesn't set up.
+	let modalStore = null;
+	try {
+		modalStore = getModalStore();
+	} catch {
+		// No modals to keep the menu from opening over.
+	}
 	// What CyberChef holds is recorded this often, and before a switch.
 	const SNAPSHOT_MS = 500;
 
@@ -24,6 +33,8 @@
 	let shownId = null;
 	let loading = Promise.resolve();
 	let stopKeys = () => {};
+	let stopSwipe = () => {};
+	let resizes;
 	let poll;
 
 	function applyTheme(dark, scale) {
@@ -39,6 +50,23 @@
 			doc.head.appendChild(style);
 		}
 		style.textContent = theme.css;
+		fitColumns(scale);
+	}
+
+	// CyberChef's columns, refit when the frame's width or the Text size
+	// changes, so the Recipe column keeps its share on a narrow frame.
+	let fitted = "";
+	function fitColumns(scale = $textSize.scale) {
+		const width = frame?.clientWidth;
+		if (!adapter || !width) return;
+		const key = `${width}:${scale}`;
+		if (key === fitted) return;
+		fitted = key;
+		try {
+			adapter.setColumns(chefColumns(width, scale));
+		} catch {
+			// The frame is going away.
+		}
 	}
 
 	// Records what CyberChef holds for the recipe it shows, when that changed.
@@ -115,7 +143,18 @@
 		stopKeys();
 		stopKeys = forwardMenuShortcuts(win);
 		interceptRecipeButtons(win, frame.contentDocument);
+		// The frame's touches never reach the app's window, so the swipe
+		// that opens the Marasi menu is installed in the frame as well. Not
+		// awaited: the recipe must load before anything else runs here.
+		stopSwipe();
+		mobileCheck.then((onMobile) => {
+			if (onMobile && adapter === next) stopSwipe = installMenuSwipe(win, modalStore);
+		});
+		fitted = "";
 		applyTheme(!$modeCurrent, $textSize.scale);
+		resizes?.disconnect();
+		resizes = new ResizeObserver(() => fitColumns());
+		resizes.observe(frame);
 		loading = show(recipe);
 		await loading;
 		clearInterval(poll);
@@ -134,6 +173,8 @@
 	onDestroy(() => {
 		clearInterval(poll);
 		stopKeys();
+		stopSwipe();
+		resizes?.disconnect();
 	});
 </script>
 

@@ -41,6 +41,10 @@
     import LaunchpadWorkspace from "../../lib/launchpad/LaunchpadWorkspace.svelte";
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
     import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
+    import { addPairToDrawing } from "../../lib/tools/addToDrawing.js";
+    import { sendTextToChef } from "../../lib/tools/cyberchef/sendAction.js";
+    import { pairText } from "../../lib/tools/cyberchef/send.js";
+    import { chefShown } from "../../lib/platform.js";
     import { launchpadMenuFor } from "../../lib/launchpad/launchpadMenu.js";
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
@@ -217,6 +221,7 @@
             testCases: $testCaseStore,
             grouped: groupByStatus,
             searching: state.search.trim() !== "",
+            chef: $chefShown,
         };
     }
 
@@ -315,11 +320,29 @@
         if (!sourceId || !ids.length) return;
         if (action.type === "remove") return removeEntries(sourceId, ids);
         if (action.type === "browser-view") return copyBrowserView(action.id);
+        if (action.type === "add-to-drawing") return addEntryToDrawing(sourceId, action.id);
+        if (action.type === "send-to-chef") return sendEntryToChef(action.id);
         if (runRecordAction(action, ids)) return;
         const targetId = action.type === "move" ? action.targetId : sourceId;
         const before = action.type === "move" ? null : action.before;
         const { moved } = await moveEntries({ sourceId, targetId, ids, before });
         if (moved?.length) await tree?.showEntry(targetId, moved[0]);
+    }
+
+    function addEntryToDrawing(launchpadId, id) {
+        const entry = get(launchpadStore).entriesByLaunchpad[launchpadId]?.find((e) => e.ID === id);
+        addPairToDrawing(toastStore, entry);
+    }
+
+    // The entry's request as Insert puts a pair's into CyberChef.
+    async function sendEntryToChef(id) {
+        try {
+            const details = await launchpadStore.ensureDetails(id);
+            sendTextToChef(pairText(details?.Request?.Raw), toastStore);
+        } catch (err) {
+            console.error("Launchpad send to CyberChef error:", err);
+            toastError(toastStore, "Failed to read the request", err);
+        }
     }
 
     // Removing the entry a dirty draft came from would replace the draft,

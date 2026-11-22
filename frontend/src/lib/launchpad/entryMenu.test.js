@@ -165,7 +165,7 @@ const shape = (items) => items.map((it) => (it === "sep" ? "sep" : it.heading ? 
 test("Finding and Test case sit between Copy browser view URL and Remove", () => {
   assert.deepEqual(shape(menu(["b"], { findings, testCases })), [
     "move", "#Order", "top", "up", "down", "bottom", "sep",
-    "browser-view", "sep", "finding", "testcase", "sep", "remove",
+    "browser-view", "drawing", "chef", "sep", "finding", "testcase", "sep", "remove",
   ]);
   assert.equal(item(menu(["b"]), "finding").label, "Finding");
   assert.equal(item(menu(["b"]), "testcase").label, "Test case");
@@ -237,4 +237,20 @@ test("New finding and New test case show their shortcut keys and run as shortcut
     hint: undefined,
   });
   assert.deepEqual(menuAction(items, "launchpad.tree.create-test-case").action, { type: "new-test-case" });
+});
+
+test("Add to Drawing and Send to CyberChef take one entry", () => {
+  assert.deepEqual(item(menu(["b"]), "drawing").action, { type: "add-to-drawing", id: "b" });
+  assert.deepEqual(item(menu(["b"]), "chef").action, { type: "send-to-chef", id: "b" });
+  assert.equal(item(menu(["b"]), "drawing").disabled, undefined);
+  assert.equal(item(menu(["b"]), "chef").disabled, undefined);
+  for (const id of ["drawing", "chef"]) {
+    assert.equal(item(menu(["b", "c"]), id).disabled, true);
+    assert.equal(item(menu(["b", "c"]), id).hint, "One entry at a time");
+  }
+});
+
+test("Send to CyberChef is left out where the app has no CyberChef", () => {
+  assert.equal(item(menu(["b"], { chef: false }), "chef"), null);
+  assert.ok(item(menu(["b"], { chef: false }), "drawing"));
 });

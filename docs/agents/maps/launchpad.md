@@ -40,7 +40,9 @@ While a launch is pending, Marasi refuses to move or remove its pair, or to dele
 
 ## Findings and test cases
 
-The entry menu's Finding and Test case submenus sit between Copy browser view URL and Remove. They act on the Entry selection's pairs, as the Ledger's do, and pending launches disable none of them.
+Add to Drawing (`add-to-drawing`) and Send to CyberChef (`send-to-chef`, left out without `chef`, the page's `chefShown`) follow Copy browser view URL, for one entry; the page runs them with `addPairToDrawing` and with the entry's request (`ensureDetails`) through `sendTextToChef`.
+
+The entry menu's Finding and Test case submenus sit between those and Remove. They act on the Entry selection's pairs, as the Ledger's do, and pending launches disable none of them.
 
 - `new-finding` and `new-test-case` open the Logbook modal through `newRecord` with the entries' ids as its requests. Nothing is saved until Save. Their New items carry the `launchpad.tree.create-finding` and `launchpad.tree.create-test-case` shortcuts (⌘⇧F, ⌘⇧B; ⌘⇧T is Toggle TLS), which `runEntryShortcut` runs like the Order ones. `recordItems` takes the ids as `newActionIds`, so a menu without shortcuts leaves them out.
 - `link-finding`, `unlink-finding`, `link-test-case` and `unlink-test-case` carry `{ id, title }`. `runRecordAction` on the page calls the store's `linkEntriesToRecord` or `unlinkEntriesFromRecord(ids, kind, recordId)`, with `kind` "finding" or "test_case". `LINK_ACTIONS` maps each type to its direction, noun and kind. `changeLinks` words success and an unchanged result as the Ledger does (`linkedText`, `unchangedText`), but a failure always offers Retry: a launchpad's selection is always `{ ids }`, so the Ledger's case that builds a job can't happen, and the spec wants a retry.

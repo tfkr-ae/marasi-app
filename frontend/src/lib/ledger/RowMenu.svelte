@@ -39,6 +39,7 @@
 		Trash2,
 		Unlink,
 		X,
+		CookingPot,
 	} from "lucide-svelte";
 	import { placeMenu, placeSubmenu } from "./menuPlacement.js";
 	import { filterMenu, isPartialSelection, isRunnable, isSwatchRow, menuFor, selectionSummary } from "./rowMenu.js";
@@ -97,6 +98,7 @@
 		bottom: ArrowDownToLine,
 		globe: Globe,
 		shapes: Shapes,
+		"cooking-pot": CookingPot,
 	};
 	const SEVERITY_CLASS = {
 		Critical: "bg-red-600 text-white",
