@@ -6,7 +6,8 @@
 // The mapper for launch stream events (toLaunch; traffic events use
 // trafficApi.js's toRequestEvent and toResponseEvent) is
 // exported for launchpadStore.js.
-import { encodeBase64Text } from "../lib/service/bytes.js";
+import { decodeBase64Text, encodeBase64Text } from "../lib/service/bytes.js";
+import { isStreamRequestOpen } from "../lib/launchpad/streamRequestOpen.js";
 import { pairQuery, RAW_ONLY, toDetails } from "./trafficApi.js";
 
 /** A launchpad from GET /launchpad, in the store's fields. */
@@ -98,11 +99,27 @@ export function createLaunchpadApi(client) {
       const launchpad = await client.get(`/launchpad/${id}`);
       return (launchpad.items ?? []).map(toEntry);
     },
-    // Null for a pair the service can't find, as the binding gave.
+    // Null for a pair the service can't find, as the binding gave. A
+    // streamed request is stored with an empty body, so its request is the
+    // one Marasi joins from its messages, ready to launch. While the
+    // request is still streaming Marasi refuses to join it
+    // (stream_request_open): the stored request stays, marked
+    // RequestStreaming, and the store refuses to launch it.
     async getRawDetails(id) {
+      let pair;
       try {
-        return toLaunchpadDetails(await client.get(`/traffic/${id}`, pairQuery(RAW_ONLY)));
+        pair = await client.get(`/traffic/${id}`, pairQuery(RAW_ONLY));
       } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+      const details = { ...toLaunchpadDetails(pair), RequestStreaming: false };
+      if (!pair.streamed?.request) return details;
+      try {
+        const joined = await client.get(`/traffic/${id}/request/joined`);
+        return { ...details, Request: { ...details.Request, Raw: decodeBase64Text(joined.raw) } };
+      } catch (err) {
+        if (isStreamRequestOpen(err)) return { ...details, RequestStreaming: true };
         if (isNotFound(err)) return null;
         throw err;
       }

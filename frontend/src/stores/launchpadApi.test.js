@@ -356,6 +356,48 @@ test("launchpad events map to the store's summary, and traffic.changed names the
   assert.equal(launchpadsChangedBy({ change: "highlight", selection }), null);
 });
 
+const streamedPair = (requestEnding) => ({
+  id: "0190s",
+  number: 2,
+  request: { method: "POST", raw: b64("POST /svc/Call HTTP/1.1\r\n\r\n") },
+  response: { status_code: -1, raw: null },
+  prettified: { request: null, response: null },
+  streamed: { request: { framing: "grpc", ending: requestEnding }, response: null },
+});
+
+test("getRawDetails gives a streamed pair's request joined from its messages, ready to launch", async () => {
+  const joined = "POST /svc/Call HTTP/1.1\r\nContent-Length: 7\r\n\r\n\u0000\u0000\u0000\u0000\u0002hi";
+  const client = fakeServiceClient({
+    "GET /traffic/0190s": streamedPair("complete"),
+    "GET /traffic/0190s/request/joined": { id: "0190s", raw: b64(joined), streamed: true, messages: 1, omitted: 0 },
+  });
+  const details = await createLaunchpadApi(client).getRawDetails("0190s");
+  assert.equal(details.Request.Raw, joined);
+  assert.equal(details.RequestStreaming, false);
+});
+
+test("getRawDetails marks a streamed pair whose request is still streaming, keeping its stored request", async () => {
+  const client = fakeServiceClient({
+    "GET /traffic/0190s": streamedPair(null),
+    "GET /traffic/0190s/request/joined": { status: 409, body: { error: "stream_request_open", message: "still carried" } },
+  });
+  const details = await createLaunchpadApi(client).getRawDetails("0190s");
+  assert.equal(details.Request.Raw, "POST /svc/Call HTTP/1.1\r\n\r\n");
+  assert.equal(details.RequestStreaming, true);
+});
+
+test("getRawDetails reads no joined request for an ordinary pair, or one whose only streamed direction is the response", async () => {
+  const sse = { ...streamedPair(null), streamed: { request: null, response: { framing: "sse", ending: null } } };
+  const client = fakeServiceClient({
+    "GET /traffic/0190a": { id: "0190a", number: 1, request: { method: "GET", raw: b64("GET /") }, response: { status_code: 200, raw: null }, prettified: {} },
+    "GET /traffic/0190s": sse,
+  });
+  const api = createLaunchpadApi(client);
+  assert.equal((await api.getRawDetails("0190a")).RequestStreaming, false);
+  assert.equal((await api.getRawDetails("0190s")).RequestStreaming, false);
+  assert.ok(client.calls.every((call) => !call.path.endsWith("/request/joined")));
+});
+
 test("getRawDetails reads only the raw text: Launchpad never shows the prettified copies", async () => {
   const client = fakeServiceClient({
     "GET /traffic/0190a": { id: "0190a", number: 1, request: { method: "GET", raw: "R0VUIC8=" }, response: { status_code: 200, raw: null }, prettified: { request: null, response: null } },
