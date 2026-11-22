@@ -430,10 +430,11 @@ export function createCheckpointStore(api, { interceptFlag = writable(false) } =
   }
 
   /**
-   * checkpoint.updated: another client may have turned Intercept all or
-   * Stream intercept over. A flag the event leaves out stays as it was.
+   * checkpoint.updated (toCheckpointFlags): another client may have turned
+   * Intercept all or Stream intercept over. A flag the event leaves out
+   * stays as it was.
    */
-  function onUpdated({ intercept, stream_intercept: streamIntercept } = {}) {
+  function onUpdated({ intercept, streamIntercept } = {}) {
     if (typeof intercept === "boolean") interceptFlag.set(intercept);
     if (typeof streamIntercept === "boolean") setStreamIntercept(streamIntercept);
   }

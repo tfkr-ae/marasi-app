@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get, writable } from "svelte/store";
 import { serviceError, superseded } from "../lib/service/errors.js";
-import { createCheckpointApi, toCheckpointItem, toSettled } from "./checkpointApi.js";
+import { createCheckpointApi, toCheckpointFlags, toCheckpointItem, toSettled } from "./checkpointApi.js";
 import { createCheckpointStore, heldOfPair, isDirty, parseErrorOf, refusalOf, textOf } from "./createCheckpointStore.js";
 
 const b64 = (text) => Buffer.from(text).toString("base64");
@@ -274,7 +274,7 @@ test("Intercept all turns the service's flag over", async () => {
 
 test("checkpoint.updated keeps Intercept all in step with other clients", async () => {
   const { store, interceptFlag } = await loaded([]);
-  store.onUpdated({ intercept: true, websocket_intercept: false });
+  store.onUpdated(toCheckpointFlags({ intercept: true, websocket_intercept: false }));
   assert.equal(get(interceptFlag), true);
 });
 
@@ -472,10 +472,10 @@ test("Stream intercept comes from the list and checkpoint.updated, and turns ove
   assert.deepEqual(posts(marasi), [["/checkpoint/stream-intercept", { stream_intercept: false }]]);
   assert.equal(get(store).streamIntercept, false);
 
-  store.onUpdated({ intercept: false, websocket_intercept: false, stream_intercept: true });
+  store.onUpdated(toCheckpointFlags({ intercept: false, websocket_intercept: false, stream_intercept: true }));
   assert.equal(get(store).streamIntercept, true);
   // An older service sends no stream_intercept: the switch stays as it was.
-  store.onUpdated({ intercept: true });
+  store.onUpdated(toCheckpointFlags({ intercept: true }));
   assert.equal(get(store).streamIntercept, true);
 });
 

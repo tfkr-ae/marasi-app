@@ -57,6 +57,15 @@ export const toSettled = (event) => ({
   Reason: event.reason,
 });
 
+/**
+ * checkpoint.updated: the flags it carries. A flag the event leaves out (an
+ * older service sends no stream_intercept) is undefined.
+ */
+export const toCheckpointFlags = (event) => ({
+  intercept: event?.intercept,
+  streamIntercept: event?.stream_intercept,
+});
+
 // The forward body: `raw` for an HTTP item or a trailer block, `payload`
 // for a WebSocket message, `text` for a stream message edited as its text
 // form and `payload` for one edited as its bytes (never both), nothing for
