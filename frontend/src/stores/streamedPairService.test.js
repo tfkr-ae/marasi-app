@@ -457,6 +457,43 @@ test("cancel posts once with no confirmation, and is offered only until both dir
   assert.equal(canCancel({ request: null, response: { Framing: "sse", Ending: null } }), true);
 });
 
+test("a direction not known yet counts as live until the pair carries an ending", () => {
+  const live = { Framing: "grpc", Ending: null };
+  const ended = (ending = "complete") => ({ Framing: "grpc", Ending: ending });
+  // Server streaming: the unary request was sent, the response head not yet admitted.
+  assert.equal(canCancel({ request: null, response: null }), true);
+  // Client streaming: the request streams, the response not yet admitted.
+  assert.equal(canCancel({ request: live, response: null }), true);
+  // Server streaming once the response streams, and once it ended.
+  assert.equal(canCancel({ request: null, response: live }), true);
+  assert.equal(canCancel({ request: null, response: ended() }), false);
+  // Marasi stamps every direction's ending as the pair ends: a direction
+  // still unknown then never comes.
+  assert.equal(canCancel({ request: ended("cancelled"), response: null }), false);
+  assert.equal(canCancel({ request: ended(), response: ended() }), false);
+});
+
+test("a server-streaming pair opened before its response is admitted offers Cancel", async () => {
+  const { store, view } = setup({
+    count: 0,
+    pair: pairRead({ response: { status_code: -1 }, streamed: { request: null, response: null } }),
+  });
+  await store.open("p1");
+  assert.equal(canCancel(view().directions), true);
+  store.onStreamedPair(
+    toStreamedPairEvent({ pair_id: "p1", streamed: { request: null, response: { framing: "grpc", ending: null } } }),
+  );
+  assert.equal(canCancel(view().directions), true);
+  store.onStreamedPair(
+    toStreamedPairEvent({
+      pair_id: "p1",
+      streamed: { request: null, response: { framing: "grpc", ending: "complete" } },
+      directions: { response: { framing: "grpc", messages: 3, ending: "complete" } },
+    }),
+  );
+  assert.equal(canCancel(view().directions), false);
+});
+
 test("a cancel the service refuses because the call already ended shows Stream closed", async () => {
   const { store } = setup({
     count: 0,

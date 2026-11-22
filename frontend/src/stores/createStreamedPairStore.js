@@ -36,8 +36,17 @@ const live = (direction) => Boolean(direction) && !direction.Ending;
 /** The directions an inject can go into: streamed and not yet ended. */
 export const openDirections = (directions) => DIRECTIONS.filter((name) => live(directions?.[name]));
 
-/** Whether Cancel is offered: some streamed direction hasn't ended. */
-export const canCancel = (directions) => openDirections(directions).length > 0;
+/**
+ * Whether the call is live, so Cancel is offered: some streamed direction
+ * hasn't ended. Marasi stamps every direction's ending as the pair ends, so
+ * until one carries its ending, a direction not known yet (null: not
+ * streamed, or a response whose head isn't admitted) may still come, such as
+ * a server-streaming call's response.
+ */
+export function canCancel(directions) {
+  const known = DIRECTIONS.map((name) => directions?.[name]).filter(Boolean);
+  return known.some((d) => !d.Ending) || (known.length < DIRECTIONS.length && !known.some((d) => d.Ending));
+}
 
 // Why an inject was refused: { code, error }, with the toast for a refusal
 // the app names, or the line, column and Marasi's reason for a text form it

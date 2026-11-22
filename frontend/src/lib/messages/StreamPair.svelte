@@ -3,7 +3,7 @@
 	// framing, message count, ending (with the reset code) and trailers,
 	// kept current by the streamed_pair.* events (streamedPairStore).
 	import { ArrowDownLeft, ArrowUpRight } from "lucide-svelte";
-	import { streamedPairStore } from "../../stores/streamedPairStore.js";
+	import { canCancel, streamedPairStore } from "../../stores/streamedPairStore.js";
 	import { directionArrow } from "./kinds.js";
 	import { pairTrailers } from "./streamMessage.js";
 
@@ -25,7 +25,9 @@
 
 	$: pair = $streamedPairStore.pairs[pairId];
 	$: messages = pair?.messages ?? [];
-	$: live = DIRECTIONS.some(({ id }) => pair?.directions[id] && !pair.directions[id].Ending);
+	// A direction not known while the pair is live may still start: a
+	// response whose head isn't admitted yet. A request's head comes first.
+	$: live = Boolean(pair?.pair) && canCancel(pair.directions);
 
 	function summary(id) {
 		const d = pair?.directions[id];
@@ -83,7 +85,7 @@
 						</dd>
 					</dl>
 				{:else}
-					<p class="text-xs opacity-60">{live ? "Not started" : "Not streamed"}</p>
+					<p class="text-xs opacity-60">{live && row.id === "response" ? "Not started" : "Not streamed"}</p>
 				{/if}
 			</section>
 		{/each}

@@ -78,7 +78,9 @@ function progressChip(progress) {
 	return parts.length ? `receiving ${parts.join(" · ")}` : null;
 }
 
-const isLive = (directions) => Object.values(directions ?? {}).some((d) => d && !d.Ending);
+// Whether the pair is live: once its head is read, until it carries its
+// endings (canCancel, which counts a direction not admitted yet as live).
+const isLive = (view) => Boolean(view?.pair) && canCancel(view.directions);
 
 export const streamKind = {
 	...base,
@@ -98,7 +100,7 @@ export const streamKind = {
 				const count = v?.messages.length ?? 0;
 				return {
 					icon: Waves,
-					iconClass: isLive(v?.directions) ? "text-success-500" : "opacity-60",
+					iconClass: isLive(v) ? "text-success-500" : "opacity-60",
 					title: pair ? `${pair.Method} ${pair.Host}${pair.Path}` : "Streamed pair",
 					count: `${pair ? `#${pair.Number} · ` : ""}${count.toLocaleString()}${v?.hasMore ? "+" : ""} messages`,
 					chip: progressChip(v?.progress),
@@ -111,7 +113,7 @@ export const streamKind = {
 				label: "Cancel",
 				busyLabel: "Cancelling…",
 				icon: OctagonX,
-				enabled: derived(view, (v) => Boolean(pairId) && canCancel(v?.directions)),
+				enabled: derived(view, (v) => Boolean(pairId) && isLive(v)),
 				async run() {
 					const outcome = await streamedPairStore.cancel(pairId);
 					if (outcome.ok || outcome.superseded) return;
