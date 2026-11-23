@@ -111,7 +111,7 @@ test("a pending pair has no response to offer: its response line says so", () =>
   const both = cardContent(pairSource, pending, { raw: pendingRaw, view: { part: "both" } });
   assert.deepEqual(both.firstLines, [
     { part: "request", text: "POST /v2/auth/login HTTP/1.1" },
-    { part: "response", text: "no response yet" },
+    { part: "response", text: "No response yet" },
   ]);
 });
 

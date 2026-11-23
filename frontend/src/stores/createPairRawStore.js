@@ -10,13 +10,16 @@
 import { writable } from "svelte/store";
 import { boundAction } from "../lib/service/boundAction.js";
 import { isSuperseded } from "../lib/service/errors.js";
+import { hasResponse } from "../lib/pairMessage.js";
 
 export function createPairRawStore(api) {
   const store = writable({});
   let held = {};
   // Reads under way, by id, so a card shown twice reads once.
   const reading = new Map();
-  // Bumped by clear(), so a read under way for the last project writes nothing.
+  // Bumped by clear(), so a read under way for the last project writes
+  // nothing. boundAction only catches a change of connection; a project
+  // switch on the same connection clears the stores without one.
   let generation = 0;
 
   function read(id) {
@@ -54,7 +57,7 @@ export function createPairRawStore(api) {
       const key = String(id);
       const raw = held[key];
       if (raw === undefined) read(key);
-      else if (raw && !raw.Response && Number(row?.StatusCode) > 0) read(key);
+      else if (raw && !raw.Response && hasResponse(row)) read(key);
     },
 
     /** Reads every pair in `ids` not held yet; resolves once all are. */

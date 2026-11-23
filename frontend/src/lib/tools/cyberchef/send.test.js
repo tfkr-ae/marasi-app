@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EditorSelection, EditorState } from "@codemirror/state";
-import { editorTracker, pairText } from "./send.js";
+import { editorTracker } from "./send.js";
 
 // A CodeMirror editor's DOM as the tracker sees it: `.cm-editor` itself,
 // inside the Ledger query box or not, and the view behind it.
@@ -64,12 +64,6 @@ test("the inbox goes into CyberChef in the order sent, and empties", async () =>
   await drainInbox(inbox, { insertInput: async (text) => inserted.push(text) });
   assert.deepEqual(inserted, ["first", "second"]);
   assert.deepEqual(get(inbox), []);
-});
-
-test("Insert puts a pair's raw text in with LF line endings, as Send takes it from the Ledger", () => {
-  assert.equal(pairText("GET / HTTP/1.1\r\nHost: a\r\n\r\nbody\r\n"), "GET / HTTP/1.1\nHost: a\n\nbody\n");
-  assert.equal(pairText("a\nb"), "a\nb");
-  assert.equal(pairText(null), "");
 });
 
 test("Insert records the source of the tab its text landed in; Send to CyberChef records none", async () => {

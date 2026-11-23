@@ -15,7 +15,8 @@
 	import { recipes } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { recipeKind } from "../../lib/tools/toolDocuments.js";
-	import { chefInbox, drainInbox, pairText, swapInput } from "../../lib/tools/cyberchef/send.js";
+	import { chefInbox, drainInbox, swapInput } from "../../lib/tools/cyberchef/send.js";
+	import { pairText } from "../../lib/pairMessage.js";
 	import { recipeFile } from "../../lib/tools/cyberchef/recipeFile.js";
 	import { ledgerStore } from "../../stores/ledgerStore.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";

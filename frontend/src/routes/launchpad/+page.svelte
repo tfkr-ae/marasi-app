@@ -43,7 +43,7 @@
     import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
     import { addPairToDrawing } from "../../lib/tools/addToDrawing.js";
     import { sendTextToChef } from "../../lib/tools/cyberchef/sendAction.js";
-    import { pairText } from "../../lib/tools/cyberchef/send.js";
+    import { pairText } from "../../lib/pairMessage.js";
     import { chefShown } from "../../lib/platform.js";
     import { launchpadMenuFor } from "../../lib/launchpad/launchpadMenu.js";
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";

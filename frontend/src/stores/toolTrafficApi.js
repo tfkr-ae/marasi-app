@@ -2,7 +2,7 @@
 // drawing's cards, and the Insert panel's newest pairs for a query. Rows
 // are the Ledger's shape (trafficApi.js's toRow).
 import { RAW_ONLY, pairQuery, readTraffic, toDetails } from "./trafficApi.js";
-import { pairText } from "../lib/tools/cyberchef/send.js";
+import { pairText } from "../lib/pairMessage.js";
 
 // Resolves to null when the service answers not_found.
 async function orNull(promise) {
