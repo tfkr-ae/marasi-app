@@ -6,6 +6,7 @@
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { pairRows } from "../../../stores/pairRowsStore.js";
 	import { METHOD_CLASS, primaryVariant } from "../../launchpad/format.js";
+	import { hasResponse } from "../../pairMessage.js";
 
 	/** The open tab's source ({ pairId, part, bodyOnly }). */
 	export let source;
@@ -23,14 +24,15 @@
 	onDestroy(() => stop());
 
 	$: row = $pairRows[String(source.pairId)];
-	$: hasResponse = Number(row?.StatusCode) > 0;
+	$: answered = hasResponse(row);
 	$: on = primaryVariant($modeCurrent);
-	const chip = (active) => `whitespace-nowrap rounded-none px-2 py-0.5 ${active ? on : "opacity-70 hover:bg-surface-500/10"}`;
+	// A pressed choice takes the primary variant (its hover from app.css).
+	$: chip = (active) => `whitespace-nowrap rounded-none px-2 py-0.5 disabled:opacity-40 ${active ? on : "opacity-70"}`;
 	const swap = (want) => onSwap({ part: source.part, bodyOnly: source.bodyOnly, ...want });
 </script>
 
 <div
-	class="flex min-w-0 items-center gap-2 border-b border-surface-500/30 bg-surface-100 px-3 py-1 text-2xs dark:bg-surface-800"
+	class="flex min-w-0 items-center gap-2 border-b border-surface-500/30 bg-surface-100 px-3 py-1 text-xs dark:bg-surface-800"
 	data-testid="cyberchef-source-bar"
 >
 	<span class="opacity-60">From</span>
@@ -61,19 +63,21 @@
 			type="button"
 			class={chip(source.part === "response")}
 			aria-pressed={source.part === "response"}
-			disabled={busy || !hasResponse}
-			title={hasResponse ? "" : "No response yet"}
+			disabled={busy || !answered}
+			title={answered ? "" : "No response yet"}
 			data-testid="cyberchef-source-res"
 			on:click={() => swap({ part: "response" })}>Res</button
 		>
 	</span>
-	<button
-		type="button"
-		class="shrink-0 border border-surface-500/30 {chip(source.bodyOnly)}"
-		aria-pressed={source.bodyOnly}
-		disabled={busy}
-		title="Only the body"
-		data-testid="cyberchef-source-body"
-		on:click={() => swap({ bodyOnly: !source.bodyOnly })}>Body</button
-	>
+	<span class="flex shrink-0 border border-surface-500/30">
+		<button
+			type="button"
+			class={chip(source.bodyOnly)}
+			aria-pressed={source.bodyOnly}
+			disabled={busy}
+			title="Only the body"
+			data-testid="cyberchef-source-body"
+			on:click={() => swap({ bodyOnly: !source.bodyOnly })}>Body</button
+		>
+	</span>
 </div>
