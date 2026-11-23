@@ -4,7 +4,7 @@
 
 - CyberChef's own UI, built from its pinned tag (`frontend/cyberchef/build.js`) and served by the app at `/tools/cyberchef/`, in a frame the app controls (`ChefFrame.svelte`, `chefAdapter.js`)
 - Recipes: the project's in-memory documents as tabs (`toolDocuments`), with New, Switch, Rename, Duplicate and Delete
-- Send to CyberChef from any editor but the Ledger query editor, and the Insert panel (traffic only, `Res` for a response)
+- Send to CyberChef from any editor but the Ledger query editor, and the Insert panel (traffic only, a click inserts the request), with the From bar (`[data-testid=cyberchef-source-bar]`) over the frame for an input inserted from a pair
 - Attach… a recipe (input, operations, output) to a finding or test case as an Artifact
 - Marasi's keys inside the frame, CyberChef's own Ctrl+Alt keys, and its Save and Load buttons turned into Rename and Switch
 
@@ -51,10 +51,12 @@ then `drive.sh cyberchef steps '{"name":"after-send","steps":[{"waitText":"Recip
 
 ```json
 {"name":"chef-insert","steps":[{"waitText":"Recipe 1"},{"key":"cmd+shift+i"},{"waitSelector":"[data-testid=insert-panel]"},
- {"click":"[data-testid=insert-row] button","hasText":"Res"},{"waitSelector":"[data-testid=insert-row]"}]}
+ {"click":"[data-testid=insert-row]","hasText":"<path>"},{"waitSelector":"[data-testid=cyberchef-source-bar]"},
+ {"click":"[data-testid=cyberchef-source-res]"},{"waitSelector":"[data-testid=cyberchef-source-res][aria-pressed=true]"},
+ {"click":"[data-testid=cyberchef-source-body]"},{"waitSelector":"[data-testid=cyberchef-source-body][aria-pressed=true]"}]}
 ```
 
-The screenshot shows the pair's response in the empty input tab. A row click (not `Res`) inserts the request, and a second insert opens a new input tab.
+The row click puts the request in the empty input tab and shows the From bar (`From #N METHOD path`); Res swaps in the response and Body its body, each rebaking (check the step screenshots). A second insert opens a new input tab. Res is disabled while the pair has no response. Swapping an input edited since it went in asks `Replace your edits?` first; the driver can't type inside the frame, so `send.test.js` covers that rule.
 
 ## Gotchas
 
