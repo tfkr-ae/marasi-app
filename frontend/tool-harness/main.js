@@ -12,7 +12,8 @@ import "../src/app.css";
 import { modeCurrent } from "@skeletonlabs/skeleton";
 import ExcalidrawIsland from "../src/lib/tools/ExcalidrawIsland.svelte";
 import { createCardEmbed } from "../src/lib/tools/cardEmbed.js";
-import { newCardElement } from "../src/lib/tools/cards.js";
+import { isCard, newCardElement } from "../src/lib/tools/cards.js";
+import { cardSvg } from "../src/lib/tools/cardImage.js";
 import { drawingFile } from "../src/lib/tools/drawingFile.js";
 import { logbookStore } from "../src/stores/logbookStore.js";
 import { service } from "../src/lib/service/index.js";
@@ -263,6 +264,10 @@ window.harness = {
 				points,
 			})),
 			lightShare: images,
+			// Each card's light image as the SVG it is drawn from, by link.
+			cardSvgs: Object.fromEntries(
+				await Promise.all(api.getSceneElements().filter(isCard).map(async (element) => [element.link, await cardSvg(element)])),
+			),
 		};
 	},
 
