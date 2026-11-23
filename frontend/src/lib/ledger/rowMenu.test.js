@@ -500,12 +500,31 @@ test("the browser view shortcut says why the menu disables it", () => {
   });
 });
 
-test("Add to Drawing takes one pair, with the global action's keys", () => {
-  const one = menuFor([pair(1)]);
+test("Add to Drawing takes one pair and lists New drawing and every drawing, the open one with the global action's keys", () => {
+  const drawings = { items: [{ id: "drawing-1", name: "Drawing 1" }, { id: "drawing-2", name: "Flow" }], openId: "drawing-2" };
+  const one = menuFor([pair(1)], context({ drawings }));
   const item = one.find((i) => i?.id === "drawing");
-  assert.deepEqual(item.action, { type: "add-to-drawing", id: 1 });
-  assert.equal(item.actionId, "global.add-to-drawing");
-  assert.equal(item.disabled, false);
-  const two = menuFor([pair(1), pair(2)]).find((i) => i?.id === "drawing");
+  assert.equal(item.disabled, undefined);
+  assert.deepEqual(
+    item.sub.map((i) => (i === "sep" ? "sep" : i.label)),
+    ["New drawing", "sep", "Drawing 1", "Flow"],
+  );
+  assert.deepEqual(item.sub[0].action, { type: "add-to-drawing", id: 1, target: "new" });
+  assert.deepEqual(item.sub[2].action, { type: "add-to-drawing", id: 1, target: "drawing-1" });
+  assert.equal(item.sub[2].actionId, undefined);
+  assert.equal(item.sub[3].actionId, "global.add-to-drawing");
+  assert.equal(item.sub[3].count, "open");
+  const two = menuFor([pair(1), pair(2)], context({ drawings })).find((i) => i?.id === "drawing");
   assert.equal(two.disabled, true);
+  assert.equal(two.hint, "One request at a time");
+});
+
+test("Send to CyberChef takes one pair into a new recipe or any recipe, and only where the app has CyberChef", () => {
+  const recipes = { items: [{ id: "recipe-1", name: "Recipe 1" }], openId: "recipe-1" };
+  const item = menuFor([pair(1)], context({ recipes, chef: true })).find((i) => i?.id === "chef");
+  assert.deepEqual(item.sub[0].action, { type: "send-to-chef", id: 1, target: "new" });
+  assert.equal(item.sub[0].label, "New recipe");
+  assert.deepEqual(item.sub[2].action, { type: "send-to-chef", id: 1, target: "recipe-1" });
+  assert.equal(menuFor([pair(1), pair(2)], context({ recipes, chef: true })).find((i) => i?.id === "chef").disabled, true);
+  assert.equal(menuFor([pair(1)], context({ recipes, chef: false })).find((i) => i?.id === "chef"), undefined);
 });

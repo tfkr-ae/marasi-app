@@ -22,6 +22,7 @@ import { LAUNCHPADS_EACH_MAX } from "./pairs.js";
 import { launchingIds, unlessLaunching } from "../launchPending.js";
 import { UNTITLED_LAUNCHPAD } from "../launchpad/format.js";
 import { browserViewRefusal } from "../browserView.js";
+import { documentTargetItem } from "../tools/documentTargets.js";
 
 const unique = (values) => [...new Set(values)];
 
@@ -292,8 +293,9 @@ const launchingCount = (pairs, pendingLaunches, launchpadId = null) =>
 /**
  * The menu for `pairs`, the selected pairs the table has loaded, in table
  * order. `context` holds what the app already knows: { launchpads,
- * findings, testCases, palette (the effective highlight
- * palette), pendingLaunches (the launchpad store's, each { ID, LaunchpadID }
+ * findings, testCases, drawings and recipes (the tool document
+ * collections' { items, openId }), chef (whether the app offers CyberChef),
+ * palette (the effective highlight palette), pendingLaunches (the launchpad store's, each { ID, LaunchpadID }
  * with its pair's ID), all, count, streamedRead (the pair whose full read
  * showed streamed metadata, lib/messages/open.js) }. `all` marks a ⌘A selection, whose
  * `count` pairs (null until counted) can be more than the loaded ones;
@@ -306,6 +308,9 @@ export function menuFor(
     launchpads = [],
     findings = [],
     testCases = [],
+    drawings = null,
+    recipes = null,
+    chef = false,
     palette = effectivePalette(),
     pendingLaunches = [],
     all = false,
@@ -413,15 +418,29 @@ export function menuFor(
       hint: NOT_FOR_ALL,
       action: { type: "armory" },
     },
-    {
+    documentTargetItem({
       id: "drawing",
       label: "Add to Drawing",
       icon: "shapes",
+      noun: "drawing",
+      documents: drawings,
       actionId: "global.add-to-drawing",
-      disabled: !one,
-      hint: "One request at a time",
+      off: one ? null : "One request at a time",
       action: { type: "add-to-drawing", id: pairs[0].ID },
-    },
+    }),
+    ...(chef
+      ? [
+          documentTargetItem({
+            id: "chef",
+            label: "Send to CyberChef",
+            icon: "cooking-pot",
+            noun: "recipe",
+            documents: recipes,
+            off: one ? null : "One request at a time",
+            action: { type: "send-to-chef", id: pairs[0].ID },
+          }),
+        ]
+      : []),
     {
       id: "browser-view",
       label: "Copy browser view URL",

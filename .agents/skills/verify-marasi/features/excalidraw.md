@@ -16,7 +16,7 @@ The pin's contract (offline mount and fonts, theme, ⌘K and ⌘/ on the canvas,
 - **Go to**: `⌘⇧J`, or `⌘K`, `⌥G`, `Excalidraw`. `drive.sh dashboard compare "Excalidraw" "cmd+shift+j"` proves both.
 - **Bottom bar More**: phone layouts only; Excalidraw shows on every layout. Check it on an iOS simulator or Android emulator (README, out of scope here).
 - **⌘K actions**: context `excalidraw` in `frontend/src/lib/keybindings/catalog.js` (New `⌘⇧N`, Switch `⌘⇧O`, Rename `⌘⇧R`, Duplicate `⌘⇧E`, Delete `⌘⇧D`, Insert… `⌘⇧I`, Attach… `⌘⇧A`, Excalidraw Shortcuts `⌘/`).
-- **Add to Drawing**: `⌘⇧;` (`global.add-to-drawing`) with a Ledger pair open, the Ledger drawer rail's `Add to Drawing` button, or the row menu's `Add to Drawing`. It adds the pair to the last-opened drawing and toasts `Added #N to <drawing>` with `Open`.
+- **Add to Drawing**: `⌘⇧;` (`global.add-to-drawing`) with a Ledger pair open, the Ledger drawer rail's `Add to Drawing` button, or the row menu's and Launchpad entry menu's `Add to Drawing` submenu (`New drawing`, then every drawing, the open one marked `open`). The shortcut and rail add the pair to the last-opened drawing, the submenu to the one picked; each toasts `Added #N to <drawing>` with `Open`, which opens that drawing.
 
 The page is the tab strip, `Insert` (`[data-testid=excalidraw-insert]`, `aria-pressed`), `Attach…` (`[data-testid=excalidraw-attach]`), and the canvas `.excalidraw canvas.interactive`. Cards are `[data-testid=card]` with `data-kind` (`pair`, `finding`, `testCase`), `data-suggested` while an arrow would bind, and `data-deleted` once the source is gone.
 
@@ -42,7 +42,7 @@ Add to Drawing, from `/ledger` with one proxied pair (capture one as in ledger.m
  {"waitSelector":"[data-testid=card][data-kind=pair]"},{"waitText":"/probe.txt","within":"[data-testid=card]"}]}
 ```
 
-The drawer rail: `{"click":".ledger-drawer-rail button[aria-label=\"Add to Drawing\"]"},{"waitText":"to Drawing 1"}`. The row menu: `{"click":".ledger-row","hasText":"/probe.txt","button":"right"},{"click":".ledger-row-menu button","hasText":"Add to Drawing"},{"waitText":"to Drawing 1"},{"key":"escape"}`. The Insert panel:
+The drawer rail: `{"click":".ledger-drawer-rail button[aria-label=\"Add to Drawing\"]"},{"waitText":"to Drawing 1"}`. The row menu: `{"click":".ledger-row","hasText":"/probe.txt","button":"right"},{"hover":".ledger-row-menu button","hasText":"Add to Drawing"},{"waitText":"New drawing","within":".ledger-row-submenu"},{"click":".ledger-row-submenu button","hasText":"New drawing"},{"waitText":"to Drawing 2"}` (or `"hasText":"Drawing 1"` for an existing one; item ids carry the document id, which a kind shares with the others, so pick by text). The Insert panel:
 
 ```json
 {"name":"insert-panel","steps":[{"click":"[data-testid=excalidraw-insert]"},{"waitSelector":"[data-testid=insert-panel]"},

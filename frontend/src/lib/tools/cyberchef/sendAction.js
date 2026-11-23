@@ -4,6 +4,7 @@
 import { goto } from "$app/navigation";
 import { EditorView } from "@codemirror/view";
 import { chefInbox, editorTracker, textOfEditor } from "./send.js";
+import { recipes } from "../documents.js";
 
 const findView = (el) => EditorView.findFromDOM(el);
 const tracker = editorTracker(findView);
@@ -24,18 +25,29 @@ const REFUSED = {
  * Sends `result` (from textOfEditor) to CyberChef, or toasts why not.
  * Returns whether it was sent.
  */
-function send(result, toastStore) {
+function send(result, toastStore, target = null) {
   if (result.refused) {
     toastStore.trigger({ message: REFUSED[result.refused], background: "variant-filled-warning" });
     return false;
   }
+  openRecipe(target);
   chefInbox.update((list) => [...list, result.text]);
   goto("/cyberchef");
   return true;
 }
 
-/** Sends `text` as it is, as a menu that already has the text does. */
-export const sendTextToChef = (text, toastStore) => send({ text }, toastStore);
+// Opens recipe `target` for a send: a recipe id, "new" for a new recipe,
+// or null to keep the open one.
+function openRecipe(target) {
+  if (target === "new") recipes.create();
+  else if (target != null) recipes.open(target);
+}
+
+/**
+ * Sends `text` as it is, as a menu that already has the text does, into
+ * recipe `target` (a recipe id, "new", or null for the open recipe).
+ */
+export const sendTextToChef = (text, toastStore, target = null) => send({ text }, toastStore, target);
 
 /** Sends from the last focused editor (global.send-to-cyberchef). */
 export const sendFocusedToChef = (toastStore) => send(tracker.text(), toastStore);
