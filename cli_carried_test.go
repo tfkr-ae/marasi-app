@@ -318,3 +318,90 @@ func cliUpdateChecks(events *recordedEvents) []CLIInstall {
 	}
 	return results
 }
+
+func TestCarriedCLIReportsTheCopyForThisPlatform(t *testing.T) {
+	c := newCarriedInstall(t)
+	if got := c.app.CarriedCLI(); !got.Available || got.Version != "30.10.2026" || got.Channel != "release" {
+		t.Fatalf("CarriedCLI = %+v, want 30.10.2026 on release", got)
+	}
+	c.app.cliRuntime.carried = carriedCopy(t, cliBinaryOld, "30.10.2026", "release", "darwin", "arm64")
+	if got := c.app.CarriedCLI(); got.Available {
+		t.Fatalf("CarriedCLI = %+v for another platform's copy, want none", got)
+	}
+	c.app.cliRuntime.carried = nil
+	if got := c.app.CarriedCLI(); got.Available {
+		t.Fatalf("CarriedCLI = %+v without a copy, want none", got)
+	}
+}
+
+func TestInstallCarriedCLIReplacesTheCurrentCLIWithoutTheNetwork(t *testing.T) {
+	c := newCarriedInstall(t)
+	path := installedCLI(t, c.cliInstall, cliBinaryNew)
+
+	result, err := c.app.InstallCarriedCLI()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c.network.requests() != 0 || c.releases.requestCount() != 0 {
+		t.Fatalf("InstallCarriedCLI made %d requests, want none", c.network.requests())
+	}
+	if result.Outcome != "installed" || result.Version != "30.10.2026" || result.CLI.Version != "30.10.2026" || result.CLI.Path != path {
+		t.Fatalf("result = %+v, want the carried 30.10.2026 at %s", result, path)
+	}
+	if data, _ := os.ReadFile(path); !bytes.Equal(data, cliBinaryOld) {
+		t.Fatalf("CLI holds %q, want the carried copy", data)
+	}
+	if got := dirFiles(t, filepath.Dir(path)); !slices.Equal(got, []string{"marasi"}) {
+		t.Fatalf("folder holds %v, want only marasi", got)
+	}
+	if saved := c.app.Config.cliPath(); saved.Path != path || saved.Source != "installed" {
+		t.Fatalf("app config holds %+v, want the same path", saved)
+	}
+	if len(c.background) != 0 {
+		t.Fatal("InstallCarriedCLI started the update check, want the carried version kept")
+	}
+}
+
+func TestInstallCarriedCLILeavesTheSameVersionAlone(t *testing.T) {
+	c := newCarriedInstall(t)
+	path := installedCLI(t, c.cliInstall, cliBinaryOld)
+	if err := os.WriteFile(path, cliBinaryOld, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := c.app.InstallCarriedCLI()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != "up-to-date" {
+		t.Fatalf("result = %+v, want up to date", result)
+	}
+	if steps := cliProgressSteps(c.events); len(steps) != 0 {
+		t.Fatalf("progress steps = %v, want none", steps)
+	}
+}
+
+func TestInstallCarriedCLIWithoutACopyFails(t *testing.T) {
+	c := newCarriedInstall(t)
+	c.app.cliRuntime.carried = nil
+	path := installedCLI(t, c.cliInstall, cliBinaryNew)
+
+	result, err := c.app.InstallCarriedCLI()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != "failed" || result.Failure.Kind != "no-build" {
+		t.Fatalf("result = %+v, want a no-build failure", result)
+	}
+	if data, _ := os.ReadFile(path); !bytes.Equal(data, cliBinaryNew) {
+		t.Fatalf("CLI became %q", data)
+	}
+}
+
+func TestInstallCarriedCLIWithoutACLIIsAnError(t *testing.T) {
+	c := newCarriedInstall(t)
+	if _, err := c.app.InstallCarriedCLI(); !errors.Is(err, errNoCLI) {
+		t.Fatalf("err = %v, want errNoCLI", err)
+	}
+}

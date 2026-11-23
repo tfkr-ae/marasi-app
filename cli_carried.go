@@ -19,7 +19,8 @@ import (
 // carried_cli/marasi.gz and its record carried_cli/carried.json
 // (cli_carried_embed.go). A development build carries none
 // (cli_carried_none.go). The app never runs the carried copy: Install only
-// places it, as a download is placed, when no CLI is found.
+// places it, as a download is placed, when no CLI is found, and
+// InstallCarriedCLI places it over the current CLI when a researcher asks.
 
 // carriedCLI is the carried copy and its record, written by cmd/carry-cli.
 type carriedCLI struct {
@@ -66,18 +67,81 @@ func buildCarriedCLI() *carriedCLI {
 }
 
 // usableCarriedCLI is the carried copy Install may place: one for this
-// platform, and only while the app finds no CLI, so an existing CLI is
-// never replaced by it.
+// platform, and only while the app finds no CLI, so Install never replaces
+// an existing CLI with it (InstallCarriedCLI does, when asked).
 func (a *App) usableCarriedCLI() (*carriedCLI, bool) {
-	r := &a.cliRuntime
-	carried := r.carried
-	if carried == nil || carried.GOOS != r.goos || carried.GOARCH != r.goarch {
+	carried, ok := a.carriedForPlatform()
+	if !ok {
 		return nil, false
 	}
 	if current, err := a.LocateCLI(); err != nil || current.Found {
 		return nil, false
 	}
 	return carried, true
+}
+
+// CarriedCLIInfo is the CLI this build carries, for Settings → Updates.
+type CarriedCLIInfo struct {
+	// Available is false when the build carries no CLI for this platform
+	// (a development build, say); the rest is then empty.
+	Available bool   `json:"available"`
+	Version   string `json:"version"`
+	Channel   string `json:"channel"`
+}
+
+// carriedForPlatform is the carried copy when it is for this platform.
+func (a *App) carriedForPlatform() (*carriedCLI, bool) {
+	r := &a.cliRuntime
+	carried := r.carried
+	if carried == nil || carried.GOOS != r.goos || carried.GOARCH != r.goarch {
+		return nil, false
+	}
+	return carried, true
+}
+
+// CarriedCLI reports the CLI this build carries, so Settings can offer it
+// when the installed CLI is another version.
+func (a *App) CarriedCLI() CarriedCLIInfo {
+	carried, ok := a.carriedForPlatform()
+	if !ok {
+		return CarriedCLIInfo{}
+	}
+	return CarriedCLIInfo{Available: true, Version: carried.Version, Channel: carried.Channel}
+}
+
+// InstallCarriedCLI replaces the CLI the app uses with the copy this build
+// carries, without the network, when the researcher picks it over the
+// channel's latest (Settings → Updates). Unlike Install's first placing, no
+// update check follows: the researcher asked for this version. It returns
+// an error when there is no CLI (Install covers that) and a failed result
+// when the build carries none.
+func (a *App) InstallCarriedCLI() (CLIInstall, error) {
+	current, err := a.LocateCLI()
+	if err != nil {
+		return CLIInstall{}, err
+	}
+	if !current.Found {
+		return CLIInstall{}, errNoCLI
+	}
+	r := &a.cliRuntime
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	carried, ok := a.carriedForPlatform()
+	if !ok {
+		return a.cliFailed(CLIInstall{CLI: current}, failed(UpdateFailureNoBuild, "This build carries no Marasi CLI")), nil
+	}
+	result := CLIInstall{Version: carried.Version, Channel: carried.Channel, CLI: current}
+	if current.Version == carried.Version && current.Channel == carried.Channel {
+		result.Outcome = cliOutcomeUpToDate
+		return result, nil
+	}
+	if err := a.installCarriedCLI(carried, current.Path); err != nil {
+		return a.cliFailed(result, err), nil
+	}
+	result.Outcome = cliOutcomeInstalled
+	result.CLI, _ = a.LocateCLI()
+	return result, nil
 }
 
 // errCarriedChecksum: the extracted copy isn't the executable CI verified.
