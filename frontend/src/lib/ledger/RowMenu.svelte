@@ -564,7 +564,7 @@
 				{@const level = k + 1}
 				<div
 					bind:this={subPanels[k]}
-					class="ledger-row-submenu fixed z-10 w-72 overflow-auto border border-surface-300-600-token bg-surface-100-800-token py-1 shadow-2xl"
+					class="ledger-row-submenu fixed z-10 w-72 overflow-auto border border-surface-300-600-token bg-surface-100-800-token shadow-2xl"
 					style={panel.style}
 					data-menu-level={level}
 					role="menu"

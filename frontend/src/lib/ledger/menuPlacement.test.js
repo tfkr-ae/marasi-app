@@ -6,7 +6,7 @@ const viewport = { width: 1600, height: 900 };
 const rect = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
 const parent = rect(1000, 100, 288, 400);
 const row = (top) => rect(1000, top, 288, 26);
-// A panel's border plus padding at the Default text size: 1 px + 0.25rem.
+// A panel's border plus padding: here 1 px + 0.25rem at the Default text size. RowMenu's submenus have no padding now, so their inset is the 1 px border; placeSubmenu works from whatever is measured.
 const inset = { top: 5, bottom: 5 };
 
 test("a submenu sits flush against its parent's right edge, its first item level with the row", () => {
