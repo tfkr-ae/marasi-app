@@ -6,11 +6,10 @@
 import { get } from "svelte/store";
 import { logbookStore } from "../../stores/logbookStore.js";
 import { highlightPalette } from "../../stores/highlightsStore.js";
-import { cardContent } from "./cardContent.js";
+import { cardContent, lineRuns } from "./cardContent.js";
 import { pairRows } from "../../stores/pairRowsStore.js";
 import { pairRaw } from "../../stores/pairRawStore.js";
 import { cardView } from "./cards.js";
-import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
 
 const SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
@@ -84,29 +83,6 @@ const escape = (text) => escapeXml(String(text).replace(/^ +/, (spaces) => " ".
 // and its coloured runs sit in separate tspans, so all are no-break.
 const escapeKept = (text) => escapeXml(String(text).replace(/ /g, " "));
 
-// A start line's words in their Ledger colours, as CardView's startWords:
-// [{ text, classes }] covering the whole line, spaces included.
-function startSegments(text, part) {
-  const words = text.split(" ");
-  const segments =
-    part === "response"
-      ? [
-          { text: words[0], classes: "opacity-60" },
-          { text: words.slice(1).join(" "), classes: statusClass(Number(words[1])) },
-        ]
-      : [
-          { text: words[0], classes: METHOD_CLASS[words[0]] ?? "" },
-          { text: words.slice(1, -1).join(" "), classes: "" },
-          { text: words.length > 1 ? words.at(-1) : "", classes: "opacity-50" },
-        ];
-  const out = [];
-  for (const segment of segments.filter((s) => s.text)) {
-    if (out.length) out.push({ text: " ", classes: "" });
-    out.push(segment);
-  }
-  return out;
-}
-
 // One wrapped row of a line (`row`, starting at offset `from` in it) as
 // tspans coloured by the line's `segments`; a segment with no classes takes
 // the card's text colour `fill`.
@@ -162,15 +138,7 @@ function details(boxes, { parts, y, left, inner, px, text }) {
         continue;
       }
       const weight = line.kind === "start" ? 600 : 400;
-      const segments =
-        line.kind === "start"
-          ? startSegments(line.text, box.part)
-          : line.kind === "header" && line.name
-            ? [
-                { text: `${line.name}:`, classes: "text-primary-700" },
-                { text: line.text.slice(line.name.length + 1), classes: "opacity-75" },
-              ]
-            : [{ text: line.text, classes: "" }];
+      const segments = lineRuns(line, box.part);
       let from = 0;
       for (const row of line.text ? wrap(line.text, font(weight), width, Infinity) : [""]) {
         rows.push(`<text x="${x}" y="${ly + size * 0.95}" font-family="${MONO}" font-size="${size}" font-weight="${weight}">${tspans(row, from, segments, text)}</text>`);
@@ -292,6 +260,15 @@ export function cardSvg(element) {
     // pt-1.5, then the footer's 24px line.
     y += px(23);
     parts.push(`<text x="${left}" y="${y}" font-family="${SANS}" font-size="${px(11)}" fill="${muted}">${escape(content.footer)}</text>`);
+  }
+  if (content.parts) {
+    // The Details row closes a pair card as on screen, set from the card's
+    // bottom (py-2.5, its 24px line, pt-1.5, the rule), so the image keeps
+    // the element's height and has no empty band.
+    const rule = H - px(40) - 0.5;
+    parts.push(`<line x1="${left}" x2="${W - px(12)}" y1="${rule}" y2="${rule}" stroke="${border}" stroke-width="1"/>`);
+    const label = content.expanded ? "Hide details ▴" : "Details ▾";
+    parts.push(`<text x="${left}" y="${rule + px(23)}" font-family="${SANS}" font-size="${px(11)}" fill="${surface.fg}" fill-opacity="0.7">${escape(label)}</text>`);
   }
 
   const accent = content.accent.color ?? lightColours(content.accent.classes).bg;

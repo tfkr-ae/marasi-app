@@ -18,7 +18,8 @@ import { drawingFile } from "../src/lib/tools/drawingFile.js";
 import { logbookStore } from "../src/stores/logbookStore.js";
 import { service } from "../src/lib/service/index.js";
 import ChefFrame from "../src/lib/tools/cyberchef/ChefFrame.svelte";
-import { chefInbox, drainInbox, pairText } from "../src/lib/tools/cyberchef/send.js";
+import { chefInbox, drainInbox } from "../src/lib/tools/cyberchef/send.js";
+import { pairText } from "../src/lib/pairMessage.js";
 import { installMenuShortcuts, menuDispatcher, menuPalettes, registerMenuActions } from "../src/lib/keybindings/app.js";
 import { MACOS, WINDOWS_LINUX } from "../src/lib/keybindings/platform.js";
 

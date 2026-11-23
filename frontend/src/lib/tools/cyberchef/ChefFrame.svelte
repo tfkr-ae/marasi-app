@@ -85,19 +85,28 @@
 			const operations = adapter.getRecipe();
 			const tabs = await adapter.getInputTabs();
 			if (id !== shownId) return;
-			const nums = tabs.map((tab) => tab.num);
 			// A removed tab's source goes with it.
+			const nums = tabs.map((tab) => tab.num);
 			for (const num of byTab.keys()) if (!nums.includes(num)) byTab.delete(num);
 			tellOpen();
-			const inputs = tabs.map((tab) => tab.text);
-			const sources = sourcesOfTabs(nums, byTab);
-			const now = JSON.stringify({ operations, inputs, sources });
-			if (now === recorded) return;
-			recorded = now;
-			dispatch("change", { id, operations, inputs, sources });
+			const now = held(operations, tabs);
+			if (now.key === recorded) return;
+			recorded = now.key;
+			dispatch("change", { id, ...now.recipe });
 		} catch {
 			// The frame is going away.
 		}
+	}
+
+	// The recipe CyberChef holds in input tabs `tabs`, with their sources,
+	// and the key it is recorded under.
+	function held(operations, tabs) {
+		const recipe = {
+			operations,
+			inputs: tabs.map((tab) => tab.text),
+			sources: sourcesOfTabs(tabs.map((tab) => tab.num), byTab),
+		};
+		return { recipe, key: JSON.stringify(recipe) };
 	}
 
 	// Tells the page the open input tab and its source when either changed.
@@ -119,14 +128,9 @@
 		try {
 			await adapter.load(next);
 			const tabs = await adapter.getInputTabs();
-			const nums = tabs.map((tab) => tab.num);
-			byTab = sourcesByTab(nums, next.sources);
+			byTab = sourcesByTab(tabs.map((tab) => tab.num), next.sources);
 			shownId = next.id;
-			recorded = JSON.stringify({
-				operations: next.operations ?? [],
-				inputs: tabs.map((tab) => tab.text),
-				sources: sourcesOfTabs(nums, byTab),
-			});
+			recorded = held(next.operations ?? [], tabs).key;
 			tellOpen();
 		} catch (err) {
 			dispatch("error", { error: err });

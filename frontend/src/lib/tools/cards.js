@@ -9,6 +9,7 @@
 // as `customData.last`, so it renders when the pair is outside any loaded
 // page. Its shape has a solid fill (hidden under the card) and no
 // roundness, so arrows bind anywhere over its area, not only its outline.
+import { PART_NAMES } from "../pairMessage.js";
 
 export const CARD_KINDS = ["pair", "finding", "testCase"];
 /** The drag data type of an Insert panel row: JSON { source, last }. */
@@ -19,8 +20,6 @@ export const CARD_HEIGHT = 150;
 /** The space between cards stacked one under another. */
 export const CARD_GAP = 16;
 
-/** The parts of its pair a pair card can hold, with their names. */
-export const PART_NAMES = { request: "Request", response: "Response", both: "Request + Response" };
 /** A pair card's view when its element has none. */
 export const DEFAULT_VIEW = Object.freeze({ part: "request", expanded: false });
 
@@ -161,31 +160,75 @@ const sideBySide = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width;
 
 /**
  * The elements with card `id` at its content's `height`, or null when that
- * changes nothing. A card that grows moves every card below it that shares
- * some of its width down by its growth, and the cards below those in turn,
- * so the layout under it keeps its spacing and nothing ends up covered.
- * Cards beside or above it, or that it already overlapped, stay; a card
- * that shrinks moves nothing. The caller applies the result outside the
- * undo history.
+ * changes nothing. The caller applies the result outside the undo history.
+ *
+ * A card that grows as its content loads or changes moves the cards it
+ * would newly cover just under it, and those they would then cover; cards
+ * the researcher overlapped on purpose stay. With `push` (the fit follows
+ * the researcher changing a pair card's view: Details, the part switch) it
+ * instead moves every card below it that shares some of its width down by
+ * its growth, and the cards below those in turn, so the layout under it
+ * keeps its spacing. Either way nothing ends up covered, and a card that
+ * shrinks moves nothing.
  */
-export function fitCard(elements, id, height) {
+export function fitCard(elements, id, height, { push = false } = {}) {
   const card = elements.find((element) => element.id === id && isCard(element));
   if (!card || !(height > 0) || Math.abs(card.height - height) < 2) return null;
-  const growth = height - card.height;
   const moved = new Map([[id, { ...card, height }]]);
-  if (growth > 0) {
-    const cards = elements.filter(isCard);
-    const queue = [card];
-    while (queue.length) {
-      const pusher = queue.shift();
-      for (const other of cards) {
-        if (moved.has(other.id) || other.y < pusher.y + pusher.height || !sideBySide(pusher, other)) continue;
-        moved.set(other.id, { ...other, y: other.y + growth });
-        queue.push(other);
-      }
+  if (push) pushDown(elements, card, height - card.height, moved);
+  else uncover(elements, id, moved);
+  return elements.map((element) => moved.get(element.id) ?? element);
+}
+
+// The cards card `id`, grown, would newly cover, moved just under it, and
+// in turn those they would cover.
+function uncover(elements, id, moved) {
+  const current = (element) => moved.get(element.id) ?? element;
+  const queue = [id];
+  while (queue.length) {
+    const pusher = moved.get(queue.shift());
+    const before = elements.find((element) => element.id === pusher.id);
+    for (const other of elements) {
+      if (other.id === pusher.id || other.id === id || !isCard(other)) continue;
+      const now = current(other);
+      if (!overlaps(pusher, now) || overlaps(before, other)) continue;
+      moved.set(other.id, { ...now, y: pusher.y + pusher.height + CARD_GAP });
+      queue.push(other.id);
     }
   }
-  return elements.map((element) => moved.get(element.id) ?? element);
+}
+
+// Every card below `card` in its columns, and below those, moved down by
+// `growth`.
+function pushDown(elements, card, growth, moved) {
+  if (!(growth > 0)) return;
+  const cards = elements.filter(isCard);
+  const queue = [card];
+  while (queue.length) {
+    const pusher = queue.shift();
+    for (const other of cards) {
+      if (moved.has(other.id) || other.y < pusher.y + pusher.height || !sideBySide(pusher, other)) continue;
+      moved.set(other.id, { ...other, y: other.y + growth });
+      queue.push(other);
+    }
+  }
+}
+
+/**
+ * For one card: called with its view each time it reports its size, true
+ * when that size follows a change to the view since the last report (the
+ * researcher's Details or part switch, or its undo), so the fit pushes the
+ * cards below down. The first report, as the card opens, is false, and so
+ * is a report of content loading in the same view.
+ */
+export function viewChanges() {
+  let last = null;
+  return (view) => {
+    const key = `${view?.part}:${Boolean(view?.expanded)}`;
+    const changed = last !== null && last !== key;
+    last = key;
+    return changed;
+  };
 }
 
 /**

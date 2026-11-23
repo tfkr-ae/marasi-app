@@ -328,13 +328,19 @@ await report.check("a pair card's Details expands it to its messages, moving the
   await page.evaluate(`harness.cards()`);
   await page.evaluate(`harness.servePairs(${JSON.stringify({ p41: PAIR_RAW })})`);
   const pairEl = `document.querySelector('[data-testid="card"][data-kind="pair"]')`;
-  const id = await page.evaluate(`harness.addCard({ kind: "pair", id: "p41" }, { x: 640, y: 160 }, ${JSON.stringify(PAIR_ROW)})`);
+  // The card below goes first, so the pair card's first lines arrive with
+  // it there: a card growing as its content loads moves nothing clear of it.
   const belowId = await page.evaluate(`harness.addCard({ kind: "finding", id: 7 }, { x: 700, y: 600 })`);
+  await settledHeight(belowId);
+  const placedY = await page.evaluate(`${cardElement(belowId)}.y`);
+  const id = await page.evaluate(`harness.addCard({ kind: "pair", id: "p41" }, { x: 640, y: 160 }, ${JSON.stringify(PAIR_ROW)})`);
   await page.waitFor(`${pairEl}?.querySelector('[data-testid="card-first-lines"]')?.innerText.includes("POST /v2/auth/login")`, {
     timeoutMs: 5000,
     message: "the pair card didn't show its request line",
   });
   const height = await settledHeight(id);
+  const loadedY = await page.evaluate(`${cardElement(belowId)}.y`);
+  if (loadedY !== placedY) throw new Error(`the card below moved ${placedY} → ${loadedY} as the pair card's first lines loaded`);
   const width = await page.evaluate(`${cardElement(id)}.width`);
   const rect = await page.evaluate(`(() => { const r = ${pairEl}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
   await drawArrowOnto(pairEl, id, rect);
@@ -395,6 +401,7 @@ await report.check("SVG export carries the scene and its light card images: an e
   for (const want of ["PAIR · REQUEST", "Content-Type:", "  &quot;username&quot;"]) {
     if (!open.svg.includes(want)) throw new Error(`the expanded card's image lacks ${JSON.stringify(want)}`);
   }
+  if (!open.svg.includes("Hide details ▴")) throw new Error("the expanded card's image doesn't draw its Details row");
   if (!(open.share > 0.5)) throw new Error(`the expanded card's image is dark (${Math.round(open.share * 100)}% light pixels)`);
 
   await page.evaluate(`${pairEl}.querySelector('[data-testid="card-details"]').click()`);
@@ -402,6 +409,7 @@ await report.check("SVG export carries the scene and its light card images: an e
   await settledHeight(expandedId);
   const shut = pairImage(await page.evaluate("harness.attachmentSvg()"));
   if (shut.svg.includes("Content-Type:") || !shut.svg.includes("→ POST /v2/auth/login")) throw new Error("the collapsed card's image doesn't draw its first lines only");
+  if (!shut.svg.includes("Details ▾")) throw new Error("the collapsed card's image doesn't draw its Details row");
   if (!(open.image.height > shut.image.height + 100)) throw new Error(`the expanded image is ${open.image.height}px high, the collapsed ${shut.image.height}px`);
   if (!(shut.share > 0.5)) throw new Error(`the collapsed card's image is dark (${Math.round(shut.share * 100)}% light pixels)`);
   return `expanded ${Math.round(open.image.height)}px (${Math.round(open.share * 100)}% light), collapsed ${Math.round(shut.image.height)}px`;
