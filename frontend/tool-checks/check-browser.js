@@ -437,6 +437,30 @@ await report.check("Insert bakes with Auto Bake on, in LF, and Attach's output i
   if (out !== "78") throw new Error(`currentOutput gave ${JSON.stringify(out)}`);
 });
 
+await report.check("replacing an open input tab's text rebakes, with the output current", async () => {
+  const autoBake = `${chefDoc}.getElementById("auto-bake").checked`;
+  await page.evaluate(`harness.chef().load({ operations: [{ op: "To Hex", args: ["None", 0] }], inputs: ["ab", "cd"] })`);
+  if (!(await page.evaluate(autoBake))) await clickInFrame("#auto-bake-label");
+  await page.waitFor(autoBake, { timeoutMs: 3000, message: "Auto Bake didn't turn on" });
+  await page.evaluate(`harness.chef().settled()`);
+  const tabs = await page.evaluate(`harness.chef().getInputTabs()`);
+  if (JSON.stringify(tabs.map((t) => t.text)) !== JSON.stringify(["ab", "cd"])) throw new Error(`tabs ${JSON.stringify(tabs)}`);
+  const open = await page.evaluate(`harness.chef().openTab()`);
+  if (open !== tabs[1].num) throw new Error(`open tab ${open}, tabs ${JSON.stringify(tabs)}`);
+  // As the From bar swaps: the open tab's text, by its number.
+  await page.evaluate(`harness.chef().replaceInput(${open}, "xy")`);
+  const inputs = await page.evaluate(`harness.chef().getInputs()`);
+  if (JSON.stringify(inputs) !== JSON.stringify(["ab", "xy"])) throw new Error(`inputs became ${JSON.stringify(inputs)}`);
+  // Auto Bake follows it, as it follows an insert.
+  await page.waitFor(`harness.chef().getOutput().then((text) => text === "7879")`, { timeoutMs: 30000, message: "the replaced input didn't bake" });
+  // Auto Bake off: the output is stale until Attach's currentOutput bakes it.
+  await clickInFrame("#auto-bake-label");
+  if (await page.evaluate(autoBake)) throw new Error("Auto Bake didn't turn off");
+  await page.evaluate(`harness.chef().replaceInput(${open}, "z")`);
+  const out = await page.evaluate(`harness.chef().currentOutput()`);
+  if (out !== "7a") throw new Error(`currentOutput gave ${JSON.stringify(out)}`);
+});
+
 await report.check("CyberChef's Save and Load buttons are intercepted", async () => {
   const shown = (id) => `document.querySelector("[data-testid=cyberchef-frame]").contentDocument.getElementById("${id}")?.classList.contains("show")`;
   await page.evaluate("harness.clearEvents()");

@@ -242,6 +242,29 @@ export function chefAdapter(win) {
       return out;
     },
 
+    /**
+     * Every input tab as { num, text }, in tab order. `num` is CyberChef's
+     * number for the tab, as openTab gives it; a removed tab leaves a gap.
+     */
+    async getInputTabs() {
+      const out = [];
+      for (const num of await inputNums()) out.push({ num, text: asText(await inputs().getInputValue(num)) });
+      return out;
+    },
+
+    /**
+     * Replaces input tab `num`'s text, opening that tab first, and rebakes
+     * as an insert does: Auto Bake follows it, and the output is stale
+     * until a bake otherwise.
+     */
+    async replaceInput(num, text) {
+      if (activeTab() !== num) {
+        inputs().changeTab(num, true);
+        await until(() => activeTab() === num, 5000, `CyberChef did not open input ${num}`);
+      }
+      setInput(text);
+    },
+
     /** The open input tab's number, as its tab shows it. */
     openTab() {
       return activeTab() > 0 ? activeTab() : 1;

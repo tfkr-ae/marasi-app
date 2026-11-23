@@ -4,17 +4,19 @@
 	// keys go through Marasi's dispatcher, it takes the app's palette and Text
 	// size, it shows the open recipe, and its Save and Load recipe buttons
 	// open Rename and Switch. chefAdapter is the only code that reaches into
-	// CyberChef itself.
+	// CyberChef itself. It keeps the shown recipe's input sources (send.js)
+	// by tab, and tells the page the open tab's source (`open`).
 	import { createEventDispatcher, onDestroy } from "svelte";
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { chefAdapter } from "./chefAdapter.js";
 	import { chefColumns, chefTheme } from "./chefTheme.js";
+	import { sourcesByTab, sourcesOfTabs } from "./send.js";
 	import { forwardMenuShortcuts } from "../../keybindings/app.js";
 	import { textScale } from "../../../stores/textSizeStore.js";
 	import { mobileCheck } from "../../platform.js";
 	import { installMenuSwipe } from "../../menuSwipe.js";
 
-	/** The open recipe ({ id, operations, inputs }). */
+	/** The open recipe ({ id, operations, inputs, sources? }). */
 	export let recipe;
 
 	const dispatch = createEventDispatcher();
@@ -36,6 +38,9 @@
 	let stopSwipe = () => {};
 	let resizes;
 	let poll;
+	// The shown recipe's input sources, by input tab number.
+	let byTab = new Map();
+	let openKey = "";
 
 	function applyTheme(dark, scale) {
 		const doc = frame?.contentDocument;
@@ -78,14 +83,32 @@
 		if (!adapter || !id) return;
 		try {
 			const operations = adapter.getRecipe();
-			const inputs = await adapter.getInputs();
-			const now = JSON.stringify({ operations, inputs });
-			if (id !== shownId || now === recorded) return;
+			const tabs = await adapter.getInputTabs();
+			if (id !== shownId) return;
+			const nums = tabs.map((tab) => tab.num);
+			// A removed tab's source goes with it.
+			for (const num of byTab.keys()) if (!nums.includes(num)) byTab.delete(num);
+			tellOpen();
+			const inputs = tabs.map((tab) => tab.text);
+			const sources = sourcesOfTabs(nums, byTab);
+			const now = JSON.stringify({ operations, inputs, sources });
+			if (now === recorded) return;
 			recorded = now;
-			dispatch("change", { id, operations, inputs });
+			dispatch("change", { id, operations, inputs, sources });
 		} catch {
 			// The frame is going away.
 		}
+	}
+
+	// Tells the page the open input tab and its source when either changed.
+	function tellOpen() {
+		if (!adapter || !shownId) return;
+		const num = adapter.openTab();
+		const source = byTab.get(num) ?? null;
+		const key = JSON.stringify([shownId, num, source]);
+		if (key === openKey) return;
+		openKey = key;
+		dispatch("open", { num, source });
 	}
 
 	async function show(next) {
@@ -95,8 +118,16 @@
 		dispatch("loading", true);
 		try {
 			await adapter.load(next);
+			const tabs = await adapter.getInputTabs();
+			const nums = tabs.map((tab) => tab.num);
+			byTab = sourcesByTab(nums, next.sources);
 			shownId = next.id;
-			recorded = JSON.stringify({ operations: next.operations ?? [], inputs: next.inputs ?? [""] });
+			recorded = JSON.stringify({
+				operations: next.operations ?? [],
+				inputs: tabs.map((tab) => tab.text),
+				sources: sourcesOfTabs(nums, byTab),
+			});
+			tellOpen();
 		} catch (err) {
 			dispatch("error", { error: err });
 		} finally {
@@ -167,6 +198,13 @@
 
 	/** Records what CyberChef holds now, before something reads the recipe. */
 	export function flush() {
+		return snapshot();
+	}
+
+	/** Sets (or, with null, clears) input tab `num`'s source, and records it. */
+	export function setSource(num, source) {
+		if (source) byTab.set(num, source);
+		else byTab.delete(num);
 		return snapshot();
 	}
 

@@ -46,6 +46,12 @@ test("a recipe's file holds its input tabs, its recipe as JSON, and the open tab
   );
 });
 
+test("a recipe's file holds its inputs as they are, swapped or not, and no sources", async () => {
+  const sources = [null, { pairId: 41, part: "response", bodyOnly: true, inserted: "d29ybGQ=" }];
+  const withSources = await recipeFile({ ...recipe, sources }, { output: "world", openTab: 2 }).text();
+  assert.equal(withSources, await recipeFile(recipe, { output: "world", openTab: 2 }).text());
+});
+
 test("a blank name still gives a file name", () => {
   assert.equal(recipeFile({ ...recipe, name: "  " }, { output: "", openTab: 1 }).name, "recipe.cyberchef.txt");
 });
