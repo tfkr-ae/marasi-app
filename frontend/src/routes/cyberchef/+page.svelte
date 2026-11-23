@@ -47,11 +47,13 @@
 	};
 	const switchRecipe = () => switchDocument(modalStore, recipes, "recipe", "cyberchef.switch-recipe");
 
-	// Texts sent to CyberChef go in once the frame is ready, each by the
-	// empty-tab rule (chefAdapter.insertInput), and are then recorded.
+	// Texts sent to CyberChef go in once the frame is ready and shows the
+	// recipe the send opened, each by the empty-tab rule
+	// (chefAdapter.insertInput), and are then recorded.
 	let inserting = Promise.resolve();
 	$: if (adapter && $chefInbox.length) {
 		inserting = inserting
+			.then(() => frame?.settled())
 			.then(() => drainInbox(chefInbox, adapter))
 			.then(flush)
 			.catch((err) => toastError(toastStore, "Send to CyberChef failed", err));

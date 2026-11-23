@@ -23,6 +23,8 @@ import { findingStore } from "../../stores/findingStore";
 import { RAW_ONLY } from "../../stores/trafficApi.js";
 import { newRecord } from "../logbook/recordEditor.js";
 import { addPairToDrawing } from "../tools/addToDrawing.js";
+import { sendTextToChef } from "../tools/cyberchef/sendAction.js";
+import { pairText } from "../tools/cyberchef/send.js";
 import {
 	ledgerStore,
 	tableRows,
@@ -420,6 +422,16 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 	}
 
 
+	// The pair's request into CyberChef's recipe `recipe`, as Insert puts it.
+	async function sendToChef(id, recipe) {
+		try {
+			const details = await ledgerStore.getDetails(id, RAW_ONLY);
+			sendTextToChef(pairText(details?.Request?.Raw), toastStore, recipe);
+		} catch (err) {
+			toastError("Failed to read the request", err);
+		}
+	}
+
 	/** Runs a row menu action (rowMenu.js) on `target` (selectionTarget). */
 	function runMenuAction(action, target) {
 		const pairs = target?.pairs ?? [];
@@ -443,7 +455,9 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 			case "armory":
 				return sendToArmory(pairs);
 			case "add-to-drawing":
-				return addPairToDrawing(toastStore, pairs.find((pair) => sameID(pair.ID, action.id)) ?? pairs[0]);
+				return addPairToDrawing(toastStore, pairs.find((pair) => sameID(pair.ID, action.id)) ?? pairs[0], action.target);
+			case "send-to-chef":
+				return sendToChef(action.id, action.target);
 			case "new-finding":
 				return createFinding(ids);
 			case "new-test-case":

@@ -122,6 +122,7 @@
 	import LicencesModal from "../lib/LicencesModal.svelte";
 	import GlobalMenu from "../lib/components/MarasiMenu/GlobalMenu.svelte";
 	import SelectionChefButton from "../lib/tools/cyberchef/SelectionChefButton.svelte";
+	import EditorSelectionMenu from "../lib/tools/EditorSelectionMenu.svelte";
 	import UpdateModal from "../lib/components/UpdateModal.svelte";
 	import UpstreamProxyModal from "../lib/components/UpstreamProxyModal.svelte";
 	import UpstreamProxyCAModal from "../lib/components/UpstreamProxyCAModal.svelte";
@@ -518,7 +519,7 @@
 	<div class="app-body flex flex-1 h-screen" on:click|capture={closeOverlaysForNav}>
 		{#if $appState.started}
 			<GlobalMenu />
-			{#if $mobile && $chefShown}<SelectionChefButton />{/if}
+			{#if $mobile && $chefShown}<SelectionChefButton />{:else if !$mobile}<EditorSelectionMenu />{/if}
 			<AppRail
 				class="no-select h-full nav-rail"
 				background="bg-surface-50-800-token"

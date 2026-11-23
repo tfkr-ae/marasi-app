@@ -7,7 +7,9 @@
 	// item's action for the page to run. The highlight swatches sit on one
 	// row: ←→ move between them there, and hovering one shows its label.
 	// Another list of pairs (the Launchpad tree's entries) passes its own
-	// `items` in the same shape, with its `noun` and `scope` for the header.
+	// `items` in the same shape, with its `noun` and `scope` for the header;
+	// a menu over something else (an editor's selection) fills the `header`
+	// slot instead.
 	import { createEventDispatcher, tick } from "svelte";
 	import {
 		ArrowDown,
@@ -68,6 +70,8 @@
 	export let noun = ["request", "requests"];
 	/** Where the pairs are, shown after the count ("in Login"); hosts when null. */
 	export let scope = null;
+	/** The menu's accessible name, when not "Actions for" the pairs. */
+	export let label = null;
 	/** Whether the footer hints at ⇧-click, for tables that multi-select. */
 	export let extendHint = true;
 
@@ -406,12 +410,14 @@
 		class="ledger-row-menu fixed z-50 w-72 border border-surface-300-600-token bg-surface-100-800-token text-xs shadow-2xl"
 		style="left: {position.left}px; top: {position.top}px"
 		role="menu"
-		aria-label="Actions for {selectionLabel}"
+		aria-label={label ?? `Actions for ${selectionLabel}`}
 		on:contextmenu|preventDefault
 	>
-		<!-- What the menu acts on. -->
+		<!-- What the menu acts on: the pairs, or the caller's own header. -->
 		<div class="border-b border-primary-500 px-3 py-2">
-			{#if pairs.length === 1 && !context.all}
+			{#if $$slots.header}
+				<slot name="header" />
+			{:else if pairs.length === 1 && !context.all}
 				{@const pair = pairs[0]}
 				<div class="flex items-center gap-2 font-mono">
 					<span class="opacity-60">#{context.numberOf?.(pair) ?? ""}</span>
