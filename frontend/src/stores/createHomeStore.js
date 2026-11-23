@@ -8,6 +8,7 @@
 //   extensionNames() -> {id: name}
 //   listener() -> {status, address, port}
 //   setListener(address, port, active) -> {status, address, port}
+//   stopListener() -> {status, address, port}
 //
 // homeStore.js routes the stream's events, as the service sends them, to
 // onLog, onListener, onJobComplete, onRequest, onResponse and
@@ -31,8 +32,18 @@ const empty = () => ({
   logs: [],
   extensionNames: {},
   listener: { status: false, address: "", port: "" },
+  lastListener: null,
+  listenerBusy: false,
   loading: false,
 });
+
+function withListener(state, next) {
+  return {
+    ...state,
+    listener: next,
+    lastListener: next.status ? { address: next.address, port: next.port } : state.lastListener,
+  };
+}
 
 export function createHomeStore(api) {
   const store = writable(empty());
@@ -45,6 +56,15 @@ export function createHomeStore(api) {
       if (run === generation) store.update((s) => ({ ...s, [part]: value }));
     } catch (err) {
       console.error(`Reading Home's ${part} failed:`, err);
+    }
+  }
+
+  async function readListener(run) {
+    try {
+      const value = await api.listener();
+      if (run === generation) store.update((s) => withListener(s, value));
+    } catch (err) {
+      console.error("Reading Home's listener failed:", err);
     }
   }
 
@@ -61,7 +81,7 @@ export function createHomeStore(api) {
       read("scope", run, api.scope),
       read("logs", run, api.logs),
       read("extensionNames", run, api.extensionNames),
-      read("listener", run, api.listener),
+      readListener(run),
     ]);
     if (run === generation) store.update((s) => ({ ...s, loading: false }));
   }
@@ -124,23 +144,41 @@ export function createHomeStore(api) {
      * A refusal rejects and leaves the listener as it was.
      */
     async setListener(address, port, { fallback = false } = {}) {
+      const run = generation;
       const active = get(store).listener.status;
-      let next;
+      store.update((s) => ({ ...s, listenerBusy: true }));
       try {
-        next = await api.setListener(address, port, active);
-      } catch (err) {
-        if (!fallback || active || codeIDs(err, "listener_unavailable") === null) throw err;
-        next = await api.setListener(address, 0, false);
+        let next;
+        try {
+          next = await api.setListener(address, port, active);
+        } catch (err) {
+          if (!fallback || active || codeIDs(err, "listener_unavailable") === null) throw err;
+          next = await api.setListener(address, 0, false);
+        }
+        if (run === generation) store.update((s) => withListener(s, next));
+        return next;
+      } finally {
+        if (run === generation) store.update((s) => ({ ...s, listenerBusy: false }));
       }
-      store.update((s) => ({ ...s, listener: next }));
-      return next;
+    },
+    /**
+     * Stops the proxy listener on the service without stopping the service.
+     * A refusal rejects and leaves the listener as it was.
+     */
+    async stopListener() {
+      const run = generation;
+      store.update((s) => ({ ...s, listenerBusy: true }));
+      try {
+        const next = await api.stopListener();
+        if (run === generation) store.update((s) => withListener(s, next));
+        return next;
+      } finally {
+        if (run === generation) store.update((s) => ({ ...s, listenerBusy: false }));
+      }
     },
     /** A listener.started, .updated or .stopped event. */
     onListener(event) {
-      store.update((s) => ({
-        ...s,
-        listener: toListener(event.status === "active" ? event.proxy_listener : null),
-      }));
+      store.update((s) => withListener(s, toListener(event.status === "active" ? event.proxy_listener : null)));
     },
     /** A job.complete event: the intercepted count's job ends its floor. */
     async onJobComplete(event) {

@@ -19,6 +19,7 @@
     "global.jump-to-toast": {"macos":["meta+."],"windows-linux":["ctrl+."]},
     "global.open-project": {"macos":["meta+o"],"windows-linux":["ctrl+o"]},
     "global.setup-listener": {"macos":["meta+l"],"windows-linux":["ctrl+l"]},
+    "global.toggle-listener": {"macos":["meta+shift+p"],"windows-linux":["ctrl+shift+p"]},
     "global.toggle-vim": {"macos":["meta+t"],"windows-linux":["ctrl+t"]},
     "global.toggle-light-mode": {"macos":["meta+u"],"windows-linux":["ctrl+u"]},
     "global.increase-text-size": {"macos":["meta+="],"windows-linux":["ctrl+="]},

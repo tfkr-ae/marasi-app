@@ -10,13 +10,14 @@
 		popup,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { ChevronDown, Download, FolderOpen } from "lucide-svelte";
+	import { ChevronDown, Download, FolderOpen, Play, Square } from "lucide-svelte";
 	import { homeStore } from "../stores/homeStore";
 	import {
 		chromeError,
 		downloadCertificate,
 		listenerModal,
 		openProjectPicker,
+		toggleListener,
 	} from "../lib/globalActions.js";
 	import { neutralVariant } from "../lib/launchpad/format.js";
 	import { onMount } from "svelte";
@@ -81,6 +82,23 @@
 									? "bg-success-500"
 									: "bg-primary-500")}
 						></span>
+					</button>
+					<button
+						type="button"
+						class="btn btn-sm text-sm flex items-center {neutralVariant($modeCurrent)}"
+						data-testid="home-listener-toggle"
+						disabled={$homeStore.listenerBusy}
+						title={$homeStore.listener.status ? "Stop proxy listener" : "Start proxy listener"}
+						aria-label={$homeStore.listener.status ? "Stop Listener" : "Start Listener"}
+						on:click={() => toggleListener(toastStore)}
+					>
+						{#if $homeStore.listener.status}
+							<span class="mr-1.5"><Square size={14} /></span>
+							<span>Stop</span>
+						{:else}
+							<span class="mr-1.5"><Play size={14} /></span>
+							<span>Start</span>
+						{/if}
 					</button>
 					<button
 						type="button"

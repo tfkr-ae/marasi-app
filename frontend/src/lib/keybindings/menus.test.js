@@ -876,3 +876,19 @@ test("Add to Drawing is ⌘⇧; from the Ledger, drawer open or closed", () => {
   assert.equal(dispatcher.resolve(cmdShift(":", "Semicolon"), on("/ledger", requestDrawer())), "global.add-to-drawing");
   assert.equal(dispatcher.resolve(cmdShift(":", "Semicolon"), on("/ledger")), "global.add-to-drawing");
 });
+
+test("⌘⇧P and Ctrl+Shift+P toggle the proxy listener from every menu context", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Repeater" }] });
+  const keybindings = { config: factoryKeybindings(), problem: "" };
+  const macDispatcher = createDispatcher({ catalog, platform: MACOS, keybindings });
+  const otherDispatcher = createDispatcher({ catalog, platform: WINDOWS_LINUX, keybindings });
+  for (const state of everyContextState()) {
+    const label = `${state.route} ${state.modal ?? ""} ${state.websocketTab ?? ""}`;
+    assert.equal(macDispatcher.resolve(cmdShift("P", "KeyP"), state), "global.toggle-listener", label);
+    assert.equal(
+      otherDispatcher.resolve(keydown("P", "KeyP", { ctrlKey: true, shiftKey: true }), state),
+      "global.toggle-listener",
+      label,
+    );
+  }
+});

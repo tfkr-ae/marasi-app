@@ -268,6 +268,71 @@ test("a refused listener change rejects and leaves the listener as it was", asyn
   await store.populate();
   await assert.rejects(store.setListener("127.0.0.1", "80"), /not_found/);
   assert.deepEqual(get(store).listener, { status: true, address: "127.0.0.1", port: "52062" });
+  assert.equal(get(store).listenerBusy, false);
+});
+
+test("stopListener stops the proxy listener with an empty body and remembers its last endpoint", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  const { store, client } = setup(routes);
+  await store.populate();
+  assert.deepEqual(get(store).lastListener, { address: "127.0.0.1", port: "52062" });
+
+  const stopped = await store.stopListener();
+
+  assert.deepEqual(client.calls.at(-1), ["/listener/stop", undefined]);
+  assert.deepEqual(stopped, { status: false, address: "", port: "" });
+  assert.deepEqual(get(store).listener, { status: false, address: "", port: "" });
+  assert.deepEqual(get(store).lastListener, { address: "127.0.0.1", port: "52062" });
+  assert.equal(get(store).listenerBusy, false);
+});
+
+test("stopListener tracks listenerBusy while in flight and leaves state intact on refusal", async () => {
+  let rejectStop;
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = () =>
+    new Promise((_, reject) => {
+      rejectStop = reject;
+    });
+  const { store } = setup(routes);
+  await store.populate();
+
+  const pending = store.stopListener();
+  assert.equal(get(store).listenerBusy, true);
+  rejectStop(new Error("POST /listener/stop: internal_server_error: boom"));
+  await assert.rejects(pending, /boom/);
+  assert.equal(get(store).listenerBusy, false);
+  assert.deepEqual(get(store).listener, { status: true, address: "127.0.0.1", port: "52062" });
+});
+
+test("clear forgets lastListener and drops an in-flight listener change", async () => {
+  let resolveStop;
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = () =>
+    new Promise((resolve) => {
+      resolveStop = resolve;
+    });
+  const { store } = setup(routes);
+  await store.populate();
+  assert.deepEqual(get(store).lastListener, { address: "127.0.0.1", port: "52062" });
+
+  const pending = store.stopListener();
+  store.clear();
+  assert.equal(get(store).lastListener, null);
+  assert.equal(get(store).listenerBusy, false);
+
+  resolveStop({ status: "inactive", proxy_listener: null });
+  await pending;
+  assert.equal(get(store).lastListener, null);
+});
+
+test("listener.stopped from the stream keeps lastListener so starting again reuses it", async () => {
+  const { store } = setup();
+  await store.populate();
+  store.onListener({ status: "active", proxy_listener: "0.0.0.0:9090" });
+  store.onListener({ status: "inactive", proxy_listener: null, reason: "requested" });
+  assert.equal(get(store).listener.status, false);
+  assert.deepEqual(get(store).lastListener, { address: "0.0.0.0", port: "9090" });
 });
 
 test("resync replaces the counts and log in place, keeping the old ones until the new arrive", async () => {

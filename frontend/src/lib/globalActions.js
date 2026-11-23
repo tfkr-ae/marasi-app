@@ -4,7 +4,9 @@ import { goto } from "$app/navigation";
 import { get } from "svelte/store";
 import { SaveFileAs, CopyCertToClipboard } from "./bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { createCertificateActions } from "./certificate.js";
+import { listenerStart } from "./listenerInterfaces.js";
 import { service } from "./service/index.js";
+import { isSuperseded } from "./service/errors.js";
 import { setWindowTitle } from "./runtime.js";
 import { checkpointHeldModal } from "./checkpointHeld.js";
 import { appState, marasiConfig } from "../stores.js";
@@ -16,21 +18,61 @@ import { projectTarget } from "../stores/projectApi.js";
 // back to a free one when it is taken, as the app's instance does.
 export function setupListener(r, toastStore) {
 	const fallback = String(r.port) === String(get(marasiConfig).DefaultPort || "8080");
-	homeStore
+	return homeStore
 		.setListener(r.addr, r.port, { fallback })
 		.then((listener) => {
 			toastStore.trigger({
 				message: "Listening on " + listener.address + ":" + listener.port,
 				background: "variant-filled-success",
 			});
+			return listener;
 		})
 		.catch((err) => {
+			if (isSuperseded(err)) return null;
 			console.error("Setting up the listener failed:", err);
 			toastStore.trigger({
 				message: "Failed to setup listener on " + r.addr + ":" + r.port,
 				background: "variant-filled-error",
 			});
+			return null;
 		});
+}
+
+// Stops the service's proxy listener without stopping the service.
+export function stopListener(toastStore) {
+	return homeStore
+		.stopListener()
+		.then((listener) => {
+			toastStore.trigger({
+				message: "Listener stopped",
+				background: "variant-filled-success",
+			});
+			return listener;
+		})
+		.catch((err) => {
+			if (isSuperseded(err)) return null;
+			console.error("Stopping the listener failed:", err);
+			toastStore.trigger({
+				message: "Failed to stop listener",
+				background: "variant-filled-error",
+			});
+			return null;
+		});
+}
+
+// Starts the service's proxy listener on its last active address and port,
+// or the app's default listener when none has run in this session.
+export function startListener(toastStore) {
+	const state = get(homeStore);
+	const target = listenerStart(state.listener, get(marasiConfig), state.lastListener);
+	return setupListener({ addr: target.address, port: target.port }, toastStore);
+}
+
+// Stops the proxy listener while active, or starts it again while off.
+export function toggleListener(toastStore) {
+	const state = get(homeStore);
+	if (state.listenerBusy) return Promise.resolve(null);
+	return state.listener.status ? stopListener(toastStore) : startListener(toastStore);
 }
 
 /**
@@ -104,7 +146,9 @@ export function listenerModal(toastStore) {
 		toggleAction: "global.setup-listener",
 		title: "Setup Listener",
 		response: (r) => {
-			if (r) setupListener(r, toastStore);
+			if (!r) return;
+			if (r.action === "stop") stopListener(toastStore);
+			else setupListener(r, toastStore);
 		},
 	};
 }

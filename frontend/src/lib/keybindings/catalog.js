@@ -71,6 +71,7 @@ export const FACTORY_ACTIONS = [
   action("global.jump-to-toast", "Jump to Toast", "Jump to the active toast", "toast", primary(".")),
   action("global.open-project", "Open Project", "Open a project", "open project", primary("o"), { group: "project" }),
   action("global.setup-listener", "Setup Listener", "Start a new listener", "listener", primary("l"), { group: "project" }),
+  action("global.toggle-listener", "Toggle Listener", "Start or stop the proxy listener", "listener, proxy, start, stop, toggle", primary("shift+p"), { group: "project" }),
   action("global.toggle-vim", "Toggle Vim Mode", "Toggle Vim Mode in editor views", "vim", primary("t"), { group: "appearance" }),
   action("global.toggle-light-mode", "Toggle Light Mode", "Switch between light and dark mode", "theme, light, dark, mode, ui", primary("u"), { group: "appearance" }),
   action("global.increase-text-size", "Increase Text Size", "Make all text one size larger", "text, font, size, larger, bigger, zoom in", primary("="), { group: "appearance" }),
