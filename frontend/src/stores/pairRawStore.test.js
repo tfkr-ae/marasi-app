@@ -6,6 +6,7 @@ import { get } from "svelte/store";
 import { fakeServiceClient } from "./fakeServiceClient.js";
 import { createToolTrafficApi } from "./toolTrafficApi.js";
 import { createPairRawStore } from "./createPairRawStore.js";
+import { cardContent } from "../lib/tools/cardContent.js";
 
 const b64 = (text) => Buffer.from(text).toString("base64");
 
@@ -58,6 +59,30 @@ test("a pending pair is read again once its row shows a response", async () => {
   await settle();
   assert.equal(service.reads().length, 2);
   assert.equal(get(store).a.Response, "HTTP/1.1 201 Created\n\n");
+});
+
+test("a response that arrives after a card is expanded appears in its details", async () => {
+  // As CardView does: it asks with the row it shows, and draws cardContent
+  // over what the store holds.
+  const { service, store } = setup({ a: { request: "POST /login HTTP/1.1\nHost: a\n\n", response: null } });
+  const source = { kind: "pair", id: "a" };
+  const view = { part: "both", expanded: true };
+  const pending = { ID: "a", Number: 1, Method: "POST", Path: "/login", StatusCode: 0 };
+  store.need("a", pending);
+  await settle();
+  let details = cardContent(source, pending, { view, raw: get(store).a }).details;
+  assert.equal(details[1].empty, "No response yet");
+
+  service.pairs.a.response = 'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"ok":true}\n';
+  const answered = { ...pending, StatusCode: 200 };
+  store.need("a", answered);
+  await settle();
+  details = cardContent(source, answered, { view, raw: get(store).a }).details;
+  assert.equal(details[1].empty, undefined);
+  assert.deepEqual(
+    details[1].lines.map((line) => line.text),
+    ["HTTP/1.1 200 OK", "Content-Type: application/json", "", '{"ok":true}'],
+  );
 });
 
 test("a pair the service no longer has reads as null", async () => {
