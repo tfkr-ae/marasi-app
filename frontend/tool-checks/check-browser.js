@@ -144,24 +144,10 @@ const cardEl = `document.querySelector('[data-testid="card"][data-kind="finding"
 const cardElement = (id) => `harness.cardScene().find((e) => e.id === ${JSON.stringify(id)})`;
 let cardId = null;
 
-await report.check("card embeddable renders, accepts an arrow binding, resizes when its content changes", async () => {
-  await page.evaluate(`harness.cards({ findings: [${JSON.stringify(FINDING)}] })`);
-  cardId = await page.evaluate(`harness.addCard({ kind: "finding", id: 7 }, { x: 640, y: 260 })`);
-  await page.waitFor(`${cardEl}?.innerText.includes(${JSON.stringify(FINDING.Title)})`, { message: "the card doesn't show its finding" });
-
-  // It fits its content (outside the undo history) and the embeddable
-  // follows: wait for the element's height to settle.
-  let height = 0;
-  for (let i = 0; i < 20; i++) {
-    const now = await page.evaluate(`${cardElement(cardId)}.height`);
-    if (Math.abs(now - height) < 1 && i > 2) break;
-    height = now;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  const rect = await page.evaluate(`(() => { const r = ${cardEl}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
-
-  // An arrow drawn from empty canvas onto the card, as a researcher draws it:
-  // the card rings while it would bind, and the arrow binds on release.
+// An arrow drawn from empty canvas onto card `id` (`el`, on screen at
+// `rect`), as a researcher draws it: the card rings while it would bind,
+// and the arrow binds on release.
+async function drawArrowOnto(el, id, rect) {
   await page.evaluate(`document.querySelector('[data-testid="toolbar-arrow"]').click()`);
   const start = { x: rect.x - 260, y: rect.y + rect.height / 2 };
   const end = { x: rect.x + rect.width * 0.4, y: rect.y + rect.height * 0.6 };
@@ -173,15 +159,40 @@ await report.check("card embeddable renders, accepts an arrow binding, resizes w
     await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1 });
   }
   const ringed = await page
-    .waitFor(`${cardEl}?.hasAttribute("data-suggested")`, { timeoutMs: 3000 })
+    .waitFor(`${el}?.hasAttribute("data-suggested")`, { timeoutMs: 3000 })
     .catch(() => false);
   await page.mouse("mouseReleased", end.x, end.y);
   if (!ringed) throw new Error("the card showed no ring while the arrow would bind");
   await page.waitFor(
-    `(() => { const arrow = harness.cardScene().find((e) => e.type === "arrow"); return arrow?.endBinding?.elementId === ${JSON.stringify(cardId)}; })()`,
+    `(() => { const arrow = harness.cardScene().find((e) => e.type === "arrow"); return arrow?.endBinding?.elementId === ${JSON.stringify(id)}; })()`,
     { timeoutMs: 3000, message: "the arrow drawn onto the card isn't bound to it" },
   );
-  await page.waitFor(`!${cardEl}?.hasAttribute("data-suggested")`, { timeoutMs: 3000, message: "the ring stayed after the arrow bound" });
+  await page.waitFor(`!${el}?.hasAttribute("data-suggested")`, { timeoutMs: 3000, message: "the ring stayed after the arrow bound" });
+}
+
+// Waits for card `id`'s element height to settle; resolves to it.
+async function settledHeight(id) {
+  let height = 0;
+  for (let i = 0; i < 20; i++) {
+    const now = await page.evaluate(`${cardElement(id)}.height`);
+    if (Math.abs(now - height) < 1 && i > 2) break;
+    height = now;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return height;
+}
+
+await report.check("card embeddable renders, accepts an arrow binding, resizes when its content changes", async () => {
+  await page.evaluate(`harness.cards({ findings: [${JSON.stringify(FINDING)}] })`);
+  cardId = await page.evaluate(`harness.addCard({ kind: "finding", id: 7 }, { x: 640, y: 260 })`);
+  await page.waitFor(`${cardEl}?.innerText.includes(${JSON.stringify(FINDING.Title)})`, { message: "the card doesn't show its finding" });
+
+  // It fits its content (outside the undo history) and the embeddable
+  // follows: wait for the element's height to settle.
+  const height = await settledHeight(cardId);
+  const rect = await page.evaluate(`(() => { const r = ${cardEl}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+
+  await drawArrowOnto(cardEl, cardId, rect);
 
   // Its finding gains a write-up elsewhere: the card grows to fit it.
   await page.evaluate(`harness.changeFinding(${JSON.stringify({ ...FINDING, WriteUp: "The login form passes its username straight into the SQL query. ".repeat(4) })})`);
@@ -302,6 +313,106 @@ await report.check("SVG export carries the scene and its light card images", asy
   const share = Object.values(out.lightShare)[0];
   if (!(share > 0.5)) throw new Error(`the card image is dark (${Math.round(share * 100)}% light pixels)`);
   return `${out.name}, card image ${Math.round(share * 100)}% light`;
+});
+
+// A pair card's Details ▾ expands it to its raw messages: it grows, the
+// card under it moves down by as much, and an arrow bound to it stays on
+// its edge; Hide details ▴ shrinks it and moves nothing; undo takes it back.
+const PAIR_ROW = { ID: "p41", Number: 41, Method: "POST", StatusCode: 200, Scheme: "https", Host: "api.shop.example", Path: "/v2/auth/login" };
+const PAIR_RAW = {
+  Request: `POST /v2/auth/login HTTP/1.1\nHost: api.shop.example\nContent-Type: application/json\n\n{\n  "username": "alice@example.com",\n  "password": "${"x".repeat(120)}"\n}`,
+  Response: "HTTP/1.1 200 OK\nContent-Type: application/json\nSet-Cookie: session=abc\n\n{\"token\":\"abc\"}",
+  StatusCode: 200,
+};
+await report.check("a pair card's Details expands it to its messages, moving the card below and keeping a bound arrow on its edge", async () => {
+  await page.evaluate(`harness.cards()`);
+  await page.evaluate(`harness.servePairs(${JSON.stringify({ p41: PAIR_RAW })})`);
+  const pairEl = `document.querySelector('[data-testid="card"][data-kind="pair"]')`;
+  // The card below goes first, so the pair card's first lines arrive with
+  // it there: a card growing as its content loads moves nothing clear of it.
+  const belowId = await page.evaluate(`harness.addCard({ kind: "finding", id: 7 }, { x: 700, y: 600 })`);
+  await settledHeight(belowId);
+  const placedY = await page.evaluate(`${cardElement(belowId)}.y`);
+  const id = await page.evaluate(`harness.addCard({ kind: "pair", id: "p41" }, { x: 640, y: 160 }, ${JSON.stringify(PAIR_ROW)})`);
+  await page.waitFor(`${pairEl}?.querySelector('[data-testid="card-first-lines"]')?.innerText.includes("POST /v2/auth/login")`, {
+    timeoutMs: 5000,
+    message: "the pair card didn't show its request line",
+  });
+  const height = await settledHeight(id);
+  const loadedY = await page.evaluate(`${cardElement(belowId)}.y`);
+  if (loadedY !== placedY) throw new Error(`the card below moved ${placedY} → ${loadedY} as the pair card's first lines loaded`);
+  const width = await page.evaluate(`${cardElement(id)}.width`);
+  const rect = await page.evaluate(`(() => { const r = ${pairEl}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  await drawArrowOnto(pairEl, id, rect);
+  const probe = arrowOnCard.replace('"CARD"', JSON.stringify(id));
+  await page.waitFor(`(${onEdge})(${probe})`, { timeoutMs: 3000, message: `the arrow's end isn't on the card's edge: ${JSON.stringify(await page.evaluate(probe))}` });
+  const belowY = await page.evaluate(`${cardElement(belowId)}.y`);
+
+  // Details ▾: the request's box, the card taller at the same width.
+  await page.evaluate(`${pairEl}.querySelector('[data-testid="card-details"]').click()`);
+  await page.waitFor(`${pairEl}.querySelector('[data-testid="card-detail"][data-part="request"]')?.innerText.includes("Content-Type:")`, {
+    timeoutMs: 3000,
+    message: "the expanded card doesn't show the request's headers",
+  });
+  await page.waitFor(`${cardElement(id)}.height > ${height + 100}`, { timeoutMs: 3000, message: `the expanded card stayed ${height}px high` });
+  const grown = await settledHeight(id);
+  if ((await page.evaluate(`${cardElement(id)}.width`)) !== width) throw new Error("expanding changed the card's width");
+  const wraps = await page.evaluate(`(() => { const box = ${pairEl}.querySelector('[data-testid="card-detail"]'); return box.scrollWidth <= box.clientWidth + 1; })()`);
+  if (!wraps) throw new Error("a long line runs past the card's width");
+  const movedBy = (await page.evaluate(`${cardElement(belowId)}.y`)) - belowY;
+  if (Math.abs(movedBy - (grown - height)) > 2) throw new Error(`the card below moved ${movedBy}px for a ${grown - height}px growth`);
+  await page.waitFor(`(${onEdge})(${probe})`, { timeoutMs: 3000, message: `after expanding, the arrow's end isn't on the card's edge: ${JSON.stringify(await page.evaluate(probe))}` });
+
+  // Hide details ▴: it shrinks back; the card below stays.
+  await page.evaluate(`${pairEl}.querySelector('[data-testid="card-details"]').click()`);
+  await page.waitFor(`${cardElement(id)}.height < ${grown - 100}`, { timeoutMs: 3000, message: "the collapsed card didn't shrink" });
+  await settledHeight(id);
+  const after = await page.evaluate(`${cardElement(belowId)}.y`);
+  if (after !== belowY + movedBy) throw new Error(`the card below moved on a shrink: ${belowY + movedBy} → ${after}`);
+  await page.waitFor(`(${onEdge})(${probe})`, { timeoutMs: 3000, message: `after collapsing, the arrow's end isn't on the card's edge: ${JSON.stringify(await page.evaluate(probe))}` });
+
+  // Undo takes the collapse back: the card is expanded again.
+  await page.evaluate(`document.querySelector(".excalidraw-container").focus()`);
+  await page.press(KEYS.z, [MOD]);
+  await page.waitFor(`${cardElement(id)}.customData?.view?.expanded === true && Boolean(${pairEl}.querySelector('[data-testid="card-detail"]'))`, {
+    timeoutMs: 3000,
+    message: "undo didn't expand the card again",
+  });
+  return `${Math.round(height)}px → ${Math.round(grown)}px, the card below moved ${Math.round(movedBy)}px`;
+});
+
+// The Artifact draws a pair card as it shows: expanded, its labelled detail
+// boxes with a body's indentation kept (as no-break spaces, since an SVG
+// drawn as an image collapses leading spaces); collapsed, its first lines.
+// Light either way, with the app in dark mode.
+await report.check("SVG export carries the scene and its light card images: an expanded pair card draws its details", async () => {
+  const pairEl = `document.querySelector('[data-testid="card"][data-kind="pair"]')`;
+  const pairImage = (out) => {
+    const image = out.elements.find((e) => e.type === "image" && e.link === "marasi://pair/p41");
+    if (!image) throw new Error(`no pair card image in ${out.elements.map((e) => e.link ?? e.type).join(", ")}`);
+    return { image, share: out.lightShare[image.id], svg: out.cardSvgs["marasi://pair/p41"] ?? "" };
+  };
+  const expandedId = await page.evaluate(`harness.cardScene().find((e) => e.link === "marasi://pair/p41")?.id`);
+  if (!(await page.evaluate(`${cardElement(expandedId)}.customData?.view?.expanded === true`))) throw new Error("the pair card isn't expanded (the Details check failed)");
+  await settledHeight(expandedId);
+  await page.evaluate("harness.setDark(true)");
+  const open = pairImage(await page.evaluate("harness.attachmentSvg()"));
+  await page.evaluate("harness.setDark(false)");
+  for (const want of ["PAIR · REQUEST", "Content-Type:", "  &quot;username&quot;"]) {
+    if (!open.svg.includes(want)) throw new Error(`the expanded card's image lacks ${JSON.stringify(want)}`);
+  }
+  if (!open.svg.includes("Hide details ▴")) throw new Error("the expanded card's image doesn't draw its Details row");
+  if (!(open.share > 0.5)) throw new Error(`the expanded card's image is dark (${Math.round(open.share * 100)}% light pixels)`);
+
+  await page.evaluate(`${pairEl}.querySelector('[data-testid="card-details"]').click()`);
+  await page.waitFor(`${cardElement(expandedId)}.customData?.view?.expanded === false`, { timeoutMs: 3000, message: "the card didn't collapse" });
+  await settledHeight(expandedId);
+  const shut = pairImage(await page.evaluate("harness.attachmentSvg()"));
+  if (shut.svg.includes("Content-Type:") || !shut.svg.includes("→ POST /v2/auth/login")) throw new Error("the collapsed card's image doesn't draw its first lines only");
+  if (!shut.svg.includes("Details ▾")) throw new Error("the collapsed card's image doesn't draw its Details row");
+  if (!(open.image.height > shut.image.height + 100)) throw new Error(`the expanded image is ${open.image.height}px high, the collapsed ${shut.image.height}px`);
+  if (!(shut.share > 0.5)) throw new Error(`the collapsed card's image is dark (${Math.round(shut.share * 100)}% light pixels)`);
+  return `expanded ${Math.round(open.image.height)}px (${Math.round(open.share * 100)}% light), collapsed ${Math.round(shut.image.height)}px`;
 });
 
 // ---- CyberChef -----------------------------------------------------------
@@ -435,6 +546,30 @@ await report.check("Insert bakes with Auto Bake on, in LF, and Attach's output i
   await page.evaluate(`harness.insertPair("x")`);
   const out = await page.evaluate(`harness.chef().currentOutput()`);
   if (out !== "78") throw new Error(`currentOutput gave ${JSON.stringify(out)}`);
+});
+
+await report.check("replacing an open input tab's text rebakes, with the output current", async () => {
+  const autoBake = `${chefDoc}.getElementById("auto-bake").checked`;
+  await page.evaluate(`harness.chef().load({ operations: [{ op: "To Hex", args: ["None", 0] }], inputs: ["ab", "cd"] })`);
+  if (!(await page.evaluate(autoBake))) await clickInFrame("#auto-bake-label");
+  await page.waitFor(autoBake, { timeoutMs: 3000, message: "Auto Bake didn't turn on" });
+  await page.evaluate(`harness.chef().settled()`);
+  const tabs = await page.evaluate(`harness.chef().getInputTabs()`);
+  if (JSON.stringify(tabs.map((t) => t.text)) !== JSON.stringify(["ab", "cd"])) throw new Error(`tabs ${JSON.stringify(tabs)}`);
+  const open = await page.evaluate(`harness.chef().openTab()`);
+  if (open !== tabs[1].num) throw new Error(`open tab ${open}, tabs ${JSON.stringify(tabs)}`);
+  // As the From bar swaps: the open tab's text, by its number.
+  await page.evaluate(`harness.chef().replaceInput(${open}, "xy")`);
+  const inputs = await page.evaluate(`harness.chef().getInputs()`);
+  if (JSON.stringify(inputs) !== JSON.stringify(["ab", "xy"])) throw new Error(`inputs became ${JSON.stringify(inputs)}`);
+  // Auto Bake follows it, as it follows an insert.
+  await page.waitFor(`harness.chef().getOutput().then((text) => text === "7879")`, { timeoutMs: 30000, message: "the replaced input didn't bake" });
+  // Auto Bake off: the output is stale until Attach's currentOutput bakes it.
+  await clickInFrame("#auto-bake-label");
+  if (await page.evaluate(autoBake)) throw new Error("Auto Bake didn't turn off");
+  await page.evaluate(`harness.chef().replaceInput(${open}, "z")`);
+  const out = await page.evaluate(`harness.chef().currentOutput()`);
+  if (out !== "7a") throw new Error(`currentOutput gave ${JSON.stringify(out)}`);
 });
 
 await report.check("CyberChef's Save and Load buttons are intercepted", async () => {

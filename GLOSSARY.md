@@ -154,11 +154,24 @@ _Avoid_: diagram, canvas, scene, board
 A pair, finding or test case placed on a drawing. It shows its source's current details, in the app's own colours, and opens its source. The researcher owns its position and width, and arrows can connect to it. A card whose source is deleted stays on the drawing, marked deleted.
 _Avoid_: element, snapshot, embed
 
+**Part**:
+Which of a pair's messages a pair card or a CyberChef input holds: its request, its response, or (on a card only) both. A new pair card holds the request; the researcher changes the part on the card, and can expand the card to show its parts' raw messages.
+_Avoid_: side, direction, half
+
 ### CyberChef
 
 **Recipe**:
-A named CyberChef document in a project: its operations and its inputs. A project can have many, and the researcher switches between them. Its output is never kept, because CyberChef works it out again. Attaching a recipe to a finding or test case adds an Artifact with its input, operations and output.
+A named CyberChef document in a project: its operations and its inputs, with each input's source when it has one. A project can have many, and the researcher switches between them. Its output is never kept, because CyberChef works it out again. Attaching a recipe to a finding or test case adds an Artifact with its input, operations and output.
 _Avoid_: bake, chef session, saved recipe (CyberChef's own, which the app does not use)
+
+**Source** (of an input):
+The pair and part a CyberChef input came from by Insert or a row or entry menu's Send to CyberChef, and whether it holds only the body. Text sent to CyberChef from an editor, typed or pasted has none.
+_Avoid_: origin, link
+_Note_: a card's source is the pair, finding or test case it shows; an input's source also names the part.
+
+**From bar**:
+The bar over CyberChef's input that names the open input's source and swaps the input to the pair's request, response or body.
+_Avoid_: pair bar
 
 ### Marasi menu keybindings
 

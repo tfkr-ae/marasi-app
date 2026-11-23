@@ -10,17 +10,29 @@
 	import { logbookStore } from "../../stores/logbookStore.js";
 	import { highlightPalette } from "../../stores/highlightsStore.js";
 	import { pairRows } from "../../stores/pairRowsStore.js";
-	import { cardContent } from "./cardContent.js";
+	import { pairRaw } from "../../stores/pairRawStore.js";
+	import { primaryVariant } from "../launchpad/format.js";
+	import { PART_NAMES } from "../pairMessage.js";
+	import { cardContent, lineRuns } from "./cardContent.js";
+	import { DEFAULT_VIEW, viewChanges } from "./cards.js";
 
 	/** { kind, id } */
 	export let source;
 	/** A pair's row when the card was added, for a pair not read yet. */
 	export let last = null;
+	/** A pair card's view (cards.js cardView): { part, expanded }. */
+	export let view = DEFAULT_VIEW;
+	/** Called with a change to the view: { part } from the switch, { expanded } from the Details row. */
+	export let onView = (_change) => {};
 	/** True while an arrow being drawn would bind to this card. */
 	export let suggested = false;
 	export let onOpen = () => {};
-	/** Called with the content's natural height, so the element can fit it. */
-	export let onSize = (_height) => {};
+	/**
+	 * Called with the content's natural height, so the element can fit it,
+	 * and { push }: true when the size follows a change to the view, so the
+	 * cards below move down by the growth (cards.js fitCard).
+	 */
+	export let onSize = (_height, _how) => {};
 
 	const same = (a, b) => String(a) === String(b);
 
@@ -36,11 +48,32 @@
 				) ?? null;
 	$: findingCount =
 		source.kind === "testCase" ? $logbookStore.findings.filter((f) => same(f.TestCaseID, source.id)).length : 0;
-	$: content = cardContent(source, item, { palette: $highlightPalette, light: $modeCurrent, findingCount });
+	// A pair card reads its raw messages for its first lines, and again
+	// when its row shows a response that arrived after the read.
+	$: if (source.kind === "pair" && item) pairRaw.need(source.id, item);
+	$: raw = source.kind === "pair" ? ($pairRaw[String(source.id)] ?? undefined) : undefined;
+	$: content = cardContent(source, item, {
+		palette: $highlightPalette,
+		light: $modeCurrent,
+		findingCount,
+		view,
+		raw,
+	});
+
+	const SWITCH = [
+		["request", "REQ"],
+		["both", "BOTH"],
+		["response", "RES"],
+	];
+	$: primary = primaryVariant($modeCurrent);
 
 	let inner;
+	const changed = viewChanges();
 	afterUpdate(() => {
-		if (inner) onSize(inner.offsetHeight);
+		// An expanded card waiting for its messages keeps its height, so it
+		// doesn't shrink and then grow again, pushing the cards under it.
+		if (!inner || (content.expanded && !content.details)) return;
+		onSize(inner.offsetHeight, { push: changed(view) });
 	});
 </script>
 
@@ -60,6 +93,22 @@
 	<div bind:this={inner} class="py-2.5 pl-4 pr-3">
 		<div class="flex items-center text-3xs font-bold uppercase tracking-wider opacity-60">
 			<span class="flex-1">{content.label}</span>
+			{#if content.parts}
+				<span class="pointer-events-auto mr-1 flex border border-surface-500/30 normal-case tracking-normal" data-testid="card-part">
+					{#each SWITCH as [value, text]}
+						<button
+							type="button"
+							class="rounded-none px-1.5 py-px {content.part === value ? primary : 'disabled:opacity-40'}"
+							title={PART_NAMES[value]}
+							aria-pressed={content.part === value}
+							disabled={value !== "request" && !content.hasResponse}
+							data-part={value}
+							on:pointerdown|stopPropagation
+							on:click|stopPropagation={() => content.part !== value && onView({ part: value })}>{text}</button
+						>
+					{/each}
+				</span>
+			{/if}
 			<button
 				type="button"
 				class="pointer-events-auto rounded-none px-1 normal-case tracking-normal hover:bg-surface-500/20"
@@ -92,8 +141,54 @@
 		{#each content.lines as line}
 			<p class="line-clamp-2 break-words text-xs opacity-60">{line.text}</p>
 		{/each}
+		{#if content.details}
+			{#each content.details as detail}
+				<div class="mt-1.5 border border-surface-500/20" data-testid="card-detail" data-part={detail.part}>
+					<div class="bg-surface-200/60 px-2 py-0.5 text-3xs font-bold uppercase tracking-wider opacity-70 dark:bg-surface-700/60">
+						{detail.title}
+					</div>
+					{#if detail.empty}
+						<p class="px-2 py-1.5 text-2xs italic opacity-60">{detail.empty}</p>
+					{:else}
+						<!-- Each line wraps within the card's width; a long token breaks anywhere. -->
+						<div class="px-2 py-1.5 font-mono text-2xs leading-snug [overflow-wrap:anywhere]">
+							{#each detail.lines as line}
+								{#if line.kind === "start" || (line.kind === "header" && line.name)}
+									<div class="whitespace-pre-wrap {line.kind === 'start' ? 'font-semibold' : ''}">{#each lineRuns(line, detail.part) as run}<span class={run.classes}>{run.text}</span>{/each}</div>
+								{:else if line.kind === "gap"}
+									<div class="my-1.5 border-t border-surface-500/20"></div>
+								{:else if line.kind === "more"}
+									<div class="mt-1 text-3xs italic opacity-50">{line.text}</div>
+								{:else}
+									<div class="min-h-[1lh] whitespace-pre-wrap">{line.text}</div>
+								{/if}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/each}
+		{:else if content.firstLines?.length}
+			<div class="mt-1.5 space-y-0.5 font-mono text-2xs opacity-70" data-testid="card-first-lines">
+				{#each content.firstLines as line}
+					<p class="truncate" data-part={line.part}>{line.part === "request" ? "→" : "←"} {line.text}</p>
+				{/each}
+			</div>
+		{/if}
 		{#if content.footer}
 			<div class="mt-2 border-t border-surface-500/20 pt-1.5 text-2xs opacity-60">{content.footer}</div>
+		{/if}
+		{#if content.parts}
+			<div class="mt-1.5 border-t border-surface-500/20 pt-1.5">
+				<button
+					type="button"
+					class="pointer-events-auto flex w-full items-center rounded-none text-2xs opacity-70"
+					aria-expanded={content.expanded}
+					data-testid="card-details"
+					on:pointerdown|stopPropagation
+					on:click|stopPropagation={() => onView({ expanded: !content.expanded })}
+					>{content.expanded ? "Hide details ▴" : "Details ▾"}</button
+				>
+			</div>
 		{/if}
 	</div>
 </div>

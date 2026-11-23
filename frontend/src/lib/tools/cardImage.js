@@ -6,8 +6,10 @@
 import { get } from "svelte/store";
 import { logbookStore } from "../../stores/logbookStore.js";
 import { highlightPalette } from "../../stores/highlightsStore.js";
-import { cardContent } from "./cardContent.js";
+import { cardContent, lineRuns } from "./cardContent.js";
 import { pairRows } from "../../stores/pairRowsStore.js";
+import { pairRaw } from "../../stores/pairRawStore.js";
+import { cardView } from "./cards.js";
 
 const SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
@@ -72,8 +74,89 @@ const textWidth = (text, font) => {
   measure.font = font;
   return measure.measureText(text).width;
 };
-const escape = (text) =>
+const escapeXml = (text) =>
   String(text).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+// Leading spaces as no-break spaces: an SVG drawn as an image collapses
+// them, even with xml:space="preserve".
+const escape = (text) => escapeXml(String(text).replace(/^ +/, (spaces) => " ".repeat(spaces.length)));
+// A message line keeps every space (a body's indentation, aligned values),
+// and its coloured runs sit in separate tspans, so all are no-break.
+const escapeKept = (text) => escapeXml(String(text).replace(/ /g, " "));
+
+// One wrapped row of a line (`row`, starting at offset `from` in it) as
+// tspans coloured by the line's `segments`; a segment with no classes takes
+// the card's text colour `fill`.
+function tspans(row, from, segments, fill) {
+  let at = 0;
+  const out = [];
+  for (const segment of segments) {
+    const start = Math.max(at, from);
+    const end = Math.min(at + segment.text.length, from + row.length);
+    if (start < end) {
+      const colours = segment.classes ? lightColours(segment.classes) : { fg: fill, opacity: 1 };
+      const opacity = colours.opacity < 1 ? ` fill-opacity="${colours.opacity}"` : "";
+      out.push(`<tspan fill="${colours.fg}"${opacity}>${escapeKept(row.slice(start - from, end - from))}</tspan>`);
+    }
+    at += segment.text.length;
+  }
+  return out.join("");
+}
+
+// An expanded card's detail boxes, as CardView draws them: per part a
+// labelled box of its lines, wrapped at the card's width (a long token
+// breaks anywhere), header names in the primary colour, a rule before the
+// body and "+N more lines" last. Pushes onto `parts`; returns the new y.
+function details(boxes, { parts, y, left, inner, px, text }) {
+  const border = lightColours("bg-surface-500/20").bg;
+  const band = lightColours("bg-surface-200/60").bg;
+  const size = px(11);
+  const step = size * 1.375;
+  const font = (weight) => `${weight} ${size}px ${MONO}`;
+  const width = inner - px(16);
+  const x = left + px(8);
+  for (const box of boxes) {
+    const top = y + px(6);
+    const rows = [];
+    // The title band is 28px on screen (text-3xs's line, py-0.5, its border).
+    const bandHeight = px(28);
+    let ly = top + bandHeight + px(6);
+    if (box.empty) {
+      rows.push(`<text x="${x}" y="${ly + size * 0.95}" font-family="${SANS}" font-size="${size}" font-style="italic" fill="${text}" fill-opacity="0.6">${escape(box.empty)}</text>`);
+      ly += step;
+    }
+    for (const line of box.lines) {
+      if (line.kind === "gap") {
+        ly += px(6);
+        rows.push(`<line x1="${x}" x2="${x + width}" y1="${ly}" y2="${ly}" stroke="${border}" stroke-width="1"/>`);
+        ly += px(7);
+        continue;
+      }
+      if (line.kind === "more") {
+        ly += px(4);
+        rows.push(`<text x="${x}" y="${ly + px(10)}" font-family="${SANS}" font-size="${px(10)}" font-style="italic" fill="${text}" fill-opacity="0.5">${escape(line.text)}</text>`);
+        ly += px(14);
+        continue;
+      }
+      const weight = line.kind === "start" ? 600 : 400;
+      const segments = lineRuns(line, box.part);
+      let from = 0;
+      for (const row of line.text ? wrap(line.text, font(weight), width, Infinity) : [""]) {
+        rows.push(`<text x="${x}" y="${ly + size * 0.95}" font-family="${MONO}" font-size="${size}" font-weight="${weight}">${tspans(row, from, segments, text)}</text>`);
+        from += row.length;
+        ly += step;
+      }
+    }
+    const bottom = ly + px(6);
+    parts.push(`<rect x="${left}" y="${top}" width="${inner}" height="${bandHeight}" fill="${band}"/>`);
+    parts.push(
+      `<text x="${x}" y="${top + bandHeight / 2 + px(3.5)}" font-family="${SANS}" font-size="${px(10)}" font-weight="700" letter-spacing="1" fill="${text}" fill-opacity="0.7">${escape(box.title.toUpperCase())}</text>`,
+    );
+    parts.push(...rows);
+    parts.push(`<rect x="${left + 0.5}" y="${top + 0.5}" width="${inner - 1}" height="${bottom - top - 1}" fill="none" stroke="${border}"/>`);
+    y = bottom;
+  }
+  return y;
+}
 
 // The card's item now, as CardView finds it.
 function itemOf(element) {
@@ -81,7 +164,8 @@ function itemOf(element) {
   const same = (a, b) => String(a) === String(b);
   if (source.kind === "pair") {
     const row = get(pairRows)[String(source.id)];
-    return { item: row === undefined ? (last ?? null) : row, findingCount: 0 };
+    const raw = get(pairRaw)[String(source.id)] ?? undefined;
+    return { item: row === undefined ? (last ?? null) : row, findingCount: 0, raw };
   }
   const state = get(logbookStore);
   const list = source.kind === "finding" ? state.findings : state.testCases;
@@ -91,13 +175,15 @@ function itemOf(element) {
   };
 }
 
-/** A PNG data URL of card `element`, light, at its size on screen. */
-export async function cardImage(element) {
-  const { item, findingCount } = itemOf(element);
+/** The SVG text of card `element`, light, at its size on screen. */
+export function cardSvg(element) {
+  const { item, findingCount, raw } = itemOf(element);
   const content = cardContent(element.customData.source, item, {
     palette: get(highlightPalette),
     light: true,
     findingCount,
+    view: cardView(element),
+    raw,
   });
   const W = element.width;
   const H = element.height;
@@ -110,12 +196,15 @@ export async function cardImage(element) {
   const left = px(16);
   const inner = W - left - px(12);
   const parts = [];
-  let y = px(10);
-
+  // On screen the switch shows a pair card's part; the image names it, in
+  // the header row the switch makes as tall as on screen.
+  const label = content.partName ? `${content.label} · ${content.partName}` : content.label;
+  let y = content.parts ? px(11) : px(10);
+  const header = content.parts ? px(28) : px(16);
   parts.push(
-    `<text x="${left}" y="${y + px(8)}" font-family="${SANS}" font-size="${px(10)}" font-weight="700" letter-spacing="1" fill="${muted}">${escape(content.label.toUpperCase())}</text>`,
+    `<text x="${left}" y="${y + header / 2 + px(3.5)}" font-family="${SANS}" font-size="${px(10)}" font-weight="700" letter-spacing="1" fill="${muted}">${escape(label.toUpperCase())}</text>`,
   );
-  y += px(16);
+  y += header;
 
   if (content.chips.length) {
     let x = left;
@@ -140,9 +229,11 @@ export async function cardImage(element) {
   const titleFont = `600 ${titleSize}px ${content.title.mono ? MONO : SANS}`;
   y += px(8);
   for (const line of wrap(content.title.text, titleFont, inner, 2)) {
-    y += titleSize * 1.3;
+    // text-sm's line is 20px, text-base leading-snug's 22px.
+    const lineHeight = content.title.mono ? px(20) : titleSize * 1.375;
+    y += lineHeight;
     parts.push(
-      `<text x="${left}" y="${y - titleSize * 0.3}" font-family="${content.title.mono ? MONO : SANS}" font-size="${titleSize}" font-weight="600" fill="${content.deleted ? muted : surface.fg}">${escape(line)}</text>`,
+      `<text x="${left}" y="${y - (lineHeight - titleSize) / 2 - titleSize * 0.2}" font-family="${content.title.mono ? MONO : SANS}" font-size="${titleSize}" font-weight="600" fill="${content.deleted ? muted : surface.fg}">${escape(line)}</text>`,
     );
   }
   for (const entry of content.lines) {
@@ -151,11 +242,33 @@ export async function cardImage(element) {
       parts.push(`<text x="${left}" y="${y - px(4)}" font-family="${SANS}" font-size="${px(12)}" fill="${muted}">${escape(line)}</text>`);
     }
   }
+  if (content.details) {
+    y = details(content.details, { parts, y, left, inner, px, text: surface.fg });
+  } else if (content.firstLines?.length) {
+    const font = `400 ${px(11)}px ${MONO}`;
+    // As on screen: mt-1.5, then 24px lines (a paragraph's) 2px apart.
+    y += px(6);
+    for (const [i, entry] of content.firstLines.entries()) {
+      const [line] = wrap(`${entry.part === "request" ? "→" : "←"} ${entry.text}`, font, inner, 1);
+      y += (i ? px(2) : 0) + px(24);
+      parts.push(`<text x="${left}" y="${y - px(8)}" font-family="${MONO}" font-size="${px(11)}" fill="${muted}">${escape(line)}</text>`);
+    }
+  }
   if (content.footer) {
     y += px(8);
     parts.push(`<line x1="${left}" x2="${W - px(12)}" y1="${y}" y2="${y}" stroke="${border}" stroke-width="1"/>`);
-    y += px(16);
+    // pt-1.5, then the footer's 24px line.
+    y += px(23);
     parts.push(`<text x="${left}" y="${y}" font-family="${SANS}" font-size="${px(11)}" fill="${muted}">${escape(content.footer)}</text>`);
+  }
+  if (content.parts) {
+    // The Details row closes a pair card as on screen, set from the card's
+    // bottom (py-2.5, its 24px line, pt-1.5, the rule), so the image keeps
+    // the element's height and has no empty band.
+    const rule = H - px(40) - 0.5;
+    parts.push(`<line x1="${left}" x2="${W - px(12)}" y1="${rule}" y2="${rule}" stroke="${border}" stroke-width="1"/>`);
+    const label = content.expanded ? "Hide details ▴" : "Details ▾";
+    parts.push(`<text x="${left}" y="${rule + px(23)}" font-family="${SANS}" font-size="${px(11)}" fill="${surface.fg}" fill-opacity="0.7">${escape(label)}</text>`);
   }
 
   const accent = content.accent.color ?? lightColours(content.accent.classes).bg;
@@ -168,6 +281,14 @@ ${parts.join("\n")}
 </g>
 <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="none" stroke="${border}"${content.deleted ? ' stroke-dasharray="5 4"' : ""}/>
 </svg>`;
+  return svg;
+}
+
+/** A PNG data URL of card `element`, light, at its size on screen. */
+export async function cardImage(element) {
+  const svg = cardSvg(element);
+  const W = element.width;
+  const H = element.height;
   const image = new Image();
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   await image.decode();

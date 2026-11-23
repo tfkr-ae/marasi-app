@@ -23,8 +23,7 @@ import { findingStore } from "../../stores/findingStore";
 import { RAW_ONLY } from "../../stores/trafficApi.js";
 import { newRecord } from "../logbook/recordEditor.js";
 import { addPairToDrawing } from "../tools/addToDrawing.js";
-import { sendTextToChef } from "../tools/cyberchef/sendAction.js";
-import { pairText } from "../tools/cyberchef/send.js";
+import { sendPairToChef } from "../tools/cyberchef/sendAction.js";
 import {
 	ledgerStore,
 	tableRows,
@@ -422,11 +421,12 @@ export function createLedgerActions({ toastStore, modalStore, isDrawerOpen, show
 	}
 
 
-	// The pair's request into CyberChef's recipe `recipe`, as Insert puts it.
+	// The pair's request into CyberChef's recipe `recipe`, as Insert puts it,
+	// with the pair as its input's source.
 	async function sendToChef(id, recipe) {
 		try {
 			const details = await ledgerStore.getDetails(id, RAW_ONLY);
-			sendTextToChef(pairText(details?.Request?.Raw), toastStore, recipe);
+			sendPairToChef(id, details?.Request?.Raw, toastStore, recipe);
 		} catch (err) {
 			toastError("Failed to read the request", err);
 		}

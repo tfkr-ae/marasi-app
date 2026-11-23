@@ -1,7 +1,18 @@
 // Traffic as the tool pages read it (lib/tools): the rows of the pairs on a
 // drawing's cards, and the Insert panel's newest pairs for a query. Rows
 // are the Ledger's shape (trafficApi.js's toRow).
-import { readTraffic } from "./trafficApi.js";
+import { RAW_ONLY, pairQuery, readTraffic, toDetails } from "./trafficApi.js";
+import { pairText } from "../lib/pairMessage.js";
+
+// Resolves to null when the service answers not_found.
+async function orNull(promise) {
+  try {
+    return await promise;
+  } catch (err) {
+    if (err?.code === "not_found") return null;
+    throw err;
+  }
+}
 
 /** The most pairs one query asks for by id. */
 export const PAIR_ROWS_CHUNK = 50;
@@ -23,6 +34,17 @@ export function createToolTrafficApi(client) {
       const page = await newest(client, idsQuery(ids), ids.length);
       if (page.QueryError) throw new Error(page.QueryError.Message);
       return page.Items;
+    },
+    /**
+     * Pair `id`'s raw messages, as CyberChef's Insert reads them (raw only):
+     * { Request, Response } with LF line endings, Response "" while it has
+     * none; null when the service no longer has the pair.
+     */
+    async readRaw(id) {
+      const pair = await orNull(client.get(`/traffic/${id}`, pairQuery(RAW_ONLY)));
+      if (!pair) return null;
+      const details = toDetails(pair);
+      return { Request: pairText(details.Request.Raw), Response: pairText(details.Response.Raw) };
     },
     /** The newest pairs matching `query`: { Items, QueryError }. */
     readList: (query) => newest(client, query, TRAFFIC_LIST_LIMIT),

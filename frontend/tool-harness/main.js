@@ -1,6 +1,7 @@
 // The tool contract checks' harness (scripts/check-tools.sh). It mounts the
 // app's real Excalidraw island and CyberChef frame, built from the pinned
-// versions, with the app's real keybinding dispatcher, and no Marasi service.
+// versions, with the app's real keybinding dispatcher, and no Marasi service
+// (servePairs answers a pair card's raw reads in its place).
 // frontend/tool-checks/check-browser.js drives it from headless Chrome
 // through window.harness.
 //
@@ -11,11 +12,14 @@ import "../src/app.css";
 import { modeCurrent } from "@skeletonlabs/skeleton";
 import ExcalidrawIsland from "../src/lib/tools/ExcalidrawIsland.svelte";
 import { createCardEmbed } from "../src/lib/tools/cardEmbed.js";
-import { newCardElement } from "../src/lib/tools/cards.js";
+import { isCard, newCardElement } from "../src/lib/tools/cards.js";
+import { cardSvg } from "../src/lib/tools/cardImage.js";
 import { drawingFile } from "../src/lib/tools/drawingFile.js";
 import { logbookStore } from "../src/stores/logbookStore.js";
+import { service } from "../src/lib/service/index.js";
 import ChefFrame from "../src/lib/tools/cyberchef/ChefFrame.svelte";
-import { chefInbox, drainInbox, pairText } from "../src/lib/tools/cyberchef/send.js";
+import { chefInbox, drainInbox } from "../src/lib/tools/cyberchef/send.js";
+import { pairText } from "../src/lib/pairMessage.js";
 import { installMenuShortcuts, menuDispatcher, menuPalettes, registerMenuActions } from "../src/lib/keybindings/app.js";
 import { MACOS, WINDOWS_LINUX } from "../src/lib/keybindings/platform.js";
 
@@ -44,6 +48,7 @@ function reset(nextRoute) {
 }
 
 const loadExcalidraw = () => import("@excalidraw/excalidraw");
+const realFetch = globalThis.fetch.bind(globalThis);
 
 let island = null;
 let chef = null;
@@ -160,10 +165,35 @@ window.harness = {
 		};
 	},
 
-	/** Adds a card for `source` at scene point `at`, as Insert does; resolves to its id. */
-	addCard(source, at) {
+	/**
+	 * Answers the service's raw reads of `pairs` ({ <id>: { Request, Response,
+	 * StatusCode } }), as GET /traffic/<id> would, so a pair card reads its
+	 * raw messages (pairRawStore.js) with no Marasi service.
+	 */
+	servePairs(pairs) {
+		const base = "http://harness.invalid/";
+		const encode = (text) => btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+		const real = realFetch;
+		globalThis.fetch = async (input, init) => {
+			const url = String(input?.url ?? input);
+			if (!url.startsWith(base)) return real(input, init);
+			const id = /\/traffic\/([^/?]+)/.exec(url)?.[1];
+			const pair = id && pairs[decodeURIComponent(id)];
+			if (!pair) return new Response(JSON.stringify({ code: "not_found" }), { status: 404, headers: { "content-type": "application/json" } });
+			const body = {
+				id,
+				request: { raw: encode(pair.Request) },
+				response: { raw: encode(pair.Response ?? ""), status_code: pair.StatusCode ?? 0 },
+			};
+			return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+		};
+		service.use({ url: base });
+	},
+
+	/** Adds a card for `source` (a pair's with its row `last`) at scene point `at`, as Insert does; resolves to its id. */
+	addCard(source, at, last = null) {
 		const { api, lib } = up;
-		const [element] = lib.restoreElements([newCardElement(source, at)], null);
+		const [element] = lib.restoreElements([newCardElement(source, at, { last })], null);
 		api.updateScene({
 			elements: [...api.getSceneElementsIncludingDeleted(), element],
 			captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY,
@@ -235,6 +265,10 @@ window.harness = {
 				points,
 			})),
 			lightShare: images,
+			// Each card's light image as the SVG it is drawn from, by link.
+			cardSvgs: Object.fromEntries(
+				await Promise.all(api.getSceneElements().filter(isCard).map(async (element) => [element.link, await cardSvg(element)])),
+			),
 		};
 	},
 

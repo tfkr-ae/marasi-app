@@ -3,7 +3,7 @@
 // The pure parts are in send.js.
 import { goto } from "$app/navigation";
 import { EditorView } from "@codemirror/view";
-import { chefInbox, editorTracker, textOfEditor } from "./send.js";
+import { chefInbox, editorTracker, pairInput, textOfEditor } from "./send.js";
 import { recipes } from "../documents.js";
 
 const findView = (el) => EditorView.findFromDOM(el);
@@ -31,7 +31,7 @@ function send(result, toastStore, target = null) {
     return false;
   }
   openRecipe(target);
-  chefInbox.update((list) => [...list, result.text]);
+  chefInbox.update((list) => [...list, result.entry ?? result.text]);
   goto("/cyberchef");
   return true;
 }
@@ -48,6 +48,13 @@ function openRecipe(target) {
  * recipe `target` (a recipe id, "new", or null for the open recipe).
  */
 export const sendTextToChef = (text, toastStore, target = null) => send({ text }, toastStore, target);
+
+/**
+ * Sends pair `pairId`'s request `raw` into recipe `target` as Insert puts it,
+ * so its input tab records the pair as its source (the From bar).
+ */
+export const sendPairToChef = (pairId, raw, toastStore, target = null) =>
+  send({ entry: pairInput(pairId, raw) }, toastStore, target);
 
 /** Sends from the last focused editor (global.send-to-cyberchef). */
 export const sendFocusedToChef = (toastStore) => send(tracker.text(), toastStore);

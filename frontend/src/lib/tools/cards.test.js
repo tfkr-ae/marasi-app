@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ARROW_GAP, artifactScene, cardArrowEnds, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, fitCard, newCardElement, placeCard, sourceOfLink } from "./cards.js";
+import { ARROW_GAP, artifactScene, cardArrowEnds, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, cardView, fitCard, viewChanges, newCardElement, placeCard, sourceOfLink, withCardView } from "./cards.js";
 
 const pairRow = { ID: "p-1", Number: 7, Method: "GET", Path: "/login" };
 
@@ -114,6 +114,73 @@ test("cards that already overlapped are left where the researcher put them", () 
   const b = card("b", 20, 50, 100);
   const fitted = fitCard([a, b], "a", 140);
   assert.equal(fitted.find((e) => e.id === "b").y, 50);
+});
+
+test("a card the researcher expands moves every card below it in its columns down by its growth, keeping their spacing", () => {
+  // `a` expands from 120 to 520: `b` (well clear of it), `c` (under `b`)
+  // and `under` (overlapping its width only in part) keep their gaps to it.
+  const a = card("a", 0, 0, 120);
+  const b = card("b", 0, 600, 120);
+  const c = card("c", 0, 900, 120);
+  const under = card("under", CARD_WIDTH - 40, 300, 100);
+  const aside = card("aside", CARD_WIDTH + 100, 200, 100);
+  const above = card("above", 0, -300, 100);
+  const byId = Object.fromEntries(fitCard([a, b, c, under, aside, above], "a", 520, { push: true }).map((e) => [e.id, e]));
+  assert.equal(byId.a.height, 520);
+  assert.equal(byId.b.y, 1000);
+  assert.equal(byId.c.y, 1300);
+  assert.equal(byId.under.y, 700);
+  assert.equal(byId.aside.y, 200, "a card beside it stays");
+  assert.equal(byId.above.y, -300, "a card above it stays");
+});
+
+test("a card an expand moves down moves the cards below it too, so none ends up covered", () => {
+  // `side` isn't under `a`, but is under `b`, which `a` moves onto it.
+  const a = card("a", 0, 0, 100);
+  const b = card("b", 200, 150, 100);
+  const side = card("side", CARD_WIDTH + 50, 300, 100);
+  const byId = Object.fromEntries(fitCard([a, b, side], "a", 300, { push: true }).map((e) => [e.id, e]));
+  assert.equal(byId.b.y, 350);
+  assert.equal(byId.side.y, 500);
+});
+
+test("a pair card whose content loads moves only the cards it would cover, as before views", () => {
+  // A collapsed pair card's first lines arrive as a drawing opens: `clear`,
+  // well below it, stays; `tight`, which it would cover, moves just under it.
+  const pair = (id, x, y, height) => ({ ...newCardElement({ kind: "pair", id }, { x, y }, { height }), id });
+  const a = pair("a", 0, 0, 150);
+  const clear = pair("clear", 0, 600, 120);
+  const beside = pair("beside", CARD_WIDTH + 50, 0, 100);
+  const tight = pair("tight", 0, 150 + CARD_GAP, 100);
+  const byId = Object.fromEntries(fitCard([a, clear, beside, tight], "a", 200).map((e) => [e.id, e]));
+  assert.equal(byId.clear.y, 600, "a card clear of it stays");
+  assert.equal(byId.beside.y, 0, "a card beside it stays");
+  assert.equal(byId.tight.y, 200 + CARD_GAP, "a card it would cover moves just under it");
+});
+
+test("a finding card that grows moves only the cards it would cover", () => {
+  const f = card("f", 0, 0, 150);
+  const below = card("below", 0, 400, 120);
+  const byId = Object.fromEntries(fitCard([f, below], "f", 300).map((e) => [e.id, e]));
+  assert.equal(byId.f.height, 300);
+  assert.equal(byId.below.y, 400);
+});
+
+test("a card's size pushes only when it follows a change to its view", () => {
+  const changed = viewChanges();
+  assert.equal(changed({ part: "request", expanded: false }), false, "the first size, as the card opens");
+  assert.equal(changed({ part: "request", expanded: false }), false, "its content loading, in the same view");
+  assert.equal(changed({ part: "request", expanded: true }), true, "Details");
+  assert.equal(changed({ part: "request", expanded: true }), false, "a later fit in the same view");
+  assert.equal(changed({ part: "both", expanded: true }), true, "a part switch");
+});
+
+test("a card that shrinks moves no other card", () => {
+  const a = card("a", 0, 0, 500);
+  const b = card("b", 0, 600, 120);
+  const fitted = fitCard([a, b], "a", 120, { push: true });
+  assert.equal(fitted.find((e) => e.id === "a").height, 120);
+  assert.equal(fitted.find((e) => e.id === "b").y, 600);
 });
 
 test("the cards an arrow would bind to, from either form of suggested binding", () => {
@@ -230,4 +297,26 @@ test("after its card moves away, a bound arrow's end goes back to the card's edg
 test("an arrow whose other point is on the card itself is left alone", () => {
   const [card, arrow] = boundArrow({ x: 150, y: 150 }, { x: 200, y: 150 });
   assert.deepEqual(cardArrowEnds([card, arrow]), []);
+});
+
+test("a new pair card, or one loaded without a view, shows the request, collapsed", () => {
+  const card = newCardElement({ kind: "pair", id: "p-1" }, { x: 0, y: 0 }, { last: pairRow });
+  assert.equal(card.customData.view, undefined);
+  assert.deepEqual(cardView(card), { part: "request", expanded: false });
+  assert.deepEqual(cardView({ ...card, customData: { source: card.customData.source } }), { part: "request", expanded: false });
+});
+
+test("a pair card's view is read from its customData, with an unknown part read as the request", () => {
+  const card = newCardElement({ kind: "pair", id: "p-1" }, { x: 0, y: 0 });
+  const both = { ...card, customData: { ...card.customData, view: { part: "both", expanded: true } } };
+  assert.deepEqual(cardView(both), { part: "both", expanded: true });
+  const odd = { ...card, customData: { ...card.customData, view: { part: "headers" } } };
+  assert.deepEqual(cardView(odd), { part: "request", expanded: false });
+});
+
+test("a card's view changes on a copy of its customData that keeps its source and row", () => {
+  const card = newCardElement({ kind: "pair", id: "p-1" }, { x: 0, y: 0 }, { last: pairRow });
+  const customData = withCardView(card, { part: "response" });
+  assert.deepEqual(customData, { source: { kind: "pair", id: "p-1" }, last: pairRow, view: { part: "response", expanded: false } });
+  assert.equal(card.customData.view, undefined);
 });

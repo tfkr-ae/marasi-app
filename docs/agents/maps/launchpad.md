@@ -40,7 +40,7 @@ While a launch is pending, Marasi refuses to move or remove its pair, or to dele
 
 ## Findings and test cases
 
-Add to Drawing (`add-to-drawing`) and Send to CyberChef (`send-to-chef`, left out without `chef`, the page's `chefShown`) follow Copy browser view URL, for one entry; each is a submenu of New drawing or New recipe and every drawing or recipe (`documentTargetItem`), so the action carries a `target`; the page runs them with `addPairToDrawing` and with the entry's request (`ensureDetails`) through `sendTextToChef`.
+Add to Drawing (`add-to-drawing`) and Send to CyberChef (`send-to-chef`, left out without `chef`, the page's `chefShown`) follow Copy browser view URL, for one entry; each is a submenu of New drawing or New recipe and every drawing or recipe (`documentTargetItem`), so the action carries a `target`; the page runs them with `addPairToDrawing` and with the entry's request (`ensureDetails`) through `sendPairToChef`, which records the entry as the input's source for the From bar.
 
 The entry menu's Finding and Test case submenus sit between those and Remove. They act on the Entry selection's pairs, as the Ledger's do, and pending launches disable none of them.
 

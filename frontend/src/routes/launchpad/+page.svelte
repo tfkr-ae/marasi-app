@@ -42,8 +42,7 @@
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
     import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
     import { addPairToDrawing } from "../../lib/tools/addToDrawing.js";
-    import { sendTextToChef } from "../../lib/tools/cyberchef/sendAction.js";
-    import { pairText } from "../../lib/tools/cyberchef/send.js";
+    import { sendPairToChef } from "../../lib/tools/cyberchef/sendAction.js";
     import { chefShown } from "../../lib/platform.js";
     import { drawings, recipes } from "../../lib/tools/documents.js";
     import { launchpadMenuFor } from "../../lib/launchpad/launchpadMenu.js";
@@ -338,11 +337,11 @@
         addPairToDrawing(toastStore, entry, drawing);
     }
 
-    // The entry's request as Insert puts a pair's into CyberChef.
+    // The entry's request as Insert puts a pair's into CyberChef, with its source.
     async function sendEntryToChef(id, recipe) {
         try {
             const details = await launchpadStore.ensureDetails(id);
-            sendTextToChef(pairText(details?.Request?.Raw), toastStore, recipe);
+            sendPairToChef(id, details?.Request?.Raw, toastStore, recipe);
         } catch (err) {
             console.error("Launchpad send to CyberChef error:", err);
             toastError(toastStore, "Failed to read the request", err);
