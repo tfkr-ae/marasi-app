@@ -10,12 +10,19 @@
 	import { logbookStore } from "../../stores/logbookStore.js";
 	import { highlightPalette } from "../../stores/highlightsStore.js";
 	import { pairRows } from "../../stores/pairRowsStore.js";
+	import { pairRaw } from "../../stores/pairRawStore.js";
+	import { primaryVariant } from "../launchpad/format.js";
 	import { cardContent } from "./cardContent.js";
+	import { DEFAULT_VIEW, PART_NAMES } from "./cards.js";
 
 	/** { kind, id } */
 	export let source;
 	/** A pair's row when the card was added, for a pair not read yet. */
 	export let last = null;
+	/** A pair card's view (cards.js cardView): { part, expanded }. */
+	export let view = DEFAULT_VIEW;
+	/** Called with a change to the view ({ part }), from the switch. */
+	export let onView = (_change) => {};
 	/** True while an arrow being drawn would bind to this card. */
 	export let suggested = false;
 	export let onOpen = () => {};
@@ -36,7 +43,24 @@
 				) ?? null;
 	$: findingCount =
 		source.kind === "testCase" ? $logbookStore.findings.filter((f) => same(f.TestCaseID, source.id)).length : 0;
-	$: content = cardContent(source, item, { palette: $highlightPalette, light: $modeCurrent, findingCount });
+	// A pair card reads its raw messages for its first lines, and again
+	// when its row shows a response that arrived after the read.
+	$: if (source.kind === "pair" && item) pairRaw.need(source.id, item);
+	$: raw = source.kind === "pair" ? ($pairRaw[String(source.id)] ?? undefined) : undefined;
+	$: content = cardContent(source, item, {
+		palette: $highlightPalette,
+		light: $modeCurrent,
+		findingCount,
+		view,
+		raw,
+	});
+
+	const SWITCH = [
+		["request", "REQ"],
+		["both", "BOTH"],
+		["response", "RES"],
+	];
+	$: primary = primaryVariant($modeCurrent);
 
 	let inner;
 	afterUpdate(() => {
@@ -60,6 +84,24 @@
 	<div bind:this={inner} class="py-2.5 pl-4 pr-3">
 		<div class="flex items-center text-3xs font-bold uppercase tracking-wider opacity-60">
 			<span class="flex-1">{content.label}</span>
+			{#if content.parts}
+				<span class="pointer-events-auto mr-1 flex border border-surface-500/30 normal-case tracking-normal" data-testid="card-part">
+					{#each SWITCH as [value, text]}
+						<button
+							type="button"
+							class="rounded-none px-1.5 py-px {content.part === value
+								? primary
+								: 'hover:bg-surface-500/20 disabled:opacity-40 disabled:hover:bg-transparent'}"
+							title={PART_NAMES[value]}
+							aria-pressed={content.part === value}
+							disabled={value !== "request" && !content.hasResponse}
+							data-part={value}
+							on:pointerdown|stopPropagation
+							on:click|stopPropagation={() => content.part !== value && onView({ part: value })}>{text}</button
+						>
+					{/each}
+				</span>
+			{/if}
 			<button
 				type="button"
 				class="pointer-events-auto rounded-none px-1 normal-case tracking-normal hover:bg-surface-500/20"
@@ -92,6 +134,13 @@
 		{#each content.lines as line}
 			<p class="line-clamp-2 break-words text-xs opacity-60">{line.text}</p>
 		{/each}
+		{#if content.firstLines?.length}
+			<div class="mt-1.5 space-y-0.5 font-mono text-2xs opacity-70" data-testid="card-first-lines">
+				{#each content.firstLines as line}
+					<p class="truncate" data-part={line.part}>{line.part === "request" ? "→" : "←"} {line.text}</p>
+				{/each}
+			</div>
+		{/if}
 		{#if content.footer}
 			<div class="mt-2 border-t border-surface-500/20 pt-1.5 text-2xs opacity-60">{content.footer}</div>
 		{/if}

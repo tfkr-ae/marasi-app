@@ -2,23 +2,45 @@
 // screen, and cardImage.js draws it light for a Drawing's Artifact. Plain
 // functions, so they load under node.
 //
-// cardContent(source, item, { palette, light, findingCount }) →
+// cardContent(source, item, { palette, light, findingCount, view, raw }) →
 //   { label, deleted, accent: { classes } | { color },
 //     chips: [{ text, classes?, color?, mono?, bold?, plain? }],
 //     title: { text, mono }, lines: [{ text }], footer }
+// and for a pair that isn't deleted, also
+//   { part, partName, parts, firstLines: [{ part, text }], hasResponse }.
 // `item` is the pair's row or the record, null once its source is deleted.
 // `palette` is the highlight palette; `light` the app's mode; a test case's
-// `findingCount` is how many findings name it.
+// `findingCount` is how many findings name it. A pair card's `view` is
+// cards.js cardView's ({ part, expanded }); `raw` is its pair's raw
+// { Request, Response } once read (pairRawStore.js), else undefined: until
+// then the card shows no first lines but "no response yet".
 import { SEVERITY_BADGE } from "../logbook/severityColors.js";
 import { METHOD_CLASS, statusClass, tertiaryVariant } from "../launchpad/format.js";
 import { formatSize, protocolText, shortType } from "../ledger/table.js";
 import { recordLabel, recordName } from "./recordKinds.js";
+import { DEFAULT_VIEW, PART_NAMES } from "./cards.js";
 
 /** The neutral chip, as the Ledger and Logbook draw a number or tag. */
 export const CHIP = "bg-surface-200 dark:bg-surface-700";
 
 const oneLine = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
 const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+// A message's start line, from its raw text as the Ledger shows it.
+const startLine = (raw) => String(raw ?? "").replace(/\r\n/g, "\n").split("\n", 1)[0];
+
+// The parts a pair card holds, and the first line of each, request first.
+function pairParts(pair, view, raw) {
+  const part = PART_NAMES[view?.part] ? view.part : DEFAULT_VIEW.part;
+  const parts = part === "both" ? ["request", "response"] : [part];
+  const hasResponse = Number(pair.StatusCode) > 0 || Boolean(raw?.Response);
+  const firstLines = parts.flatMap((p) => {
+    if (p === "response" && !hasResponse) return [{ part: p, text: "no response yet" }];
+    if (!raw) return [];
+    return [{ part: p, text: startLine(p === "request" ? raw.Request : raw.Response) }];
+  });
+  return { part, partName: PART_NAMES[part], parts, firstLines, hasResponse };
+}
 
 function pairContent(pair, palette) {
   const code = Number(pair.StatusCode);
@@ -77,7 +99,7 @@ function testCaseContent(testCase, light, findingCount) {
   };
 }
 
-export function cardContent(source, item, { palette = [], light = true, findingCount = 0 } = {}) {
+export function cardContent(source, item, { palette = [], light = true, findingCount = 0, view = DEFAULT_VIEW, raw } = {}) {
   const label = recordLabel(source.kind);
   if (!item) {
     return {
@@ -92,7 +114,7 @@ export function cardContent(source, item, { palette = [], light = true, findingC
   }
   const body =
     source.kind === "pair"
-      ? pairContent(item, palette)
+      ? { ...pairContent(item, palette), ...pairParts(item, view, raw) }
       : source.kind === "finding"
         ? findingContent(item)
         : testCaseContent(item, light, findingCount);

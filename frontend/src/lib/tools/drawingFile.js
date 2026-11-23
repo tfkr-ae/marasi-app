@@ -3,8 +3,9 @@
 // screen and drawn after every other element (artifactScene), so an arrow
 // running under a card is hidden as it is on screen, and the canvas is light
 // whatever mode the app is in.
-import { artifactScene, isCard } from "./cards.js";
+import { artifactScene, cardSource, isCard } from "./cards.js";
 import { cardImage } from "./cardImage.js";
+import { pairRaw } from "../../stores/pairRawStore.js";
 
 export const DRAWING_FORMATS = [
   { value: "svg", label: "SVG" },
@@ -16,6 +17,8 @@ const baseName = (name) => String(name).trim().replace(/[^\w.-]+/g, "-").replace
 /** A File of the drawing on screen. `lib` is Excalidraw's module, `api` its imperative API. */
 export async function drawingFile(lib, api, name, format) {
   const elements = api.getSceneElements();
+  // Every pair card's raw messages first, so no image lacks its first lines.
+  await pairRaw.ensure(elements.map(cardSource).filter((source) => source?.kind === "pair").map((source) => source.id));
   const images = {};
   for (const element of elements) if (isCard(element)) images[element.id] = await cardImage(element);
   const scene = artifactScene(elements, api.getFiles(), images);

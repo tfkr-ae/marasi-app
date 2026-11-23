@@ -1,11 +1,12 @@
 // Cards on a drawing, as the Excalidraw island draws them: the `embed` it
 // takes (CardView over each card embeddable), each card fitted to its
-// content outside the undo history, the ring while an arrow would bind, and
-// the arrows bound to a card kept on its edge.
+// content outside the undo history, the ring while an arrow would bind, the
+// arrows bound to a card kept on its edge, and a pair card's view (its
+// REQ · BOTH · RES switch) changed in the undo history.
 // The Excalidraw page and the tool contract checks' harness both use it.
 import { get, writable } from "svelte/store";
 import CardView from "./CardView.svelte";
-import { cardArrowEnds, cardSource, fitCard, sourceOfLink, suggestedCardIds } from "./cards.js";
+import { cardArrowEnds, cardSource, cardView, fitCard, sourceOfLink, suggestedCardIds, withCardView } from "./cards.js";
 
 /**
  * `excalidraw()` returns { api, lib } once Excalidraw is up, else null.
@@ -30,6 +31,19 @@ export function createCardEmbed({ excalidraw, onOpen = () => {} }) {
         : lib.newElementWith(before, { y: element.y, height: element.height });
     });
     api.updateScene({ elements: next, captureUpdate: lib.CaptureUpdateAction.NEVER });
+  }
+
+  // A pair card's switch: its view changes in the undo history, so undo
+  // takes it back; the fit that follows stays outside it.
+  function changeView(id, change) {
+    const up = excalidraw();
+    if (!up) return;
+    const { api, lib } = up;
+    const elements = api.getSceneElementsIncludingDeleted();
+    const next = elements.map((element) =>
+      element.id === id && cardSource(element) ? lib.newElementWith(element, { customData: withCardView(element, change) }) : element,
+    );
+    api.updateScene({ elements: next, captureUpdate: lib.CaptureUpdateAction.IMMEDIATELY });
   }
 
   // While a pointer is down or an element is being drawn, moved or resized,
@@ -69,20 +83,28 @@ export function createCardEmbed({ excalidraw, onOpen = () => {} }) {
     accepts: (link) => sourceOfLink(link) !== null,
     mount(target, element) {
       let latest = element;
+      let shown = cardView(element);
       const view = new CardView({
         target,
         props: {
           source: cardSource(element) ?? sourceOfLink(element.link),
           last: element.customData?.last ?? null,
+          view: shown,
           suggested: get(suggested).has(element.id),
           onOpen: () => onOpen(cardSource(latest) ?? sourceOfLink(latest.link), latest.customData?.last),
           onSize: (height) => fitToContent(latest.id, height),
+          onView: (change) => changeView(latest.id, change),
         },
       });
       const unsubscribe = suggested.subscribe((ids) => view.$set({ suggested: ids.has(latest.id) }));
       return {
         update(next) {
           latest = next;
+          const now = cardView(next);
+          if (now.part !== shown.part || now.expanded !== shown.expanded) {
+            shown = now;
+            view.$set({ view: now });
+          }
         },
         destroy() {
           unsubscribe();
