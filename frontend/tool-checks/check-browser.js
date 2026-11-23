@@ -375,6 +375,38 @@ await report.check("a pair card's Details expands it to its messages, moving the
   return `${Math.round(height)}px → ${Math.round(grown)}px, the card below moved ${Math.round(movedBy)}px`;
 });
 
+// The Artifact draws a pair card as it shows: expanded, its labelled detail
+// boxes with a body's indentation kept (as no-break spaces, since an SVG
+// drawn as an image collapses leading spaces); collapsed, its first lines.
+// Light either way, with the app in dark mode.
+await report.check("SVG export carries the scene and its light card images: an expanded pair card draws its details", async () => {
+  const pairEl = `document.querySelector('[data-testid="card"][data-kind="pair"]')`;
+  const pairImage = (out) => {
+    const image = out.elements.find((e) => e.type === "image" && e.link === "marasi://pair/p41");
+    if (!image) throw new Error(`no pair card image in ${out.elements.map((e) => e.link ?? e.type).join(", ")}`);
+    return { image, share: out.lightShare[image.id], svg: out.cardSvgs["marasi://pair/p41"] ?? "" };
+  };
+  const expandedId = await page.evaluate(`harness.cardScene().find((e) => e.link === "marasi://pair/p41")?.id`);
+  if (!(await page.evaluate(`${cardElement(expandedId)}.customData?.view?.expanded === true`))) throw new Error("the pair card isn't expanded (the Details check failed)");
+  await settledHeight(expandedId);
+  await page.evaluate("harness.setDark(true)");
+  const open = pairImage(await page.evaluate("harness.attachmentSvg()"));
+  await page.evaluate("harness.setDark(false)");
+  for (const want of ["PAIR · REQUEST", "Content-Type:", "  &quot;username&quot;"]) {
+    if (!open.svg.includes(want)) throw new Error(`the expanded card's image lacks ${JSON.stringify(want)}`);
+  }
+  if (!(open.share > 0.5)) throw new Error(`the expanded card's image is dark (${Math.round(open.share * 100)}% light pixels)`);
+
+  await page.evaluate(`${pairEl}.querySelector('[data-testid="card-details"]').click()`);
+  await page.waitFor(`${cardElement(expandedId)}.customData?.view?.expanded === false`, { timeoutMs: 3000, message: "the card didn't collapse" });
+  await settledHeight(expandedId);
+  const shut = pairImage(await page.evaluate("harness.attachmentSvg()"));
+  if (shut.svg.includes("Content-Type:") || !shut.svg.includes("→ POST /v2/auth/login")) throw new Error("the collapsed card's image doesn't draw its first lines only");
+  if (!(open.image.height > shut.image.height + 100)) throw new Error(`the expanded image is ${open.image.height}px high, the collapsed ${shut.image.height}px`);
+  if (!(shut.share > 0.5)) throw new Error(`the collapsed card's image is dark (${Math.round(shut.share * 100)}% light pixels)`);
+  return `expanded ${Math.round(open.image.height)}px (${Math.round(open.share * 100)}% light), collapsed ${Math.round(shut.image.height)}px`;
+});
+
 // ---- CyberChef -----------------------------------------------------------
 
 const chefDoc = `document.querySelector("[data-testid=cyberchef-frame]").contentDocument`;
