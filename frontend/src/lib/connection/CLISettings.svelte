@@ -16,12 +16,20 @@
 		GetCLIChannel,
 		InstallCarriedCLI,
 		LocateCLI,
+		RestartLocalInstance,
 		SetCLIChannel,
 		UseCLIPath,
 	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { on } from "../runtime.js";
-	import { CLI_UPDATE_CHECKED_EVENT, cliResultText, cliSourceLabel, offersCarriedCLI } from "./cli.js";
+	import {
+		CLI_UPDATE_CHECKED_EVENT,
+		cliResultText,
+		cliSourceLabel,
+		installThenRestart,
+		offersCarriedCLI,
+		restartsAfterCLIInstall,
+	} from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import CLIProgress from "./CLIProgress.svelte";
 	import { serviceUpdateLine, serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
@@ -34,9 +42,11 @@
 	// The check found a newer CLI and is installing it (its first progress).
 	let installingUpdate = false;
 	let changing = false;
-	// The CLI this build carries (CarriedCLI), and Install running.
+	// The CLI this build carries (CarriedCLI), Install running, and its
+	// confirm for a local instance another program started.
 	let carried = null;
 	let installingCarried = false;
+	let confirmingCarried = false;
 	// The update check Go runs after placing the carried CLI is installing
 	// a newer one (its progress, while Check isn't running).
 	let updatingInBackground = false;
@@ -46,6 +56,9 @@
 	$: primary = primaryButton($modeCurrent);
 	$: neutral = neutralButton($modeCurrent);
 	$: busy = checking || installingCarried;
+	// Install from embedded restarts the active local instance with the CLI
+	// it installs, asking first when another program started it.
+	$: restarts = restartsAfterCLIInstall($connectionStore);
 	const row = "settings-row flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
 	const control = "settings-control flex w-80 shrink-0";
 	const channels = [
@@ -99,15 +112,29 @@
 			});
 	}
 
+	function startInstallCarried() {
+		if (restarts && !$connectionStore.owned) confirmingCarried = true;
+		else installCarried();
+	}
+
 	function installCarried() {
 		installingCarried = true;
-		InstallCarriedCLI()
-			.then((result) => {
-				cli = result.cli;
-				toast(cliResultText(result));
+		const restart = restarts ? () => RestartLocalInstance($connectionStore.connection.id) : null;
+		const install = () =>
+			InstallCarriedCLI().then((result) => {
+				if (result.cli?.found) cli = result.cli;
+				return result;
+			});
+		installThenRestart({ install, restart })
+			.then((outcome) => {
+				toast(outcome.text);
+				if (outcome.ok && restart) connectionStore.retryNow();
 			})
 			.catch(failure)
-			.finally(() => (installingCarried = false));
+			.finally(() => {
+				installingCarried = false;
+				confirmingCarried = false;
+			});
 	}
 
 	function change() {
@@ -167,11 +194,23 @@
 			</div>
 			<div class="{control} items-center justify-end gap-2">
 				<p class="whitespace-nowrap font-mono text-xs" data-testid="cli-carried-version">{carried.version}</p>
-				<button type="button" class={neutral} disabled={busy} on:click={installCarried} data-testid="cli-install-carried"
-					>Install from embedded</button
-				>
+				{#if confirmingCarried}
+					<button type="button" class={neutral} disabled={busy} on:click={() => (confirmingCarried = false)}>Cancel</button>
+					<button type="button" class={primary} disabled={busy} on:click={installCarried} data-testid="cli-install-carried-restart"
+						>{installingCarried ? "Installing…" : "Install and restart"}</button
+					>
+				{:else}
+					<button type="button" class={neutral} disabled={busy} on:click={startInstallCarried} data-testid="cli-install-carried"
+						>{installingCarried ? "Installing…" : "Install from embedded"}</button
+					>
+				{/if}
 			</div>
 		</div>
+		{#if confirmingCarried}
+			<p class="py-1 text-right text-xs opacity-70" data-testid="cli-install-carried-confirm">
+				Another program started Marasi. Its project reopens in the new instance.
+			</p>
+		{/if}
 	{/if}
 {/if}
 {#if serviceUpdate}

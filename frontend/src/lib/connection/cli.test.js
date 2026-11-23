@@ -4,12 +4,14 @@ import assert from "node:assert/strict";
 import {
   cliMissing,
   cliUpdateCheckedNotice,
+  installThenRestart,
   cliProgressPercent,
   cliProgressText,
   cliResultText,
   cliSourceLabel,
   offersCarriedCLI,
   outdatedVersion,
+  restartsAfterCLIInstall,
   shouldOfferCLISetup,
   updateCLI,
 } from "./cli.js";
@@ -121,4 +123,42 @@ test("Settings offers the carried CLI only when it isn't the installed one", () 
   assert.equal(offersCarriedCLI({ available: false }, cli("06.11.2026")), false);
   assert.equal(offersCarriedCLI(null, cli("06.11.2026")), false);
   assert.equal(offersCarriedCLI(carried, { found: false }), false);
+});
+
+test("Install from embedded restarts the local instance after installing", async () => {
+  const calls = [];
+  const outcome = await installThenRestart({
+    install: async () => {
+      calls.push("install");
+      return { outcome: "installed", version: "30.10.2026" };
+    },
+    restart: async () => calls.push("restart"),
+  });
+  assert.deepEqual(calls, ["install", "restart"]);
+  assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 30.10.2026 installed" });
+});
+
+test("without a running local instance, Install from embedded only installs", async () => {
+  const outcome = await installThenRestart({
+    install: async () => ({ outcome: "installed", version: "30.10.2026" }),
+    restart: null,
+  });
+  assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 30.10.2026 installed" });
+});
+
+test("a failed embedded install restarts nothing", async () => {
+  const calls = [];
+  const outcome = await installThenRestart({
+    install: async () => ({ outcome: "failed", failure: { kind: "checksum", reason: "Checksum mismatch, nothing installed" } }),
+    restart: async () => calls.push("restart"),
+  });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(outcome, { ok: false, text: "Checksum mismatch, nothing installed" });
+});
+
+test("only a local instance that isn't stopped restarts after Install from embedded", () => {
+  assert.equal(restartsAfterCLIInstall({ connection: { kind: "local" }, phase: "connected" }), true);
+  assert.equal(restartsAfterCLIInstall({ connection: { kind: "local" }, phase: "failed" }), true);
+  assert.equal(restartsAfterCLIInstall({ connection: { kind: "local" }, phase: "stopped" }), false);
+  assert.equal(restartsAfterCLIInstall({ connection: { kind: "remote" }, phase: "connected" }), false);
 });

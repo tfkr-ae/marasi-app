@@ -86,17 +86,31 @@ export function outdatedVersion(error) {
 }
 
 /**
- * Update CLI, for a local instance at an API level the app doesn't support:
- * installs the CLI channel's release (`checkForUpdate`, Go's
- * CheckForCLIUpdate) and restarts the local instance with it (`restart`, Go's
- * RestartLocalInstance). A current CLI still restarts, since the instance may
- * run another build. Resolves to `{ok, text}` for the toast or the problem.
- * Marasi doesn't publish its releases' API levels, so the install takes the
- * channel's latest.
+ * Installs a CLI (`install`, Go's CheckForCLIUpdate or InstallCarriedCLI),
+ * then restarts the local instance with it (`restart`, Go's
+ * RestartLocalInstance), so the instance runs the CLI just installed. A
+ * current CLI still restarts, since the instance may run another build. A
+ * null `restart` (no running local instance) only installs. Resolves to
+ * `{ok, text}` for the toast or the problem.
  */
-export async function updateCLI({ checkForUpdate, restart }) {
-  const result = await checkForUpdate();
+export async function installThenRestart({ install, restart }) {
+  const result = await install();
   if (result.outcome === "failed") return { ok: false, text: cliResultText(result) };
-  await restart();
+  if (restart) await restart();
   return { ok: true, text: cliResultText(result) };
 }
+
+/**
+ * Update CLI, for a local instance at an API level the app doesn't support:
+ * installs the CLI channel's release (`checkForUpdate`, Go's
+ * CheckForCLIUpdate) and restarts the local instance with it
+ * (installThenRestart). Marasi doesn't publish its releases' API levels, so
+ * the install takes the channel's latest.
+ */
+export const updateCLI = ({ checkForUpdate, restart }) => installThenRestart({ install: checkForUpdate, restart });
+
+/**
+ * Whether Install from embedded restarts the active connection: it is a
+ * local instance that isn't stopped. A remote runs its own Marasi.
+ */
+export const restartsAfterCLIInstall = (state) => state?.connection?.kind === "local" && state.phase !== "stopped";
