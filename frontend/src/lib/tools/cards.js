@@ -157,30 +157,35 @@ export function placeCard({ elements, view, lastId = null, drop = null, width = 
   return first;
 }
 
+const sideBySide = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width;
+
 /**
  * The elements with card `id` at its content's `height`, or null when that
- * changes nothing. A card that grows moves the cards it would newly cover
- * down, and those they would then cover; cards the researcher overlapped
- * on purpose stay. The caller applies the result outside the undo history.
+ * changes nothing. A card that grows moves every card below it that shares
+ * some of its width down by its growth, and the cards below those in turn,
+ * so the layout under it keeps its spacing and nothing ends up covered.
+ * Cards beside or above it, or that it already overlapped, stay; a card
+ * that shrinks moves nothing. The caller applies the result outside the
+ * undo history.
  */
 export function fitCard(elements, id, height) {
   const card = elements.find((element) => element.id === id && isCard(element));
   if (!card || !(height > 0) || Math.abs(card.height - height) < 2) return null;
+  const growth = height - card.height;
   const moved = new Map([[id, { ...card, height }]]);
-  const current = (element) => moved.get(element.id) ?? element;
-  const queue = [id];
-  while (queue.length) {
-    const pusher = moved.get(queue.shift());
-    for (const other of elements) {
-      if (other.id === pusher.id || !isCard(other) || other.id === id) continue;
-      const before = elements.find((element) => element.id === pusher.id);
-      const now = current(other);
-      if (!overlaps(pusher, now) || overlaps(before, other)) continue;
-      moved.set(other.id, { ...now, y: pusher.y + pusher.height + CARD_GAP });
-      queue.push(other.id);
+  if (growth > 0) {
+    const cards = elements.filter(isCard);
+    const queue = [card];
+    while (queue.length) {
+      const pusher = queue.shift();
+      for (const other of cards) {
+        if (moved.has(other.id) || other.y < pusher.y + pusher.height || !sideBySide(pusher, other)) continue;
+        moved.set(other.id, { ...other, y: other.y + growth });
+        queue.push(other);
+      }
     }
   }
-  return elements.map(current);
+  return elements.map((element) => moved.get(element.id) ?? element);
 }
 
 /**

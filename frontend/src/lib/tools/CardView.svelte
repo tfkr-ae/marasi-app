@@ -11,7 +11,7 @@
 	import { highlightPalette } from "../../stores/highlightsStore.js";
 	import { pairRows } from "../../stores/pairRowsStore.js";
 	import { pairRaw } from "../../stores/pairRawStore.js";
-	import { primaryVariant } from "../launchpad/format.js";
+	import { METHOD_CLASS, primaryVariant, statusClass } from "../launchpad/format.js";
 	import { cardContent } from "./cardContent.js";
 	import { DEFAULT_VIEW, PART_NAMES } from "./cards.js";
 
@@ -21,7 +21,7 @@
 	export let last = null;
 	/** A pair card's view (cards.js cardView): { part, expanded }. */
 	export let view = DEFAULT_VIEW;
-	/** Called with a change to the view ({ part }), from the switch. */
+	/** Called with a change to the view: { part } from the switch, { expanded } from the Details row. */
 	export let onView = (_change) => {};
 	/** True while an arrow being drawn would bind to this card. */
 	export let suggested = false;
@@ -62,9 +62,29 @@
 	];
 	$: primary = primaryVariant($modeCurrent);
 
+	// A start line's words: a request's method and a response's status in
+	// their Ledger colours.
+	function startWords(text, part) {
+		const words = text.split(" ");
+		if (part === "response") {
+			return [
+				{ text: words[0], classes: "opacity-60" },
+				{ text: words.slice(1).join(" "), classes: statusClass(Number(words[1])) },
+			];
+		}
+		return [
+			{ text: words[0], classes: METHOD_CLASS[words[0]] ?? "" },
+			{ text: words.slice(1, -1).join(" "), classes: "" },
+			{ text: words.length > 1 ? words.at(-1) : "", classes: "opacity-50" },
+		];
+	}
+
 	let inner;
 	afterUpdate(() => {
-		if (inner) onSize(inner.offsetHeight);
+		// An expanded card waiting for its messages keeps its height, so it
+		// doesn't shrink and then grow again, pushing the cards under it.
+		if (!inner || (content.expanded && !content.details)) return;
+		onSize(inner.offsetHeight);
 	});
 </script>
 
@@ -134,7 +154,35 @@
 		{#each content.lines as line}
 			<p class="line-clamp-2 break-words text-xs opacity-60">{line.text}</p>
 		{/each}
-		{#if content.firstLines?.length}
+		{#if content.details}
+			{#each content.details as detail}
+				<div class="mt-1.5 border border-surface-500/20" data-testid="card-detail" data-part={detail.part}>
+					<div class="bg-surface-200/60 px-2 py-0.5 text-3xs font-bold uppercase tracking-wider opacity-70 dark:bg-surface-700/60">
+						{detail.title}
+					</div>
+					{#if detail.empty}
+						<p class="px-2 py-1.5 text-2xs italic opacity-60">{detail.empty}</p>
+					{:else}
+						<!-- Each line wraps within the card's width; a long token breaks anywhere. -->
+						<div class="px-2 py-1.5 font-mono text-2xs leading-snug [overflow-wrap:anywhere]">
+							{#each detail.lines as line}
+								{#if line.kind === "start"}
+									<div class="whitespace-pre-wrap font-semibold">{#each startWords(line.text, detail.part) as word, i}{#if word.text}{i ? " " : ""}<span class={word.classes}>{word.text}</span>{/if}{/each}</div>
+								{:else if line.kind === "header" && line.name}
+									<div class="whitespace-pre-wrap"><span class="text-primary-700 dark:text-primary-400">{line.name}:</span><span class="opacity-75">{line.text.slice(line.name.length + 1)}</span></div>
+								{:else if line.kind === "gap"}
+									<div class="my-1.5 border-t border-surface-500/20"></div>
+								{:else if line.kind === "more"}
+									<div class="mt-1 text-3xs italic opacity-50">{line.text}</div>
+								{:else}
+									<div class="min-h-[1lh] whitespace-pre-wrap">{line.text}</div>
+								{/if}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/each}
+		{:else if content.firstLines?.length}
 			<div class="mt-1.5 space-y-0.5 font-mono text-2xs opacity-70" data-testid="card-first-lines">
 				{#each content.firstLines as line}
 					<p class="truncate" data-part={line.part}>{line.part === "request" ? "→" : "←"} {line.text}</p>
@@ -143,6 +191,17 @@
 		{/if}
 		{#if content.footer}
 			<div class="mt-2 border-t border-surface-500/20 pt-1.5 text-2xs opacity-60">{content.footer}</div>
+		{/if}
+		{#if content.parts}
+			<button
+				type="button"
+				class="pointer-events-auto mt-1.5 flex w-full items-center rounded-none border-t border-surface-500/20 pt-1.5 text-2xs opacity-70 hover:opacity-100"
+				aria-expanded={content.expanded}
+				data-testid="card-details"
+				on:pointerdown|stopPropagation
+				on:click|stopPropagation={() => onView({ expanded: !content.expanded })}
+				>{content.expanded ? "Hide details ▴" : "Details ▾"}</button
+			>
 		{/if}
 	</div>
 </div>

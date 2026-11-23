@@ -7,7 +7,11 @@
 //     chips: [{ text, classes?, color?, mono?, bold?, plain? }],
 //     title: { text, mono }, lines: [{ text }], footer }
 // and for a pair that isn't deleted, also
-//   { part, partName, parts, firstLines: [{ part, text }], hasResponse }.
+//   { part, partName, parts, expanded, firstLines: [{ part, text }], hasResponse }
+// and once expanded with its raw messages read, `details`: per part
+//   { part, title, lines: [{ text, kind: "start" | "header" | "gap" | "body"
+//     | "more", name? }] }, cut at DETAIL_LINES with a "+N more lines" line,
+// or { part, title, lines: [], empty } for a response not there yet.
 // `item` is the pair's row or the record, null once its source is deleted.
 // `palette` is the highlight palette; `light` the app's mode; a test case's
 // `findingCount` is how many findings name it. A pair card's `view` is
@@ -26,20 +30,54 @@ export const CHIP = "bg-surface-200 dark:bg-surface-700";
 const oneLine = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
 const count = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-// A message's start line, from its raw text as the Ledger shows it.
-const startLine = (raw) => String(raw ?? "").replace(/\r\n/g, "\n").split("\n", 1)[0];
+/** How many lines an expanded card shows of each part before "+N more lines". */
+export const DETAIL_LINES = 14;
 
-// The parts a pair card holds, and the first line of each, request first.
+const lf = (raw) => String(raw ?? "").replace(/\r\n/g, "\n");
+
+// A message's start line, from its raw text as the Ledger shows it.
+const startLine = (raw) => lf(raw).split("\n", 1)[0];
+
+// A message's lines as an expanded card shows them: its start line, its
+// header field lines (HTTP/2's pseudo-headers too, named with their colon),
+// a gap, then its body, cut at DETAIL_LINES.
+function messageLines(raw) {
+  const text = lf(raw);
+  const cut = text.indexOf("\n\n");
+  const head = cut < 0 ? text : text.slice(0, cut);
+  const body = cut < 0 ? "" : text.slice(cut + 2).replace(/\n+$/, "");
+  const [start, ...fields] = head.split("\n");
+  const lines = [
+    { text: start, kind: "start" },
+    ...fields.map((line) => ({ text: line, kind: "header", name: line.slice(0, Math.max(0, line.indexOf(":", 1))) })),
+    ...(body ? [{ text: "", kind: "gap" }, ...body.split("\n").map((line) => ({ text: line, kind: "body" }))] : []),
+  ];
+  if (lines.length <= DETAIL_LINES) return lines;
+  return [...lines.slice(0, DETAIL_LINES), { text: `+${lines.length - DETAIL_LINES} more lines`, kind: "more" }];
+}
+
+// The parts a pair card holds, and the first line of each, request first;
+// expanded, each part's lines in its labelled box.
 function pairParts(pair, view, raw) {
   const part = PART_NAMES[view?.part] ? view.part : DEFAULT_VIEW.part;
+  const expanded = Boolean(view?.expanded);
   const parts = part === "both" ? ["request", "response"] : [part];
   const hasResponse = Number(pair.StatusCode) > 0 || Boolean(raw?.Response);
+  const message = (p) => (p === "request" ? raw.Request : raw.Response);
   const firstLines = parts.flatMap((p) => {
     if (p === "response" && !hasResponse) return [{ part: p, text: "no response yet" }];
     if (!raw) return [];
-    return [{ part: p, text: startLine(p === "request" ? raw.Request : raw.Response) }];
+    return [{ part: p, text: startLine(message(p)) }];
   });
-  return { part, partName: PART_NAMES[part], parts, firstLines, hasResponse };
+  const details =
+    expanded && raw
+      ? parts.map((p) =>
+          message(p)
+            ? { part: p, title: PART_NAMES[p], lines: messageLines(message(p)) }
+            : { part: p, title: PART_NAMES[p], lines: [], empty: "No response yet" },
+        )
+      : undefined;
+  return { part, partName: PART_NAMES[part], parts, expanded, firstLines, hasResponse, ...(details ? { details } : {}) };
 }
 
 function pairContent(pair, palette) {

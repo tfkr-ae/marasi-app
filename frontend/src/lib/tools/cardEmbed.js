@@ -2,7 +2,7 @@
 // takes (CardView over each card embeddable), each card fitted to its
 // content outside the undo history, the ring while an arrow would bind, the
 // arrows bound to a card kept on its edge, and a pair card's view (its
-// REQ · BOTH · RES switch) changed in the undo history.
+// REQ · BOTH · RES switch and its Details row) changed in the undo history.
 // The Excalidraw page and the tool contract checks' harness both use it.
 import { get, writable } from "svelte/store";
 import CardView from "./CardView.svelte";
@@ -33,8 +33,9 @@ export function createCardEmbed({ excalidraw, onOpen = () => {} }) {
     api.updateScene({ elements: next, captureUpdate: lib.CaptureUpdateAction.NEVER });
   }
 
-  // A pair card's switch: its view changes in the undo history, so undo
-  // takes it back; the fit that follows stays outside it.
+  // A pair card's switch or Details row: its view changes in the undo
+  // history, so undo takes it back; the fit that follows (and the cards it
+  // pushes down) stays outside it.
   function changeView(id, change) {
     const up = excalidraw();
     if (!up) return;
