@@ -19,6 +19,11 @@ export const CARD_HEIGHT = 150;
 /** The space between cards stacked one under another. */
 export const CARD_GAP = 16;
 
+/** The parts of its pair a pair card can hold, with their names. */
+export const PART_NAMES = { request: "Request", response: "Response", both: "Request + Response" };
+/** A pair card's view when its element has none. */
+export const DEFAULT_VIEW = Object.freeze({ part: "request", expanded: false });
+
 export const linkOf = (source) => `marasi://${source.kind}/${source.id}`;
 
 /** The { kind, id } a marasi:// link names, or null. */
@@ -35,6 +40,22 @@ export function cardSource(element) {
 }
 
 export const isCard = (element) => cardSource(element) !== null;
+
+/**
+ * A pair card's view, `customData.view`: which part of its pair it shows
+ * and whether it is expanded. A missing view, or a part it doesn't know,
+ * reads as DEFAULT_VIEW, so drawings from before views load unchanged.
+ */
+export function cardView(element) {
+  const view = element?.customData?.view;
+  if (!view || !PART_NAMES[view.part]) return { ...DEFAULT_VIEW };
+  return { part: view.part, expanded: Boolean(view.expanded) };
+}
+
+/** Card `element`'s customData with `change` ({ part?, expanded? }) made to its view. */
+export function withCardView(element, change) {
+  return { ...element.customData, view: { ...cardView(element), ...change } };
+}
 
 const randomInt = () => Math.floor(Math.random() * 2 ** 31);
 const randomId = () =>

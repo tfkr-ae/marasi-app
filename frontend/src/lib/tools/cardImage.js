@@ -8,6 +8,8 @@ import { logbookStore } from "../../stores/logbookStore.js";
 import { highlightPalette } from "../../stores/highlightsStore.js";
 import { cardContent } from "./cardContent.js";
 import { pairRows } from "../../stores/pairRowsStore.js";
+import { pairRaw } from "../../stores/pairRawStore.js";
+import { cardView } from "./cards.js";
 
 const SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
@@ -81,7 +83,8 @@ function itemOf(element) {
   const same = (a, b) => String(a) === String(b);
   if (source.kind === "pair") {
     const row = get(pairRows)[String(source.id)];
-    return { item: row === undefined ? (last ?? null) : row, findingCount: 0 };
+    const raw = get(pairRaw)[String(source.id)] ?? undefined;
+    return { item: row === undefined ? (last ?? null) : row, findingCount: 0, raw };
   }
   const state = get(logbookStore);
   const list = source.kind === "finding" ? state.findings : state.testCases;
@@ -93,11 +96,13 @@ function itemOf(element) {
 
 /** A PNG data URL of card `element`, light, at its size on screen. */
 export async function cardImage(element) {
-  const { item, findingCount } = itemOf(element);
+  const { item, findingCount, raw } = itemOf(element);
   const content = cardContent(element.customData.source, item, {
     palette: get(highlightPalette),
     light: true,
     findingCount,
+    view: cardView(element),
+    raw,
   });
   const W = element.width;
   const H = element.height;
@@ -111,9 +116,11 @@ export async function cardImage(element) {
   const inner = W - left - px(12);
   const parts = [];
   let y = px(10);
+  // On screen the switch shows a pair card's part; the image names it.
+  const label = content.partName ? `${content.label} · ${content.partName}` : content.label;
 
   parts.push(
-    `<text x="${left}" y="${y + px(8)}" font-family="${SANS}" font-size="${px(10)}" font-weight="700" letter-spacing="1" fill="${muted}">${escape(content.label.toUpperCase())}</text>`,
+    `<text x="${left}" y="${y + px(8)}" font-family="${SANS}" font-size="${px(10)}" font-weight="700" letter-spacing="1" fill="${muted}">${escape(label.toUpperCase())}</text>`,
   );
   y += px(16);
 
@@ -149,6 +156,15 @@ export async function cardImage(element) {
     for (const line of wrap(entry.text, `400 ${px(12)}px ${SANS}`, inner, 2)) {
       y += px(16);
       parts.push(`<text x="${left}" y="${y - px(4)}" font-family="${SANS}" font-size="${px(12)}" fill="${muted}">${escape(line)}</text>`);
+    }
+  }
+  if (content.firstLines?.length) {
+    const font = `400 ${px(11)}px ${MONO}`;
+    y += px(4);
+    for (const entry of content.firstLines) {
+      const [line] = wrap(`${entry.part === "request" ? "→" : "←"} ${entry.text}`, font, inner, 1);
+      y += px(15);
+      parts.push(`<text x="${left}" y="${y - px(4)}" font-family="${MONO}" font-size="${px(11)}" fill="${muted}">${escape(line)}</text>`);
     }
   }
   if (content.footer) {

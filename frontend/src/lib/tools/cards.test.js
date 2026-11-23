@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ARROW_GAP, artifactScene, cardArrowEnds, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, fitCard, newCardElement, placeCard, sourceOfLink } from "./cards.js";
+import { ARROW_GAP, artifactScene, cardArrowEnds, suggestedCardIds, CARD_GAP, CARD_HEIGHT, CARD_WIDTH, cardSource, cardView, fitCard, newCardElement, placeCard, sourceOfLink, withCardView } from "./cards.js";
 
 const pairRow = { ID: "p-1", Number: 7, Method: "GET", Path: "/login" };
 
@@ -230,4 +230,26 @@ test("after its card moves away, a bound arrow's end goes back to the card's edg
 test("an arrow whose other point is on the card itself is left alone", () => {
   const [card, arrow] = boundArrow({ x: 150, y: 150 }, { x: 200, y: 150 });
   assert.deepEqual(cardArrowEnds([card, arrow]), []);
+});
+
+test("a new pair card, or one loaded without a view, shows the request, collapsed", () => {
+  const card = newCardElement({ kind: "pair", id: "p-1" }, { x: 0, y: 0 }, { last: pairRow });
+  assert.equal(card.customData.view, undefined);
+  assert.deepEqual(cardView(card), { part: "request", expanded: false });
+  assert.deepEqual(cardView({ ...card, customData: { source: card.customData.source } }), { part: "request", expanded: false });
+});
+
+test("a pair card's view is read from its customData, with an unknown part read as the request", () => {
+  const card = newCardElement({ kind: "pair", id: "p-1" }, { x: 0, y: 0 });
+  const both = { ...card, customData: { ...card.customData, view: { part: "both", expanded: true } } };
+  assert.deepEqual(cardView(both), { part: "both", expanded: true });
+  const odd = { ...card, customData: { ...card.customData, view: { part: "headers" } } };
+  assert.deepEqual(cardView(odd), { part: "request", expanded: false });
+});
+
+test("a card's view changes on a copy of its customData that keeps its source and row", () => {
+  const card = newCardElement({ kind: "pair", id: "p-1" }, { x: 0, y: 0 }, { last: pairRow });
+  const customData = withCardView(card, { part: "response" });
+  assert.deepEqual(customData, { source: { kind: "pair", id: "p-1" }, last: pairRow, view: { part: "response", expanded: false } });
+  assert.equal(card.customData.view, undefined);
 });
