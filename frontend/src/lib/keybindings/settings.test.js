@@ -350,7 +350,7 @@ const onMac = (actionId) => ({ profileId: "default", platform: MACOS, actionId }
 function customizedRepeater() {
   const installed = buildCatalog({ extensions: [repeater], extensionMenus: repeaterMenu });
   let draft = openDraft(null, installed);
-  draft = replaceBinding(installed, draft, onMac(sendRequest), 0, "meta+shift+p");
+  draft = replaceBinding(installed, draft, onMac(sendRequest), 0, "meta+shift+z");
   draft = replaceBinding(installed, draft, onMac(openRepeater), 0, "meta+alt+8");
   return draft;
 }
@@ -367,8 +367,8 @@ test("a customized extension action shows as unavailable, keeping its bindings, 
   const send = rows[sendRequest];
   assert.equal(send.row.status, "unavailable");
   assert.equal(send.row.available, false);
-  assert.deepEqual(send.row.bindings, ["meta+shift+p"]);
-  assert.deepEqual(send.row.display, ["⌘⇧P"]);
+  assert.deepEqual(send.row.bindings, ["meta+shift+z"]);
+  assert.deepEqual(send.row.display, ["⌘⇧Z"]);
   assert.equal(send.row.note, "Extension unavailable");
   assert.equal(send.group.state, "Extension unavailable");
 
@@ -418,7 +418,7 @@ test("edits saved while the extension is missing keep its customizations, which 
   const returned = buildCatalog({ extensions: [repeater], extensionMenus: repeaterMenu });
   const reopened = openDraft({ config: draft, problem: "" }, returned);
   const rows = rowsById(browse({ catalog: returned, profile: reopened.profiles[0], platform: MACOS }));
-  assert.deepEqual(rows[sendRequest].row.bindings, ["meta+shift+p"]);
+  assert.deepEqual(rows[sendRequest].row.bindings, ["meta+shift+z"]);
   assert.equal(rows[sendRequest].row.status, "");
   assert.equal(rows[sendRequest].row.available, true);
   assert.deepEqual(rows[openRepeater].row.bindings, ["meta+alt+8"]);

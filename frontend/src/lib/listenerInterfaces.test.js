@@ -29,9 +29,16 @@ test("the running listener's address starts selected, else the first", () => {
   assert.equal(startingInterface(list, ""), 0);
 });
 
-test("a listener that is off starts from the app's default listener", () => {
+test("a listener that is off starts from the last active listener, else the app's default listener", () => {
   const config = { DefaultAddress: "0.0.0.0", DefaultPort: "9090" };
   assert.deepEqual(listenerStart({ status: false, address: "", port: "" }, config), { address: "0.0.0.0", port: "9090" });
   assert.deepEqual(listenerStart({ status: false, address: "", port: "" }, {}), { address: "127.0.0.1", port: "8080" });
-  assert.deepEqual(listenerStart({ status: true, address: "127.0.0.1", port: "52062" }, config), { address: "127.0.0.1", port: "52062" });
+  assert.deepEqual(
+    listenerStart({ status: false, address: "", port: "" }, config, { address: "127.0.0.1", port: "52062" }),
+    { address: "127.0.0.1", port: "52062" },
+  );
+  assert.deepEqual(
+    listenerStart({ status: true, address: "127.0.0.1", port: "52062" }, config, { address: "0.0.0.0", port: "7777" }),
+    { address: "127.0.0.1", port: "52062" },
+  );
 });

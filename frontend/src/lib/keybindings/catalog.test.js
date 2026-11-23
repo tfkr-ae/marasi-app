@@ -30,6 +30,7 @@ test("global navigation and Home actions keep today's labels and default keys", 
     ["global.jump-to-toast", "Jump to Toast", "meta+.", "ctrl+."],
     ["global.open-project", "Open Project", "meta+o", "ctrl+o"],
     ["global.setup-listener", "Setup Listener", "meta+l", "ctrl+l"],
+    ["global.toggle-listener", "Toggle Listener", "meta+shift+p", "ctrl+shift+p"],
     ["global.toggle-vim", "Toggle Vim Mode", "meta+t", "ctrl+t"],
     ["global.toggle-light-mode", "Toggle Light Mode", "meta+u", "ctrl+u"],
     ["global.toggle-intercept", "Toggle Intercept", "meta+i", "ctrl+i"],
@@ -384,7 +385,7 @@ test("the global menu groups gather Marasi's own actions as the spec lists them"
     "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
     "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-settings", "open-extension.port-scanner",
   ]);
-  assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener"]);
+  assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener", "toggle-listener"]);
   assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);
   assert.deepEqual(inGroup("appearance").sort(), [
     "decrease-text-size", "increase-text-size", "reset-text-size", "toggle-light-mode", "toggle-vim",

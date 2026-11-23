@@ -14,10 +14,14 @@ export function startingInterface(list, address) {
 }
 
 /**
- * Where the listener modal starts: the running listener, or the app's
- * default listener (default_address, default_port) when it is off.
+ * Where the listener starts: the running listener, else the last active
+ * listener in this session, else the app's default listener
+ * (default_address, default_port).
  */
-export function listenerStart(listener, config) {
+export function listenerStart(listener, config, lastListener = null) {
   if (listener?.status) return { address: listener.address, port: listener.port };
+  if (lastListener?.address && lastListener?.port) {
+    return { address: lastListener.address, port: String(lastListener.port) };
+  }
   return { address: config?.DefaultAddress || "127.0.0.1", port: config?.DefaultPort || "8080" };
 }

@@ -40,13 +40,15 @@ printf '%s\n' "$NP" > "$MARASI_VERIFY_STATE_DIR/proxy-port"
 
 Launch in attach mode (default), then clean up: `service-after-quit.txt` reads `service_after_app_quit=running`. Launch with `MARASI_VERIFY_SERVICE=app`, drive Home, then clean up: it reads `running`, because When quitting is Ask and `TERM` answers no question; with When quitting set to Stop Marasi it reads `stopped`. In app mode, `ps -ww -o command= -p "$(cat "$MARASI_VERIFY_STATE_DIR/service.pid")"` shows `--port <proxy port>` and `--control-address 127.0.0.1:0` and never the password, which the app passes as `MARASI_PASSWORD`.
 
-Drive the listener button (`[data-testid=home-listener]`, `Listener off` when the service has none) only when reconfiguration is under test. Its `Setup Listener` modal starts or moves the service's listener (`POST /listener/start` or `/listener/update`). Proven, with `<NP>` a free port (then write it to `proxy-port`):
+Drive the listener button (`[data-testid=home-listener]`, `Listener off` when the service has none) and its adjacent start/stop toggle (`[data-testid=home-listener-toggle]`, `Stop` / `Start`, also `⌘⇧P` and `Stop Listener` / `Start Listener` in `⌘K` under Project) only when listener control or reconfiguration is under test. The `Setup Listener` modal starts, moves or stops the service's listener (`POST /listener/start`, `/listener/update`, `/listener/stop`), showing `Stop Listener` + `Update` when active and `Start Listener` when off, seeded from the last active endpoint (or the app's default listener). Proven, with `<NP>` a free port (then write it to `proxy-port`):
 
 ```json
 {"name":"listener-modal","steps":[
  {"click":"[data-testid=home-listener]"},{"waitText":"Setup Listener"},{"click":"input[placeholder=\"8080\"]"},{"key":"cmd+a"},{"insert":"<NP>"},
- {"text":"Continue"},{"waitText":"Listening on"},{"waitText":":<NP>","within":"[data-testid=home-listener]"}]}
+ {"text":"Update"},{"waitText":"Listening on"},{"waitText":":<NP>","within":"[data-testid=home-listener]"}]}
 ```
+
+Stopping and starting the proxy listener without stopping the service works from all three places — the Home toggle (`[data-testid=home-listener-toggle]`), the `Setup Listener` modal (`[data-testid=listener-modal-stop]` / `[data-testid=listener-modal-submit]`), and `⌘⇧P` / `⌘K` (`Stop Listener` / `Start Listener`). Starting again reuses the last active address and port.
 
 `lsof -nP -t -iTCP:<NP> -sTCP:LISTEN` must print the service PID (`service.pid`), not the app's. Prove Open Project with `scripts/drive.sh dashboard compare "Open Project" "cmd+o"`; that clicks the dashboard button and then sends `⌘+O` (the catalog's `global.open-project` action), and both must paint the same `Switch Projects` overlay. Compare waits for the overlay text to settle before capturing, because the modal's list stays empty until the service's project list arrives. `Browse…`, Download Certificate and Copy Certificate need a native dialog or the clipboard; see [native.md](native.md) for what the server build shows and how to check them.
 

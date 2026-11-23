@@ -31,6 +31,7 @@
 		FolderOpen,
 		PartyPopper,
 		Network,
+		Power,
 		SendIcon,
 		Settings,
 		Swords,
@@ -55,6 +56,7 @@
 		extensions_ui,
 		interceptFlag,
 		keybindingState,
+		listener,
 		marasiConfig,
 	} from "../../../stores.js";
 	import {
@@ -63,6 +65,7 @@
 		downloadCertificate,
 		listenerModal,
 		openProjectPicker,
+		toggleListener,
 	} from "../../globalActions.js";
 	import {
 		globalMenuEntries,
@@ -145,6 +148,7 @@
 			else if (top.toggleAction === "global.open-project") modalStore.close();
 		},
 		"global.setup-listener": () => toggleModal(listenerModal(toastStore)),
+		"global.toggle-listener": () => toggleListener(toastStore),
 		"global.toggle-vim": () =>
 			ToggleFlag("vim_enabled").then((config) =>
 				marasiConfig.set(config),
@@ -186,6 +190,7 @@
 		"global.jump-to-toast": PartyPopper,
 		"global.open-project": FolderOpen,
 		"global.setup-listener": Binoculars,
+		"global.toggle-listener": Power,
 		"global.toggle-vim": ToggleLeft,
 		"global.toggle-light-mode": Sun,
 		"global.increase-text-size": AArrowUp,
@@ -262,13 +267,15 @@
 		};
 	}
 
-	function entry(action, { intercept, loadedExtensions, extensionsUI }) {
+	function entry(action, { intercept, listenerActive, loadedExtensions, extensionsUI }) {
 		const extension = loadedExtensions.find(
 			(ext) => extensionNavigationActionId(ext.Name) === action.id,
 		);
 		let name = action.label;
 		if (action.id === "global.toggle-intercept") {
 			name = intercept ? "Toggle Intercept Off" : "Toggle Intercept On";
+		} else if (action.id === "global.toggle-listener") {
+			name = listenerActive ? "Stop Listener" : "Start Listener";
 		}
 		return {
 			actionId: action.id,
@@ -291,6 +298,7 @@
 		.map((action) =>
 			entry(action, {
 				intercept: $interceptFlag,
+				listenerActive: $listener.status,
 				loadedExtensions: $extensions,
 				extensionsUI: $extensions_ui,
 			}),
