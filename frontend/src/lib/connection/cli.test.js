@@ -8,6 +8,7 @@ import {
   cliProgressText,
   cliResultText,
   cliSourceLabel,
+  offersCarriedCLI,
   outdatedVersion,
   shouldOfferCLISetup,
   updateCLI,
@@ -108,4 +109,16 @@ test("the update check after placing the carried CLI speaks only when it install
   assert.equal(cliUpdateCheckedNotice({ outcome: "up-to-date", version: "30.10.2026", cli }), null);
   assert.equal(cliUpdateCheckedNotice({ outcome: "failed", failure: { reason: "Couldn't reach GitHub" }, cli }), null);
   assert.equal(cliUpdateCheckedNotice(null), null);
+});
+
+test("Settings offers the carried CLI only when it isn't the installed one", () => {
+  const carried = { available: true, version: "30.10.2026", channel: "release" };
+  const cli = (version, channel = "release") => ({ found: true, version, channel });
+  assert.equal(offersCarriedCLI(carried, cli("06.11.2026")), true);
+  assert.equal(offersCarriedCLI(carried, cli("30.10.2026", "nightly")), true);
+  assert.equal(offersCarriedCLI(carried, cli("dev", "")), true);
+  assert.equal(offersCarriedCLI(carried, cli("30.10.2026")), false);
+  assert.equal(offersCarriedCLI({ available: false }, cli("06.11.2026")), false);
+  assert.equal(offersCarriedCLI(null, cli("06.11.2026")), false);
+  assert.equal(offersCarriedCLI(carried, { found: false }), false);
 });

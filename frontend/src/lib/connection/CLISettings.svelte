@@ -1,23 +1,27 @@
 <script>
 	// Settings → Updates, its Marasi CLI part (the page draws the heading,
 	// id "cli"): where the CLI is, where it came from, its version, Check for
-	// CLI update, and its channel (follow the app, Release or Nightly). Go:
-	// cli_locate.go and cli_install.go.
+	// CLI update, the CLI this build carries when it is another version (to
+	// install instead of the channel's latest), and its channel (follow the
+	// app, Release or Nightly). Go: cli_locate.go, cli_install.go and
+	// cli_carried.go.
 	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { RefreshCw } from "lucide-svelte";
 	import { onMount } from "svelte";
 	import {
 		BrowseCLIPath,
+		CarriedCLI,
 		CheckForCLIUpdate,
 		ClearCLIPath,
 		GetCLIChannel,
+		InstallCarriedCLI,
 		LocateCLI,
 		SetCLIChannel,
 		UseCLIPath,
 	} from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { on } from "../runtime.js";
-	import { CLI_UPDATE_CHECKED_EVENT, cliResultText, cliSourceLabel } from "./cli.js";
+	import { CLI_UPDATE_CHECKED_EVENT, cliResultText, cliSourceLabel, offersCarriedCLI } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import CLIProgress from "./CLIProgress.svelte";
 	import { serviceUpdateLine, serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
@@ -30,6 +34,9 @@
 	// The check found a newer CLI and is installing it (its first progress).
 	let installingUpdate = false;
 	let changing = false;
+	// The CLI this build carries (CarriedCLI), and Install running.
+	let carried = null;
+	let installingCarried = false;
 	// The update check Go runs after placing the carried CLI is installing
 	// a newer one (its progress, while Check isn't running).
 	let updatingInBackground = false;
@@ -38,6 +45,7 @@
 	$: serviceUpdate = serviceUpdateLine($serviceUpdateStore);
 	$: primary = primaryButton($modeCurrent);
 	$: neutral = neutralButton($modeCurrent);
+	$: busy = checking || installingCarried;
 	const row = "settings-row flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600";
 	const control = "settings-control flex w-80 shrink-0";
 	const channels = [
@@ -52,9 +60,10 @@
 	onMount(() => {
 		LocateCLI().then((info) => (cli = info)).catch(failure);
 		GetCLIChannel().then((c) => (channel = c)).catch(failure);
+		CarriedCLI().then((c) => (carried = c)).catch(failure);
 		// The layout toasts the result; this shows the CLI it left.
 		const stopProgress = on("cli-install-progress", () => {
-			if (!checking && cli?.found) updatingInBackground = true;
+			if (!busy && cli?.found) updatingInBackground = true;
 		});
 		const stopChecked = on(CLI_UPDATE_CHECKED_EVENT, (result) => {
 			updatingInBackground = false;
@@ -90,6 +99,17 @@
 			});
 	}
 
+	function installCarried() {
+		installingCarried = true;
+		InstallCarriedCLI()
+			.then((result) => {
+				cli = result.cli;
+				toast(cliResultText(result));
+			})
+			.catch(failure)
+			.finally(() => (installingCarried = false));
+	}
+
 	function change() {
 		changing = true;
 		BrowseCLIPath()
@@ -112,7 +132,7 @@
 		<p>Location</p>
 		<div class="{control} items-center justify-end gap-2">
 			<p class="min-w-0 truncate font-mono text-xs" title={cli.path} data-testid="cli-location">{cli.path}</p>
-			<button type="button" class={neutral} disabled={changing || checking} on:click={change}>Change</button>
+			<button type="button" class={neutral} disabled={changing || busy} on:click={change}>Change</button>
 		</div>
 	</div>
 	<div class={row}>
@@ -120,7 +140,7 @@
 		<div class="{control} items-center justify-end gap-2">
 			<p class="text-sm" data-testid="cli-source">{cliSourceLabel(cli.source)}</p>
 			{#if cli.source === "custom"}
-				<button type="button" class={neutral} disabled={checking} on:click={reset}>Use PATH</button>
+				<button type="button" class={neutral} disabled={busy} on:click={reset}>Use PATH</button>
 			{/if}
 		</div>
 	</div>
@@ -131,13 +151,27 @@
 		<p>Version</p>
 		<div class="{control} items-center justify-end gap-2">
 			<p class="whitespace-nowrap font-mono text-xs" data-testid="cli-version">{cli.version}</p>
-			<button type="button" class={neutral} disabled={checking} on:click={check} data-testid="cli-check"
+			<button type="button" class={neutral} disabled={busy} on:click={check} data-testid="cli-check"
 				><RefreshCw size={14} class={checking ? "animate-spin" : ""} /><span>Check for CLI update</span></button
 			>
 		</div>
 	</div>
 	{#if (checking && installingUpdate) || updatingInBackground}
 		<div class="py-3"><CLIProgress /></div>
+	{/if}
+	{#if offersCarriedCLI(carried, cli)}
+		<div class={row} data-testid="cli-carried">
+			<div>
+				<p>Embedded</p>
+				<p class="text-xs opacity-70">The CLI this app carries</p>
+			</div>
+			<div class="{control} items-center justify-end gap-2">
+				<p class="whitespace-nowrap font-mono text-xs" data-testid="cli-carried-version">{carried.version}</p>
+				<button type="button" class={neutral} disabled={busy} on:click={installCarried} data-testid="cli-install-carried"
+					>Install from embedded</button
+				>
+			</div>
+		</div>
 	{/if}
 {/if}
 {#if serviceUpdate}
@@ -166,7 +200,7 @@
 					class="flex-1 px-3 py-1 {channel.setting === value
 						? primary
 						: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
-					disabled={checking}
+					disabled={busy}
 					on:click={() => chooseChannel(value)}>{label}</button
 				>
 			{/each}

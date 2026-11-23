@@ -40,6 +40,14 @@ export const CLI_UPDATE_CHECKED_EVENT = "cli-update-checked";
 export const cliUpdateCheckedNotice = (result) =>
   result?.outcome === "installed" ? cliResultText(result) : null;
 
+/**
+ * Whether Settings offers to install the CLI this build carries (Go's
+ * CarriedCLI) over the one found (LocateCLI): the build carries one and it
+ * isn't the installed version and channel.
+ */
+export const offersCarriedCLI = (carried, cli) =>
+  Boolean(carried?.available && cli?.found && (carried.version !== cli.version || carried.channel !== cli.channel));
+
 const sources = { custom: "Custom path", installed: "Installed by Marasi", path: "PATH" };
 
 /** Where the CLI was found. */
