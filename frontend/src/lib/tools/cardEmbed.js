@@ -15,14 +15,15 @@ import { cardArrowEnds, cardSource, cardView, fitCard, sourceOfLink, suggestedCa
 export function createCardEmbed({ excalidraw, onOpen = () => {} }) {
   const suggested = writable(new Set());
 
-  // A card takes its content's height, outside the undo history, pushing
-  // down the cards it would cover.
-  function fitToContent(id, height) {
+  // A card takes its content's height, outside the undo history, moving
+  // the cards it would cover; after a change to its view (`push`), every
+  // card below it moves down by its growth (cards.js fitCard).
+  function fitToContent(id, height, { push = false } = {}) {
     const up = excalidraw();
     if (!up) return;
     const { api, lib } = up;
     const elements = api.getSceneElementsIncludingDeleted();
-    const fitted = fitCard(elements, id, height);
+    const fitted = fitCard(elements, id, height, { push });
     if (!fitted) return;
     const next = fitted.map((element, i) => {
       const before = elements[i];
@@ -35,7 +36,7 @@ export function createCardEmbed({ excalidraw, onOpen = () => {} }) {
 
   // A pair card's switch or Details row: its view changes in the undo
   // history, so undo takes it back; the fit that follows (and the cards it
-  // pushes down) stays outside it.
+  // pushes down, CardView's onSize `push`) stays outside it.
   function changeView(id, change) {
     const up = excalidraw();
     if (!up) return;
@@ -93,7 +94,7 @@ export function createCardEmbed({ excalidraw, onOpen = () => {} }) {
           view: shown,
           suggested: get(suggested).has(element.id),
           onOpen: () => onOpen(cardSource(latest) ?? sourceOfLink(latest.link), latest.customData?.last),
-          onSize: (height) => fitToContent(latest.id, height),
+          onSize: (height, how) => fitToContent(latest.id, height, how),
           onView: (change) => changeView(latest.id, change),
         },
       });

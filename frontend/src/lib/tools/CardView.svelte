@@ -11,9 +11,10 @@
 	import { highlightPalette } from "../../stores/highlightsStore.js";
 	import { pairRows } from "../../stores/pairRowsStore.js";
 	import { pairRaw } from "../../stores/pairRawStore.js";
-	import { METHOD_CLASS, primaryVariant, statusClass } from "../launchpad/format.js";
-	import { cardContent } from "./cardContent.js";
-	import { DEFAULT_VIEW, PART_NAMES } from "./cards.js";
+	import { primaryVariant } from "../launchpad/format.js";
+	import { PART_NAMES } from "../pairMessage.js";
+	import { cardContent, lineRuns } from "./cardContent.js";
+	import { DEFAULT_VIEW, viewChanges } from "./cards.js";
 
 	/** { kind, id } */
 	export let source;
@@ -26,8 +27,12 @@
 	/** True while an arrow being drawn would bind to this card. */
 	export let suggested = false;
 	export let onOpen = () => {};
-	/** Called with the content's natural height, so the element can fit it. */
-	export let onSize = (_height) => {};
+	/**
+	 * Called with the content's natural height, so the element can fit it,
+	 * and { push }: true when the size follows a change to the view, so the
+	 * cards below move down by the growth (cards.js fitCard).
+	 */
+	export let onSize = (_height, _how) => {};
 
 	const same = (a, b) => String(a) === String(b);
 
@@ -62,29 +67,13 @@
 	];
 	$: primary = primaryVariant($modeCurrent);
 
-	// A start line's words: a request's method and a response's status in
-	// their Ledger colours.
-	function startWords(text, part) {
-		const words = text.split(" ");
-		if (part === "response") {
-			return [
-				{ text: words[0], classes: "opacity-60" },
-				{ text: words.slice(1).join(" "), classes: statusClass(Number(words[1])) },
-			];
-		}
-		return [
-			{ text: words[0], classes: METHOD_CLASS[words[0]] ?? "" },
-			{ text: words.slice(1, -1).join(" "), classes: "" },
-			{ text: words.length > 1 ? words.at(-1) : "", classes: "opacity-50" },
-		];
-	}
-
 	let inner;
+	const changed = viewChanges();
 	afterUpdate(() => {
 		// An expanded card waiting for its messages keeps its height, so it
 		// doesn't shrink and then grow again, pushing the cards under it.
 		if (!inner || (content.expanded && !content.details)) return;
-		onSize(inner.offsetHeight);
+		onSize(inner.offsetHeight, { push: changed(view) });
 	});
 </script>
 
@@ -109,9 +98,7 @@
 					{#each SWITCH as [value, text]}
 						<button
 							type="button"
-							class="rounded-none px-1.5 py-px {content.part === value
-								? primary
-								: 'hover:bg-surface-500/20 disabled:opacity-40 disabled:hover:bg-transparent'}"
+							class="rounded-none px-1.5 py-px {content.part === value ? primary : 'disabled:opacity-40'}"
 							title={PART_NAMES[value]}
 							aria-pressed={content.part === value}
 							disabled={value !== "request" && !content.hasResponse}
@@ -166,10 +153,8 @@
 						<!-- Each line wraps within the card's width; a long token breaks anywhere. -->
 						<div class="px-2 py-1.5 font-mono text-2xs leading-snug [overflow-wrap:anywhere]">
 							{#each detail.lines as line}
-								{#if line.kind === "start"}
-									<div class="whitespace-pre-wrap font-semibold">{#each startWords(line.text, detail.part) as word, i}{#if word.text}{i ? " " : ""}<span class={word.classes}>{word.text}</span>{/if}{/each}</div>
-								{:else if line.kind === "header" && line.name}
-									<div class="whitespace-pre-wrap"><span class="text-primary-700 dark:text-primary-400">{line.name}:</span><span class="opacity-75">{line.text.slice(line.name.length + 1)}</span></div>
+								{#if line.kind === "start" || (line.kind === "header" && line.name)}
+									<div class="whitespace-pre-wrap {line.kind === 'start' ? 'font-semibold' : ''}">{#each lineRuns(line, detail.part) as run}<span class={run.classes}>{run.text}</span>{/each}</div>
 								{:else if line.kind === "gap"}
 									<div class="my-1.5 border-t border-surface-500/20"></div>
 								{:else if line.kind === "more"}
@@ -193,15 +178,17 @@
 			<div class="mt-2 border-t border-surface-500/20 pt-1.5 text-2xs opacity-60">{content.footer}</div>
 		{/if}
 		{#if content.parts}
-			<button
-				type="button"
-				class="pointer-events-auto mt-1.5 flex w-full items-center rounded-none border-t border-surface-500/20 pt-1.5 text-2xs opacity-70 hover:opacity-100"
-				aria-expanded={content.expanded}
-				data-testid="card-details"
-				on:pointerdown|stopPropagation
-				on:click|stopPropagation={() => onView({ expanded: !content.expanded })}
-				>{content.expanded ? "Hide details ▴" : "Details ▾"}</button
-			>
+			<div class="mt-1.5 border-t border-surface-500/20 pt-1.5">
+				<button
+					type="button"
+					class="pointer-events-auto flex w-full items-center rounded-none text-2xs opacity-70"
+					aria-expanded={content.expanded}
+					data-testid="card-details"
+					on:pointerdown|stopPropagation
+					on:click|stopPropagation={() => onView({ expanded: !content.expanded })}
+					>{content.expanded ? "Hide details ▴" : "Details ▾"}</button
+				>
+			</div>
 		{/if}
 	</div>
 </div>
