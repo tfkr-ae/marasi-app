@@ -116,6 +116,42 @@ test("cards that already overlapped are left where the researcher put them", () 
   assert.equal(fitted.find((e) => e.id === "b").y, 50);
 });
 
+test("a card that grows moves every card below it in its columns down by its growth, keeping their spacing", () => {
+  // `a` expands from 120 to 520: `b` (well clear of it), `c` (under `b`)
+  // and `under` (overlapping its width only in part) keep their gaps to it.
+  const a = card("a", 0, 0, 120);
+  const b = card("b", 0, 600, 120);
+  const c = card("c", 0, 900, 120);
+  const under = card("under", CARD_WIDTH - 40, 300, 100);
+  const aside = card("aside", CARD_WIDTH + 100, 200, 100);
+  const above = card("above", 0, -300, 100);
+  const byId = Object.fromEntries(fitCard([a, b, c, under, aside, above], "a", 520).map((e) => [e.id, e]));
+  assert.equal(byId.a.height, 520);
+  assert.equal(byId.b.y, 1000);
+  assert.equal(byId.c.y, 1300);
+  assert.equal(byId.under.y, 700);
+  assert.equal(byId.aside.y, 200, "a card beside it stays");
+  assert.equal(byId.above.y, -300, "a card above it stays");
+});
+
+test("a card moved down moves the cards below it too, so none ends up covered", () => {
+  // `side` isn't under `a`, but is under `b`, which `a` moves onto it.
+  const a = card("a", 0, 0, 100);
+  const b = card("b", 200, 150, 100);
+  const side = card("side", CARD_WIDTH + 50, 300, 100);
+  const byId = Object.fromEntries(fitCard([a, b, side], "a", 300).map((e) => [e.id, e]));
+  assert.equal(byId.b.y, 350);
+  assert.equal(byId.side.y, 500);
+});
+
+test("a card that shrinks moves no other card", () => {
+  const a = card("a", 0, 0, 500);
+  const b = card("b", 0, 600, 120);
+  const fitted = fitCard([a, b], "a", 120);
+  assert.equal(fitted.find((e) => e.id === "a").height, 120);
+  assert.equal(fitted.find((e) => e.id === "b").y, 600);
+});
+
 test("the cards an arrow would bind to, from either form of suggested binding", () => {
   const a = card("a", 0, 0);
   const b = card("b", 0, 300);
