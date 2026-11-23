@@ -135,7 +135,7 @@ Prove each path on one connection: turn `Intercept On`, send a message, then for
 
 A forward or drop on either side, or by another client of the service, streams `checkpoint.forwarded` or `checkpoint.dropped`, so both sides drop the message. To prove the page follows another client, settle a held item with `curl` against the control API (`POST /checkpoint/{id}/drop`, see SKILL.md) and wait for `Nothing intercepted`; `POST /checkpoint/intercept` with `{"intercept":true}` shows `Intercept all is on` the same way. A real connection needs no npm package: from a scratch directory outside the repo, run a Node upstream that answers the upgrade with `101` and logs each text frame it receives, and a Node client that opens a raw TCP socket to `127.0.0.1:<proxy port>`, sends `GET http://127.0.0.1:<port>/socket HTTP/1.1` with the upgrade headers, and writes a masked text frame for each line appended to a control file. Run both in the background and stop them yourself before `cleanup.sh`.
 
-The upgrade's `101` row has no content type and reads as `application/octet-stream`, which the default Types filter hides (`1 hidden`). Show it before opening the row: `{"click":"#ledgerTypesButton"}`, `{"click":".ledger-types-row[data-type=\"application/octet-stream\"] input"}`, then `{"click":".ledger-status"}`.
+The upgrade's `101` row has no content type and reads as `application/octet-stream`, which the default Types filter shows, so the row is visible without changing Types.
 
 Open the modal and turn interception on:
 

@@ -27,9 +27,11 @@ const routes = {
 	armory: { selector: '[title="Armory"], [title^="Armory · "]', path: "/armory", expected: "Templates" },
 	logbook: { selector: '[title="Logbook"]', path: "/logbook", expected: "In progress" },
 	workshop: { selector: '[title="Workshop"]', path: "/workshop", expected: "Workshop Settings" },
-	// A fresh project's first document; the tab strip is the page's own.
-	cyberchef: { selector: '[title="CyberChef"]', path: "/cyberchef", expected: "Recipe 1" },
-	excalidraw: { selector: '[title="Excalidraw"]', path: "/excalidraw", expected: "Drawing 1" },
+	// The frame is titled CyberChef too, so the rail's link is named by tag.
+	// Their tab names change with Rename and Delete, so these two wait for
+	// the page's own root element instead of text.
+	cyberchef: { selector: 'a[title="CyberChef"]', path: "/cyberchef", page: "[data-testid=cyberchef-page]" },
+	excalidraw: { selector: 'a[title="Excalidraw"]', path: "/excalidraw", page: "[data-testid=excalidraw-page]" },
 	// The icon's title gains " · <update state>" while an update waits.
 	settings: { selector: '[title="Settings"], [title^="Settings · "]', path: "/settings", expected: "Marasi Settings" },
 };
@@ -42,6 +44,11 @@ const openDrawers = ".drawer, .armory-drawer-box";
 // and covers the rows under it. Escape closes its deepest submenu first,
 // then the menu.
 const openMenus = ".ledger-row-menu";
+
+// Excalidraw's own dialogs (Excalidraw Shortcuts on ⌘/, its library and
+// export dialogs) are its React markup, not Skeleton's modal: a `.Modal`
+// inside the island with a `.Modal__background` over the whole page.
+const toolModals = ".excalidraw .Modal";
 
 // Skeleton's modal wrapper is display: contents, so measure its card. The
 // built-in confirm, alert and prompt dialogs carry data-testid="modal" on the
@@ -425,17 +432,21 @@ function resultOf(state) {
 	return { kind: "page", label: null, text: null, rect: null, path: state.path };
 }
 
-const onRoute = (route) => `location.pathname === ${JSON.stringify(route.path)} && document.body.innerText.includes(${JSON.stringify(route.expected)})`;
+const onRoute = (route) =>
+	`location.pathname === ${JSON.stringify(route.path)} && ${
+		route.page ? `!!document.querySelector(${JSON.stringify(route.page)})` : `document.body.innerText.includes(${JSON.stringify(route.expected)})`
+	}`;
+const routeProof = (route) => (route.page ? `page element ${route.page}` : `visible text: ${route.expected}`);
 
 async function driveRoute(route) {
 	await capture(`${feature}-before`);
 	const point = await clickTarget({ selector: route.selector });
-	fs.writeFileSync(`${evidenceDir}/${feature}-action.txt`, `input=left mouse click\nselector=${route.selector}\nclick=${JSON.stringify(point)}\nexpected_path=${route.path}\nexpected_text=${route.expected}\n`);
+	fs.writeFileSync(`${evidenceDir}/${feature}-action.txt`, `input=left mouse click\nselector=${route.selector}\nclick=${JSON.stringify(point)}\nexpected_path=${route.path}\nexpected=${routeProof(route)}\n`);
 	await waitFor(onRoute(route), `${feature} route and text`);
 	await capture(`${feature}-after`);
 	fs.writeFileSync(`${evidenceDir}/${feature}-console.json`, `${JSON.stringify(consoleEvents, null, 2)}\n`);
 	fs.writeFileSync(`${evidenceDir}/${feature}-network.json`, `${JSON.stringify(networkEvents, null, 2)}\n`);
-	console.log(`feature=${feature}\nresult=path ${route.path}, visible text: ${route.expected}\nevidence=${evidenceDir}`);
+	console.log(`feature=${feature}\nresult=path ${route.path}, ${routeProof(route)}\nevidence=${evidenceDir}`);
 }
 
 // Overlays fill in after they paint: the Project modal shows "No recent
@@ -714,11 +725,11 @@ if (mode === "launch") {
 	await waitFor(`performance.timeOrigin === ${timeOrigin}`, "the page launch loaded (it was reloaded since, so its listener state is stale; run cleanup.sh and relaunch)", 1000);
 	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
 	await waitFor(`document.visibilityState === "visible"`, "the Marasi page in front, not hidden behind another tab", 2000);
-	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)}) && !(${paintedSelector(openMenus)})`, "no open modal, command palette, row menu, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
+	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)}) && !(${paintedSelector(openMenus)}) && !(${paintedSelector(toolModals)})`, "no open modal, command palette, row menu, Excalidraw dialog, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {
 	// Dismiss what an earlier drive left open with the same input a user
 	// would: Escape, then a click on the drawer backdrop.
-	const residue = `${overlayPainted} || ${paintedSelector(openDrawers)} || ${paintedSelector(openMenus)}`;
+	const residue = `${overlayPainted} || ${paintedSelector(openDrawers)} || ${paintedSelector(openMenus)} || ${paintedSelector(toolModals)}`;
 	for (let attempt = 0; attempt < 3 && await evaluate(residue); attempt++) {
 		await pressEscape();
 		try {
