@@ -3,7 +3,7 @@
 	// Ledger's and Logbook's colours. Excalidraw takes traffic, findings and
 	// test cases (click a row to add it, or drag it onto the canvas);
 	// CyberChef takes traffic only (`kinds={["pair"]}`), where a click inserts
-	// the request and `onPickResponse` adds a Res button for the response.
+	// the request (its From bar swaps it for the response or a body).
 	//
 	// onPick(source, row) gets { kind, id } and the pair's row or the record.
 	// A dragged row carries its source as JSON under DRAG_TYPE (cards.js).
@@ -23,8 +23,6 @@
 	export let title = "Insert";
 	export let hint = kinds.length > 1 ? "click to add · drag to place" : "click for the request";
 	export let onPick = (_source, _row) => {};
-	/** Set for a Res button on each pair row. */
-	export let onPickResponse = null;
 	export let onClose = null;
 
 	const stop = trafficList.start();
@@ -142,14 +140,6 @@
 							>
 						</div>
 					</div>
-					{#if onPickResponse}
-						<button
-							type="button"
-							class="shrink-0 rounded-none px-1.5 py-0.5 text-2xs opacity-70"
-							title="Insert the response"
-							on:click|stopPropagation={() => onPickResponse(source, pair)}>Res</button
-						>
-					{/if}
 				</li>
 			{:else}
 				<li class="px-3 py-2 opacity-60">{$trafficList.loading ? "Loading…" : "No traffic"}</li>

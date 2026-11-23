@@ -23,7 +23,9 @@ export const drawingKind = {
 };
 
 // A Recipe keeps CyberChef's operations (its recipe config) and its input
-// tabs, never its output.
+// tabs, never its output. An input that came from a pair by Insert has a
+// source in `sources`, a list parallel to `inputs` (cyberchef/send.js), so
+// `inputs` stays strings and isEmpty ignores it.
 export const recipeKind = {
   noun: "Recipe",
   blank: () => ({ operations: [], inputs: [""] }),

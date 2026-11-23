@@ -11,10 +11,11 @@
 	import InsertPanel from "../../lib/tools/InsertPanel.svelte";
 	import AttachDialog from "../../lib/tools/AttachDialog.svelte";
 	import ChefFrame from "../../lib/tools/cyberchef/ChefFrame.svelte";
+	import ChefSourceBar from "../../lib/tools/cyberchef/ChefSourceBar.svelte";
 	import { recipes } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { recipeKind } from "../../lib/tools/toolDocuments.js";
-	import { chefInbox, drainInbox, pairText } from "../../lib/tools/cyberchef/send.js";
+	import { chefInbox, drainInbox, pairText, swapInput } from "../../lib/tools/cyberchef/send.js";
 	import { recipeFile } from "../../lib/tools/cyberchef/recipeFile.js";
 	import { ledgerStore } from "../../stores/ledgerStore.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
@@ -52,7 +53,7 @@
 	let inserting = Promise.resolve();
 	$: if (adapter && $chefInbox.length) {
 		inserting = inserting
-			.then(() => drainInbox(chefInbox, adapter))
+			.then(() => drainInbox(chefInbox, adapter, (num, source) => frame?.setSource(num, source)))
 			.then(flush)
 			.catch((err) => toastError(toastStore, "Send to CyberChef failed", err));
 	}
@@ -62,20 +63,56 @@
 		toastError(toastStore, "CyberChef didn't load", event.detail.error);
 	}
 
-	// Insert: a pair's request, or its response (Res), goes in by the same
-	// empty-tab rule as Send to CyberChef, through the inbox.
+	// Insert: a pair's request goes in by the same empty-tab rule as Send to
+	// CyberChef, through the inbox, and its tab records the pair as its
+	// source for the From bar.
 	let showInsert = false;
-	async function insertPair(source, part) {
+	async function insertPair(pair) {
 		try {
-			const details = await ledgerStore.getDetails(source.id, RAW_ONLY);
-			const raw = details?.[part]?.Raw;
-			if (raw == null) {
+			const details = await ledgerStore.getDetails(pair.id, RAW_ONLY);
+			const raw = details?.Request?.Raw;
+			if (raw == null) return;
+			const source = { pairId: pair.id, part: "request", bodyOnly: false };
+			chefInbox.update((list) => [...list, { text: pairText(raw), source }]);
+		} catch (err) {
+			toastError(toastStore, "Insert failed", err);
+		}
+	}
+
+	// The From bar: the open input tab and its source (ChefFrame's `open`).
+	// A swap replaces that tab's text with the pair's request or response,
+	// whole or body only, asking first when the researcher edited it.
+	let openInput = { num: null, source: null };
+	let swapping = false;
+	const confirmReplace = () =>
+		new Promise((resolve) =>
+			modalStore.trigger({
+				type: "confirm",
+				title: "Replace your edits?",
+				body: "This input changed since it was inserted.",
+				buttonTextConfirm: "Replace",
+				response: (yes) => resolve(Boolean(yes)),
+			}),
+		);
+	async function swapSource(want) {
+		const { num, source } = openInput;
+		if (!adapter || !source || swapping) return;
+		swapping = true;
+		try {
+			const details = await ledgerStore.getDetails(source.pairId, RAW_ONLY);
+			const current = (await adapter.getInputTabs()).find((tab) => tab.num === num)?.text ?? "";
+			const result = swapInput(source, current, details, want);
+			if (result.refused) {
 				toastStore.trigger({ message: "No response yet", background: "variant-filled-warning" });
 				return;
 			}
-			chefInbox.update((list) => [...list, pairText(raw)]);
+			if (result.ask && !(await confirmReplace())) return;
+			await adapter.replaceInput(num, result.text);
+			await frame?.setSource(num, result.source);
 		} catch (err) {
-			toastError(toastStore, "Insert failed", err);
+			toastError(toastStore, "Swap failed", err);
+		} finally {
+			swapping = false;
 		}
 	}
 
@@ -145,13 +182,23 @@
 			>
 		</DocumentTabs>
 		<div class="flex min-h-0 flex-1">
-		<div class="relative min-w-0 flex-1">
+		<div class="flex min-w-0 flex-1 flex-col">
+		{#if openInput.source && adapter && !loading}
+			<ChefSourceBar source={openInput.source} busy={swapping} onSwap={swapSource} />
+		{/if}
+		<div class="relative min-h-0 flex-1">
 			<ChefFrame
 				bind:this={frame}
 				recipe={current}
 				on:ready={(event) => (adapter = event.detail.adapter)}
 				on:loading={(event) => (loading = event.detail)}
-				on:change={(event) => recipes.change(event.detail.id, { operations: event.detail.operations, inputs: event.detail.inputs })}
+				on:change={(event) =>
+					recipes.change(event.detail.id, {
+						operations: event.detail.operations,
+						inputs: event.detail.inputs,
+						sources: event.detail.sources,
+					})}
+				on:open={(event) => (openInput = event.detail)}
 				on:error={onError}
 				on:saveRecipe={() => rename(current.id)}
 				on:loadRecipe={switchRecipe}
@@ -162,13 +209,13 @@
 				</div>
 			{/if}
 		</div>
+		</div>
 		{#if showInsert}
 			<aside class="flex w-80 max-w-[60%] shrink-0 flex-col border-l border-surface-500/30 bg-surface-50 dark:bg-surface-900">
 				<InsertPanel
 					kinds={["pair"]}
 					title="Insert Input"
-					onPick={(source) => insertPair(source, "Request")}
-					onPickResponse={(source) => insertPair(source, "Response")}
+					onPick={insertPair}
 					onClose={() => (showInsert = false)}
 				/>
 			</aside>
