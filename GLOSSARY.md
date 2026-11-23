@@ -165,7 +165,7 @@ A named CyberChef document in a project: its operations and its inputs, with eac
 _Avoid_: bake, chef session, saved recipe (CyberChef's own, which the app does not use)
 
 **Source** (of an input):
-The pair and part a CyberChef input came from by Insert, and whether it holds only the body. Text sent to CyberChef from an editor, typed or pasted has none.
+The pair and part a CyberChef input came from by Insert or a row or entry menu's Send to CyberChef, and whether it holds only the body. Text sent to CyberChef from an editor, typed or pasted has none.
 _Avoid_: origin, link
 _Note_: a card's source is the pair, finding or test case it shows; an input's source also names the part.
 

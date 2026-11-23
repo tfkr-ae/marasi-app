@@ -1,6 +1,7 @@
 // Adding cards to the open project's Drawings, from the Excalidraw page's
 // Insert panel and from Add to Drawing on other pages. It remembers the card
 // added last on each drawing, so the next goes under it (placeCard).
+import { get } from "svelte/store";
 import { newCardElement, placeCard } from "./cards.js";
 
 /** The canvas's size in pixels to place cards in when the real one is unknown. */
@@ -30,12 +31,17 @@ export function createDrawingCards(drawings, { viewport }) {
       lastCards.set(drawingId, elementId);
     },
     /**
-     * Adds a card for `source` to the last-opened drawing's stored scene,
-     * which the page shows when it next opens. `last` is a pair's row.
+     * Adds a card for `source` to drawing `target`'s stored scene, which the
+     * page shows when it next opens: a drawing id, "new" for a new drawing
+     * (which opens), or null for the last-opened drawing. An id no drawing
+     * has falls back to the last-opened one. `last` is a pair's row.
      * Returns { drawing, element }.
      */
-    add(source, { last = null } = {}) {
-      const drawing = drawings.current();
+    add(source, { last = null, target = null } = {}) {
+      const drawing =
+        target === "new"
+          ? drawings.create()
+          : (target != null && get(drawings).items.find((doc) => doc.id === target)) || drawings.current();
       const elements = drawing.scene?.elements ?? [];
       const at = placeCard({
         elements,

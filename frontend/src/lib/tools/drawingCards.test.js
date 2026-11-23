@@ -62,3 +62,18 @@ test("the last card added is remembered per drawing", () => {
   assert.equal(cards.lastCardId(two.id), null);
   assert.equal(cards.lastCardId(one.id), "card-x");
 });
+
+test("a menu's target puts the card on that drawing, or on a new one, which opens", () => {
+  const { drawings, cards } = setup();
+  const first = drawings.current();
+  drawings.create();
+  const picked = cards.add({ kind: "pair", id: "p-1" }, { last: row, target: first.id });
+  assert.equal(picked.drawing.id, first.id);
+  assert.notEqual(get(drawings).openId, first.id, "picking a drawing doesn't open it");
+  const made = cards.add({ kind: "pair", id: "p-1" }, { last: row, target: "new" });
+  assert.equal(get(drawings).items.length, 3);
+  assert.equal(get(drawings).openId, made.drawing.id);
+  assert.equal(get(drawings).items.find((d) => d.id === made.drawing.id).scene.elements.length, 1);
+  const gone = cards.add({ kind: "pair", id: "p-1" }, { target: "drawing-404" });
+  assert.equal(gone.drawing.id, made.drawing.id, "an unknown drawing falls back to the open one");
+});

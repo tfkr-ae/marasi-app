@@ -239,11 +239,16 @@ test("New finding and New test case show their shortcut keys and run as shortcut
   assert.deepEqual(menuAction(items, "launchpad.tree.create-test-case").action, { type: "new-test-case" });
 });
 
-test("Add to Drawing and Send to CyberChef take one entry", () => {
-  assert.deepEqual(item(menu(["b"]), "drawing").action, { type: "add-to-drawing", id: "b" });
-  assert.deepEqual(item(menu(["b"]), "chef").action, { type: "send-to-chef", id: "b" });
-  assert.equal(item(menu(["b"]), "drawing").disabled, undefined);
-  assert.equal(item(menu(["b"]), "chef").disabled, undefined);
+test("Add to Drawing and Send to CyberChef take one entry, into a new or any drawing or recipe", () => {
+  const drawings = { items: [{ id: "drawing-1", name: "Drawing 1" }], openId: "drawing-1" };
+  const recipes = { items: [{ id: "recipe-1", name: "Recipe 1" }, { id: "recipe-2", name: "JWT" }], openId: "recipe-1" };
+  const items = menu(["b"], { drawings, recipes });
+  assert.deepEqual(item(items, "drawing-new").action, { type: "add-to-drawing", id: "b", target: "new" });
+  assert.deepEqual(item(items, "drawing-drawing-1").action, { type: "add-to-drawing", id: "b", target: "drawing-1" });
+  assert.deepEqual(item(items, "chef-new").action, { type: "send-to-chef", id: "b", target: "new" });
+  assert.deepEqual(item(items, "chef-recipe-2").action, { type: "send-to-chef", id: "b", target: "recipe-2" });
+  assert.equal(item(items, "drawing").disabled, undefined);
+  assert.equal(item(items, "chef").disabled, undefined);
   for (const id of ["drawing", "chef"]) {
     assert.equal(item(menu(["b", "c"]), id).disabled, true);
     assert.equal(item(menu(["b", "c"]), id).hint, "One entry at a time");

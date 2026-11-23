@@ -77,6 +77,19 @@ test("Insert records the source of the tab its text landed in; Send to CyberChef
   assert.deepEqual(recorded, [[2, { ...source, inserted: "GET / HTTP/1.1\n\n" }]]);
 });
 
+test("a pair sent from Insert or a row or entry menu goes in whole, with LF endings, and records its source", async () => {
+  const { writable } = await import("svelte/store");
+  const { drainInbox, pairInput } = await import("./send.js");
+  const entry = pairInput(7, "GET /a HTTP/1.1\r\nHost: x\r\n\r\n");
+  assert.deepEqual(entry, {
+    text: "GET /a HTTP/1.1\nHost: x\n\n",
+    source: { pairId: 7, part: "request", bodyOnly: false },
+  });
+  const recorded = [];
+  await drainInbox(writable([entry]), { insertInput: async () => {}, openTab: () => 3 }, (num, src) => recorded.push([num, src]));
+  assert.deepEqual(recorded, [[3, { ...entry.source, inserted: entry.text }]]);
+});
+
 test("a recipe's sources follow its input tabs, and a removed tab's source goes", async () => {
   const { sourcesByTab, sourcesOfTabs } = await import("./send.js");
   const a = { pairId: 1, part: "request", bodyOnly: false, inserted: "a" };

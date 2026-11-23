@@ -6,7 +6,7 @@
 	// open Rename and Switch. chefAdapter is the only code that reaches into
 	// CyberChef itself. It keeps the shown recipe's input sources (send.js)
 	// by tab, and tells the page the open tab's source (`open`).
-	import { createEventDispatcher, onDestroy } from "svelte";
+	import { createEventDispatcher, onDestroy, tick } from "svelte";
 	import { getModalStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { chefAdapter } from "./chefAdapter.js";
 	import { chefColumns, chefTheme } from "./chefTheme.js";
@@ -199,6 +199,19 @@
 
 	$: applyTheme(!$modeCurrent, $textScale);
 	$: if (adapter && recipe) loading = loading.then(() => show(recipe));
+
+	/**
+	 * Resolves once CyberChef shows the recipe it was last given, so text
+	 * put in after it lands in that recipe, not one a load then replaces.
+	 */
+	export async function settled() {
+		await tick();
+		let current;
+		do {
+			current = loading;
+			await current;
+		} while (current !== loading);
+	}
 
 	/** Records what CyberChef holds now, before something reads the recipe. */
 	export function flush() {

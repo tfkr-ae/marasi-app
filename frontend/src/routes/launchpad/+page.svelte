@@ -42,9 +42,9 @@
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
     import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
     import { addPairToDrawing } from "../../lib/tools/addToDrawing.js";
-    import { sendTextToChef } from "../../lib/tools/cyberchef/sendAction.js";
-    import { pairText } from "../../lib/pairMessage.js";
+    import { sendPairToChef } from "../../lib/tools/cyberchef/sendAction.js";
     import { chefShown } from "../../lib/platform.js";
+    import { drawings, recipes } from "../../lib/tools/documents.js";
     import { launchpadMenuFor } from "../../lib/launchpad/launchpadMenu.js";
     import { lastEntry } from "../../lib/launchpad/jumpTarget.js";
     import RowMenu from "../../lib/ledger/RowMenu.svelte";
@@ -223,6 +223,8 @@
             grouped: groupByStatus,
             searching: state.search.trim() !== "",
             chef: $chefShown,
+            drawings: $drawings,
+            recipes: $recipes,
         };
     }
 
@@ -321,8 +323,8 @@
         if (!sourceId || !ids.length) return;
         if (action.type === "remove") return removeEntries(sourceId, ids);
         if (action.type === "browser-view") return copyBrowserView(action.id);
-        if (action.type === "add-to-drawing") return addEntryToDrawing(sourceId, action.id);
-        if (action.type === "send-to-chef") return sendEntryToChef(action.id);
+        if (action.type === "add-to-drawing") return addEntryToDrawing(sourceId, action.id, action.target);
+        if (action.type === "send-to-chef") return sendEntryToChef(action.id, action.target);
         if (runRecordAction(action, ids)) return;
         const targetId = action.type === "move" ? action.targetId : sourceId;
         const before = action.type === "move" ? null : action.before;
@@ -330,16 +332,16 @@
         if (moved?.length) await tree?.showEntry(targetId, moved[0]);
     }
 
-    function addEntryToDrawing(launchpadId, id) {
+    function addEntryToDrawing(launchpadId, id, drawing) {
         const entry = get(launchpadStore).entriesByLaunchpad[launchpadId]?.find((e) => e.ID === id);
-        addPairToDrawing(toastStore, entry);
+        addPairToDrawing(toastStore, entry, drawing);
     }
 
-    // The entry's request as Insert puts a pair's into CyberChef.
-    async function sendEntryToChef(id) {
+    // The entry's request as Insert puts a pair's into CyberChef, with its source.
+    async function sendEntryToChef(id, recipe) {
         try {
             const details = await launchpadStore.ensureDetails(id);
-            sendTextToChef(pairText(details?.Request?.Raw), toastStore);
+            sendPairToChef(id, details?.Request?.Raw, toastStore, recipe);
         } catch (err) {
             console.error("Launchpad send to CyberChef error:", err);
             toastError(toastStore, "Failed to read the request", err);

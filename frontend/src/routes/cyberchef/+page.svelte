@@ -15,8 +15,7 @@
 	import { recipes } from "../../lib/tools/documents.js";
 	import { deleteDocument, renameDocument, switchDocument } from "../../lib/tools/documentPrompts.js";
 	import { recipeKind } from "../../lib/tools/toolDocuments.js";
-	import { chefInbox, drainInbox, swapInput } from "../../lib/tools/cyberchef/send.js";
-	import { pairText } from "../../lib/pairMessage.js";
+	import { chefInbox, drainInbox, pairInput, swapInput } from "../../lib/tools/cyberchef/send.js";
 	import { recipeFile } from "../../lib/tools/cyberchef/recipeFile.js";
 	import { ledgerStore } from "../../stores/ledgerStore.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
@@ -49,11 +48,13 @@
 	};
 	const switchRecipe = () => switchDocument(modalStore, recipes, "recipe", "cyberchef.switch-recipe");
 
-	// Texts sent to CyberChef go in once the frame is ready, each by the
-	// empty-tab rule (chefAdapter.insertInput), and are then recorded.
+	// Texts sent to CyberChef go in once the frame is ready and shows the
+	// recipe the send opened, each by the empty-tab rule
+	// (chefAdapter.insertInput), and are then recorded.
 	let inserting = Promise.resolve();
 	$: if (adapter && $chefInbox.length) {
 		inserting = inserting
+			.then(() => frame?.settled())
 			.then(() => drainInbox(chefInbox, adapter, (num, source) => frame?.setSource(num, source)))
 			.then(flush)
 			.catch((err) => toastError(toastStore, "Send to CyberChef failed", err));
@@ -73,8 +74,7 @@
 			const details = await ledgerStore.getDetails(pair.id, RAW_ONLY);
 			const raw = details?.Request?.Raw;
 			if (raw == null) return;
-			const source = { pairId: pair.id, part: "request", bodyOnly: false };
-			chefInbox.update((list) => [...list, { text: pairText(raw), source }]);
+			chefInbox.update((list) => [...list, pairInput(pair.id, raw)]);
 		} catch (err) {
 			toastError(toastStore, "Insert failed", err);
 		}

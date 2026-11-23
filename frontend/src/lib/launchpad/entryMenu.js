@@ -12,8 +12,10 @@
 //   { type: "reorder", before }        within the launchpad; before null is the end
 //   { type: "remove" }                 unlink from the launchpad
 //   { type: "browser-view", id }       copy the entry's browser view URL
-//   { type: "add-to-drawing", id }     the entry's pair as a card on the drawing
-//   { type: "send-to-chef", id }       the entry's request into CyberChef
+//   { type: "add-to-drawing", id, target }  the entry's pair as a card on
+//                                      drawing `target` (an id, or "new")
+//   { type: "send-to-chef", id, target }    the entry's request into recipe
+//                                      `target` (an id, or "new")
 //   { type: "new-finding" }            a new finding with the entries' pairs
 //   { type: "new-test-case" }          a new test case with the entries' pairs
 //   { type: "link-finding", id, title }      also unlink-finding,
@@ -23,6 +25,7 @@ import { UNTITLED_LAUNCHPAD } from "./format.js";
 import { moveRefusal } from "./entryMove.js";
 import { browserViewRefusal } from "../browserView.js";
 import { linkMenu } from "../ledger/rowMenu.js";
+import { documentTargetItem } from "../tools/documentTargets.js";
 
 const entriesLabel = (n) => (n === 1 ? "" : ` ${n.toLocaleString()}`);
 
@@ -102,7 +105,9 @@ const ORDER_ITEMS = [
  * project's records for the Finding and Test case items. Reordering is off
  * while the tree is `grouped` by status or `searching`; moving to another
  * launchpad's end is not. `chef` is whether the app offers CyberChef
- * (chefShown); without it, Send to CyberChef is left out.
+ * (chefShown); without it, Send to CyberChef is left out. `drawings` and
+ * `recipes` are the tool document collections' { items, openId }, which
+ * Add to Drawing and Send to CyberChef list.
  */
 export function entryMenuFor({
   launchpadId,
@@ -116,6 +121,8 @@ export function entryMenuFor({
   grouped = false,
   searching = false,
   chef = true,
+  drawings = null,
+  recipes = null,
 }) {
   const order = entries.map((entry) => entry.ID);
   const picked = order.filter((id) => ids.includes(id));
@@ -174,22 +181,26 @@ export function entryMenuFor({
       ...(viewOff ? { disabled: true, hint: viewOff } : {}),
       action: { type: "browser-view", id: picked[0] },
     },
-    {
+    documentTargetItem({
       id: "drawing",
       label: "Add to Drawing",
       icon: "shapes",
-      ...(one ? {} : { disabled: true, hint: "One entry at a time" }),
+      noun: "drawing",
+      documents: drawings,
+      off: one ? null : "One entry at a time",
       action: { type: "add-to-drawing", id: picked[0] },
-    },
+    }),
     ...(chef
       ? [
-          {
+          documentTargetItem({
             id: "chef",
             label: "Send to CyberChef",
             icon: "cooking-pot",
-            ...(one ? {} : { disabled: true, hint: "One entry at a time" }),
+            noun: "recipe",
+            documents: recipes,
+            off: one ? null : "One entry at a time",
             action: { type: "send-to-chef", id: picked[0] },
-          },
+          }),
         ]
       : []),
     "sep",

@@ -43,9 +43,18 @@ export function textOfEditor(el, findView) {
 
 // Texts sent and not yet put into CyberChef, oldest first. The CyberChef
 // page takes them once its frame is ready. An entry is the text (Send to
-// CyberChef), or { text, source } for a pair's text from Insert, where
-// `source` is { pairId, part, bodyOnly }.
+// CyberChef from an editor), or { text, source } for a pair's request from
+// Insert or a row or entry menu (pairInput), where `source` is
+// { pairId, part, bodyOnly }.
 export const chefInbox = writable([]);
+
+/**
+ * The inbox entry for pair `pairId`'s request `raw`, as Insert and the row
+ * and entry menus put it in: the whole request, with its source.
+ */
+export function pairInput(pairId, raw) {
+  return { text: pairText(raw), source: { pairId, part: "request", bodyOnly: false } };
+}
 
 /**
  * Puts each waiting text into CyberChef through `adapter.insertInput`, which

@@ -10,6 +10,8 @@
 	import { testCaseStore } from "../../stores/testCaseStore";
 	import { findingStore } from "../../stores/findingStore";
 	import { ledgerStore, selectionSize, selectionTarget as storeSelectionTarget } from "../../stores/ledgerStore";
+	import { drawings, recipes } from "../tools/documents.js";
+	import { chefShown } from "../platform.js";
 
 	// The table (LedgerTable) and the area that holds it, to place the menu.
 	export let table;
@@ -57,6 +59,9 @@
 		launchpads: $launchpadStore.launchpads,
 		findings: $findingStore,
 		testCases: $testCaseStore,
+		drawings: $drawings,
+		recipes: $recipes,
+		chef: $chefShown,
 		palette: $highlightPalette,
 		pendingLaunches: Object.values($launchpadStore.launchesById ?? {}).filter((launch) => launch.Status === "pending"),
 		all: Boolean(rowMenu.target?.all),
