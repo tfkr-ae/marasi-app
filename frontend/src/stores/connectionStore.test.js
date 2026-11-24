@@ -798,3 +798,71 @@ test("the app's own instance stays the app's across a reconnect", () => {
   const { state } = reduce(dropped, { type: "RECONNECTED", url: "http://127.0.0.1:51391", startedByApp: true, status });
   assert.equal(state.owned, true);
 });
+
+test("connecting preserves os, channel, and restart_required from status, and handles older services that omit them", () => {
+  const fullStatus = { ...status, version: "24.11.2026", os: "darwin", channel: "release", restart_required: true };
+  const connected = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: fullStatus }).state;
+  assert.equal(connected.os, "darwin");
+  assert.equal(connected.channel, "release");
+  assert.equal(connected.restartRequired, true);
+
+  // Older services omit os, channel, and restart_required; dev builds send channel: null.
+  const older = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status }).state;
+  assert.equal(older.os, null);
+  assert.equal(older.channel, null);
+  assert.equal(older.restartRequired, false);
+
+  const devStatus = { ...status, os: "linux", channel: null, restart_required: false };
+  const dev = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: devStatus }).state;
+  assert.equal(dev.os, "linux");
+  assert.equal(dev.channel, null);
+  assert.equal(dev.restartRequired, false);
+});
+
+test("reconnecting and refreshing status update os, channel, and restartRequired", () => {
+  const initial = { ...status, version: "20.11.2026", os: "linux", channel: "release", restart_required: true };
+  const start = run({ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status: initial }).state;
+  assert.equal(start.restartRequired, true);
+
+  const dropped = reduce(start, { type: "STREAM_DROPPED" }).state;
+  const afterReconnect = reduce(dropped, {
+    type: "RECONNECTED",
+    url: "http://127.0.0.1:51391",
+    startedByApp: true,
+    status: { ...initial, version: "24.11.2026", run_id: "run-2", channel: "nightly", restart_required: false },
+  }).state;
+  assert.equal(afterReconnect.os, "linux");
+  assert.equal(afterReconnect.channel, "nightly");
+  assert.equal(afterReconnect.restartRequired, false);
+
+  const refreshed = reduce(
+    reduce(afterReconnect, { type: "LOAD_CONFIRMED" }).state,
+    { type: "STATUS_REFRESHED", status: { ...initial, os: "darwin", channel: "release", restart_required: true } },
+  ).state;
+  assert.equal(refreshed.os, "darwin");
+  assert.equal(refreshed.channel, "release");
+  assert.equal(refreshed.restartRequired, true);
+});
+
+test("switching connections resets os, channel, and restartRequired, and stopping clears restartRequired", () => {
+  const remote = { id: "r1", kind: "remote", name: "Lab", url: "http://10.0.0.5:9000" };
+  const local = initialConnection().connection;
+  const fullStatus = { ...status, os: "darwin", channel: "release", restart_required: true };
+  const connected = run(
+    { type: "CONNECTIONS_LOADED", connections: [local, remote], activeId: "local" },
+    { type: "APP_STARTED" },
+    up(true),
+    { type: "CONNECTED", status: fullStatus },
+  ).state;
+  assert.equal(connected.os, "darwin");
+  assert.equal(connected.channel, "release");
+  assert.equal(connected.restartRequired, true);
+
+  const switched = reduce(connected, { type: "SWITCH_CONFIRMED", id: "r1" }).state;
+  assert.equal(switched.os, null);
+  assert.equal(switched.channel, null);
+  assert.equal(switched.restartRequired, false);
+
+  const stopped = reduce(reduce(connected, { type: "STOP" }).state, { type: "INSTANCE_STOPPED" }).state;
+  assert.equal(stopped.restartRequired, false);
+});
