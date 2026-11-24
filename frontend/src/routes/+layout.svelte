@@ -68,6 +68,7 @@
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
+	import { localCLIStore } from "../stores/localCLIStore.js";
 	import {
 		CLI_UPDATE_CHECKED_EVENT,
 		cliUpdateCheckedNotice,
@@ -500,10 +501,13 @@
 				},
 			);
 		});
-		// Touch fixes, on iOS only (lib/touch.js).
+		// Touch fixes, on iOS only (lib/touch.js); desktop loads local CLI & carried-CLI info.
 		let stopTouch = () => {};
 		mobileCheck.then((onMobile) => {
-			if (!onMobile) return;
+			if (!onMobile) {
+				localCLIStore.load();
+				return;
+			}
 			const stopLongPress = installLongPress(window);
 			const stopKeyboard = keepKeyboardDown(modalStore, document);
 			// Opens the Marasi menu, not over another dialog.

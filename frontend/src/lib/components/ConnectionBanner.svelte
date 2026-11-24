@@ -12,8 +12,11 @@
 	import { createRestartHeldHandler } from "../checkpointHeld.js";
 	import { createConnectionToasts } from "../connectionToasts.js";
 	import { projectName } from "../openProgress.js";
+	import { mobile } from "../platform.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { localCLIStore } from "../../stores/localCLIStore.js";
 	import UpdateCLI from "../connection/UpdateCLI.svelte";
+	import { proactiveCarriedUpgrade } from "../connection/carried.js";
 	import { connectionActionBanner } from "../connection/indicators.js";
 	import { reachingText } from "../connection/status.js";
 	import { service } from "../service/index.js";
@@ -23,7 +26,39 @@
 	$: primary = `btn btn-sm rounded-none py-0.5 ${primaryVariant($modeCurrent)}`;
 	$: name = $connectionStore.connection.name;
 	let dismissedRestartKey = null;
-	$: actionBanner = connectionActionBanner($connectionStore, $serviceUpdateStore, { dismissedRestartKey });
+	$: carriedUpgrade = proactiveCarriedUpgrade({
+		mobile: $mobile,
+		connectionState: $connectionStore,
+		updateState: $serviceUpdateStore,
+		carried: $localCLIStore.carried,
+		cli: $localCLIStore.cli,
+		dismissedVersion: $localCLIStore.dismissedVersion,
+	});
+	$: actionBanner = connectionActionBanner($connectionStore, $serviceUpdateStore, {
+		dismissedRestartKey,
+		carriedUpgrade,
+	});
+
+	async function installCarriedFromBanner() {
+		try {
+			const outcome = await localCLIStore.installCarried({
+				connectionState: $connectionStore,
+				connectionId: $connectionStore.connection.id,
+				isActive: true,
+				restartService: () => connectionStore.restart(),
+				retryConnection: () =>
+					$connectionStore.phase === "failed" ? connectionStore.retry() : connectionStore.retryNow(),
+			});
+			if (outcome?.text) {
+				toastStore.trigger({
+					message: outcome.text,
+					...(outcome.ok ? {} : { background: "variant-filled-error" }),
+				});
+			}
+		} catch (err) {
+			toastStore.trigger({ message: String(err?.message ?? err), background: "variant-filled-error" });
+		}
+	}
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -145,6 +180,39 @@
 			class={neutral}
 			data-testid="connection-banner-dismiss"
 			on:click={() => (dismissedRestartKey = actionBanner.key)}
+		>
+			Dismiss
+		</button>
+	</div>
+{:else if actionBanner?.kind === "carried-upgrade"}
+	<div
+		class="flex flex-wrap items-center gap-2 bg-primary-500/15 px-4 py-1.5 text-xs"
+		data-testid="connection-banner"
+		data-banner-kind="carried-upgrade"
+	>
+		<span class="h-2 w-2 rounded-full bg-primary-500"></span>
+		<span class="min-w-0 flex-1" data-testid="connection-banner-text">
+			{#if actionBanner.version}
+				Marasi CLI <span class="font-mono">{actionBanner.version}</span> included.
+			{:else}
+				{actionBanner.text}
+			{/if}
+		</span>
+		<button
+			type="button"
+			class={primary}
+			disabled={$localCLIStore.installing || $connectionStore.busy !== null || $connectionStore.restarting || $connectionStore.restartConfirming}
+			data-testid="connection-banner-carried-install"
+			on:click={installCarriedFromBanner}
+		>
+			{$localCLIStore.installing ? "Installing…" : "Install & restart"}
+		</button>
+		<button
+			type="button"
+			class={neutral}
+			disabled={$localCLIStore.installing}
+			data-testid="connection-banner-dismiss"
+			on:click={() => localCLIStore.dismissCarried(actionBanner.version)}
 		>
 			Dismiss
 		</button>

@@ -5,6 +5,7 @@ import {
   contextualSlotKind,
   detailWhereText,
   formatServiceNotes,
+  LOCAL_QUIT_CHOICES,
   reinstallConfirmCopy,
   restartConfirmCopy,
   SERVICE_CHANNELS,
@@ -86,18 +87,34 @@ test("setupDisclosure picks the collapsed disclosure title and mono summary", ()
     title: "Channel, CLI path & quit behavior",
     summary: "release",
   });
-  assert.deepEqual(setupDisclosure(local, { channel: null, version: "dev", mobile: false }), {
+  assert.deepEqual(
+    setupDisclosure(local, { channel: "release", version: "24.11.2026", whenQuitting: "ask", mobile: false }),
+    {
+      title: "Channel, CLI path & quit behavior",
+      summary: "release · quit: ask",
+    },
+  );
+  assert.deepEqual(setupDisclosure(local, { channel: null, version: "dev", whenQuitting: "keep", mobile: false }), {
     title: "Channel, CLI path & quit behavior",
-    summary: "dev",
+    summary: "dev · quit: keep",
   });
-  assert.deepEqual(setupDisclosure(remote, { channel: "nightly", version: "24.11.2026 (nightly a1b2)", mobile: false }), {
+  assert.deepEqual(setupDisclosure(remote, { channel: "nightly", version: "24.11.2026 (nightly a1b2)", whenQuitting: "stop", mobile: false }), {
     title: "Update channel & reinstall",
     summary: "nightly",
+  });
+  assert.deepEqual(setupDisclosure(local, { channel: "release", version: "24.11.2026", whenQuitting: "ask", mobile: true }), {
+    title: "Update channel & reinstall",
+    summary: "release",
   });
   assert.deepEqual(setupDisclosure(remote, { channel: null, version: "20.10.2026", mobile: true }), {
     title: "Update channel & reinstall",
     summary: "",
   });
+  assert.deepEqual(LOCAL_QUIT_CHOICES, [
+    ["ask", "Ask"],
+    ["keep", "Keep running"],
+    ["stop", "Stop"],
+  ]);
 });
 
 const connBase = {
@@ -200,6 +217,49 @@ test("serviceUpdateAction adapts the top bar primary button to state and hides c
   assert.equal(serviceUpdateAction(connBase, { ...updBase, supported: false }), null);
   assert.equal(serviceUpdateAction(connBase, { ...updBase, development: true }), null);
   assert.equal(serviceUpdateAction({ ...connBase, version: "dev" }, updBase), null);
+
+  // Carried CLI upgrade (desktop local) -> primary Install <version> right after restartRequired/installing
+  assert.deepEqual(
+    serviceUpdateAction(connBase, updBase, { carriedUpgrade: { version: "25.11.2026", channel: "release" } }),
+    {
+      kind: "carried",
+      label: "Install 25.11.2026",
+      primary: true,
+      disabled: false,
+      spinning: false,
+      hideNeutralRestart: false,
+    },
+  );
+  // Carried CLI beats merely-available service update in top action bar
+  assert.equal(
+    serviceUpdateAction(
+      connBase,
+      { ...updBase, available: { version: "24.11.2026", channel: "release", notes: "", page: "" } },
+      { carriedUpgrade: { version: "25.11.2026", channel: "release" } },
+    )?.kind,
+    "carried",
+  );
+  // While installing carried CLI, button disables with Installing…
+  assert.equal(
+    serviceUpdateAction(connBase, updBase, {
+      carriedUpgrade: { version: "25.11.2026", channel: "release" },
+      installingCarried: true,
+    })?.label,
+    "Installing…",
+  );
+  // Service restartRequired and installing take precedence over carriedUpgrade
+  assert.equal(
+    serviceUpdateAction(connBase, { ...updBase, restartRequired: true }, { carriedUpgrade: { version: "25.11.2026" } })?.kind,
+    "restart",
+  );
+  assert.equal(
+    serviceUpdateAction(
+      connBase,
+      { ...updBase, install: { state: "running", version: "24.11.2026", step: "download", received: 10, total: 100 } },
+      { carriedUpgrade: { version: "25.11.2026" } },
+    )?.kind,
+    "installing",
+  );
 });
 
 test("serviceUpdateProgress tracks the 4-step bar and hides Cancel once swap/install begins", () => {
@@ -240,7 +300,7 @@ test("serviceUpdateProgress tracks the 4-step bar and hides Cancel once swap/ins
   assert.equal(restart.heading, "Marasi 24.11.2026 installed on Lab");
 });
 
-test("contextualSlotKind enforces strict precedence (at most one card at a time)", () => {
+test("contextualSlotKind enforces strict 7-tier precedence (at most one card at a time)", () => {
   const baseArgs = {
     isActive: true,
     phase: "connected",
@@ -251,36 +311,61 @@ test("contextualSlotKind enforces strict precedence (at most one card at a time)
     isCLIMissing: false,
     isOutdated: false,
     stopErrorText: null,
+    carriedUpgrade: null,
+    channelMismatch: null,
   };
 
   // Idle and healthy -> null
   assert.equal(contextualSlotKind(baseArgs), null);
 
-  // Available -> available
-  const withAvail = {
+  // Tier 7: installError / restartError
+  const withRestartError = {
     ...baseArgs,
-    updateState: { ...updBase, available: { version: "24.11.2026", channel: "release", notes: "Hi", page: "" } },
+    connectionState: { ...connBase, restartError: "successor exited" },
   };
-  assert.equal(contextualSlotKind(withAvail), "available");
+  assert.equal(contextualSlotKind(withRestartError), "restart-error");
 
-  // Install error surfaces clearly even when available stays for retrying
-  const withError = {
-    ...withAvail,
+  const withInstallError = {
+    ...withRestartError,
     updateState: {
-      ...withAvail.updateState,
+      ...updBase,
       error: { code: "install_path_not_writable", message: "Permission denied", installPath: "/opt/marasi", page: "" },
     },
   };
-  assert.equal(contextualSlotKind(withError), "install-error");
+  assert.equal(contextualSlotKind(withInstallError), "install-error");
 
-  // Restart required beats available and error
+  // Tier 6: channelMismatch (desktop local) beats installError / restartError
+  const withMismatch = {
+    ...withInstallError,
+    channelMismatch: { appChannel: "nightly", serviceChannel: "release" },
+  };
+  assert.equal(contextualSlotKind(withMismatch), "channel-mismatch");
+
+  // Tier 5: available beats channelMismatch and errors
+  const withAvail = {
+    ...withMismatch,
+    updateState: {
+      ...withMismatch.updateState,
+      available: { version: "24.11.2026", channel: "release", notes: "Hi", page: "" },
+    },
+  };
+  assert.equal(contextualSlotKind(withAvail), "available");
+
+  // Tier 4: carriedUpgrade (desktop local) beats available, channelMismatch, and errors
+  const withCarried = {
+    ...withAvail,
+    carriedUpgrade: { version: "25.11.2026", channel: "release" },
+  };
+  assert.equal(contextualSlotKind(withCarried), "carried-upgrade");
+
+  // Tier 3: restartRequired beats carriedUpgrade, available, channelMismatch, and errors
   const withRestartReq = {
-    ...withError,
-    updateState: { ...withError.updateState, restartRequired: true },
+    ...withCarried,
+    updateState: { ...withCarried.updateState, restartRequired: true },
   };
   assert.equal(contextualSlotKind(withRestartReq), "restart-required");
 
-  // Installing beats restartRequired, available, error
+  // Tier 2: installing beats restartRequired, carriedUpgrade, available, channelMismatch, and errors
   const withInstalling = {
     ...withRestartReq,
     updateState: {
@@ -290,22 +375,22 @@ test("contextualSlotKind enforces strict precedence (at most one card at a time)
   };
   assert.equal(contextualSlotKind(withInstalling), "installing");
 
-  // Confirmations beat everything (precedence 1)
+  // Tier 1: confirmations beat everything
   assert.equal(contextualSlotKind({ ...withInstalling, showStopConfirm: true }), "stop-confirm");
   assert.equal(contextualSlotKind({ ...withInstalling, showRestartConfirm: true, showStopConfirm: true }), "restart-confirm");
 
-  // Dev / unsupported hides update contextual cards while keeping restartError usable
+  // Dev / unsupported hides service update contextual cards while keeping restartError usable
   assert.equal(
     contextualSlotKind({
-      ...withAvail,
-      updateState: { ...withAvail.updateState, development: true },
+      ...baseArgs,
+      updateState: { ...updBase, available: { version: "24.11.2026" }, development: true },
     }),
     null,
   );
   assert.equal(
     contextualSlotKind({
-      ...withAvail,
-      updateState: { ...withAvail.updateState, supported: false },
+      ...baseArgs,
+      updateState: { ...updBase, available: { version: "24.11.2026" }, supported: false },
       connectionState: { ...connBase, restartError: "successor exited" },
     }),
     "restart-error",
