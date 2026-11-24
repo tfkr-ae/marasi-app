@@ -57,6 +57,15 @@ const loadParts = [
 const partOfSignal = new Map(loadParts.flatMap(({ signals }, i) => signals.map((signal) => [signal, i])));
 
 /**
+ * The part of the project `signal` belongs to, `{index, label}` in load
+ * order, or null for an unknown signal.
+ */
+export function loadPart(signal) {
+  const index = partOfSignal.get(signal);
+  return index === undefined ? null : { index, label: loadParts[index].label };
+}
+
+/**
  * Starts the state for opening the project `name` at `path` (null while the
  * full path is unknown). `current` is the project open now, `{name, path}`
  * (path null when unknown), or null at startup. `scratchpad` marks the

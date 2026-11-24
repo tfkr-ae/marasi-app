@@ -5,10 +5,11 @@ import { createToolTrafficApi } from "./toolTrafficApi.js";
 import { STREAMED_PAIR_EVENTS, toStreamedEvent } from "./trafficApi.js";
 import { createPairRowsStore } from "./createPairRowsStore.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 
 export const pairRows = createPairRowsStore(createToolTrafficApi(service));
 
-projectData.register("pairRows", { clear: pairRows.clear, load: pairRows.load });
+projectData.register("pairRows", { signal: loadSignals.traffic, clear: pairRows.clear, load: pairRows.load });
 
 service.on("traffic.changed", pairRows.onTrafficChanged);
 for (const name of STREAMED_PAIR_EVENTS) {

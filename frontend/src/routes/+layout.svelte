@@ -7,7 +7,14 @@
 	import { QUIT_QUESTION_EVENT, quitAnswerOf } from "../lib/connection/quitQuestion.js";
 	import ConnectionRailTile from "../lib/connection/ConnectionRailTile.svelte";
 	import OutdatedInstance from "../lib/connection/OutdatedInstance.svelte";
-	import { filePickerShown, pagesHeld, startupOffersConnections, startupText } from "../lib/connection/status.js";
+	import {
+		filePickerShown,
+		pagesHeld,
+		SLOW_LOAD_MS,
+		startupOffersConnections,
+		startupOffersRetry,
+		startupText,
+	} from "../lib/connection/status.js";
 	import { neutralVariant, primaryVariant } from "../lib/launchpad/format.js";
 	import {
 		computePosition,
@@ -28,7 +35,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	initializeStores();
-	import { onMount } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 
 	import { AppRail, AppRailAnchor } from "@skeletonlabs/skeleton";
 	import {
@@ -57,6 +64,7 @@
 		openingShown,
 		pagesKey,
 		loadedProject,
+		startupPart,
 	} from "../stores/projectStore.js";
 	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
@@ -289,6 +297,20 @@
 	// readConfig sets it before startup draws any text. On a phone, the
 	// phone's own text size scales it too (lib/systemTextScale.js).
 	$: applyTextSize($textSize, $systemTextScale);
+	// A first load that takes long offers Retry on the start screen: one
+	// read may never answer. Each session's load starts the wait afresh.
+	let slowLoad = false;
+	let slowLoadTimer = null;
+	let slowLoadSession = null;
+	$: watchSlowLoad($connectionStore.phase, $connectionStore.session);
+	function watchSlowLoad(phase, session) {
+		if (phase === "connected" && slowLoadSession === session) return;
+		clearTimeout(slowLoadTimer);
+		slowLoad = false;
+		slowLoadSession = phase === "connected" ? session : null;
+		if (slowLoadSession !== null) slowLoadTimer = setTimeout(() => (slowLoad = true), SLOW_LOAD_MS);
+	}
+	onDestroy(() => clearTimeout(slowLoadTimer));
 	onMount(() => {
 		let stop = () => {};
 		let stopped = false;
@@ -994,10 +1016,14 @@
 						<p class="mt-2 max-w-md text-xs text-center opacity-70 break-words">
 							{$connectionStore.error}
 						</p>
+					{:else if $connectionStore.phase === "connected" && $startupPart}
+						<p class="mt-2 text-xs text-center opacity-70" data-testid="startup-part">
+							{$startupPart.label}
+						</p>
 					{/if}
 					{#if startupOffersConnections($connectionStore.phase)}
 						<div class="mt-3 flex justify-center gap-2">
-							{#if $connectionStore.phase === "failed" && outdatedVersion($connectionStore.error) === null}
+							{#if startupOffersRetry($connectionStore, slowLoad) && outdatedVersion($connectionStore.error) === null}
 								<button
 									type="button"
 									class="btn btn-sm {primaryVariant($modeCurrent)}"

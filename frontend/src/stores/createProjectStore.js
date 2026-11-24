@@ -33,6 +33,7 @@
 import { get, writable } from "svelte/store";
 import { isSuperseded } from "../lib/service/errors.js";
 import {
+  loadPart,
   openingFor,
   openingScreen,
   projectName,
@@ -61,6 +62,9 @@ export function createProjectStore(api, timers = globalThis) {
     loaded: null,
     // Bumped after each switch's load, so the pages mount afresh.
     generation: 0,
+    // The part of the project loadService waits on, `{index, label}`
+    // (openProgress.js loadPart), or null: the start screen names it.
+    startupPart: null,
   });
   const patch = (next) => store.update((state) => ({ ...state, ...next }));
   const updateOpening = (change) =>
@@ -266,7 +270,19 @@ export function createProjectStore(api, timers = globalThis) {
    */
   async function loadService(path, { current } = {}) {
     const { live } = claim(current);
-    await api.loadProject(path, () => {}, live);
+    patch({ startupPart: null });
+    // projectData reports the part of the first store still loading, so
+    // the latest is the one the load waits on. Unlike the opening screen's,
+    // it can move back: stores register in no part order.
+    const part = (signal) => {
+      const next = loadPart(signal);
+      if (live() && next) patch({ startupPart: next });
+    };
+    try {
+      await api.loadProject(path, part, live);
+    } finally {
+      if (live()) patch({ startupPart: null });
+    }
     if (!live()) return superseded;
     const project = projectAt(path);
     patch({ loaded: project });

@@ -95,6 +95,41 @@ test("the service's open project is the loaded one, named after its file", () =>
   assert.equal(get(store).opening, null);
 });
 
+test("loading the service's project names the part it waits on now, and clears it after", async () => {
+  const seen = [];
+  let finish;
+  const { store } = setup({
+    load: async (path, part) => {
+      part("traffic");
+      seen.push(get(store).startupPart?.label);
+      part("launchpads");
+      part("logs");
+      seen.push(get(store).startupPart?.label);
+      await new Promise((resolve) => (finish = resolve));
+    },
+  });
+
+  const loading = store.loadService(acme);
+  await new Promise((r) => setTimeout(r, 0));
+  finish();
+  await loading;
+
+  assert.deepEqual(seen, ["Traffic", "Extensions"]);
+  assert.equal(get(store).startupPart, null);
+});
+
+test("a failed load of the service's project clears its part", async () => {
+  const { store } = setup({
+    load: async (path, part) => {
+      part("traffic");
+      throw new Error("GET /traffic: timeout");
+    },
+  });
+
+  await assert.rejects(store.loadService(acme), /timeout/);
+  assert.equal(get(store).startupPart, null);
+});
+
 test("opening a project by name opens it on the service, loads it and reports it opened", async () => {
   const { client, store, loads, prompts } = setup();
 

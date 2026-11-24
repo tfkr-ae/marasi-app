@@ -6,6 +6,7 @@ import { service } from "../lib/service/index.js";
 import { createJobsApi, progressJob } from "./jobsApi.js";
 import { createJobsStore } from "./createJobsStore.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 import { ledgerStore } from "./ledgerStore";
 import { sitemapStore } from "./sitemapStore";
 
@@ -22,7 +23,7 @@ export const jobsStore = createJobsStore(
   },
 );
 
-projectData.register("jobs", { clear: jobsStore.clear, load: jobsStore.refresh });
+projectData.register("jobs", { signal: loadSignals.traffic, clear: jobsStore.clear, load: jobsStore.refresh });
 // A finished job shows at once, without waiting for the next poll.
 service.on("job.complete", () => jobsStore.refresh());
 // A running job's progress shows as it goes, as Settings → Maintenance lists it.

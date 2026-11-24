@@ -13,6 +13,7 @@ import { createSavedQueriesStore, visibleSavedQueries } from "./createSavedQueri
 import { createSavedQueriesApi } from "./savedQueriesApi.js";
 import { contentTypeExclusion } from "./ledgerStore";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 import { followCountChanges } from "./countChanges.js";
 
 export {
@@ -41,6 +42,7 @@ export const savedQueriesStore = createSavedQueriesStore(
 // recounts only while the menu is open; opening it recounts. A switch
 // forgets the last project's.
 projectData.register("savedQueries", {
+  signal: loadSignals.traffic,
   clear: savedQueriesStore.clearCounts,
   load: async () => {
     await savedQueriesStore.load();

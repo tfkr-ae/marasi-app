@@ -10,6 +10,7 @@ import { createMatchCounts } from "./createMatchCounts.js";
 import { followCountChanges } from "./countChanges.js";
 import { ledgerStore } from "./ledgerStore";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 
 const count = (query) => ledgerStore.countQuery(query);
 
@@ -22,6 +23,7 @@ const all = [highlightCounts, markCounts];
 const schedule = () => all.forEach((counts) => counts.schedule());
 
 projectData.register("ledgerMenuCounts", {
+  signal: loadSignals.traffic,
   clear: () => all.forEach((counts) => counts.clear()),
   load: schedule,
 });

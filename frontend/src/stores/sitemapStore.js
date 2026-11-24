@@ -8,6 +8,7 @@ import { FLUSH_INTERVAL_MS } from "./createLedgerStore.js";
 import { contentTypeExclusion, ledgerStore } from "./ledgerStore";
 import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 
 export { hostCountLabel, sitemapRows, sitemapScope, STEP, WINDOW } from "./createSitemapStore.js";
 
@@ -16,6 +17,7 @@ export const sitemapStore = createSitemapStore(createSitemapApi(service, { exclu
 // The sitemap reads once the Ledger's context is ready (below), so a load
 // only clears it; a resync reads the open levels again in place.
 projectData.register("sitemap", {
+  signal: loadSignals.traffic,
   clear: sitemapStore.clear,
   load: async () => {},
   resync: () => sitemapStore.reload(),
