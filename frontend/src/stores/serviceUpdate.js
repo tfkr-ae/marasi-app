@@ -86,6 +86,8 @@ const initial = () => ({
   channel: null,
   installPath: "",
   restartRequired: false,
+  // Bumped whenever a live install completes so a dismissed restart banner resurfaces.
+  installedSeq: 0,
   // The newest build the service found: {version, channel, published, notes, page}, or null.
   available: null,
   // The running or last install: {state: "running", version, step, received, total, joined},
@@ -115,6 +117,7 @@ export function createServiceUpdateStore(api = null) {
     const channel = body?.channel ?? body?.installed?.channel ?? null;
     const parsed = normalizeInstallFromSnapshot(body?.install, installPath);
     const restartRequired = Boolean(body?.restart_required) || parsed.install?.state === "installed";
+    const completedRunningInstall = prev.install?.state === "running" && restartRequired;
 
     let install = parsed.install;
     let error = restartRequired ? null : parsed.error;
@@ -131,6 +134,7 @@ export function createServiceUpdateStore(api = null) {
       channel,
       installPath,
       restartRequired,
+      installedSeq: completedRunningInstall ? s.installedSeq + 1 : s.installedSeq,
       available: restartRequired ? null : available,
       install,
       error,
@@ -170,6 +174,7 @@ export function createServiceUpdateStore(api = null) {
         startingInstall: false,
         cancelling: false,
         restartRequired: true,
+        installedSeq: s.installedSeq + 1,
         available: null,
         error: null,
         installPath: e.install_path ?? s.installPath,

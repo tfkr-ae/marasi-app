@@ -1,26 +1,29 @@
 <script>
 	// The strip over the page while the connection is unhealthy (reconnecting,
 	// failed with its reason and Retry, a project change, Marasi stopped with
-	// Start for a local connection and Retry for a remote) or the
-	// service is at an API level the app doesn't support (it warns, never
-	// blocks; the local connection offers Update CLI), and the
-	// drop and reconnect toasts (lib/connectionToasts.js). Pages stay
-	// mounted underneath.
+	// Start for a local connection and Retry for a remote), the service is at an
+	// unsupported API level, or an installed service update awaits a restart
+	// (dismissible for this session/install), plus the drop/reconnect/update
+	// toasts (lib/connectionToasts.js). Pages stay mounted underneath.
 	import { onDestroy, onMount } from "svelte";
 	import { goto } from "$app/navigation";
 	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
-	import { neutralVariant } from "../launchpad/format.js";
+	import { neutralVariant, primaryVariant } from "../launchpad/format.js";
 	import { createRestartHeldHandler } from "../checkpointHeld.js";
 	import { createConnectionToasts } from "../connectionToasts.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import UpdateCLI from "../connection/UpdateCLI.svelte";
+	import { connectionActionBanner } from "../connection/indicators.js";
 	import { reachingText } from "../connection/status.js";
 	import { service } from "../service/index.js";
-	import { SERVICE_UPDATE_EVENTS, serviceUpdateToast } from "../../stores/serviceUpdateStore.js";
+	import { SERVICE_UPDATE_EVENTS, serviceUpdateStore, serviceUpdateToast } from "../../stores/serviceUpdateStore.js";
 
 	$: neutral = `btn btn-sm rounded-none py-0.5 ${neutralVariant($modeCurrent)}`;
+	$: primary = `btn btn-sm rounded-none py-0.5 ${primaryVariant($modeCurrent)}`;
 	$: name = $connectionStore.connection.name;
+	let dismissedRestartKey = null;
+	$: actionBanner = connectionActionBanner($connectionStore, $serviceUpdateStore, { dismissedRestartKey });
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
@@ -95,5 +98,55 @@
 	<div class="flex items-center gap-3 bg-warning-500/15 px-4 py-1.5 text-xs" data-testid="connection-banner">
 		<span class="flex-1">{$connectionStore.apiWarning}. Some features may not work.</span>
 		{#if $connectionStore.connection.kind === "local"}<UpdateCLI compact />{/if}
+	</div>
+{:else if actionBanner?.kind === "restart-confirm"}
+	<div
+		class="flex flex-wrap items-center gap-2 bg-warning-500/15 px-4 py-1.5 text-xs"
+		data-testid="connection-banner"
+		data-banner-kind="restart-confirm"
+	>
+		<span class="h-2 w-2 rounded-full bg-warning-500"></span>
+		<span class="min-w-0 flex-1">
+			<span class="font-semibold">{actionBanner.title}</span>
+			<span class="opacity-85"> {actionBanner.detail}</span>
+		</span>
+		<button type="button" class={neutral} data-testid="connection-banner-restart-cancel" on:click={() => connectionStore.cancelRestart()}>
+			Cancel
+		</button>
+		<button type="button" class={primary} data-testid="connection-banner-restart-confirm" on:click={() => connectionStore.confirmRestart()}>
+			Restart
+		</button>
+	</div>
+{:else if actionBanner?.kind === "restart-required"}
+	<div
+		class="flex flex-wrap items-center gap-2 bg-warning-500/15 px-4 py-1.5 text-xs"
+		data-testid="connection-banner"
+		data-banner-kind="restart-required"
+	>
+		<span class="h-2 w-2 rounded-full bg-warning-500"></span>
+		<span class="min-w-0 flex-1" data-testid="connection-banner-text">
+			{#if actionBanner.version}
+				{actionBanner.name} updated to <span class="font-mono">{actionBanner.version}</span>.
+			{:else}
+				{actionBanner.text}
+			{/if}
+		</span>
+		<button
+			type="button"
+			class={primary}
+			disabled={$connectionStore.busy !== null || $connectionStore.restartConfirming}
+			data-testid="connection-banner-restart"
+			on:click={() => connectionStore.restart()}
+		>
+			Restart
+		</button>
+		<button
+			type="button"
+			class={neutral}
+			data-testid="connection-banner-dismiss"
+			on:click={() => (dismissedRestartKey = actionBanner.key)}
+		>
+			Dismiss
+		</button>
 	</div>
 {/if}
