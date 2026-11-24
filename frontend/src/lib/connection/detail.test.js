@@ -1,7 +1,7 @@
 // Presentation helpers for the Connection details layout (ConnectionDetail.svelte).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detailWhereText, serviceMetaText, setupDisclosure, stopConfirmCopy } from "./detail.js";
+import { detailWhereText, restartConfirmCopy, serviceMetaText, setupDisclosure, stopConfirmCopy } from "./detail.js";
 
 test("detailWhereText formats host, instance, and OS for local and remote connections", () => {
   const local = { id: "local", kind: "local", name: "Local", url: "" };
@@ -48,6 +48,20 @@ test("stopConfirmCopy names the connection cleanly without obtuse phrasing", () 
   assert.equal(localCopy.title, "Stop Local?");
   assert.equal(localCopy.detail, "Another program started this instance.");
   assert.equal(localCopy.detail.includes("Marasi and its proxy"), false);
+});
+
+test("restartConfirmCopy explains active connections drop while the project reopens", () => {
+  const remote = { id: "r1", kind: "remote", name: "Lab", url: "http://10.0.0.5:9000" };
+  const local = { id: "local", kind: "local", name: "Local", url: "" };
+
+  assert.deepEqual(restartConfirmCopy(remote), {
+    title: "Restart Lab?",
+    detail: "Active connections will drop while the project reopens.",
+  });
+  assert.deepEqual(restartConfirmCopy(local), {
+    title: "Restart Local?",
+    detail: "Active connections will drop while the project reopens.",
+  });
 });
 
 test("setupDisclosure picks the collapsed disclosure title and mono summary", () => {

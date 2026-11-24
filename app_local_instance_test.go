@@ -826,7 +826,58 @@ func TestLocalInstanceOperationsRefuseAConnectionThatIsNotLocal(t *testing.T) {
 	if err := app.RestartLocalInstance("remote-abc"); err == nil {
 		t.Fatal("restarted through a connection that isn't local")
 	}
+	if err := app.ClaimOwnedRun("remote-abc", "run-2"); err == nil {
+		t.Fatal("claimed an owned run for a connection that isn't local")
+	}
 	if len(cli.calls) != 0 {
 		t.Fatalf("ran the CLI %v for a connection that isn't local", cli.subcommands())
+	}
+}
+
+func TestClaimOwnedRunKeepsLocalOwnershipAcrossControlAPIRestart(t *testing.T) {
+	first := (&fakeCLI{}).
+		answer("service status", 1, notRunning).
+		answer("service status", 0, runOf("run-1")).
+		answer("service start", 0, started).
+		answer("service control pair", 0, paired)
+	app := quittingApp(t, first)
+	if _, err := app.ConnectLocal(localConnectionID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate an app-initiated POST /service/restart handing over to run-2:
+	// ConnectLocal sees the new run_id before ClaimOwnedRun records it, then
+	// ClaimOwnedRun saves run-2 so relaunch and quit still treat it as owned.
+	if err := app.ClaimOwnedRun(localConnectionID, "run-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := (&fakeCLI{}).
+		answer("service status", 0, runOf("run-2")).
+		answer("service control pair", 0, paired).
+		answer("service status", 0, runOf("run-2")).
+		answer("service stop", 0, stopped)
+	relaunched := relaunchedApp(t, app, cli)
+	connection, err := relaunched.ConnectLocal(localConnectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !connection.StartedByApp {
+		t.Fatal("claimed successor run does not read as the app's after relaunch")
+	}
+	relaunched.ServiceShutdown()
+	if cli.stops() != 1 {
+		t.Fatalf("stopped the claimed successor %d times on quit, want once (calls %v)", cli.stops(), cli.subcommands())
+	}
+}
+
+func TestClaimOwnedRunIgnoresEmptyRunID(t *testing.T) {
+	cli := &fakeCLI{}
+	app := quittingApp(t, cli)
+	if err := app.ClaimOwnedRun(localConnectionID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := app.savedOwnedRun(localConnectionID); got != "" {
+		t.Fatalf("savedOwnedRun = %q, want empty", got)
 	}
 }
