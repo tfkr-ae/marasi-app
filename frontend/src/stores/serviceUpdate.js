@@ -1,9 +1,10 @@
 // The connected service's own update: the Marasi binary the service runs
-// checking for, installing, and cancelling a newer build of itself via the
-// control API (/update, /update/check, /update/install, DELETE /update/install)
-// and live update.* SSE events. This is not the app's update (updateStore.js)
-// nor the desktop app's carried CLI. It follows the active connection: switching
-// connections clears it immediately and supersedes any in-flight calls.
+// checking for, installing, cancelling, changing channel, and reinstalling via
+// the control API (/update, /update/check, /update/install, DELETE /update/install,
+// PUT /update/channel, POST /update/reinstall) and live update.* SSE events.
+// This is not the app's update (updateStore.js) nor the desktop app's carried
+// CLI. It follows the active connection: switching connections clears it
+// immediately and supersedes any in-flight calls.
 import { get, writable } from "svelte/store";
 import { isSuperseded } from "../lib/service/errors.js";
 
@@ -94,6 +95,7 @@ const initial = () => ({
   // {state: "installed", version, installPath} or {state: "failed", version, kind, step, message, page, installPath}, or null.
   install: null,
   checking: false,
+  switchingChannel: false,
   startingInstall: false,
   cancelling: false,
   checkResult: null,
@@ -158,6 +160,7 @@ export function createServiceUpdateStore(api = null) {
       store.update((s) => ({
         ...s,
         startingInstall: false,
+        restartRequired: false,
         error: null,
         install: {
           state: "running",
@@ -318,17 +321,20 @@ export function createServiceUpdateStore(api = null) {
 
   const stepRank = { download: 0, verify: 1, install: 2, swap: 2 };
 
-  async function install() {
-    if (!api?.installUpdate) return { ok: false };
+  async function startInstall(run, { reinstall: isReinstall = false } = {}) {
+    if (!run) return { ok: false };
     const { link, live } = boundCall();
     set({ startingInstall: true, checkResult: null, error: null });
     try {
-      const body = await api.installUpdate(link);
+      const body = await run(link);
       if (!live()) return { ok: false, superseded: true };
       const joined = Boolean(body?.joined);
       store.update((s) => {
         const installPath = body?.install_path || s.installPath;
-        if (s.restartRequired || s.install?.state === "installed") {
+        const completedDuringCall = isReinstall
+          ? !s.startingInstall && s.install?.state === "installed"
+          : s.restartRequired || s.install?.state === "installed";
+        if (completedDuringCall) {
           return { ...s, startingInstall: false, installPath };
         }
         const incoming = body?.install;
@@ -341,11 +347,12 @@ export function createServiceUpdateStore(api = null) {
           current &&
           ((stepRank[current.step] ?? 0) > (stepRank[incomingStep] ?? 0) ||
             (current.step === incomingStep && current.received > incomingReceived));
+        const fallbackVersion = isReinstall ? "" : (s.available?.version || "");
         const nextInstall = keepCurrent
           ? { ...current, joined: current.joined || joined }
           : {
               state: "running",
-              version: incoming?.version || s.available?.version || "",
+              version: incoming?.version || fallbackVersion,
               step: incomingStep,
               received: incomingReceived,
               total: incomingTotal,
@@ -354,6 +361,7 @@ export function createServiceUpdateStore(api = null) {
         return {
           ...s,
           startingInstall: false,
+          restartRequired: false,
           installPath,
           error: null,
           install: nextInstall,
@@ -370,7 +378,7 @@ export function createServiceUpdateStore(api = null) {
         set({ loaded: true, development: true, startingInstall: false, error: null });
         return { ok: false, development: true };
       }
-      if (err?.code === "already_installed") {
+      if (!isReinstall && err?.code === "already_installed") {
         store.update((s) => ({
           ...s,
           startingInstall: false,
@@ -407,10 +415,11 @@ export function createServiceUpdateStore(api = null) {
         store.update((s) => ({
           ...s,
           startingInstall: false,
+          restartRequired: false,
           error: null,
           install: {
             state: "running",
-            version: s.available?.version ?? "",
+            version: isReinstall ? "" : (s.available?.version ?? ""),
             step: "download",
             received: 0,
             total: 0,
@@ -419,7 +428,7 @@ export function createServiceUpdateStore(api = null) {
         }));
         return { ok: true, joined: true };
       }
-      if (err?.code === "no_update") {
+      if (!isReinstall && err?.code === "no_update") {
         store.update((s) => ({
           ...s,
           startingInstall: false,
@@ -432,7 +441,7 @@ export function createServiceUpdateStore(api = null) {
       const prev = get(store);
       const isPermissions = err?.code === "install_path_not_writable";
       const installPath = err?.body?.install_path || (isPermissions ? prev.installPath : "") || "";
-      const page = err?.body?.page || prev.available?.page || "";
+      const page = err?.body?.page || (isReinstall ? "" : (prev.available?.page || ""));
       const message = err?.body?.message || String(err?.message ?? err);
       const error = {
         code: err?.code || "install_failed",
@@ -442,22 +451,29 @@ export function createServiceUpdateStore(api = null) {
         page,
         installPath,
       };
-      set({
-        startingInstall: false,
-        install: {
-          state: "failed",
-          version: prev.available?.version ?? "",
-          kind: error.kind,
-          step: error.step,
-          message,
-          page,
-          installPath,
-        },
-        error,
-      });
+      if (isReinstall) {
+        set({ startingInstall: false, error });
+      } else {
+        set({
+          startingInstall: false,
+          install: {
+            state: "failed",
+            version: prev.available?.version ?? "",
+            kind: error.kind,
+            step: error.step,
+            message,
+            page,
+            installPath,
+          },
+          error,
+        });
+      }
       return { ok: false, error };
     }
   }
+
+  const install = () => startInstall(api?.installUpdate, { reinstall: false });
+  const reinstall = () => startInstall(api?.reinstallUpdate, { reinstall: true });
 
   async function cancel() {
     if (!api?.cancelInstall) return { ok: false };
@@ -498,11 +514,48 @@ export function createServiceUpdateStore(api = null) {
     }
   }
 
+  async function setChannel(channel) {
+    if (!api?.setChannel) return { ok: false };
+    const { link, live } = boundCall();
+    set({ switchingChannel: true, checkResult: null, error: null });
+    try {
+      const body = await api.setChannel(channel, link);
+      if (!live()) return { ok: false, superseded: true };
+      applySnapshot(body, { preserveRunning: true });
+      const next = get(store);
+      set({ switchingChannel: false });
+      return { ok: true, channel: next.channel, available: next.available, body };
+    } catch (err) {
+      if (isSuperseded(err) || !live()) return { ok: false, superseded: true };
+      if (isUpdatesUnavailable(err)) {
+        set({ loaded: true, supported: false, switchingChannel: false, error: null });
+        return { ok: false, unsupported: true };
+      }
+      if (isDevBuildError(err)) {
+        set({ loaded: true, development: true, switchingChannel: false, error: null });
+        return { ok: false, development: true };
+      }
+      const message = err?.body?.message || String(err?.message ?? err);
+      const error = {
+        code: err?.code || "channel_failed",
+        kind: "",
+        step: "",
+        message,
+        page: err?.body?.page ?? "",
+        installPath: err?.body?.install_path ?? "",
+      };
+      set({ switchingChannel: false, error });
+      return { ok: false, error };
+    }
+  }
+
   return {
     subscribe: store.subscribe,
     load,
     check,
+    setChannel,
     install,
+    reinstall,
     cancel,
     /** Takes the service's `name` event with its data. */
     onEvent: (name, data) => handlers[name]?.(data ?? {}),

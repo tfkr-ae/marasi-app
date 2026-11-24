@@ -5,7 +5,10 @@ import {
   contextualSlotKind,
   detailWhereText,
   formatServiceNotes,
+  reinstallConfirmCopy,
   restartConfirmCopy,
+  SERVICE_CHANNELS,
+  serviceChannelControls,
   serviceMetaText,
   serviceUpdateAction,
   serviceUpdateCheckToast,
@@ -337,5 +340,116 @@ test("formatServiceNotes strips nightly metadata headers and keeps release notes
       notes: "  Bug fixes and improvements  ",
     }),
     "Bug fixes and improvements",
+  );
+});
+
+test("serviceChannelControls shows channel & reinstall on supported non-dev services and hides on dev, unsupported, or unloaded", () => {
+  assert.deepEqual(SERVICE_CHANNELS, [
+    ["release", "Release"],
+    ["nightly", "Nightly"],
+  ]);
+
+  // Supported non-dev service on release
+  assert.deepEqual(
+    serviceChannelControls(
+      { ...connBase, channel: "release" },
+      { ...updBase, loaded: true, channel: "release" },
+    ),
+    {
+      channel: "release",
+      reinstallLabel: "Reinstall latest release",
+      disabled: false,
+      switchingChannel: false,
+    },
+  );
+
+  // Configured channel in updateState overrides running build channel from connectionState
+  assert.deepEqual(
+    serviceChannelControls(
+      { ...connBase, channel: "nightly" },
+      { ...updBase, loaded: true, channel: "release" },
+    ),
+    {
+      channel: "release",
+      reinstallLabel: "Reinstall latest release",
+      disabled: false,
+      switchingChannel: false,
+    },
+  );
+
+  // Disabled while switching channel, checking, installing, or restarting
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, channel: "release" },
+      { ...updBase, loaded: true, channel: "release", switchingChannel: true },
+    )?.disabled,
+    true,
+  );
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, channel: "release" },
+      { ...updBase, loaded: true, channel: "release", startingInstall: true },
+    )?.disabled,
+    true,
+  );
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, channel: "release", restarting: true },
+      { ...updBase, loaded: true, channel: "release" },
+    )?.disabled,
+    true,
+  );
+
+  // Hidden on dev builds, older services lacking /update, or before GET /update loads
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, channel: "release" },
+      { ...updBase, loaded: false, channel: "release" },
+    ),
+    null,
+  );
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, channel: "release" },
+      { ...updBase, loaded: true, supported: false, channel: "release" },
+    ),
+    null,
+  );
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, channel: null },
+      { ...updBase, loaded: true, development: true, channel: null },
+    ),
+    null,
+  );
+  assert.equal(
+    serviceChannelControls(
+      { ...connBase, version: "dev", channel: null },
+      { ...updBase, loaded: true, channel: "release" },
+    ),
+    null,
+  );
+});
+
+test("reinstallConfirmCopy warns about replacing with older builds and project compatibility", () => {
+  const copy = reinstallConfirmCopy("release", "Lab");
+  assert.equal(copy.title, "Reinstall latest release?");
+  assert.match(copy.detail, /replaces the installed build/i);
+  assert.match(copy.detail, /even when older/i);
+  assert.match(copy.detail, /projects opened in a newer build may not open/i);
+});
+
+test("serviceUpdateAction disables check and install while switchingChannel is in flight", () => {
+  assert.equal(
+    serviceUpdateAction(connBase, { ...updBase, switchingChannel: true })?.disabled,
+    true,
+  );
+  assert.equal(
+    serviceUpdateAction(connBase, {
+      ...updBase,
+      switchingChannel: true,
+      available: { version: "24.11.2026", channel: "release", notes: "", page: "" },
+    })?.disabled,
+    true,
   );
 });

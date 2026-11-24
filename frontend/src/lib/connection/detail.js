@@ -48,6 +48,12 @@ export function setupDisclosure(connection, { channel = null, version = null, mo
 
 const SERVICE_UPDATE_STEPS = ["Download", "Verify", "Install", "Restart"];
 
+/** The service update channels a non-development service can follow. */
+export const SERVICE_CHANNELS = [
+  ["release", "Release"],
+  ["nightly", "Nightly"],
+];
+
 const supportsServiceUpdates = (connectionState, updateState) =>
   Boolean(updateState?.supported !== false && !updateState?.development && connectionState?.version !== "dev");
 
@@ -56,6 +62,41 @@ const isUpdateInstalling = (updateState) =>
 
 const isUpdateRestartRequired = (connectionState, updateState) =>
   Boolean(updateState?.restartRequired || connectionState?.restartRequired);
+
+/**
+ * Channel and reinstall controls for the collapsed setup disclosure, or null
+ * when hidden (dev build, older service lacking /update, or before GET /update
+ * loads).
+ */
+export function serviceChannelControls(connectionState, updateState) {
+  if (!supportsServiceUpdates(connectionState, updateState)) return null;
+  if (updateState?.loaded === false) return null;
+  const channel = updateState?.channel || connectionState?.channel || null;
+  if (!channel) return null;
+  const disabled = Boolean(
+    connectionState?.busy !== null ||
+      connectionState?.restarting ||
+      connectionState?.restartConfirming ||
+      updateState?.switchingChannel ||
+      updateState?.checking ||
+      isUpdateInstalling(updateState) ||
+      updateState?.cancelling,
+  );
+  return {
+    channel,
+    reinstallLabel: `Reinstall latest ${channel}`,
+    disabled,
+    switchingChannel: Boolean(updateState?.switchingChannel),
+  };
+}
+
+/** Inline confirmation copy before reinstalling the latest build on `channel`. */
+export function reinstallConfirmCopy(channel, connectionName) {
+  return {
+    title: channel ? `Reinstall latest ${channel}?` : "Reinstall latest build?",
+    detail: `Replaces the installed build on ${connectionName} even when older. Projects opened in a newer build may not open.`,
+  };
+}
 
 /**
  * Primary service-update button for the connected top action bar, or null when
@@ -93,7 +134,7 @@ export function serviceUpdateAction(connectionState, updateState) {
       kind: "install",
       label: `Update to ${updateState.available.version}`,
       primary: true,
-      disabled: connBusy || Boolean(updateState?.checking),
+      disabled: connBusy || Boolean(updateState?.checking) || Boolean(updateState?.switchingChannel),
       spinning: false,
       hideNeutralRestart: false,
     };
@@ -103,7 +144,7 @@ export function serviceUpdateAction(connectionState, updateState) {
     kind: "check",
     label: updateState?.checking ? "Checking…" : "Check update",
     primary: false,
-    disabled: connBusy || Boolean(updateState?.checking),
+    disabled: connBusy || Boolean(updateState?.checking) || Boolean(updateState?.switchingChannel),
     spinning: Boolean(updateState?.checking),
     hideNeutralRestart: false,
   };

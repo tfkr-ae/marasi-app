@@ -861,3 +861,317 @@ test("update.failed SSE event surfaces error with page and clears busy state whi
   assert.equal(state.error?.page, "https://example.com/releases/24.11.2026");
   assert.equal(state.available?.version, "24.11.2026");
 });
+
+test("PUT /update/channel switches channel, updates available from response, and never auto-downgrades", async () => {
+  const { updateStore, requests, stopFollowing } = await setup({
+    routes: {
+      "GET /update": () => ({
+        ...baseUpdate,
+        installed: { version: "24.11.2026 (nightly abc1234)", channel: "nightly" },
+        channel: "nightly",
+        available: {
+          version: "25.11.2026 (nightly def5678)",
+          channel: "nightly",
+          notes: "Nightly fixes",
+          page: "https://example.com/nightly",
+        },
+      }),
+      "PUT /update/channel": (body) => {
+        if (body?.channel === "release") {
+          return {
+            ...baseUpdate,
+            installed: { version: "24.11.2026 (nightly abc1234)", channel: "nightly" },
+            channel: "release",
+            available: null,
+          };
+        }
+        return {
+          ...baseUpdate,
+          installed: { version: "24.11.2026 (nightly abc1234)", channel: "nightly" },
+          channel: "nightly",
+          available: {
+            version: "25.11.2026 (nightly def5678)",
+            channel: "nightly",
+            notes: "Nightly fixes",
+            page: "https://example.com/nightly",
+          },
+        };
+      },
+    },
+  });
+
+  // Switch nightly -> release: updates channel and drops older release without installing.
+  const toRelease = await updateStore.setChannel("release");
+  assert.equal(toRelease.ok, true);
+  assert.equal(toRelease.channel, "release");
+  const putReq = requests.find((r) => r.method === "PUT" && r.path === "/update/channel");
+  assert.deepEqual(putReq?.body, { channel: "release" });
+  assert.equal(requests.some((r) => r.path === "/update/install" || r.path === "/update/reinstall"), false);
+  let state = get(updateStore);
+  assert.equal(state.switchingChannel, false);
+  assert.equal(state.channel, "release");
+  assert.equal(state.available, null);
+  assert.equal(state.install, null);
+  assert.equal(state.error, null);
+
+  // Switch release -> nightly: picks up available update returned by service.
+  const toNightly = await updateStore.setChannel("nightly");
+  stopFollowing();
+  assert.equal(toNightly.ok, true);
+  assert.equal(toNightly.channel, "nightly");
+  state = get(updateStore);
+  assert.equal(state.switchingChannel, false);
+  assert.equal(state.channel, "nightly");
+  assert.equal(state.available?.version, "25.11.2026 (nightly def5678)");
+  assert.equal(requests.some((r) => r.path === "/update/install" || r.path === "/update/reinstall"), false);
+});
+
+test("PUT /update/channel handles check_failed, development_build, and updates_unavailable cleanly", async () => {
+  const errCase = await setup({
+    routes: {
+      "PUT /update/channel": () => refusal(502, { error: "check_failed", message: "upstream timeout" }),
+    },
+  });
+  const failed = await errCase.updateStore.setChannel("nightly");
+  errCase.stopFollowing();
+  assert.equal(failed.ok, false);
+  assert.equal(get(errCase.updateStore).switchingChannel, false);
+  assert.equal(get(errCase.updateStore).channel, "release");
+  assert.equal(get(errCase.updateStore).error?.code, "check_failed");
+  assert.equal(get(errCase.updateStore).error?.message, "upstream timeout");
+
+  const devCase = await setup({
+    routes: {
+      "PUT /update/channel": () => refusal(409, { error: "development_build", message: "dev build" }),
+    },
+  });
+  const devRes = await devCase.updateStore.setChannel("nightly");
+  devCase.stopFollowing();
+  assert.equal(devRes.ok, false);
+  assert.equal(devRes.development, true);
+  assert.equal(get(devCase.updateStore).development, true);
+  assert.equal(get(devCase.updateStore).error, null);
+
+  const unsupportedCase = await setup({
+    routes: {
+      "PUT /update/channel": () => refusal(501, { error: "updates_unavailable" }),
+    },
+  });
+  const unsupRes = await unsupportedCase.updateStore.setChannel("nightly");
+  unsupportedCase.stopFollowing();
+  assert.equal(unsupRes.ok, false);
+  assert.equal(unsupRes.unsupported, true);
+  assert.equal(get(unsupportedCase.updateStore).supported, false);
+  assert.equal(get(unsupportedCase.updateStore).error, null);
+});
+
+test("in-flight PUT /update/channel is superseded silently on connection switch", async () => {
+  let finishChannel;
+  const { conn, updateStore, stopFollowing } = await setup({
+    routes: {
+      "GET /update": (_body, req) =>
+        req.host === "10.0.0.5:9000" ? { ...baseUpdate, channel: "nightly" } : baseUpdate,
+      "PUT /update/channel": () =>
+        new Promise((resolve) => {
+          finishChannel = resolve;
+        }),
+    },
+  });
+
+  const pending = updateStore.setChannel("nightly");
+  assert.equal(get(updateStore).switchingChannel, true);
+
+  conn.switchTo("remote-1");
+  await reached(conn, "connected");
+  await settle();
+  await settle();
+
+  finishChannel(refusal(500, { error: "internal_server_error", message: "stale local channel error" }));
+  const res = await pending;
+  stopFollowing();
+
+  assert.equal(res.ok, false);
+  assert.equal(res.superseded, true);
+  const state = get(updateStore);
+  assert.equal(state.channel, "nightly");
+  assert.equal(state.switchingChannel, false);
+  assert.equal(state.error, null);
+});
+
+test("POST /update/reinstall sends { confirm: true } and drives the 4-step install tracker to restartRequired", async () => {
+  const { updateStore, requests, currentStream, stopFollowing } = await setup({
+    routes: {
+      "GET /update": () => ({
+        ...baseUpdate,
+        installed: { version: "24.11.2026 (nightly abc1234)", channel: "nightly" },
+        channel: "release",
+        restart_required: true,
+        install: { state: "installed", version: "25.11.2026 (nightly def5678)" },
+      }),
+      "POST /update/reinstall": () =>
+        accepted({
+          joined: false,
+          install: { state: "running", version: "20.11.2026", step: "download", received: 0, total: 1000 },
+          install_path: "/usr/local/bin/marasi",
+        }),
+    },
+  });
+
+  const started = await updateStore.reinstall();
+  assert.equal(started.ok, true);
+  const req = requests.find((r) => r.method === "POST" && r.path === "/update/reinstall");
+  assert.deepEqual(req?.body, { confirm: true });
+
+  // Running reinstall clears prior restartRequired and drives download -> verify -> install -> installed.
+  let state = get(updateStore);
+  assert.equal(state.startingInstall, false);
+  assert.equal(state.restartRequired, false);
+  assert.equal(state.install?.state, "running");
+  assert.equal(state.install?.version, "20.11.2026");
+  assert.equal(state.install?.step, "download");
+
+  currentStream().emit("update.progress", {
+    instance: "default",
+    version: "20.11.2026",
+    step: "verify",
+    received: 1000,
+    total: 1000,
+  });
+  assert.equal(get(updateStore).install?.step, "verify");
+
+  currentStream().emit("update.progress", {
+    instance: "default",
+    version: "20.11.2026",
+    step: "install",
+    received: 1000,
+    total: 1000,
+  });
+  assert.equal(get(updateStore).install?.step, "install");
+
+  currentStream().emit("update.installed", {
+    instance: "default",
+    version: "20.11.2026",
+    install_path: "/usr/local/bin/marasi",
+  });
+  stopFollowing();
+
+  state = get(updateStore);
+  assert.equal(state.restartRequired, true);
+  assert.equal(state.install?.state, "installed");
+  assert.equal(state.install?.version, "20.11.2026");
+  assert.equal(state.error, null);
+});
+
+test("POST /update/reinstall surfaces not_signed, check_failed, install_path_not_writable, and joins update_in_progress", async () => {
+  // 1. 409 not_signed surfaces message and release page
+  const unsigned = await setup({
+    routes: {
+      "POST /update/reinstall": () =>
+        refusal(409, {
+          error: "not_signed",
+          message: "build 20.11.2026 is not signed, so Marasi cannot verify it; install it by hand",
+          page: "https://example.com/releases/20.11.2026",
+        }),
+    },
+  });
+  const unsignedRes = await unsigned.updateStore.reinstall();
+  unsigned.stopFollowing();
+  assert.equal(unsignedRes.ok, false);
+  assert.equal(get(unsigned.updateStore).startingInstall, false);
+  assert.equal(get(unsigned.updateStore).error?.code, "not_signed");
+  assert.match(get(unsigned.updateStore).error?.message, /not signed/);
+  assert.equal(get(unsigned.updateStore).error?.page, "https://example.com/releases/20.11.2026");
+
+  // 2. 502 check_failed surfaces error cleanly
+  const checkFailed = await setup({
+    routes: {
+      "POST /update/reinstall": () =>
+        refusal(502, {
+          error: "check_failed",
+          message: "github API rate limit exceeded",
+        }),
+    },
+  });
+  const checkFailedRes = await checkFailed.updateStore.reinstall();
+  checkFailed.stopFollowing();
+  assert.equal(checkFailedRes.ok, false);
+  assert.equal(get(checkFailed.updateStore).startingInstall, false);
+  assert.equal(get(checkFailed.updateStore).error?.code, "check_failed");
+  assert.equal(get(checkFailed.updateStore).error?.message, "github API rate limit exceeded");
+
+  // 3. 409 install_path_not_writable surfaces installPath and page
+  const unwritable = await setup({
+    routes: {
+      "GET /update": () => ({ ...baseUpdate, install_path: "/opt/marasi/bin/marasi" }),
+      "POST /update/reinstall": () =>
+        refusal(409, {
+          error: "install_path_not_writable",
+          message: "permission denied",
+          page: "https://example.com/releases/20.11.2026",
+        }),
+    },
+  });
+  const unwritableRes = await unwritable.updateStore.reinstall();
+  unwritable.stopFollowing();
+  assert.equal(unwritableRes.ok, false);
+  assert.equal(get(unwritable.updateStore).error?.code, "install_path_not_writable");
+  assert.equal(get(unwritable.updateStore).error?.installPath, "/opt/marasi/bin/marasi");
+  assert.equal(get(unwritable.updateStore).error?.page, "https://example.com/releases/20.11.2026");
+
+  // 4. 409 update_in_progress joins running install
+  let gets = 0;
+  const inProgress = await setup({
+    routes: {
+      "GET /update": () => {
+        gets++;
+        return gets === 1
+          ? baseUpdate
+          : {
+              ...baseUpdate,
+              install: { state: "running", version: "20.11.2026", step: "download", received: 250, total: 1000 },
+            };
+      },
+      "POST /update/reinstall": () => refusal(409, { error: "update_in_progress", message: "already installing" }),
+    },
+  });
+  const inProgressRes = await inProgress.updateStore.reinstall();
+  inProgress.stopFollowing();
+  assert.equal(inProgressRes.ok, true);
+  assert.equal(inProgressRes.joined, true);
+  assert.equal(get(inProgress.updateStore).install?.state, "running");
+  assert.equal(get(inProgress.updateStore).error, null);
+});
+
+test("in-flight POST /update/reinstall is superseded silently on connection switch", async () => {
+  let finishReinstall;
+  const { conn, updateStore, stopFollowing } = await setup({
+    routes: {
+      "GET /update": (_body, req) =>
+        req.host === "10.0.0.5:9000" ? { ...baseUpdate, channel: "nightly" } : baseUpdate,
+      "POST /update/reinstall": () =>
+        new Promise((resolve) => {
+          finishReinstall = resolve;
+        }),
+    },
+  });
+
+  const pending = updateStore.reinstall();
+  assert.equal(get(updateStore).startingInstall, true);
+
+  conn.switchTo("remote-1");
+  await reached(conn, "connected");
+  await settle();
+  await settle();
+
+  finishReinstall(refusal(409, { error: "not_signed", message: "stale local unsigned error" }));
+  const res = await pending;
+  stopFollowing();
+
+  assert.equal(res.ok, false);
+  assert.equal(res.superseded, true);
+  const state = get(updateStore);
+  assert.equal(state.channel, "nightly");
+  assert.equal(state.startingInstall, false);
+  assert.equal(state.error, null);
+  assert.equal(state.install, null);
+});
