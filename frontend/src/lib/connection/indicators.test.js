@@ -8,6 +8,8 @@ import { createConnectionStore } from "../../stores/createConnectionStore.js";
 import { connectionServiceApi } from "../../stores/connectionServiceApi.js";
 import { createServiceUpdateApi } from "../../stores/serviceUpdateApi.js";
 import { createServiceUpdateStore, followConnection, SERVICE_UPDATE_EVENTS } from "../../stores/serviceUpdate.js";
+import { createLocalCLIStore, followLocalConnection } from "../../stores/createLocalCLIStore.js";
+import { localChannelMismatch, proactiveCarriedUpgrade } from "./carried.js";
 import { connectionActionBanner, connectionTileIndicator, restartBannerKey } from "./indicators.js";
 
 const conn = (overrides = {}) => ({
@@ -474,4 +476,113 @@ test("serviceUpdateStore + connectionStore lifecycle drives tile dot, banner dis
   assert.equal(connectionTileIndicator(get(connStore), get(updateStore)), null);
   assert.equal(connectionActionBanner(get(connStore), get(updateStore), { dismissedRestartKey }), null);
 });
+
+test("desktop local carried-CLI upgrade drives tile dot and banner, hides on remote or dismissal, and channel mismatch stays calm without banner or dot", async () => {
+  const data = new Map();
+  const storage = {
+    getItem: (k) => (data.has(k) ? data.get(k) : null),
+    setItem: (k, v) => data.set(k, String(v)),
+    removeItem: (k) => data.delete(k),
+  };
+
+  let cliVersion = "20.11.2026";
+  let carriedVersion = "24.11.2026";
+  const localCLI = createLocalCLIStore(
+    {
+      locateCLI: async () => ({ found: true, path: "/usr/local/bin/marasi", source: "path", version: cliVersion, channel: "release" }),
+      carriedCLI: async () => ({ available: true, version: carriedVersion, channel: "release" }),
+      getBuildInfo: async () => ({ Channel: "nightly", Version: "24.11.2026 (nightly a1b2c3d)" }),
+    },
+    storage,
+  );
+  await localCLI.load();
+
+  const localState = conn({ channel: "release" });
+  const remoteState = conn({
+    connection: { id: "remote-1", kind: "remote", name: "Lab", url: "http://10.0.0.5:9000" },
+    channel: "release",
+  });
+  const healthyUpd = upd({ channel: "release" });
+
+  // 1. Desktop local with strictly newer carried CLI lights tile dot + shows dismissible banner
+  const carried = () =>
+    proactiveCarriedUpgrade({
+      mobile: false,
+      connectionState: localState,
+      updateState: healthyUpd,
+      carried: get(localCLI).carried,
+      cli: get(localCLI).cli,
+      dismissedVersion: get(localCLI).dismissedVersion,
+    });
+
+  assert.deepEqual(connectionTileIndicator(localState, healthyUpd, { carriedUpgrade: carried() }), {
+    kind: "carried-upgrade",
+    label: "Marasi CLI 24.11.2026 included",
+  });
+  assert.deepEqual(connectionActionBanner(localState, healthyUpd, { carriedUpgrade: carried() }), {
+    kind: "carried-upgrade",
+    version: "24.11.2026",
+    text: "Marasi CLI 24.11.2026 included.",
+  });
+
+  // 2. Switching to remote hides carried upgrade immediately
+  const onRemote = proactiveCarriedUpgrade({
+    mobile: false,
+    connectionState: remoteState,
+    updateState: healthyUpd,
+    carried: get(localCLI).carried,
+    cli: get(localCLI).cli,
+    dismissedVersion: get(localCLI).dismissedVersion,
+  });
+  assert.equal(onRemote, null);
+  assert.equal(connectionTileIndicator(remoteState, healthyUpd, { carriedUpgrade: onRemote }), null);
+  assert.equal(connectionActionBanner(remoteState, healthyUpd, { carriedUpgrade: onRemote }), null);
+
+  // 3. Dismissing persists per carried version across launches until a newer carried CLI ships
+  localCLI.dismissCarried("24.11.2026");
+  assert.equal(carried(), null);
+  assert.equal(connectionTileIndicator(localState, healthyUpd, { carriedUpgrade: carried() }), null);
+  assert.equal(connectionActionBanner(localState, healthyUpd, { carriedUpgrade: carried() }), null);
+
+  // Channel mismatch (nightly app + release local) is detected for inline ConnectionDetail only — NO banner or tile dot
+  assert.deepEqual(
+    localChannelMismatch({
+      mobile: false,
+      connectionState: localState,
+      updateState: healthyUpd,
+      appChannel: get(localCLI).appChannel,
+    }),
+    { appChannel: "nightly", serviceChannel: "release" },
+  );
+  assert.equal(connectionTileIndicator(localState, healthyUpd, { carriedUpgrade: carried() }), null);
+  assert.equal(connectionActionBanner(localState, healthyUpd, { carriedUpgrade: carried() }), null);
+
+  // 4. Newer carried CLI (25.11.2026) on a fresh launch resurfaces the prompt
+  carriedVersion = "25.11.2026";
+  const nextLaunch = createLocalCLIStore(
+    {
+      locateCLI: async () => ({ found: true, path: "/usr/local/bin/marasi", source: "path", version: cliVersion, channel: "release" }),
+      carriedCLI: async () => ({ available: true, version: carriedVersion, channel: "release" }),
+      getBuildInfo: async () => ({ Channel: "release", Version: "25.11.2026" }),
+    },
+    storage,
+  );
+  await nextLaunch.load();
+  const nextCarried = proactiveCarriedUpgrade({
+    mobile: false,
+    connectionState: localState,
+    updateState: healthyUpd,
+    carried: get(nextLaunch).carried,
+    cli: get(nextLaunch).cli,
+    dismissedVersion: get(nextLaunch).dismissedVersion,
+  });
+  assert.deepEqual(nextCarried, { version: "25.11.2026", channel: "release" });
+  assert.equal(connectionTileIndicator(localState, healthyUpd, { carriedUpgrade: nextCarried })?.kind, "carried-upgrade");
+  assert.equal(connectionActionBanner(localState, healthyUpd, { carriedUpgrade: nextCarried })?.text, "Marasi CLI 25.11.2026 included.");
+
+  // Sanity: followLocalConnection works cleanly without leaks
+  const stop = followLocalConnection({ subscribe: (fn) => { fn(localState); return () => {}; } }, nextLaunch);
+  stop();
+});
+
 

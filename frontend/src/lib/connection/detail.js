@@ -39,12 +39,20 @@ export function restartConfirmCopy(connection) {
 }
 
 /** Collapsed setup disclosure heading and mono summary. */
-export function setupDisclosure(connection, { channel = null, version = null, mobile = false } = {}) {
-  const title =
-    connection.kind === "remote" || mobile ? "Update channel & reinstall" : "Channel, CLI path & quit behavior";
-  const summary = channel || (version === "dev" ? "dev" : "");
-  return { title, summary };
+export function setupDisclosure(connection, { channel = null, version = null, whenQuitting = null, mobile = false } = {}) {
+  const isDesktopLocal = connection.kind === "local" && !mobile;
+  const title = isDesktopLocal ? "Channel, CLI path & quit behavior" : "Update channel & reinstall";
+  const parts = [channel || (version === "dev" ? "dev" : "")].filter(Boolean);
+  if (isDesktopLocal && whenQuitting) parts.push(`quit: ${whenQuitting}`);
+  return { title, summary: parts.join(" · ") };
 }
+
+/** Segmented choices for `When quitting Marasi App` in Local's setup disclosure (desktop local only). */
+export const LOCAL_QUIT_CHOICES = [
+  ["ask", "Ask"],
+  ["keep", "Keep running"],
+  ["stop", "Stop"],
+];
 
 const SERVICE_UPDATE_STEPS = ["Download", "Verify", "Install", "Restart"];
 
@@ -99,14 +107,19 @@ export function reinstallConfirmCopy(channel, connectionName) {
 }
 
 /**
- * Primary service-update button for the connected top action bar, or null when
- * update controls are hidden (development build or 404/501 unsupported service).
+ * Primary service-update or carried-CLI button for the connected top action
+ * bar, or null when update controls are hidden (development build or 404/501
+ * unsupported service without an active carried-CLI upgrade).
  */
-export function serviceUpdateAction(connectionState, updateState) {
-  if (!supportsServiceUpdates(connectionState, updateState)) return null;
+export function serviceUpdateAction(
+  connectionState,
+  updateState,
+  { carriedUpgrade = null, installingCarried = false } = {},
+) {
+  const updatesSupported = supportsServiceUpdates(connectionState, updateState);
   const connBusy = Boolean(connectionState?.busy !== null || connectionState?.restarting || connectionState?.restartConfirming);
 
-  if (isUpdateRestartRequired(connectionState, updateState)) {
+  if (updatesSupported && isUpdateRestartRequired(connectionState, updateState)) {
     if (!connectionState?.restartSupported) return null;
     return {
       kind: "restart",
@@ -118,7 +131,7 @@ export function serviceUpdateAction(connectionState, updateState) {
     };
   }
 
-  if (isUpdateInstalling(updateState)) {
+  if (updatesSupported && isUpdateInstalling(updateState)) {
     return {
       kind: "installing",
       label: "Updating…",
@@ -128,6 +141,19 @@ export function serviceUpdateAction(connectionState, updateState) {
       hideNeutralRestart: false,
     };
   }
+
+  if (carriedUpgrade) {
+    return {
+      kind: "carried",
+      label: installingCarried ? "Installing…" : `Install ${carriedUpgrade.version}`,
+      primary: true,
+      disabled: connBusy || installingCarried || Boolean(updateState?.checking) || Boolean(updateState?.switchingChannel),
+      spinning: false,
+      hideNeutralRestart: false,
+    };
+  }
+
+  if (!updatesSupported) return null;
 
   if (updateState?.available) {
     return {
@@ -193,8 +219,15 @@ export function serviceUpdateProgress(updateState, connectionName) {
 }
 
 /**
- * Strict precedence for the single contextual slot below the action bar
- * (at most one card renders at a time).
+ * Strict 7-tier precedence for the single contextual slot below the action bar
+ * (at most one card renders at a time):
+ * 1. restartConfirm / stopConfirm
+ * 2. installing (download/verify/swap)
+ * 3. restartRequired
+ * 4. carriedUpgrade (desktop local)
+ * 5. available
+ * 6. channelMismatch (desktop local)
+ * 7. installError / restartError (plus stopError / apiWarning)
  */
 export function contextualSlotKind({
   isActive,
@@ -206,6 +239,8 @@ export function contextualSlotKind({
   isCLIMissing,
   isOutdated,
   stopErrorText,
+  carriedUpgrade = null,
+  channelMismatch = null,
 }) {
   if (showRestartConfirm) return "restart-confirm";
   if (showStopConfirm) return "stop-confirm";
@@ -215,14 +250,17 @@ export function contextualSlotKind({
   if (isActive && phase === "stopped") return "stopped";
   if (isActive && phase === "failed") return "failed";
 
-  const connectedUpdates = isActive && phase === "connected" && supportsServiceUpdates(connectionState, updateState);
+  const connected = isActive && phase === "connected";
+  const connectedUpdates = connected && supportsServiceUpdates(connectionState, updateState);
   if (connectedUpdates && isUpdateInstalling(updateState)) return "installing";
   if (connectedUpdates && isUpdateRestartRequired(connectionState, updateState)) return "restart-required";
+  if (connected && carriedUpgrade) return "carried-upgrade";
+  if (connectedUpdates && updateState?.available) return "available";
+  if (connected && channelMismatch) return "channel-mismatch";
 
   if (stopErrorText) return "stop-error";
   if (connectedUpdates && updateState?.error) return "install-error";
   if (isActive && connectionState?.restartError) return "restart-error";
-  if (connectedUpdates && updateState?.available) return "available";
   if (isActive && connectionState?.apiWarning) return "api-warning";
   return null;
 }

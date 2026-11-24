@@ -5,7 +5,10 @@
 	import { getModalStore } from "@skeletonlabs/skeleton";
 	import { Laptop, Server } from "lucide-svelte";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { localCLIStore } from "../../stores/localCLIStore.js";
 	import { serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
+	import { mobile } from "../platform.js";
+	import { proactiveCarriedUpgrade } from "./carried.js";
 	import { connectionTileIndicator } from "./indicators.js";
 	import { connectionsModal } from "./modal.js";
 	import { phaseLabel, phaseTone } from "./status.js";
@@ -16,7 +19,15 @@
 	$: restarting = $connectionStore.restarting;
 	$: tone = restarting ? "bg-warning-500" : phaseTone(phase);
 	$: label = restarting ? "Restarting" : phaseLabel(phase);
-	$: indicator = connectionTileIndicator($connectionStore, $serviceUpdateStore);
+	$: carriedUpgrade = proactiveCarriedUpgrade({
+		mobile: $mobile,
+		connectionState: $connectionStore,
+		updateState: $serviceUpdateStore,
+		carried: $localCLIStore.carried,
+		cli: $localCLIStore.cli,
+		dismissedVersion: $localCLIStore.dismissedVersion,
+	});
+	$: indicator = connectionTileIndicator($connectionStore, $serviceUpdateStore, { carriedUpgrade });
 	$: tileTitle = indicator ? `${connection.name} · ${label} · ${indicator.label}` : `${connection.name} · ${label}`;
 	function open() {
 		if (!$modalStore.length) modalStore.trigger(connectionsModal());

@@ -12,19 +12,26 @@
 	// 5. Collapsed setup disclosure shell (ready for channel, reinstall, and
 	//    desktop local CLI / quit controls), followed by connection management
 	//    rows (Address/Remove on remotes, Proxy port/Remove on added locals).
+	import { onMount } from "svelte";
 	import { getToastStore, modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
 	import { Check, ChevronDown, ChevronRight, Download, ExternalLink, Power, RefreshCw, RotateCw } from "lucide-svelte";
+	import { SetFlag } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { neutralButton, primaryButton, primaryVariant } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { mobile } from "../platform.js";
 	import { openURL } from "../runtime.js";
+	import { toastError } from "../toasts.js";
+	import { marasiConfig } from "../../stores";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { localCLIStore } from "../../stores/localCLIStore.js";
 	import { serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
+	import { localChannelMismatch, proactiveCarriedUpgrade } from "./carried.js";
 	import { phaseLabel, phaseTone, removeBlock } from "./status.js";
 	import {
 		contextualSlotKind,
 		detailWhereText,
 		formatServiceNotes,
+		LOCAL_QUIT_CHOICES,
 		reinstallConfirmCopy,
 		restartConfirmCopy,
 		SERVICE_CHANNELS,
@@ -38,7 +45,7 @@
 	} from "./detail.js";
 	import { errorText, localInstanceControl, removeConnection, setAddress, setPort } from "./manage.js";
 	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
-	import { cliMissing, outdatedVersion } from "./cli.js";
+	import { cliMissing, cliSourceLabel, offersCarriedCLI, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import OutdatedInstance from "./OutdatedInstance.svelte";
 	import UpdateCLI from "./UpdateCLI.svelte";
@@ -103,6 +110,7 @@
 	function handleUpdateAction() {
 		if (!updateAction) return;
 		if (updateAction.kind === "restart") connectionStore.restart();
+		else if (updateAction.kind === "carried") installCarried();
 		else if (updateAction.kind === "install") serviceUpdateStore.install();
 		else if (updateAction.kind === "check") checkForUpdate();
 	}
@@ -119,7 +127,62 @@
 		await serviceUpdateStore.reinstall();
 	}
 
+	async function changeCLIPath() {
+		try {
+			await localCLIStore.browseAndUsePath();
+		} catch (err) {
+			toastStore.trigger({ message: String(err?.message ?? err), background: "variant-filled-error" });
+		}
+	}
+
+	async function clearCLIPath() {
+		try {
+			await localCLIStore.clearPath();
+		} catch (err) {
+			toastStore.trigger({ message: String(err?.message ?? err), background: "variant-filled-error" });
+		}
+	}
+
+	async function installCarried() {
+		try {
+			const outcome = await localCLIStore.installCarried({
+				connectionState: state,
+				connectionId: connection.id,
+				isActive,
+				instanceRunning: Boolean(instance?.running),
+				restartService: () => connectionStore.restart(),
+				retryConnection: () => (phase === "failed" ? connectionStore.retry() : connectionStore.retryNow()),
+			});
+			if (!isActive && local) local.refresh(isActive, state.phase);
+			if (outcome?.text) {
+				toastStore.trigger({
+					message: outcome.text,
+					...(outcome.ok ? {} : { background: "variant-filled-error" }),
+				});
+			}
+		} catch (err) {
+			toastStore.trigger({ message: String(err?.message ?? err), background: "variant-filled-error" });
+		}
+	}
+
+	function setWhenQuitting(value) {
+		SetFlag("when_quitting", value)
+			.then((config) => marasiConfig.set(config))
+			.catch((error) => toastError(toastStore, "When quitting not saved", error));
+	}
+
+	onMount(() => {
+		if (!$mobile && connection.kind === "local" && !$localCLIStore.loaded) {
+			localCLIStore.load();
+		}
+	});
+
 	$: added = connection.kind === "local" && connection.id !== "local";
+	$: isDesktopLocal = !$mobile && connection.kind === "local";
+	$: localCLI = $localCLIStore;
+	$: whenQuitting = LOCAL_QUIT_CHOICES.some(([value]) => value === $marasiConfig?.WhenQuitting)
+		? $marasiConfig.WhenQuitting
+		: "ask";
 	$: state = $connectionStore;
 	$: update = $serviceUpdateStore;
 	$: isActive = connection.id === state.connection.id;
@@ -150,7 +213,31 @@
 	$: stopCopy = stopConfirmCopy(connection);
 	$: stopErrorText = isActive ? state.stopError : (instance?.error || null);
 
-	$: updateAction = isActive && phase === "connected" ? serviceUpdateAction(state, update) : null;
+	$: carriedUpgrade =
+		isActive && isDesktopLocal
+			? proactiveCarriedUpgrade({
+					mobile: $mobile,
+					connectionState: state,
+					updateState: update,
+					carried: localCLI.carried,
+					cli: localCLI.cli,
+					dismissedVersion: localCLI.dismissedVersion,
+				})
+			: null;
+	$: channelMismatch =
+		isActive && isDesktopLocal
+			? localChannelMismatch({
+					mobile: $mobile,
+					connectionState: state,
+					updateState: update,
+					appChannel: localCLI.appChannel,
+				})
+			: null;
+
+	$: updateAction =
+		isActive && phase === "connected"
+			? serviceUpdateAction(state, update, { carriedUpgrade, installingCarried: localCLI.installing })
+			: null;
 	$: updateInstalling = isActive && phase === "connected" && (update.install?.state === "running" || update.startingInstall);
 	$: updateProgress = serviceUpdateProgress(
 		{ ...update, restartRequired: update.restartRequired || state.restartRequired },
@@ -167,6 +254,8 @@
 		isCLIMissing,
 		isOutdated,
 		stopErrorText,
+		carriedUpgrade,
+		channelMismatch,
 	});
 
 	function confirmStop() {
@@ -188,9 +277,12 @@
 	$: reinstallCopy = channelControls ? reinstallConfirmCopy(channelControls.channel, connection.name) : null;
 	$: if (!channelControls) reinstallAsk = false;
 
+	$: showManualCarried = isDesktopLocal && offersCarriedCLI(localCLI.carried, localCLI.cli);
+	$: showSetup = Boolean(channelControls || (isDesktopLocal && !isCLIMissing));
 	$: setup = setupDisclosure(connection, {
 		channel: (isActive ? update.channel : null) ?? state.channel,
-		version: state.version,
+		version: isActive ? state.version : null,
+		whenQuitting: isDesktopLocal ? whenQuitting : null,
 		mobile: $mobile,
 	});
 
@@ -258,16 +350,18 @@
 						disabled={updateAction.disabled}
 						data-testid={updateAction.kind === "restart"
 							? "connection-restart-apply"
-							: updateAction.kind === "install"
-								? "connection-update-install"
-								: updateAction.kind === "installing"
-									? "connection-update-installing"
-									: "connection-update-check"}
+							: updateAction.kind === "carried"
+								? "connection-carried-action"
+								: updateAction.kind === "install"
+									? "connection-update-install"
+									: updateAction.kind === "installing"
+										? "connection-update-installing"
+										: "connection-update-check"}
 						on:click={handleUpdateAction}
 					>
 						{#if updateAction.kind === "restart"}
 							<RotateCw size={14} class={updateAction.spinning ? "animate-spin" : ""} />
-						{:else if updateAction.kind === "install" || updateAction.kind === "installing"}
+						{:else if updateAction.kind === "carried" || updateAction.kind === "install" || updateAction.kind === "installing"}
 							<Download size={14} />
 						{:else}
 							<RefreshCw size={14} class={updateAction.spinning ? "animate-spin" : ""} />
@@ -369,7 +463,7 @@
 		</div>
 	{:else if slot === "cli-missing"}
 		<div class="mt-3" data-testid="connection-context">
-			<CLISetup />
+			<CLISetup on:found={(event) => localCLIStore.setCLI(event.detail)} />
 		</div>
 	{:else if slot === "outdated"}
 		<div class="mt-3 border-l-4 border-warning-500 bg-warning-500/15 p-3" data-testid="connection-context">
@@ -453,6 +547,100 @@
 				{/if}
 			{/if}
 		</div>
+	{:else if slot === "carried-upgrade" && carriedUpgrade}
+		<div
+			class="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-primary-500 bg-primary-500/10 px-3 py-2.5 text-xs"
+			data-testid="connection-carried-upgrade"
+		>
+			<div class="min-w-0">
+				<p class="font-semibold">Marasi CLI <span class="font-mono">{carriedUpgrade.version}</span> is included with this app</p>
+				<p class="opacity-75">Update {connection.name} offline and restart in one step.</p>
+			</div>
+			<div class="connection-context-actions flex items-center gap-2">
+				<button
+					type="button"
+					class={neutral}
+					disabled={localCLI.installing}
+					data-testid="connection-carried-dismiss"
+					on:click={() => localCLIStore.dismissCarried(carriedUpgrade.version)}
+				>
+					Dismiss
+				</button>
+				<button
+					type="button"
+					class={primary}
+					disabled={localCLI.installing || state.busy !== null || state.restarting || state.restartConfirming}
+					data-testid="connection-carried-install"
+					on:click={installCarried}
+				>
+					{localCLI.installing ? "Installing…" : "Install & restart"}
+				</button>
+			</div>
+		</div>
+	{:else if slot === "available"}
+		<div
+			class="mt-3 space-y-2 border-l-4 border-primary-500 bg-surface-100 p-3 text-xs dark:bg-surface-800"
+			data-testid="connection-update-available"
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="font-semibold">
+					Marasi {update.available.version} available{#if update.available.channel} ({update.available.channel}){/if}
+				</span>
+				{#if update.available.page}
+					<button
+						type="button"
+						class="inline-flex items-center gap-1 underline opacity-75 hover:opacity-100"
+						data-testid="connection-update-page"
+						on:click={() => openURL(update.available.page)}
+					>
+						<span>Release page</span><ExternalLink size={11} />
+					</button>
+				{/if}
+			</div>
+			{#if availableNotes}
+				<pre class="whitespace-pre-wrap break-words font-sans opacity-85" data-testid="connection-update-notes">{availableNotes}</pre>
+			{/if}
+			{#if update.error}
+				<div class="space-y-1 border-t border-surface-300 pt-2 text-error-700 dark:border-surface-600 dark:text-error-300" role="alert" data-testid="connection-update-error">
+					<div class="flex flex-wrap items-start justify-between gap-2">
+						<span class="min-w-0 flex-1 break-words font-semibold">{update.error.message}</span>
+						<button
+							type="button"
+							class="shrink-0 underline opacity-75 hover:opacity-100"
+							data-testid="connection-update-error-dismiss"
+							on:click={() => serviceUpdateStore.dismissError()}
+						>
+							Dismiss
+						</button>
+					</div>
+					{#if update.error.installPath}
+						<p class="break-all font-mono text-2xs opacity-85" data-testid="connection-update-error-path">
+							Install path: {update.error.installPath}
+						</p>
+					{/if}
+				</div>
+			{:else if state.restartError}
+				<p class="border-t border-surface-300 pt-2 text-error-700 dark:border-surface-600 dark:text-error-300" role="alert" data-testid="connection-restart-error">
+					{state.restartError}
+				</p>
+			{/if}
+		</div>
+	{:else if slot === "channel-mismatch" && channelMismatch}
+		<div
+			class="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2 text-xs"
+			data-testid="connection-channel-mismatch"
+		>
+			<span>App is <strong>{channelMismatch.appChannel}</strong>; Local is <strong>{channelMismatch.serviceChannel}</strong>.</span>
+			<button
+				type="button"
+				class={neutral}
+				disabled={Boolean(channelControls?.disabled)}
+				data-testid="connection-channel-mismatch-switch"
+				on:click={() => switchChannel(channelMismatch.appChannel)}
+			>
+				Switch Local to {channelMismatch.appChannel}
+			</button>
+		</div>
 	{:else if slot === "stop-error"}
 		<div class="mt-3 border-l-4 border-error-500 bg-error-500/15 px-3 py-2 text-xs text-error-700 dark:text-error-300" role="alert" data-testid="connection-context">
 			{stopErrorText}
@@ -496,30 +684,6 @@
 		<div class="mt-3 border-l-4 border-error-500 bg-error-500/15 px-3 py-2 text-xs text-error-700 dark:text-error-300" role="alert" data-testid="connection-restart-error">
 			{state.restartError}
 		</div>
-	{:else if slot === "available"}
-		<div
-			class="mt-3 space-y-2 border-l-4 border-primary-500 bg-surface-100 p-3 text-xs dark:bg-surface-800"
-			data-testid="connection-update-available"
-		>
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<span class="font-semibold">
-					Marasi {update.available.version} available{#if update.available.channel} ({update.available.channel}){/if}
-				</span>
-				{#if update.available.page}
-					<button
-						type="button"
-						class="inline-flex items-center gap-1 underline opacity-75 hover:opacity-100"
-						data-testid="connection-update-page"
-						on:click={() => openURL(update.available.page)}
-					>
-						<span>Release page</span><ExternalLink size={11} />
-					</button>
-				{/if}
-			</div>
-			{#if availableNotes}
-				<pre class="whitespace-pre-wrap break-words font-sans opacity-85" data-testid="connection-update-notes">{availableNotes}</pre>
-			{/if}
-		</div>
 	{:else if slot === "api-warning"}
 		<div class="mt-3 space-y-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2 text-xs" data-testid="connection-api-warning">
 			<p>{state.apiWarning}. Some features may not work.</p>
@@ -547,8 +711,8 @@
 		<ConnectionAccess {connection} {row} flush={reached} />
 	{/if}
 
-	<!-- 5. Collapsed setup disclosure (channel & reinstall) -->
-	{#if channelControls}
+	<!-- 5. Collapsed setup disclosure (channel, reinstall, and desktop local CLI / quit controls) -->
+	{#if showSetup}
 		<div class="mt-4" data-testid="connection-setup">
 			<button
 				type="button"
@@ -567,77 +731,162 @@
 			</button>
 			{#if setupOpen}
 				<div class="border border-t-0 border-surface-300 px-3 py-1 dark:border-surface-600" data-testid="connection-setup-body">
-					<div class={row}>
-						<div>
-							<p>Update channel</p>
-							<p class="text-xs opacity-70">Builds {connection.name} checks</p>
+					{#if channelControls}
+						<div class={row}>
+							<div>
+								<p>Update channel</p>
+								<p class="text-xs opacity-70">Builds {connection.name} checks</p>
+							</div>
+							<div class="settings-control flex w-44 text-xs" role="radiogroup" aria-label="Update channel">
+								{#each SERVICE_CHANNELS as [value, label]}
+									<button
+										type="button"
+										role="radio"
+										aria-checked={channelControls.channel === value}
+										disabled={channelControls.disabled}
+										class="flex-1 px-3 py-1 {channelControls.channel === value
+											? primaryVar
+											: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+										data-testid="connection-channel-{value}"
+										on:click={() => switchChannel(value)}
+									>
+										{label}
+									</button>
+								{/each}
+							</div>
 						</div>
-						<div class="settings-control flex w-44 text-xs" role="radiogroup" aria-label="Update channel">
-							{#each SERVICE_CHANNELS as [value, label]}
-								<button
-									type="button"
-									role="radio"
-									aria-checked={channelControls.channel === value}
-									disabled={channelControls.disabled}
-									class="flex-1 px-3 py-1 {channelControls.channel === value
-										? primaryVar
-										: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
-									data-testid="connection-channel-{value}"
-									on:click={() => switchChannel(value)}
+						<div class="py-2.5 {isDesktopLocal ? 'border-b border-surface-300 dark:border-surface-600' : ''}">
+							{#if reinstallAsk && reinstallCopy}
+								<div
+									class="flex flex-wrap items-center justify-between gap-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2.5 text-xs"
+									data-testid="connection-reinstall-confirm-box"
 								>
-									{label}
-								</button>
-							{/each}
-						</div>
-					</div>
-					<div class="py-2.5">
-						{#if reinstallAsk && reinstallCopy}
-							<div
-								class="flex flex-wrap items-center justify-between gap-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2.5 text-xs"
-								data-testid="connection-reinstall-confirm-box"
-							>
-								<div class="min-w-0">
-									<p class="font-semibold" data-testid="connection-reinstall-confirm-title">{reinstallCopy.title}</p>
-									<p class="opacity-80" data-testid="connection-reinstall-confirm-detail">{reinstallCopy.detail}</p>
+									<div class="min-w-0">
+										<p class="font-semibold" data-testid="connection-reinstall-confirm-title">{reinstallCopy.title}</p>
+										<p class="opacity-80" data-testid="connection-reinstall-confirm-detail">{reinstallCopy.detail}</p>
+									</div>
+									<div class="connection-context-actions flex items-center gap-2">
+										<button
+											type="button"
+											class={neutral}
+											data-testid="connection-reinstall-cancel"
+											on:click={() => (reinstallAsk = false)}
+										>
+											Cancel
+										</button>
+										<button
+											type="button"
+											class={primary}
+											disabled={channelControls.disabled}
+											data-testid="connection-reinstall-confirm"
+											on:click={confirmReinstall}
+										>
+											Reinstall
+										</button>
+									</div>
 								</div>
-								<div class="connection-context-actions flex items-center gap-2">
+							{:else}
+								<div class="settings-row flex items-center justify-between gap-4">
+									<div>
+										<p data-testid="connection-reinstall-label">{channelControls.reinstallLabel}</p>
+										<p class="text-xs opacity-70">Replaces the installed build even when older</p>
+									</div>
 									<button
 										type="button"
 										class={neutral}
-										data-testid="connection-reinstall-cancel"
-										on:click={() => (reinstallAsk = false)}
-									>
-										Cancel
-									</button>
-									<button
-										type="button"
-										class={primary}
 										disabled={channelControls.disabled}
-										data-testid="connection-reinstall-confirm"
-										on:click={confirmReinstall}
+										data-testid="connection-reinstall"
+										on:click={() => (reinstallAsk = true)}
 									>
 										Reinstall
 									</button>
 								</div>
+							{/if}
+						</div>
+					{/if}
+
+					{#if isDesktopLocal}
+						<div class={row} data-testid="connection-cli-path">
+							<div class="min-w-0 flex-1">
+								<p>Local CLI path</p>
+								{#if localCLI.cli?.found}
+									<p class="truncate font-mono text-2xs opacity-65" title={localCLI.cli.path} data-testid="connection-cli-location">
+										{localCLI.cli.path} · {cliSourceLabel(localCLI.cli.source)}
+									</p>
+								{:else if localCLI.loaded}
+									<p class="text-xs opacity-70">Not installed</p>
+								{/if}
+								{#if localCLI.cli?.problem}
+									<p class="mt-1 bg-warning-500/15 px-2 py-0.5 text-2xs break-words">{localCLI.cli.problem}</p>
+								{/if}
 							</div>
-						{:else}
-							<div class="settings-row flex items-center justify-between gap-4">
-								<div>
-									<p data-testid="connection-reinstall-label">{channelControls.reinstallLabel}</p>
-									<p class="text-xs opacity-70">Replaces the installed build even when older</p>
+							<div class="flex shrink-0 items-center gap-2">
+								{#if localCLI.cli?.source === "custom"}
+									<button
+										type="button"
+										class={neutral}
+										disabled={localCLI.changingPath || localCLI.installing}
+										data-testid="connection-cli-use-path"
+										on:click={clearCLIPath}
+									>
+										Use PATH
+									</button>
+								{/if}
+								<button
+									type="button"
+									class={neutral}
+									disabled={localCLI.changingPath || localCLI.installing}
+									data-testid="connection-cli-change"
+									on:click={changeCLIPath}
+								>
+									Change
+								</button>
+							</div>
+						</div>
+
+						{#if showManualCarried}
+							<div class={row} data-testid="connection-cli-carried">
+								<div class="min-w-0 flex-1">
+									<p>Carried CLI</p>
+									<p class="font-mono text-2xs opacity-65" data-testid="connection-cli-carried-version">
+										{localCLI.carried.version}{#if localCLI.carried.channel} ({localCLI.carried.channel}){/if}
+									</p>
 								</div>
 								<button
 									type="button"
 									class={neutral}
-									disabled={channelControls.disabled}
-									data-testid="connection-reinstall"
-									on:click={() => (reinstallAsk = true)}
+									disabled={localCLI.installing || localCLI.changingPath || state.busy !== null || state.restarting || state.restartConfirming}
+									data-testid="connection-cli-carried-install"
+									on:click={installCarried}
 								>
-									Reinstall
+									{localCLI.installing ? "Installing…" : "Install & restart"}
 								</button>
 							</div>
 						{/if}
-					</div>
+
+						<div class="settings-row flex items-center justify-between gap-4 py-2.5" data-testid="connection-when-quitting">
+							<div>
+								<p>When quitting Marasi App</p>
+								<p class="text-xs opacity-70">Local instances this app started</p>
+							</div>
+							<div class="settings-control flex w-60 shrink-0 text-xs" role="radiogroup" aria-label="When quitting Marasi App">
+								{#each LOCAL_QUIT_CHOICES as [value, label]}
+									<button
+										type="button"
+										role="radio"
+										aria-checked={whenQuitting === value}
+										class="flex-1 whitespace-nowrap px-2 py-1 {whenQuitting === value
+											? primaryVar
+											: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+										data-testid="connection-quit-{value}"
+										on:click={() => setWhenQuitting(value)}
+									>
+										{label}
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
