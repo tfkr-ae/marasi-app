@@ -2,11 +2,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  contextualSlotErrors,
   contextualSlotKind,
   detailWhereText,
   formatServiceNotes,
   LOCAL_QUIT_CHOICES,
   reinstallConfirmCopy,
+  resolvedServiceChannel,
   restartConfirmCopy,
   SERVICE_CHANNELS,
   serviceChannelControls,
@@ -16,6 +18,7 @@ import {
   serviceUpdateProgress,
   setupDisclosure,
   stopConfirmCopy,
+  supportsServiceUpdates,
 } from "./detail.js";
 
 test("detailWhereText formats host, instance, and OS for local and remote connections", () => {
@@ -537,4 +540,122 @@ test("serviceUpdateAction disables check and install while switchingChannel is i
     })?.disabled,
     true,
   );
+});
+
+test("resolvedServiceChannel never leaks the active connection's channel onto inactive connections and prefers updateState.channel when active", () => {
+  assert.equal(
+    resolvedServiceChannel({
+      isActive: false,
+      connectionState: { channel: "release" },
+      updateState: { channel: "nightly" },
+    }),
+    null,
+  );
+  assert.equal(
+    resolvedServiceChannel({
+      isActive: false,
+      connectionState: { channel: "release" },
+      updateState: { channel: null },
+    }),
+    null,
+  );
+  assert.equal(
+    resolvedServiceChannel({
+      isActive: true,
+      connectionState: { channel: "release" },
+      updateState: { channel: "nightly" },
+    }),
+    "nightly",
+  );
+  assert.equal(
+    resolvedServiceChannel({
+      isActive: true,
+      connectionState: { channel: "release" },
+      updateState: { channel: null },
+    }),
+    "release",
+  );
+  // Inactive local connection setup disclosure omits the active connection's channel
+  const inactiveChannel = resolvedServiceChannel({
+    isActive: false,
+    connectionState: { channel: "release" },
+    updateState: { channel: "nightly" },
+  });
+  assert.deepEqual(
+    setupDisclosure(
+      { id: "local-work", kind: "local", name: "Work", url: "" },
+      { channel: inactiveChannel, version: null, whenQuitting: "ask", mobile: false },
+    ),
+    {
+      title: "Channel, CLI path & quit behavior",
+      summary: "quit: ask",
+    },
+  );
+});
+
+test("serviceMetaText prefers active updateState.channel immediately after PUT /update/channel", () => {
+  assert.equal(
+    serviceMetaText(
+      { version: "24.11.2026", channel: "release", api: 1 },
+      { channel: "nightly" },
+    ),
+    "Marasi 24.11.2026 (nightly) · API 1",
+  );
+  assert.equal(
+    serviceMetaText(
+      { version: "24.11.2026", channel: "release", api: 1 },
+      { channel: null },
+    ),
+    "Marasi 24.11.2026 (release) · API 1",
+  );
+  assert.equal(
+    serviceMetaText(
+      { version: "24.11.2026 (nightly abc1234)", channel: "nightly", api: 1 },
+      { channel: "release" },
+    ),
+    "Marasi 24.11.2026 (nightly abc1234) (release) · API 1",
+  );
+  assert.equal(
+    serviceMetaText(
+      { version: "dev", channel: null, api: 1 },
+      { channel: null, development: true },
+    ),
+    "Marasi dev · API 1",
+  );
+});
+
+test("contextualSlotErrors surfaces update.error (with page and installPath) and restartError under channel-mismatch, available, restart-required, and carried-upgrade", () => {
+  const richError = {
+    code: "install_path_not_writable",
+    message: "Permission denied",
+    page: "https://example.com/releases/24.11.2026",
+    installPath: "/opt/marasi/marasi",
+  };
+  const updWithErr = { ...updBase, error: richError };
+  const connWithRestartErr = { ...connBase, restartError: "successor exited" };
+
+  for (const slot of ["channel-mismatch", "available", "restart-required", "carried-upgrade", "install-error", "restart-error"]) {
+    const both = contextualSlotErrors(slot, connWithRestartErr, updWithErr);
+    assert.deepEqual(both.updateError, richError, `slot ${slot} keeps updateError with page and installPath`);
+    assert.equal(both.restartError, "successor exited", `slot ${slot} keeps restartError`);
+  }
+
+  // Unsupported or dev services hide updateError while still surfacing restartError
+  const devRes = contextualSlotErrors("restart-error", connWithRestartErr, { ...updWithErr, development: true });
+  assert.equal(devRes.updateError, null);
+  assert.equal(devRes.restartError, "successor exited");
+
+  // Non-error or active-install slots suppress inline error rendering
+  assert.deepEqual(contextualSlotErrors("installing", connWithRestartErr, updWithErr), {
+    updateError: null,
+    restartError: null,
+  });
+  assert.deepEqual(contextualSlotErrors("restart-confirm", connWithRestartErr, updWithErr), {
+    updateError: null,
+    restartError: null,
+  });
+
+  // supportsServiceUpdates is exported from detail.js
+  assert.equal(supportsServiceUpdates(connBase, updBase), true);
+  assert.equal(supportsServiceUpdates({ ...connBase, version: "dev" }, updBase), false);
 });

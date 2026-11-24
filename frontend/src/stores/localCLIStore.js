@@ -10,9 +10,11 @@ import {
   InstallCarriedCLI,
   LocateCLI,
   RestartLocalInstance,
+  SetFlag,
   UseCLIPath,
 } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { mobile } from "../lib/platform.js";
+import { marasiConfig } from "../stores.js";
 import { connectionStore } from "./connectionStore.js";
 import { createLocalCLIStore, followLocalConnection } from "./createLocalCLIStore.js";
 
@@ -25,6 +27,11 @@ export const localCLIStore = createLocalCLIStore({
   clearCLIPath: () => ClearCLIPath(),
   installCarriedCLI: () => InstallCarriedCLI(),
   restartLocalInstance: (id) => RestartLocalInstance(id),
+  setWhenQuitting: async (value) => {
+    const config = await SetFlag("when_quitting", value);
+    marasiConfig.set(config);
+    return config;
+  },
 });
 
 followLocalConnection(connectionStore, localCLIStore, { isMobile: () => get(mobile) });

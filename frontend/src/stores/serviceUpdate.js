@@ -6,7 +6,8 @@
 // CLI. It follows the active connection: switching connections clears it
 // immediately and supersedes any in-flight calls.
 import { get, writable } from "svelte/store";
-import { isSuperseded } from "../lib/service/errors.js";
+import { isSuperseded, serviceErrorMessage } from "../lib/service/errors.js";
+import { toUpdateEvent } from "./serviceUpdateApi.js";
 
 /** The events this store follows. */
 export const SERVICE_UPDATE_EVENTS = ["update.available", "update.progress", "update.installed", "update.failed"];
@@ -16,18 +17,7 @@ const isUpdatesUnavailable = (err) =>
 
 const isDevBuildError = (err) => err?.code === "development_build";
 
-function normalizeAvailable(raw) {
-  if (!raw || !raw.version) return null;
-  return {
-    version: raw.version,
-    channel: raw.channel ?? "",
-    published: raw.published ?? null,
-    notes: raw.notes ?? "",
-    page: raw.page ?? "",
-  };
-}
-
-function normalizeInstallFromSnapshot(raw, installPath) {
+function parseSnapshotInstall(raw, installPath) {
   if (!raw || !raw.state || raw.state === "idle") return { install: null, error: null };
   if (raw.state === "running") {
     return {
@@ -108,17 +98,15 @@ export function createServiceUpdateStore(api = null) {
 
   const set = (patch) => store.update((s) => ({ ...s, ...patch }));
 
-  function applySnapshot(body, { preserveRunning = false } = {}) {
+  function applySnapshot(snapshot, { preserveRunning = false } = {}) {
     const prev = get(store);
-    const installPath = body?.install_path ?? prev.installPath ?? "";
-    const available = normalizeAvailable(body?.available);
-    const development = Boolean(body?.development);
-    const installed = body?.installed
-      ? { version: body.installed.version ?? "", channel: body.installed.channel ?? null }
-      : prev.installed;
-    const channel = body?.channel ?? body?.installed?.channel ?? null;
-    const parsed = normalizeInstallFromSnapshot(body?.install, installPath);
-    const restartRequired = Boolean(body?.restart_required) || parsed.install?.state === "installed";
+    const installPath = snapshot?.installPath || prev.installPath || "";
+    const available = snapshot?.available ?? null;
+    const development = Boolean(snapshot?.development);
+    const installed = snapshot?.installed ?? prev.installed;
+    const channel = snapshot?.channel ?? snapshot?.installed?.channel ?? null;
+    const parsed = parseSnapshotInstall(snapshot?.install, installPath);
+    const restartRequired = Boolean(snapshot?.restartRequired) || parsed.install?.state === "installed";
     const completedRunningInstall = prev.install?.state === "running" && restartRequired;
 
     let install = parsed.install;
@@ -151,10 +139,10 @@ export function createServiceUpdateStore(api = null) {
   }
 
   const handlers = {
-    "update.available": (e) =>
+    "update.available": (available) =>
       store.update((s) => ({
         ...s,
-        available: normalizeAvailable(e),
+        available,
       })),
     "update.progress": (e) =>
       store.update((s) => ({
@@ -180,11 +168,11 @@ export function createServiceUpdateStore(api = null) {
         installedSeq: s.installedSeq + 1,
         available: null,
         error: null,
-        installPath: e.install_path ?? s.installPath,
+        installPath: e.installPath ?? s.installPath,
         install: {
           state: "installed",
           version: e.version ?? s.install?.version ?? s.available?.version ?? "",
-          installPath: e.install_path ?? s.installPath ?? "",
+          installPath: e.installPath ?? s.installPath ?? "",
         },
       })),
     "update.failed": (e) =>
@@ -198,7 +186,7 @@ export function createServiceUpdateStore(api = null) {
             error: null,
           };
         }
-        const installPath = e.install_path || (e.kind === "permissions" ? s.installPath : "") || "";
+        const installPath = e.installPath || (e.kind === "permissions" ? s.installPath : "") || "";
         const page = e.page || s.available?.page || "";
         const failed = {
           state: "failed",
@@ -256,7 +244,7 @@ export function createServiceUpdateStore(api = null) {
       const body = await api.checkUpdate(link);
       if (!live()) return { ok: false, superseded: true };
       applySnapshot(body, { preserveRunning: true });
-      const checkError = body?.last_check?.error || "";
+      const checkError = body?.lastCheck?.error || "";
       if (body?.development) {
         set({ checking: false, checkResult: null, error: null });
         return { ok: true, kind: "development" };
@@ -305,14 +293,14 @@ export function createServiceUpdateStore(api = null) {
         set({ loaded: true, development: true, checking: false, checkResult: null, error: null });
         return { ok: false, development: true };
       }
-      const message = err?.body?.message || String(err?.message ?? err);
+      const message = serviceErrorMessage(err, "Update check failed");
       const error = {
         code: err?.code || "check_failed",
         kind: "",
         step: "",
         message,
-        page: err?.body?.page ?? "",
-        installPath: err?.body?.install_path ?? "",
+        page: err?.details?.page ?? "",
+        installPath: err?.details?.installPath ?? "",
       };
       set({ checking: false, checkResult: { kind: "error", message }, error });
       return { ok: false, kind: "error", error };
@@ -330,7 +318,7 @@ export function createServiceUpdateStore(api = null) {
       if (!live()) return { ok: false, superseded: true };
       const joined = Boolean(body?.joined);
       store.update((s) => {
-        const installPath = body?.install_path || s.installPath;
+        const installPath = body?.installPath || s.installPath;
         const completedDuringCall = isReinstall
           ? !s.startingInstall && s.install?.state === "installed"
           : s.restartRequired || s.install?.state === "installed";
@@ -397,7 +385,7 @@ export function createServiceUpdateStore(api = null) {
           try {
             const snap = await api.getUpdate(link);
             if (!live()) return { ok: false, superseded: true };
-            if (snap?.install?.state === "running" || snap?.restart_required) {
+            if (snap?.install?.state === "running" || snap?.restartRequired) {
               applySnapshot(snap);
               set({ startingInstall: false });
               return { ok: true, joined: true };
@@ -406,8 +394,9 @@ export function createServiceUpdateStore(api = null) {
             if (isSuperseded(snapErr) || !live()) return { ok: false, superseded: true };
           }
         }
-        if (err?.body?.instance) {
-          const message = err.body.message || `Another instance (${err.body.instance}) is installing an update`;
+        const instance = err?.details?.instance;
+        if (instance) {
+          const message = serviceErrorMessage(err, `Another instance (${instance}) is installing an update`);
           const error = { code: "update_in_progress", kind: "", step: "", message, page: "", installPath: "" };
           set({ startingInstall: false, error });
           return { ok: false, error };
@@ -440,9 +429,16 @@ export function createServiceUpdateStore(api = null) {
       }
       const prev = get(store);
       const isPermissions = err?.code === "install_path_not_writable";
-      const installPath = err?.body?.install_path || (isPermissions ? prev.installPath : "") || "";
-      const page = err?.body?.page || (isReinstall ? "" : (prev.available?.page || ""));
-      const message = err?.body?.message || String(err?.message ?? err);
+      const installPath = err?.details?.installPath || (isPermissions ? prev.installPath : "") || "";
+      const page = err?.details?.page || (isReinstall ? "" : (prev.available?.page || ""));
+      const fallback = isPermissions
+        ? "Install path is not writable"
+        : err?.code === "not_signed"
+          ? "Build is not signed"
+          : isReinstall
+            ? "Reinstall failed"
+            : "Update failed";
+      const message = serviceErrorMessage(err, fallback);
       const error = {
         code: err?.code || "install_failed",
         kind: isPermissions ? "permissions" : "",
@@ -507,7 +503,7 @@ export function createServiceUpdateStore(api = null) {
           noInstall: err?.code === "no_install",
         };
       }
-      const message = err?.body?.message || String(err?.message ?? err);
+      const message = serviceErrorMessage(err, "Could not cancel update");
       const error = { code: err?.code || "cancel_failed", kind: "", step: "", message, page: "", installPath: "" };
       set({ cancelling: false, error });
       return { ok: false, error };
@@ -535,14 +531,14 @@ export function createServiceUpdateStore(api = null) {
         set({ loaded: true, development: true, switchingChannel: false, error: null });
         return { ok: false, development: true };
       }
-      const message = err?.body?.message || String(err?.message ?? err);
+      const message = serviceErrorMessage(err, "Could not change update channel");
       const error = {
         code: err?.code || "channel_failed",
         kind: "",
         step: "",
         message,
-        page: err?.body?.page ?? "",
-        installPath: err?.body?.install_path ?? "",
+        page: err?.details?.page ?? "",
+        installPath: err?.details?.installPath ?? "",
       };
       set({ switchingChannel: false, error });
       return { ok: false, error };
@@ -557,8 +553,8 @@ export function createServiceUpdateStore(api = null) {
     install,
     reinstall,
     cancel,
-    /** Takes the service's `name` event with its data. */
-    onEvent: (name, data) => handlers[name]?.(data ?? {}),
+    /** Takes the service's `name` event with its data, normalizing at the boundary. */
+    onEvent: (name, data) => handlers[name]?.(toUpdateEvent(name, data)),
     /** Clears any displayed update error without dropping an available update. */
     dismissError: () => set({ error: null }),
     /** Forgets the last service's update and supersedes in-flight calls. */

@@ -8,8 +8,10 @@ import {
   localChannelMismatch,
   proactiveCarriedUpgrade,
   readDismissedCarriedVersion,
+  runCarriedInstall,
   writeDismissedCarriedVersion,
 } from "./carried.js";
+import { superseded } from "../service/errors.js";
 
 test("isCarriedNewer orders release versions by DD.MM.YYYY and natural re-release suffix, never downgrading", () => {
   const carried = (version, channel = "release") => ({ available: true, version, channel });
@@ -170,6 +172,111 @@ test("proactiveCarriedUpgrade triggers only on desktop local for a strictly newe
     }),
     { version: "25.11.2026", channel: "release" },
   );
+
+  // Suppressed when the active connected local service is already equal or newer,
+  // even if LocateCLI still points to an older binary on PATH.
+  assert.equal(
+    proactiveCarriedUpgrade({
+      ...base,
+      connectionState: localConn({ version: "26.11.2026", channel: "release" }),
+    }),
+    null,
+  );
+  assert.equal(
+    proactiveCarriedUpgrade({
+      ...base,
+      connectionState: localConn({ version: "24.11.2026", channel: "release" }),
+    }),
+    null,
+  );
+  // Same check for nightly: externally started newer nightly suppresses older carried nightly
+  assert.equal(
+    proactiveCarriedUpgrade({
+      ...base,
+      connectionState: localConn({ version: "26.11.2026 (nightly bbbb222)", channel: "nightly" }),
+      updateState: updState({ channel: "nightly" }),
+      carried: { available: true, version: "24.11.2026 (nightly cccc333)", channel: "nightly" },
+      cli: { found: true, path: "/usr/local/bin/marasi", source: "path", version: "22.11.2026 (nightly aaaa111)", channel: "nightly" },
+    }),
+    null,
+  );
+  // Externally started running nightly binary never gets overwritten by a release carried CLI
+  // even if updateState.channel was switched to release
+  assert.equal(
+    proactiveCarriedUpgrade({
+      ...base,
+      connectionState: localConn({ version: "24.11.2026 (nightly bbbb222)", channel: "nightly" }),
+      updateState: updState({ channel: "release" }),
+    }),
+    null,
+  );
+  // Older service lacking channel in /service/status still compares active version safely
+  assert.deepEqual(
+    proactiveCarriedUpgrade({
+      ...base,
+      connectionState: localConn({ version: "20.11.2026", channel: null }),
+      updateState: updState({ supported: false, channel: null }),
+    }),
+    { version: "24.11.2026", channel: "release" },
+  );
+  assert.equal(
+    proactiveCarriedUpgrade({
+      ...base,
+      connectionState: localConn({ version: "26.11.2026", channel: null }),
+      updateState: updState({ supported: false, channel: null }),
+    }),
+    null,
+  );
+});
+
+test("runCarriedInstall orchestrates install + toasts and routes thrown errors through toastError", async () => {
+  // Success outcome
+  {
+    const toasts = [];
+    const toastStore = { trigger: (t) => toasts.push(t) };
+    const outcome = await runCarriedInstall({
+      installCarried: async () => ({ ok: true, text: "Marasi CLI 24.11.2026 installed", method: "service" }),
+      toastStore,
+    });
+    assert.equal(outcome?.ok, true);
+    assert.deepEqual(toasts, [{ message: "Marasi CLI 24.11.2026 installed" }]);
+  }
+
+  // Failed outcome
+  {
+    const toasts = [];
+    const toastStore = { trigger: (t) => toasts.push(t) };
+    const outcome = await runCarriedInstall({
+      installCarried: async () => ({ ok: false, text: "Checksum mismatch", method: "none" }),
+      toastStore,
+    });
+    assert.equal(outcome?.ok, false);
+    assert.deepEqual(toasts, [{ message: "Checksum mismatch", background: "variant-filled-error" }]);
+  }
+
+  // Thrown error uses toastError (prefixes context and hides superseded)
+  {
+    const toasts = [];
+    const toastStore = { trigger: (t) => toasts.push(t) };
+    await runCarriedInstall({
+      installCarried: async () => {
+        throw new Error("disk full");
+      },
+      toastStore,
+    });
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].background, "variant-filled-error");
+    assert.match(toasts[0].message, /Carried CLI install failed/);
+
+    toasts.length = 0;
+    await runCarriedInstall({
+      installCarried: async () => {
+        throw superseded("POST /service/restart");
+      },
+      toastStore,
+    });
+    assert.deepEqual(toasts, []);
+  }
 });
 
 test("carried-CLI dismissal persists per version and degrades gracefully without storage", () => {

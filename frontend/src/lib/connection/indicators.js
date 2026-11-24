@@ -4,10 +4,7 @@
 //   desktop carried CLI upgrades).
 // Merely-available service updates surface only via the Connection tile dot,
 // the one-time toast, and Connection details — never a persistent page banner.
-import { restartConfirmCopy } from "./detail.js";
-
-const supportsServiceUpdates = (connectionState, updateState) =>
-  Boolean(updateState?.supported !== false && !updateState?.development && connectionState?.version !== "dev");
+import { restartConfirmCopy, supportsServiceUpdates } from "./detail.js";
 
 const installedVersionOf = (updateState) => {
   if (updateState?.install?.state !== "installed") return null;
@@ -49,7 +46,7 @@ export function connectionTileIndicator(connectionState, updateState, { carriedU
     const version = carriedVersionOf(carriedUpgrade);
     return {
       kind: "carried-upgrade",
-      label: version ? `Marasi CLI ${version} included` : "Marasi CLI update included",
+      label: version ? `Marasi CLI ${version} included` : "Newer Marasi CLI included",
     };
   }
 

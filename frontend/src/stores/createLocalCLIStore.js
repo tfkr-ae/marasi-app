@@ -112,6 +112,11 @@ export function createLocalCLIStore(api, storage = undefined) {
     }
   }
 
+  async function setWhenQuitting(value) {
+    if (!api.setWhenQuitting) return null;
+    return await api.setWhenQuitting(value);
+  }
+
   return {
     subscribe: store.subscribe,
     load,
@@ -121,6 +126,7 @@ export function createLocalCLIStore(api, storage = undefined) {
     clearPath,
     dismissCarried,
     installCarried,
+    setWhenQuitting,
   };
 }
 

@@ -144,3 +144,20 @@ test("createLocalCLIStore installCarried updates located CLI and delegates resta
   assert.equal(get(store).installing, false);
   assert.deepEqual(calls, ["restart-service"]);
 });
+
+test("createLocalCLIStore saves when_quitting through its injected API", async () => {
+  const saved = [];
+  const store = createLocalCLIStore(
+    {
+      setWhenQuitting: async (value) => {
+        saved.push(value);
+        return { WhenQuitting: value };
+      },
+    },
+    memoryStorage(),
+  );
+
+  const config = await store.setWhenQuitting("keep");
+  assert.deepEqual(saved, ["keep"]);
+  assert.deepEqual(config, { WhenQuitting: "keep" });
+});
