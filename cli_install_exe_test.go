@@ -62,8 +62,9 @@ func runningWindowsCLI(t *testing.T, c *cliInstall, files *windowsFiles, data []
 	return path
 }
 
-func publishWindowsUpdate(c *cliInstall) {
-	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-windows-amd64.exe": cliBinaryNew}))
+func carryWindowsCLI(t *testing.T, c *cliInstall, data []byte, version string) {
+	t.Helper()
+	c.app.cliRuntime.carried = carriedCopy(t, data, version, "release", "windows", "amd64")
 }
 
 func fileHolds(t *testing.T, path string, want []byte) {
@@ -77,13 +78,13 @@ func fileHolds(t *testing.T, path string, want []byte) {
 	}
 }
 
-func TestCheckForCLIUpdateOnWindowsMovesTheRunningCLIAsideAndInstallsTheNewOne(t *testing.T) {
+func TestInstallCarriedCLIOnWindowsMovesTheRunningCLIAsideAndInstallsTheNewOne(t *testing.T) {
 	c := newCLIInstall(t, "windows", "amd64")
 	files := c.onWindows()
 	path := runningWindowsCLI(t, c, files, cliBinaryOld)
-	publishWindowsUpdate(c)
+	carryWindowsCLI(t, c, cliBinaryNew, "06.11.2026")
 
-	result, err := c.app.CheckForCLIUpdate()
+	result, err := c.app.InstallCarriedCLI()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,11 +99,11 @@ func TestCheckForCLIUpdateOnWindowsMovesTheRunningCLIAsideAndInstallsTheNewOne(t
 	}
 }
 
-func TestCheckForCLIUpdateOnWindowsPutsTheRunningCLIBackWhenTheNewOneCannotMoveIn(t *testing.T) {
+func TestInstallCarriedCLIOnWindowsPutsTheRunningCLIBackWhenTheNewOneCannotMoveIn(t *testing.T) {
 	c := newCLIInstall(t, "windows", "amd64")
 	files := c.onWindows()
 	path := runningWindowsCLI(t, c, files, cliBinaryOld)
-	publishWindowsUpdate(c)
+	carryWindowsCLI(t, c, cliBinaryNew, "06.11.2026")
 	rename := c.app.cliRuntime.rename
 	c.app.cliRuntime.rename = func(from, to string) error {
 		if strings.HasPrefix(filepath.Base(from), ".marasi.exe.") {
@@ -111,7 +112,7 @@ func TestCheckForCLIUpdateOnWindowsPutsTheRunningCLIBackWhenTheNewOneCannotMoveI
 		return rename(from, to)
 	}
 
-	result, err := c.app.CheckForCLIUpdate()
+	result, err := c.app.InstallCarriedCLI()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,9 +133,9 @@ func TestStartupRemovesTheCLIMovedAsideOnceItsProcessHasExited(t *testing.T) {
 	c := newCLIInstall(t, "windows", "amd64")
 	files := c.onWindows()
 	path := runningWindowsCLI(t, c, files, cliBinaryOld)
-	publishWindowsUpdate(c)
-	if result, _ := c.app.CheckForCLIUpdate(); result.Outcome != "installed" {
-		t.Fatalf("update = %+v, want installed", result)
+	carryWindowsCLI(t, c, cliBinaryNew, "06.11.2026")
+	if result, _ := c.app.InstallCarriedCLI(); result.Outcome != "installed" {
+		t.Fatalf("install = %+v, want installed", result)
 	}
 	// The previous instance is still exiting when the app starts, then
 	// exits during the first wait.
@@ -162,10 +163,10 @@ func TestInstallingTheCLIOnWindowsAgainReplacesALeftoverNotYetRemoved(t *testing
 	if err := os.WriteFile(path+".old", []byte("older"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	publishWindowsUpdate(c)
+	carryWindowsCLI(t, c, cliBinaryNew, "06.11.2026")
 
-	if result, _ := c.app.CheckForCLIUpdate(); result.Outcome != "installed" {
-		t.Fatalf("update = %+v, want installed", result)
+	if result, _ := c.app.InstallCarriedCLI(); result.Outcome != "installed" {
+		t.Fatalf("install = %+v, want installed", result)
 	}
 
 	fileHolds(t, path, cliBinaryNew)
@@ -179,13 +180,13 @@ func publishWindowsArchiveUpdate(t *testing.T, c *cliInstall) {
 	}))
 }
 
-func TestCheckForCLIUpdateOnWindowsFromAnArchiveMovesTheRunningCLIAside(t *testing.T) {
+func TestInstallCLIOnWindowsFromAnArchiveMovesTheRunningCLIAside(t *testing.T) {
 	c := newCLIInstall(t, "windows", "amd64")
 	files := c.onWindows()
 	path := runningWindowsCLI(t, c, files, cliBinaryOld)
 	publishWindowsArchiveUpdate(t, c)
 
-	result, err := c.app.CheckForCLIUpdate()
+	result, err := c.app.InstallCLI(filepath.Dir(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +201,7 @@ func TestCheckForCLIUpdateOnWindowsFromAnArchiveMovesTheRunningCLIAside(t *testi
 	}
 }
 
-func TestCheckForCLIUpdateOnWindowsFromAnArchivePutsTheRunningCLIBackWhenTheNewOneCannotMoveIn(t *testing.T) {
+func TestInstallCLIOnWindowsFromAnArchivePutsTheRunningCLIBackWhenTheNewOneCannotMoveIn(t *testing.T) {
 	c := newCLIInstall(t, "windows", "amd64")
 	files := c.onWindows()
 	path := runningWindowsCLI(t, c, files, cliBinaryOld)
@@ -213,7 +214,7 @@ func TestCheckForCLIUpdateOnWindowsFromAnArchivePutsTheRunningCLIBackWhenTheNewO
 		return rename(from, to)
 	}
 
-	result, err := c.app.CheckForCLIUpdate()
+	result, err := c.app.InstallCLI(filepath.Dir(path))
 	if err != nil {
 		t.Fatal(err)
 	}

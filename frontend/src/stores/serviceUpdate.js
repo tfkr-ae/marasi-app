@@ -608,18 +608,6 @@ export function followConnection(connectionStore, updateStore) {
   });
 }
 
-/** The one line Settings shows, or null when there is nothing to say. */
-export function serviceUpdateLine({ available, install }) {
-  if (install?.state === "running") {
-    const pct = install.total > 0 ? ` ${Math.floor((install.received / install.total) * 100)}%` : "";
-    return `Installing ${install.version}: ${install.step}${pct}`;
-  }
-  if (install?.state === "installed") return `${install.version} installed. Restart the service to run it.`;
-  if (install?.state === "failed") return `${install.version} not installed: ${install.message}`;
-  if (available) return `${available.version} available (${available.channel})`;
-  return null;
-}
-
 /** The short toast for the event on the connection named `name`, or null. */
 export function serviceUpdateToast(event, data, name) {
   if (event === "update.available") return { message: `Marasi ${data.version} available on ${name}`, background: "variant-filled-primary" };

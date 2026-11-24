@@ -64,12 +64,10 @@ func (c *countedTransport) requests() int {
 }
 
 // carriedInstall is newCLIInstall with a carried copy of cliBinaryOld
-// (30.10.2026 on release) for linux/amd64, network requests counted, and
-// background work held until the test runs it.
+// (30.10.2026 on release) for linux/amd64 and network requests counted.
 type carriedInstall struct {
 	*cliInstall
-	network    *countedTransport
-	background []func()
+	network *countedTransport
 }
 
 func newCarriedInstall(t *testing.T) *carriedInstall {
@@ -79,17 +77,7 @@ func newCarriedInstall(t *testing.T) *carriedInstall {
 	c.app.updateClient = &http.Client{Transport: c.network}
 	r := &c.app.cliRuntime
 	r.carried = carriedCopy(t, cliBinaryOld, "30.10.2026", "release", "linux", "amd64")
-	r.background = func(work func()) { c.background = append(c.background, work) }
 	return c
-}
-
-// runBackground runs the background work InstallCLI started.
-func (c *carriedInstall) runBackground() {
-	work := c.background
-	c.background = nil
-	for _, run := range work {
-		run()
-	}
 }
 
 func TestInstallCLIPlacesTheCarriedCopyWithoutTheNetwork(t *testing.T) {
@@ -131,20 +119,9 @@ func TestInstallCLIPlacesTheCarriedCopyWithoutTheNetwork(t *testing.T) {
 	if steps := cliProgressSteps(c.events); !slices.Equal(steps, []string{"extract"}) {
 		t.Fatalf("progress steps = %v, want [extract]", steps)
 	}
-
-	// Then the update check replaces it with the channel's newer release.
-	if len(c.background) != 1 {
-		t.Fatalf("Install started %d background jobs, want the update check", len(c.background))
-	}
-	c.runBackground()
-	if data, _ := os.ReadFile(installed); !bytes.Equal(data, cliBinaryNew) {
-		t.Fatalf("after the update check the CLI is %q, want 06.11.2026", data)
-	}
-	// The frontend hears the check's result, so Settings and the CLI setup
-	// show the new version without being reopened.
-	checked := cliUpdateChecks(c.events)
-	if len(checked) != 1 || checked[0].Outcome != "installed" || checked[0].Version != "06.11.2026" || checked[0].CLI.Version != "06.11.2026" {
-		t.Fatalf("cli-update-checked events = %+v, want one installing 06.11.2026", checked)
+	// No post-install Go CLI update check runs; the started service checks its own channel.
+	if n := eventCount(c.events, "cli-update-checked"); n != 0 {
+		t.Fatalf("cli-update-checked events = %d, want none", n)
 	}
 }
 
@@ -160,20 +137,18 @@ func TestInstallCLIFromTheCarriedCopySucceedsWhenTheReleaseServerIsUnreachable(t
 	if result.Outcome != "installed" {
 		t.Fatalf("result = %+v, want installed", result)
 	}
-
-	c.runBackground()
-	if c.network.requests() == 0 {
-		t.Fatal("no update check ran after the install")
+	if c.network.requests() != 0 {
+		t.Fatalf("Install made %d network requests, want none", c.network.requests())
 	}
 	installed := filepath.Join(dir, "marasi")
 	if data, _ := os.ReadFile(installed); !bytes.Equal(data, cliBinaryOld) {
-		t.Fatalf("after a failed update check the CLI is %q, want the carried copy", data)
+		t.Fatalf("CLI is %q, want the carried copy", data)
 	}
 	if saved := c.app.Config.cliPath(); saved.Path != installed {
 		t.Fatalf("app config holds %+v, want the installed path", saved)
 	}
-	if checked := cliUpdateChecks(c.events); len(checked) != 1 || checked[0].Outcome != "failed" {
-		t.Fatalf("cli-update-checked events = %+v, want one failed check", checked)
+	if n := eventCount(c.events, "cli-update-checked"); n != 0 {
+		t.Fatalf("cli-update-checked events = %d, want none", n)
 	}
 }
 
@@ -193,9 +168,6 @@ func TestInstallCLIWithoutACarriedCopyDownloads(t *testing.T) {
 	}
 	if c.releases.requestCount() == 0 {
 		t.Fatal("Install requested nothing, want a download")
-	}
-	if len(c.background) != 0 {
-		t.Fatalf("a download started %d background jobs, want none", len(c.background))
 	}
 }
 
@@ -261,9 +233,6 @@ func TestInstallCLIRefusesACarriedCopyThatDoesNotMatchItsChecksum(t *testing.T) 
 	if saved := c.app.Config.cliPath(); saved.Path != "" {
 		t.Fatalf("app config holds %+v, want nothing saved", saved)
 	}
-	if len(c.background) != 0 {
-		t.Fatal("a failed install started the update check")
-	}
 }
 
 func TestLoadCarriedCLIReadsItsRecord(t *testing.T) {
@@ -306,17 +275,16 @@ func cliProgressSteps(events *recordedEvents) []string {
 	return steps
 }
 
-// cliUpdateChecks lists the results the cli-update-checked events carried.
-func cliUpdateChecks(events *recordedEvents) []CLIInstall {
+func eventCount(events *recordedEvents, want string) int {
 	events.mu.Lock()
 	defer events.mu.Unlock()
-	var results []CLIInstall
-	for i, name := range events.names {
-		if name == cliUpdateCheckedEvent {
-			results = append(results, events.data[i][0].(CLIInstall))
+	n := 0
+	for _, name := range events.names {
+		if name == want {
+			n++
 		}
 	}
-	return results
+	return n
 }
 
 func TestCarriedCLIReportsTheCopyForThisPlatform(t *testing.T) {
@@ -357,9 +325,6 @@ func TestInstallCarriedCLIReplacesTheCurrentCLIWithoutTheNetwork(t *testing.T) {
 	}
 	if saved := c.app.Config.cliPath(); saved.Path != path || saved.Source != "installed" {
 		t.Fatalf("app config holds %+v, want the same path", saved)
-	}
-	if len(c.background) != 0 {
-		t.Fatal("InstallCarriedCLI started the update check, want the carried version kept")
 	}
 }
 
