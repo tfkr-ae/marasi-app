@@ -211,11 +211,15 @@ _Avoid_: beta, preview, snapshot
 
 **Update**:
 A build on the app's channel that is newer than the running one and replaces it once the researcher installs it. It is never an older build; going back to an older release is a reinstall.
-_Avoid_: upgrade, patch; not to be confused with new matches or a CLI update
+_Avoid_: upgrade, patch; not to be confused with new matches or a service update
 
-**CLI update**:
-A newer Marasi CLI on its channel that the app installs in place of the one it uses. It never replaces the app itself; that is an update.
-_Avoid_: update on its own, upgrade
+**Service update**:
+A newer Marasi build on a connected service's channel that the service installs for itself and runs after a restart. It applies to the active connection, whether local or remote, and never replaces Marasi App.
+_Avoid_: CLI update, app update, upgrade
+
+**Carried CLI**:
+The compressed copy of the Marasi CLI that a release or nightly desktop build carries for first-time setup and offline installation onto this machine. The app never runs it from inside the bundle.
+_Avoid_: bundled CLI, embedded binary
 
 ### Connections
 

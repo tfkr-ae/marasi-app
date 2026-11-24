@@ -55,7 +55,11 @@
 								<span class="truncate text-xs opacity-70">{whereText(c, null)}</span>
 							</span>
 							{#if c.id === $connectionStore.connection.id}
-								<span class="h-2 w-2 shrink-0 rounded-full {phaseTone($connectionStore.phase)}"></span>
+								<span
+									class="h-2 w-2 shrink-0 rounded-full {$connectionStore.restarting
+										? 'animate-pulse bg-warning-500'
+										: phaseTone($connectionStore.phase)}"
+								></span>
 							{/if}
 						</button>
 					{/each}

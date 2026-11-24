@@ -112,6 +112,12 @@ export function initialConnection() {
     version: null,
     api: null,
     apiWarning: null,
+    // The service host's OS (runtime.GOOS), build channel ("release" |
+    // "nightly", or null for dev/older services), and whether an installed
+    // update awaits a restart (GET /service/status).
+    os: null,
+    channel: null,
+    restartRequired: false,
     // The service process's run ID: a new one on a reconnect is a restart.
     runId: null,
     proxyListener: null,
@@ -138,11 +144,24 @@ export function initialConnection() {
     shareHost: "",
     // The app's own origin, which turning the password off always allows.
     appOrigin: null,
-    // The service announced a restart (service.restarting) and hasn't
-    // answered as the new run yet; why the last restart failed
-    // (service.restart_failed).
+    // The service announced a restart (service.restarting) or the app
+    // started one through POST /service/restart and hasn't answered as the
+    // new run yet; why the last restart failed.
     restarting: false,
     restartError: null,
+    // Restart waits for inline confirmation (remote or unowned local run),
+    // is awaiting the unsaved-work guard, or was found unsupported (404/501).
+    restartAsk: false,
+    restartConfirming: false,
+    restartSupported: true,
+    // Incremented whenever POST /service/restart is refused with 409
+    // checkpoint_items_held so the UI opens the Checkpoint held-items modal.
+    restartHeld: 0,
+    // Internal flags for an app-initiated restart: avoids a second
+    // unsaved-work prompt on reconnect to the same project, and keeps a
+    // previously owned local run owned across the successor's new run_id.
+    appRestarting: false,
+    claimOwnedRun: false,
     // Stop waits for the researcher's yes, since the run isn't the app's;
     // why the last Stop failed.
     stopAsk: false,
@@ -155,6 +174,13 @@ const localConnection = { id: "local", kind: "local", name: "Local", url: "" };
 /** Whether `err` is the service refusing the password (401 unauthorized). */
 export const isAuthRefusal = (err) => err?.code === "unauthorized" || err?.status === 401;
 
+// Whether POST /service/restart was refused over held Checkpoint items.
+const isRestartHeld = (err) => err?.code === "checkpoint_items_held";
+
+// Whether POST /service/restart is unsupported by an older or non-restartable service.
+const isRestartUnavailable = (err) =>
+  err?.status === 404 || err?.status === 501 || err?.code === "restart_unavailable";
+
 /** The wait before reconnect attempt `attempt` (1, 2, …): 1s doubling to 30s. */
 export function backoff(attempt) {
   return Math.min(2 ** (attempt - 1), 30) * 1000;
@@ -165,6 +191,9 @@ const fromStatus = (status) => ({
   version: status.version ?? null,
   api: status.api ?? null,
   apiWarning: apiWarning(status.api),
+  os: status.os || null,
+  channel: status.channel || null,
+  restartRequired: Boolean(status.restart_required),
   runId: status.run_id ?? null,
   proxyListener: status.proxy_listener ?? null,
 });
@@ -214,6 +243,9 @@ function begin(state) {
     version: null,
     api: null,
     apiWarning: null,
+    os: null,
+    channel: null,
+    restartRequired: false,
     runId: null,
     proxyListener: null,
     instance: null,
@@ -225,6 +257,14 @@ function begin(state) {
     busy: null,
     changeError: null,
     shareHost: "",
+    restarting: false,
+    restartError: null,
+    restartAsk: false,
+    restartConfirming: false,
+    restartSupported: true,
+    restartHeld: 0,
+    appRestarting: false,
+    claimOwnedRun: false,
     stopAsk: false,
     stopError: null,
     loaded: false,
@@ -511,7 +551,7 @@ export function reduce(state, action) {
       // stay; only the stream goes.
       if (state.phase !== "connected" && state.phase !== "reconnecting") return refuse(state, "Not connected.");
       const attempt = state.attempt + 1;
-      return go(state, { phase: "reconnecting", attempt, trying: false }, [
+      return go(state, { phase: "reconnecting", attempt, trying: false, restartAsk: false, restartConfirming: false }, [
         ...(state.phase === "connected" ? [{ type: "close-events" }] : []),
         { type: "wait", ms: backoff(attempt) },
       ]);
@@ -535,6 +575,8 @@ export function reduce(state, action) {
         attempt: 0,
         trying: false,
         restarting: false,
+        appRestarting: false,
+        claimOwnedRun: false,
         url: action.url ?? state.url,
         owned: ownedAfter(state, action),
         ...fromStatus(status),
@@ -544,6 +586,14 @@ export function reduce(state, action) {
       }
       if (status.project === state.project && !restarted) {
         return go(state, { ...patch, phase: "connected" }, [{ type: "open-events", resume: true }]);
+      }
+      if (status.project === state.project && restarted && state.appRestarting) {
+        // An app-initiated restart already passed the unsaved-work guard
+        // before sending POST /service/restart; reload without asking twice.
+        return go(state, { ...patch, phase: "connected" }, [
+          { type: "open-events", resume: false },
+          { type: "reload-project", status },
+        ]);
       }
       return go(state, { ...patch, phase: "project-changed", pendingProject: status.project }, [
         { type: "confirm-load", status },
@@ -572,7 +622,91 @@ export function reduce(state, action) {
 
     case "SERVICE_RESTART_FAILED":
       // The service kept or rolled back to its old run.
-      return go(state, { restarting: false, restartError: action.failure?.error || "Restart failed" });
+      return go(state, {
+        restarting: false,
+        appRestarting: false,
+        claimOwnedRun: false,
+        restartError: action.failure?.error || "Restart failed",
+      });
+
+    case "RESTART": {
+      if (state.phase !== "connected") return refuse(state, "Connect first.");
+      if (state.busy || state.restarting || state.restartConfirming) return refuse(state, "Another change is under way.");
+      if (!state.restartSupported) return refuse(state, "This service doesn't support restart.");
+      const remote = state.connection.kind === "remote";
+      if ((remote || !state.owned) && !action.confirmed) {
+        return go(state, { restartAsk: true, stopAsk: false, restartError: null });
+      }
+      return go(state, { restartAsk: false, stopAsk: false, restartConfirming: true, restartError: null }, [
+        { type: "confirm-restart" },
+      ]);
+    }
+
+    case "CANCEL_RESTART":
+      return go(state, { restartAsk: false });
+
+    case "RESTART_CANCELLED":
+      return go(state, { restartConfirming: false });
+
+    case "RESTART_CONFIRMED": {
+      if (state.phase !== "connected" || state.busy || state.restarting) {
+        return go(state, { restartConfirming: false });
+      }
+      const claimOwnedRun = state.connection.kind === "local" && state.owned;
+      return go(
+        state,
+        {
+          restartAsk: false,
+          restartConfirming: false,
+          restarting: true,
+          restartError: null,
+          appRestarting: true,
+          claimOwnedRun,
+        },
+        [{ type: "restart-service" }],
+      );
+    }
+
+    case "RESTART_ACCEPTED": {
+      // Handover finished and the successor is ready; reconnect immediately.
+      if (!state.restarting) return go(state, {});
+      if (state.phase === "connected") {
+        return go(state, { phase: "reconnecting", attempt: 1, trying: true }, [
+          { type: "close-events" },
+          { type: "reconnect" },
+        ]);
+      }
+      if (state.phase === "reconnecting" && !state.trying) {
+        return go(state, { trying: true }, [{ type: "cancel-wait" }, { type: "reconnect" }]);
+      }
+      return go(state, {});
+    }
+
+    case "RESTART_HELD":
+      return go(state, {
+        restarting: false,
+        restartError: null,
+        restartHeld: state.restartHeld + 1,
+        appRestarting: false,
+        claimOwnedRun: false,
+      });
+
+    case "RESTART_UNAVAILABLE":
+      return go(state, {
+        restarting: false,
+        restartError: null,
+        restartSupported: false,
+        appRestarting: false,
+        claimOwnedRun: false,
+      });
+
+    case "RESTART_FAILED":
+      return go(state, {
+        restarting: false,
+        appRestarting: false,
+        claimOwnedRun: false,
+        restartError: state.restartError || action.error,
+      });
 
     case "FOLLOW_SWITCH":
       // Another client opened `path` on the service: read which project it
@@ -640,10 +774,10 @@ export function reduce(state, action) {
       // app can't start again; a remote stops through the service's own
       // stop route. The stream closes, so its drop is expected while `busy`.
       if (state.phase !== "connected") return refuse(state, "Connect first.");
-      if (state.busy) return refuse(state, "Another change is under way.");
+      if (state.busy || state.restarting || state.restartConfirming) return refuse(state, "Another change is under way.");
       const remote = state.connection.kind === "remote";
-      if ((remote || !state.owned) && !action.confirmed) return go(state, { stopAsk: true, stopError: null });
-      return go(state, { busy: "stop", stopAsk: false, stopError: null }, [
+      if ((remote || !state.owned) && !action.confirmed) return go(state, { stopAsk: true, restartAsk: false, stopError: null });
+      return go(state, { busy: "stop", stopAsk: false, restartAsk: false, stopError: null }, [
         { type: "close-events" },
         remote ? { type: "stop-service" } : { type: "stop-instance", id: state.connection.id },
       ]);
@@ -658,9 +792,11 @@ export function reduce(state, action) {
       // The proxy listener stopped with it, though no listener.stopped event
       // came over the closed stream (`service-stopped`).
       if (state.busy !== "stop") return refuse(state, "No stop is under way.");
-      return go(state, { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false }, [
-        { type: "service-stopped" },
-      ]);
+      return go(
+        state,
+        { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false, restartRequired: false },
+        [{ type: "service-stopped" }],
+      );
 
     case "STOP_FAILED":
       if (state.busy !== "stop") return refuse(state, "No stop is under way.");
@@ -842,7 +978,7 @@ export function createConnectionStore(api, timers = globalThis) {
         // The local instance's address can change (its control listener
         // restarted on a new port), so reach it as on starting. A remote is
         // reached with its saved password, which may have changed.
-        const { connection } = get(store);
+        const { connection, runId: previousRunId, claimOwnedRun } = get(store);
         let reached, status;
         try {
           if (connection.kind === "local") {
@@ -853,6 +989,18 @@ export function createConnectionStore(api, timers = globalThis) {
           if (!current(session)) return;
           api.use({ url: reached.url, password: reached.password });
           status = await api.readStatus(statusWait, api.bind?.());
+          if (!current(session)) return;
+          if (
+            connection.kind === "local" &&
+            claimOwnedRun &&
+            status.run_id &&
+            status.run_id !== previousRunId &&
+            api.claimOwnedRun
+          ) {
+            await api.claimOwnedRun(connection.id, status.run_id);
+            if (!current(session)) return;
+            reached = { ...reached, startedByApp: true };
+          }
         } catch (err) {
           if (!current(session)) return;
           if (isAuthRefusal(err)) {
@@ -969,6 +1117,41 @@ export function createConnectionStore(api, timers = globalThis) {
         settle(session, { type: "REJOINED", url: reached.url, startedByApp: reached.startedByApp, status, control });
         return;
       }
+      case "confirm-restart": {
+        let agreed = false;
+        try {
+          agreed = api.confirmSwitch ? await api.confirmSwitch() : true;
+        } catch (err) {
+          console.error("Asking about unsaved work failed:", err);
+        }
+        settle(session, { type: agreed ? "RESTART_CONFIRMED" : "RESTART_CANCELLED" });
+        return;
+      }
+      case "restart-service": {
+        try {
+          await api.restartService(api.bind?.());
+        } catch (err) {
+          if (err?.code === "superseded") return;
+          if (isRestartHeld(err)) {
+            settle(session, { type: "RESTART_HELD" });
+            return;
+          }
+          if (isRestartUnavailable(err)) {
+            settle(session, { type: "RESTART_UNAVAILABLE" });
+            return;
+          }
+          if (err?.code === "unreachable") {
+            // The old process may have exited before flushing the 200 response;
+            // let reconnect probe the successor (or recover if it never exited).
+            settle(session, { type: "RESTART_ACCEPTED" });
+            return;
+          }
+          settle(session, { type: "RESTART_FAILED", error: err?.body?.message || message(err) });
+          return;
+        }
+        settle(session, { type: "RESTART_ACCEPTED" });
+        return;
+      }
       case "stop-instance":
         try {
           await api.stopLocal(step.id);
@@ -1033,6 +1216,11 @@ export function createConnectionStore(api, timers = globalThis) {
     /** Stops it after the researcher said yes. */
     confirmStop: () => dispatch({ type: "STOP", confirmed: true }),
     cancelStop: () => dispatch({ type: "CANCEL_STOP" }),
+    /** Restarts the active connection's service through POST /service/restart, asking first for a remote or unowned local run. */
+    restart: () => dispatch({ type: "RESTART" }),
+    /** Restarts it after the researcher confirmed inline. */
+    confirmRestart: () => dispatch({ type: "RESTART", confirmed: true }),
+    cancelRestart: () => dispatch({ type: "CANCEL_RESTART" }),
     /** Starts the stopped local instance on its project and loads it in full. */
     startInstance: () => dispatch({ type: "START" }),
     /** Reconnects now instead of waiting (the banner's Retry now). */

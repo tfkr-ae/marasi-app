@@ -19,14 +19,14 @@ import (
 	"github.com/tfkr-ae/marasi-app/internal/marasicli"
 )
 
-// Installing and updating the Marasi CLI from Marasi's GitHub releases
-// (spec "CLI install and update"). checksums.txt.minisig must verify with
-// marasiCLIPublicKey and its trusted comment must name the Marasi CLI, the
-// channel and the release's version; the build must match its signed
+// Installing the Marasi CLI from Marasi's GitHub releases when no CLI is
+// installed and no carried copy is embedded. checksums.txt.minisig must
+// verify with marasiCLIPublicKey and its trusted comment must name the Marasi
+// CLI, the channel and the release's version; the build must match its signed
 // checksum. Anything else fails closed: nothing is written to the install
 // folder and nothing is saved.
 
-// cliInstallTimeout bounds a whole install or update.
+// cliInstallTimeout bounds a whole install.
 const cliInstallTimeout = 10 * time.Minute
 
 // cliSmallAssetLimit caps checksums.txt and its signature.
@@ -36,14 +36,11 @@ const cliSmallAssetLimit = 64 << 10
 // publishes.
 var cliAssets = marasicli.Assets
 
-// Outcomes of InstallCLI and CheckForCLIUpdate.
+// Outcomes of InstallCLI and InstallCarriedCLI.
 const (
 	cliOutcomeInstalled = "installed"
 	cliOutcomeUpToDate  = "up-to-date"
-	// cliOutcomeDev: the CLI is a development build, which is never
-	// replaced.
-	cliOutcomeDev    = "dev"
-	cliOutcomeFailed = "failed"
+	cliOutcomeFailed    = "failed"
 )
 
 const (
@@ -59,11 +56,11 @@ type CLIFailure struct {
 	Reason string `json:"reason"`
 }
 
-// CLIInstall is the result of InstallCLI and CheckForCLIUpdate.
+// CLIInstall is the result of InstallCLI and InstallCarriedCLI.
 type CLIInstall struct {
-	// Outcome is installed, up-to-date, dev or failed.
+	// Outcome is installed, up-to-date or failed.
 	Outcome string `json:"outcome"`
-	// Version and Channel are the release checked or installed.
+	// Version and Channel are the release or carried copy installed.
 	Version string `json:"version"`
 	Channel string `json:"channel"`
 	// CLI is the CLI the app uses afterwards.
@@ -72,13 +69,13 @@ type CLIInstall struct {
 	Failure *CLIFailure `json:"failure"`
 }
 
-// cliInstallProgressEvent reports a running CLI install or update to the
-// frontend, with a CLIInstallProgress.
+// cliInstallProgressEvent reports a running CLI install to the frontend,
+// with a CLIInstallProgress.
 const cliInstallProgressEvent = "cli-install-progress"
 
 // CLIInstallProgress is the step a CLI install is on: download (with the
 // bytes received and the total, 0 when the server didn't say), verify,
-// extract (an archive build) or install.
+// extract (an archive build or carried copy) or install.
 type CLIInstallProgress struct {
 	Step     string `json:"step"`
 	Received int64  `json:"received"`
@@ -89,48 +86,9 @@ func (a *App) reportCLIProgress(progress CLIInstallProgress) {
 	a.emitEvent(cliInstallProgressEvent, progress)
 }
 
-// CLIChannel is the CLI's channel: Setting is "app" (follow the app),
-// "release" or "nightly"; Effective is the channel installs use.
-type CLIChannel struct {
-	Setting   string `json:"setting"`
-	Effective string `json:"effective"`
-}
-
-// GetCLIChannel reports the CLI channel.
-func (a *App) GetCLIChannel() CLIChannel {
-	setting := "app"
-	if a.Config != nil {
-		if saved := a.Config.cliChannelSetting(); saved != "" {
-			setting = string(saved)
-		}
-	}
-	return CLIChannel{Setting: setting, Effective: string(a.cliChannel())}
-}
-
-// SetCLIChannel saves the CLI channel: "app" follows the app's channel,
-// "release" or "nightly" overrides it.
-func (a *App) SetCLIChannel(setting string) (CLIChannel, error) {
-	channel := Channel(setting)
-	switch {
-	case setting == "app":
-		channel = ""
-	case !channel.valid():
-		return a.GetCLIChannel(), fmt.Errorf("%q isn't a CLI channel", setting)
-	}
-	if err := a.Config.setCLIChannel(channel); err != nil {
-		return a.GetCLIChannel(), err
-	}
-	return a.GetCLIChannel(), nil
-}
-
-// cliChannel is the channel CLI installs use: the saved override, else the
-// app's build channel, else release (for a development app).
+// cliChannel is the channel first-time CLI downloads use: the app's build
+// channel, or release for a development app.
 func (a *App) cliChannel() Channel {
-	if a.Config != nil {
-		if saved := a.Config.cliChannelSetting(); saved != "" {
-			return saved
-		}
-	}
 	if build := Channel(a.build.Channel); build.valid() {
 		return build
 	}
@@ -139,9 +97,9 @@ func (a *App) cliChannel() Channel {
 
 // InstallCLI installs the Marasi CLI for this platform into dir and saves it
 // as the app's CLI: the copy this build carries, when it carries one and no
-// CLI is found, without the network and followed by the CLI update check;
-// otherwise the release on the CLI's channel. It returns an
-// error, rather than a failed install, only when dir is empty.
+// CLI is found, without the network; otherwise the release on the app's build
+// channel (defaulting to release on development builds). It returns an error,
+// rather than a failed install, only when dir is empty.
 func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 	dir, err := a.expandCLIDir(dir)
 	if err != nil {
@@ -176,7 +134,7 @@ func (a *App) InstallCLI(dir string) (CLIInstall, error) {
 }
 
 // installCarried places the carried CLI at target without the network and
-// saves it as the app's CLI, then starts the CLI update check.
+// saves it as the app's CLI.
 func (a *App) installCarried(carried *carriedCLI, target string) CLIInstall {
 	result := CLIInstall{Version: carried.Version, Channel: carried.Channel}
 	err := a.installCarriedCLI(carried, target)
@@ -188,48 +146,7 @@ func (a *App) installCarried(carried *carriedCLI, target string) CLIInstall {
 	}
 	result.Outcome = cliOutcomeInstalled
 	result.CLI, _ = a.LocateCLI()
-	a.cliRuntime.background(a.checkForCLIUpdateAfterInstall)
 	return result
-}
-
-// CheckForCLIUpdate replaces the CLI the app uses with the release on the
-// CLI's channel when that differs from it. A development build is left
-// alone. It returns an error when there is no CLI.
-func (a *App) CheckForCLIUpdate() (CLIInstall, error) {
-	current, err := a.LocateCLI()
-	if err != nil {
-		return CLIInstall{}, err
-	}
-	if !current.Found {
-		return CLIInstall{}, errNoCLI
-	}
-	r := &a.cliRuntime
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), cliInstallTimeout)
-	defer cancel()
-
-	channel := a.cliChannel()
-	result := CLIInstall{Channel: string(channel), CLI: current}
-	if current.Version == "dev" || current.Version == "" {
-		result.Outcome = cliOutcomeDev
-		return result, nil
-	}
-	release, version, err := a.findCLIRelease(ctx, channel)
-	if err != nil {
-		return a.cliFailed(result, err), nil
-	}
-	result.Version = version
-	if current.Version == version && current.Channel == string(channel) {
-		result.Outcome = cliOutcomeUpToDate
-		return result, nil
-	}
-	if err := a.installCLIRelease(ctx, release, channel, version, current.Path); err != nil {
-		return a.cliFailed(result, err), nil
-	}
-	result.Outcome = cliOutcomeInstalled
-	result.CLI, _ = a.LocateCLI()
-	return result, nil
 }
 
 func (a *App) cliFailed(result CLIInstall, err error) CLIInstall {

@@ -1,7 +1,7 @@
-// How a connection's phase reads in the rail tile, the Connections modal and
-// Settings → Connection.
+// How a connection's phase reads in the rail tile and the Connections modal.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as statusModule from "./status.js";
 import {
   filePickerShown,
   pagesHeld,
@@ -12,7 +12,6 @@ import {
   startupOffersConnections,
   startupOffersRetry,
   startupText,
-  statusHint,
   whereText,
 } from "./status.js";
 
@@ -40,9 +39,8 @@ test("the local connection is this machine and its instance", () => {
   assert.equal(whereText({ kind: "local" }, null), "This machine");
 });
 
-test("Settings' hint names the active connection and its status", () => {
-  const state = { phase: "connected", connection: { name: "Local" } };
-  assert.equal(statusHint(state), "Local · Connected");
+test("retired Settings → Connection statusHint helper is removed", () => {
+  assert.equal("statusHint" in statusModule, false);
 });
 
 test("a remote is its address", () => {

@@ -20,17 +20,19 @@ import (
 )
 
 // The Marasi CLI (GLOSSARY "Marasi CLI"): the app never runs a CLI from
-// inside itself. It finds one, or installs one, from the copy a release or
-// nightly build carries or from Marasi's GitHub releases, and updates it
-// from those releases
+// inside itself. It finds one, or installs one on first setup, from the copy
+// a release or nightly build carries or from Marasi's GitHub releases
 // (docs/adr/2026-11-08-the-app-carries-a-compressed-cli-it-installs-once.md).
+// Once running, a connected service checks for and installs its own updates
+// through its control API
+// (docs/adr/2026-11-24-connected-services-update-through-the-control-api.md).
 //
 //   - cli.go: the replaceable functions every CLI effect goes through, and
 //     reading a CLI's build;
-//   - cli_config.go: the custom CLI path and the CLI channel in app config;
+//   - cli_config.go: the custom or installed CLI path in app config;
 //   - cli_locate.go: finding the CLI (custom path, then PATH) and checking
 //     a candidate is Marasi;
-//   - cli_install.go: installing and updating it, verified against
+//   - cli_install.go: first-time installation, verified against
 //     marasiCLIPublicKey;
 //   - cli_archive.go: extracting a release's archive build;
 //   - cli_carried.go: the CLI a release or nightly build carries.
@@ -82,11 +84,8 @@ type cliRuntime struct {
 	sleep func(d time.Duration)
 	// carried is the CLI this build carries (cli_carried.go), nil for none.
 	carried *carriedCLI
-	// background runs work, such as the update check after Install places
-	// the carried CLI, without waiting for it.
-	background func(work func())
 
-	// mu makes installs and updates run one at a time.
+	// mu makes installs run one at a time.
 	mu sync.Mutex
 }
 
@@ -113,7 +112,6 @@ func (a *App) useCLIRuntime() {
 	r.getenv = os.Getenv
 	r.sleep = time.Sleep
 	r.carried = buildCarriedCLI()
-	r.background = func(work func()) { go work() }
 }
 
 func parseMinisignKey(text string) (minisign.PublicKey, error) {

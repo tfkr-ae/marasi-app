@@ -15,18 +15,41 @@ export const heldCheckpointIDs = (error) => codeIDs(error, "checkpoint_held");
 export const isCheckpointGone = (error) => codeIDs(error, "checkpoint_gone") !== null;
 
 /**
- * The confirm modal for a switch refused over held items. Its buttons take
- * the layout's Modal variants; Open Checkpoint calls `open`.
+ * The confirm modal for a switch or restart refused over held items. Its
+ * buttons take the layout's Modal variants; Open Checkpoint calls `open`.
  */
-export function checkpointHeldModal(open) {
+export function checkpointHeldModal(open, { action = "switch projects" } = {}) {
   return {
     type: "confirm",
     title: "Checkpoint has intercepted items",
-    body: "Forward or drop them to switch projects.",
+    body: `Forward or drop them to ${action}.`,
     buttonTextConfirm: "Open Checkpoint",
     buttonTextCancel: "Cancel",
     response: (ok) => {
       if (ok) open();
     },
+  };
+}
+
+/**
+ * Subscribes to the connection store and opens the Checkpoint held-items
+ * modal in front of any open modal (such as Connections) whenever a restart
+ * is refused over held items.
+ */
+export function createRestartHeldHandler(modalStore, openCheckpoint) {
+  let seen = null;
+  return function update(state) {
+    const count = state.restartHeld ?? 0;
+    if (seen === null) {
+      seen = count;
+      return;
+    }
+    if (count <= seen) {
+      seen = count;
+      return;
+    }
+    seen = count;
+    const modal = checkpointHeldModal(openCheckpoint, { action: "restart" });
+    modalStore.update((queue) => [modal, ...queue]);
   };
 }

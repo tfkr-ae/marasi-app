@@ -1,6 +1,6 @@
-// How a connection's phase reads in the rail tile, the Connections modal and
-// Settings → Connection. Phases are the connection store's
-// (stores/createConnectionStore.js); a new phase adds its label and tone here.
+// How a connection's phase reads in the rail tile and the Connections modal.
+// Phases are the connection store's (stores/createConnectionStore.js); a new
+// phase adds its label and tone here.
 
 import { projectName } from "../openProgress.js";
 
@@ -35,9 +35,6 @@ export function whereText(connection, instance) {
   if (connection.kind === "local") return instance ? `This machine · instance ${instance}` : "This machine";
   return connection.url?.replace(/^https?:\/\//, "") ?? "";
 }
-
-/** Settings → Connection's hint: the active connection and its status. */
-export const statusHint = (state) => `${state.connection.name} · ${phaseLabel(state.phase)}`;
 
 /**
  * Whether the native file picker shows: a remote's projects live on its

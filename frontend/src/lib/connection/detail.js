@@ -1,0 +1,317 @@
+// Presentation helpers for the Connection details layout (ConnectionDetail.svelte):
+// identity header metadata, inline stop/restart confirmation copy, service update
+// actions/progress/contextual-slot precedence, and collapsed setup disclosure header.
+import { nightlyNotes } from "../updates.js";
+
+/** Host, instance, and OS metadata line under the connection name. */
+export function detailWhereText(connection, { instance = null, os = null } = {}) {
+  const host =
+    connection.kind === "local" ? "This machine" : (connection.url?.replace(/^https?:\/\//, "") ?? "");
+  const inst = instance || (connection.kind === "local" ? connection.instance : null) || null;
+  return [host, inst ? `instance ${inst}` : null, os || null].filter(Boolean).join(" · ");
+}
+
+/**
+ * Effective update channel for a connection: null when inactive (never leaking
+ * the active connection's channel), otherwise preferring `updateState.channel`
+ * (updated immediately by PUT /update/channel) over `connectionState.channel`.
+ */
+export function resolvedServiceChannel({ isActive = true, connectionState = null, updateState = null } = {}) {
+  if (!isActive) return null;
+  return updateState?.channel || connectionState?.channel || null;
+}
+
+/** Service version, build channel, and API level line, or null before reaching a service. */
+export function serviceMetaText({ version = null, channel = null, api = null } = {}, updateState = null) {
+  if (!version) return null;
+  const effectiveChannel = updateState?.channel || channel;
+  const hasChannel = effectiveChannel && version.toLowerCase().includes(`(${effectiveChannel.toLowerCase()}`);
+  const ch = effectiveChannel && !hasChannel ? ` (${effectiveChannel})` : "";
+  return `Marasi ${version}${ch} · API ${api ?? "none"}`;
+}
+
+/** Concise inline Stop confirmation copy for the contextual slot. */
+export function stopConfirmCopy(connection) {
+  return {
+    title: `Stop ${connection.name}?`,
+    detail:
+      connection.kind === "remote"
+        ? "You'll need to start it again on the remote host."
+        : "Another program started this instance.",
+  };
+}
+
+/** Concise inline Restart confirmation copy for remote or unowned local runs. */
+export function restartConfirmCopy(connection) {
+  return {
+    title: `Restart ${connection.name}?`,
+    detail: "Active connections will drop while the project reopens.",
+  };
+}
+
+/** Collapsed setup disclosure heading and mono summary. */
+export function setupDisclosure(connection, { channel = null, version = null, whenQuitting = null, mobile = false } = {}) {
+  const isDesktopLocal = connection.kind === "local" && !mobile;
+  const title = isDesktopLocal ? "Channel, CLI path & quit behavior" : "Update channel & reinstall";
+  const parts = [channel || (version === "dev" ? "dev" : "")].filter(Boolean);
+  if (isDesktopLocal && whenQuitting) parts.push(`quit: ${whenQuitting}`);
+  return { title, summary: parts.join(" · ") };
+}
+
+/** Segmented choices for `When quitting Marasi App` in Local's setup disclosure (desktop local only). */
+export const LOCAL_QUIT_CHOICES = [
+  ["ask", "Ask"],
+  ["keep", "Keep running"],
+  ["stop", "Stop"],
+];
+
+const SERVICE_UPDATE_STEPS = ["Download", "Verify", "Install", "Restart"];
+
+/** The service update channels a non-development service can follow. */
+export const SERVICE_CHANNELS = [
+  ["release", "Release"],
+  ["nightly", "Nightly"],
+];
+
+/** Whether the connected service supports self-update controls (non-dev and /update available). */
+export const supportsServiceUpdates = (connectionState, updateState) =>
+  Boolean(updateState?.supported !== false && !updateState?.development && connectionState?.version !== "dev");
+
+const isUpdateInstalling = (updateState) =>
+  Boolean(updateState?.install?.state === "running" || updateState?.startingInstall);
+
+const isUpdateRestartRequired = (connectionState, updateState) =>
+  Boolean(updateState?.restartRequired || connectionState?.restartRequired);
+
+/**
+ * Channel and reinstall controls for the collapsed setup disclosure, or null
+ * when hidden (dev build, older service lacking /update, or before GET /update
+ * loads).
+ */
+export function serviceChannelControls(connectionState, updateState) {
+  if (!supportsServiceUpdates(connectionState, updateState)) return null;
+  if (updateState?.loaded === false) return null;
+  const channel = updateState?.channel || connectionState?.channel || null;
+  if (!channel) return null;
+  const disabled = Boolean(
+    connectionState?.busy !== null ||
+      connectionState?.restarting ||
+      connectionState?.restartConfirming ||
+      updateState?.switchingChannel ||
+      updateState?.checking ||
+      isUpdateInstalling(updateState) ||
+      updateState?.cancelling,
+  );
+  return {
+    channel,
+    reinstallLabel: `Reinstall latest ${channel}`,
+    disabled,
+    switchingChannel: Boolean(updateState?.switchingChannel),
+  };
+}
+
+/** Inline confirmation copy before reinstalling the latest build on `channel`. */
+export function reinstallConfirmCopy(channel, connectionName) {
+  return {
+    title: channel ? `Reinstall latest ${channel}?` : "Reinstall latest build?",
+    detail: `Replaces the installed build on ${connectionName} even when older. Projects opened in a newer build may not open.`,
+  };
+}
+
+/**
+ * Primary service-update or carried-CLI button for the connected top action
+ * bar, or null when update controls are hidden (development build or 404/501
+ * unsupported service without an active carried-CLI upgrade).
+ */
+export function serviceUpdateAction(
+  connectionState,
+  updateState,
+  { carriedUpgrade = null, installingCarried = false } = {},
+) {
+  const updatesSupported = supportsServiceUpdates(connectionState, updateState);
+  const connBusy = Boolean(connectionState?.busy !== null || connectionState?.restarting || connectionState?.restartConfirming);
+
+  if (updatesSupported && isUpdateRestartRequired(connectionState, updateState)) {
+    if (!connectionState?.restartSupported) return null;
+    return {
+      kind: "restart",
+      label: connectionState?.restarting ? "Restarting…" : "Restart to apply",
+      primary: true,
+      disabled: connBusy,
+      spinning: Boolean(connectionState?.restarting),
+      hideNeutralRestart: true,
+    };
+  }
+
+  if (updatesSupported && isUpdateInstalling(updateState)) {
+    return {
+      kind: "installing",
+      label: "Updating…",
+      primary: true,
+      disabled: true,
+      spinning: false,
+      hideNeutralRestart: false,
+    };
+  }
+
+  if (carriedUpgrade) {
+    return {
+      kind: "carried",
+      label: installingCarried ? "Installing…" : `Install ${carriedUpgrade.version}`,
+      primary: true,
+      disabled: connBusy || installingCarried || Boolean(updateState?.checking) || Boolean(updateState?.switchingChannel),
+      spinning: false,
+      hideNeutralRestart: false,
+    };
+  }
+
+  if (!updatesSupported) return null;
+
+  if (updateState?.available) {
+    return {
+      kind: "install",
+      label: `Update to ${updateState.available.version}`,
+      primary: true,
+      disabled: connBusy || Boolean(updateState?.checking) || Boolean(updateState?.switchingChannel),
+      spinning: false,
+      hideNeutralRestart: false,
+    };
+  }
+
+  return {
+    kind: "check",
+    label: updateState?.checking ? "Checking…" : "Check update",
+    primary: false,
+    disabled: connBusy || Boolean(updateState?.checking) || Boolean(updateState?.switchingChannel),
+    spinning: Boolean(updateState?.checking),
+    hideNeutralRestart: false,
+  };
+}
+
+/**
+ * State for the inline 4-step update tracker (`Download → Verify → Install → Restart`).
+ * Cancel is offered only while downloading or verifying, disappearing once swap begins.
+ */
+export function serviceUpdateProgress(updateState, connectionName) {
+  const install = updateState?.install ?? null;
+  const restartRequired = Boolean(updateState?.restartRequired || install?.state === "installed");
+  const step = install?.step || "download";
+  const swapping = step === "install" || step === "swap";
+
+  const stepIndex = restartRequired ? 3 : swapping ? 2 : step === "verify" ? 1 : 0;
+
+  let percent;
+  if (!restartRequired && step === "download" && install?.total > 0) {
+    percent = Math.min(100, Math.max(0, Math.floor((install.received * 100) / install.total)));
+  }
+
+  let heading;
+  if (restartRequired) {
+    const version = install?.version || "";
+    heading = version
+      ? `Marasi ${version} installed on ${connectionName}`
+      : `Update installed on ${connectionName}`;
+  } else if (swapping) {
+    heading = `Replacing executable on ${connectionName}…`;
+  } else if (step === "verify") {
+    heading = "Verifying signature and checksum…";
+  } else if (percent !== undefined) {
+    heading = `Downloading on ${connectionName}… ${percent}%`;
+  } else {
+    heading = `Downloading on ${connectionName}…`;
+  }
+
+  return {
+    steps: SERVICE_UPDATE_STEPS,
+    stepIndex,
+    percent,
+    cancellable: Boolean(!restartRequired && install?.state === "running" && !swapping),
+    heading,
+  };
+}
+
+/**
+ * Strict 7-tier precedence for the single contextual slot below the action bar
+ * (at most one card renders at a time):
+ * 1. restartConfirm / stopConfirm
+ * 2. installing (download/verify/swap)
+ * 3. restartRequired
+ * 4. carriedUpgrade (desktop local)
+ * 5. available
+ * 6. channelMismatch (desktop local)
+ * 7. installError / restartError (plus stopError / apiWarning)
+ */
+export function contextualSlotKind({
+  isActive,
+  phase,
+  connectionState,
+  updateState,
+  showRestartConfirm,
+  showStopConfirm,
+  isCLIMissing,
+  isOutdated,
+  stopErrorText,
+  carriedUpgrade = null,
+  channelMismatch = null,
+}) {
+  if (showRestartConfirm) return "restart-confirm";
+  if (showStopConfirm) return "stop-confirm";
+  if (isActive && phase === "auth-failed") return "auth-failed";
+  if (isCLIMissing) return "cli-missing";
+  if (isOutdated) return "outdated";
+  if (isActive && phase === "stopped") return "stopped";
+  if (isActive && phase === "failed") return "failed";
+
+  const connected = isActive && phase === "connected";
+  const connectedUpdates = connected && supportsServiceUpdates(connectionState, updateState);
+  if (connectedUpdates && isUpdateInstalling(updateState)) return "installing";
+  if (connectedUpdates && isUpdateRestartRequired(connectionState, updateState)) return "restart-required";
+  if (connected && carriedUpgrade) return "carried-upgrade";
+  if (connectedUpdates && updateState?.available) return "available";
+  if (connected && channelMismatch) return "channel-mismatch";
+
+  if (stopErrorText) return "stop-error";
+  if (connectedUpdates && updateState?.error) return "install-error";
+  if (isActive && connectionState?.restartError) return "restart-error";
+  if (isActive && connectionState?.apiWarning) return "api-warning";
+  return null;
+}
+
+const INLINE_ERROR_SLOTS = new Set([
+  "restart-required",
+  "carried-upgrade",
+  "available",
+  "channel-mismatch",
+  "install-error",
+  "restart-error",
+]);
+
+/**
+ * Active update and/or restart errors to display alongside (or inside) `slot`
+ * via the shared inline error block, so errors from Switch channel, Check
+ * update, Reinstall, or Restart are never hidden by higher-precedence cards.
+ */
+export function contextualSlotErrors(slot, connectionState, updateState) {
+  if (!INLINE_ERROR_SLOTS.has(slot)) return { updateError: null, restartError: null };
+  const updateError =
+    supportsServiceUpdates(connectionState, updateState) && updateState?.error ? updateState.error : null;
+  const restartError = connectionState?.restartError || null;
+  return { updateError, restartError };
+}
+
+/** Clean toast for an explicit `Check update` that found the service up to date. */
+export function serviceUpdateCheckToast(result, connectionName) {
+  if (!result?.ok || result.kind !== "up-to-date") return null;
+  return {
+    message: result.channel
+      ? `${connectionName} is on the latest ${result.channel} build`
+      : `${connectionName} is up to date`,
+    background: "variant-filled-success",
+  };
+}
+
+/** Formats available service update release notes (stripping nightly metadata headers). */
+export function formatServiceNotes(available) {
+  if (!available?.notes) return "";
+  return available.channel === "nightly" ? nightlyNotes(available.notes) : available.notes.trim();
+}

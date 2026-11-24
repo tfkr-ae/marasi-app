@@ -8,16 +8,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
-	"strings"
 	"testing"
 
 	"aead.dev/minisign"
 )
 
-// Installing and updating the Marasi CLI from a fake Marasi release server,
-// signed with a key made for the test and injected through cliRuntime.key.
-// The release server is never GitHub.
+// Installing the Marasi CLI from a fake Marasi release server, signed with a
+// key made for the test and injected through cliRuntime.key. The release
+// server is never GitHub.
 
 var (
 	cliBinaryOld = []byte("#!/bin/sh\necho marasi 30.10.2026\n")
@@ -147,9 +147,6 @@ func newCLIInstall(t *testing.T, goos, goarch string) *cliInstall {
 	r.carried = nil
 	c.app.updateClient = c.releases.server.Client()
 	c.app.build = BuildInfo{Channel: "release", Version: "30.10.2026"}
-	if err := c.app.Config.setCLIChannel(""); err != nil {
-		t.Fatal(err)
-	}
 	return c
 }
 
@@ -362,9 +359,7 @@ func TestInstallCLIInstallsNothingWhenItCantMakeTheBuildExecutable(t *testing.T)
 
 func TestInstallCLIFromAMissingNightlySaysToTryAgainAndWritesNothing(t *testing.T) {
 	c := newCLIInstall(t, "linux", "amd64")
-	if _, err := c.app.SetCLIChannel("nightly"); err != nil {
-		t.Fatal(err)
-	}
+	c.app.build = BuildInfo{Channel: "nightly", Version: "x"}
 	dir := t.TempDir()
 
 	result, err := c.app.InstallCLI(dir)
@@ -382,9 +377,7 @@ func TestInstallCLIFromAMissingNightlySaysToTryAgainAndWritesNothing(t *testing.
 
 func TestInstallCLIFromANightlyWithoutThisPlatformsAssetSaysToTryAgain(t *testing.T) {
 	c := newCLIInstall(t, "linux", "amd64")
-	if _, err := c.app.SetCLIChannel("nightly"); err != nil {
-		t.Fatal(err)
-	}
+	c.app.build = BuildInfo{Channel: "nightly", Version: "x"}
 	// The nightly is recreated on each run: published, assets still coming.
 	publishCLI(c.releases, c.keys, nightlyCLI("06.11.2026 (nightly 7d411bd)", map[string][]byte{"marasi-windows-amd64.exe": cliBinaryNew}))
 
@@ -398,25 +391,26 @@ func TestInstallCLIFromANightlyWithoutThisPlatformsAssetSaysToTryAgain(t *testin
 	}
 }
 
-func TestInstallCLIFollowsTheAppsChannelUnlessOverridden(t *testing.T) {
+func TestInstallCLIFollowsTheAppsBuildChannel(t *testing.T) {
 	for name, tc := range map[string]struct {
-		appChannel string
-		setting    string
-		want       string
+		appChannel    string
+		legacyConfig  string
+		want          string
+		wantChannel   string
 	}{
-		"release app follows release":       {"release", "", "06.11.2026"},
-		"nightly app follows nightly":       {"nightly", "", "07.11.2026 (nightly abc1234)"},
-		"dev app follows release":           {"dev", "", "06.11.2026"},
-		"release app overridden to nightly": {"release", "nightly", "07.11.2026 (nightly abc1234)"},
-		"nightly app overridden to release": {"nightly", "release", "06.11.2026"},
+		"release app follows release":              {"release", "", "06.11.2026", "release"},
+		"nightly app follows nightly":              {"nightly", "", "07.11.2026 (nightly abc1234)", "nightly"},
+		"dev app defaults to release":              {"dev", "", "06.11.2026", "release"},
+		"empty channel defaults to release":        {"", "", "06.11.2026", "release"},
+		"legacy cli_channel config key is ignored": {"release", "nightly", "06.11.2026", "release"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := newCLIInstall(t, "linux", "amd64")
 			c.app.build = BuildInfo{Channel: tc.appChannel, Version: "x"}
 			publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": []byte("release")}))
 			publishCLI(c.releases, c.keys, nightlyCLI("07.11.2026 (nightly abc1234)", map[string][]byte{"marasi-linux-amd64": []byte("nightly")}))
-			if tc.setting != "" {
-				if _, err := c.app.SetCLIChannel(tc.setting); err != nil {
+			if tc.legacyConfig != "" {
+				if err := writeConfigKeys(c.app.Config.path(), map[string]any{"cli_channel": tc.legacyConfig}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -426,36 +420,35 @@ func TestInstallCLIFollowsTheAppsChannelUnlessOverridden(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if result.Outcome != "installed" || result.Version != tc.want {
-				t.Fatalf("installed %+v, want %s", result, tc.want)
+			if result.Outcome != "installed" || result.Version != tc.want || result.Channel != tc.wantChannel {
+				t.Fatalf("installed %+v, want %s on %s", result, tc.want, tc.wantChannel)
 			}
 		})
 	}
 }
 
-func TestSetCLIChannelSavesTheOverride(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	c.app.build = BuildInfo{Channel: "nightly", Version: "x"}
-
-	got, err := c.app.SetCLIChannel("release")
-	if err != nil {
-		t.Fatal(err)
+func TestRetiredCLIUpdaterBindingsAreRemovedAndRetainedFlowsExist(t *testing.T) {
+	appType := reflect.TypeOf(&App{})
+	for _, retired := range []string{"CheckForCLIUpdate", "GetCLIChannel", "SetCLIChannel"} {
+		if _, exists := appType.MethodByName(retired); exists {
+			t.Errorf("App still exports retired CLI updater method %s", retired)
+		}
 	}
-	if got.Setting != "release" || got.Effective != "release" {
-		t.Fatalf("channel = %+v, want release", got)
-	}
-	if got, _ := c.app.SetCLIChannel("app"); got.Setting != "app" || got.Effective != "nightly" {
-		t.Fatalf("channel = %+v, want following the nightly app", got)
-	}
-	if _, err := c.app.SetCLIChannel("beta"); err == nil {
-		t.Fatal("SetCLIChannel(beta) succeeded, want a refusal")
-	}
-	reloaded, err := LoadConfig(c.app.Config.ConfigDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reloaded.cliChannelSetting() != "" {
-		t.Fatalf("saved channel %q, want following the app", reloaded.cliChannelSetting())
+	for _, retained := range []string{
+		"LocateCLI",
+		"UseCLIPath",
+		"ClearCLIPath",
+		"BrowseCLIPath",
+		"DefaultCLIInstallDir",
+		"InstallCLI",
+		"CarriedCLI",
+		"InstallCarriedCLI",
+		"RestartLocalInstance",
+		"ClaimOwnedRun",
+	} {
+		if _, exists := appType.MethodByName(retained); !exists {
+			t.Errorf("App is missing retained CLI/local method %s", retained)
+		}
 	}
 }
 
@@ -518,125 +511,6 @@ func installedCLI(t *testing.T, c *cliInstall, data []byte) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-func TestCheckForCLIUpdateInstallsANewerCLIOverTheCurrentOne(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	path := installedCLI(t, c, cliBinaryOld)
-	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": cliBinaryNew}))
-
-	result, err := c.app.CheckForCLIUpdate()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Outcome != "installed" || result.Version != "06.11.2026" {
-		t.Fatalf("result = %+v, want 06.11.2026 installed", result)
-	}
-	data, _ := os.ReadFile(path)
-	if !bytes.Equal(data, cliBinaryNew) {
-		t.Fatalf("CLI holds %q, want the new build", data)
-	}
-	if got := dirFiles(t, filepath.Dir(path)); !slices.Equal(got, []string{"marasi"}) {
-		t.Fatalf("folder holds %v, want only marasi", got)
-	}
-	if result.CLI.Version != "06.11.2026" || result.CLI.Path != path {
-		t.Fatalf("CLI = %+v, want the new version at the same path", result.CLI)
-	}
-}
-
-func TestCheckForCLIUpdateLeavesAnUpToDateCLIAlone(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	path := installedCLI(t, c, cliBinaryNew)
-	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": []byte("same day, other bytes")}))
-
-	result, err := c.app.CheckForCLIUpdate()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Outcome != "up-to-date" {
-		t.Fatalf("result = %+v, want up to date", result)
-	}
-	for _, request := range c.releases.requested() {
-		if strings.Contains(request, "/download/") {
-			t.Fatalf("downloaded %s, want nothing", request)
-		}
-	}
-	if data, _ := os.ReadFile(path); !bytes.Equal(data, cliBinaryNew) {
-		t.Fatal("the CLI changed")
-	}
-}
-
-func TestCheckForCLIUpdateInstallsTheNightlyOnTheNightlyChannel(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	path := installedCLI(t, c, cliBinaryOld)
-	publishCLI(c.releases, c.keys, releaseCLI("30.10.2026", map[string][]byte{"marasi-linux-amd64": cliBinaryOld}))
-	publishCLI(c.releases, c.keys, nightlyCLI("06.11.2026 (nightly 7d411bd)", map[string][]byte{"marasi-linux-amd64": []byte("nightly build")}))
-	if _, err := c.app.SetCLIChannel("nightly"); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := c.app.CheckForCLIUpdate()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Outcome != "installed" || result.Version != "06.11.2026 (nightly 7d411bd)" || result.Channel != "nightly" {
-		t.Fatalf("result = %+v, want the nightly installed", result)
-	}
-	if data, _ := os.ReadFile(path); string(data) != "nightly build" {
-		t.Fatalf("CLI holds %q, want the nightly", data)
-	}
-}
-
-func TestCheckForCLIUpdateNeverReplacesADevBuild(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	path := installedCLI(t, c, []byte("my own build"))
-	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": cliBinaryNew}))
-
-	result, err := c.app.CheckForCLIUpdate()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Outcome != "dev" {
-		t.Fatalf("result = %+v, want a dev build left alone", result)
-	}
-	if data, _ := os.ReadFile(path); string(data) != "my own build" {
-		t.Fatal("the dev build was replaced")
-	}
-}
-
-func TestCheckForCLIUpdateKeepsTheCurrentCLIWhenTheUpdateFailsVerification(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	path := installedCLI(t, c, cliBinaryOld)
-	r := releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": []byte("evil")})
-	r.checksums = cliChecksums(map[string][]byte{"marasi-linux-amd64": cliBinaryNew})
-	publishCLI(c.releases, c.keys, r)
-
-	result, err := c.app.CheckForCLIUpdate()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Outcome != "failed" || result.Failure.Kind != "checksum" {
-		t.Fatalf("result = %+v, want a checksum failure", result)
-	}
-	if data, _ := os.ReadFile(path); !bytes.Equal(data, cliBinaryOld) {
-		t.Fatal("the CLI was replaced")
-	}
-	if got := dirFiles(t, filepath.Dir(path)); !slices.Equal(got, []string{"marasi"}) {
-		t.Fatalf("folder holds %v, want only marasi", got)
-	}
-}
-
-func TestCheckForCLIUpdateWithNoCLIIsRefused(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-
-	if _, err := c.app.CheckForCLIUpdate(); err == nil {
-		t.Fatal("CheckForCLIUpdate with no CLI succeeded, want an error")
-	}
 }
 
 func TestTheBuiltInCLIKeyVerifiesAPublishedMarasiRelease(t *testing.T) {
@@ -720,25 +594,5 @@ func TestInstallCLIReportsDownloadVerifyAndInstallProgress(t *testing.T) {
 	}
 	if last.Received != int64(len(build)) {
 		t.Fatalf("last download progress = %+v, want all %d bytes", last, len(build))
-	}
-}
-
-func TestCheckForCLIUpdateReportsProgressOnlyWhenItInstalls(t *testing.T) {
-	c := newCLIInstall(t, "linux", "amd64")
-	path := filepath.Join(t.TempDir(), "marasi")
-	if err := os.WriteFile(path, cliBinaryNew, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := c.app.UseCLIPath(path); err != nil {
-		t.Fatal(err)
-	}
-	publishCLI(c.releases, c.keys, releaseCLI("06.11.2026", map[string][]byte{"marasi-linux-amd64": cliBinaryNew}))
-
-	result, err := c.app.CheckForCLIUpdate()
-	if err != nil || result.Outcome != "up-to-date" {
-		t.Fatalf("result = %+v, %v, want up to date", result, err)
-	}
-	if progress := c.cliProgress(); len(progress) != 0 {
-		t.Fatalf("progress = %+v, want none for an up-to-date CLI", progress)
 	}
 }

@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { Cable, ChevronLeft, ChevronRight, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { ChevronLeft, ChevronRight, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		SetFlag,
 		ToggleFlag,
@@ -53,9 +53,7 @@
 	import { chromeError } from "../../lib/globalActions.js";
 	import { toastError } from "../../lib/toasts.js";
 	import { neutralVariant, primaryVariant } from "../../lib/launchpad/format.js";
-	import ConnectionSettings from "../../lib/connection/ConnectionSettings.svelte";
-	import CLISettings from "../../lib/connection/CLISettings.svelte";
-	import { statusHint } from "../../lib/connection/status.js";
+	import { connectionsModal } from "../../lib/connection/modal.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { MOBILE_HIDDEN_SECTIONS, mobile, mobileCheck } from "../../lib/platform.js";
 	import { followChromeConfig } from "../../lib/chromeConfigEvents.js";
@@ -82,7 +80,6 @@
 	const modalStore = getModalStore();
 
 	$: sections = [
-		{ id: "connection", name: "Connection", hint: statusHint($connectionStore), icon: Cable },
 		{ id: "appearance", name: "Appearance", hint: "Text size and theme", icon: Palette },
 		{ id: "editing", name: "Keyboard & Editor", hint: "Shortcuts, Vim, syntax", icon: Keyboard },
 		{ id: "listener", name: "Listener", hint: "Default interface and port", icon: Globe },
@@ -92,7 +89,7 @@
 		{ id: "highlights", name: "Highlights", hint: "Colours and labels", icon: Highlighter },
 		{ id: "content-types", name: "Content Types", hint: "Types the Ledger hides", icon: FileType },
 		{ id: "maintenance", name: "Maintenance", hint: "Background jobs and rebuilds", icon: Wrench },
-		{ id: "updates", name: "Updates", hint: "App and Marasi CLI", icon: RefreshCw },
+		{ id: "updates", name: "Updates", hint: "Marasi App", icon: RefreshCw },
 		{ id: "about", name: "About", hint: "Version and build", icon: Info },
 	].filter((entry) => !($mobile && MOBILE_HIDDEN_SECTIONS.has(entry.id)));
 	const syntaxModes = [
@@ -112,18 +109,23 @@
 	// ?section=<id> opens a section, as the update panel's link to the
 	// Channel setting does. Choosing a section puts it in the URL, so that
 	// link switches section even after the researcher moved to another one.
-	// ?section=cli (the old Marasi CLI section) and ?section=updates#cli open
-	// Updates scrolled to its Marasi CLI part (lib/settingsSection.js).
+	// Legacy ?section=connection, ?section=cli, and ?section=updates#cli links
+	// open the Connections modal cleanly without landing on a broken section
+	// (lib/settingsSection.js).
 	$: requested = settingsSection(
 		$page.url.searchParams.get("section"),
 		$page.url.hash,
 		sections.map((entry) => entry.id),
 	);
-	// Once per URL: sections changes with the connection's hint too.
 	let openedHref = null;
 	$: if (requested && $page.url.href !== openedHref) openRequested(requested, $page.url.href);
-	async function openRequested({ section: id, part }, href) {
+	async function openRequested({ section: id, part, openConnections }, href) {
 		openedHref = href;
+		if (openConnections) {
+			if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
+			goto("/settings", { replaceState: true, noScroll: true, keepFocus: true });
+			return;
+		}
 		section = id;
 		listing = false;
 		if (!part) return;
@@ -530,9 +532,7 @@
 			<button type="button" class="settings-back mb-2 items-center gap-1 text-sm text-primary-500" on:click={() => (listing = true)}>
 				<ChevronLeft size={16} />Settings
 			</button>
-			{#if section === "connection"}
-				<ConnectionSettings />
-			{:else if section === "appearance"}
+			{#if section === "appearance"}
 				<h3 class="text-sm font-bold">Appearance</h3>
 				<div class={row}>
 					<p>Text size</p>
@@ -1179,7 +1179,7 @@
 				</div>
 			{:else if section === "updates"}
 				<h3 class="text-sm font-bold">Updates</h3>
-				<h4 class="mt-3 text-xs font-semibold uppercase tracking-wide opacity-60" data-testid="updates-app">Marasi App</h4>
+				<p class="text-xs opacity-70" data-testid="updates-app">Marasi App</p>
 				{#if updateSettings?.Channel}
 					<div class={row}>
 						<p>Channel</p>
@@ -1244,8 +1244,6 @@
 						</div>
 					</div>
 				{/if}
-				<h4 id="cli" class="mt-8 scroll-mt-4 text-xs font-semibold uppercase tracking-wide opacity-60" data-testid="updates-cli">Marasi CLI</h4>
-				<CLISettings />
 			{:else}
 				<h3 class="text-sm font-bold">About</h3>
 				<div class={row}>

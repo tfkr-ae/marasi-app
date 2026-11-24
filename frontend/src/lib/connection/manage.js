@@ -1,5 +1,6 @@
 // Adding, editing and removing saved connections (Go's connections.go),
 // then reloading the connection store's list.
+import { get } from "svelte/store";
 import {
   AddConnection,
   AddLocalConnection,
@@ -12,6 +13,8 @@ import {
   StopLocalInstance,
 } from "../bindings/github.com/tfkr-ae/marasi-app/app.js";
 import { connectionStore } from "../../stores/connectionStore.js";
+import { localCLIStore } from "../../stores/localCLIStore.js";
+import { runCarriedInstall } from "./carried.js";
 import { createInstanceControl } from "./instanceControl.js";
 
 /** Saves a remote, `{name, url, password, noPassword}`; resolves to it. */
@@ -75,3 +78,25 @@ export function localInstanceControl(connection) {
 
 /** A Go error's text, for the inline error line. */
 export const errorText = (err) => String(err?.message ?? err);
+
+/**
+ * Installs the carried CLI offline, restarts the local instance, and shows
+ * the result or error toast. Shared by ConnectionDetail and ConnectionBanner.
+ */
+export function installCarriedWithToast(
+  toastStore,
+  { connectionId, isActive = true, instanceRunning = false } = {},
+) {
+  const state = get(connectionStore);
+  const activePhase = isActive ? state.phase : "idle";
+  return runCarriedInstall({
+    installCarried: (opts) => localCLIStore.installCarried(opts),
+    toastStore,
+    connectionState: state,
+    connectionId: connectionId ?? state.connection.id,
+    isActive,
+    instanceRunning,
+    restartService: () => connectionStore.restart(),
+    retryConnection: () => (activePhase === "failed" ? connectionStore.retry() : connectionStore.retryNow()),
+  });
+}

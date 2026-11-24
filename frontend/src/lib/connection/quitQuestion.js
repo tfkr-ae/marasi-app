@@ -4,13 +4,6 @@
 /** Go's event carrying the question. */
 export const QUIT_QUESTION_EVENT = "quit-question";
 
-/** The When quitting setting's choices, as Settings → Connection shows them. */
-export const WHEN_QUITTING = [
-  ["ask", "Ask"],
-  ["keep", "Keep Marasi running"],
-  ["stop", "Stop Marasi"],
-];
-
 /**
  * The connections the modal names: only when there are several, since one
  * owned run needs no name.

@@ -3,37 +3,47 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { get } from "svelte/store";
-import { createServiceUpdateStore, SERVICE_UPDATE_EVENTS, serviceUpdateLine, serviceUpdateToast } from "./serviceUpdate.js";
+import * as serviceUpdateModule from "./serviceUpdate.js";
+import { createServiceUpdateStore, SERVICE_UPDATE_EVENTS, serviceUpdateToast } from "./serviceUpdate.js";
 import { createServiceClient } from "../lib/service/client.js";
 
 const available = { instance: "default", version: "v1.4.0", channel: "release", published: "2026-11-01T00:00:00Z", notes: "Fixes", page: "https://example.com/v1.4.0" };
 
+test("retired Settings CLI passive status helper serviceUpdateLine is removed", () => {
+  assert.equal("serviceUpdateLine" in serviceUpdateModule, false);
+});
+
 test("an available build shows, then the install's progress, then the result", () => {
   const store = createServiceUpdateStore();
-  assert.equal(serviceUpdateLine(get(store)), null);
+  assert.equal(get(store).available, null);
+  assert.equal(get(store).install, null);
 
   store.onEvent("update.available", available);
   assert.equal(get(store).available.version, "v1.4.0");
-  assert.equal(serviceUpdateLine(get(store)), "v1.4.0 available (release)");
+  assert.equal(get(store).available.channel, "release");
 
   store.onEvent("update.progress", { instance: "default", version: "v1.4.0", step: "download", received: 512, total: 2048 });
-  assert.equal(serviceUpdateLine(get(store)), "Installing v1.4.0: download 25%");
+  assert.deepEqual(get(store).install, { state: "running", version: "v1.4.0", step: "download", received: 512, total: 2048, joined: false });
 
   store.onEvent("update.installed", { instance: "default", version: "v1.4.0", install_path: "/usr/local/bin/marasi" });
-  assert.equal(serviceUpdateLine(get(store)), "v1.4.0 installed. Restart the service to run it.");
+  assert.equal(get(store).restartRequired, true);
+  assert.deepEqual(get(store).install, { state: "installed", version: "v1.4.0", installPath: "/usr/local/bin/marasi" });
 });
 
 test("a failed install says where it stopped", () => {
   const store = createServiceUpdateStore();
   store.onEvent("update.failed", { instance: "default", version: "v1.4.0", kind: "verify", step: "verify", message: "checksum mismatch" });
-  assert.equal(serviceUpdateLine(get(store)), "v1.4.0 not installed: checksum mismatch");
+  assert.equal(get(store).install.state, "failed");
+  assert.equal(get(store).install.step, "verify");
+  assert.equal(get(store).error.message, "checksum mismatch");
 });
 
 test("clear forgets the last service's update, on a connection switch", () => {
   const store = createServiceUpdateStore();
   store.onEvent("update.available", available);
   store.clear();
-  assert.equal(serviceUpdateLine(get(store)), null);
+  assert.equal(get(store).available, null);
+  assert.equal(get(store).install, null);
 });
 
 test("available, installed and failed toast briefly; progress doesn't", () => {
@@ -67,7 +77,8 @@ test("the update events reach the store over the service client's /events stream
   const [stream] = sources;
   stream.emit("update.available", available, "run.1");
   stream.emit("update.progress", { instance: "default", version: "v1.4.0", step: "verify", received: 2048, total: 2048 }, "run.2");
-  assert.equal(serviceUpdateLine(get(store)), "Installing v1.4.0: verify 100%");
+  assert.deepEqual(get(store).install, { state: "running", version: "v1.4.0", step: "verify", received: 2048, total: 2048, joined: false });
   stream.emit("update.failed", { instance: "default", version: "v1.4.0", kind: "network", step: "download", message: "connection reset" }, "run.3");
-  assert.equal(serviceUpdateLine(get(store)), "v1.4.0 not installed: connection reset");
+  assert.equal(get(store).install.state, "failed");
+  assert.equal(get(store).error.message, "connection reset");
 });

@@ -83,3 +83,17 @@ func (a *App) ownsRun(id, runID string) bool {
 	a.saveOwnedRun(id, "")
 	return false
 }
+
+// ClaimOwnedRun records runID as the app's owned run on local connection id
+// after an app-initiated restart through POST /service/restart hands over to
+// a successor process with a new run_id. A run without an ID is not saved.
+func (a *App) ClaimOwnedRun(id, runID string) error {
+	if _, _, err := a.localInstanceFor(id); err != nil {
+		return err
+	}
+	if runID == "" {
+		return nil
+	}
+	a.saveOwnedRun(id, runID)
+	return nil
+}

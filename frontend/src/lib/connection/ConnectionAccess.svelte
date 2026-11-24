@@ -17,6 +17,8 @@
 	export let connection;
 	/** The Settings row class, or the modal's. */
 	export let row;
+	/** Omit the top margin and border when continuing directly below another row group. */
+	export let flush = false;
 
 	$: neutral = neutralButton($modeCurrent);
 	$: primary = primaryButton($modeCurrent);
@@ -123,7 +125,7 @@
 	const copyPayload = attempt(async () => copyText(JSON.stringify(payload), "payload"));
 </script>
 
-<div class="mt-3 border-t border-surface-200 dark:border-surface-700" data-testid="connection-access">
+<div class={flush ? "" : "mt-4 border-t border-surface-300 dark:border-surface-600"} data-testid="connection-access">
 	<div class={row}>
 		<div>
 			<p>Password</p>
