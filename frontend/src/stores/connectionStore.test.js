@@ -76,6 +76,35 @@ test("a service that can't be reached fails the connection", () => {
 
 const connected = [{ type: "APP_STARTED" }, up(true), { type: "CONNECTED", status }];
 
+test("a first load that fails says so, closes the stream, and Retry reaches the service again", () => {
+  const failed = run(...connected, { type: "LOAD_FAILED", error: "GET /dashboard: internal: database is locked" });
+  assert.equal(failed.state.phase, "failed");
+  assert.equal(failed.state.loadFailed, true);
+  assert.equal(failed.state.error, "GET /dashboard: internal: database is locked");
+  assert.equal(failed.steps.at(-1), "close-events");
+
+  const retried = run(...connected, { type: "LOAD_FAILED", error: "x" }, { type: "RETRY" });
+  assert.equal(retried.state.phase, "starting");
+  assert.equal(retried.state.loadFailed, false);
+  assert.equal(retried.state.error, null);
+});
+
+test("Retry starts a first load that hasn't finished over, but not a loaded project", () => {
+  const loading = run(...connected, { type: "RETRY" });
+  assert.equal(loading.state.phase, "starting");
+  assert.equal(loading.state.session, run(...connected).state.session + 1);
+
+  const loaded = run(...connected, { type: "PROJECT_LOADED", path: status.project }, { type: "RETRY" });
+  assert.equal(loaded.state.phase, "connected");
+  assert.deepEqual(loaded.refusals, ["Nothing to retry."]);
+});
+
+test("a load failure after the project loaded changes nothing", () => {
+  const { state, refusals } = run(...connected, { type: "PROJECT_LOADED", path: status.project }, { type: "LOAD_FAILED", error: "x" });
+  assert.equal(state.phase, "connected");
+  assert.deepEqual(refusals, ["No project is loading."]);
+});
+
 // Runs `actions` after connecting, and returns the steps they added, with
 // their details.
 function after(...actions) {
@@ -270,7 +299,7 @@ test("an action out of turn is refused and changes nothing", () => {
 
 // The store performs each step through `api`, recorded in `calls`. Timers
 // are fake: `timers.fire()` ends the pending wait.
-function fakeApi({ connectLocal, readStatus, confirmSwitch, confirmFollow } = {}) {
+function fakeApi({ connectLocal, readStatus, confirmSwitch, confirmFollow, loadProject } = {}) {
   const calls = [];
   let onDrop = null;
   let onReset = null;
@@ -290,7 +319,10 @@ function fakeApi({ connectLocal, readStatus, confirmSwitch, confirmFollow } = {}
       onReset = handlers.onReset;
     },
     closeEvents: () => calls.push("closeEvents"),
-    loadProject: async (loaded) => calls.push(["loadProject", loaded.project]),
+    loadProject: async (loaded, options) => {
+      calls.push(["loadProject", loaded.project]);
+      if (loadProject) await loadProject(options);
+    },
     resync: async () => calls.push("resync"),
     confirmSwitch: async () => {
       calls.push("confirmSwitch");
@@ -392,6 +424,46 @@ test("a failed start shows the error, and retry() reaches the service", async ()
   store.retry();
   const connected = await reached(store, "connected");
   assert.equal(connected.owned, false);
+});
+
+test("a first load that rejects fails the connection with its error", async () => {
+  const { api, calls } = fakeApi({
+    loadProject: async () => {
+      throw new Error("GET /traffic/count: timeout: No answer from 127.0.0.1:51391");
+    },
+  });
+  const store = createConnectionStore(api);
+
+  store.start();
+  const failed = await reached(store, "failed");
+
+  assert.equal(failed.loadFailed, true);
+  assert.match(failed.error, /No answer from/);
+  assert.equal(calls.at(-1), "closeEvents");
+});
+
+test("Retry during a first load supersedes it: its late failure changes nothing", async () => {
+  let fail;
+  let loads = 0;
+  const { api } = fakeApi({
+    loadProject: () => {
+      loads++;
+      if (loads === 1) return new Promise((_, reject) => (fail = reject));
+    },
+  });
+  const store = createConnectionStore(api);
+
+  store.start();
+  await reached(store, "connected");
+  await settle();
+  store.retry();
+  await reached(store, "connected");
+  await settle();
+  fail(new Error("late"));
+  await settle();
+
+  assert.equal(get(store).phase, "connected");
+  assert.equal(loads, 2);
 });
 
 test("a refused status fails the connection with the service's error", async () => {

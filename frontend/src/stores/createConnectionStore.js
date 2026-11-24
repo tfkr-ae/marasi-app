@@ -116,6 +116,10 @@ export function initialConnection() {
     runId: null,
     proxyListener: null,
     error: null,
+    // This session's project has loaded (PROJECT_LOADED), and whether the
+    // session failed loading it rather than reaching the service.
+    loaded: false,
+    loadFailed: false,
     // Reconnect attempts since the stream dropped, and whether one is
     // reaching the service now.
     attempt: 0,
@@ -223,6 +227,8 @@ function begin(state) {
     shareHost: "",
     stopAsk: false,
     stopError: null,
+    loaded: false,
+    loadFailed: false,
   };
   const { connection } = state;
   reset.session = state.session + 1;
@@ -613,9 +619,18 @@ export function reduce(state, action) {
 
     case "PROJECT_LOADED":
       // A switch loaded another project: reconnects compare against it.
-      return go(state, { project: action.path });
+      return go(state, { project: action.path, loaded: true });
+
+    case "LOAD_FAILED":
+      // Loading the project on connecting failed: the start screen says
+      // why and offers Retry, which reaches the service again.
+      if (state.phase !== "connected" || state.loaded) return refuse(state, "No project is loading.");
+      return go(state, { phase: "failed", error: action.error, loadFailed: true }, [{ type: "close-events" }]);
 
     case "RETRY":
+      // A first load that hasn't finished can start over too: one read
+      // may never answer.
+      if (state.phase === "connected" && !state.loaded) return begin(state);
       if (!["failed", "auth-failed", "stopped"].includes(state.phase)) return refuse(state, "Nothing to retry.");
       return begin(state);
 
@@ -979,6 +994,7 @@ export function createConnectionStore(api, timers = globalThis) {
           await api.loadProject(step.status, { current: () => current(session) });
         } catch (err) {
           console.error("Loading the service's project failed:", err);
+          settle(session, { type: "LOAD_FAILED", error: message(err) });
         }
         return;
     }

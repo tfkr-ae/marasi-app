@@ -9,6 +9,7 @@ import { eventBatch } from "./eventBatch.js";
 
 export { canCancel, openDirections } from "./createStreamedPairStore.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 import {
   createStreamedPairApi,
   toHeldStreamItem,
@@ -21,6 +22,7 @@ import { STREAMED_PAIR_EVENTS } from "./trafficApi.js";
 export const streamedPairStore = createStreamedPairStore(createStreamedPairApi(service));
 
 projectData.register("streamed-pairs", {
+  signal: loadSignals.traffic,
   clear: streamedPairStore.clear,
   load: streamedPairStore.resync,
 });

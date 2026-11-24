@@ -8,6 +8,7 @@ import { service } from "../lib/service/index.js";
 import { createUpstreamProxyApi } from "./upstreamProxyApi.js";
 import { createUpstreamProxyStore } from "./createUpstreamProxyStore.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 
 export {
   selectionWarning,
@@ -27,7 +28,7 @@ for (const name of ["upstream_proxy.added", "upstream_proxy.updated", "upstream_
   service.on(name, upstreamProxyStore.onListChanged);
 }
 service.on("upstream_proxy.selected", upstreamProxyStore.onSelected);
-projectData.register("upstreamProxies", { clear: upstreamProxyStore.clear, load: reloadShown });
+projectData.register("upstreamProxies", { signal: loadSignals.scope, clear: upstreamProxyStore.clear, load: reloadShown });
 
 /** Asks for a CA file and resolves to its text, or "" when cancelled. */
 export const readUpstreamProxyCAFile = () => ReadUpstreamProxyCAFile();

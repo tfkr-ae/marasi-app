@@ -45,6 +45,8 @@ export const opening = derived(projectStore, (state) => state.opening);
 export const openingShown = derived(projectStore, (state) => state.shown);
 /** The project loaded, `{name, path}`, or null until the first has. */
 export const loadedProject = derived(projectStore, (state) => state.loaded);
+/** The part of the project the first load on connecting waits on, `{index, label}`, or null. */
+export const startupPart = derived(projectStore, (state) => state.startupPart);
 /** Bumped after each switch's load, so the pages mount afresh. */
 export const pagesKey = derived(projectStore, (state) => state.generation);
 

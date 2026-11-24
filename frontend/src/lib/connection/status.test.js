@@ -10,6 +10,7 @@ import {
   reachingText,
   removeBlock,
   startupOffersConnections,
+  startupOffersRetry,
   startupText,
   statusHint,
   whereText,
@@ -87,13 +88,30 @@ test("the start screen names a named local connection other than Local", () => {
   assert.equal(startupText({ phase: "failed", connection: work }), "Couldn't reach Work");
 });
 
-test("the start screen offers Connections… until it reaches the service, and after it fails", () => {
-  for (const phase of ["starting", "connecting", "failed", "auth-failed"]) {
+test("the start screen offers Connections… until the project loads, and after it fails", () => {
+  for (const phase of ["starting", "connecting", "connected", "failed", "auth-failed"]) {
     assert.equal(startupOffersConnections(phase), true, phase);
   }
-  for (const phase of ["idle", "connected"]) {
+  for (const phase of ["idle"]) {
     assert.equal(startupOffersConnections(phase), false, phase);
   }
+});
+
+test("the start screen offers Retry after a failure, and once a first load is slow", () => {
+  assert.equal(startupOffersRetry({ phase: "failed" }, false), true);
+  assert.equal(startupOffersRetry({ phase: "connected" }, false), false);
+  assert.equal(startupOffersRetry({ phase: "connected" }, true), true);
+  assert.equal(startupOffersRetry({ phase: "connecting" }, true), false);
+});
+
+test("a failed first load names the project, not the connection", () => {
+  const office = { id: "office", kind: "remote", name: "Office", url: "http://10.0.0.5:9000" };
+  assert.equal(
+    startupText({ phase: "failed", connection: office, project: "/w/acme.marasi", loadFailed: true }),
+    "Couldn't load acme",
+  );
+  assert.equal(startupText({ phase: "failed", connection: office, project: null, loadFailed: true }), "Couldn't load the project");
+  assert.equal(startupText({ phase: "failed", connection: office, project: "/w/acme.marasi" }), "Couldn't reach Office");
 });
 
 test("the switch banner reads as the start screen while it reaches the connection", () => {

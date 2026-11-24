@@ -5,8 +5,9 @@ import { service } from "../lib/service/index.js";
 import { createToolTrafficApi } from "./toolTrafficApi.js";
 import { createPairRawStore } from "./createPairRawStore.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 
 export const pairRaw = createPairRawStore(createToolTrafficApi(service));
 
 // The cards remount after a load and ask again.
-projectData.register("pairRaw", { clear: pairRaw.clear, load: () => {} });
+projectData.register("pairRaw", { signal: loadSignals.traffic, clear: pairRaw.clear, load: () => {} });

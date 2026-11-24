@@ -2,6 +2,8 @@
 // Settings → Connection. Phases are the connection store's
 // (stores/createConnectionStore.js); a new phase adds its label and tone here.
 
+import { projectName } from "../openProgress.js";
+
 const labels = {
   idle: "Not connected",
   starting: "Starting",
@@ -54,13 +56,13 @@ export const pagesHeld = (phase) => phase === "project-changed" || phase === "st
  * before the first project loads: a remote or a named local connection by
  * its name, Local as Marasi.
  */
-export function startupText({ phase, connection }) {
+export function startupText({ phase, connection, project = null, loadFailed = false }) {
   const reaching = reachingText({ phase, connection });
   if (reaching) return reaching;
   const text = {
     idle: "Starting…",
     connected: "Loading project…",
-    failed: `Couldn't reach ${startupName(connection)}`,
+    failed: loadFailed ? `Couldn't load ${project ? projectName(project) : "the project"}` : `Couldn't reach ${startupName(connection)}`,
     "auth-failed": phaseLabel("auth-failed"),
     unpaired: "Pair with Marasi on your computer to start",
   };
@@ -95,11 +97,20 @@ export function removeBlock({ isActive, ownedRun }) {
   return null;
 }
 
-const switchable = ["starting", "connecting", "failed", "auth-failed", "unpaired"];
+const switchable = ["starting", "connecting", "connected", "failed", "auth-failed", "unpaired"];
 
 /**
  * Whether the start screen offers Connections…: while the app is still
- * reaching the service and after it fails, so the researcher can switch
- * without waiting for a timeout.
+ * reaching the service or loading its project, and after it fails, so the
+ * researcher can switch without waiting for a timeout.
  */
 export const startupOffersConnections = (phase) => switchable.includes(phase);
+
+/** How long the start screen waits on a first load before it offers Retry. */
+export const SLOW_LOAD_MS = 15_000;
+
+/**
+ * Whether the start screen offers Retry: after a failure, and once the
+ * first load has taken `slow` (SLOW_LOAD_MS), since a read may never answer.
+ */
+export const startupOffersRetry = ({ phase }, slow) => phase === "failed" || (phase === "connected" && slow);

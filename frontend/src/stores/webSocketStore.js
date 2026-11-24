@@ -8,6 +8,7 @@ import { toSettled } from "./checkpointApi.js";
 import { createWebSocketStore } from "./createWebSocketStore.js";
 import { ledgerStore } from "./ledgerStore";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 import { createWebSocketApi, toConnection, toHeldMessage, toMessage, toProgress } from "./webSocketApi.js";
 
 // Draft payload for the Inject tab (set via "Copy to Inject").
@@ -16,6 +17,7 @@ export const wsInjectDraft = writable(null);
 export const webSocketStore = createWebSocketStore(createWebSocketApi(service));
 
 projectData.register("websocket", {
+  signal: loadSignals.traffic,
   clear: webSocketStore.clear,
   load: webSocketStore.populateInterceptFlag,
   resync: webSocketStore.resync,

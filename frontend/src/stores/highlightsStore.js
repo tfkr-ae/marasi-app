@@ -11,6 +11,7 @@ import { service } from "../lib/service/index.js";
 import { createHighlightsStore } from "./createHighlightsStore.js";
 import { createHighlightsApi } from "./highlightsApi.js";
 import { projectData } from "./projectData.js";
+import { loadSignals } from "../lib/openProgress.js";
 
 export const highlightsStore = createHighlightsStore(
   createHighlightsApi(service, {
@@ -21,6 +22,7 @@ export const highlightsStore = createHighlightsStore(
 );
 
 projectData.register("highlights", {
+  signal: loadSignals.traffic,
   clear: highlightsStore.clear,
   load: highlightsStore.loadProject,
   resync: highlightsStore.resync,
