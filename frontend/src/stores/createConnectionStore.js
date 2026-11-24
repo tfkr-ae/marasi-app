@@ -112,6 +112,12 @@ export function initialConnection() {
     version: null,
     api: null,
     apiWarning: null,
+    // The service host's OS (runtime.GOOS), build channel ("release" |
+    // "nightly", or null for dev/older services), and whether an installed
+    // update awaits a restart (GET /service/status).
+    os: null,
+    channel: null,
+    restartRequired: false,
     // The service process's run ID: a new one on a reconnect is a restart.
     runId: null,
     proxyListener: null,
@@ -165,6 +171,9 @@ const fromStatus = (status) => ({
   version: status.version ?? null,
   api: status.api ?? null,
   apiWarning: apiWarning(status.api),
+  os: status.os || null,
+  channel: status.channel || null,
+  restartRequired: Boolean(status.restart_required),
   runId: status.run_id ?? null,
   proxyListener: status.proxy_listener ?? null,
 });
@@ -214,6 +223,9 @@ function begin(state) {
     version: null,
     api: null,
     apiWarning: null,
+    os: null,
+    channel: null,
+    restartRequired: false,
     runId: null,
     proxyListener: null,
     instance: null,
@@ -658,9 +670,11 @@ export function reduce(state, action) {
       // The proxy listener stopped with it, though no listener.stopped event
       // came over the closed stream (`service-stopped`).
       if (state.busy !== "stop") return refuse(state, "No stop is under way.");
-      return go(state, { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false }, [
-        { type: "service-stopped" },
-      ]);
+      return go(
+        state,
+        { phase: "stopped", busy: null, owned: false, attempt: 0, trying: false, restarting: false, restartRequired: false },
+        [{ type: "service-stopped" }],
+      );
 
     case "STOP_FAILED":
       if (state.busy !== "stop") return refuse(state, "No stop is under way.");
