@@ -1,10 +1,8 @@
 <script>
-	// A running CLI install or update: its step, from Go's
-	// cli-install-progress events, and the download's bar (indeterminate
-	// when the size is unknown, and while verifying, extracting and
-	// installing).
-	// CLISetup and CLISettings show it while InstallCLI or CheckForCLIUpdate
-	// runs.
+	// A running CLI install: its step, from Go's cli-install-progress events,
+	// and the download's bar (indeterminate when the size is unknown, and
+	// while verifying, extracting and installing).
+	// CLISetup shows it while first-time InstallCLI runs.
 	import { ProgressBar } from "@skeletonlabs/skeleton";
 	import { onDestroy } from "svelte";
 	import { on } from "../runtime.js";

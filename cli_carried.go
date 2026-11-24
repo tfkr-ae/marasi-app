@@ -80,7 +80,8 @@ func (a *App) usableCarriedCLI() (*carriedCLI, bool) {
 	return carried, true
 }
 
-// CarriedCLIInfo is the CLI this build carries, for Settings → Updates.
+// CarriedCLIInfo is the CLI this build carries, for Local's Connection details
+// and carried CLI upgrade prompts.
 type CarriedCLIInfo struct {
 	// Available is false when the build carries no CLI for this platform
 	// (a development build, say); the rest is then empty.
@@ -99,8 +100,8 @@ func (a *App) carriedForPlatform() (*carriedCLI, bool) {
 	return carried, true
 }
 
-// CarriedCLI reports the CLI this build carries, so Settings can offer it
-// when the installed CLI is another version.
+// CarriedCLI reports the CLI this build carries, so Connections can offer it
+// when the installed local CLI is another version.
 func (a *App) CarriedCLI() CarriedCLIInfo {
 	carried, ok := a.carriedForPlatform()
 	if !ok {
@@ -110,11 +111,9 @@ func (a *App) CarriedCLI() CarriedCLIInfo {
 }
 
 // InstallCarriedCLI replaces the CLI the app uses with the copy this build
-// carries, without the network, when the researcher picks it over the
-// channel's latest (Settings → Updates). Unlike Install's first placing, no
-// update check follows: the researcher asked for this version. It returns
-// an error when there is no CLI (Install covers that) and a failed result
-// when the build carries none.
+// carries, without the network, when the researcher applies the carried CLI
+// in Connections. It returns an error when there is no CLI (Install covers
+// that) and a failed result when the build carries none.
 func (a *App) InstallCarriedCLI() (CLIInstall, error) {
 	current, err := a.LocateCLI()
 	if err != nil {
@@ -183,26 +182,4 @@ func (c *checkedReader) Read(p []byte) (int, error) {
 		return n, errCarriedChecksum
 	}
 	return n, err
-}
-
-// cliUpdateCheckedEvent tells the frontend the result of the update check
-// that followed placing the carried copy, a CLIInstall, so Settings and the
-// CLI setup show the CLI it left without being reopened.
-const cliUpdateCheckedEvent = "cli-update-checked"
-
-// checkForCLIUpdateAfterInstall is the CLI update check Install runs after
-// placing the carried copy: CheckForCLIUpdate, as Settings' Check for CLI
-// update runs it, so a researcher gets the channel's latest when the copy is
-// older. It runs in the background and reports its result to the frontend;
-// a failure (an unreachable GitHub, say) leaves the carried copy installed.
-func (a *App) checkForCLIUpdateAfterInstall() {
-	result, err := a.CheckForCLIUpdate()
-	if err != nil {
-		log.Printf("checking for a Marasi CLI update after installing the carried CLI: %v", err)
-		return
-	}
-	if result.Failure != nil {
-		log.Printf("checking for a Marasi CLI update after installing the carried CLI: %s", result.Failure.Reason)
-	}
-	a.emitEvent(cliUpdateCheckedEvent, result)
 }

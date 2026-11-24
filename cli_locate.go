@@ -14,10 +14,10 @@ import (
 const cliProbeTimeout = 15 * time.Second
 
 // errNoCLI: no Marasi CLI at the custom path or on PATH.
-var errNoCLI = errors.New("the Marasi CLI isn't installed: install it, or set its path in Settings → Updates")
+var errNoCLI = errors.New("the Marasi CLI isn't installed: install it, or set its path in Connections")
 
-// CLIInfo is the Marasi CLI the app uses, for the CLI setup and Settings →
-// Updates (its Marasi CLI part).
+// CLIInfo is the Marasi CLI the app uses, for the CLI setup and Local's
+// Connection details.
 type CLIInfo struct {
 	// Found is false when there is no Marasi CLI; the rest is then empty.
 	Found bool   `json:"found"`

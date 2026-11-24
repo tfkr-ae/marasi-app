@@ -9,7 +9,7 @@ import { connectionStore } from "./connectionStore.js";
 import { createServiceUpdateApi } from "./serviceUpdateApi.js";
 import { createServiceUpdateStore, followConnection, SERVICE_UPDATE_EVENTS } from "./serviceUpdate.js";
 
-export { serviceUpdateLine, serviceUpdateToast, SERVICE_UPDATE_EVENTS } from "./serviceUpdate.js";
+export { serviceUpdateToast, SERVICE_UPDATE_EVENTS } from "./serviceUpdate.js";
 
 export const serviceUpdateStore = createServiceUpdateStore(createServiceUpdateApi(service));
 

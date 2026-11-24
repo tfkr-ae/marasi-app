@@ -9,13 +9,13 @@ How the app checks for, downloads, verifies, installs and relaunches into an upd
 3. **Install.** The `platformInstaller` from `defaultInstaller` stages the build beside the running one and swaps it in. Each OS has its own `update_platform_<goos>.go`. On macOS, a Marasi.app that Gatekeeper translocated (opened straight from Downloads) installs into the bundle it was translocated from (`bundleInstaller.locate`, `translocationOriginal`). `finishInstall` sends `update-installed` or `update-failed`.
 4. **Relaunch.** `RestartToUpdate` sets `App.restarting` and quits, which `shouldQuit` lets through without asking. `ServiceShutdown` calls `relaunchIfRestarting` last. The next start removes the leftovers (`removeUpdateLeftovers`).
 
-**Not this updater.** The connected Marasi service updating its own binary (`marasi update`) arrives as the service's `update.available`, `.progress`, `.installed` and `.failed` events, not as these Wails events. `stores/serviceUpdateStore.js` keeps them apart, and Settings → Updates shows them in its Marasi CLI part (see `marasi-service.md`, Events).
+**Not this updater.** Connected Marasi services (local and remote, desktop and mobile) check for, install, cancel, change channels, reinstall, and restart their own binary through Marasi's control API (`/update/*`, `/service/restart`) and live `update.available`, `.progress`, `.installed` and `.failed` events, managed in Connections (`stores/serviceUpdateStore.js`, `ConnectionDetail.svelte`, `ConnectionBanner.svelte`; see `marasi-service.md`). The duplicate Go-side CLI updater (`CheckForCLIUpdate`, `GetCLIChannel`, `SetCLIChannel`, `cli_channel`) is retired.
 
 The updater uses its own HTTP client (`updateHTTPClient`), which honours the system proxy but never sends through the local instance's proxy listener (`isMarasiListener` reads it from `service status` through `localProxyListener`).
 
 ## Frontend
 
-`frontend/src/stores/updateStore.js` calls the bindings and holds `updateState`. `frontend/src/lib/updates.js` holds the logic and the text, and `UpdateModal.svelte` draws the panel. `+layout.svelte` subscribes to the four events by name. Remove each one in the same cleanup. The menu action is `global.check-for-updates` in the keybinding catalog (see `keybindings-and-menus.md`). The Settings page has an `updates` section: its Marasi App part is this updater, its Marasi CLI part is `CLISettings.svelte` (`marasi-service.md`).
+`frontend/src/stores/updateStore.js` calls the bindings and holds `updateState`. `frontend/src/lib/updates.js` holds the logic and the text, and `UpdateModal.svelte` draws the panel. `+layout.svelte` subscribes to the four events by name. Remove each one in the same cleanup. The menu action is `global.check-for-updates` in the keybinding catalog (see `keybindings-and-menus.md`). `Settings → Updates` (`routes/settings/+page.svelte`, desktop-only via `MOBILE_HIDDEN_SECTIONS`) is exclusively for Marasi App updates (channel, status/check, check automatically, latest release reinstall) with no Marasi CLI or service-update rows.
 
 ## Strings that must match
 
@@ -41,3 +41,4 @@ gh workflow run build.yml --ref <branch> -f channel=nightly
 
 - [Updates are verified against a signing key built into the app](../../adr/2026-10-17-updates-are-signed-with-an-embedded-key.md)
 - [Switching channel never installs an older build on its own](../../adr/2026-10-17-switching-channel-never-downgrades.md)
+- [Connected services update through the control API](../../adr/2026-11-24-connected-services-update-through-the-control-api.md)

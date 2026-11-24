@@ -1,20 +1,29 @@
-// How the Marasi CLI setup and Settings → Updates read Go's results.
+// How the Marasi CLI setup and Local's Connection details read Go's CLI results.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as cliModule from "./cli.js";
 import {
   cliMissing,
-  cliUpdateCheckedNotice,
-  installThenRestart,
   cliProgressPercent,
   cliProgressText,
   cliResultText,
   cliSourceLabel,
   offersCarriedCLI,
   outdatedVersion,
-  restartsAfterCLIInstall,
   shouldOfferCLISetup,
-  updateCLI,
 } from "./cli.js";
+
+test("retired Go CLI updater helpers are removed from cli.js", () => {
+  for (const retired of [
+    "CLI_UPDATE_CHECKED_EVENT",
+    "cliUpdateCheckedNotice",
+    "installThenRestart",
+    "updateCLI",
+    "restartsAfterCLIInstall",
+  ]) {
+    assert.equal(retired in cliModule, false, `${retired} should be retired`);
+  }
+});
 
 test("a connection that failed for want of the CLI asks for the CLI setup", () => {
   const error = "finding the Marasi CLI: cli_missing (): the Marasi CLI isn't installed";
@@ -34,7 +43,6 @@ test("the setup opens by itself once per missing-CLI failure", () => {
 test("each outcome reads as a short message", () => {
   assert.equal(cliResultText({ outcome: "installed", version: "06.11.2026" }), "Marasi CLI 06.11.2026 installed");
   assert.equal(cliResultText({ outcome: "up-to-date", version: "06.11.2026" }), "Marasi CLI is up to date");
-  assert.equal(cliResultText({ outcome: "dev" }), "Development build, not updated");
   assert.equal(
     cliResultText({ outcome: "failed", failure: { kind: "no-build", reason: "No Marasi CLI build for this platform" } }),
     "No Marasi CLI build for this platform",
@@ -72,48 +80,7 @@ test("an outdated local instance names the version it runs", () => {
   assert.equal(outdatedVersion(null), null);
 });
 
-test("Update CLI installs the channel's CLI, then restarts the local instance with it", async () => {
-  const calls = [];
-  const outcome = await updateCLI({
-    checkForUpdate: async () => {
-      calls.push("check");
-      return { outcome: "installed", version: "07.11.2026" };
-    },
-    restart: async () => calls.push("restart"),
-  });
-  assert.deepEqual(calls, ["check", "restart"]);
-  assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 07.11.2026 installed" });
-});
-
-test("Update CLI still restarts when the CLI is current, since the instance may run another", async () => {
-  const calls = [];
-  const outcome = await updateCLI({
-    checkForUpdate: async () => ({ outcome: "up-to-date" }),
-    restart: async () => calls.push("restart"),
-  });
-  assert.deepEqual(calls, ["restart"]);
-  assert.equal(outcome.ok, true);
-});
-
-test("a failed install says why and restarts nothing", async () => {
-  const calls = [];
-  const outcome = await updateCLI({
-    checkForUpdate: async () => ({ outcome: "failed", failure: { reason: "checksum mismatch" } }),
-    restart: async () => calls.push("restart"),
-  });
-  assert.deepEqual(calls, []);
-  assert.deepEqual(outcome, { ok: false, text: "checksum mismatch" });
-});
-
-test("the update check after placing the carried CLI speaks only when it installed a newer one", () => {
-  const cli = { found: true, version: "06.11.2026" };
-  assert.equal(cliUpdateCheckedNotice({ outcome: "installed", version: "06.11.2026", cli }), "Marasi CLI 06.11.2026 installed");
-  assert.equal(cliUpdateCheckedNotice({ outcome: "up-to-date", version: "30.10.2026", cli }), null);
-  assert.equal(cliUpdateCheckedNotice({ outcome: "failed", failure: { reason: "Couldn't reach GitHub" }, cli }), null);
-  assert.equal(cliUpdateCheckedNotice(null), null);
-});
-
-test("Settings offers the carried CLI only when it isn't the installed one", () => {
+test("Connections offers the carried CLI only when it isn't the installed one", () => {
   const carried = { available: true, version: "30.10.2026", channel: "release" };
   const cli = (version, channel = "release") => ({ found: true, version, channel });
   assert.equal(offersCarriedCLI(carried, cli("06.11.2026")), true);
@@ -123,42 +90,4 @@ test("Settings offers the carried CLI only when it isn't the installed one", () 
   assert.equal(offersCarriedCLI({ available: false }, cli("06.11.2026")), false);
   assert.equal(offersCarriedCLI(null, cli("06.11.2026")), false);
   assert.equal(offersCarriedCLI(carried, { found: false }), false);
-});
-
-test("Install from embedded restarts the local instance after installing", async () => {
-  const calls = [];
-  const outcome = await installThenRestart({
-    install: async () => {
-      calls.push("install");
-      return { outcome: "installed", version: "30.10.2026" };
-    },
-    restart: async () => calls.push("restart"),
-  });
-  assert.deepEqual(calls, ["install", "restart"]);
-  assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 30.10.2026 installed" });
-});
-
-test("without a running local instance, Install from embedded only installs", async () => {
-  const outcome = await installThenRestart({
-    install: async () => ({ outcome: "installed", version: "30.10.2026" }),
-    restart: null,
-  });
-  assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 30.10.2026 installed" });
-});
-
-test("a failed embedded install restarts nothing", async () => {
-  const calls = [];
-  const outcome = await installThenRestart({
-    install: async () => ({ outcome: "failed", failure: { kind: "checksum", reason: "Checksum mismatch, nothing installed" } }),
-    restart: async () => calls.push("restart"),
-  });
-  assert.deepEqual(calls, []);
-  assert.deepEqual(outcome, { ok: false, text: "Checksum mismatch, nothing installed" });
-});
-
-test("only a local instance that isn't stopped restarts after Install from embedded", () => {
-  assert.equal(restartsAfterCLIInstall({ connection: { kind: "local" }, phase: "connected" }), true);
-  assert.equal(restartsAfterCLIInstall({ connection: { kind: "local" }, phase: "failed" }), true);
-  assert.equal(restartsAfterCLIInstall({ connection: { kind: "local" }, phase: "stopped" }), false);
-  assert.equal(restartsAfterCLIInstall({ connection: { kind: "remote" }, phase: "connected" }), false);
 });

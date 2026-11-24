@@ -48,12 +48,9 @@
 	import { cliMissing, cliSourceLabel, offersCarriedCLI, outdatedVersion } from "./cli.js";
 	import CLISetup from "./CLISetup.svelte";
 	import OutdatedInstance from "./OutdatedInstance.svelte";
-	import UpdateCLI from "./UpdateCLI.svelte";
 	import ConnectionAccess from "./ConnectionAccess.svelte";
 
 	export let connection;
-	/** Settings rows instead of the compact modal spacing. */
-	export let rows = false;
 
 	const toastStore = getToastStore();
 
@@ -286,9 +283,7 @@
 		mobile: $mobile,
 	});
 
-	const row = rows
-		? "settings-row flex items-center justify-between gap-8 py-3 border-b border-surface-300 dark:border-surface-600"
-		: "settings-row flex items-center justify-between gap-4 py-2.5 border-b border-surface-300 dark:border-surface-600";
+	const row = "settings-row flex items-center justify-between gap-4 py-2.5 border-b border-surface-300 dark:border-surface-600";
 </script>
 
 <div class="text-sm" data-testid="connection-detail">
@@ -687,7 +682,6 @@
 	{:else if slot === "api-warning"}
 		<div class="mt-3 space-y-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2 text-xs" data-testid="connection-api-warning">
 			<p>{state.apiWarning}. Some features may not work.</p>
-			{#if connection.kind === "local" && phase === "connected"}<UpdateCLI />{/if}
 		</div>
 	{/if}
 

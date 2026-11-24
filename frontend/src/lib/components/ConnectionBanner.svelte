@@ -15,9 +15,9 @@
 	import { mobile } from "../platform.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { localCLIStore } from "../../stores/localCLIStore.js";
-	import UpdateCLI from "../connection/UpdateCLI.svelte";
 	import { proactiveCarriedUpgrade } from "../connection/carried.js";
 	import { connectionActionBanner } from "../connection/indicators.js";
+	import { connectionsModal } from "../connection/modal.js";
 	import { reachingText } from "../connection/status.js";
 	import { service } from "../service/index.js";
 	import { SERVICE_UPDATE_EVENTS, serviceUpdateStore, serviceUpdateToast } from "../../stores/serviceUpdateStore.js";
@@ -72,7 +72,7 @@
 		),
 	);
 	// The connected service's own update: a short toast for found, installed
-	// and failed (Settings → Updates shows the rest).
+	// and failed (Connections shows release notes and progress).
 	onMount(() => {
 		const stops = SERVICE_UPDATE_EVENTS.map((event) =>
 			service.on(event, (data) => {
@@ -132,7 +132,15 @@
 {:else if $connectionStore.phase === "connected" && $connectionStore.apiWarning}
 	<div class="flex items-center gap-3 bg-warning-500/15 px-4 py-1.5 text-xs" data-testid="connection-banner">
 		<span class="flex-1">{$connectionStore.apiWarning}. Some features may not work.</span>
-		{#if $connectionStore.connection.kind === "local"}<UpdateCLI compact />{/if}
+		<button
+			type="button"
+			class={neutral}
+			on:click={() => {
+				if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
+			}}
+		>
+			Connections
+		</button>
 	</div>
 {:else if actionBanner?.kind === "restart-confirm"}
 	<div
