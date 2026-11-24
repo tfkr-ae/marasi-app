@@ -11,6 +11,8 @@
 	import { setLightMode } from "../lightMode.js";
 	import { ChevronDown, ChevronUp, Laptop, Moon, Server, Sun } from "lucide-svelte";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
+	import { connectionTileIndicator } from "../connection/indicators.js";
 	import { phaseLabel, phaseTone } from "../connection/status.js";
 
 	/** The bar's pages: { id, label, icon, path, go, badge? }. */
@@ -29,6 +31,13 @@
 	$: path = $page.url.pathname;
 	$: connection = $connectionStore.connection;
 	$: phase = $connectionStore.phase;
+	$: restarting = $connectionStore.restarting;
+	$: connectionTone = restarting ? "bg-warning-500" : phaseTone(phase);
+	$: connectionLabel = restarting ? "Restarting" : phaseLabel(phase);
+	$: connectionIndicator = connectionTileIndicator($connectionStore, $serviceUpdateStore);
+	$: connectionTitle = connectionIndicator
+		? `${connection.name} · ${connectionLabel} · ${connectionIndicator.label}`
+		: `${connection.name} · ${connectionLabel}`;
 	$: moreSelected = more.some((item) => isAt(item, path));
 
 	function isAt(item, current) {
@@ -151,17 +160,25 @@
 		<button
 			type="button"
 			class={tab(false)}
-			title="{connection.name} · {phaseLabel(phase)}"
+			title={connectionTitle}
 			aria-label="Connections"
 			data-testid="bottom-bar-connections"
+			data-update-indicator={connectionIndicator?.kind ?? ""}
 			on:click={connections}
 		>
 			<span class="relative">
 				{#if connection.kind === "local"}<Laptop size="20" />{:else}<Server size="20" />{/if}
 				<span
-					class="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-surface-50 dark:ring-surface-800 {phaseTone(phase)}"
-					class:animate-pulse={phase === "reconnecting"}
+					class="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-surface-50 dark:ring-surface-800 {connectionTone}"
+					class:animate-pulse={phase === "reconnecting" || restarting}
 				></span>
+				{#if connectionIndicator}
+					<span
+						class="absolute -left-1.5 -top-1 h-2 w-2 rounded-full bg-primary-500 ring-2 ring-surface-50 dark:ring-surface-800"
+						data-testid="bottom-bar-connections-update-dot"
+						aria-hidden="true"
+					></span>
+				{/if}
 			</span>
 		</button>
 		<button
