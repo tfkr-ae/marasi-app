@@ -5,11 +5,10 @@
 // stream events (toTemplate, toRun, toWordlists) live here too; traffic
 // events use trafficApi.js's toRequestEvent and toResponseEvent.
 //
-// Calls with no single route are composed: a template from a pair (GET
-// /traffic/{id}, then POST /armory/template), and the run's traffic and
-// group counts (GET /traffic narrowed to the run's metadata).
+// Calls with no single route are composed: the run's traffic and group
+// counts (GET /traffic narrowed to the run's metadata).
 
-import { decodeBase64Text } from "../lib/service/bytes.js";
+import { runQuery } from "./createArmoryRunTraffic.js";
 
 /** The most pairs one GET /traffic page holds. */
 export const TRAFFIC_PAGE_LIMIT = 500;
@@ -21,6 +20,9 @@ export function toTemplate(template) {
     Name: template.name,
     Description: template.description ?? "",
     RawTemplate: template.raw_template ?? "",
+    // The message framing ("grpc", "grpc-web" or "connect") of a template
+    // with a message-form body; "" for one with none.
+    Framing: template.framing ?? "",
   };
 }
 
@@ -30,6 +32,8 @@ export function toRun(run) {
     ID: run.id,
     TemplateID: run.template_id,
     TemplateSnapshot: run.template_snapshot,
+    // The template's framing when the run was made; "" for none.
+    TemplateFraming: run.template_framing ?? "",
     UseHTTPS: run.use_https,
     Wordlists: run.wordlists ?? [],
     Status: run.status,
@@ -38,6 +42,25 @@ export function toRun(run) {
     CreatedAt: run.created_at,
     StartedAt: run.started_at ?? null,
     FinishedAt: run.finished_at ?? null,
+    // The requests it stored as pairs and the ones it built but didn't send.
+    Progress: {
+      Entries: run.progress?.entries ?? 0,
+      FailedAttempts: run.progress?.failed_attempts ?? 0,
+    },
+  };
+}
+
+/**
+ * A failed attempt, from GET /armory/run/{id}/failed-attempts or the
+ * armory.failed_attempt.created event: a request the run built from its
+ * payloads but didn't send, since a message didn't encode.
+ */
+export function toFailedAttempt(attempt) {
+  return {
+    ID: attempt.id,
+    Payloads: (attempt.payloads ?? []).map((p) => ({ Position: p.position, Value: p.value })),
+    Error: attempt.error ?? "",
+    CreatedAt: attempt.created_at,
   };
 }
 
@@ -69,14 +92,11 @@ export function toPairSummary(pair) {
     UpstreamProxy: pair.upstream_proxy ?? null,
     ClientProtocol: pair.client_protocol ?? "",
     OriginProtocol: pair.origin_protocol ?? "",
+    // The grpc-status a gRPC call's response ended with; null for any other pair.
+    GrpcStatus: pair.grpc_status ?? null,
   };
 }
 
-/** The traffic query for the pairs the run `runId` sent. */
-export function runQuery(runId, narrowing = "") {
-  const query = `metadata.armory_run_id = ${JSON.stringify(String(runId))}`;
-  return narrowing ? `${query} AND (${narrowing})` : query;
-}
 
 const templatePath = (id) => `/armory/template/${encodeURIComponent(id)}`;
 const runPath = (id) => `/armory/run/${encodeURIComponent(id)}`;
@@ -92,8 +112,8 @@ export function createArmoryApi(client) {
     return (list?.items ?? []).map(toRun);
   }
 
-  async function createTemplate(name, description, rawTemplate, link = client) {
-    return toTemplate(await link.post("/armory/template", { name, description, raw_template: rawTemplate }));
+  async function createTemplate(name, description, rawTemplate) {
+    return toTemplate(await client.post("/armory/template", { name, description, raw_template: rawTemplate }));
   }
 
   // One GET /traffic page; Limit over the service's cap reads several.
@@ -133,14 +153,11 @@ export function createArmoryApi(client) {
     /** The client bound to its connection now, for a multi-step action (boundAction.js). */
     bind: () => client.bind?.(),
     CreateArmoryTemplate: (name, description, rawTemplate) => createTemplate(name, description, rawTemplate),
-    // A template from the pair's request, named after it, made on the
-    // connection the pair was read from.
-    async CreateArmoryTemplateFromRequest(requestId) {
-      const link = client.bind?.() ?? client;
-      const pair = await link.get(`/traffic/${encodeURIComponent(requestId)}`);
-      const { method, host, path, raw } = pair.request;
-      return createTemplate(`${method} ${host}${path}`, "Imported from request history", decodeBase64Text(raw), link);
-    },
+    // The template Marasi builds from the pair's request, as the CLI's
+    // --from-pair does: escaped so it renders back to the capture, and a
+    // gRPC, gRPC-Web or Connect call as a message-form body.
+    CreateArmoryTemplateFromRequest: async (requestId) =>
+      toTemplate(await client.post(`/armory/template/from-pair/${encodeURIComponent(requestId)}`)),
     async UpdateArmoryTemplate(id, name, description, rawTemplate) {
       return toTemplate(await client.post(templatePath(id), { name, description, raw_template: rawTemplate }));
     },
@@ -148,6 +165,11 @@ export function createArmoryApi(client) {
 
     GetArmoryRuns: runsOf,
     GetArmoryRun: async (id) => toRun(await client.get(runPath(id))),
+    // The requests the run built but didn't send, oldest first.
+    async GetArmoryFailedAttempts(id) {
+      const list = await client.get(`${runPath(id)}/failed-attempts`);
+      return (list?.items ?? []).map(toFailedAttempt);
+    },
     // Every template's runs in progress, in one call.
     async GetActiveArmoryRuns() {
       const list = await client.get("/armory/run", { status: "in_progress" });
@@ -181,12 +203,14 @@ export function createArmoryApi(client) {
       return preview?.items ?? [];
     },
 
-    // The run's pairs, whatever their content type, narrowed by req.Query.
-    QueryArmoryRunTraffic: (runId, req = {}) => queryPage(runQuery(runId, req.Query), req),
-    // The run's pairs counted by `field` up to asOf ("" for the newest).
-    async CountArmoryRunTraffic(runId, field, asOf = "") {
+    // The run's pairs, whatever their content type, under req.Filter and
+    // narrowed by req.Query.
+    QueryArmoryRunTraffic: (runId, req = {}) => queryPage(runQuery(runId, req.Query, req.Filter), req),
+    // The run's pairs under `filter` counted by `field` up to asOf ("" for
+    // the newest).
+    async CountArmoryRunTraffic(runId, field, asOf = "", filter = "") {
       const counts = await client.get("/traffic/count/by-field", {
-        q: runQuery(runId),
+        q: runQuery(runId, "", filter),
         field,
         as_of: asOf || undefined,
       });

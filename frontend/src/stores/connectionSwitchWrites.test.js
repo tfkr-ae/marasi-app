@@ -31,8 +31,6 @@ import { createSavedQueriesApi } from "./savedQueriesApi.js";
 import { createSavedQueriesStore, PROJECT_QUERY_PREFIX } from "./createSavedQueriesStore.js";
 
 const superseded = (err) => isSuperseded(err);
-const b64 = (text) => Buffer.from(text).toString("base64");
-const pair = (id) => ({ id, request: { method: "GET", host: "x.test", path: `/${id}`, raw: b64(`GET /${id} HTTP/1.1\r\n\r\n`) } });
 
 const appConfig = { getDefaultExclusion: async () => [], setDefaultExclusion: async () => {} };
 
@@ -46,9 +44,8 @@ function ledgerOver(service) {
 const ledgerRoutes = {
   "POST /launchpad": { id: "lp1" },
   "POST /traffic/bulk/link": { count: 1 },
-  "GET /traffic/1": pair("1"),
-  "GET /traffic/2": pair("2"),
-  "POST /armory/template": { id: "t1", name: "GET x.test/1" },
+  "POST /armory/template/from-pair/1": { id: "t1", name: "GET x.test /1" },
+  "POST /armory/template/from-pair/2": { id: "t2", name: "GET x.test /2" },
 };
 
 test("Ledger one launchpad each: a switch after the first create links nothing on B", async () => {
@@ -76,21 +73,11 @@ test("Ledger new launchpad: a switch after the create links nothing on B", async
 test("Ledger send to Armory: a switch after the first template sends no other pair to B", async () => {
   const service = switchingService(ledgerRoutes);
   const ledger = ledgerOver(service);
-  service.switchWhen("POST /armory/template");
+  service.switchWhen("POST /armory/template/from-pair/1");
 
   await assert.rejects(ledger.sendToArmory(["1", "2"]), superseded);
 
-  assert.deepEqual(service.onA(), ["GET /traffic/1", "POST /armory/template"]);
-  assert.deepEqual(service.onB(), []);
-});
-
-test("Armory template from a request: a switch after reading the pair creates nothing on B", async () => {
-  const service = switchingService(ledgerRoutes);
-  const armory = createArmoryStore(createArmoryApi(service.client));
-  service.switchWhen("GET /traffic/1");
-
-  await assert.rejects(armory.createTemplateFromRequest("1"), superseded);
-
+  assert.deepEqual(service.onA(), ["POST /armory/template/from-pair/1"]);
   assert.deepEqual(service.onB(), []);
 });
 

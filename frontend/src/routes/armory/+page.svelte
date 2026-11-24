@@ -72,6 +72,7 @@
 	import TemplateEditor from "../../lib/armory/TemplateEditor.svelte";
 	import TemplateHeader from "../../lib/armory/TemplateHeader.svelte";
 	import TrafficRegion from "../../lib/armory/TrafficRegion.svelte";
+	import { isGrpcRun } from "../../lib/armory/traffic.js";
 	import { isSuperseded } from "../../lib/service/errors.js";
 	import { mobile } from "../../lib/platform.js";
 
@@ -131,6 +132,9 @@
 	let projectStateVersion = savedArmoryState.projectStateVersion;
 
 	let trafficOpen = savedTrafficOpen;
+	// Whether the run's failed attempts show in the table's place; each run
+	// opens on its traffic.
+	let showFailed = false;
 
 	$: savedSettingsOpen = settingsOpen;
 	$: savedTrafficOpen = trafficOpen;
@@ -164,6 +168,7 @@
 	// rows, place and open pair through page visits.
 	$: trafficRunId = selectedRun ? selectedRunId : null;
 	$: runTraffic.open(trafficRunId).catch((err) => console.error("Loading run traffic failed:", err));
+	$: trafficRunId, (showFailed = false);
 	$: requests = runTrafficRows($runTraffic);
 	$: openRow = openRunPair($runTraffic);
 	$: if (!openRow) drawerMaximised = false;
@@ -840,6 +845,15 @@
 					onShowNew={() =>
 						runTraffic.showNew().catch((err) => console.error("Reading run traffic failed:", err))}
 					onScroll={runTraffic.setScrollTop}
+					grpc={isGrpcRun(selectedRun, requests)}
+					grpcStatus={$runTraffic.grpcStatus}
+					onFilterGrpcStatus={(value) =>
+						runTraffic
+							.filterGrpcStatus(value)
+							.catch((err) => console.error("Filtering run traffic failed:", err))}
+					failedAttempts={selectedRun ? $runTraffic.failedAttempts : null}
+					failedCount={selectedRun?.Progress?.FailedAttempts ?? 0}
+					bind:showFailed
 				/>
 			</div>
 			{#if openRow}

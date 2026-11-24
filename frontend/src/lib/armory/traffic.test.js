@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupLabel, shareText, stepRequest } from "./traffic.js";
+import { grpcStatusText, groupLabel, isGrpcRun, shareText, stepRequest, trafficColumns } from "./traffic.js";
 
 const rows = (n) => Array.from({ length: n }, (_, i) => ({ ID: `p${i}` }));
 
@@ -34,4 +34,25 @@ test("a group's share always has one decimal, so the decimal points line up", ()
   assert.equal(shareText(50), "50.0%");
   assert.equal(shareText(100 / 3), "33.3%");
   assert.equal(shareText(0.04), "0.0%");
+});
+
+test("a gRPC run's table shows grpc-status after Status", () => {
+  assert.deepEqual(trafficColumns(true).map((c) => c.label), ["#", "Time", "Method", "Host / Path", "Status", "gRPC status", "Length"]);
+  assert.deepEqual(trafficColumns(false).map((c) => c.label), ["#", "Time", "Method", "Host / Path", "Status", "Length"]);
+});
+
+test("a grpc-status reads as its number and name", () => {
+  assert.equal(grpcStatusText(0), "0 OK");
+  assert.equal(grpcStatusText(3), "3 INVALID_ARGUMENT");
+  assert.equal(grpcStatusText(16), "16 UNAUTHENTICATED");
+  assert.equal(grpcStatusText(42), "42");
+  assert.equal(grpcStatusText(null), "");
+});
+
+test("a run is gRPC when its template is gRPC or gRPC-Web, or a pair has a grpc-status", () => {
+  assert.equal(isGrpcRun({ TemplateFraming: "grpc" }), true);
+  assert.equal(isGrpcRun({ TemplateFraming: "grpc-web" }), true);
+  assert.equal(isGrpcRun({ TemplateFraming: "connect" }), false);
+  assert.equal(isGrpcRun({ TemplateFraming: "" }, [{ GrpcStatus: null }]), false);
+  assert.equal(isGrpcRun({ TemplateFraming: "" }, [{ GrpcStatus: 0 }]), true);
 });

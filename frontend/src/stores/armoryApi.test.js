@@ -81,8 +81,8 @@ test("populate reads every template with its raw text, sorted by id", async () =
   const { store } = setup();
   await store.populate();
   assert.deepEqual(get(store).templates, [
-    { ID: T1, Name: "First", Description: "login", RawTemplate: "POST /login HTTP/1.1" },
-    { ID: T2, Name: "Second", Description: "", RawTemplate: "GET / HTTP/1.1" },
+    { ID: T1, Name: "First", Description: "login", RawTemplate: "POST /login HTTP/1.1", Framing: "" },
+    { ID: T2, Name: "Second", Description: "", RawTemplate: "GET / HTTP/1.1", Framing: "" },
   ]);
 });
 
@@ -130,24 +130,42 @@ test("populate reads the wordlists with their names and sizes", async () => {
   assert.deepEqual(get(store).wordlists, [{ Name: "words.txt", Size: 120 }]);
 });
 
-test("a template made from a pair is named after its request and holds its raw text", async () => {
+test("a template made from a pair is the one Marasi builds from it, with its framing", async () => {
   const routes = serviceRoutes();
-  routes["GET /traffic/p1"] = {
-    id: "p1",
-    request: { scheme: "https", method: "POST", host: "api.acme.test", path: "/login?x=1", raw: btoa("POST /login?x=1 HTTP/1.1\r\nHost: api.acme.test\r\n\r\n") },
+  const built = {
+    id: "t9",
+    name: "POST 127.0.0.1:50051 /grpc.testing.TestService/UnaryCall",
+    description: "",
+    raw_template: "POST /grpc.testing.TestService/UnaryCall HTTP/2\r\n\r\n--- message ---\n2:VARINT 4\n",
+    framing: "grpc",
   };
-  routes["POST /armory/template"] = (body) => ({ id: "t9", ...body });
+  routes["POST /armory/template/from-pair/p1"] = built;
   const { store, client } = setup(routes);
   await store.populate();
   const template = await store.createTemplateFromRequest("p1");
-  const posted = client.calls.find(([m, p]) => m === "POST" && p === "/armory/template")[2];
-  assert.deepEqual(posted, {
-    name: "POST api.acme.test/login?x=1",
-    description: "Imported from request history",
-    raw_template: "POST /login?x=1 HTTP/1.1\r\nHost: api.acme.test\r\n\r\n",
+  assert.deepEqual(
+    client.calls.filter(([method]) => method === "POST").map(([method, path]) => `${method} ${path}`),
+    ["POST /armory/template/from-pair/p1"],
+  );
+  assert.deepEqual(template, {
+    ID: "t9",
+    Name: "POST 127.0.0.1:50051 /grpc.testing.TestService/UnaryCall",
+    Description: "",
+    RawTemplate: "POST /grpc.testing.TestService/UnaryCall HTTP/2\r\n\r\n--- message ---\n2:VARINT 4\n",
+    Framing: "grpc",
   });
-  assert.equal(template.ID, "t9");
-  assert.ok(get(store).templates.some((t) => t.ID === "t9" && t.Name === "POST api.acme.test/login?x=1"));
+  assert.ok(get(store).templates.some((t) => t.ID === "t9" && t.Framing === "grpc"));
+});
+
+test("templates read their framing, empty when they name none", async () => {
+  const routes = serviceRoutes();
+  routes[`GET /armory/template/${T1}`] = { id: T1, name: "First", description: "login", raw_template: "x", framing: "grpc-web" };
+  const { store } = setup(routes);
+  await store.populate();
+  assert.deepEqual(
+    get(store).templates.map((t) => [t.ID, t.Framing]),
+    [[T1, "grpc-web"], [T2, ""]],
+  );
 });
 
 // Traffic summaries as GET /traffic lists them.
@@ -221,6 +239,35 @@ test("a group's rows narrow the run's query", async () => {
   assert.equal(query.order_by, "length desc");
 });
 
+test("filtered on grpc-status, a run's rows and counts are read under the filter, and rows carry their grpc-status", async () => {
+  const routes = serviceRoutes();
+  routes["GET /traffic/count/by-field"] = { items: [{ value: "200", count: 2 }], as_of: "p0006", index: { complete: true } };
+  routes["GET /traffic"] = () => ({
+    items: [{ ...summary(6), grpc_status: 3 }, { ...summary(2), grpc_status: 13 }],
+    next_cursor: null,
+    as_of: "p0006",
+    index: { complete: true },
+  });
+  const { store, client } = setup(routes);
+  await store.runTraffic.open("r2");
+  await store.runTraffic.filterGrpcStatus("error");
+  const [, , read] = client.calls.at(-1);
+  assert.equal(read.q, 'metadata.armory_run_id = "r2" AND (grpc_status != 0)');
+  assert.deepEqual(get(store.runTraffic).list.rows.map((r) => [r.Number, r.GrpcStatus]), [[2, 13], [6, 3]]);
+
+  await store.runTraffic.selectAll();
+  const [, , count] = client.calls.findLast(([, p]) => p === "/traffic/count/by-field");
+  assert.deepEqual(count, { q: 'metadata.armory_run_id = "r2" AND (grpc_status != 0)', field: "status_code", as_of: "p0006" });
+});
+
+test("a pair that isn't gRPC has no grpc-status", async () => {
+  const routes = serviceRoutes();
+  routes["GET /traffic"] = () => ({ items: [summary(1)], next_cursor: null, as_of: "p0001", index: { complete: true } });
+  const { store } = setup(routes);
+  await store.runTraffic.open("r2");
+  assert.equal(get(store.runTraffic).list.rows[0].GrpcStatus, null);
+});
+
 test("grouped by status, the run's pairs are counted by the service", async () => {
   const routes = serviceRoutes();
   routes["GET /traffic/count/by-field"] = { items: [{ value: "200", count: 7 }, { value: "403", count: 2 }], as_of: "p0009", index: { complete: true } };
@@ -240,6 +287,85 @@ test("grouped by status, the run's pairs are counted by the service", async () =
     { value: "403", count: 2 },
   ]);
   assert.equal(get(store.runTraffic).grouping.asOf, "p0009");
+});
+
+test("a run reads its template's framing and its progress", async () => {
+  const routes = serviceRoutes();
+  routes["GET /armory/run/r9"] = run("r9", T1, "complete", {
+    template_framing: "grpc",
+    progress: { entries: 6, failed_attempts: 1 },
+  });
+  const api = createArmoryApi(fakeClient(routes));
+  const read = await api.GetArmoryRun("r9");
+  assert.equal(read.TemplateFraming, "grpc");
+  assert.deepEqual(read.Progress, { Entries: 6, FailedAttempts: 1 });
+  routes["GET /armory/run/r1"] = run("r1", T1, "draft");
+  const plain = await api.GetArmoryRun("r1");
+  assert.equal(plain.TemplateFraming, "");
+  assert.deepEqual(plain.Progress, { Entries: 0, FailedAttempts: 0 });
+});
+
+const attempt = (id, runId, value, error) => ({
+  id,
+  run_id: runId,
+  payloads: [{ position: 0, value }],
+  error,
+  created_at: "2026-11-24T06:42:09+04:00",
+});
+
+test("opening a run lists its failed attempts with their payloads and errors", async () => {
+  const routes = serviceRoutes();
+  routes["GET /traffic"] = () => ({ items: [], next_cursor: null, as_of: null, index: { complete: true } });
+  routes["GET /armory/run/r2/failed-attempts"] = {
+    items: [attempt("f1", "r2", "abc", 'message 1: line 12 column 12: bad number "abc"')],
+  };
+  const { store } = setup(routes);
+  await store.runTraffic.open("r2");
+  assert.deepEqual(get(store.runTraffic).failedAttempts, {
+    loaded: true,
+    failed: false,
+    items: [
+      {
+        ID: "f1",
+        Payloads: [{ Position: 0, Value: "abc" }],
+        Error: 'message 1: line 12 column 12: bad number "abc"',
+        CreatedAt: "2026-11-24T06:42:09+04:00",
+      },
+    ],
+  });
+});
+
+test("a failed attempt event joins the open run's list, and another run's is left out", async () => {
+  const routes = serviceRoutes();
+  routes["GET /traffic"] = () => ({ items: [], next_cursor: null, as_of: null, index: { complete: true } });
+  routes["GET /armory/run/r2/failed-attempts"] = { items: [] };
+  const { store } = setup(routes);
+  await store.runTraffic.open("r2");
+  store.onFailedAttempt(attempt("f2", "r2", "x\\y", "message 1: bad"));
+  store.onFailedAttempt(attempt("f3", "r9", "z", "message 1: bad"));
+  assert.deepEqual(get(store.runTraffic).failedAttempts.items.map((a) => [a.ID, a.Payloads[0].Value]), [["f2", "x\\y"]]);
+});
+
+test("a failed attempt whose event beats the run's first read of them stays listed", async () => {
+  const routes = serviceRoutes();
+  routes["GET /traffic"] = () => ({ items: [], next_cursor: null, as_of: null, index: { complete: true } });
+  let answer;
+  routes["GET /armory/run/r2/failed-attempts"] = () => new Promise((resolve) => (answer = resolve));
+  const { store } = setup(routes);
+  const opening = store.runTraffic.open("r2");
+  store.onFailedAttempt(attempt("f2", "r2", "abc", "message 1: bad"));
+  answer({ items: [] });
+  await opening;
+  assert.deepEqual(get(store.runTraffic).failedAttempts.items.map((a) => a.ID), ["f2"]);
+});
+
+test("a run whose failed attempts can't be read still shows its traffic", async () => {
+  const routes = serviceRoutes();
+  routes["GET /traffic"] = () => ({ items: [summary(1)], next_cursor: null, as_of: "p0001", index: { complete: true } });
+  const { store } = setup(routes);
+  await store.runTraffic.open("r2");
+  assert.equal(get(store.runTraffic).list.rows.length, 1);
+  assert.equal(get(store.runTraffic).failedAttempts.failed, true);
 });
 
 test("a run event keeps its template's runs and the active runs current", async () => {

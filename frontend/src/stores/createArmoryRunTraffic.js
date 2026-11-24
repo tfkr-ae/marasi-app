@@ -85,6 +85,9 @@ function emptyGrouping() {
 function initialState(sort = { column: null, desc: false }, groupBy = null) {
   return {
     runId: null,
+    // The grpc-status filter: "" for none, "ok", "error" (any status but
+    // OK) or a status number as a string. Each run opens unfiltered.
+    grpcStatus: "",
     // column is null for # order, else "number", "time", "status" or "size".
     sort,
     // null for one list, else "status" or "length".
@@ -99,6 +102,9 @@ function initialState(sort = { column: null, desc: false }, groupBy = null) {
     selection: emptySelection(),
     // Where the table was scrolled, so a page visit comes back to it.
     scrollTop: 0,
+    // The requests the run built but didn't send (a message didn't
+    // encode), oldest first.
+    failedAttempts: { items: [], loaded: false, failed: false },
   };
 }
 
@@ -120,6 +126,12 @@ export function orderBy(sort) {
 const GROUP_FIELDS = { status: "status_code", length: "length" };
 const GROUP_COLUMNS = { status: "status", length: "size" };
 
+/** The most streamed pairs one read asks for the grpc-status of. */
+const STATUS_READ_LIMIT = 100;
+
+/** How many flushes look for a streamed pair's grpc-status before giving up. */
+const STATUS_READ_TRIES = 10;
+
 /** A group above this share of the run starts folded. */
 export const FOLD_SHARE = 0.4;
 
@@ -129,13 +141,21 @@ export function groupNarrowing(groupBy, value) {
   return value === "" ? `NOT ${field} >= 0` : `${field} = ${value}`;
 }
 
+/** The query a grpc-status filter narrows the run by; "" for none. */
+export function grpcStatusNarrowing(grpcStatus) {
+  if (!grpcStatus) return "";
+  if (grpcStatus === "ok") return "grpc_status = 0";
+  if (grpcStatus === "error") return "grpc_status != 0";
+  return `grpc_status = ${Number(grpcStatus)}`;
+}
+
 /**
- * The traffic query for a narrowing of the run, as QueryArmoryRunTraffic
- * builds it, for a Selection in Marasi's query shape.
+ * The traffic query for a narrowing of the run under a filter, as
+ * QueryArmoryRunTraffic builds it, for a Selection in Marasi's query shape.
  */
-export function runQuery(runId, narrowing = "") {
+export function runQuery(runId, narrowing = "", filter = "") {
   const run = `metadata.armory_run_id = ${JSON.stringify(String(runId))}`;
-  return narrowing ? `${run} AND (${narrowing})` : run;
+  return [run, filter, narrowing].filter(Boolean).reduce((query, part) => `${query} AND (${part})`);
 }
 
 // Values by number, the pairs with no value last.
@@ -183,7 +203,7 @@ export function runTrafficGroups(state) {
         share: total ? (count / total) * 100 : 0,
         folded: grouping.folded.has(value),
         narrowing,
-        query: runQuery(runId, narrowing),
+        query: runQuery(runId, narrowing, grpcStatusNarrowing(state.grpcStatus)),
         list: grouping.lists.get(value) ?? emptyList(narrowing),
       };
     })
@@ -273,7 +293,11 @@ export function runSelectionSpec(state) {
   const { ids, query } = state.selection;
   if (query) {
     const narrowing = query.groups?.map((value) => groupNarrowing(query.groupBy, value)).join(" OR ") ?? "";
-    return { query: runQuery(state.runId, narrowing), exclusion: [], as_of: query.asOf };
+    return {
+      query: runQuery(state.runId, narrowing, grpcStatusNarrowing(state.grpcStatus)),
+      exclusion: [],
+      as_of: query.asOf,
+    };
   }
   return ids.size ? { ids: [...ids] } : null;
 }
@@ -347,7 +371,9 @@ export function runTrafficNewLabel(state) {
  * True when a pair the run sends belongs at the end of the rows: # order,
  * or # or Time ascending.
  */
-function joinsAtEnd(sort) {
+function joinsAtEnd(sort, grpcStatus = "") {
+  // Under a filter a pair can't be placed until its response ends.
+  if (grpcStatus) return false;
   return orderBy(sort) === "requested_at";
 }
 
@@ -418,6 +444,11 @@ export function createRunTrafficView(api) {
   // once it is back.
   let counting = null;
   let recountDue = false;
+  // Streamed pairs whose response event came, by ID, with how many reads
+  // have looked for their grpc-status: the event doesn't carry it, and
+  // Marasi stores it just after announcing the response.
+  let statusDue = new Map();
+  let statusReading = null;
 
   // A list is the whole run's (key null) or one group's (its value).
   function listOf(state, key) {
@@ -450,6 +481,7 @@ export function createRunTrafficView(api) {
     try {
       page = await api.queryRunTraffic(String(runId), {
         Query: list.narrowing,
+        Filter: grpcStatusNarrowing(current.grpcStatus),
         OrderBy: listOrderBy(current),
         AsOf: asOf,
         Limit: Math.min(limit, MAX_PAGE_SIZE),
@@ -479,6 +511,7 @@ export function createRunTrafficView(api) {
     try {
       page = await api.queryRunTraffic(String(runId), {
         Query: list.narrowing,
+        Filter: grpcStatusNarrowing(current.grpcStatus),
         OrderBy: listOrderBy(current),
         Cursor: list.next,
         AsOf: list.asOf ?? "",
@@ -506,7 +539,7 @@ export function createRunTrafficView(api) {
   // The run's counts by `field` up to `asOf` ("" for the newest pair), as
   // { counts: [{ value, count }], asOf }.
   async function countGroups(field = GROUP_FIELDS[current.groupBy], asOf = "") {
-    const result = await api.countRunTraffic(String(current.runId), field, asOf);
+    const result = await api.countRunTraffic(String(current.runId), field, asOf, grpcStatusNarrowing(current.grpcStatus));
     return {
       counts: (result?.Counts ?? []).map((c) => ({ value: c.Value, count: c.Count })),
       asOf: result?.AsOf || null,
@@ -611,8 +644,59 @@ export function createRunTrafficView(api) {
    * counts follow it. While a read is under way the events wait for it.
    */
   function flush() {
+    flushEvents();
+    readStatuses();
+  }
+
+  // Reads the grpc-status of the streamed pairs answered since, among the
+  // rows read, and fills it in their rows, which stay where they are. A
+  // status not stored yet is asked for again at the next flush, a few
+  // times.
+  function readStatuses() {
+    if (statusReading || statusDue.size === 0) return;
+    const { runId } = current;
+    const known = new Set(readRows(current).map((row) => String(row.ID)));
+    if (current.openRow) known.add(String(current.openRow.ID));
+    for (const key of statusDue.keys()) if (runId == null || !known.has(key)) statusDue.delete(key);
+    const ids = [...statusDue.keys()].slice(0, STATUS_READ_LIMIT);
+    if (ids.length === 0) return;
+    const gen = generation;
+    statusReading = api
+      .queryRunTraffic(String(runId), {
+        Query: ids.map((key) => `id = ${JSON.stringify(key)}`).join(" OR "),
+        OrderBy: "requested_at",
+        Limit: ids.length,
+      })
+      .then((page) => {
+        if (gen !== generation) return;
+        const found = new Map();
+        for (const item of page.Items ?? []) if (item.GrpcStatus != null) found.set(String(item.ID), item.GrpcStatus);
+        for (const key of ids) {
+          const tries = (statusDue.get(key) ?? 0) + 1;
+          if (found.has(key) || tries >= STATUS_READ_TRIES) statusDue.delete(key);
+          else statusDue.set(key, tries);
+        }
+        if (found.size) patchRows(found);
+      })
+      .catch((err) => console.error("Reading grpc-status failed:", err))
+      .finally(() => (statusReading = null));
+  }
+
+  // Fills each row's grpc-status from `statuses` (ID → status).
+  function patchRows(statuses) {
+    const patch = (row) => (statuses.has(String(row.ID)) ? { ...row, GrpcStatus: statuses.get(String(row.ID)) } : row);
+    const patchList = (l) => ({ ...l, rows: l.rows.map(patch) });
+    update((state) => ({
+      ...state,
+      list: patchList(state.list),
+      grouping: { ...state.grouping, lists: new Map([...state.grouping.lists].map(([key, l]) => [key, patchList(l)])) },
+      openRow: state.openRow && patch(state.openRow),
+    }));
+  }
+
+  function flushEvents() {
     if (requestBuffer.length === 0 && responseBuffer.size === 0) return;
-    const { runId, sort, list, groupBy } = current;
+    const { runId, sort, list, groupBy, grpcStatus } = current;
     if (runId == null) {
       requestBuffer = [];
       responseBuffer = new Map();
@@ -664,7 +748,7 @@ export function createRunTrafficView(api) {
       // Sorted with no rows yet, nothing can move under the cursor, so the
       // pairs are read in their place instead of waiting. The events go back
       // in the buffer: the next flush counts any pair the read missed.
-      if (sent.length && !joinsAtEnd(sort) && list.rows.length === 0 && !list.hasMore) {
+      if (sent.length && !joinsAtEnd(sort, grpcStatus) && list.rows.length === 0 && !list.hasMore) {
         requestBuffer = [...requests, ...requestBuffer];
         responseBuffer = new Map([...responses, ...responseBuffer]);
         reading = readFirst().catch((err) => console.error("Reading run traffic failed:", err));
@@ -674,7 +758,7 @@ export function createRunTrafficView(api) {
         let { rows, tail } = fill(l);
         let newIds = l.newIds;
         if (sent.length) {
-          if (!joinsAtEnd(sort)) {
+          if (!joinsAtEnd(sort, grpcStatus)) {
             const waiting = new Set(newIds);
             for (const pair of sent) waiting.add(String(pair.ID));
             for (const row of rows) waiting.delete(String(row.ID));
@@ -692,6 +776,30 @@ export function createRunTrafficView(api) {
     if (open && responses.has(String(open.ID))) {
       update((state) => ({ ...state, openRow: answered(state.openRow) }));
     }
+  }
+
+  // Reads the open run's failed attempts. A failed read leaves the traffic
+  // as it is and marks the list failed.
+  async function readFailedAttempts() {
+    const { runId } = current;
+    if (runId == null || !api.failedAttempts) return;
+    let items;
+    try {
+      items = await api.failedAttempts(String(runId));
+    } catch (err) {
+      console.error("Reading failed attempts failed:", err);
+      if (String(current.runId) === String(runId)) {
+        update((state) => ({ ...state, failedAttempts: { ...state.failedAttempts, failed: true } }));
+      }
+      return;
+    }
+    if (String(current.runId) !== String(runId)) return;
+    update((state) => {
+      // Attempts whose event came while the read was under way stay.
+      const read = new Set(items.map((item) => item.ID));
+      const later = state.failedAttempts.items.filter((item) => !read.has(item.ID));
+      return { ...state, failedAttempts: { items: [...items, ...later], loaded: true, failed: false } };
+    });
   }
 
   // Reads the view from the top: the groups, or the one list.
@@ -792,6 +900,27 @@ export function createRunTrafficView(api) {
       return groupBy ? readGroups({ resetFolds: true }) : readFirst();
     },
 
+    /**
+     * Narrows the run's traffic to the pairs whose response ended with a
+     * grpc-status: "ok", "error" (any but OK), a status number as a string,
+     * or "" for every pair. The rows and groups read again from the top
+     * and the Selection empties; the sort and grouping stay.
+     */
+    filterGrpcStatus(grpcStatus) {
+      grpcStatus = grpcStatus ? String(grpcStatus) : "";
+      if (grpcStatus === current.grpcStatus) return Promise.resolve();
+      generation++;
+      update((state) => ({
+        ...state,
+        grpcStatus,
+        grouping: emptyGrouping(),
+        list: emptyList(),
+        selection: { ...emptySelection(), anchor: state.selection.anchor },
+      }));
+      if (current.runId == null) return Promise.resolve();
+      return current.groupBy ? readGroups({ resetFolds: true }) : readFirst();
+    },
+
     /** Folds the group with this value, or unfolds it and reads its rows. */
     toggleGroup(value) {
       return fold([value], !current.grouping.folded.has(value));
@@ -803,13 +932,31 @@ export function createRunTrafficView(api) {
       return fold(runTrafficGroups(current)?.map((g) => g.value) ?? [], true);
     },
 
-    /** Shows `runId`'s traffic; the run already shown keeps its rows. */
+    /**
+     * Shows `runId`'s traffic and failed attempts; the run already shown
+     * keeps its rows.
+     */
     open(runId) {
       if (runId != null && String(runId) === String(current.runId)) return Promise.resolve();
       generation++;
       set({ ...initialState(current.sort, current.groupBy), runId });
       if (runId == null) return Promise.resolve();
-      return current.groupBy ? readGroups({ resetFolds: true }) : readFirst();
+      return Promise.all([
+        current.groupBy ? readGroups({ resetFolds: true }) : readFirst(),
+        readFailedAttempts(),
+      ]).then(() => {});
+    },
+
+    readFailedAttempts,
+
+    /** An armory.failed_attempt.created event, for run `runId`. */
+    onFailedAttempt(runId, attempt) {
+      if (current.runId == null || String(runId) !== String(current.runId)) return;
+      update((state) => {
+        const { items } = state.failedAttempts;
+        if (items.some((item) => item.ID === attempt.ID)) return state;
+        return { ...state, failedAttempts: { ...state.failedAttempts, items: [...items, attempt] } };
+      });
     },
 
     /**
@@ -959,6 +1106,7 @@ export function createRunTrafficView(api) {
       generation++;
       requestBuffer = [];
       responseBuffer = new Map();
+      statusDue = new Map();
       set(initialState());
     },
 
@@ -967,9 +1115,10 @@ export function createRunTrafficView(api) {
     },
     onResponse(res) {
       responseBuffer.set(String(res.ID), res);
+      if (res.Streamed) statusDue.set(String(res.ID), 0);
     },
     flush,
     /** Resolves once a read or count a flush started is back. */
-    settled: () => reading,
+    settled: () => Promise.all([reading, statusReading]).then(() => {}),
   };
 }
