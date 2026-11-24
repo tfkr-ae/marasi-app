@@ -7,8 +7,10 @@
 	// drop and reconnect toasts (lib/connectionToasts.js). Pages stay
 	// mounted underneath.
 	import { onDestroy, onMount } from "svelte";
-	import { getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
+	import { goto } from "$app/navigation";
+	import { getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
 	import { neutralVariant } from "../launchpad/format.js";
+	import { createRestartHeldHandler } from "../checkpointHeld.js";
 	import { createConnectionToasts } from "../connectionToasts.js";
 	import { projectName } from "../openProgress.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
@@ -21,7 +23,16 @@
 	$: name = $connectionStore.connection.name;
 
 	const toastStore = getToastStore();
+	const modalStore = getModalStore();
 	onDestroy(connectionStore.subscribe(createConnectionToasts(toastStore)));
+	onDestroy(
+		connectionStore.subscribe(
+			createRestartHeldHandler(modalStore, () => {
+				modalStore.clear();
+				goto("/checkpoint");
+			}),
+		),
+	);
 	// The connected service's own update: a short toast for found, installed
 	// and failed (Settings → Updates shows the rest).
 	onMount(() => {

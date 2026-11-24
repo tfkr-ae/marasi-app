@@ -5,6 +5,7 @@
 // client. The lifecycle is in createConnectionStore.js.
 import {
   AddRecentProject,
+  ClaimOwnedRun,
   ConfirmFollowProject,
   ConfirmProjectSwitch,
   ConnectLocal,
@@ -31,6 +32,7 @@ export const connectionStore = createConnectionStore({
   ...connectionServiceApi(service, projectStore),
   listConnections: () => ListConnections(),
   connectLocal: (id) => ConnectLocal(id),
+  claimOwnedRun: (id, runId) => ClaimOwnedRun(id, runId),
   startLocal: (id, project) => StartLocalInstance(id, project),
   stopLocal: (id) => StopLocalInstance(id),
   connectionPassword: (id) => ConnectionPassword(id),

@@ -29,6 +29,14 @@ export function stopConfirmCopy(connection) {
   };
 }
 
+/** Concise inline Restart confirmation copy for remote or unowned local runs. */
+export function restartConfirmCopy(connection) {
+  return {
+    title: `Restart ${connection.name}?`,
+    detail: "Active connections will drop while the project reopens.",
+  };
+}
+
 /** Collapsed setup disclosure heading and mono summary. */
 export function setupDisclosure(connection, { channel = null, version = null, mobile = false } = {}) {
   const title =

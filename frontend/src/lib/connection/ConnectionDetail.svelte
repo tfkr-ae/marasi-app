@@ -18,7 +18,7 @@
 	import { mobile } from "../platform.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
 	import { phaseLabel, phaseTone, removeBlock } from "./status.js";
-	import { detailWhereText, serviceMetaText, setupDisclosure, stopConfirmCopy } from "./detail.js";
+	import { detailWhereText, restartConfirmCopy, serviceMetaText, setupDisclosure, stopConfirmCopy } from "./detail.js";
 	import { errorText, localInstanceControl, removeConnection, setAddress, setPort } from "./manage.js";
 	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
 	import { cliMissing, outdatedVersion } from "./cli.js";
@@ -95,6 +95,8 @@
 	$: statusLabel = isActive && state.restarting ? "Restarting" : phaseLabel(phase);
 	$: statusPulsing = phase === "reconnecting" || (isActive && state.restarting);
 
+	$: showRestartConfirm = isActive && phase === "connected" && state.restartAsk;
+	$: restartCopy = restartConfirmCopy(connection);
 	$: activeStopAsk = isActive && phase === "connected" && state.stopAsk;
 	$: inactiveStopAsk = !isActive && Boolean(local && instance?.stopAsk);
 	$: showStopConfirm = activeStopAsk || inactiveStopAsk;
@@ -179,10 +181,22 @@
 					{/if}
 				{/if}
 			{:else if phase === "connected"}
+				{#if state.restartSupported}
+					<button
+						type="button"
+						class="{neutral} justify-center"
+						disabled={state.busy !== null || state.restarting || state.restartConfirming}
+						data-testid="connection-restart"
+						on:click={() => connectionStore.restart()}
+					>
+						<RotateCw size={14} class={state.restarting ? "animate-spin" : ""} />
+						<span>{state.restarting ? "Restarting…" : "Restart"}</span>
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="{neutral} justify-center"
-					disabled={state.busy !== null || state.restarting}
+					disabled={state.busy !== null || state.restarting || state.restartConfirming}
 					data-testid="connection-stop"
 					on:click={() => connectionStore.stop()}
 				>
@@ -222,7 +236,21 @@
 	{/if}
 
 	<!-- 3. Single contextual slot directly below the action bar -->
-	{#if showStopConfirm}
+	{#if showRestartConfirm}
+		<div
+			class="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2.5 text-xs"
+			data-testid="connection-context"
+		>
+			<div class="min-w-0">
+				<p class="font-semibold" data-testid="connection-restart-title">{restartCopy.title}</p>
+				<p class="opacity-80" data-testid="connection-restart-hint">{restartCopy.detail}</p>
+			</div>
+			<div class="connection-context-actions flex items-center gap-2">
+				<button type="button" class={neutral} data-testid="connection-restart-cancel" on:click={() => connectionStore.cancelRestart()}>Cancel</button>
+				<button type="button" class={primary} data-testid="connection-restart-confirm" on:click={() => connectionStore.confirmRestart()}>Restart</button>
+			</div>
+		</div>
+	{:else if showStopConfirm}
 		<div
 			class="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-error-500 bg-error-500/15 px-3 py-2.5 text-xs"
 			data-testid="connection-context"
@@ -264,6 +292,10 @@
 	{:else if stopErrorText}
 		<div class="mt-3 border-l-4 border-error-500 bg-error-500/15 px-3 py-2 text-xs text-error-700 dark:text-error-300" role="alert" data-testid="connection-context">
 			{stopErrorText}
+		</div>
+	{:else if isActive && state.restartError}
+		<div class="mt-3 border-l-4 border-error-500 bg-error-500/15 px-3 py-2 text-xs text-error-700 dark:text-error-300" role="alert" data-testid="connection-restart-error">
+			{state.restartError}
 		</div>
 	{:else if isActive && state.apiWarning}
 		<div class="mt-3 space-y-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2 text-xs" data-testid="connection-api-warning">
