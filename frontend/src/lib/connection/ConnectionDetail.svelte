@@ -14,7 +14,7 @@
 	//    rows (Address/Remove on remotes, Proxy port/Remove on added locals).
 	import { getToastStore, modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
 	import { Check, ChevronDown, ChevronRight, Download, ExternalLink, Power, RefreshCw, RotateCw } from "lucide-svelte";
-	import { neutralButton, primaryButton } from "../launchpad/format.js";
+	import { neutralButton, primaryButton, primaryVariant } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { mobile } from "../platform.js";
 	import { openURL } from "../runtime.js";
@@ -25,7 +25,10 @@
 		contextualSlotKind,
 		detailWhereText,
 		formatServiceNotes,
+		reinstallConfirmCopy,
 		restartConfirmCopy,
+		SERVICE_CHANNELS,
+		serviceChannelControls,
 		serviceMetaText,
 		serviceUpdateAction,
 		serviceUpdateCheckToast,
@@ -49,7 +52,9 @@
 
 	$: neutral = neutralButton($modeCurrent);
 	$: primary = primaryButton($modeCurrent);
+	$: primaryVar = primaryVariant($modeCurrent);
 	let setupOpen = false;
+	let reinstallAsk = false;
 	let password = "";
 	let passwordError = "";
 	let address = connection.url ?? "";
@@ -100,6 +105,18 @@
 		if (updateAction.kind === "restart") connectionStore.restart();
 		else if (updateAction.kind === "install") serviceUpdateStore.install();
 		else if (updateAction.kind === "check") checkForUpdate();
+	}
+
+	async function switchChannel(channel) {
+		if (!channelControls || channelControls.disabled || channelControls.channel === channel) return;
+		reinstallAsk = false;
+		await serviceUpdateStore.setChannel(channel);
+	}
+
+	async function confirmReinstall() {
+		if (!channelControls || channelControls.disabled) return;
+		reinstallAsk = false;
+		await serviceUpdateStore.reinstall();
 	}
 
 	$: added = connection.kind === "local" && connection.id !== "local";
@@ -166,6 +183,10 @@
 		phase === "connected" ||
 		phase === "stopped" ||
 		(phase === "failed" && !isCLIMissing && !isOutdated);
+
+	$: channelControls = isActive && phase === "connected" ? serviceChannelControls(state, update) : null;
+	$: reinstallCopy = channelControls ? reinstallConfirmCopy(channelControls.channel, connection.name) : null;
+	$: if (!channelControls) reinstallAsk = false;
 
 	$: setup = setupDisclosure(connection, {
 		channel: (isActive ? update.channel : null) ?? state.channel,
@@ -405,6 +426,30 @@
 				<p class="opacity-75">Restart {connection.name} to switch onto the new version. Your open project stays intact.</p>
 				{#if state.restartError}
 					<p class="text-error-700 dark:text-error-300" role="alert" data-testid="connection-restart-error">{state.restartError}</p>
+				{:else if update.error}
+					<div class="flex flex-wrap items-center justify-between gap-2 text-error-700 dark:text-error-300" role="alert" data-testid="connection-update-error">
+						<span class="min-w-0 flex-1 break-words">{update.error.message}</span>
+						<div class="flex shrink-0 items-center gap-3">
+							{#if update.error.page}
+								<button
+									type="button"
+									class="inline-flex items-center gap-1 underline opacity-85 hover:opacity-100"
+									data-testid="connection-update-error-page"
+									on:click={() => openURL(update.error.page)}
+								>
+									<span>Release page</span><ExternalLink size={11} />
+								</button>
+							{/if}
+							<button
+								type="button"
+								class="underline opacity-75 hover:opacity-100"
+								data-testid="connection-update-error-dismiss"
+								on:click={() => serviceUpdateStore.dismissError()}
+							>
+								Dismiss
+							</button>
+						</div>
+					</div>
 				{/if}
 			{/if}
 		</div>
@@ -431,16 +476,14 @@
 							<span>Release page</span><ExternalLink size={11} />
 						</button>
 					{/if}
-					{#if update.available}
-						<button
-							type="button"
-							class="underline opacity-75 hover:opacity-100"
-							data-testid="connection-update-error-dismiss"
-							on:click={() => serviceUpdateStore.dismissError()}
-						>
-							Dismiss
-						</button>
-					{/if}
+					<button
+						type="button"
+						class="underline opacity-75 hover:opacity-100"
+						data-testid="connection-update-error-dismiss"
+						on:click={() => serviceUpdateStore.dismissError()}
+					>
+						Dismiss
+					</button>
 				</div>
 			</div>
 			{#if update.error.installPath}
@@ -504,8 +547,8 @@
 		<ConnectionAccess {connection} {row} flush={reached} />
 	{/if}
 
-	<!-- 5. Collapsed setup disclosure shell -->
-	{#if reached}
+	<!-- 5. Collapsed setup disclosure (channel & reinstall) -->
+	{#if channelControls}
 		<div class="mt-4" data-testid="connection-setup">
 			<button
 				type="button"
@@ -524,14 +567,76 @@
 			</button>
 			{#if setupOpen}
 				<div class="border border-t-0 border-surface-300 px-3 py-1 dark:border-surface-600" data-testid="connection-setup-body">
-					<div class="settings-row flex items-center justify-between gap-4 py-2.5">
+					<div class={row}>
 						<div>
 							<p>Update channel</p>
 							<p class="text-xs opacity-70">Builds {connection.name} checks</p>
 						</div>
-						<p class="font-mono text-xs opacity-75" data-testid="connection-setup-channel">
-							{(isActive ? update.channel : null) ?? state.channel ?? (state.version === "dev" ? "dev" : "unavailable")}
-						</p>
+						<div class="settings-control flex w-44 text-xs" role="radiogroup" aria-label="Update channel">
+							{#each SERVICE_CHANNELS as [value, label]}
+								<button
+									type="button"
+									role="radio"
+									aria-checked={channelControls.channel === value}
+									disabled={channelControls.disabled}
+									class="flex-1 px-3 py-1 {channelControls.channel === value
+										? primaryVar
+										: 'bg-surface-200 hover:bg-surface-300 dark:bg-surface-700 dark:hover:bg-surface-600'}"
+									data-testid="connection-channel-{value}"
+									on:click={() => switchChannel(value)}
+								>
+									{label}
+								</button>
+							{/each}
+						</div>
+					</div>
+					<div class="py-2.5">
+						{#if reinstallAsk && reinstallCopy}
+							<div
+								class="flex flex-wrap items-center justify-between gap-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2.5 text-xs"
+								data-testid="connection-reinstall-confirm-box"
+							>
+								<div class="min-w-0">
+									<p class="font-semibold" data-testid="connection-reinstall-confirm-title">{reinstallCopy.title}</p>
+									<p class="opacity-80" data-testid="connection-reinstall-confirm-detail">{reinstallCopy.detail}</p>
+								</div>
+								<div class="connection-context-actions flex items-center gap-2">
+									<button
+										type="button"
+										class={neutral}
+										data-testid="connection-reinstall-cancel"
+										on:click={() => (reinstallAsk = false)}
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										class={primary}
+										disabled={channelControls.disabled}
+										data-testid="connection-reinstall-confirm"
+										on:click={confirmReinstall}
+									>
+										Reinstall
+									</button>
+								</div>
+							</div>
+						{:else}
+							<div class="settings-row flex items-center justify-between gap-4">
+								<div>
+									<p data-testid="connection-reinstall-label">{channelControls.reinstallLabel}</p>
+									<p class="text-xs opacity-70">Replaces the installed build even when older</p>
+								</div>
+								<button
+									type="button"
+									class={neutral}
+									disabled={channelControls.disabled}
+									data-testid="connection-reinstall"
+									on:click={() => (reinstallAsk = true)}
+								>
+									Reinstall
+								</button>
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/if}

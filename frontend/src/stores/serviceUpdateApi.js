@@ -1,7 +1,8 @@
 // The service update API adapter over the service client: the control API
-// routes for inspecting, checking, installing, and cancelling a connected
-// service's own update (service/update_routes.go). Each call accepts a bound
-// link from `bind()` so connection switches supersede in-flight calls cleanly.
+// routes for inspecting, checking, installing, cancelling, changing channel,
+// and reinstalling a connected service's own update (service/update_routes.go).
+// Each call accepts a bound link from `bind()` so connection switches supersede
+// in-flight calls cleanly.
 export function createServiceUpdateApi(client) {
   return {
     bind: () => client.bind(),
@@ -9,5 +10,7 @@ export function createServiceUpdateApi(client) {
     checkUpdate: (link = client) => link.post("/update/check"),
     installUpdate: (link = client) => link.post("/update/install"),
     cancelInstall: (link = client) => link.del("/update/install"),
+    setChannel: (channel, link = client) => link.put("/update/channel", { channel }),
+    reinstallUpdate: (link = client) => link.post("/update/reinstall", { confirm: true }),
   };
 }
