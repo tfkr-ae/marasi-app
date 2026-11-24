@@ -76,7 +76,7 @@ test("connectionTileIndicator shows for available update, restartRequired (from 
   );
   assert.deepEqual(
     connectionTileIndicator(conn(), upd(), { carriedUpgrade: true }),
-    { kind: "carried-upgrade", label: "Marasi CLI update included" },
+    { kind: "carried-upgrade", label: "Newer Marasi CLI included" },
   );
   // restartRequired beats carriedUpgrade
   assert.equal(

@@ -1175,3 +1175,88 @@ test("in-flight POST /update/reinstall is superseded silently on connection swit
   assert.equal(state.error, null);
   assert.equal(state.install, null);
 });
+
+test("serviceUpdateApi maps snake_case control API responses to camelCase", async () => {
+  const fakeClient = {
+    bind: () => fakeClient,
+    get: async () => ({
+      ...baseUpdate,
+      auto_check: true,
+      last_check: { at: "2026-11-24T00:00:00Z", latest: null, error: "dns failure" },
+      restart_required: true,
+      install_path: "/opt/marasi/marasi",
+    }),
+    post: async (path) =>
+      path === "/update/check"
+        ? {
+            ...baseUpdate,
+            auto_check: false,
+            last_check: { at: "2026-11-24T00:00:00Z", latest: null, error: "" },
+            restart_required: false,
+            install_path: "/usr/local/bin/marasi",
+          }
+        : {
+            joined: true,
+            install: { state: "running", version: "24.11.2026", step: "download", received: 10, total: 100 },
+            install_path: "/opt/marasi/marasi",
+          },
+    put: async () => ({
+      ...baseUpdate,
+      channel: "nightly",
+      restart_required: false,
+      install_path: "/usr/local/bin/marasi",
+    }),
+    del: async () => ({}),
+  };
+  const api = createServiceUpdateApi(fakeClient);
+  const snap = await api.getUpdate();
+  assert.equal(snap.installPath, "/opt/marasi/marasi");
+  assert.equal(snap.restartRequired, true);
+  assert.equal(snap.autoCheck, true);
+  assert.deepEqual(snap.lastCheck, { at: "2026-11-24T00:00:00Z", latest: null, error: "dns failure" });
+  assert.equal("install_path" in snap, false);
+  assert.equal("restart_required" in snap, false);
+  assert.equal("auto_check" in snap, false);
+  assert.equal("last_check" in snap, false);
+
+  const start = await api.installUpdate();
+  assert.equal(start.installPath, "/opt/marasi/marasi");
+  assert.equal(start.joined, true);
+  assert.equal("install_path" in start, false);
+});
+
+test("serviceUpdate never leaks raw ServiceError HTTP routes or codes when error body has no message", async () => {
+  const { updateStore, stopFollowing } = await setup({
+    routes: {
+      "GET /update": () => ({
+        ...baseUpdate,
+        available: { version: "24.11.2026", channel: "release", notes: "", page: "" },
+      }),
+      "POST /update/check": () => refusal(502, { error: "check_failed" }),
+      "POST /update/install": () => refusal(500, { error: "internal_server_error" }),
+      "DELETE /update/install": () => refusal(500, { error: "internal_server_error" }),
+      "PUT /update/channel": () => refusal(502, { error: "check_failed" }),
+    },
+  });
+
+  const assertFriendly = (msg, label) => {
+    assert.ok(msg && msg.length > 0, `${label}: non-empty message`);
+    assert.doesNotMatch(msg, /\b(GET|POST|PUT|DELETE)\s+\/update/, `${label}: no HTTP method/route`);
+    assert.doesNotMatch(msg, /\b(http_error|internal_server_error|check_failed):/, `${label}: no raw code prefix`);
+    assert.doesNotMatch(msg, /HTTP\s+\d{3}/, `${label}: no raw HTTP status`);
+  };
+
+  await updateStore.check();
+  assertFriendly(get(updateStore).error?.message, "check");
+
+  await updateStore.install();
+  assertFriendly(get(updateStore).error?.message, "install");
+
+  await updateStore.cancel();
+  assertFriendly(get(updateStore).error?.message, "cancel");
+
+  await updateStore.setChannel("nightly");
+  assertFriendly(get(updateStore).error?.message, "setChannel");
+
+  stopFollowing();
+});

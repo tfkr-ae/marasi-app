@@ -11,11 +11,22 @@ export function detailWhereText(connection, { instance = null, os = null } = {})
   return [host, inst ? `instance ${inst}` : null, os || null].filter(Boolean).join(" · ");
 }
 
+/**
+ * Effective update channel for a connection: null when inactive (never leaking
+ * the active connection's channel), otherwise preferring `updateState.channel`
+ * (updated immediately by PUT /update/channel) over `connectionState.channel`.
+ */
+export function resolvedServiceChannel({ isActive = true, connectionState = null, updateState = null } = {}) {
+  if (!isActive) return null;
+  return updateState?.channel || connectionState?.channel || null;
+}
+
 /** Service version, build channel, and API level line, or null before reaching a service. */
-export function serviceMetaText({ version = null, channel = null, api = null } = {}) {
+export function serviceMetaText({ version = null, channel = null, api = null } = {}, updateState = null) {
   if (!version) return null;
-  const hasChannel = channel && version.toLowerCase().includes(`(${channel.toLowerCase()}`);
-  const ch = channel && !hasChannel ? ` (${channel})` : "";
+  const effectiveChannel = updateState?.channel || channel;
+  const hasChannel = effectiveChannel && version.toLowerCase().includes(`(${effectiveChannel.toLowerCase()}`);
+  const ch = effectiveChannel && !hasChannel ? ` (${effectiveChannel})` : "";
   return `Marasi ${version}${ch} · API ${api ?? "none"}`;
 }
 
@@ -62,7 +73,8 @@ export const SERVICE_CHANNELS = [
   ["nightly", "Nightly"],
 ];
 
-const supportsServiceUpdates = (connectionState, updateState) =>
+/** Whether the connected service supports self-update controls (non-dev and /update available). */
+export const supportsServiceUpdates = (connectionState, updateState) =>
   Boolean(updateState?.supported !== false && !updateState?.development && connectionState?.version !== "dev");
 
 const isUpdateInstalling = (updateState) =>
@@ -263,6 +275,28 @@ export function contextualSlotKind({
   if (isActive && connectionState?.restartError) return "restart-error";
   if (isActive && connectionState?.apiWarning) return "api-warning";
   return null;
+}
+
+const INLINE_ERROR_SLOTS = new Set([
+  "restart-required",
+  "carried-upgrade",
+  "available",
+  "channel-mismatch",
+  "install-error",
+  "restart-error",
+]);
+
+/**
+ * Active update and/or restart errors to display alongside (or inside) `slot`
+ * via the shared inline error block, so errors from Switch channel, Check
+ * update, Reinstall, or Restart are never hidden by higher-precedence cards.
+ */
+export function contextualSlotErrors(slot, connectionState, updateState) {
+  if (!INLINE_ERROR_SLOTS.has(slot)) return { updateError: null, restartError: null };
+  const updateError =
+    supportsServiceUpdates(connectionState, updateState) && updateState?.error ? updateState.error : null;
+  const restartError = connectionState?.restartError || null;
+  return { updateError, restartError };
 }
 
 /** Clean toast for an explicit `Check update` that found the service up to date. */

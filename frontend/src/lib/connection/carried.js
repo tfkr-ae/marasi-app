@@ -5,6 +5,7 @@
 // - Calm inline channel-mismatch detection (desktop app channel vs local service channel)
 // - Install & restart orchestration (POST /service/restart when connected & supported,
 //   falling back to Go's RestartLocalInstance otherwise)
+import { toastError } from "../toasts.js";
 import { cliResultText } from "./cli.js";
 
 const VALID_CHANNELS = new Set(["release", "nightly"]);
@@ -178,6 +179,15 @@ export function proactiveCarriedUpgrade({
   const serviceChannel = updateState?.channel || connectionState?.channel || null;
   if (serviceChannel && serviceChannel !== carried.channel) return null;
 
+  const activeVersion = connectionState?.version || updateState?.installed?.version || null;
+  if (activeVersion) {
+    const activeChannel =
+      connectionState?.channel || updateState?.installed?.channel || serviceChannel || carried.channel;
+    if (!isCarriedNewer(carried, { found: true, version: activeVersion, channel: activeChannel })) {
+      return null;
+    }
+  }
+
   if (dismissedVersion && dismissedVersion === carried.version) return null;
   return { version: carried.version, channel: carried.channel };
 }
@@ -250,4 +260,25 @@ export async function applyCarriedCLI({
   }
 
   return { ok: true, text, method: "none" };
+}
+
+/**
+ * Shared carried-CLI install + toast orchestration for ConnectionBanner and
+ * ConnectionDetail: triggers the install outcome toast and routes thrown errors
+ * through `toastError` (never showing raw error strings or superseded failures).
+ */
+export async function runCarriedInstall({ installCarried, toastStore, ...options }) {
+  try {
+    const outcome = await installCarried(options);
+    if (outcome?.text) {
+      toastStore.trigger({
+        message: outcome.text,
+        ...(outcome.ok ? {} : { background: "variant-filled-error" }),
+      });
+    }
+    return outcome;
+  } catch (err) {
+    toastError(toastStore, "Carried CLI install failed", err);
+    return null;
+  }
 }

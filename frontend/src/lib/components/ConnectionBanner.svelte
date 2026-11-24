@@ -17,6 +17,7 @@
 	import { localCLIStore } from "../../stores/localCLIStore.js";
 	import { proactiveCarriedUpgrade } from "../connection/carried.js";
 	import { connectionActionBanner } from "../connection/indicators.js";
+	import { installCarriedWithToast } from "../connection/manage.js";
 	import { connectionsModal } from "../connection/modal.js";
 	import { reachingText } from "../connection/status.js";
 	import { service } from "../service/index.js";
@@ -39,26 +40,7 @@
 		carriedUpgrade,
 	});
 
-	async function installCarriedFromBanner() {
-		try {
-			const outcome = await localCLIStore.installCarried({
-				connectionState: $connectionStore,
-				connectionId: $connectionStore.connection.id,
-				isActive: true,
-				restartService: () => connectionStore.restart(),
-				retryConnection: () =>
-					$connectionStore.phase === "failed" ? connectionStore.retry() : connectionStore.retryNow(),
-			});
-			if (outcome?.text) {
-				toastStore.trigger({
-					message: outcome.text,
-					...(outcome.ok ? {} : { background: "variant-filled-error" }),
-				});
-			}
-		} catch (err) {
-			toastStore.trigger({ message: String(err?.message ?? err), background: "variant-filled-error" });
-		}
-	}
+	const installCarriedFromBanner = () => installCarriedWithToast(toastStore);
 
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();

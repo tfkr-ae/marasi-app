@@ -94,3 +94,17 @@ export function serviceError({ method, path, status, body, text = "" }) {
   const message = code === "http_error" ? `${what}: ${named}: HTTP ${status}${detail ? ` ${detail}` : ""}` : `${what}: ${named}: ${cause}`;
   return new ServiceError(message, { status, code, ids, body });
 }
+
+/**
+ * User-facing message for a failed control API call, without raw HTTP method,
+ * route path, status, or error-code prefixes. Uses the service's own message
+ * when present, or the already-friendly unreachable/timeout text, else `fallback`.
+ */
+export function serviceErrorMessage(err, fallback = "Request failed") {
+  const bodyMessage = typeof err?.body?.message === "string" ? err.body.message.trim() : "";
+  if (bodyMessage) return bodyMessage;
+  if (err?.code === "unreachable" || err?.code === "timeout") {
+    return err.message || fallback;
+  }
+  return fallback;
+}
