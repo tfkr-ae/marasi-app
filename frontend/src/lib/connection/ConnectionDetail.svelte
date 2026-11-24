@@ -2,23 +2,37 @@
 	// One connection's details in the Variant E action-first layout:
 	// 1. Compact identity header: name, status dot + label, host/instance/OS,
 	//    and Marasi <version> (<channel>) · API <level> when reached.
-	// 2. Top action bar directly below the header (Switch / Stop / Start /
-	//    Retry; ready for Restart and service update actions).
+	// 2. Top action bar directly below the header (Check update / Update to
+	//    <version> / Restart to apply, Restart, Stop / Switch / Start / Retry).
 	// 3. Single contextual slot directly beneath the action bar (at most one
-	//    card: inline Stop confirmation, password prompt, CLI setup, outdated
-	//    instance recovery, stopped/failed/error notice, or API warning).
+	//    card, strict precedence: inline Restart/Stop confirmation, inline
+	//    4-step update tracker while installing or waiting to restart, errors,
+	//    available release notes + Release page link, or connection/API notice).
 	// 4. Operational rows: Project and Access (ConnectionAccess).
 	// 5. Collapsed setup disclosure shell (ready for channel, reinstall, and
 	//    desktop local CLI / quit controls), followed by connection management
 	//    rows (Address/Remove on remotes, Proxy port/Remove on added locals).
-	import { modeCurrent } from "@skeletonlabs/skeleton";
-	import { ChevronDown, ChevronRight, Power, RotateCw } from "lucide-svelte";
+	import { getToastStore, modeCurrent, ProgressBar } from "@skeletonlabs/skeleton";
+	import { Check, ChevronDown, ChevronRight, Download, ExternalLink, Power, RefreshCw, RotateCw } from "lucide-svelte";
 	import { neutralButton, primaryButton } from "../launchpad/format.js";
 	import { projectName } from "../openProgress.js";
 	import { mobile } from "../platform.js";
+	import { openURL } from "../runtime.js";
 	import { connectionStore } from "../../stores/connectionStore.js";
+	import { serviceUpdateStore } from "../../stores/serviceUpdateStore.js";
 	import { phaseLabel, phaseTone, removeBlock } from "./status.js";
-	import { detailWhereText, restartConfirmCopy, serviceMetaText, setupDisclosure, stopConfirmCopy } from "./detail.js";
+	import {
+		contextualSlotKind,
+		detailWhereText,
+		formatServiceNotes,
+		restartConfirmCopy,
+		serviceMetaText,
+		serviceUpdateAction,
+		serviceUpdateCheckToast,
+		serviceUpdateProgress,
+		setupDisclosure,
+		stopConfirmCopy,
+	} from "./detail.js";
 	import { errorText, localInstanceControl, removeConnection, setAddress, setPort } from "./manage.js";
 	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
 	import { cliMissing, outdatedVersion } from "./cli.js";
@@ -30,6 +44,8 @@
 	export let connection;
 	/** Settings rows instead of the compact modal spacing. */
 	export let rows = false;
+
+	const toastStore = getToastStore();
 
 	$: neutral = neutralButton($modeCurrent);
 	$: primary = primaryButton($modeCurrent);
@@ -73,8 +89,22 @@
 		}
 	}
 
+	async function checkForUpdate() {
+		const result = await serviceUpdateStore.check();
+		const toast = serviceUpdateCheckToast(result, connection.name);
+		if (toast) toastStore.trigger({ ...toast, timeout: 4000 });
+	}
+
+	function handleUpdateAction() {
+		if (!updateAction) return;
+		if (updateAction.kind === "restart") connectionStore.restart();
+		else if (updateAction.kind === "install") serviceUpdateStore.install();
+		else if (updateAction.kind === "check") checkForUpdate();
+	}
+
 	$: added = connection.kind === "local" && connection.id !== "local";
 	$: state = $connectionStore;
+	$: update = $serviceUpdateStore;
 	$: isActive = connection.id === state.connection.id;
 	$: phase = isActive ? state.phase : "idle";
 	$: reached = isActive && state.version !== null && phase !== "stopped";
@@ -103,6 +133,25 @@
 	$: stopCopy = stopConfirmCopy(connection);
 	$: stopErrorText = isActive ? state.stopError : (instance?.error || null);
 
+	$: updateAction = isActive && phase === "connected" ? serviceUpdateAction(state, update) : null;
+	$: updateInstalling = isActive && phase === "connected" && (update.install?.state === "running" || update.startingInstall);
+	$: updateProgress = serviceUpdateProgress(
+		{ ...update, restartRequired: update.restartRequired || state.restartRequired },
+		connection.name,
+	);
+	$: availableNotes = formatServiceNotes(update.available);
+	$: slot = contextualSlotKind({
+		isActive,
+		phase,
+		connectionState: state,
+		updateState: update,
+		showRestartConfirm,
+		showStopConfirm,
+		isCLIMissing,
+		isOutdated,
+		stopErrorText,
+	});
+
 	function confirmStop() {
 		if (activeStopAsk) connectionStore.confirmStop();
 		else if (local) local.confirmStop();
@@ -119,7 +168,7 @@
 		(phase === "failed" && !isCLIMissing && !isOutdated);
 
 	$: setup = setupDisclosure(connection, {
-		channel: state.channel,
+		channel: (isActive ? update.channel : null) ?? state.channel,
 		version: state.version,
 		mobile: $mobile,
 	});
@@ -181,11 +230,35 @@
 					{/if}
 				{/if}
 			{:else if phase === "connected"}
-				{#if state.restartSupported}
+				{#if updateAction}
+					<button
+						type="button"
+						class="{updateAction.primary ? primary : neutral} justify-center"
+						disabled={updateAction.disabled}
+						data-testid={updateAction.kind === "restart"
+							? "connection-restart-apply"
+							: updateAction.kind === "install"
+								? "connection-update-install"
+								: updateAction.kind === "installing"
+									? "connection-update-installing"
+									: "connection-update-check"}
+						on:click={handleUpdateAction}
+					>
+						{#if updateAction.kind === "restart"}
+							<RotateCw size={14} class={updateAction.spinning ? "animate-spin" : ""} />
+						{:else if updateAction.kind === "install" || updateAction.kind === "installing"}
+							<Download size={14} />
+						{:else}
+							<RefreshCw size={14} class={updateAction.spinning ? "animate-spin" : ""} />
+						{/if}
+						<span>{updateAction.label}</span>
+					</button>
+				{/if}
+				{#if state.restartSupported && !updateAction?.hideNeutralRestart}
 					<button
 						type="button"
 						class="{neutral} justify-center"
-						disabled={state.busy !== null || state.restarting || state.restartConfirming}
+						disabled={state.busy !== null || state.restarting || state.restartConfirming || updateInstalling}
 						data-testid="connection-restart"
 						on:click={() => connectionStore.restart()}
 					>
@@ -196,7 +269,7 @@
 				<button
 					type="button"
 					class="{neutral} justify-center"
-					disabled={state.busy !== null || state.restarting || state.restartConfirming}
+					disabled={state.busy !== null || state.restarting || state.restartConfirming || updateInstalling}
 					data-testid="connection-stop"
 					on:click={() => connectionStore.stop()}
 				>
@@ -235,8 +308,8 @@
 		</div>
 	{/if}
 
-	<!-- 3. Single contextual slot directly below the action bar -->
-	{#if showRestartConfirm}
+	<!-- 3. Single contextual slot directly below the action bar (at most one card) -->
+	{#if slot === "restart-confirm"}
 		<div
 			class="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2.5 text-xs"
 			data-testid="connection-context"
@@ -250,7 +323,7 @@
 				<button type="button" class={primary} data-testid="connection-restart-confirm" on:click={() => connectionStore.confirmRestart()}>Restart</button>
 			</div>
 		</div>
-	{:else if showStopConfirm}
+	{:else if slot === "stop-confirm"}
 		<div
 			class="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-error-500 bg-error-500/15 px-3 py-2.5 text-xs"
 			data-testid="connection-context"
@@ -264,7 +337,7 @@
 				<button type="button" class={primary} data-testid="connection-stop-confirm" on:click={confirmStop}>Stop</button>
 			</div>
 		</div>
-	{:else if isActive && phase === "auth-failed"}
+	{:else if slot === "auth-failed"}
 		<div class="mt-3" data-testid="connection-context">
 			<form class="flex items-center gap-3 border-l-4 border-error-500 bg-error-500/10 p-3" data-testid="connection-password-prompt" on:submit|preventDefault={enterPassword}>
 				<p class="text-xs">{state.error}</p>
@@ -273,31 +346,138 @@
 			</form>
 			{#if passwordError}<p class="mt-1 text-xs text-error-600 dark:text-error-400">{passwordError}</p>{/if}
 		</div>
-	{:else if isCLIMissing}
+	{:else if slot === "cli-missing"}
 		<div class="mt-3" data-testid="connection-context">
 			<CLISetup />
 		</div>
-	{:else if isOutdated}
+	{:else if slot === "outdated"}
 		<div class="mt-3 border-l-4 border-warning-500 bg-warning-500/15 p-3" data-testid="connection-context">
 			<OutdatedInstance error={state.error} />
 		</div>
-	{:else if isActive && phase === "stopped"}
+	{:else if slot === "stopped"}
 		<div class="mt-3 border-l-4 border-surface-400 bg-surface-500/10 px-3 py-2 text-xs" data-testid="connection-stopped">
 			Marasi stopped. {connection.kind === "local" ? "Start it again to resume working." : "Start it on the remote host, then retry."}
 		</div>
-	{:else if isActive && phase === "failed"}
+	{:else if slot === "failed"}
 		<div class="mt-3 border-l-4 border-error-500 bg-error-500/10 px-3 py-2 text-xs" role="alert" data-testid="connection-context">
 			<p class="min-w-0 break-words">{state.error}</p>
 		</div>
-	{:else if stopErrorText}
+	{:else if slot === "installing" || slot === "restart-required"}
+		<div
+			class="mt-3 space-y-3 border-l-4 border-primary-500 bg-surface-100 p-3 text-xs dark:bg-surface-800"
+			data-testid={slot === "installing" ? "connection-update-progress" : "connection-update-restart"}
+		>
+			<div class="flex items-center justify-between gap-2">
+				<span class="min-w-0 truncate font-semibold" data-testid="connection-update-heading">{updateProgress.heading}</span>
+				{#if slot === "installing" && updateProgress.cancellable}
+					<button
+						type="button"
+						class="{neutral} shrink-0 py-0.5"
+						disabled={update.cancelling}
+						data-testid="connection-update-cancel"
+						on:click={() => serviceUpdateStore.cancel()}
+					>
+						{update.cancelling ? "Cancelling…" : "Cancel"}
+					</button>
+				{/if}
+			</div>
+
+			<ol class="grid grid-cols-4 gap-1.5 text-3xs sm:gap-2" aria-label="Update steps">
+				{#each updateProgress.steps as label, i (label)}
+					<li class="flex min-w-0 items-center gap-1.5" aria-current={i === updateProgress.stepIndex ? "step" : undefined}>
+						<span
+							class="flex h-4 w-4 shrink-0 items-center justify-center font-bold {i < updateProgress.stepIndex
+								? 'bg-primary-500 text-white'
+								: i === updateProgress.stepIndex
+									? 'ring-2 ring-primary-500'
+									: 'bg-surface-300 dark:bg-surface-600'}"
+						>
+							{#if i < updateProgress.stepIndex}<Check size={10} />{:else}{i + 1}{/if}
+						</span>
+						<span class="truncate {i === updateProgress.stepIndex ? 'font-semibold' : i < updateProgress.stepIndex ? '' : 'opacity-55'}">{label}</span>
+					</li>
+				{/each}
+			</ol>
+
+			{#if slot === "installing"}
+				<ProgressBar value={updateProgress.percent} max={100} height="h-1.5" meter="bg-primary-500" />
+			{:else}
+				<p class="opacity-75">Restart {connection.name} to switch onto the new version. Your open project stays intact.</p>
+				{#if state.restartError}
+					<p class="text-error-700 dark:text-error-300" role="alert" data-testid="connection-restart-error">{state.restartError}</p>
+				{/if}
+			{/if}
+		</div>
+	{:else if slot === "stop-error"}
 		<div class="mt-3 border-l-4 border-error-500 bg-error-500/15 px-3 py-2 text-xs text-error-700 dark:text-error-300" role="alert" data-testid="connection-context">
 			{stopErrorText}
 		</div>
-	{:else if isActive && state.restartError}
+	{:else if slot === "install-error"}
+		<div
+			class="mt-3 space-y-1.5 border-l-4 border-error-500 bg-error-500/15 px-3 py-2.5 text-xs text-error-700 dark:text-error-300"
+			role="alert"
+			data-testid="connection-update-error"
+		>
+			<div class="flex flex-wrap items-start justify-between gap-2">
+				<p class="min-w-0 flex-1 break-words font-semibold">{update.error.message}</p>
+				<div class="flex shrink-0 items-center gap-3">
+					{#if update.error.page}
+						<button
+							type="button"
+							class="inline-flex items-center gap-1 underline opacity-85 hover:opacity-100"
+							data-testid="connection-update-error-page"
+							on:click={() => openURL(update.error.page)}
+						>
+							<span>Release page</span><ExternalLink size={11} />
+						</button>
+					{/if}
+					{#if update.available}
+						<button
+							type="button"
+							class="underline opacity-75 hover:opacity-100"
+							data-testid="connection-update-error-dismiss"
+							on:click={() => serviceUpdateStore.dismissError()}
+						>
+							Dismiss
+						</button>
+					{/if}
+				</div>
+			</div>
+			{#if update.error.installPath}
+				<p class="break-all font-mono text-2xs opacity-85" data-testid="connection-update-error-path">
+					Install path: {update.error.installPath}
+				</p>
+			{/if}
+		</div>
+	{:else if slot === "restart-error"}
 		<div class="mt-3 border-l-4 border-error-500 bg-error-500/15 px-3 py-2 text-xs text-error-700 dark:text-error-300" role="alert" data-testid="connection-restart-error">
 			{state.restartError}
 		</div>
-	{:else if isActive && state.apiWarning}
+	{:else if slot === "available"}
+		<div
+			class="mt-3 space-y-2 border-l-4 border-primary-500 bg-surface-100 p-3 text-xs dark:bg-surface-800"
+			data-testid="connection-update-available"
+		>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="font-semibold">
+					Marasi {update.available.version} available{#if update.available.channel} ({update.available.channel}){/if}
+				</span>
+				{#if update.available.page}
+					<button
+						type="button"
+						class="inline-flex items-center gap-1 underline opacity-75 hover:opacity-100"
+						data-testid="connection-update-page"
+						on:click={() => openURL(update.available.page)}
+					>
+						<span>Release page</span><ExternalLink size={11} />
+					</button>
+				{/if}
+			</div>
+			{#if availableNotes}
+				<pre class="whitespace-pre-wrap break-words font-sans opacity-85" data-testid="connection-update-notes">{availableNotes}</pre>
+			{/if}
+		</div>
+	{:else if slot === "api-warning"}
 		<div class="mt-3 space-y-2 border-l-4 border-warning-500 bg-warning-500/15 px-3 py-2 text-xs" data-testid="connection-api-warning">
 			<p>{state.apiWarning}. Some features may not work.</p>
 			{#if connection.kind === "local" && phase === "connected"}<UpdateCLI />{/if}
@@ -350,7 +530,7 @@
 							<p class="text-xs opacity-70">Builds {connection.name} checks</p>
 						</div>
 						<p class="font-mono text-xs opacity-75" data-testid="connection-setup-channel">
-							{state.channel ?? (state.version === "dev" ? "dev" : "unavailable")}
+							{(isActive ? update.channel : null) ?? state.channel ?? (state.version === "dev" ? "dev" : "unavailable")}
 						</p>
 					</div>
 				</div>
