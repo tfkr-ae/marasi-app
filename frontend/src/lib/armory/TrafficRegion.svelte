@@ -6,7 +6,9 @@
 	// its next page as its end nears. The rows, grouping, sort and open pair
 	// are armoryStore's run traffic view (stores/createArmoryRunTraffic.js). Selected rows are tinted across the
 	// full row, as in the Ledger; the open pair is framed. The page owns whether the panel is
-	// open; the header toggles it.
+	// open; the header toggles it. A gRPC run adds a grpc-status column and
+	// filter, and a run with failed attempts a toggle that lists them in the
+	// table's place.
 	import { afterUpdate, onMount, tick } from "svelte";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import {
@@ -21,7 +23,14 @@
 	import { METHOD_CLASS, primaryVariant, shortTime, statusClass } from "../launchpad/format.js";
 	import { formatSize, statusText } from "../ledger/table.js";
 	import { sameID } from "../ledger/pairs.js";
-	import { TRAFFIC_COLUMNS, TRAFFIC_TEMPLATE, groupLabel, shareText } from "./traffic.js";
+	import {
+		GRPC_STATUS_NAMES,
+		groupLabel,
+		grpcStatusText,
+		shareText,
+		trafficColumns,
+		trafficTemplate,
+	} from "./traffic.js";
 
 	/** The rows read so far, in the table's order; null when no run is selected. */
 	export let requests = null;
@@ -68,12 +77,32 @@
 	export let onCollapseAll = () => {};
 	export let onShowNew = () => {};
 	export let onScroll = (scrollTop) => {};
+	/** Whether the run's pairs are gRPC calls: the grpc-status column and filter show. */
+	export let grpc = false;
+	/** The grpc-status filter: "", "ok", "error" or a status number as a string. */
+	export let grpcStatus = "";
+	export let onFilterGrpcStatus = (grpcStatus) => {};
+	/** The run's failed attempts ({ items, loaded, failed }), or null without a run. */
+	export let failedAttempts = null;
+	/** How many failed attempts the run counts, before they are read. */
+	export let failedCount = 0;
+	/** Whether the failed attempts show in the table's place. */
+	export let showFailed = false;
 
 	// How near the end, in pixels, the list asks for the next page.
 	const LOAD_AHEAD = 400;
 	let list;
 
 	$: primary = primaryVariant($modeCurrent);
+	$: columns = trafficColumns(grpc);
+	$: template = trafficTemplate(columns);
+	$: failedShown = Math.max(failedAttempts?.items.length ?? 0, failedCount);
+	$: if (failedShown === 0) showFailed = false;
+
+	// A grpc-status's colour: OK as a 2xx, any other as an error.
+	const grpcClass = (code) => (code == null ? "" : statusClass(code === 0 ? 200 : 500));
+	// A payload as written, quoted so spaces and escapes show.
+	const payloadText = (value) => JSON.stringify(value);
 
 	const GROUPINGS = [
 		{ key: null, label: "None" },
@@ -202,6 +231,34 @@
 				{/if}
 			</div>
 		{/if}
+		{#if open && requests && (grpc || grpcStatus)}
+			<label class="flex items-center gap-1 text-xs">
+				<span class="trim whitespace-nowrap opacity-60">gRPC status</span>
+				<select
+					class="select h-5 rounded-none py-0 pl-1.5 pr-6 text-2xs"
+					aria-label="gRPC status"
+					value={grpcStatus}
+					on:change={(event) => onFilterGrpcStatus(event.currentTarget.value)}
+				>
+					<option value="">Any</option>
+					<option value="ok">OK</option>
+					<option value="error">Not OK</option>
+					{#each GRPC_STATUS_NAMES as name, code (code)}
+						{#if code > 0}<option value={String(code)}>{code} {name}</option>{/if}
+					{/each}
+				</select>
+			</label>
+		{/if}
+		{#if open && requests && failedShown > 0}
+			<button
+				type="button"
+				class="btn btn-sm h-5 rounded-none px-2 py-0 text-2xs {showFailed ? primary : 'text-error-500 hover:bg-surface-500/15'}"
+				aria-pressed={showFailed}
+				title={showFailed ? "Show the traffic" : "Show the requests the run built but didn't send"}
+				on:click={() => (showFailed = !showFailed)}
+				><span class="trim">{failedShown.toLocaleString()} failed</span></button
+			>
+		{/if}
 		{#if open && selectionLabel}
 			<span class="ml-auto flex items-center gap-2 whitespace-nowrap text-xs">
 				<span class="trim opacity-60">{selectionLabel} · right-click for actions</span>
@@ -236,15 +293,46 @@
 		>
 			{#if !requests}
 				<p class="p-4 text-center font-sans text-xs opacity-60">Select a run to view traffic</p>
+			{:else if showFailed}
+				<div
+					class="fa-row sticky top-0 z-10 h-6 border-b border-primary-500 bg-surface-100 font-sans font-semibold dark:bg-surface-800"
+					role="row"
+				>
+					<span role="columnheader">Time</span>
+					<span role="columnheader">Payloads</span>
+					<span role="columnheader">Error</span>
+				</div>
+				{#if failedAttempts?.failed}
+					<p class="p-4 text-center font-sans text-xs opacity-60">Couldn't read the failed attempts</p>
+				{/if}
+				{#each failedAttempts?.items ?? [] as attempt (attempt.ID)}
+					<div
+						class="fa-row min-h-[1.375rem] border-b border-surface-300/50 dark:border-surface-700/60"
+						role="row"
+						data-failed-attempt={attempt.ID}
+					>
+						<span class={dim}>{shortTime(attempt.CreatedAt)}</span>
+						<span class="fa-payloads">
+							{#each attempt.Payloads as payload (payload.Position)}
+								<span title="Position {payload.Position}"
+									><span class={dim}>{payload.Position}:</span> {payloadText(payload.Value)}</span
+								>
+							{/each}
+						</span>
+						<span class="fa-error text-error-500">{attempt.Error}</span>
+					</div>
+				{/each}
 			{:else if groups ? groups.length === 0 : !groupBy && items.length === 0}
-				<p class="p-4 text-center font-sans text-xs opacity-60">No requests captured yet</p>
+				<p class="p-4 text-center font-sans text-xs opacity-60">
+					{grpcStatus ? "No requests with this gRPC status" : "No requests captured yet"}
+				</p>
 			{:else}
 				<div
 					class="tr-row sticky top-0 z-10 h-6 border-b border-primary-500 bg-surface-100 font-sans font-semibold dark:bg-surface-800"
-					style="grid-template-columns: {TRAFFIC_TEMPLATE}"
+					style="grid-template-columns: {template}"
 					role="row"
 				>
-					{#each TRAFFIC_COLUMNS as column (column.key)}
+					{#each columns as column (column.key)}
 						{#if column.sortable && isSortable(column.key)}
 							<button
 								type="button"
@@ -325,7 +413,7 @@
 							class="tr-row relative h-[1.375rem] w-full border-b border-surface-300/50 text-left dark:border-surface-700/60 {selected
 								? 'bg-primary-500/25'
 								: 'hover:bg-surface-200/70 dark:hover:bg-surface-700/60'}"
-							style="grid-template-columns: {TRAFFIC_TEMPLATE}"
+							style="grid-template-columns: {template}"
 							role="row"
 							aria-selected={selected}
 							aria-current={focused || undefined}
@@ -349,6 +437,11 @@
 								><span class="tr-host {dim}">{row.Host ?? ""}</span><span class="tr-path">{row.Path ?? ""}</span></span
 							>
 							<span class="text-right {statusClass(row.StatusCode)}">{statusText(row.StatusCode)}</span>
+							{#if grpc}
+								<span class={grpcClass(row.GrpcStatus)} title={row.GrpcStatus == null ? undefined : `grpc-status ${row.GrpcStatus}`}
+									>{grpcStatusText(row.GrpcStatus)}</span
+								>
+							{/if}
 							<span class="text-right {dim}">{formatSize(row.Length)}</span>
 						</button>
 					{/if}
@@ -359,6 +452,24 @@
 </section>
 
 <style>
+	/* A failed attempt: its time, its payloads by position, and the error,
+	   which wraps rather than hide the line and column it names. */
+	.fa-row {
+		display: grid;
+		grid-template-columns: 4.375rem minmax(8rem, 2fr) minmax(0, 3fr);
+		align-items: start;
+		font-size: 0.6875rem;
+	}
+	.fa-row > * {
+		padding: 4px 6px;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.fa-payloads {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 0.75rem;
+	}
 	.tr-row {
 		display: grid;
 		align-items: center;

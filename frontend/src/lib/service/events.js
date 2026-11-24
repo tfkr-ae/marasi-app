@@ -68,6 +68,7 @@ export const SERVICE_EVENTS = [
   "armory.run.created",
   "armory.run.updated",
   "armory.run.deleted",
+  "armory.failed_attempt.created",
   "wordlist.added",
   "wordlist.removed",
   // Logbook: findings, test cases, artifacts and report templates

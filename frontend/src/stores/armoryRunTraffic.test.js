@@ -27,8 +27,9 @@ const RUN = "run-1";
 // Pair ids sort in capture order, as Marasi's UUIDv7 ids do.
 const id = (n) => `p${String(n).padStart(4, "0")}`;
 
-function pair(n, { status = 200, length = 100, run = RUN } = {}) {
+function pair(n, { status = 200, length = 100, run = RUN, grpc } = {}) {
   return {
+    ...(grpc === undefined ? {} : { GrpcStatus: grpc }),
     ID: id(n),
     Number: n,
     Method: "GET",
@@ -46,6 +47,7 @@ const KEYS = {
   requested_at: (p) => p.Number,
   status_code: (p) => p.StatusCode || null,
   length: (p) => (p.StatusCode ? p.Length : null),
+  grpc_status: (p) => p.GrpcStatus ?? null,
 };
 
 /**
@@ -65,6 +67,7 @@ function fakeApi(pairs) {
       const asOf = req.AsOf || null;
       const matching = api.pairs
         .filter((p) => p.Metadata.armory_run_id === runId)
+        .filter(narrowedBy(req.Filter))
         .filter(narrowedBy(req.Query))
         .filter((p) => !asOf || p.ID <= asOf)
         .sort((a, b) => {
@@ -89,11 +92,12 @@ function fakeApi(pairs) {
       };
     },
   };
-  api.countRunTraffic = async (runId, field, asOf = "") => {
-    api.calls.push({ runId, count: field, asOf });
+  api.countRunTraffic = async (runId, field, asOf = "", filter = "") => {
+    api.calls.push({ runId, count: field, asOf, ...(filter ? { Filter: filter } : {}) });
     const bound = asOf || api.pairs.reduce((max, p) => (p.ID > max ? p.ID : max), "");
     const counts = new Map();
-    for (const p of api.pairs.filter((p) => p.Metadata.armory_run_id === runId && p.ID <= bound)) {
+    const held = api.pairs.filter(narrowedBy(filter));
+    for (const p of held.filter((p) => p.Metadata.armory_run_id === runId && p.ID <= bound)) {
       const value = KEYS[field](p) == null ? "" : String(KEYS[field](p));
       counts.set(value, (counts.get(value) ?? 0) + 1);
     }
@@ -108,10 +112,18 @@ function fakeApi(pairs) {
 // `NOT field >= 0` for the pairs with no value.
 function narrowedBy(query) {
   if (!query) return () => true;
+  // Pairs by id: `id = "a" OR id = "b"`.
+  if (query.startsWith("id = ")) {
+    const ids = query.split(" OR ").map((part) => JSON.parse(part.slice(5)));
+    return (p) => ids.includes(p.ID);
+  }
   const pending = /^NOT (\w+) >= 0$/.exec(query);
   if (pending) return (p) => KEYS[pending[1]](p) == null;
   const equals = /^(\w+) = (\d+)$/.exec(query);
   if (equals) return (p) => KEYS[equals[1]](p) === Number(equals[2]);
+  // As Marasi's grpc_status !=, it skips pairs with no value.
+  const differs = /^(\w+) != (\d+)$/.exec(query);
+  if (differs) return (p) => KEYS[differs[1]](p) != null && KEYS[differs[1]](p) !== Number(differs[2]);
   throw new Error(`the fake can't narrow by ${query}`);
 }
 
@@ -1159,4 +1171,115 @@ test("ungrouped, Previous and Next request are unavailable only at the run's end
   assert.deepEqual(can(), [true, true]);
   await view.step(1);
   assert.deepEqual(can(), [true, false]);
+});
+
+// A gRPC run: pair 4's payload never got an answer, the others ended with
+// these grpc-status values.
+function grpcRun() {
+  return [
+    pair(1, { grpc: 0 }),
+    pair(2, { grpc: 3 }),
+    pair(3, { grpc: 0 }),
+    pair(4, { status: 0 }),
+    pair(5, { grpc: 13 }),
+    pair(6, { grpc: 3 }),
+  ];
+}
+
+test("filtering on grpc-status reads only the run's pairs that ended with it", async () => {
+  const { api, view } = await opened(grpcRun());
+
+  await view.filterGrpcStatus("error");
+  assert.deepEqual(numbers(view), [2, 5, 6]);
+  assert.equal(api.calls.at(-1).Filter, "grpc_status != 0");
+  assert.equal(get(view).grpcStatus, "error");
+
+  await view.filterGrpcStatus("ok");
+  assert.deepEqual(numbers(view), [1, 3]);
+
+  await view.filterGrpcStatus("3");
+  assert.deepEqual(numbers(view), [2, 6]);
+
+  await view.filterGrpcStatus("");
+  assert.deepEqual(numbers(view), [1, 2, 3, 4, 5, 6]);
+});
+
+test("grouped, the grpc-status filter narrows the counts and every group", async () => {
+  const { view } = await opened(grpcRun());
+  await view.groupBy("status");
+
+  await view.filterGrpcStatus("error");
+
+  assert.deepEqual(groups(view), ["200=3"]);
+  assert.equal(
+    groupOf(view, "200").query,
+    `metadata.armory_run_id = "${RUN}" AND (grpc_status != 0) AND (status_code = 200)`,
+  );
+  await view.toggleGroup("200");
+  assert.deepEqual(numbers(view), [2, 5, 6]);
+});
+
+test("selecting the whole filtered run selects only the pairs the filter holds", async () => {
+  const { view } = await opened(grpcRun());
+  await view.filterGrpcStatus("3");
+
+  await view.selectAll();
+
+  assert.equal(runSelectionLabel(get(view)), "2 selected");
+  assert.equal(runSelectionSpec(get(view)).query, `metadata.armory_run_id = "${RUN}" AND (grpc_status = 3)`);
+});
+
+test("a filtered run's arrivals wait behind n new, and another run opens unfiltered", async () => {
+  const { api, view } = await opened(grpcRun());
+  await view.filterGrpcStatus("error");
+
+  view.onRequest(pair(7));
+  view.flush();
+  assert.deepEqual(numbers(view), [2, 5, 6]);
+  assert.equal(runTrafficNewLabel(get(view)), "1 new");
+
+  api.pairs.push(pair(1, { run: "run-2", grpc: 0 }));
+  await view.open("run-2");
+  assert.equal(get(view).grpcStatus, "");
+  assert.equal(runTrafficRows(get(view)).length, 1);
+});
+
+const grpcOf = (view) => runTrafficRows(get(view)).map((row) => row.GrpcStatus ?? null);
+const streamedResponse = (n) => ({ ID: id(n), StatusCode: 200, Streamed: { response: { framing: "grpc", ending: "complete" } } });
+
+test("a gRPC call's grpc-status fills its row once its response is stored, and the rows stay put", async () => {
+  const pairs = [pair(1, { status: 0 }), pair(2, { status: 0 })];
+  const { api, view } = await opened(pairs);
+  api.pairs = [pair(1, { grpc: 3 }), pair(2, { status: 0 })];
+
+  view.onResponse(streamedResponse(1));
+  view.flush();
+  await view.settled();
+
+  assert.deepEqual(numbers(view), [1, 2]);
+  assert.deepEqual(grpcOf(view), [3, null]);
+  assert.equal(api.calls.at(-1).Query, `id = "${id(1)}"`);
+});
+
+test("a grpc-status not stored yet is asked for again at the next flush", async () => {
+  const { api, view } = await opened([pair(1, { status: 0 })]);
+
+  view.onResponse(streamedResponse(1));
+  view.flush();
+  await view.settled();
+  assert.deepEqual(grpcOf(view), [null]);
+
+  api.pairs = [pair(1, { grpc: 13 })];
+  view.flush();
+  await view.settled();
+  assert.deepEqual(grpcOf(view), [13]);
+});
+
+test("a response that isn't streamed asks for no grpc-status", async () => {
+  const { api, view } = await opened([pair(1, { status: 0 })]);
+  const reads = api.calls.length;
+  view.onResponse({ ID: id(1), StatusCode: 200 });
+  view.flush();
+  await view.settled();
+  assert.equal(api.calls.length, reads);
 });

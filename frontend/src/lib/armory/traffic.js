@@ -18,6 +18,53 @@ export const TRAFFIC_COLUMNS = Object.freeze([
 
 export const TRAFFIC_TEMPLATE = TRAFFIC_COLUMNS.map((column) => column.width).join(" ");
 
+/** The grpc-status column, after Status, for a run of gRPC calls. */
+const GRPC_COLUMN = Object.freeze({ key: "grpc", label: "gRPC status", width: "10rem" });
+
+/** The table's columns: with grpc-status after Status when `grpc`. */
+export function trafficColumns(grpc) {
+  if (!grpc) return TRAFFIC_COLUMNS;
+  const at = TRAFFIC_COLUMNS.findIndex((column) => column.key === "status") + 1;
+  return [...TRAFFIC_COLUMNS.slice(0, at), GRPC_COLUMN, ...TRAFFIC_COLUMNS.slice(at)];
+}
+
+/** The grid template for `columns`. */
+export const trafficTemplate = (columns) => columns.map((column) => column.width).join(" ");
+
+/** The gRPC status codes' names, by number. */
+export const GRPC_STATUS_NAMES = Object.freeze([
+  "OK",
+  "CANCELLED",
+  "UNKNOWN",
+  "INVALID_ARGUMENT",
+  "DEADLINE_EXCEEDED",
+  "NOT_FOUND",
+  "ALREADY_EXISTS",
+  "PERMISSION_DENIED",
+  "RESOURCE_EXHAUSTED",
+  "FAILED_PRECONDITION",
+  "ABORTED",
+  "OUT_OF_RANGE",
+  "UNIMPLEMENTED",
+  "INTERNAL",
+  "UNAVAILABLE",
+  "DATA_LOSS",
+  "UNAUTHENTICATED",
+]);
+
+/** A grpc-status as the table shows it: "3 INVALID_ARGUMENT", or "" for none. */
+export function grpcStatusText(code) {
+  if (code == null) return "";
+  const name = GRPC_STATUS_NAMES[code];
+  return name ? `${code} ${name}` : String(code);
+}
+
+/** Whether a run's pairs are gRPC calls, so their grpc-status shows. */
+export function isGrpcRun(run, rows = []) {
+  if (run?.TemplateFraming === "grpc" || run?.TemplateFraming === "grpc-web") return true;
+  return rows.some((row) => row.GrpcStatus != null);
+}
+
 /**
  * The index in `rows` of the pair `delta` steps from the open pair `openId`,
  * or -1 past either end or when `rows` no longer holds the open pair.

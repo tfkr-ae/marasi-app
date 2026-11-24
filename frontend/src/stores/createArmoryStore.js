@@ -5,7 +5,7 @@ import { get, writable } from "svelte/store";
 import { clampDrawerSplit } from "./createLedgerStore.js";
 import { createRunTrafficView } from "./createArmoryRunTraffic.js";
 import { boundAction } from "../lib/service/boundAction.js";
-import { isActiveRun, toRun, toTemplate, toWordlists } from "./armoryApi.js";
+import { isActiveRun, toFailedAttempt, toRun, toTemplate, toWordlists } from "./armoryApi.js";
 
 /** How long cancelling the active runs waits for them to stop. */
 export const CANCEL_TIMEOUT_MS = 5000;
@@ -77,6 +77,7 @@ export function createArmoryStore(api) {
     DeleteArmoryTemplate,
     GetActiveArmoryRuns,
     GetArmoryRun,
+    GetArmoryFailedAttempts,
     GetArmoryRuns,
     GetArmoryTemplates,
     GetArmoryWordlists,
@@ -105,7 +106,8 @@ export function createArmoryStore(api) {
   // flushes its buffered events.
   const runTraffic = createRunTrafficView({
     queryRunTraffic: (runId, req) => QueryArmoryRunTraffic(runId, req),
-    countRunTraffic: (runId, field) => CountArmoryRunTraffic(runId, field),
+    countRunTraffic: (runId, field, asOf, filter) => CountArmoryRunTraffic(runId, field, asOf, filter),
+    failedAttempts: (runId) => GetArmoryFailedAttempts(runId),
   });
 
   // Adds or replaces a run in its template's runs, when those are loaded
@@ -267,7 +269,7 @@ export function createArmoryStore(api) {
     }
     const state = get({ subscribe });
     if (state.selectedTemplateId && !known.has(state.selectedTemplateId)) removeTemplate(state.selectedTemplateId);
-    await runTraffic.showNew();
+    await Promise.all([runTraffic.showNew(), runTraffic.readFailedAttempts()]);
   }
 
   // Cancels every active run, read afresh from the service, and waits until
@@ -431,6 +433,7 @@ export function createArmoryStore(api) {
     onTemplate: (template) => upsertTemplate(toTemplate(template)),
     onTemplateDeleted: ({ id }) => removeTemplate(id),
     onRun: (run) => upsertRun(toRun(run), { always: false }),
+    onFailedAttempt: (attempt) => runTraffic.onFailedAttempt(attempt.run_id, toFailedAttempt(attempt)),
     onRunDeleted: ({ id }) => removeRun(id),
     onWordlists: (list) => update((state) => ({ ...state, wordlists: toWordlists(list) })),
 

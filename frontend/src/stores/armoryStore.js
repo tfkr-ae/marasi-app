@@ -35,6 +35,7 @@ service.on("armory.template.deleted", armoryStore.onTemplateDeleted);
 service.on("armory.run.created", armoryStore.onRun);
 service.on("armory.run.updated", armoryStore.onRun);
 service.on("armory.run.deleted", armoryStore.onRunDeleted);
+service.on("armory.failed_attempt.created", armoryStore.onFailedAttempt);
 service.on("wordlist.added", armoryStore.onWordlists);
 service.on("wordlist.removed", armoryStore.onWordlists);
 service.on("traffic.request", (req) => armoryStore.onRequest(toRequestEvent(req)));

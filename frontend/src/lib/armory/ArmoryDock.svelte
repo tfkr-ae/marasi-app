@@ -160,6 +160,13 @@
 					</button>
 					<FileText size={12} class="flex-none opacity-60" />
 					<span class="min-w-0 flex-1 truncate font-semibold">{template.Name}</span>
+					{#if template.Framing}
+						<span
+							class="flex-none bg-surface-200 px-1 py-px font-mono text-3xs leading-none dark:bg-surface-700"
+							data-testid="armory-template-framing"
+							title="Message framing: {template.Framing}">{template.Framing}</span
+						>
+					{/if}
 					{#if runningByTemplate[template.ID]}
 						<span
 							class="badge variant-filled-primary flex-none px-1 py-px text-3xs leading-none"
