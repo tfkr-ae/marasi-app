@@ -8,7 +8,7 @@
 - Open Project, Download Certificate, and Start Chrome actions
 - Switching projects: the `Switch Projects` picker, the opening screen (steps, a locked project), and the refusal while Checkpoint holds items
 - Global light/dark appearance toggle; the app reopens in the scheme chosen last (`⌘U`, Settings › Appearance › Dark mode), else the system's
-- The Connections modal: the rail's connection tile (`[data-testid=connection-tile]`, the connection's name, `Local`) or `⌘9` (`global.connections`, `Connections…` in the menu)
+- The Connections modal: the rail's connection tile (`[data-testid=connection-tile]`, the connection's name, `Local`) or `⌘9` (`global.connections`, `Connections…` in the menu). It holds every connection control: Restart, Stop, service updates and channel, the local CLI path and carried CLI, and When quitting (Settings has no Connection section)
 
 ## How to get to it (user POV)
 
@@ -62,7 +62,23 @@ Home's counts follow traffic without navigating. Proven, with a request sent thr
 {"name":"live-counts","steps":[{"waitText":"Total Requests\n\n0"},{"waitText":"Total Requests\n\n1","timeoutMs":15000}]}
 ```
 
-Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cmd+9"`: the rail tile and `⌘9` both paint `Connections` (the connection list, `Add connection`, and the picked connection's status, Project, Service version, API level and Instance `Stop`). Settings › Connection shows the same list and details as a section ([settings.md](settings.md)). Add connection also lists unsaved running local instances under `[data-testid=add-local-running]` (rows `[data-testid=add-local-running-item]`: instance, project, proxy listener, version, and Add). Proven with a second isolated instance named `extra` that had no saved connection yet; one-click Add saves a connection for that instance's current proxy port.
+Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cmd+9"`: the rail tile and `⌘9` both paint `Connections` (the connection list, `Add connection`, and the picked connection's details). Add connection also lists unsaved running local instances under `[data-testid=add-local-running]` (rows `[data-testid=add-local-running-item]`: instance, project, proxy listener, version, and Add). Proven with a second isolated instance named `extra` that had no saved connection yet; one-click Add saves a connection for that instance's current proxy port.
+
+The details (`[data-testid=connection-detail]`) read top to bottom: the name, `This machine · instance default · linux` (`connection-where`), `Marasi dev · API 1` (`connection-service-meta`) and the status (`connection-status`, `Connected`); the action bar (`connection-actions`); one contextual slot (`connection-context`: an inline confirm, an update's progress, an error); Project; Password and Share (`ConnectionAccess.svelte`); and a collapsed disclosure, `Channel, CLI path & quit behavior` (`connection-setup-toggle`, summary `dev · quit: ask`). For a `dev` service, which is what `MARASI_VERIFY_CLI` built from source runs, the action bar is only `Restart` and `Stop`, and the disclosure has no `Update channel` or `Reinstall`: `Check update`, `Update to <version>`, `Restart to apply`, the channel switch, Reinstall and the rail tile's update dot (`connection-tile-update-dot`) need a release or nightly service (`frontend/src/lib/connection/detail.js`). Opened, the disclosure lists `Local CLI path` (`connection-cli-location`: `<path> · PATH`, with `Change`, and `Use PATH` for a custom path), a `Carried CLI` row with `Install & restart` only when the CLI this build carries differs from the one in use (a development `launch.sh` build carries none, or the same one, so the row is absent), and `When quitting Marasi App` (`connection-quit-ask|keep|stop`: `Ask`/`Keep running`/`Stop`, saved to `when_quitting` in `marasi_appconfig.yaml`). The details pane scrolls inside the modal; the driver scrolls a control below its edge into view. Proven (`when_quitting: keep`; set it back with `connection-quit-ask`):
+
+```json
+{"name":"conn-quit","steps":[{"key":"cmd+9"},{"waitSelector":"[data-testid=connections-modal]"},{"waitText":"Connected","within":"[data-testid=connection-status]"},{"click":"[data-testid=connection-setup-toggle]"},{"waitSelector":"[data-testid=connection-setup-body]"},{"click":"[data-testid=connection-quit-keep]"},{"waitSelector":"[data-testid=connection-quit-keep][aria-checked=true]"},{"waitText":"quit: keep","within":"[data-testid=connection-setup-summary]"},{"key":"escape"},{"waitNoSelector":"[data-testid=connections-modal]"}]}
+```
+
+`Restart` (`connection-restart`) sends `POST /service/restart`. On a run the app did not start (attach mode) or a remote it first asks inline: `Restart Local?`, `Active connections will drop while the project reopens.`, `connection-restart-cancel` / `connection-restart-confirm`. The service hands its listeners to a new process (a new PID and `run_id`, the same proxy port, control address and password), the app reconnects and reloads the project, and Home's log gets another `Marasi Service Started` row. Doctor then records the new service PID. Proven:
+
+```json
+{"name":"restart","steps":[{"key":"cmd+9"},{"waitSelector":"[data-testid=connections-modal]"},{"click":"[data-testid=connection-restart]"},{"waitText":"Restart Local?"},{"click":"[data-testid=connection-restart-confirm]"},{"waitText":"Connected","within":"[data-testid=connection-status]","timeoutMs":30000},{"key":"escape"},{"waitNoSelector":"[data-testid=connections-modal]"},{"waitText":"\n2\tINFO\tMarasi Service Started","timeoutMs":20000}]}
+```
+
+Row `2` is the first restart after a launch; count up for later ones.
+
+With a Checkpoint item held, the confirmed restart is refused and `Checkpoint has intercepted items` opens over the modal with `Forward or drop them to restart.` and `Open Checkpoint`. With unsaved work (a Launchpad draft, Logbook edits, an open CyberChef recipe or Excalidraw drawing, an Armory run) Restart first asks the native unsaved-work question, which the server build declines: nothing happens and no request is sent ([native.md](native.md)).
 
 ### Switching projects
 
