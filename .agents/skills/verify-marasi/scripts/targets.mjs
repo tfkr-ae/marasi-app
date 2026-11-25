@@ -35,7 +35,16 @@ export function collectExpression(spec) {
 			const box = el.getBoundingClientRect();
 			const x = box.left + box.width / 2;
 			const y = box.top + box.height / 2;
-			const inViewport = x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
+			// A centre clipped by a scrolling ancestor (a modal's own scroll
+			// pane) is off screen too: scrollIntoView scrolls that pane.
+			let clipped = false;
+			for (let parent = el.parentElement; parent && !clipped; parent = parent.parentElement) {
+				const style = getComputedStyle(parent);
+				if (!/(auto|scroll|hidden)/.test(style.overflowX + style.overflowY)) continue;
+				const pane = parent.getBoundingClientRect();
+				clipped = x < pane.left || y < pane.top || x >= pane.right || y >= pane.bottom;
+			}
+			const inViewport = x >= 0 && y >= 0 && x < innerWidth && y < innerHeight && !clipped;
 			const hit = inViewport ? document.elementFromPoint(x, y) : null;
 			return {
 				index,
@@ -64,7 +73,8 @@ function describe(candidate) {
 
 /**
  * Chooses the target from collected candidates.
- * Returns {target}, {scroll: index} when the only unique match is off screen,
+ * Returns {target}, {scroll: index} when the only unique match is off screen
+ * (outside the viewport or clipped by a scrolling ancestor),
  * or {pending: reason} while the driver should keep waiting.
  * `nth` (1-based) picks among several actionable matches on purpose.
  * `enabled: false` accepts a disabled match, for asserting presence only.

@@ -2,7 +2,7 @@
 
 ## Sub-features
 
-- Connection section (first in the list): the connections with the active one's status, `Add connection` (including unsaved running local instances at `[data-testid=add-local-running]`, as in the Connections modal, [dashboard.md](dashboard.md)), the picked connection's details, and When quitting (`[data-testid=when-quitting]`: `Ask`/`Keep Marasi running`/`Stop Marasi`, saved to `when_quitting` in `marasi_appconfig.yaml`)
+- No Connection section: connection controls, When quitting and the local CLI live in the Connections modal ([dashboard.md](dashboard.md)). The legacy links `?section=connection`, `?section=cli` and `?section=updates#cli` open that modal instead (`frontend/src/lib/settingsSection.js`)
 - Appearance section: Text size (`Small`/`Default`/`Large`/`X-Large`, saved to `text_size` in `marasi_appconfig.yaml`; the global `⌘=`/`⌘-`/`⌘0` step and reset it) and the Dark mode toggle
 - Vim, syntax mode, line wrapping (`wrap_mode`), default interface, and default port
 - Waypoint management
@@ -13,12 +13,12 @@
 - Maintenance section: Marasi's background jobs for the open project (search index, sitemap, formatted bodies) with their state, and Rebuild for the search index and the sitemap
 - Build version displayed beside the page heading (`dev` in a local development build)
 - About section: Version, Build channel, and Open-source licences, whose `View` (`[data-testid=view-licences]`) opens `[data-testid=licences-modal]` listing the Go modules (`[data-testid=licences-go]`, Go itself first) and npm packages (`[data-testid=licences-javascript]`) the app ships, each a `<details>` row (name, version, licence badge) that opens to its licence text
-- Updates section, in two parts under sub-headings. Marasi App (`[data-testid=updates-app]`): the Channel (`Release`/`Nightly`), the update status with `Check`, `Check automatically`, and `Reinstall` of the latest release; the global `Check for updates…` action (`⌘⇧U`, id `global.check-for-updates`) runs the same check. Marasi CLI (`#cli`, `[data-testid=updates-cli]`): the CLI's Location with `Change`, Source, Version with `Check for CLI update` (`[data-testid=cli-check]`), an Embedded row (`[data-testid=cli-carried]`) when the CLI this build carries is a different version or channel than the one in use, with `Install from embedded` (`[data-testid=cli-install-carried]`), the CLI Channel (`Follow app`/`Release`/`Nightly`), the connected service's own update line, and the CLI setup when no CLI is found. There is no separate Marasi CLI section; `?section=cli` and `?section=updates#cli` open Updates at its CLI part
+- Updates section, Marasi App only (`[data-testid=updates-app]`): the Channel (`Release`/`Nightly`), the update status with `Check`, `Check automatically`, and `Reinstall` of the latest release; the global `Check for updates…` action (`⌘⇧U`, id `global.check-for-updates`) runs the same check. It has no Marasi CLI or service-update rows: a connected service updates itself from its Connections details
 - Keybindings modal (`Configure Keybindings`): rebind menu actions per profile and platform, saved to the `keybindings` section of `marasi_appconfig.yaml`; each sidebar entry lists its menu groups above its actions (`[data-menu-groups]`, headed `Marasi` for the global ones), each with its `⌥` letter as a `Record a letter for <group>` button and Reset
 
 ## How to get to it (user POV)
 
-Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Connection, Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates (App and Marasi CLI) and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
+Select the rail item titled `Settings`, or press `Command+,` from any route (`⌘S` is the Ledger's Search). The page shows `Marasi Settings`, the build version, and a sections list (`nav[aria-label="Settings sections"]`): Appearance (default), Keyboard & Editor, Listener, Waypoints, Browser, Upstream Proxy, Highlights, Content Types, Maintenance, Updates (Marasi App) and About. Only the selected section is rendered; pick one with `{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Waypoints"}`. The choice is in the URL (`?section=editing`), and `drive.sh settings` on `/settings` does not reset it, so start every recipe by clicking its section.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `global` (Settings has no page menu) in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
@@ -46,12 +46,6 @@ Keybindings: in Keyboard & Editor, `{"text":"Configure Keybindings"}` opens the 
 {"name":"kb-save","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Keyboard & Editor"},{"text":"Configure Keybindings"},{"waitText":"Every page"},{"click":"button[aria-label=\"Add binding to Ledger\"]"},{"waitSelector":"[data-key-capture]"},{"key":"cmd+j"},{"waitText":"Unsaved changes"},{"text":"Save"},{"waitText":"Keybindings saved"},{"key":"cmd+j"},{"waitPath":"/ledger"}]}
 ```
 
-When quitting, in the Connection section, writes `when_quitting` on click; set it back to `Ask` afterwards. Proven (`when_quitting: keep`, then `ask` again):
-
-```json
-{"name":"connection-section","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Connection"},{"waitText":"Where Marasi runs."},{"waitText":"Connected","within":"[data-testid=connection-item]"},{"waitText":"scratchpad","within":"[data-testid=connection-project]"},{"click":"[data-testid=when-quitting] [role=radio]","hasText":"Keep Marasi running"},{"waitSelector":"[data-testid=when-quitting] [role=radio][aria-checked=true]"}]}
-```
-
 ## Gotchas
 
 - General and Chrome settings persist to `marasi_appconfig.yaml` (Chrome as `chrome_paths` and `chrome_profiles`), and waypoints to the project database through the service.
@@ -68,15 +62,6 @@ When quitting, in the Connection section, writes `when_quitting` on click; set i
 ```json
 {"name":"updates-check","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Updates"},{"waitText":"Check automatically"},{"waitText":"Development builds don't check for updates","within":"section"},{"waitNoSelector":"[role=radiogroup][aria-label=Channel]"},{"waitNoText":"Latest release"},{"text":"Check"},{"waitText":"Development builds don't check for updates","within":".snackbar-wrapper"}]}
 ```
-
-- Check for CLI update from Settings → Updates. A `dev` CLI (`MARASI_VERIFY_CLI` built from source) is never replaced: the check toasts `Development build, not updated`. Proven:
-
-```json
-{"name":"cli-check","steps":[{"click":"nav[aria-label=\"Settings sections\"] button","hasText":"Updates"},{"click":"[data-testid=cli-check]"},{"waitText":"Development build, not updated","within":".snackbar-wrapper","timeoutMs":60000}]}
-```
-
-The Embedded row appears only when `CarriedCLI` is available for this platform and its version or channel differs from the CLI in use. `Install from embedded` replaces the CLI with the carried copy and, for a running local instance, restarts it so that instance runs the new CLI; when another program started the instance, the button first becomes `Install and restart` (`[data-testid=cli-install-carried-restart]`) with the note `Another program started Marasi. Its project reopens in the new instance.` A development `launch.sh` build may carry no CLI, or the same one, so the row is absent. Do not click Install during a verify run that still needs the current instance.
-
 
 - While an update is known (a release or nightly build only), the rail's Settings icon carries a dot or download ring and its title becomes `Settings · <status>` (for example `Settings · Update available: <version>`), so `drive.sh settings`, which clicks `[title="Settings"]`, cannot find it; it also links to `/settings?section=updates`.
 - Upstream Proxy: the add row is `tfoot input` 1 (name) and 2 (URL), `{"text":"Add CA"}` (a modal: paste into `[aria-label="CA certificate"]` or `Read from File`, then `Done`; the button then reads `CA Added`; `Read from File` needs a native dialog ([native.md](native.md)), so launch with `MARASI_UPSTREAM_PROXY_CA_FILE=<absolute path>` and it reads that file instead), then `{"text":"Add Upstream Proxy"}`. Every call goes to the service's `/upstream-proxy` routes, and an edit another client makes (curl `POST /upstream-proxy`) shows without leaving the section, through the `upstream_proxy.*` events. The selection is `select[aria-label="This project's upstream proxy"]`: click it, then a bare `key` with the option's first letter (`d` for Direct), then `enter`: the click opens the option list, and the choice applies only on Enter. Test connects to `[aria-label="Test target"]` and shows `Connected` or the failure in the row's Last Test cell. Edit opens a modal (`Edit <name>`) whose URL field starts empty, because Marasi never returns credentials. Deleting the selected entry first asks `Remove <name>?`. Afterwards the select reads `<name> (not set up)` and `[data-testid=upstream-warning]` shows. To prove routing, run a local CONNECT proxy and an origin, send `curl --proxy http://127.0.0.1:<proxy port>` and read the proxy's log. A pair's route is in `request.upstream_proxy_name` and `upstream_proxy_address`, and a failed route gives a 502 and one ERROR row in `logs`.

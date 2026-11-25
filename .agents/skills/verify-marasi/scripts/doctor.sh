@@ -36,6 +36,15 @@ curl --fail --silent --output /dev/null "http://127.0.0.1:$CDP_PORT/json/version
 SERVICE_PID=$(cat "$SERVICE_PID_FILE")
 [ "$(service_state)" = running ] || fail "The Marasi service in $SERVICE_DIR is not running. See $SERVICE_DIR/instances/default.log, then run cleanup.sh and relaunch."
 LISTENER_PID=$(lsof -nP -t -iTCP:"$PORT" -sTCP:LISTEN | head -n 1)
+# A restart (Restart in Connections, or `service restart`) hands the
+# listeners to a successor process: follow it when the recorded PID is gone
+# and the proxy port's new owner is this isolated instance.
+if [ -n "$LISTENER_PID" ] && [ "$LISTENER_PID" != "$SERVICE_PID" ] && ! kill -0 "$SERVICE_PID" 2>/dev/null \
+	&& ps -p "$LISTENER_PID" -o args= | grep -qF -e "--config-dir $SERVICE_DIR "; then
+	printf 'doctor: service PID %s exited and the instance restarted as PID %s; recorded it.\n' "$SERVICE_PID" "$LISTENER_PID" >&2
+	SERVICE_PID=$LISTENER_PID
+	printf '%s\n' "$SERVICE_PID" > "$SERVICE_PID_FILE"
+fi
 [ "$LISTENER_PID" = "$SERVICE_PID" ] || fail "Proxy port $PORT is owned by ${LISTENER_PID:-nothing}, not the Marasi service PID $SERVICE_PID."
 [ -f "$APP_CONFIG_DIR/marasi_appconfig.yaml" ] || fail "No isolated config at $APP_CONFIG_DIR/marasi_appconfig.yaml."
 [ -f "$SERVICE_PROJECT" ] || fail "No scratch project at $SERVICE_PROJECT."
