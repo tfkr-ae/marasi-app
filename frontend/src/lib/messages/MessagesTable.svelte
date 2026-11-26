@@ -286,6 +286,7 @@
 					{#if selected}
 						<CodeMirror
 							class="text-xs h-full w-full"
+							styles={{ "&": { fontSize: "0.6875rem" } }}
 							bind:value={payloadText}
 							theme={$modeCurrent ? githubLight : oneDark}
 							extensions={[
@@ -303,6 +304,19 @@
 </div>
 
 <style>
+	/* Dense table rows (docs/agents/maps/ui.md, Type scale), as the Ledger's:
+	   Skeleton's .table sets its cells to 0.875rem with 1rem padding, and
+	   .table-compact only trims that padding to 0.75rem. */
+	.msg-table :global(thead th),
+	.msg-table :global(tbody td) {
+		font-size: 0.6875rem;
+		line-height: 1rem;
+	}
+	.msg-table :global(tbody td) {
+		padding-top: 0.375rem !important;
+		padding-bottom: 0.375rem !important;
+	}
+
 	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
 	   global, as app.css's shared mobile rules are, so they weigh the same
 	   against Skeleton's and Tailwind's classes. */

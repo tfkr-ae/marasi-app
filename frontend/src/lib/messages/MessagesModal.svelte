@@ -100,7 +100,7 @@
 {#if $modalStore[0]}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="card p-4 text-sm w-[90%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-primary-500 bg-surface-50-800-token text-surface-900-50-token"
+		class="card p-4 text-xs w-[90%] max-w-[95vw] shadow-xl rounded-none flex flex-col max-h-[95vh] border-t-4 border-primary-500 bg-surface-50-800-token text-surface-900-50-token"
 		on:keydown={(event) => {
 			if (event.key === "Escape") {
 				event.stopImmediatePropagation();
@@ -112,7 +112,7 @@
 			<div class="flex min-w-0 items-center gap-2">
 				<svelte:component this={$header.icon} size={18} class={$header.iconClass} />
 				<h2 class="truncate text-base font-bold">{$header.title}</h2>
-				<span class="shrink-0 text-sm opacity-70">{$header.count}</span>
+				<span class="shrink-0 text-xs opacity-70">{$header.count}</span>
 				{#if $header.chip}
 					<span class="chip variant-soft-primary shrink-0 text-xs" title={$header.chipTitle}>
 						<Loader size={12} class="animate-spin" />
@@ -144,7 +144,7 @@
 		</header>
 
 		<div class="mt-2 flex w-full justify-center">
-			<TabGroup class="msg-tabs" padding="px-3 py-1" regionList="text-sm">
+			<TabGroup class="msg-tabs" padding="px-3 py-1" regionList="text-xs">
 				{#each kind.tabs as tab (tab.id)}
 					<Tab bind:group={openTab} name={tab.id} value={tab.id}>
 						<div class="flex items-center gap-2">
