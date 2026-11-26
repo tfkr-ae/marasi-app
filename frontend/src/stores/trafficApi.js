@@ -144,6 +144,8 @@ export function toDetails(pair) {
     Route: route,
     ClientProtocol: pair.client_protocol ?? "",
     OriginProtocol: pair.origin_protocol ?? "",
+    // The streamed state (GLOSSARY Streamed pair), as on rows (toRow).
+    Streamed: pair.streamed ?? null,
   };
 }
 

@@ -41,6 +41,7 @@
     import LaunchpadWorkspace from "../../lib/launchpad/LaunchpadWorkspace.svelte";
     import { compareClick, compareEscape } from "../../lib/launchpad/compare.js";
     import { entryMenuFor } from "../../lib/launchpad/entryMenu.js";
+    import { fullReadStreamed, messagesModal } from "../../lib/messages/open.js";
     import { addPairToDrawing } from "../../lib/tools/addToDrawing.js";
     import { sendPairToChef } from "../../lib/tools/cyberchef/sendAction.js";
     import { chefShown } from "../../lib/platform.js";
@@ -225,6 +226,7 @@
             chef: $chefShown,
             drawings: $drawings,
             recipes: $recipes,
+            streamedIds: ids.filter((id) => fullReadStreamed(state.detailsById[id])),
         };
     }
 
@@ -313,7 +315,7 @@
     }
 
     // Runs a menu item's action on the Entry selection. Any type other than
-    // remove, browser-view and the Finding and Test case ones is taken as a
+    // remove, messages, browser-view and the Finding and Test case ones is taken as a
     // move or reorder (entryMenuFor), so a new type needs its own branch
     // above that.
     async function runEntryAction(action) {
@@ -323,6 +325,7 @@
         if (!sourceId || !ids.length) return;
         if (action.type === "remove") return removeEntries(sourceId, ids);
         if (action.type === "browser-view") return copyBrowserView(action.id);
+        if (action.type === "messages") return openEntryMessages(sourceId, action.id);
         if (action.type === "add-to-drawing") return addEntryToDrawing(sourceId, action.id, action.target);
         if (action.type === "send-to-chef") return sendEntryToChef(action.id, action.target);
         if (runRecordAction(action, ids)) return;
@@ -330,6 +333,22 @@
         const before = action.type === "move" ? null : action.before;
         const { moved } = await moveEntries({ sourceId, targetId, ids, before });
         if (moved?.length) await tree?.showEntry(targetId, moved[0]);
+    }
+
+    // The entry's stream messages, or its WebSocket connection, in the
+    // Messages modal, as the Ledger's Open messages opens them.
+    async function openEntryMessages(launchpadId, id) {
+        if (get(modalStore)[0]) return;
+        const entry = get(launchpadStore).entriesByLaunchpad[launchpadId]?.find((e) => e.ID === id);
+        if (entry?.Streamed) return modalStore.trigger(messagesModal(id, { streamed: true }));
+        try {
+            const details = await launchpadStore.ensureDetails(id);
+            if (!details) return toastError(toastStore, "Failed to read the request", new Error("not found"));
+            modalStore.trigger(messagesModal(id, { details }));
+        } catch (err) {
+            console.error("Launchpad open messages error:", err);
+            toastError(toastStore, "Failed to read the request", err);
+        }
     }
 
     function addEntryToDrawing(launchpadId, id, drawing) {

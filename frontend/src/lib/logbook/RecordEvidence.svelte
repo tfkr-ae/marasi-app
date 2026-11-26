@@ -205,7 +205,7 @@
 		</div>
 		<div class="min-h-0 min-w-0 flex-1">
 			{#if selectedRequest}
-				<RequestPair id={selectedRequest} read={readPair} />
+				<RequestPair id={selectedRequest} read={readPair} messages={false} />
 			{:else}
 				<p class="p-8 text-center text-2xs opacity-60">Link a request to view it</p>
 			{/if}

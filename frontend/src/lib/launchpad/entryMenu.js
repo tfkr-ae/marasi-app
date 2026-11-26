@@ -3,7 +3,8 @@
 // renders it and menuAction runs its shortcuts. Every item is a Move, to the
 // end of another launchpad or to a new place in this one, a removal,
 // copying one entry's browser view URL, Add to Drawing or Send to
-// CyberChef with one entry, or a Finding or Test case item.
+// CyberChef with one entry, or a Finding or Test case item. A streamed or
+// WebSocket entry also opens its messages.
 // The launchpad menu (launchpadMenu.js) shares recordItems. Plain
 // functions, so they load under node.
 //
@@ -11,6 +12,7 @@
 //   { type: "move", targetId, name }   to the end of another launchpad
 //   { type: "reorder", before }        within the launchpad; before null is the end
 //   { type: "remove" }                 unlink from the launchpad
+//   { type: "messages", id }           the entry's Messages modal
 //   { type: "browser-view", id }       copy the entry's browser view URL
 //   { type: "add-to-drawing", id, target }  the entry's pair as a card on
 //                                      drawing `target` (an id, or "new")
@@ -25,6 +27,7 @@ import { UNTITLED_LAUNCHPAD } from "./format.js";
 import { moveRefusal } from "./entryMove.js";
 import { browserViewRefusal } from "../browserView.js";
 import { linkMenu } from "../ledger/rowMenu.js";
+import { canOpenRowMessages } from "../messages/open.js";
 import { documentTargetItem } from "../tools/documentTargets.js";
 
 const entriesLabel = (n) => (n === 1 ? "" : ` ${n.toLocaleString()}`);
@@ -107,7 +110,9 @@ const ORDER_ITEMS = [
  * launchpad's end is not. `chef` is whether the app offers CyberChef
  * (chefShown); without it, Send to CyberChef is left out. `drawings` and
  * `recipes` are the tool document collections' { items, openId }, which
- * Add to Drawing and Send to CyberChef list.
+ * Add to Drawing and Send to CyberChef list. `streamedIds` are the entries
+ * whose full read showed them streamed (fullReadStreamed), for a service
+ * without `streamed` on rows.
  */
 export function entryMenuFor({
   launchpadId,
@@ -123,6 +128,7 @@ export function entryMenuFor({
   chef = true,
   drawings = null,
   recipes = null,
+  streamedIds = [],
 }) {
   const order = entries.map((entry) => entry.ID);
   const picked = order.filter((id) => ids.includes(id));
@@ -157,6 +163,9 @@ export function entryMenuFor({
   const one = n === 1 ? entries.find((entry) => entry.ID === picked[0]) : null;
   const viewOff = one ? browserViewRefusal(one) : "One entry at a time";
   return [
+    ...(one && canOpenRowMessages(one, { streamedRead: streamedIds.includes(one.ID) ? one.ID : null })
+      ? [{ id: "messages", label: "Open messages", icon: "radio", action: { type: "messages", id: one.ID } }, "sep"]
+      : []),
     {
       id: "move",
       label: `Move${entriesLabel(n)} to launchpad`,

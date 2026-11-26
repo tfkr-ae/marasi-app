@@ -38,6 +38,10 @@ While a launch is pending, Marasi refuses to move or remove its pair, or to dele
 3. Add a store method, and map its API name in `launchpadStore.js` and in `fakeApi` in the tests.
 4. For a shortcut, add a catalog row in `launchpad.tree` and a `launchpadMenu` entry that calls `runEntryShortcut` (see `keybindings-and-menus.md`).
 
+## Open messages
+
+A streamed entry (its row's `Streamed`, mapped by `toEntry`, or a full read in `detailsById` that shows it, passed as `streamedIds`) or a WebSocket upgrade offers Open messages at the top of the entry menu for one entry (`{ type: "messages", id }`, `canOpenRowMessages` in `lib/messages/open.js`). The page's `openEntryMessages` opens the Messages modal through `messagesModal`: the stream kind for a streamed entry, else the WebSocket kind with the entry's details (`ensureDetails`).
+
 ## Findings and test cases
 
 Add to Drawing (`add-to-drawing`) and Send to CyberChef (`send-to-chef`, left out without `chef`, the page's `chefShown`) follow Copy browser view URL, for one entry; each is a submenu of New drawing or New recipe and every drawing or recipe (`documentTargetItem`), so the action carries a `target`; the page runs them with `addPairToDrawing` and with the entry's request (`ensureDetails`) through `sendPairToChef`, which records the entry as the input's source for the From bar.
