@@ -4,9 +4,12 @@
 	// and Line wrapping, as the Ledger and Launchpad editors do, and a pane
 	// says "Not wrapped" when a long line stops it. Expand opens the pair
 	// nearly full screen; Esc or a click outside closes only that, even over
-	// a modal.
-	import { onDestroy } from "svelte";
-	import { Maximize2, X } from "lucide-svelte";
+	// a modal. A streamed pair or a WebSocket upgrade offers Messages, which
+	// opens the Messages modal as the Ledger's Open messages does.
+	import { createEventDispatcher, onDestroy } from "svelte";
+	import { Maximize2, Radio, X } from "lucide-svelte";
+	import { getModalStore } from "@skeletonlabs/skeleton";
+	import { canOpenPairMessages, messagesModal } from "../messages/open.js";
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, usesSyntax } from "../ledger/drawer.js";
@@ -23,6 +26,13 @@
 	export let stack = false;
 	/** Inside the expanded view, so no Expand of its own. */
 	export let expanded = false;
+	/** Offers Messages; off inside a modal, which the Messages modal would queue behind. */
+	export let messages = true;
+
+	const modalStore = getModalStore();
+	// Tells the expanding pane that Messages opened, so it closes its
+	// expanded view, which would cover the Messages modal.
+	const dispatch = createEventDispatcher();
 
 	let details;
 	// Per pane, whether a shown long string stopped the lines wrapping.
@@ -42,6 +52,14 @@
 	$: bodies = details ? drawerBodies(details, { prettify: $prettify }) : { request: "", response: "" };
 	$: request = details?.Request;
 	$: response = details?.Response;
+	$: canOpenMessages = messages && Boolean(details) && canOpenPairMessages(details);
+
+	function openMessages() {
+		if (!details || $modalStore[0]) return;
+		big = false;
+		dispatch("messages");
+		modalStore.trigger(messagesModal(id, { details }));
+	}
 
 	function onKeydown(event) {
 		if (!big || event.key !== "Escape") return;
@@ -75,6 +93,12 @@
 				{/if}
 				{#if details}<SendToChefButton />{/if}
 				{#if i === 1}
+					{#if canOpenMessages}<button
+							type="button"
+							class="logbook-pair-messages flex items-center gap-1 font-normal normal-case tracking-normal opacity-70 hover:opacity-100"
+							title="Open messages"
+							on:click={openMessages}><Radio size={11} />Messages</button
+						>{/if}
 					{#if !expanded}<button
 							type="button"
 							class="logbook-pair-expand flex items-center gap-1 font-normal normal-case tracking-normal opacity-70 hover:opacity-100"
@@ -119,7 +143,7 @@
 					><X size={15} /></button
 				>
 			</header>
-			<div class="min-h-0 flex-1"><svelte:self {id} {read} expanded /></div>
+			<div class="min-h-0 flex-1"><svelte:self {id} {read} {messages} expanded on:messages={() => (big = false)} /></div>
 		</div>
 	</div>
 {/if}

@@ -259,3 +259,19 @@ test("Send to CyberChef is left out where the app has no CyberChef", () => {
   assert.equal(item(menu(["b"], { chef: false }), "chef"), null);
   assert.ok(item(menu(["b"], { chef: false }), "drawing"));
 });
+
+test("Open messages leads the menu for one streamed or WebSocket entry", () => {
+  const entries = [
+    entry("s", { Streamed: { request: true } }),
+    entry("w", { StatusCode: 101, Metadata: { protocol: "websocket", "websocket.state": "open" } }),
+    entry("p"),
+  ];
+  const at = (ids, extra = {}) => menu(ids, { entries, ...extra });
+  assert.deepEqual(at(["s"])[0].action, { type: "messages", id: "s" });
+  assert.equal(at(["s"])[1], "sep");
+  assert.deepEqual(at(["w"])[0].action, { type: "messages", id: "w" });
+  assert.equal(item(at(["p"]), "messages"), null);
+  assert.equal(item(at(["s", "w"]), "messages"), null, "one entry at a time");
+  // A service without `streamed` on rows: the full read showed it.
+  assert.deepEqual(at(["p"], { streamedIds: ["p"] })[0].action, { type: "messages", id: "p" });
+});

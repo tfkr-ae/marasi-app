@@ -64,6 +64,8 @@ export function toEntry(item) {
     RespondedAt: item.responded_at ?? null,
     Highlight: item.highlight ?? null,
     Note: item.note ?? "",
+    // The streamed state (GLOSSARY Streamed pair), as on Ledger rows.
+    Streamed: item.streamed ?? null,
   };
 }
 
