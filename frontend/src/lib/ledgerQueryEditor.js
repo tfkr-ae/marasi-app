@@ -62,6 +62,16 @@ export function queryErrorRange(doc, error) {
  * whole query's length. `readyMade` lists the { label, query } entries
  * offered in an empty box.
  */
+/**
+ * Whether the suggestion list opens with its first option chosen, so Enter
+ * takes it. In a blank box it opens with none chosen: the box was just
+ * cleared or focused, and Enter runs it as it stands (back to live) rather
+ * than a ready-made query. Down chooses one.
+ */
+export function choosesFirstSuggestion(query) {
+  return query.trim() !== "";
+}
+
 // CodeMirror keeps a completion explicit for as long as its list stays open,
 // so typing or pasting after the ready-made list (opened on focus) or
 // Ctrl-Space would keep offering every field. Count a request as explicit

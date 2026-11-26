@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { explicitCompletion, queryErrorRange, querySuggestions } from "./ledgerQueryEditor.js";
+import { choosesFirstSuggestion, explicitCompletion, queryErrorRange, querySuggestions } from "./ledgerQueryEditor.js";
 
 // Ticket 06 supplies the real list; any list works here.
 const READY_MADE_QUERIES = [
@@ -196,4 +196,10 @@ test("id offers = and !=, and no value, since only a real pair's UUID fits", () 
   assert.ok(labels(querySuggestions("i", 1)).includes("id"));
   assert.deepEqual(labels(querySuggestions("id ", 3)), ["=", "!="]);
   assert.equal(querySuggestions("id = ", 5), null);
+});
+
+test("the suggestion list opens with nothing chosen in a blank box, so Enter runs it cleared", () => {
+  assert.equal(choosesFirstSuggestion(""), false);
+  assert.equal(choosesFirstSuggestion("   "), false);
+  assert.equal(choosesFirstSuggestion("sta"), true);
 });
