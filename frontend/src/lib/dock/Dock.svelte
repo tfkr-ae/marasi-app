@@ -5,10 +5,11 @@
 </script>
 
 <script>
-	// A side dock, shared by the Launchpad and the Ledger: drag the edge to
-	// resize, drag below the snap point to collapse to a strip. The strip has
-	// an expand button, a search button and a vertical label. With
-	// `peekOnHover`, hovering the strip shows the panel over the page.
+	// A side dock, shared by every page's sidebar: drag the edge to any
+	// width, and drag it about as narrow as the strip to collapse it. The
+	// strip has an expand button, a search button and a vertical label, and a
+	// click anywhere else on it expands the dock too. With `peekOnHover`,
+	// hovering the strip shows the panel over the page.
 	//
 	// `state` is a store of { width, collapsed } with `set`; the owner decides
 	// how long it lasts. A `header` slot puts a header row with a collapse
@@ -79,6 +80,13 @@
 		setDock(toggleDock($state));
 	}
 
+	// A click on the strip's bare surface expands the dock; its own buttons
+	// (the strip slot's too) keep their actions.
+	function expandFromStrip(event) {
+		if (event.target.closest?.("button, a, input, [role='button']")) return;
+		expand();
+	}
+
 	function peek(on, delay) {
 		if (!peekOnHover) return;
 		clearTimeout(peekTimer);
@@ -104,9 +112,12 @@
 </script>
 
 {#if collapsed && !dragging}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- The strip's buttons give keyboard access; the click on its surface is a mouse shortcut. -->
+	<!-- svelte-ignore a11y-no-static-element-interactions a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
 	<aside
-		class="lp-strip z-30 flex w-11 flex-none flex-col items-center gap-2 border-r border-surface-500/30 bg-surface-50 py-2 dark:bg-surface-900"
+		class="lp-strip z-30 flex w-11 flex-none cursor-pointer flex-col items-center gap-2 border-r border-surface-500/30 bg-surface-50 py-2 hover:bg-surface-100 dark:bg-surface-900 dark:hover:bg-surface-800"
+		title={expandLabel}
+		on:click={expandFromStrip}
 		on:mouseenter={() => peek(true, 150)}
 		on:mouseleave={() => peek(false, 250)}
 	>
@@ -149,8 +160,7 @@
 		on:mouseleave={() => collapsed && peek(false, 250)}
 		on:click={closeOnPick}
 	>
-		<!-- Content keeps at least the minimum width while dragging narrower. -->
-		<div class="flex h-full min-h-0 flex-col" style="width: {Math.max(overlay ? width : panelWidth, limits.min)}px">
+		<div class="flex h-full min-h-0 w-full flex-col">
 			{#if $$slots.header}
 				<div
 					class="flex items-center justify-end gap-2 border-b border-surface-500/30 bg-surface-50 px-2 py-1 text-3xs dark:bg-surface-900"
