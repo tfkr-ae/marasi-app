@@ -72,6 +72,27 @@ export function choosesFirstSuggestion(query) {
   return query.trim() !== "";
 }
 
+/**
+ * Where a suggestion's note goes (CodeMirror's `positionInfo`), from the
+ * list's, the chosen option's and the note's rects and the space tooltips
+ * may use. With room for `width` px beside the list, it sits there, its top
+ * level with the chosen option, as CodeMirror places it. Without (a phone),
+ * it hangs under the whole list at a fixed place, rather than CodeMirror's
+ * narrow fallback, which covers the options below the chosen one and moves
+ * with every step through the list.
+ */
+export function placeQueryInfo(list, option, info, space, width) {
+  const right = space.right - list.right;
+  const left = list.left - space.left;
+  if (right >= width || left >= width) {
+    const side = right >= width ? "right" : "left";
+    const height = info.bottom - info.top;
+    const top = Math.max(space.top, Math.min(option.top, space.bottom - height)) - list.top;
+    return { style: `top: ${top}px; max-width: ${width}px`, class: `cm-completionInfo-${side}` };
+  }
+  return { style: "top: 100%; left: 0; right: 0; width: auto; max-width: none", class: "cm-completionInfo-below" };
+}
+
 // CodeMirror keeps a completion explicit for as long as its list stays open,
 // so typing or pasting after the ready-made list (opened on focus) or
 // Ctrl-Space would keep offering every field. Count a request as explicit

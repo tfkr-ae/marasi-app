@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { choosesFirstSuggestion, explicitCompletion, queryErrorRange, querySuggestions } from "./ledgerQueryEditor.js";
+import { choosesFirstSuggestion, explicitCompletion, placeQueryInfo, queryErrorRange, querySuggestions } from "./ledgerQueryEditor.js";
 
 // Ticket 06 supplies the real list; any list works here.
 const READY_MADE_QUERIES = [
@@ -202,4 +202,22 @@ test("the suggestion list opens with nothing chosen in a blank box, so Enter run
   assert.equal(choosesFirstSuggestion(""), false);
   assert.equal(choosesFirstSuggestion("   "), false);
   assert.equal(choosesFirstSuggestion("sta"), true);
+});
+
+const rect = (left, top, right, bottom) => ({ left, top, right, bottom });
+
+test("a suggestion's note sits beside the list, level with the chosen option, when it fits", () => {
+  const placed = placeQueryInfo(rect(100, 50, 452, 300), rect(100, 90, 452, 110), rect(0, 0, 300, 60), rect(0, 0, 1600, 900), 352);
+  assert.equal(placed.class, "cm-completionInfo-right");
+  assert.match(placed.style, /^top: 40px;/);
+});
+
+test("on a narrow screen the note hangs under the whole list, wherever the chosen option is", () => {
+  const list = rect(60, 70, 340, 240);
+  const space = rect(0, 0, 400, 800);
+  const first = placeQueryInfo(list, rect(60, 70, 340, 90), rect(0, 0, 300, 60), space, 352);
+  const later = placeQueryInfo(list, rect(60, 150, 340, 170), rect(0, 0, 300, 60), space, 352);
+  assert.equal(first.class, "cm-completionInfo-below");
+  assert.match(first.style, /top: 100%/);
+  assert.deepEqual(later, first);
 });
