@@ -46,7 +46,7 @@
 	$: rows = DIRECTIONS.map((direction) => ({ ...direction, summary: pair && summary(direction.id) }));
 </script>
 
-<div class="h-full overflow-auto p-4 text-sm">
+<div class="h-full overflow-auto p-4 text-xs">
 	{#if pair?.pair}
 		<p class="mb-3 break-all font-mono text-xs opacity-70">
 			#{pair.pair.Number} · {pair.pair.Method} {pair.pair.Host}{pair.pair.Path}
