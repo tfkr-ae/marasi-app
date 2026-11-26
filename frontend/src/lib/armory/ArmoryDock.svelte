@@ -96,7 +96,7 @@
 	{searchInput}
 >
 	<svelte:fragment slot="header">
-		<span class="mr-auto px-1 text-xs font-bold"
+		<span class="mr-auto min-w-0 truncate px-1 text-xs font-bold"
 			>Templates <span class="text-3xs font-normal opacity-70">{templates.length}</span></span
 		>
 		<button

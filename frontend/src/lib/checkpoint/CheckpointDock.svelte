@@ -70,7 +70,7 @@
 		{/if}
 	</svelte:fragment>
 	<svelte:fragment slot="header">
-		<span class="cp-count mr-auto px-1 text-xs font-bold"
+		<span class="cp-count mr-auto min-w-0 truncate px-1 text-xs font-bold"
 			>Intercepted <span class="text-3xs font-normal opacity-70">{state.items.length}</span></span
 		>
 	</svelte:fragment>

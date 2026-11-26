@@ -160,7 +160,7 @@
 		on:mouseleave={() => collapsed && peek(false, 250)}
 		on:click={closeOnPick}
 	>
-		<div class="flex h-full min-h-0 w-full flex-col">
+		<div class="dock-content flex h-full min-h-0 w-full flex-col">
 			{#if $$slots.header}
 				<div
 					class="flex items-center justify-end gap-2 border-b border-surface-500/30 bg-surface-50 px-2 py-1 text-3xs dark:bg-surface-900"
@@ -217,6 +217,21 @@
 {/if}
 
 <style>
+	/* Resizing never reflows the dock: every line stays one line, text that
+	   no longer fits ends in an ellipsis, and the rest keeps its size and is
+	   cut off at the dock's edge. Only text-only elements shrink, so nothing
+	   overlaps. Zero specificity (:where), so a component's own classes win. */
+	.dock-content :global(:where(*)) {
+		white-space: nowrap;
+	}
+	.dock-content :global(:where(:not(:has(*)):not(svg, svg *))) {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.dock-content :global(:where(svg)) {
+		flex-shrink: 0;
+	}
 	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
 	   global, as app.css's shared mobile rules are, so they weigh the same
 	   against Skeleton's and Tailwind's classes. */

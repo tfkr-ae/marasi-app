@@ -71,7 +71,7 @@
 <div class="ledger-sitemap flex h-full min-h-0 flex-col text-sm">
 	<header class="space-y-2 border-b border-surface-500/30 p-3">
 		<div class="flex items-center justify-between gap-2 pr-5">
-			<h2 class="font-bold">
+			<h2 class="min-w-0 truncate font-bold">
 				Sitemap {#if hosts}<span class="ledger-sitemap-hosts text-xs font-normal opacity-50">{hosts}</span>{/if}
 			</h2>
 			{#if !state.complete}
