@@ -26,7 +26,17 @@ android {
         // Configure supported ABIs
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
+            // Marasi: the bundle carries libwails.so's symbol table, so Play
+            // names functions in native crash reports.
+            debugSymbolLevel 'SYMBOL_TABLE'
         }
+    }
+
+    // Marasi: strip and extract symbols with the NDK the Go build links
+    // against (build/android/Taskfile.yml), when one is set.
+    def ndkHome = System.getenv("ANDROID_NDK_HOME")
+    if (ndkHome) {
+        ndkPath = ndkHome
     }
 
     def keystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
@@ -76,11 +86,14 @@ android {
         }
     }
 
-    // Packaging options
-    packagingOptions {
-        // Don't strip Go symbols in debug builds
-        doNotStrip '*/arm64-v8a/libwails.so'
-        doNotStrip '*/x86_64/libwails.so'
+}
+
+// Marasi: a debug build keeps libwails.so's symbols and DWARF in the APK for
+// a debugger. A release build ships it stripped; its symbol table goes in
+// the bundle's native debug symbols (debugSymbolLevel above).
+androidComponents {
+    onVariants(selector().withBuildType('debug')) { variant ->
+        variant.packaging.jniLibs.keepDebugSymbols.add('**/libwails.so')
     }
 }
 
