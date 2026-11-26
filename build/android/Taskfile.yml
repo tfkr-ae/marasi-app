@@ -116,7 +116,10 @@ tasks:
       # as on the desktop. Kept out of BUILD_FLAGS, which binding generation
       # quotes.
       LDFLAGS_X: '{{if .CHANNEL}} -X main.buildChannel={{.CHANNEL}}{{end}}{{if .VERSION}} -X ''main.version={{.VERSION}}''{{end}}'
-      LDFLAGS: '{{if eq .PRODUCTION "true"}}-w -s{{end}}{{.LDFLAGS_X}}'
+      # Marasi: -w drops DWARF but keeps the symbol table, which Gradle
+      # strips from the shipped library and puts in the bundle's native
+      # debug symbols for Play's crash reports (app/build.gradle).
+      LDFLAGS: '{{if eq .PRODUCTION "true"}}-w{{end}}{{.LDFLAGS_X}}'
 
   compile:go:all-archs:
     summary: Compile Go code for all Android architectures (fat APK)
