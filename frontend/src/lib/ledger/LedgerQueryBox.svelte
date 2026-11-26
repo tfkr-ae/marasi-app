@@ -13,7 +13,7 @@
 	import { autocompletion, closeCompletion, startCompletion } from "@codemirror/autocomplete";
 	import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 	import { tags } from "@lezer/highlight";
-	import { choosesFirstSuggestion, explicitCompletion, fieldNamed, queryErrorRange, querySuggestions } from "../ledgerQueryEditor";
+	import { choosesFirstSuggestion, explicitCompletion, fieldNamed, placeQueryInfo, queryErrorRange, querySuggestions } from "../ledgerQueryEditor";
 	import { clearSelectionOnBlur } from "./leaveEditor.js";
 
 	export let value = "";
@@ -119,6 +119,11 @@
 
 	const explicit = explicitCompletion();
 
+	// The note's widest, 22rem as in the styles below, in px.
+	function infoWidth() {
+		return 22 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+	}
+
 	// The suggestion list. In a blank box it opens with nothing chosen (see
 	// choosesFirstSuggestion), so Enter after clearing the box runs it empty.
 	function suggestions(query) {
@@ -126,6 +131,8 @@
 			override: [completionSource],
 			icons: false,
 			selectOnOpen: choosesFirstSuggestion(query),
+			// Beside the list when the note's full width fits, else under it.
+			positionInfo: (_v, list, option, info, space) => placeQueryInfo(list, option, info, space, infoWidth()),
 			// The ready-made list belongs to the whole box, not the caret.
 			tooltipClass: (state) => (state.doc.length ? "" : "ledger-query-ready"),
 		});
@@ -413,5 +420,11 @@
 		font-family: system-ui;
 		font-size: 0.75rem;
 		white-space: pre-line;
+	}
+	/* Under the list (narrow screens), its top border on the list's bottom
+	   border and its sides on the list's. */
+	.ledger-query :global(.cm-tooltip.cm-completionInfo.cm-completionInfo-below) {
+		margin-left: -1px;
+		margin-right: -1px;
 	}
 </style>
