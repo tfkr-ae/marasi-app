@@ -57,13 +57,13 @@
 	</svelte:fragment>
 	<svelte:fragment slot="header">
 		<button
-			class="flex items-center gap-1 opacity-70 hover:opacity-100"
+			class="flex min-w-0 items-center gap-1 opacity-70 hover:opacity-100"
 			title="Collapse the sidebar when the editor is focused"
 			aria-pressed={autoHide}
 			on:click={() => (autoHide = !autoHide)}
 		>
 			{#if autoHide}<EyeOff size={12} />{:else}<Eye size={12} />{/if}
-			Auto-hide while editing: {autoHide ? "on" : "off"}
+			<span>Auto-hide while editing: {autoHide ? "on" : "off"}</span>
 		</button>
 	</svelte:fragment>
 	<slot />

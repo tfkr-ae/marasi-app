@@ -326,7 +326,7 @@
 <div class="flex h-full min-h-0 flex-col">
 	<header class="space-y-2 border-b border-surface-500/30 p-3">
 		<div class="flex items-center justify-between">
-			<h2 class="font-bold">
+			<h2 class="min-w-0 truncate font-bold">
 				Launchpads <span class="text-xs font-normal opacity-50">{state.launchpads.length}</span>
 			</h2>
 			<div class="flex gap-1">
