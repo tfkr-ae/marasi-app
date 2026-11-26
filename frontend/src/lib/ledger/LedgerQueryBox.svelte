@@ -10,10 +10,10 @@
 	import { Decoration, EditorView, keymap, placeholder } from "@codemirror/view";
 	import { Compartment, EditorState, Prec, StateEffect, StateField } from "@codemirror/state";
 	import { ChevronsDownUp, ChevronsUpDown } from "lucide-svelte";
-	import { autocompletion, startCompletion } from "@codemirror/autocomplete";
+	import { autocompletion, closeCompletion, startCompletion } from "@codemirror/autocomplete";
 	import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 	import { tags } from "@lezer/highlight";
-	import { explicitCompletion, fieldNamed, queryErrorRange, querySuggestions } from "../ledgerQueryEditor";
+	import { choosesFirstSuggestion, explicitCompletion, fieldNamed, queryErrorRange, querySuggestions } from "../ledgerQueryEditor";
 	import { clearSelectionOnBlur } from "./leaveEditor.js";
 
 	export let value = "";
@@ -41,6 +41,7 @@
 	let inset = 0;
 	let span = 0;
 	const wrapping = new Compartment();
+	const suggesting = new Compartment();
 
 	function measureOverflow() {
 		view?.requestMeasure({
@@ -117,6 +118,18 @@
 	}
 
 	const explicit = explicitCompletion();
+
+	// The suggestion list. In a blank box it opens with nothing chosen (see
+	// choosesFirstSuggestion), so Enter after clearing the box runs it empty.
+	function suggestions(query) {
+		return autocompletion({
+			override: [completionSource],
+			icons: false,
+			selectOnOpen: choosesFirstSuggestion(query),
+			// The ready-made list belongs to the whole box, not the caret.
+			tooltipClass: (state) => (state.doc.length ? "" : "ledger-query-ready"),
+		});
+	}
 
 	// Opens the suggestions on request (focus on an empty box, Ctrl-Space).
 	function requestCompletion(v) {
@@ -196,11 +209,14 @@
 							},
 						}),
 					),
-					autocompletion({
-						override: [completionSource],
-						icons: false,
-						// The ready-made list belongs to the whole box, not the caret.
-						tooltipClass: (state) => (state.doc.length ? "" : "ledger-query-ready"),
+					suggesting.of(suggestions(value)),
+					// Follows the box between blank and not, in the same
+					// transaction, so a list opened by the edit reads it.
+					EditorState.transactionExtender.of((tr) => {
+						if (!tr.docChanged) return null;
+						const query = tr.newDoc.toString();
+						if (choosesFirstSuggestion(query) === choosesFirstSuggestion(tr.startState.doc.toString())) return null;
+						return { effects: suggesting.reconfigure(suggestions(query)) };
 					}),
 					wrapping.of([]),
 					// One line only: line breaks from typing or pasting become spaces.
@@ -209,9 +225,10 @@
 							? [tr, { changes: { from: 0, to: tr.newDoc.length, insert: tr.newDoc.toString().replace(/\n/g, " ") }, sequential: true }]
 							: tr,
 					),
-					// After the suggestion keymap, so Enter acts on an open
-					// suggestion list first.
-					Prec.high(keymap.of([{ key: "Enter", run: () => (dispatch("run"), true) }])),
+					// After the suggestion keymap, so Enter acts on a chosen
+					// suggestion first. With none chosen it runs the box and
+					// closes the list.
+					Prec.high(keymap.of([{ key: "Enter", run: (v) => (closeCompletion(v), dispatch("run"), true) }])),
 					clearSelectionOnBlur,
 					EditorView.domEventHandlers({
 						focus: (_event, v) => {
