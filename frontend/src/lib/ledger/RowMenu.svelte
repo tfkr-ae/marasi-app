@@ -572,7 +572,7 @@
 				>
 					{#each levelItems[k] ?? [] as item, j}
 						{#if item === "sep"}
-							<div class="my-1 border-t border-surface-300-600-token"></div>
+							<div class="border-t border-surface-300-600-token"></div>
 						{:else if item.heading}
 							<div class="px-3 pb-0.5 pt-1.5 text-3xs uppercase tracking-wide opacity-50">{item.heading}</div>
 						{:else}
