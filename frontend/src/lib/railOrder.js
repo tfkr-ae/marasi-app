@@ -136,6 +136,17 @@ export function targetIndexFromDropSlot(fromIndex, dropSlot) {
 }
 
 /**
+ * Returns the primary-modified key suffix for a reorderable built-in rail
+ * page at `index` (0-based below Home), or `null` when unbound past slot 8:
+ * - indices 0–6 (rail slots 2–8): `"2"`..`"8"`
+ * - indices 7+ (rail slots 9–11): `page.fallbackShortcut` if defined, else `null`
+ */
+export function railSlotDefaultKey(page, index) {
+  if (index >= 0 && index < 7) return String(index + 2);
+  return page?.fallbackShortcut ?? null;
+}
+
+/**
  * Projects resolved built-in rail pages into the narrow mobile bottom bar:
  * Home + first 4 visible pages in `primary` (5 tabs total, skipping hidden
  * CyberChef), and the remaining visible pages in `more` in rail order.

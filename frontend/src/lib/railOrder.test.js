@@ -7,6 +7,7 @@ import {
   dropSlotFromMidpoints,
   isDefaultRailOrder,
   projectBottomBar,
+  railSlotDefaultKey,
   reorderRailOrder,
   resolveRailOrder,
   resolveRailPages,
@@ -202,5 +203,24 @@ test("projectBottomBar skips hidden CyberChef so 5 primary tabs stay full and om
   assert.deepEqual(
     withoutChef.more.map((p) => p.id),
     ["excalidraw", "checkpoint", "armory", "compass", "workshop"],
+  );
+});
+
+test("railSlotDefaultKey returns digits 2-8 for slots 0-6, fallbackShortcut for 7+, and null otherwise", () => {
+  const pages = resolveRailPages([]);
+  assert.deepEqual(
+    pages.map((page, index) => [page.id, railSlotDefaultKey(page, index)]),
+    [
+      ["ledger", "2"],
+      ["compass", "3"],
+      ["checkpoint", "4"],
+      ["launchpad", "5"],
+      ["armory", "6"],
+      ["logbook", "7"],
+      ["workshop", "8"],
+      ["cyberchef", "shift+y"],
+      ["excalidraw", "shift+j"],
+      ["interact", null],
+    ],
   );
 });

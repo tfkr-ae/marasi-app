@@ -89,6 +89,7 @@
 	import { platformFromDesktopOS } from "../../keybindings/platform.js";
 	import { sendFocusedToChef, trackEditors } from "../../tools/cyberchef/sendAction.js";
 	import { interactActivator } from "../../interact.js";
+	import { railOrder } from "../../../stores/railOrderStore.js";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -229,6 +230,7 @@
 				guiExtensionNames.split("\n").includes(extension.Name),
 			),
 			extensionMenus: JSON.parse(extensionMenusJSON),
+			railOrder: $railOrder,
 		}),
 	});
 	// The saved profile: the dispatcher resolves its active variant for the

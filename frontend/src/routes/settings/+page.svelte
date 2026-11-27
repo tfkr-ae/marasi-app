@@ -78,6 +78,9 @@
 		targetIndexFromDropSlot,
 	} from "../../lib/railOrder.js";
 	import { RAIL_ICONS } from "../../lib/railIcons.js";
+	import { railSlotDefaultBinding } from "../../lib/keybindings/catalog.js";
+	import { formatBinding } from "../../lib/keybindings/keys.js";
+	import { platformFromDesktopOS } from "../../lib/keybindings/platform.js";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { select } from "../../lib/storeSelect.js";
 	import { groupBuilding, jobLabel, jobsStore, jobStatus } from "../../stores/jobsStore";
@@ -287,6 +290,7 @@
 	}
 
 	// Settings → Appearance: App rail order (Up/Down buttons, pointer drag, and Reset).
+	$: keybindingPlatform = platformFromDesktopOS($marasiConfig.DesktopOS);
 	let railOrderListEl = null;
 	let railDrag = null;
 	let stopRailDragListeners = () => {};
@@ -659,7 +663,7 @@
 						<div>
 							<h4 class="text-sm font-bold">App rail order</h4>
 							<p class="text-xs opacity-70">
-								Reorder the built-in pages below Home in the app rail and mobile bottom bar.
+								Reorder the built-in pages below Home in the app rail, Go to menu, and mobile bottom bar.
 							</p>
 						</div>
 						<button
@@ -678,6 +682,8 @@
 						bind:this={railOrderListEl}
 					>
 						{#each $railPages as item, index (item.id)}
+							{@const defaultBinding = railSlotDefaultBinding(item, index, keybindingPlatform)}
+							{@const defaultShortcut = defaultBinding ? formatBinding(defaultBinding, keybindingPlatform) : ""}
 							<div
 								role="listitem"
 								data-rail-order-item={item.id}
@@ -701,27 +707,37 @@
 									</span>
 									<span class="truncate text-sm">{item.label}</span>
 								</div>
-								<div class="flex shrink-0 items-center gap-1">
-									<button
-										type="button"
-										class="btn btn-sm h-7 w-7 shrink-0 p-0 {neutral}"
-										aria-label="Move {item.label} up"
-										title="Move {item.label} up"
-										disabled={index === 0}
-										on:click={() => moveRailRow(index, index - 1)}
-									>
-										<ChevronUp size={15} />
-									</button>
-									<button
-										type="button"
-										class="btn btn-sm h-7 w-7 shrink-0 p-0 {neutral}"
-										aria-label="Move {item.label} down"
-										title="Move {item.label} down"
-										disabled={index === $railPages.length - 1}
-										on:click={() => moveRailRow(index, index + 1)}
-									>
-										<ChevronDown size={15} />
-									</button>
+								<div class="flex shrink-0 items-center gap-3">
+									{#if defaultShortcut}
+										<kbd
+											class="inline-flex h-6 min-w-[1.5rem] items-center justify-center border border-surface-300 bg-surface-100 px-1.5 font-sans text-xs font-medium leading-none tracking-wide text-surface-900 dark:border-surface-500 dark:bg-surface-700 dark:text-white"
+											data-testid="rail-order-shortcut">{defaultShortcut}</kbd
+										>
+									{:else}
+										<span class="text-xs opacity-50" data-testid="rail-order-shortcut">No default</span>
+									{/if}
+									<div class="flex items-center gap-1">
+										<button
+											type="button"
+											class="btn btn-sm h-7 w-7 shrink-0 p-0 {neutral}"
+											aria-label="Move {item.label} up"
+											title="Move {item.label} up"
+											disabled={index === 0}
+											on:click={() => moveRailRow(index, index - 1)}
+										>
+											<ChevronUp size={15} />
+										</button>
+										<button
+											type="button"
+											class="btn btn-sm h-7 w-7 shrink-0 p-0 {neutral}"
+											aria-label="Move {item.label} down"
+											title="Move {item.label} down"
+											disabled={index === $railPages.length - 1}
+											on:click={() => moveRailRow(index, index + 1)}
+										>
+											<ChevronDown size={15} />
+										</button>
+									</div>
 								</div>
 								{#if railDrag?.active && index === $railPages.length - 1 && railDrag.dropSlot === $railPages.length}
 									<div
