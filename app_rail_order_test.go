@@ -128,7 +128,7 @@ func TestAppRailOrder(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid blank inputs are rejected and leave disk and memory unchanged", func(t *testing.T) {
+	t.Run("invalid inputs are rejected and leave disk and memory unchanged", func(t *testing.T) {
 		dir := t.TempDir()
 		app := loadConfigApp(t, dir)
 		initial := []string{"launchpad", "ledger"}
@@ -138,6 +138,7 @@ func TestAppRailOrder(t *testing.T) {
 		before := readAppConfig(t, dir)
 
 		cases := map[string][]string{
+			"nil slice":         nil,
 			"empty string":      {"ledger", ""},
 			"whitespace string": {"ledger", "   \t  "},
 		}

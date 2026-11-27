@@ -72,11 +72,8 @@
 		resetRailOrder,
 		saveRailOrder,
 	} from "../../stores/railOrderStore.js";
-	import {
-		dropSlotFromMidpoints,
-		reorderRailOrder,
-		targetIndexFromDropSlot,
-	} from "../../lib/railOrder.js";
+	import { reorderRailOrder } from "../../lib/railOrder.js";
+	import { createRailDragController } from "../../lib/railDrag.js";
 	import { RAIL_ICONS } from "../../lib/railIcons.js";
 	import { railSlotDefaultBinding } from "../../lib/keybindings/catalog.js";
 	import { formatBinding } from "../../lib/keybindings/keys.js";
@@ -292,6 +289,7 @@
 	// Settings → Appearance: App rail order (Up/Down buttons, pointer drag, and Reset).
 	$: keybindingPlatform = platformFromDesktopOS($marasiConfig.DesktopOS);
 	let railOrderListEl = null;
+	const railDragController = createRailDragController();
 	let railDrag = null;
 	let stopRailDragListeners = () => {};
 
@@ -304,65 +302,107 @@
 		resetRailOrder().catch((error) => toastError(toastStore, "Error resetting rail order", error));
 	}
 
-	function stopRailRowDrag() {
+	function detachRailDragListeners() {
 		stopRailDragListeners();
 		stopRailDragListeners = () => {};
+	}
+
+	function stopRailRowDrag() {
+		detachRailDragListeners();
+		railDragController.cancel();
+		railDragController.clearSuppressedClick();
 		railDrag = null;
 	}
 
-	function startRailRowDrag(event, index) {
-		if (event.button !== 0 || event.pointerType === "touch") return;
-		if (event.target?.closest?.("button")) return;
-		stopRailRowDrag();
-		railDrag = {
+	function readRailRowMidpoints() {
+		const rows = railOrderListEl?.querySelectorAll("[data-rail-order-item]") ?? [];
+		return Array.from(rows, (el) => {
+			const rect = el.getBoundingClientRect();
+			return rect.top + rect.height / 2;
+		});
+	}
+
+	function startRailRowDrag(event, item, index) {
+		if (event.target?.closest?.("button, a, input, select, textarea")) return;
+		detachRailDragListeners();
+		const { started, state } = railDragController.pointerDown({
+			pageId: item.id,
 			fromIndex: index,
-			startX: event.clientX,
-			startY: event.clientY,
 			pointerId: event.pointerId,
-			active: false,
-			dropSlot: index,
-		};
+			clientX: event.clientX,
+			clientY: event.clientY,
+			button: event.button,
+			pointerType: event.pointerType,
+			mobile: $mobile,
+		});
+		if (!started) return;
+		const activePointerId = event.pointerId;
+		railDrag = state;
+
 		const onMove = (moveEvent) => {
-			if (!railDrag || moveEvent.pointerId !== railDrag.pointerId) return;
-			if (!railDrag.active) {
-				const distance = Math.hypot(
-					moveEvent.clientX - railDrag.startX,
-					moveEvent.clientY - railDrag.startY,
-				);
-				if (distance < 4) return;
-			}
-			const rows = railOrderListEl?.querySelectorAll("[data-rail-order-item]") ?? [];
-			const midpoints = Array.from(rows, (el) => {
-				const rect = el.getBoundingClientRect();
-				return rect.top + rect.height / 2;
+			if (moveEvent.pointerId !== activePointerId) return;
+			const { changed, state: nextState } = railDragController.pointerMove({
+				pointerId: moveEvent.pointerId,
+				clientX: moveEvent.clientX,
+				clientY: moveEvent.clientY,
+				midpoints: readRailRowMidpoints(),
 			});
-			const dropSlot = dropSlotFromMidpoints(midpoints, moveEvent.clientY);
-			railDrag = { ...railDrag, active: true, dropSlot };
+			if (changed) railDrag = nextState;
 		};
 		const onUp = (upEvent) => {
-			if (!railDrag || upEvent.pointerId !== railDrag.pointerId) return;
-			const { active, fromIndex, dropSlot } = railDrag;
-			stopRailRowDrag();
-			if (!active) return;
-			const targetIndex = targetIndexFromDropSlot(fromIndex, dropSlot);
-			if (targetIndex !== null) moveRailRow(fromIndex, targetIndex);
+			if (upEvent.pointerId !== activePointerId) return;
+			const order = get(railOrder);
+			const result = railDragController.pointerUp({
+				pointerId: upEvent.pointerId,
+				fullOrder: order,
+				visibleIds: order,
+			});
+			detachRailDragListeners();
+			railDragController.clearSuppressedClick();
+			railDrag = null;
+			if (result.nextOrder) {
+				saveRailOrder(result.nextOrder).catch((error) =>
+					toastError(toastStore, "Error saving rail order", error),
+				);
+			}
 		};
 		const onCancel = (cancelEvent) => {
-			if (!railDrag || cancelEvent.pointerId !== railDrag.pointerId) return;
-			stopRailRowDrag();
+			if (cancelEvent.pointerId !== activePointerId) return;
+			railDragController.cancel({ pointerId: cancelEvent.pointerId });
+			detachRailDragListeners();
+			railDragController.clearSuppressedClick();
+			railDrag = null;
 		};
 		const onKeyDown = (keyEvent) => {
-			if (keyEvent.key === "Escape") stopRailRowDrag();
+			if (keyEvent.key !== "Escape") return;
+			const result = railDragController.cancel();
+			if (!result.cancelled) return;
+			if (result.wasActive) {
+				keyEvent.preventDefault();
+				keyEvent.stopPropagation();
+			}
+			detachRailDragListeners();
+			railDragController.clearSuppressedClick();
+			railDrag = null;
 		};
+		const onBlur = () => {
+			railDragController.cancel();
+			detachRailDragListeners();
+			railDragController.clearSuppressedClick();
+			railDrag = null;
+		};
+
 		window.addEventListener("pointermove", onMove);
 		window.addEventListener("pointerup", onUp);
 		window.addEventListener("pointercancel", onCancel);
-		window.addEventListener("keydown", onKeyDown);
+		window.addEventListener("keydown", onKeyDown, true);
+		window.addEventListener("blur", onBlur);
 		stopRailDragListeners = () => {
 			window.removeEventListener("pointermove", onMove);
 			window.removeEventListener("pointerup", onUp);
 			window.removeEventListener("pointercancel", onCancel);
-			window.removeEventListener("keydown", onKeyDown);
+			window.removeEventListener("keydown", onKeyDown, true);
+			window.removeEventListener("blur", onBlur);
 		};
 	}
 
@@ -690,7 +730,8 @@
 								class="relative flex items-center justify-between gap-4 border-b border-surface-300 py-2 dark:border-surface-600 {railDrag?.active && railDrag.fromIndex === index
 									? 'opacity-50'
 									: ''} {railDrag?.active ? 'cursor-grabbing' : !$mobile ? 'cursor-grab' : ''}"
-								on:pointerdown={(event) => startRailRowDrag(event, index)}
+								on:pointerdown={(event) => startRailRowDrag(event, item, index)}
+								on:dragstart|preventDefault
 							>
 								{#if railDrag?.active && railDrag.dropSlot === index}
 									<div
@@ -710,7 +751,7 @@
 								<div class="flex shrink-0 items-center gap-3">
 									{#if defaultShortcut}
 										<kbd
-											class="inline-flex h-6 min-w-[1.5rem] items-center justify-center border border-surface-300 bg-surface-100 px-1.5 font-sans text-xs font-medium leading-none tracking-wide text-surface-900 dark:border-surface-500 dark:bg-surface-700 dark:text-white"
+											class="inline-flex items-center justify-center border border-surface-300 bg-surface-100 px-1.5 py-0.5 font-mono text-xs font-medium leading-none text-surface-900 dark:border-surface-500 dark:bg-surface-700 dark:text-white"
 											data-testid="rail-order-shortcut">{defaultShortcut}</kbd
 										>
 									{:else}

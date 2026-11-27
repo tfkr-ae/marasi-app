@@ -100,7 +100,7 @@
 	import { AnswerQuitQuestion, OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { PuzzleIcon } from "lucide-svelte";
 	import { RAIL_ICONS } from "../lib/railIcons.js";
-	import { projectBottomBar } from "../lib/railOrder.js";
+	import { projectBottomBar, visibleRailPages } from "../lib/railOrder.js";
 	import { createRailDragController } from "../lib/railDrag.js";
 	import { toastError } from "../lib/toasts.js";
 	import { railOrder, railPages, saveRailOrder } from "../stores/railOrderStore.js";
@@ -221,9 +221,7 @@
 			go: () => openRailPage(item),
 		};
 	}
-	$: visibleRailPages = $railPages.filter(
-		(item) => $chefShown || item.id !== "cyberchef",
-	);
+	$: shownRailPages = visibleRailPages($railPages, { chefShown: $chefShown });
 	// Desktop app rail direct pointer drag-and-drop (disabled on mobile/touch).
 	const railDragController = createRailDragController();
 	let railDrag = null;
@@ -297,7 +295,7 @@
 			const result = railDragController.pointerUp({
 				pointerId: upEvent.pointerId,
 				fullOrder: get(railOrder),
-				visibleIds: visibleRailPages.map((entry) => entry.id),
+				visibleIds: shownRailPages.map((entry) => entry.id),
 			});
 			detachRailDragListeners();
 			railDrag = null;
@@ -719,7 +717,7 @@
 					</svelte:fragment>
 					<span></span>
 				</AppRailAnchor>
-				{#each visibleRailPages as item, index (item.id)}
+				{#each shownRailPages as item, index (item.id)}
 					<!-- svelte-ignore a11y-no-static-element-interactions -->
 					<div
 						class="relative {railDrag?.active && railDrag.fromIndex === index ? 'opacity-50' : ''} {railDrag?.active ? 'cursor-grabbing' : ''}"
@@ -767,7 +765,7 @@
 							</svelte:fragment>
 							<span>{item.label}</span>
 						</AppRailAnchor>
-						{#if railDrag?.active && index === visibleRailPages.length - 1 && railDrag.dropSlot === visibleRailPages.length}
+						{#if railDrag?.active && index === shownRailPages.length - 1 && railDrag.dropSlot === shownRailPages.length}
 							<div
 								class="pointer-events-none absolute inset-x-1 -bottom-px z-10 h-0.5 bg-primary-500"
 								data-testid="rail-drop-indicator"

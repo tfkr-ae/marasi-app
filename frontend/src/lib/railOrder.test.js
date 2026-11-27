@@ -12,6 +12,7 @@ import {
   resolveRailOrder,
   resolveRailPages,
   targetIndexFromDropSlot,
+  visibleRailPages,
 } from "./railOrder.js";
 
 test("canonical built-in rail pages define the 10 reorderable pages below Home", () => {
@@ -35,6 +36,12 @@ test("canonical built-in rail pages define the 10 reorderable pages below Home",
   assert.equal(byId.interact.label, "Interactsh");
   assert.equal(byId.interact.actionId, "global.go-interact");
   assert.equal(byId.interact.fallbackShortcut, undefined);
+  for (const page of BUILTIN_RAIL_PAGES) {
+    assert.equal(typeof page.description, "string", `${page.id} description`);
+    assert.ok(page.description.length > 0, `${page.id} non-empty description`);
+    assert.equal(typeof page.keywords, "string", `${page.id} keywords`);
+    assert.ok(page.keywords.length > 0, `${page.id} non-empty keywords`);
+  }
 });
 
 test("resolveRailOrder returns default order when saved list is empty or missing", () => {
@@ -156,6 +163,23 @@ test("dropSlotFromMidpoints and targetIndexFromDropSlot compute drag insertion i
   assert.equal(targetIndexFromDropSlot(1, 3), 2);
   // Moving item 0 to end (slot 4) -> target index 3.
   assert.equal(targetIndexFromDropSlot(0, 4), 3);
+});
+
+test("visibleRailPages keeps all pages when chefShown is true and omits CyberChef when false", () => {
+  const pages = resolveRailPages([]);
+  assert.deepEqual(
+    visibleRailPages(pages).map((p) => p.id),
+    DEFAULT_RAIL_ORDER,
+  );
+  assert.deepEqual(
+    visibleRailPages(pages, { chefShown: true }).map((p) => p.id),
+    DEFAULT_RAIL_ORDER,
+  );
+  assert.deepEqual(
+    visibleRailPages(pages, { chefShown: false }).map((p) => p.id),
+    DEFAULT_RAIL_ORDER.filter((id) => id !== "cyberchef"),
+  );
+  assert.deepEqual(visibleRailPages(null, { chefShown: false }), []);
 });
 
 test("projectBottomBar puts Home + first 4 visible pages in primary and the rest in more", () => {

@@ -1,6 +1,6 @@
 // App-wide rail order store factory. Backend calls go through the injected
 // `api` ({ get, save, reset }) so unit tests run without Wails bindings.
-import { derived, get, writable } from "svelte/store";
+import { derived, writable } from "svelte/store";
 import {
   isDefaultRailOrder,
   resolveRailOrder,
@@ -17,24 +17,45 @@ export function createRailOrderStore(api) {
   /** True when the current rail order matches the canonical default order. */
   const isDefault = derived(railOrder, ($order) => isDefaultRailOrder($order));
 
+  // Track the last confirmed persisted state separately from optimistic updates
+  // and guard overlapping writes with a monotonic generation counter so a stale
+  // failure never clobbers a newer confirmed save or restores unpersisted state.
+  let lastPersisted = [];
+  let lastPersistedSeq = 0;
+  let writeSeq = 0;
+
   async function read() {
+    const seq = writeSeq;
     try {
       const saved = await api.get();
-      savedOrder.set(Array.isArray(saved) ? saved : []);
+      const confirmed = Array.isArray(saved) ? [...saved] : [];
+      if (seq === writeSeq) {
+        lastPersisted = confirmed;
+        lastPersistedSeq = seq;
+        savedOrder.set([...confirmed]);
+      }
     } catch (error) {
       console.error("reading rail order, using default:", error);
     }
   }
 
   async function reset() {
-    const before = get(savedOrder);
+    const seq = ++writeSeq;
     savedOrder.set([]);
     try {
       await api.reset();
-      savedOrder.set([]);
+      if (seq >= lastPersistedSeq) {
+        lastPersisted = [];
+        lastPersistedSeq = seq;
+      }
+      if (seq === writeSeq) {
+        savedOrder.set([]);
+      }
       return resolveRailOrder([]);
     } catch (error) {
-      savedOrder.set(before);
+      if (seq === writeSeq) {
+        savedOrder.set([...lastPersisted]);
+      }
       throw error;
     }
   }
@@ -44,15 +65,23 @@ export function createRailOrderStore(api) {
     if (isDefaultRailOrder(next)) {
       return reset();
     }
-    const before = get(savedOrder);
+    const seq = ++writeSeq;
     savedOrder.set(next);
     try {
       const saved = await api.save(next);
-      const confirmed = Array.isArray(saved) ? saved : next;
-      savedOrder.set(confirmed);
+      const confirmed = Array.isArray(saved) ? [...saved] : [...next];
+      if (seq >= lastPersistedSeq) {
+        lastPersisted = confirmed;
+        lastPersistedSeq = seq;
+      }
+      if (seq === writeSeq) {
+        savedOrder.set([...confirmed]);
+      }
       return resolveRailOrder(confirmed);
     } catch (error) {
-      savedOrder.set(before);
+      if (seq === writeSeq) {
+        savedOrder.set([...lastPersisted]);
+      }
       throw error;
     }
   }

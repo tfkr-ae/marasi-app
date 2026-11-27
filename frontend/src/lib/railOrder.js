@@ -11,18 +11,69 @@ export const HOME_RAIL_PAGE = Object.freeze({
 
 // The 10 reorderable built-in pages below Home, in canonical factory order.
 export const BUILTIN_RAIL_PAGES = Object.freeze([
-  Object.freeze({ id: "ledger", label: "Ledger", route: "/ledger", actionId: "global.go-ledger" }),
-  Object.freeze({ id: "compass", label: "Compass", route: "/compass", actionId: "global.go-compass" }),
-  Object.freeze({ id: "checkpoint", label: "Checkpoint", route: "/checkpoint", actionId: "global.go-checkpoint" }),
-  Object.freeze({ id: "launchpad", label: "Launchpad", route: "/launchpad", actionId: "global.go-launchpad" }),
-  Object.freeze({ id: "armory", label: "Armory", route: "/armory", actionId: "global.go-armory" }),
-  Object.freeze({ id: "logbook", label: "Logbook", route: "/logbook", actionId: "global.go-logbook" }),
-  Object.freeze({ id: "workshop", label: "Workshop", route: "/workshop", actionId: "global.go-workshop" }),
+  Object.freeze({
+    id: "ledger",
+    label: "Ledger",
+    route: "/ledger",
+    actionId: "global.go-ledger",
+    description: "View requests",
+    keywords: "ledger",
+  }),
+  Object.freeze({
+    id: "compass",
+    label: "Compass",
+    route: "/compass",
+    actionId: "global.go-compass",
+    description: "Configure scope",
+    keywords: "compass",
+  }),
+  Object.freeze({
+    id: "checkpoint",
+    label: "Checkpoint",
+    route: "/checkpoint",
+    actionId: "global.go-checkpoint",
+    description: "Intercept Requests",
+    keywords: "checkpoint",
+  }),
+  Object.freeze({
+    id: "launchpad",
+    label: "Launchpad",
+    route: "/launchpad",
+    actionId: "global.go-launchpad",
+    description: "Edit and Repeat Requests",
+    keywords: "Launchpad",
+  }),
+  Object.freeze({
+    id: "armory",
+    label: "Armory",
+    route: "/armory",
+    actionId: "global.go-armory",
+    description: "Create request templates",
+    keywords: "armory,template,attack",
+  }),
+  Object.freeze({
+    id: "logbook",
+    label: "Logbook",
+    route: "/logbook",
+    actionId: "global.go-logbook",
+    description: "Review test cases and findings",
+    keywords: "logbook,findings,tests",
+  }),
+  Object.freeze({
+    id: "workshop",
+    label: "Workshop",
+    route: "/workshop",
+    actionId: "global.go-workshop",
+    description: "Extend Marasi",
+    keywords: "Workshop",
+  }),
   Object.freeze({
     id: "cyberchef",
     label: "CyberChef",
     route: "/cyberchef",
     actionId: "global.go-cyberchef",
+    description: "Decode, encode and transform data",
+    keywords: "cyberchef, chef, decode, encode, recipe",
     fallbackShortcut: "shift+y",
   }),
   Object.freeze({
@@ -30,9 +81,18 @@ export const BUILTIN_RAIL_PAGES = Object.freeze([
     label: "Excalidraw",
     route: "/excalidraw",
     actionId: "global.go-excalidraw",
+    description: "Sketch with cards",
+    keywords: "excalidraw, drawing, diagram, draw",
     fallbackShortcut: "shift+j",
   }),
-  Object.freeze({ id: "interact", label: "Interactsh", route: "/interact", actionId: "global.go-interact" }),
+  Object.freeze({
+    id: "interact",
+    label: "Interactsh",
+    route: "/interact",
+    actionId: "global.go-interact",
+    description: "Inspect out-of-band interactions",
+    keywords: "interact, interactsh, oob, oast",
+  }),
 ]);
 
 export const DEFAULT_RAIL_ORDER = Object.freeze(BUILTIN_RAIL_PAGES.map((page) => page.id));
@@ -147,14 +207,20 @@ export function railSlotDefaultKey(page, index) {
 }
 
 /**
+ * Filters built-in rail pages to those visible for the current viewport,
+ * omitting CyberChef when `chefShown` is false.
+ */
+export function visibleRailPages(pages, { chefShown = true } = {}) {
+  return (pages ?? []).filter((page) => chefShown || page.id !== "cyberchef");
+}
+
+/**
  * Projects resolved built-in rail pages into the narrow mobile bottom bar:
  * Home + first 4 visible pages in `primary` (5 tabs total, skipping hidden
  * CyberChef), and the remaining visible pages in `more` in rail order.
  */
 export function projectBottomBar(resolvedPages, { chefShown = true } = {}) {
-  const visible = (resolvedPages ?? []).filter(
-    (page) => chefShown || page.id !== "cyberchef",
-  );
+  const visible = visibleRailPages(resolvedPages, { chefShown });
   return {
     primary: [HOME_RAIL_PAGE, ...visible.slice(0, 4)],
     more: visible.slice(4),

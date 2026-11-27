@@ -81,13 +81,17 @@ func (a *App) GetRailOrder() []string {
 }
 
 // SaveRailOrder validates, normalizes, and persists the app-wide rail order.
-// An empty list deletes `rail_order` from the YAML file. On error, disk and
-// in-memory state remain unchanged and the current order is returned.
+// A nil slice is rejected; a non-nil empty slice deletes `rail_order` from the
+// YAML file. On error, disk and in-memory state remain unchanged and the
+// current order is returned.
 func (a *App) SaveRailOrder(order []string) ([]string, error) {
 	cfg := a.Config
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 	current := cloneRailOrder(cfg.railOrder)
+	if order == nil {
+		return current, fmt.Errorf("rail order is nil")
+	}
 	next, err := normalizeRailOrder(order)
 	if err != nil {
 		return current, err

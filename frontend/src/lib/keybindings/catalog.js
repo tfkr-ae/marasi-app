@@ -45,26 +45,14 @@ function pageActions(context, rows) {
   );
 }
 
-// Copy for the 10 reorderable built-in navigation actions below Home.
-// Their order and default keys follow the app rail order (railOrder.js);
+// The 10 reorderable built-in navigation actions below Home. Their metadata
+// (label, description, keywords, fallbackShortcut) lives on BUILTIN_RAIL_PAGES
+// in railOrder.js. Their order and default keys follow the app rail order:
 // slots 2–8 take primary+2..8, CyberChef and Excalidraw fall back to
 // primary+shift+y / primary+shift+j past slot 8, and other overflow pages
 // have no default shortcut. Every one is marked `positionalDefault: true` so
 // explicit profile overrides stay pinned to their action id and colliding
 // positional defaults yield cleanly (docs/adr/2026-11-27-rail-order-drives-positional-page-defaults.md).
-const RAIL_ACTION_COPY = Object.freeze({
-  ledger: ["Ledger", "View requests", "ledger"],
-  compass: ["Compass", "Configure scope", "compass"],
-  checkpoint: ["Checkpoint", "Intercept Requests", "checkpoint"],
-  launchpad: ["Launchpad", "Edit and Repeat Requests", "Launchpad"],
-  armory: ["Armory", "Create request templates", "armory,template,attack"],
-  logbook: ["Logbook", "Review test cases and findings", "logbook,findings,tests"],
-  workshop: ["Workshop", "Extend Marasi", "Workshop"],
-  cyberchef: ["CyberChef", "Decode, encode and transform data", "cyberchef, chef, decode, encode, recipe"],
-  excalidraw: ["Excalidraw", "Sketch with cards", "excalidraw, drawing, diagram, draw"],
-  interact: ["Interactsh", "Inspect out-of-band interactions", "interact, interactsh, oob, oast"],
-});
-
 export function railSlotDefaultBinding(page, index, platform) {
   const key = railSlotDefaultKey(page, index);
   if (!key) return null;
@@ -73,10 +61,9 @@ export function railSlotDefaultBinding(page, index, platform) {
 
 function railNavigationActions(railOrder = null) {
   return resolveRailPages(railOrder).map((page, index) => {
-    const [label, description, keywords] = RAIL_ACTION_COPY[page.id];
     const key = railSlotDefaultKey(page, index);
     const defaults = key ? primary(key) : { [MACOS]: [], [WINDOWS_LINUX]: [] };
-    return action(page.actionId, label, description, keywords, defaults, {
+    return action(page.actionId, page.label, page.description, page.keywords, defaults, {
       group: "go",
       positionalDefault: true,
     });
