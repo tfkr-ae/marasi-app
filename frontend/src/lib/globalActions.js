@@ -106,6 +106,15 @@ async function settle(opening, toastStore, modalStore) {
 			background: "variant-filled-success",
 		});
 		return result.project;
+	} catch (err) {
+		if (!isSuperseded(err)) {
+			console.error("Opening project failed:", err);
+			toastStore?.trigger({
+				message: "Couldn't open project: " + (err?.message ?? err),
+				background: "variant-filled-error",
+			});
+		}
+		return null;
 	} finally {
 		appState.update((s) => ({ ...s, isReady: true }));
 	}

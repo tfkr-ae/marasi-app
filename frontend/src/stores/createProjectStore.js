@@ -151,6 +151,7 @@ export function createProjectStore(api, timers = globalThis) {
     patch({
       opening: openingFor({ name, path, current, scratchpad: name === "scratchpad" }),
       shown: current === null,
+      startupPart: null,
     });
     const timer = timers.setTimeout(() => live() && patch({ shown: true }), openingDelay);
     const stopEvents = api.onProjectEvent(
@@ -280,6 +281,9 @@ export function createProjectStore(api, timers = globalThis) {
     };
     try {
       await api.loadProject(path, part, live);
+    } catch (error) {
+      if (!live()) return superseded;
+      throw error;
     } finally {
       if (live()) patch({ startupPart: null });
     }
@@ -311,7 +315,7 @@ export function createProjectStore(api, timers = globalThis) {
       lastTarget = null;
       endFollowed();
       screenOf = 0;
-      patch({ opening: null, shown: false });
+      patch({ opening: null, shown: false, startupPart: null });
     },
     /** Re-runs the last open, for the opening screen's Try again. */
     retry: () => (lastTarget ? open(lastTarget) : Promise.resolve(null)),

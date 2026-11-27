@@ -111,3 +111,12 @@ export const SLOW_LOAD_MS = 15_000;
  * first load has taken `slow` (SLOW_LOAD_MS), since a read may never answer.
  */
 export const startupOffersRetry = ({ phase }, slow) => phase === "failed" || (phase === "connected" && slow);
+
+/**
+ * Whether the start screen offers Switch project…: once the service has
+ * been reached and loading its project failed (`loadFailed`) or has taken
+ * `slow` (SLOW_LOAD_MS), so the researcher can open another project on the
+ * running service.
+ */
+export const startupOffersProjectSwitch = ({ phase, loadFailed = false }, slow = false) =>
+  (phase === "failed" && Boolean(loadFailed)) || (phase === "connected" && Boolean(slow));

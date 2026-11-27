@@ -10,6 +10,7 @@ import {
   reachingText,
   removeBlock,
   startupOffersConnections,
+  startupOffersProjectSwitch,
   startupOffersRetry,
   startupText,
   whereText,
@@ -100,6 +101,17 @@ test("the start screen offers Retry after a failure, and once a first load is sl
   assert.equal(startupOffersRetry({ phase: "connected" }, false), false);
   assert.equal(startupOffersRetry({ phase: "connected" }, true), true);
   assert.equal(startupOffersRetry({ phase: "connecting" }, true), false);
+});
+
+test("the start screen offers Switch project… when loading the project failed or is slow, not when the service wasn't reached", () => {
+  assert.equal(startupOffersProjectSwitch({ phase: "failed", loadFailed: true }, false), true);
+  assert.equal(startupOffersProjectSwitch({ phase: "connected" }, true), true);
+  assert.equal(startupOffersProjectSwitch({ phase: "failed", loadFailed: false }, false), false);
+  assert.equal(startupOffersProjectSwitch({ phase: "failed" }, false), false);
+  assert.equal(startupOffersProjectSwitch({ phase: "connected" }, false), false);
+  for (const phase of ["idle", "starting", "connecting", "auth-failed", "unpaired", "stopped"]) {
+    assert.equal(startupOffersProjectSwitch({ phase }, true), false, phase);
+  }
 });
 
 test("a failed first load names the project, not the connection", () => {

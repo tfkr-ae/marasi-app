@@ -89,6 +89,32 @@ test("a first load that fails says so, closes the stream, and Retry reaches the 
   assert.equal(retried.state.error, null);
 });
 
+test("opening another project after a failed first load recovers the connection and reopens /events", () => {
+  const recovered = run(
+    ...connected,
+    { type: "LOAD_FAILED", error: "GET /dashboard: internal: database is locked" },
+    { type: "PROJECT_LOADED", path: "/p/other.marasi" },
+  );
+  assert.equal(recovered.state.phase, "connected");
+  assert.equal(recovered.state.project, "/p/other.marasi");
+  assert.equal(recovered.state.loaded, true);
+  assert.equal(recovered.state.loadFailed, false);
+  assert.equal(recovered.state.error, null);
+  assert.equal(recovered.steps.at(-1), "open-events");
+});
+
+test("PROJECT_LOADED does not recover a connect failure where the service was never reached", () => {
+  const failed = run(
+    { type: "APP_STARTED" },
+    up(true),
+    { type: "CONNECT_FAILED", error: "Couldn't reach 127.0.0.1:9000" },
+    { type: "PROJECT_LOADED", path: "/p/other.marasi" },
+  );
+  assert.equal(failed.state.phase, "failed");
+  assert.equal(failed.state.loadFailed, false);
+  assert.equal(failed.steps.includes("open-events"), false);
+});
+
 test("Retry starts a first load that hasn't finished over, but not a loaded project", () => {
   const loading = run(...connected, { type: "RETRY" });
   assert.equal(loading.state.phase, "starting");
