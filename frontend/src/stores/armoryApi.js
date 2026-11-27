@@ -94,6 +94,8 @@ export function toPairSummary(pair) {
     OriginProtocol: pair.origin_protocol ?? "",
     // The grpc-status a gRPC call's response ended with; null for any other pair.
     GrpcStatus: pair.grpc_status ?? null,
+    // The streamed state (GLOSSARY Streamed pair), as on Ledger rows.
+    Streamed: pair.streamed ?? null,
   };
 }
 

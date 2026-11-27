@@ -19,6 +19,7 @@ import "./stores/sitemapStore";
 import "./stores/savedQueriesStore";
 import "./stores/ledgerMenuCounts";
 import "./stores/jobsStore";
+import "./stores/joinedResponseStore";
 import "./stores/pairRowsStore";
 import "./stores/trafficListStore";
 import { wrapStartsOn } from "./lib/lineWrap.js";

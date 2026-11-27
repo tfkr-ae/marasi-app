@@ -4,7 +4,7 @@
 	// left. The note or the metadata opens in place of the response, beside
 	// the request it is about. The pair is read in full through the Ledger
 	// store; the page runs the actions the rail dispatches.
-	import { createEventDispatcher } from "svelte";
+	import { createEventDispatcher, onDestroy } from "svelte";
 	import { javascript } from "@codemirror/lang-javascript";
 	import DrawerEditor from "./DrawerEditor.svelte";
 	import DrawerNote from "./DrawerNote.svelte";
@@ -14,6 +14,7 @@
 	import { sameID } from "./pairs.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
 	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
+	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
 
 	/** The Ledger store: getDetails, noteFullRead, getNote, getMetadata and saveNote. */
@@ -119,7 +120,19 @@
 		if (metadataFor === row) metadata = metadataText(value);
 	}
 
-	$: bodies = drawerBodies(details, { prettify: $prettify, incomingResponse });
+	const joined = joinedResponseStore.createPreview();
+	onDestroy(() => joined.destroy());
+
+	$: pairDetails = sameID(details?.Request?.ID, pair?.ID) ? details : null;
+	$: pairIncoming = sameID(incomingResponse?.ID, pair?.ID) ? incomingResponse : null;
+	$: joined.sync({
+		id: pair?.ID,
+		active: pane === null && pair?.ID != null,
+		hasResponse: Boolean(pairIncoming?.Raw || pairDetails?.Response?.Raw || Number(pair?.StatusCode) > 0),
+		sources: [pair?.Streamed, pairIncoming?.Streamed, pairDetails?.Streamed, pairDetails?.Metadata?.streamed],
+	});
+
+	$: bodies = drawerBodies(details, { prettify: $prettify, incomingResponse, joinedResponse: $joined });
 	$: syntaxMode = $marasiConfig.SyntaxMode;
 	$: hasResponse = Boolean(bodies.response);
 	// Wrap lines is on but a shown long string stopped an editor wrapping;

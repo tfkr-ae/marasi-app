@@ -27,6 +27,20 @@ test("a response that arrived after the pair was selected replaces the one read 
   assert.deepEqual(drawerBodies(null, { prettify: true }), { request: "", response: "" });
 });
 
+test("a joined SSE response is shown in both Prettify modes", () => {
+  const joined = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: hello\n\n";
+  assert.equal(drawerBodies(details, { prettify: true, joinedResponse: joined }).response, joined);
+  assert.equal(drawerBodies(details, { prettify: false, joinedResponse: joined }).response, joined);
+  assert.equal(
+    drawerBodies(details, {
+      prettify: true,
+      incomingResponse: { Raw: "HTTP/1.1 200 OK\r\n\r\n", Prettified: "" },
+      joinedResponse: joined,
+    }).response,
+    joined,
+  );
+});
+
 test("syntax highlighting follows the setting; auto stops at 75,000 characters", () => {
   const big = "x".repeat(SYNTAX_AUTO_LIMIT);
   assert.equal(usesSyntax("GET /", "enabled"), true);

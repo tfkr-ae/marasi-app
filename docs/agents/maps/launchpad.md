@@ -8,7 +8,7 @@ Which files work together on the Launchpad page, how a launch travels through Go
 - `frontend/src/stores/createLaunchpadStore.js` holds the state, the selectors and the event reducers. It takes its API as an argument: `frontend/src/stores/launchpadApi.js` over the service client, bound in `launchpadStore.js`.
 - `frontend/src/lib/launchpad/`:
   - `LaunchpadTree.svelte` handles selection and drag-to-move;
-  - `LaunchpadWorkspace.svelte` is the draft editor;
+  - `LaunchpadWorkspace.svelte` is the draft editor; its response pane resolves its view state through `responseView.js` (`launchpadResponseView`) and loads ended SSE responses through the shared `stores/joinedResponseStore.js` (keeping request replay on `GET /traffic/{id}/request/joined` and showing both the terminal status and joined events for cancelled launches that captured complete SSE events);
   - `entryMenu.js` (`entryMenuFor`) describes the entry menu in the same item shape as the Ledger's `rowMenu.js`, drawn by the same `RowMenu.svelte`. Its Finding and Test case submenus come from `recordItems`, which wraps the Ledger's shared `linkMenu`;
   - `launchpadMenu.js` (`launchpadMenuFor`) describes the launchpad menu, a launchpad row's context menu, in the same shape, with `recordItems` from `entryMenu.js`;
   - the other files are pure helpers.

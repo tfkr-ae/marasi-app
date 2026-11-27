@@ -10,14 +10,18 @@ export const SYNTAX_AUTO_LIMIT = 75_000;
  * The request and response text from the full pair read (GetRawDetails):
  * Marasi's prettified copies when `prettify` is on and it has them, else
  * the raw text. `incomingResponse`, a response that arrived after the pair
- * was selected, replaces the one read with it.
+ * was selected, replaces the one read with it. `joinedResponse`, when given
+ * (an ended SSE pair's joined response), is shown in both Prettify modes.
  */
-export function drawerBodies(details, { prettify, incomingResponse = null }) {
+export function drawerBodies(details, { prettify, incomingResponse = null, joinedResponse = null }) {
   const pretty = (part) => (prettify ? prettifiedBody(details, part) : null);
   const request = pretty("request") ?? details?.Request?.Raw ?? "";
-  const response = incomingResponse
-    ? (prettify && incomingResponse.Prettified) || incomingResponse.Raw || ""
-    : (pretty("response") ?? details?.Response?.Raw ?? "");
+  const response =
+    joinedResponse != null
+      ? joinedResponse
+      : incomingResponse
+        ? (prettify && incomingResponse.Prettified) || incomingResponse.Raw || ""
+        : (pretty("response") ?? details?.Response?.Raw ?? "");
   return { request, response };
 }
 
