@@ -66,8 +66,15 @@ export function initialLayout() {
     // The sitemap dock: its width in px, and whether it is collapsed to a strip.
     dock: { width: LEDGER_DOCK.default, collapsed: false },
     // The drawer's share of the table area's height, whether it covers the
-    // table, and whether its details column is expanded from the rail.
-    drawer: { split: DRAWER_SPLIT.default, maximised: false, expanded: false },
+    // table, and whether its left details column or right actions column is
+    // expanded from its rail (`expanded` mirrors `leftExpanded`).
+    drawer: {
+      split: DRAWER_SPLIT.default,
+      maximised: false,
+      leftExpanded: false,
+      rightExpanded: false,
+      expanded: false,
+    },
   };
 }
 

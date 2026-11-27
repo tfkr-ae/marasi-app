@@ -229,6 +229,42 @@ test("the drawer's details column starts collapsed and stays as left across clos
   assert.equal(get(store).layout.drawer.expanded, false);
 });
 
+test("the drawer's left and right rails start collapsed, toggle independently, and outlast closing, reopening and project switches", async () => {
+  const store = await storeWith([pair("a"), pair("b")]);
+  assert.equal(get(store).layout.drawer.leftExpanded, false);
+  assert.equal(get(store).layout.drawer.rightExpanded, false);
+
+  store.selectPair("a");
+  store.setDrawerLeftExpanded(true);
+  assert.equal(get(store).layout.drawer.leftExpanded, true);
+  assert.equal(get(store).layout.drawer.expanded, true);
+  assert.equal(get(store).layout.drawer.rightExpanded, false, "expanding left leaves right collapsed");
+
+  store.setDrawerRightExpanded(true);
+  assert.equal(get(store).layout.drawer.leftExpanded, true, "expanding right keeps left open");
+  assert.equal(get(store).layout.drawer.rightExpanded, true);
+
+  store.setDrawerLeftExpanded(false);
+  assert.equal(get(store).layout.drawer.leftExpanded, false);
+  assert.equal(get(store).layout.drawer.expanded, false);
+  assert.equal(get(store).layout.drawer.rightExpanded, true, "collapsing left leaves right open");
+
+  // Both open survive closing/reopening the drawer and switching projects.
+  store.setDrawerLeftExpanded(true);
+  store.clearSelection();
+  store.selectPair("b");
+  assert.equal(get(store).layout.drawer.leftExpanded, true, "closing and reopening keeps leftExpanded");
+  assert.equal(get(store).layout.drawer.rightExpanded, true, "closing and reopening keeps rightExpanded");
+
+  store.clear();
+  assert.equal(get(store).layout.drawer.leftExpanded, true, "a project switch keeps leftExpanded");
+  assert.equal(get(store).layout.drawer.rightExpanded, true, "a project switch keeps rightExpanded");
+
+  store.setDrawerRightExpanded(false);
+  assert.equal(get(store).layout.drawer.leftExpanded, true, "collapsing right leaves left open");
+  assert.equal(get(store).layout.drawer.rightExpanded, false);
+});
+
 test("the selected pair's live response gains its body from the full pair, for the drawer", async () => {
   let release;
   const read = new Promise((resolve) => (release = resolve));

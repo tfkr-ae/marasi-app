@@ -201,24 +201,28 @@ html.mobile .mobile-fullscreen {
 	padding: var(--safe-top) var(--safe-right) 0 0;
 	background-color: rgb(var(--color-surface-50));
 }
-/* The editors and the rail's edge run the full height, under the home
+/* The Ledger drawer carries a full-width command strip and slide-over
+   sidebars, so it keeps the left inset too while letting the editors run
+   under the home indicator; its rails and slide-over sidebars clear the
+   home indicator at the bottom. */
+html.mobile .mobile-fullscreen:has(.ledger-drawer) {
+	padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+}
+html.mobile .mobile-fullscreen .ledger-drawer-rail,
+html.mobile .mobile-fullscreen .ledger-drawer-column,
+html.mobile .mobile-fullscreen .ledger-drawer-mobile-sidebar {
+	padding-bottom: max(var(--safe-bottom), 1rem);
+}
+/* The editors and the Armory rail's edge run the full height, under the home
    indicator too; only the rail's buttons move in, clear of the screen's
    curved corners (in landscape the top inset is 0, and the corner cut the
    first button) and the indicator. */
-html.mobile .mobile-fullscreen .ledger-drawer-rail,
-html.mobile .mobile-fullscreen .ledger-drawer-column,
 html.mobile .mobile-fullscreen .armory-drawer-rail,
 html.mobile .mobile-fullscreen .armory-drawer-column {
 	padding-top: 1.5rem;
 	padding-bottom: max(var(--safe-bottom), 1rem);
 }
-/* The left inset: a highlighted pair's stripe fills it to the screen's
-   edge; without one the rail moves in by it. */
-html.mobile .mobile-fullscreen .ledger-drawer-highlight {
-	width: calc(3px + max(var(--safe-left), 0.5rem));
-}
-html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-rail:first-child,
-html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-column:first-child,
+/* The left inset on the Armory drawer: moves the rail clear of the screen edge. */
 html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-rail:first-child,
 html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-column:first-child {
 	margin-left: max(var(--safe-left), 0.5rem);
