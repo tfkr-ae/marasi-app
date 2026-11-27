@@ -3,7 +3,7 @@
 ## Sub-features
 
 - The page: dock outline (`+ Finding`, `+ Test case`, the All · In progress · Done toggle, Group by), the toolbar (search, kind toggles, Severity, Category and Tags menus, Export) and the summary
-- The record view: checklist, inline fixes with their leave prompt, linked records, evidence (requests and artifacts) and the expanded pair
+- The record view: checklist, inline fixes with their leave prompt, linked records, evidence (requests and artifacts), the expanded pair and Messages for a streamed or WebSocket pair
 - The finding and test case modal and its edit session: Save and close, Close without saving, the dirty prompt
 - Export review, with Include test cases
 
@@ -89,6 +89,20 @@ A fresh scratchpad has no records and no traffic. Send a few requests through th
  {"click":".logbook-pair-expanded","edge":"top"},{"waitNoSelector":".logbook-pair-expanded"},{"waitSelector":".logbook-record"},
  {"key":"escape"},{"waitNoSelector":".logbook-record"},{"waitSelector":".logbook-summary"}]}
 ```
+
+**Messages.** A linked streamed pair or WebSocket upgrade shows `Messages` (`.logbook-pair-messages`, title `Open messages`) in the pair's Response header, beside Expand; it opens the Messages modal as the Ledger does. From the expanded pair it closes the expanded view first. The edit modal's evidence has no `Messages` (Skeleton would queue the Messages modal behind it). Proven with a finding made from a `/ws-lp` upgrade's launchpad entry (`Finding › New finding from this request`, see `launchpad/menus.md`) that carried `hello-lp-1`:
+
+```json
+{"name":"lb-messages","steps":[
+ {"click":".logbook-summary-findings button","hasText":"WS finding 27"},{"waitSelector":".logbook-record"},
+ {"click":".logbook-record .logbook-pair-messages"},{"waitText":"hello-lp-1"},{"waitText":"Close Connection"},{"key":"escape"},{"waitNoText":"hello-lp-1"},
+ {"click":".logbook-record .logbook-pair-expand"},{"waitSelector":".logbook-pair-expanded"},
+ {"click":".logbook-pair-expanded .logbook-pair-messages"},{"waitNoSelector":".logbook-pair-expanded"},{"waitText":"hello-lp-1"},{"key":"escape"},{"waitNoText":"hello-lp-1"},
+ {"click":"#logbookEdit"},{"waitText":"Edit finding"},{"waitNoSelector":"[data-record-modal] .logbook-pair-messages"},
+ {"text":"Close without saving"},{"waitNoSelector":"[data-record-modal]"},{"key":"escape"},{"waitSelector":".logbook-summary"}]}
+```
+
+The expanded pair is a fixed overlay over the page, so doctor counts a leftover one as residue and `reset.sh` closes it with Escape.
 
 **Group by and wrapping.** A Group by menu draws above the next section's header: the driver's hit test fails the click if it doesn't. The record's panes follow the Ledger drawer's Wrap lines; a pair with a response line over 100,000 characters says `Not wrapped` on that pane only. The evidence list opens on the first linked pair (`/profile` here), so pick `/long` in it. Proven with a finding and a test case, and `/long` answering 150 KB of `word `:
 

@@ -42,8 +42,9 @@ const openDrawers = ".drawer, .armory-drawer-box";
 
 // The row menu (Ledger, Armory, Launchpad) is a fixed div, not a <dialog>,
 // and covers the rows under it. Escape closes its deepest submenu first,
-// then the menu.
-const openMenus = ".ledger-row-menu";
+// then the menu. The Logbook's expanded pair is a fixed div too, over the
+// whole page (its header covers the record's Back); Escape closes it.
+const openMenus = ".ledger-row-menu, .logbook-pair-expanded";
 
 // Excalidraw's own dialogs (Excalidraw Shortcuts on ⌘/, its library and
 // export dialogs) are its React markup, not Skeleton's modal: a `.Modal`
@@ -725,7 +726,7 @@ if (mode === "launch") {
 	await waitFor(`performance.timeOrigin === ${timeOrigin}`, "the page launch loaded (it was reloaded since, so its listener state is stale; run cleanup.sh and relaunch)", 1000);
 	await waitFor(`location.origin === ${JSON.stringify(appOrigin)} && ${viewportMatches} && document.querySelector('[title="Home"]')`, `healthy Marasi browser page, app rail, and ${viewport.width}x${viewport.height} viewport`, 5000);
 	await waitFor(`document.visibilityState === "visible"`, "the Marasi page in front, not hidden behind another tab", 2000);
-	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)}) && !(${paintedSelector(openMenus)}) && !(${paintedSelector(toolModals)})`, "no open modal, command palette, row menu, Excalidraw dialog, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
+	await waitFor(`!${overlayPainted} && !(${paintedSelector(openDrawers)}) && !(${paintedSelector(openMenus)}) && !(${paintedSelector(toolModals)})`, "no open modal, command palette, row menu, expanded Logbook pair, Excalidraw dialog, or drawer left by an earlier drive (dismiss it or relaunch)", 2000);
 } else if (mode === "reset") {
 	// Dismiss what an earlier drive left open with the same input a user
 	// would: Escape, then a click on the drawer backdrop.
