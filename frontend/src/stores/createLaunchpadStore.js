@@ -313,6 +313,7 @@ function arriveResponse(state, response) {
   if (!launchpadId) return state;
   const entries = state.entriesByLaunchpad[launchpadId];
   const newest = state.launchpads.find((item) => item.ID === launchpadId)?.NewestEntryID;
+  const streamed = response.Streamed ?? details.Streamed ?? null;
   return {
     ...state,
     launchpads:
@@ -323,7 +324,11 @@ function arriveResponse(state, response) {
         : state.launchpads,
     detailsById: {
       ...state.detailsById,
-      [response.ID]: { ...details, Response: response },
+      [response.ID]: {
+        ...details,
+        Response: response,
+        ...(streamed ? { Streamed: streamed } : {}),
+      },
     },
     entriesByLaunchpad: entries
       ? {
@@ -337,12 +342,36 @@ function arriveResponse(state, response) {
                   ContentType: response.ContentType,
                   Length: response.Length,
                   RespondedAt: response.RespondedAt,
+                  ...(streamed ? { Streamed: streamed } : {}),
                 }
               : entry,
           ),
         }
       : state.entriesByLaunchpad,
   };
+}
+
+// Patches a streamed pair's Streamed state on loaded entries and details.
+function patchStreamedPair(state, { ID, Streamed } = {}) {
+  if (ID == null) return state;
+  const id = String(ID);
+  let changed = false;
+  const entriesByLaunchpad = {};
+  for (const [launchpadId, entries] of Object.entries(state.entriesByLaunchpad)) {
+    let listChanged = false;
+    const nextEntries = entries.map((entry) => {
+      if (String(entry.ID) !== id) return entry;
+      listChanged = true;
+      return { ...entry, Streamed };
+    });
+    entriesByLaunchpad[launchpadId] = listChanged ? nextEntries : entries;
+    if (listChanged) changed = true;
+  }
+  const existing = state.detailsById[id];
+  const detailsById = existing ? { ...state.detailsById, [id]: { ...existing, Streamed } } : state.detailsById;
+  if (existing) changed = true;
+  if (!changed) return state;
+  return { ...state, entriesByLaunchpad, detailsById };
 }
 
 export function createLaunchpadStore(api) {
@@ -1116,6 +1145,7 @@ export function createLaunchpadStore(api) {
       update((state) => arriveResponse(state, response));
       if (current !== before && response.Raw === undefined) await refreshDetails(response.ID);
     },
+    onStreamedPair: (event) => update((state) => patchStreamedPair(state, event)),
 
     // Compare starts from an entry of the open launchpad as A. `picking`
     // names the side the next entry click fills.

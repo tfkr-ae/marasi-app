@@ -13,8 +13,10 @@
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, usesSyntax } from "../ledger/drawer.js";
+	import { sameID } from "../ledger/pairs.js";
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
+	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
 
@@ -49,7 +51,16 @@
 		if (String(loadingID) === String(target)) details = row;
 	}
 
-	$: bodies = details ? drawerBodies(details, { prettify: $prettify }) : { request: "", response: "" };
+	const joined = joinedResponseStore.createPreview();
+	$: pairDetails = sameID(details?.Request?.ID, id) ? details : null;
+	$: joined.sync({
+		id,
+		active: id != null,
+		hasResponse: Boolean(pairDetails?.Response?.Raw || Number(pairDetails?.Response?.StatusCode) > 0),
+		sources: [pairDetails?.Streamed, pairDetails?.Metadata?.streamed],
+	});
+
+	$: bodies = details ? drawerBodies(details, { prettify: $prettify, joinedResponse: $joined }) : { request: "", response: "" };
 	$: request = details?.Request;
 	$: response = details?.Response;
 	$: canOpenMessages = messages && Boolean(details) && canOpenPairMessages(details);
@@ -76,7 +87,10 @@
 		releaseEscape();
 		releaseEscape = null;
 	}
-	onDestroy(() => releaseEscape?.());
+	onDestroy(() => {
+		releaseEscape?.();
+		joined.destroy();
+	});
 </script>
 
 <svelte:window on:keydown|capture={onKeydown} />

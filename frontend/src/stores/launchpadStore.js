@@ -6,7 +6,7 @@ import { service } from "../lib/service/index.js";
 import { loadSignals } from "../lib/openProgress.js";
 import { createLaunchpadStore } from "./createLaunchpadStore.js";
 import { createLaunchpadApi, launchpadsChangedBy, toLaunch, toLaunchpadSummary } from "./launchpadApi.js";
-import { toRequestEvent, toResponseEvent } from "./trafficApi.js";
+import { STREAMED_PAIR_EVENTS, toRequestEvent, toResponseEvent, toStreamedEvent } from "./trafficApi.js";
 import { reportUnsavedDraftCount } from "./draftGuards.js";
 import { projectData } from "./projectData.js";
 import { relinked } from "./relinked.js";
@@ -51,6 +51,9 @@ const logged = (what) => (promise) =>
 
 service.on("traffic.request", (request) => logged("request arrival")(launchpadStore.onRequest(toRequestEvent(request))));
 service.on("traffic.response", (response) => logged("response arrival")(launchpadStore.onResponse(toResponseEvent(response))));
+for (const name of STREAMED_PAIR_EVENTS) {
+  service.on(name, (data) => launchpadStore.onStreamedPair(toStreamedEvent(data)));
+}
 service.on("launch.started", (launch) => launchpadStore.onLaunchStarted(toLaunch(launch)));
 for (const ended of ["launch.completed", "launch.failed", "launch.cancelled"]) {
   service.on(ended, (launch) => logged("launch end")(launchpadStore.onLaunchFinished(toLaunch(launch))));

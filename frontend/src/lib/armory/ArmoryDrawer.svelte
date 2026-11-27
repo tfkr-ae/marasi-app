@@ -5,6 +5,7 @@
 	// column) on the left. It fills the box the page gives it, inside the
 	// workspace right of the dock. The `details` slot passes through to the
 	// expanded column.
+	import { onDestroy } from "svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
 	import { drawerBodies, pairTiming, usesSyntax } from "../ledger/drawer.js";
@@ -13,6 +14,7 @@
 	import { pairURL } from "../ledger/rowMenu.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
 	import { ledgerStore } from "../../stores/ledgerStore";
+	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
 	import ArmoryDrawerRail from "./ArmoryDrawerRail.svelte";
 
 	/** The open pair's traffic row, and its request number. */
@@ -66,13 +68,23 @@
 			});
 	}
 
+	const joined = joinedResponseStore.createPreview();
+	onDestroy(() => joined.destroy());
+	$: pairDetails = sameID(details?.Request?.ID, pair?.ID) ? details : null;
+	$: joined.sync({
+		id: pair?.ID,
+		active: pair?.ID != null,
+		hasResponse: Boolean(hasResponse || pairDetails?.Response?.Raw),
+		sources: [pair?.Streamed, pairDetails?.Streamed, pairDetails?.Metadata?.streamed],
+	});
+
 	async function copy(what) {
 		if (what === "url") return onCopy(pairURL(pair), what);
 		const row = details ?? (await reading);
-		onCopy((what === "request" ? row?.Request?.Raw : row?.Response?.Raw) ?? "", what);
+		onCopy((what === "request" ? row?.Request?.Raw : ($joined ?? row?.Response?.Raw)) ?? "", what);
 	}
 
-	$: bodies = drawerBodies(details, { prettify: $prettify });
+	$: bodies = drawerBodies(details, { prettify: $prettify, joinedResponse: $joined });
 	$: syntaxMode = $marasiConfig.SyntaxMode;
 
 	const message = "p-3 text-2xs opacity-50";

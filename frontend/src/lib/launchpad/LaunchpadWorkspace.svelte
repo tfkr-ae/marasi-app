@@ -2,6 +2,7 @@
 	// The Launchpad workspace: top bar, then the Launchpad draft and the
 	// selected entry's response side by side at full width. It reads the
 	// store and calls its methods; confirmations belong to the page.
+	import { onDestroy } from "svelte";
 	import CodeMirror from "svelte-codemirror-editor";
 	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
 	import { StreamLanguage } from "@codemirror/language";
@@ -15,10 +16,12 @@
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import { longStrings } from "../longStrings.js";
 	import { isDraftDirty, launchOf, pendingLaunchOf } from "../../stores/launchpadStore";
+	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
 	import { DELETE_LAUNCHPAD_PENDING_HINT } from "../launchPending.js";
 	import { browserViewRefusal } from "../browserView.js";
 	import { compareView } from "./compare.js";
 	import { launchEndText, neutralVariant, primaryVariant, statusClass } from "./format.js";
+	import { launchpadResponseView } from "./responseView.js";
 	import LaunchpadCompare from "./LaunchpadCompare.svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
 
@@ -37,8 +40,9 @@
 	$: draft = state.draftsByLaunchpad[launchpadId];
 	$: selectedId = state.selectedEntryByLaunchpad[launchpadId];
 	$: entryIndex = entries.findIndex((entry) => entry.ID === selectedId);
+	$: selectedEntry = entries[entryIndex] ?? null;
 	$: details = selectedId ? state.detailsById[selectedId] : null;
-	$: browserViewOff = browserViewRefusal(entries[entryIndex]);
+	$: browserViewOff = browserViewRefusal(selectedEntry);
 	$: dirty = isDraftDirty(state, launchpadId);
 	$: pending = !!pendingLaunchOf(state, launchpadId);
 	// The pane on show when the screen is too narrow for both (PaneTabs):
@@ -63,6 +67,16 @@
 	];
 	$: compare = compareView(state);
 	$: comparing = !!compare?.comparing;
+
+	const joined = joinedResponseStore.createPreview();
+	onDestroy(() => joined.destroy());
+	$: joined.sync({
+		id: selectedId,
+		active: Boolean(launchpad && !comparing && selectedId),
+		hasResponse: Boolean(details?.Response || Number(selectedEntry?.StatusCode) > 0),
+		sources: [selectedEntry?.Streamed, details?.Streamed, details?.Metadata?.streamed],
+	});
+	$: responseView = launchpadResponseView({ selectedId, details, endText, joinedResponse: $joined });
 
 	let comparePane;
 	/**
@@ -284,7 +298,7 @@
 							· <span class={statusClass(details.Response.StatusCode)}>{details.Response.StatusCode}</span>
 							· {details.Response.Length} B
 						{/if}
-						{#if details?.Response && responsePaused}
+						{#if responseView.kind === "response" && responsePaused}
 							<span class="lp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 						{/if}
 					</span>
@@ -302,24 +316,35 @@
 					{/if}
 					</span>
 				</div>
-				<div class="lp-response lp-scroll min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
-					{#if endText}
-						<p class="lp-launch-end p-4 text-sm {endText === 'Cancelled' ? 'opacity-60' : 'text-error-500'}">
-							{endText === "Cancelled" ? "Cancelled — no response" : endText}
+				<div class="lp-response flex min-h-0 flex-1 flex-col dark:bg-[#282c34]">
+					{#if responseView.kind === "ended-empty"}
+						<p class="lp-launch-end p-4 text-sm {responseView.endText === 'Cancelled' ? 'opacity-60' : 'text-error-500'}">
+							{responseView.endMessage}
 						</p>
-					{:else if details && !details.Response}
+					{:else if responseView.kind === "waiting"}
 						<p class="p-4 text-sm opacity-60">Waiting for the response…</p>
-					{:else if details?.Response}
-						<CodeMirror
-							value={details.Response.Raw}
-							readonly
-							class="text-xs"
-							styles={{ "&": { fontSize: "0.6875rem" } }}
-							lang={lang(details.Response.Raw)}
-							{theme}
-							extensions={responseExtensions}
-						/>
-					{:else if selectedId}
+					{:else if responseView.kind === "response"}
+						{#if responseView.endText}
+							<p
+								class="lp-launch-end flex-none border-b border-surface-500/30 bg-surface-50 px-3 py-1 text-2xs dark:bg-surface-900 {responseView.endText === 'Cancelled'
+									? 'opacity-70'
+									: 'text-error-500'}"
+							>
+								{responseView.endText}
+							</p>
+						{/if}
+						<div class="lp-scroll min-h-0 flex-1 overflow-auto">
+							<CodeMirror
+								value={responseView.text}
+								readonly
+								class="text-xs"
+								styles={{ "&": { fontSize: "0.6875rem" } }}
+								lang={lang(responseView.text)}
+								{theme}
+								extensions={responseExtensions}
+							/>
+						</div>
+					{:else if responseView.kind === "loading"}
 						<p class="p-4 text-sm opacity-60">Loading…</p>
 					{:else}
 						<p class="p-4 text-sm opacity-60">Launch the draft to see a response.</p>

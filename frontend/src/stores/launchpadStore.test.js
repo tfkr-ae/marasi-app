@@ -1260,3 +1260,34 @@ test("a change to launchpads whose entries aren't loaded rereads their summaries
   assert.equal(get(store).launchpads.find((l) => l.ID === "lp2").EntryCount, 4);
   assert.equal(get(store).selectedLaunchpadId, "lp1");
 });
+
+test("streamed_pair events and response events update Streamed on loaded entries and details", async () => {
+  const api = twoLaunchpads();
+  api.nextLaunchIds = ["live-sse"];
+  const store = createLaunchpadStore(api);
+  await store.populate();
+  const launchId = await store.launch("lp1");
+  await store.onRequest({ ID: launchId, Method: "GET", Path: "/sse/live", Raw: "GET /sse/live HTTP/1.1\r\nHost: x\r\n\r\n" });
+
+  store.onStreamedPair({ ID: launchId, Streamed: { response: { framing: "sse", ending: null } } });
+  assert.deepEqual(get(store).detailsById[launchId].Streamed, { response: { framing: "sse", ending: null } });
+  assert.deepEqual(
+    get(store).entriesByLaunchpad.lp1.find((e) => e.ID === launchId).Streamed,
+    { response: { framing: "sse", ending: null } },
+  );
+
+  await store.onResponse({
+    ID: launchId,
+    Status: "200 OK",
+    StatusCode: 200,
+    ContentType: "text/event-stream",
+    Length: "0",
+    Raw: "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n",
+    Streamed: { response: { framing: "sse", ending: "complete" } },
+  });
+  assert.deepEqual(get(store).detailsById[launchId].Streamed, { response: { framing: "sse", ending: "complete" } });
+  assert.deepEqual(
+    get(store).entriesByLaunchpad.lp1.find((e) => e.ID === launchId).Streamed,
+    { response: { framing: "sse", ending: "complete" } },
+  );
+});
