@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import {
   byteSizeText,
   commandStripCopyActions,
+  drawerCopyActions,
   noteIndicator,
   pairHasResponse,
   pairSummary,
   paneHeaderState,
+  rightRailWorkflowActions,
   shortcutTooltip,
 } from "./drawerPresentation.js";
 
@@ -226,4 +228,55 @@ test("paneHeaderState presents Request size/copy on the left and switches Respon
 
   const loadedMeta = paneHeaderState({ pane: "metadata", metadataBody: '{\n  "ok": true\n}' });
   assert.equal(loadedMeta.right.copy.disabled, false);
+});
+
+test("rightRailWorkflowActions groups outbound workflow actions and gates Open messages and CyberChef", () => {
+  const desktop = rightRailWorkflowActions({ canOpenStream: false, showChef: true });
+  assert.deepEqual(
+    desktop.map((a) => [a.id, a.group, a.actionId]),
+    [
+      ["send-to-launchpad", "send", "ledger.drawer-open.send-to-launchpad"],
+      ["send-to-armory", "send", "ledger.drawer-open.send-to-armory"],
+      ["add-to-drawing", "tools", "global.add-to-drawing"],
+      ["send-to-cyberchef", "tools", "global.send-to-cyberchef"],
+      ["create-finding", "record", "ledger.drawer-open.create-finding"],
+      ["create-test-case", "record", "ledger.drawer-open.create-test-case"],
+    ],
+  );
+
+  // Streamed/WebSocket pair prepends Open messages in its own stream group with accent.
+  const streamed = rightRailWorkflowActions({ canOpenStream: true, showChef: true });
+  assert.deepEqual(streamed[0], {
+    id: "open-messages",
+    label: "Open messages",
+    icon: "radio",
+    actionId: "ledger.drawer-open.websocket.open-stream",
+    group: "stream",
+    accent: true,
+  });
+  assert.equal(streamed.length, 7);
+
+  // Phone width (showChef: false) leaves Send to CyberChef out while keeping Add to Drawing and Logbook actions.
+  const phone = rightRailWorkflowActions({ canOpenStream: false, showChef: false });
+  assert.deepEqual(
+    phone.map((a) => a.id),
+    ["send-to-launchpad", "send-to-armory", "add-to-drawing", "create-finding", "create-test-case"],
+  );
+});
+
+test("drawerCopyActions lists all four copy actions and disables Copy response on pending pairs", () => {
+  const pending = drawerCopyActions({ hasResponse: false });
+  assert.deepEqual(
+    pending.map((a) => [a.id, a.label, a.actionId, a.disabled]),
+    [
+      ["copy-request", "Copy request", "ledger.drawer-open.copy-raw-request", false],
+      ["copy-response", "Copy response", "ledger.drawer-open.copy-raw-response", true],
+      ["copy-url", "Copy URL", "ledger.drawer-open.copy-url", false],
+      ["copy-browser-view-url", "Copy browser view URL", "ledger.drawer-open.copy-browser-view-url", false],
+    ],
+  );
+  assert.equal(pending.find((a) => a.id === "copy-response").disabledHint, "No response yet");
+
+  const responded = drawerCopyActions({ hasResponse: true });
+  assert.equal(responded.find((a) => a.id === "copy-response").disabled, false);
 });

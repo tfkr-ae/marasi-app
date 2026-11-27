@@ -58,22 +58,9 @@ export function pairSummary(pair, { number = "", incomingResponse = null, respon
   };
 }
 
-/** Quick-copy and stream actions shown in the widescreen command strip. */
-export function commandStripCopyActions({ hasResponse = false, canOpenStream = false } = {}) {
+/** Copy actions shared between the command strip and the expanded right actions column. */
+export function drawerCopyActions({ hasResponse = false } = {}) {
   return [
-    ...(canOpenStream
-      ? [
-          {
-            id: "open-messages",
-            label: "Open messages",
-            shortLabel: "Messages",
-            icon: "radio",
-            actionId: `${DRAWER_CONTEXT}.websocket.open-stream`,
-            disabled: false,
-            accent: true,
-          },
-        ]
-      : []),
     {
       id: "copy-request",
       label: "Copy request",
@@ -106,6 +93,90 @@ export function commandStripCopyActions({ hasResponse = false, canOpenStream = f
       icon: "globe",
       actionId: `${DRAWER_CONTEXT}.copy-browser-view-url`,
       disabled: false,
+    },
+  ];
+}
+
+/** Quick-copy and stream actions shown in the widescreen command strip. */
+export function commandStripCopyActions({ hasResponse = false, canOpenStream = false } = {}) {
+  return [
+    ...(canOpenStream
+      ? [
+          {
+            id: "open-messages",
+            label: "Open messages",
+            shortLabel: "Messages",
+            icon: "radio",
+            actionId: `${DRAWER_CONTEXT}.websocket.open-stream`,
+            disabled: false,
+            accent: true,
+          },
+        ]
+      : []),
+    ...drawerCopyActions({ hasResponse }),
+  ];
+}
+
+/** Outbound workflow actions shown in the right rail and expanded right actions column. */
+export function rightRailWorkflowActions({ canOpenStream = false, showChef = true } = {}) {
+  return [
+    ...(canOpenStream
+      ? [
+          {
+            id: "open-messages",
+            label: "Open messages",
+            icon: "radio",
+            actionId: `${DRAWER_CONTEXT}.websocket.open-stream`,
+            group: "stream",
+            accent: true,
+          },
+        ]
+      : []),
+    {
+      id: "send-to-launchpad",
+      label: "Send to Launchpad",
+      icon: "send",
+      actionId: `${DRAWER_CONTEXT}.send-to-launchpad`,
+      group: "send",
+    },
+    {
+      id: "send-to-armory",
+      label: "Send to Armory",
+      icon: "swords",
+      actionId: `${DRAWER_CONTEXT}.send-to-armory`,
+      group: "send",
+    },
+    {
+      id: "add-to-drawing",
+      label: "Add to Drawing",
+      icon: "shapes",
+      actionId: "global.add-to-drawing",
+      group: "tools",
+    },
+    ...(showChef
+      ? [
+          {
+            id: "send-to-cyberchef",
+            label: "Send to CyberChef",
+            icon: "cooking-pot",
+            actionId: "global.send-to-cyberchef",
+            group: "tools",
+          },
+        ]
+      : []),
+    {
+      id: "create-finding",
+      label: "Create finding",
+      icon: "shield-alert",
+      actionId: `${DRAWER_CONTEXT}.create-finding`,
+      group: "record",
+    },
+    {
+      id: "create-test-case",
+      label: "Create test case",
+      icon: "book-check",
+      actionId: `${DRAWER_CONTEXT}.create-test-case`,
+      group: "record",
     },
   ];
 }
