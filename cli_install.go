@@ -39,7 +39,6 @@ var cliAssets = marasicli.Assets
 // Outcomes of InstallCLI and InstallCarriedCLI.
 const (
 	cliOutcomeInstalled = "installed"
-	cliOutcomeUpToDate  = "up-to-date"
 	cliOutcomeFailed    = "failed"
 )
 
@@ -58,7 +57,7 @@ type CLIFailure struct {
 
 // CLIInstall is the result of InstallCLI and InstallCarriedCLI.
 type CLIInstall struct {
-	// Outcome is installed, up-to-date or failed.
+	// Outcome is installed or failed.
 	Outcome string `json:"outcome"`
 	// Version and Channel are the release or carried copy installed.
 	Version string `json:"version"`

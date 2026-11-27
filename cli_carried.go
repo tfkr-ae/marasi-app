@@ -100,8 +100,8 @@ func (a *App) carriedForPlatform() (*carriedCLI, bool) {
 	return carried, true
 }
 
-// CarriedCLI reports the CLI this build carries, so Connections can offer it
-// when the installed local CLI is another version.
+// CarriedCLI reports the CLI this build carries, so Connections can offer
+// installing or reinstalling it offline.
 func (a *App) CarriedCLI() CarriedCLIInfo {
 	carried, ok := a.carriedForPlatform()
 	if !ok {
@@ -111,9 +111,10 @@ func (a *App) CarriedCLI() CarriedCLIInfo {
 }
 
 // InstallCarriedCLI replaces the CLI the app uses with the copy this build
-// carries, without the network, when the researcher applies the carried CLI
-// in Connections. It returns an error when there is no CLI (Install covers
-// that) and a failed result when the build carries none.
+// carries, without the network, when the researcher applies or reinstalls the
+// carried CLI in Connections. It overwrites even when the installed CLI has
+// the same version and channel. It returns an error when there is no CLI
+// (Install covers that) and a failed result when the build carries none.
 func (a *App) InstallCarriedCLI() (CLIInstall, error) {
 	current, err := a.LocateCLI()
 	if err != nil {
@@ -131,10 +132,6 @@ func (a *App) InstallCarriedCLI() (CLIInstall, error) {
 		return a.cliFailed(CLIInstall{CLI: current}, failed(UpdateFailureNoBuild, "This build carries no Marasi CLI")), nil
 	}
 	result := CLIInstall{Version: carried.Version, Channel: carried.Channel, CLI: current}
-	if current.Version == carried.Version && current.Channel == carried.Channel {
-		result.Outcome = cliOutcomeUpToDate
-		return result, nil
-	}
 	if err := a.installCarriedCLI(carried, current.Path); err != nil {
 		return a.cliFailed(result, err), nil
 	}

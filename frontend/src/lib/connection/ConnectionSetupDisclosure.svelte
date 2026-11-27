@@ -12,7 +12,7 @@
 	export let channelControls;
 	export let isDesktopLocal;
 	export let localCLI;
-	export let showManualCarried;
+	export let carriedRow;
 	export let whenQuitting;
 	export let connectionBusy;
 	export let primary;
@@ -119,7 +119,7 @@
 						<div class="settings-row flex items-center justify-between gap-4">
 							<div>
 								<p data-testid="connection-reinstall-label">{channelControls.reinstallLabel}</p>
-								<p class="text-xs opacity-70">Replaces the installed build even when older</p>
+								<p class="text-xs opacity-70">Downloads from GitHub, even when older</p>
 							</div>
 							<button
 								type="button"
@@ -174,22 +174,22 @@
 					</div>
 				</div>
 
-				{#if showManualCarried}
+				{#if carriedRow}
 					<div class={row} data-testid="connection-cli-carried">
 						<div class="min-w-0 flex-1">
 							<p>Carried CLI</p>
-							<p class="font-mono text-2xs opacity-65" data-testid="connection-cli-carried-version">
-								{localCLI.carried.version}{#if localCLI.carried.channel} ({localCLI.carried.channel}){/if}
+							<p class="truncate font-mono text-2xs opacity-65" title={carriedRow.detail} data-testid="connection-cli-carried-version">
+								{carriedRow.detail}
 							</p>
 						</div>
 						<button
 							type="button"
-							class={neutral}
+							class="{neutral} shrink-0"
 							disabled={localCLI.installing || localCLI.changingPath || connectionBusy}
 							data-testid="connection-cli-carried-install"
 							on:click={onInstallCarried}
 						>
-							{localCLI.installing ? "Installing…" : "Install & restart"}
+							{localCLI.installing ? carriedRow.busyLabel : carriedRow.label}
 						</button>
 					</div>
 				{/if}

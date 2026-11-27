@@ -1,12 +1,13 @@
 // Desktop local Marasi CLI store factory: tracks LocateCLI, CarriedCLI,
 // BuildInfo.Channel, per-version carried-CLI dismissal persistence, path edits,
 // and offline carried-CLI Install & restart. Completely inactive on mobile.
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import {
   applyCarriedCLI,
   readDismissedCarriedVersion,
   writeDismissedCarriedVersion,
 } from "../lib/connection/carried.js";
+import { carriedMatchesCLI } from "../lib/connection/cli.js";
 
 export function createLocalCLIStore(api, storage = undefined) {
   const store = writable({
@@ -91,6 +92,8 @@ export function createLocalCLIStore(api, storage = undefined) {
     restartLocal = null,
     retryConnection = null,
   } = {}) {
+    const current = get(store);
+    const reinstall = carriedMatchesCLI(current.carried, current.cli);
     patch({ installing: true });
     try {
       return await applyCarriedCLI({
@@ -103,6 +106,7 @@ export function createLocalCLIStore(api, storage = undefined) {
         connectionId,
         isActive,
         instanceRunning,
+        reinstall,
         restartService,
         restartLocal: restartLocal ?? ((id) => api.restartLocalInstance(id)),
         retryConnection,

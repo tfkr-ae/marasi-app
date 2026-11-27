@@ -48,7 +48,7 @@
 		setPort,
 	} from "./manage.js";
 	import { PORT_RANGE_MESSAGE, parsePort, portText } from "./localPort.js";
-	import { cliMissing, offersCarriedCLI, outdatedVersion } from "./cli.js";
+	import { carriedCLIRow, cliMissing, outdatedVersion } from "./cli.js";
 	import ConnectionAccess from "./ConnectionAccess.svelte";
 	import ConnectionContextSlot from "./ConnectionContextSlot.svelte";
 	import ConnectionSetupDisclosure from "./ConnectionSetupDisclosure.svelte";
@@ -254,7 +254,7 @@
 		(phase === "failed" && !isCLIMissing && !isOutdated);
 
 	$: channelControls = isActive && phase === "connected" ? serviceChannelControls(state, update) : null;
-	$: showManualCarried = isDesktopLocal && offersCarriedCLI(localCLI.carried, localCLI.cli);
+	$: carriedRow = isDesktopLocal ? carriedCLIRow(localCLI.carried, localCLI.cli) : null;
 	$: showSetup = Boolean(channelControls || (isDesktopLocal && !isCLIMissing));
 	$: setup = setupDisclosure(connection, {
 		channel: resolvedServiceChannel({ isActive, connectionState: state, updateState: update }),
@@ -456,7 +456,7 @@
 			{channelControls}
 			{isDesktopLocal}
 			{localCLI}
-			{showManualCarried}
+			{carriedRow}
 			{whenQuitting}
 			connectionBusy={state.busy !== null || state.restarting || state.restartConfirming}
 			{primary}
