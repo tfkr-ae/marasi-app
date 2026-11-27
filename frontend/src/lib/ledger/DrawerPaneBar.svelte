@@ -111,12 +111,3 @@
 		</div>
 	</div>
 </div>
-
-<style>
-	/* Narrow mobile screens use PaneTabs until the unified mobile pane bar lands. */
-	@media (max-width: 40rem) {
-		:global(html.mobile .ledger-drawer-pane-bar) {
-			display: none;
-		}
-	}
-</style>
