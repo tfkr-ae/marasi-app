@@ -29,7 +29,7 @@ export const QUERY_FIELDS = [
   { name: "scheme", ops: ["=", "!="], example: 'scheme = "https"', help: "Exact case. * at the start or end is a wildcard." },
   { name: "path", ops: ["=", "!="], example: 'path = "/api/*"', help: "Exact case. * at the start or end is a wildcard." },
   { name: "content_type", ops: ["=", "!="], example: 'content_type = "application/json*"', help: "Exact case. * at the start or end is a wildcard. In-flight pairs have none." },
-  { name: "status_code", ops: ["=", "!=", "<", "<=", ">", ">="], example: "status_code >= 500", help: "Whole number. In-flight pairs have no status code." },
+  { name: "status_code", ops: ["=", "!=", "<", "<=", ">", ">=", ":"], example: "status_code >= 500", values: { ":": ["*"] }, help: "Whole number. status_code:* for pairs with a response, NOT status_code:* for in-flight pairs." },
   { name: "requested_at", ops: ["=", "!=", "<", "<=", ">", ">="], example: 'requested_at > "2026-10-09T10:00:00Z"', help: "RFC 3339 timestamp." },
   { name: "responded_at", ops: ["=", "!=", "<", "<=", ">", ">="], example: 'responded_at < "2026-10-09T10:00:00Z"', help: "RFC 3339 timestamp." },
   { name: "client_protocol", ops: ["=", "!="], example: 'client_protocol = "h2"', values: { "=": ['"h2"', '"http/1.1"'], "!=": ['"h2"', '"http/1.1"'] }, help: 'The protocol between the client and Marasi: "http/1.1" or "h2".' },

@@ -34,7 +34,7 @@ test("keywords are offered alongside fields, ignoring case", () => {
 
 test("a field followed by a space offers its operators, then continues", () => {
   const r = querySuggestions("status_code ", 12);
-  assert.deepEqual(labels(r), ["=", "!=", "<", "<=", ">", ">="]);
+  assert.deepEqual(labels(r), ["=", "!=", "<", "<=", ">", ">=", ":"]);
   assert.equal(r.from, 12);
   assert.ok(r.options.every((o) => o.next));
 });
@@ -100,6 +100,16 @@ test("highlight takes a colour number, or :* for any highlight", () => {
   assert.deepEqual(labels(querySuggestions("highlight = ", 12)), ["1"]);
   assert.deepEqual(labels(querySuggestions("highlight:", 10)), ["*"]);
   assert.equal(querySuggestions("highlight:*", 11), null);
+});
+
+test("status_code offers :* for pairs with a response, and keeps its numeric comparisons", () => {
+  assert.deepEqual(labels(querySuggestions("status_code ", 12)), ["=", "!=", "<", "<=", ">", ">=", ":"]);
+  assert.deepEqual(labels(querySuggestions("status_code >= ", 15)), ["500"]);
+  assert.deepEqual(labels(querySuggestions("status_code:", 12)), ["*"]);
+  assert.deepEqual(labels(querySuggestions("status_code :", 13)), ["*"]);
+  assert.deepEqual(labels(querySuggestions("NOT status_code:", 16)), ["*"]);
+  assert.deepEqual(labels(querySuggestions("-status_code:", 13)), ["*"]);
+  assert.equal(querySuggestions("status_code:*", 13), null);
 });
 
 test("link fields offer * after the colon, and no made-up uuid after =", () => {

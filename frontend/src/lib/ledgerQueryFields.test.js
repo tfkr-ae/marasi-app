@@ -64,3 +64,14 @@ test("the field list documents id with = and != against a quoted UUID", () => {
   assert.match(field.example, /^id = "[0-9a-f-]{36}"$/);
   for (const form of ['id = "<uuid>"', 'id != "<uuid>"']) assert.ok(field.help.includes(form), `help mentions ${form}`);
 });
+
+test("the field list documents status_code presence with :*", () => {
+  const field = QUERY_FIELDS.find((f) => f.name === "status_code");
+  assert.ok(field, "status_code field listed");
+  assert.deepEqual(field.ops, ["=", "!=", "<", "<=", ">", ">=", ":"]);
+  assert.deepEqual(field.values, { ":": ["*"] });
+  assert.equal(field.example, "status_code >= 500");
+  for (const form of ["status_code:*", "NOT status_code:*"]) {
+    assert.ok(field.help.includes(form), `help mentions ${form}`);
+  }
+});
