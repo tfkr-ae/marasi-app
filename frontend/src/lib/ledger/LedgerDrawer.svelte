@@ -5,13 +5,18 @@
 	// the request it is about. The pair is read in full through the Ledger
 	// store; the page runs the actions the rail dispatches.
 	import { createEventDispatcher, onDestroy } from "svelte";
+	import { getToastStore } from "@skeletonlabs/skeleton";
 	import { javascript } from "@codemirror/lang-javascript";
+	import DrawerCommandStrip from "./DrawerCommandStrip.svelte";
 	import DrawerEditor from "./DrawerEditor.svelte";
 	import DrawerNote from "./DrawerNote.svelte";
+	import DrawerPaneBar from "./DrawerPaneBar.svelte";
 	import DrawerRail from "./DrawerRail.svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
 	import { drawerBodies, metadataText, pairTiming, usesSyntax } from "./drawer.js";
+	import { pairHasResponse } from "./drawerPresentation.js";
 	import { sameID } from "./pairs.js";
+	import { toastError } from "../toasts.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
 	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
 	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
@@ -40,6 +45,7 @@
 	export let canOpenStream = false;
 
 	const dispatch = createEventDispatcher();
+	const toastStore = getToastStore();
 	const jsonLanguage = javascript();
 
 	// Marasi is still moving older pairs' prettified copies out of metadata;
@@ -134,12 +140,22 @@
 
 	$: bodies = drawerBodies(details, { prettify: $prettify, incomingResponse, joinedResponse: $joined });
 	$: syntaxMode = $marasiConfig.SyntaxMode;
-	$: hasResponse = Boolean(bodies.response);
+	$: hasResponseBody = Boolean(bodies.response);
+	$: hasResponse = pairHasResponse(pair, { incomingResponse: pairIncoming, responseBody: bodies.response });
+	$: hasNote = note != null ? note.length > 0 : pair.Metadata?.has_note == 1;
 	// Wrap lines is on but a shown long string stopped an editor wrapping;
 	// the rail's Wrap lines button shows it as an amber dot.
 	let requestPaused = false;
 	let responsePaused = false;
-	$: wrapPaused = requestPaused || (pane === null && hasResponse && responsePaused);
+	$: wrapPaused = requestPaused || (pane === null && hasResponseBody && responsePaused);
+
+	function copyMetadata() {
+		if (metadata == null) return;
+		navigator.clipboard
+			.writeText(metadata)
+			.then(() => toastStore.trigger({ message: "Metadata copied to clipboard", background: "variant-filled-success" }))
+			.catch(() => toastError(toastStore, "Failed to copy metadata"));
+	}
 
 	// The pane on show when the screen is too narrow for both (PaneTabs).
 	// Opening the note or the metadata shows the right-hand pane.
@@ -148,105 +164,126 @@
 	$: rightLabel = pane === "note" ? "Note" : pane === "metadata" ? "Metadata" : "Response";
 
 	const message = "p-3 text-2xs opacity-50";
-	// The panes start a few pixels below the drawer's red top line, on the
-	// editors' own background: WebKit snaps an editor's scrolling layer to
-	// device pixels apart from the line, so text flush against it could paint
-	// over it.
-	const paneBox = "relative min-w-0 flex-1 pt-[3px] bg-white dark:bg-[#282c34]";
+	const paneBox = "relative min-h-0 min-w-0 flex-1 bg-white dark:bg-[#282c34]";
 </script>
 
-<div class="ledger-drawer flex h-full min-h-0 bg-surface-50 text-2xs dark:bg-surface-900">
+<div class="ledger-drawer flex h-full min-h-0 flex-col bg-surface-50 text-2xs dark:bg-surface-900">
 	{#if highlight}
-		<div class="ledger-drawer-highlight w-[3px] flex-none" style="background: {highlight}" title="Highlighted"></div>
+		<div class="ledger-drawer-highlight h-[2px] w-full flex-none" style="background: {highlight}" title="Highlighted"></div>
 	{/if}
-	<DrawerRail
+	<DrawerCommandStrip
 		{pair}
 		{number}
-		{expanded}
+		incomingResponse={pairIncoming}
+		responseBody={bodies.response}
 		{maximised}
+		{highlight}
 		{palette}
-		{note}
-		{noteStatus}
-		indexing={prettifiedMoving}
-		{wrapPaused}
-		{findings}
-		{testCases}
-		{pane}
 		{canOpenStream}
-		timing={pairTiming(incomingResponse ? { ...pair, RespondedAt: incomingResponse.RespondedAt } : pair)}
-		bind:prettify={$prettify}
-		bind:wrap={$lineWrap}
-		on:expand
 		on:step
 		on:maximise
 		on:close
 		on:action
 		on:highlight
-		on:pane={(e) => (pane = e.detail)}
 	/>
-	<div class="flex min-w-0 flex-1 flex-col">
-		<PaneTabs
-			tabs={[
-				{ id: "request", label: "Request" },
-				{ id: "response", label: rightLabel },
-			]}
-			bind:active={narrowPane}
+	<div class="flex min-h-0 flex-1">
+		<DrawerRail
+			{pair}
+			{number}
+			{expanded}
+			{palette}
+			{note}
+			{noteStatus}
+			indexing={prettifiedMoving}
+			{wrapPaused}
+			{findings}
+			{testCases}
+			{pane}
+			{canOpenStream}
+			timing={pairTiming(incomingResponse ? { ...pair, RespondedAt: incomingResponse.RespondedAt } : pair)}
+			bind:prettify={$prettify}
+			bind:wrap={$lineWrap}
+			on:expand
+			on:action
+			on:highlight
+			on:pane={(e) => (pane = e.detail)}
 		/>
-		<div class="flex min-h-0 flex-1">
-			<div class="ledger-drawer-request {paneBox}" class:pane-off={narrowPane !== "request"}>
-				{#if details === undefined}
-					<p class={message}>Loading…</p>
-				{:else if details === null}
-					<p class={message}>Couldn't read this request.</p>
-				{:else}
-					<DrawerEditor
-						value={bodies.request}
-						lang={usesSyntax(bodies.request, syntaxMode) ? "http" : undefined}
-						wrap={$lineWrap}
-						on:suspend={(e) => (requestPaused = e.detail)}
-					/>
-				{/if}
-			</div>
-			<div
-				class="ledger-drawer-response {paneBox} flex flex-col border-l border-surface-300-600-token"
-				class:pane-off={narrowPane !== "response"}
-			>
-				{#if pane === "note"}
-					{#if note === null}
-						<p class={message}>Loading the note…</p>
-					{:else}
-						{#key `${noteFor}:${noteVersion}`}
-							<DrawerNote
-								id={noteFor}
-								text={note}
-								save={store.saveNote}
-								on:edit={onNoteEdit}
-								on:status={(e) => (noteStatus = e.detail)}
-							/>
-						{/key}
-					{/if}
-				{:else if pane === "metadata"}
-					<div class="ledger-drawer-metadata min-h-0 flex-1">
-						{#if metadata === null}
-							<p class={message}>Loading…</p>
-						{:else}
-							<DrawerEditor value={metadata} lang={jsonLanguage} wrap />
-						{/if}
-					</div>
-				{:else}
+		<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+			<PaneTabs
+				tabs={[
+					{ id: "request", label: "Request" },
+					{ id: "response", label: rightLabel },
+				]}
+				bind:active={narrowPane}
+			/>
+			<DrawerPaneBar
+				{pane}
+				requestBody={bodies.request}
+				responseBody={bodies.response}
+				metadataBody={metadata}
+				{hasResponse}
+				{hasNote}
+				{noteStatus}
+				on:pane={(e) => (pane = e.detail)}
+				on:action
+				on:copymetadata={copyMetadata}
+			/>
+			<div class="flex min-h-0 flex-1">
+				<div class="ledger-drawer-request {paneBox}" class:pane-off={narrowPane !== "request"}>
 					{#if details === undefined}
 						<p class={message}>Loading…</p>
-					{:else if hasResponse}
+					{:else if details === null}
+						<p class={message}>Couldn't read this request.</p>
+					{:else}
 						<DrawerEditor
-							value={bodies.response}
-							lang={usesSyntax(bodies.response, syntaxMode) ? "http" : undefined}
+							value={bodies.request}
+							lang={usesSyntax(bodies.request, syntaxMode) ? "http" : undefined}
 							wrap={$lineWrap}
-							on:suspend={(e) => (responsePaused = e.detail)}
+							on:suspend={(e) => (requestPaused = e.detail)}
 						/>
-					{:else if details !== null}
-						<p class={message}>Waiting for the response…</p>
 					{/if}
-				{/if}
+				</div>
+				<div
+					class="ledger-drawer-response {paneBox} flex flex-col border-l border-surface-300-600-token"
+					class:pane-off={narrowPane !== "response"}
+				>
+					{#if pane === "note"}
+						{#if note === null}
+							<p class={message}>Loading the note…</p>
+						{:else}
+							{#key `${noteFor}:${noteVersion}`}
+								<DrawerNote
+									id={noteFor}
+									text={note}
+									save={store.saveNote}
+									on:edit={onNoteEdit}
+									on:status={(e) => (noteStatus = e.detail)}
+								/>
+							{/key}
+						{/if}
+					{:else if pane === "metadata"}
+						<div class="ledger-drawer-metadata min-h-0 flex-1">
+							{#if metadata === null}
+								<p class={message}>Loading…</p>
+							{:else}
+								<DrawerEditor value={metadata} lang={jsonLanguage} wrap />
+							{/if}
+						</div>
+					{:else}
+						{#if details === undefined}
+							<p class={message}>Loading…</p>
+						{:else if hasResponseBody}
+							<DrawerEditor
+								value={bodies.response}
+								lang={usesSyntax(bodies.response, syntaxMode) ? "http" : undefined}
+								wrap={$lineWrap}
+								on:suspend={(e) => (responsePaused = e.detail)}
+							/>
+						{:else if details !== null}
+							<p class={message}>Waiting for the response…</p>
+						{/if}
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>

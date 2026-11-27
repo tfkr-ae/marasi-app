@@ -104,6 +104,7 @@
 	$: if (!drawerOpen) drawerPane = null;
 	$: focusID = $selection.focus;
 	$: focusNumber = $focused ? ledgerStore.pairNumber($focused.ID) : "";
+	$: focusHighlight = $focused ? rowHighlight($focused, $highlightPalette) : null;
 	$: selectedCount = $selection.ids.size;
 	// "All N matching selected" after ⌘A, else "".
 	const allLabel = select(ledgerStore, allSelectedLabel);
@@ -312,7 +313,7 @@
 					class:mobile-fullscreen={$mobile && $drawerLayout.maximised}
 					style="flex: {$drawerLayout.maximised ? 1 : $drawerLayout.split} 1 0"
 				>
-					{#if !$drawerLayout.maximised}
+					{#if !$drawerLayout.maximised && !focusHighlight}
 						<div
 							class="ledger-drawer-edge pointer-events-none absolute inset-x-0 top-0 z-[300] h-px bg-primary-500"
 							aria-hidden="true"
@@ -326,7 +327,7 @@
 						maximised={$drawerLayout.maximised}
 						expanded={$drawerLayout.expanded}
 						bind:pane={drawerPane}
-						highlight={rowHighlight($focused, $highlightPalette)}
+						highlight={focusHighlight}
 						palette={$highlightPalette}
 						findings={linkedTo($focused.ID, $findingStore)}
 						testCases={linkedTo($focused.ID, $testCaseStore)}

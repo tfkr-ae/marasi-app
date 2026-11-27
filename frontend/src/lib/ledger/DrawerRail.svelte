@@ -10,15 +10,11 @@
 	import {
 		BookCheck,
 		Braces,
-		ChevronDown,
-		ChevronUp,
 		CookingPot,
 		Copy,
 		FileOutput,
 		Globe,
 		Link,
-		Maximize2,
-		Minimize2,
 		PanelLeftClose,
 		PanelLeftOpen,
 		Pencil,
@@ -30,12 +26,12 @@
 		Swords,
 		Shapes,
 		WrapText,
-		X,
 	} from "lucide-svelte";
 	import { menuDispatcher } from "../keybindings/app.js";
 	import { shortcutLabel } from "../keybindings/keys.js";
 	import DrawerFacts from "./DrawerFacts.svelte";
 	import DrawerLinked from "./DrawerLinked.svelte";
+	import { DRAWER_CONTEXT, noteIndicator, shortcutTooltip } from "./drawerPresentation.js";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import { chefShown } from "../platform.js";
 
@@ -44,7 +40,6 @@
 	export let number;
 	/** Whether the details column shows instead of the rail. */
 	export let expanded = false;
-	export let maximised = false;
 	/** The highlight palette, [{ number, label, color }]. */
 	export let palette = [];
 	/** The pair's note, or null while it loads. */
@@ -67,7 +62,7 @@
 	export let canOpenStream = false;
 
 	const dispatch = createEventDispatcher();
-	const DRAWER = "ledger.drawer-open";
+	const DRAWER = DRAWER_CONTEXT;
 
 	// The pair actions, in groups; null separates them.
 	$: actions = [
@@ -88,38 +83,13 @@
 		{ label: "Create test case", icon: BookCheck, actionId: `${DRAWER}.create-test-case` },
 	];
 
-	// "Label (⌘⇧R)", or the label alone when the action has no shortcut.
-	function tip(label, actionId, keymap) {
-		const key = shortcutLabel(keymap, actionId);
-		return key ? `${label} (${key})` : label;
-	}
+	const tip = shortcutTooltip;
 	$: keymap = $menuDispatcher;
 	$: hasNote = note != null ? note.length > 0 : pair.Metadata?.has_note == 1;
-	$: maximiseLabel = maximised ? "Restore the table" : "Maximise the drawer";
 	$: ExpandIcon = expanded ? PanelLeftClose : PanelLeftOpen;
-
-	// The note button's dot: neutral grey when the pair has a note (the
-	// primary colour is red, so it would read as the failure), amber while
-	// an edit is unsaved or saving, red when a save failed (closing the
-	// note, or the next edit, tries again).
-	$: noteDot =
-		noteStatus === "failed"
-			? "bg-error-500"
-			: noteStatus !== "saved"
-				? "bg-warning-500"
-				: hasNote
-					? "bg-surface-500 dark:bg-surface-300"
-					: "";
-	$: noteTitle =
-		noteStatus === "failed"
-			? "Note not saved: close it or keep typing to try again"
-			: noteStatus === "saving"
-				? "Saving the note…"
-				: noteStatus === "unsaved"
-					? "Note edited"
-					: hasNote
-						? "Note"
-						: "Add a note";
+	$: noteInfo = noteIndicator(noteStatus, hasNote);
+	$: noteDot = noteInfo.dot;
+	$: noteTitle = noteInfo.title;
 	const STATUS = { unsaved: "Edited", saving: "Saving…", failed: "Not saved" };
 	// While the note is open, the column's Note heading follows the dot:
 	// undimmed when saved, amber or red otherwise.
@@ -174,30 +144,6 @@
 				on:click={() => dispatch("expand", false)}><svelte:component this={ExpandIcon} size={14} /></button
 			>
 			<span class="min-w-0 flex-1 truncate pl-1 font-mono text-2xs opacity-60">#{number}</span>
-			<button
-				class={headerButton}
-				title={tip("Previous request", `${DRAWER}.previous-request`, keymap)}
-				aria-label="Previous request"
-				on:click={() => dispatch("step", -1)}><ChevronUp size={14} /></button
-			>
-			<button
-				class={headerButton}
-				title={tip("Next request", `${DRAWER}.next-request`, keymap)}
-				aria-label="Next request"
-				on:click={() => dispatch("step", 1)}><ChevronDown size={14} /></button
-			>
-			<button
-				class={headerButton}
-				title={tip(maximiseLabel, `${DRAWER}.toggle-fullscreen`, keymap)}
-				aria-label={maximiseLabel}
-				aria-pressed={maximised}
-				on:click={() => dispatch("maximise")}
-			>
-				{#if maximised}<Minimize2 size={13} />{:else}<Maximize2 size={13} />{/if}
-			</button>
-			<button class={headerButton} title="Close (Esc)" aria-label="Close the drawer" on:click={() => dispatch("close")}
-				><X size={14} /></button
-			>
 		</div>
 
 		<DrawerFacts {pair} {timing} prefix="ledger" />
@@ -294,30 +240,6 @@
 			aria-label="Show the details"
 			aria-expanded="false"
 			on:click={() => dispatch("expand", true)}><svelte:component this={ExpandIcon} size={14} /></button
-		>
-		<button class={railButton} title="Close (Esc)" aria-label="Close the drawer" on:click={() => dispatch("close")}
-			><X size={14} /></button
-		>
-		<button
-			class={railButton}
-			title={tip(maximiseLabel, `${DRAWER}.toggle-fullscreen`, keymap)}
-			aria-label={maximiseLabel}
-			aria-pressed={maximised}
-			on:click={() => dispatch("maximise")}
-		>
-			{#if maximised}<Minimize2 size={13} />{:else}<Maximize2 size={13} />{/if}
-		</button>
-		<button
-			class={railButton}
-			title={tip("Previous request", `${DRAWER}.previous-request`, keymap)}
-			aria-label="Previous request"
-			on:click={() => dispatch("step", -1)}><ChevronUp size={14} /></button
-		>
-		<button
-			class={railButton}
-			title={tip("Next request", `${DRAWER}.next-request`, keymap)}
-			aria-label="Next request"
-			on:click={() => dispatch("step", 1)}><ChevronDown size={14} /></button
 		>
 		<div class={divider}></div>
 		<div
