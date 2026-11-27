@@ -3,6 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as cliModule from "./cli.js";
 import {
+  carriedCLIRow,
+  carriedMatchesCLI,
   cliMissing,
   cliProgressPercent,
   cliProgressText,
@@ -42,6 +44,14 @@ test("the setup opens by itself once per missing-CLI failure", () => {
 
 test("each outcome reads as a short message", () => {
   assert.equal(cliResultText({ outcome: "installed", version: "06.11.2026" }), "Marasi CLI 06.11.2026 installed");
+  assert.equal(
+    cliResultText({ outcome: "installed", version: "06.11.2026" }, { fromApp: true }),
+    "Marasi CLI 06.11.2026 installed from app",
+  );
+  assert.equal(
+    cliResultText({ outcome: "installed", version: "06.11.2026" }, { fromApp: true, reinstall: true }),
+    "Marasi CLI 06.11.2026 reinstalled from app",
+  );
   assert.equal(cliResultText({ outcome: "up-to-date", version: "06.11.2026" }), "Marasi CLI is up to date");
   assert.equal(
     cliResultText({ outcome: "failed", failure: { kind: "no-build", reason: "No Marasi CLI build for this platform" } }),
@@ -80,14 +90,48 @@ test("an outdated local instance names the version it runs", () => {
   assert.equal(outdatedVersion(null), null);
 });
 
-test("Connections offers the carried CLI only when it isn't the installed one", () => {
+test("Connections offers the carried CLI whenever available and a CLI is found, distinguishing reinstall from install", () => {
   const carried = { available: true, version: "30.10.2026", channel: "release" };
   const cli = (version, channel = "release") => ({ found: true, version, channel });
   assert.equal(offersCarriedCLI(carried, cli("06.11.2026")), true);
   assert.equal(offersCarriedCLI(carried, cli("30.10.2026", "nightly")), true);
   assert.equal(offersCarriedCLI(carried, cli("dev", "")), true);
-  assert.equal(offersCarriedCLI(carried, cli("30.10.2026")), false);
+  assert.equal(offersCarriedCLI(carried, cli("30.10.2026")), true);
   assert.equal(offersCarriedCLI({ available: false }, cli("06.11.2026")), false);
   assert.equal(offersCarriedCLI(null, cli("06.11.2026")), false);
   assert.equal(offersCarriedCLI(carried, { found: false }), false);
+
+  assert.equal(carriedMatchesCLI(carried, cli("30.10.2026")), true);
+  assert.equal(carriedMatchesCLI(carried, cli("06.11.2026")), false);
+  assert.equal(carriedMatchesCLI(carried, cli("30.10.2026", "nightly")), false);
+
+  assert.deepEqual(carriedCLIRow(carried, cli("30.10.2026")), {
+    reinstall: true,
+    versionLabel: "30.10.2026 (release)",
+    detail: "30.10.2026 (release) · included in app, offline",
+    label: "Reinstall & restart",
+    busyLabel: "Reinstalling…",
+  });
+  assert.deepEqual(carriedCLIRow(carried, cli("06.11.2026")), {
+    reinstall: false,
+    versionLabel: "30.10.2026 (release)",
+    detail: "30.10.2026 (release) · included in app, offline",
+    label: "Install & restart",
+    busyLabel: "Installing…",
+  });
+  // Nightly version already carries "(nightly <sha>)" so channel is not repeated
+  assert.deepEqual(
+    carriedCLIRow(
+      { available: true, version: "26.11.2026 (nightly 43eeb4f)", channel: "nightly" },
+      cli("26.11.2026 (nightly 43eeb4f)", "nightly"),
+    ),
+    {
+      reinstall: true,
+      versionLabel: "26.11.2026 (nightly 43eeb4f)",
+      detail: "26.11.2026 (nightly 43eeb4f) · included in app, offline",
+      label: "Reinstall & restart",
+      busyLabel: "Reinstalling…",
+    },
+  );
+  assert.equal(carriedCLIRow({ available: false }, cli("30.10.2026")), null);
 });

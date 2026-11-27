@@ -229,12 +229,13 @@ export async function applyCarriedCLI({
   connectionId = "local",
   isActive = true,
   instanceRunning = false,
+  reinstall = false,
   restartService = null,
   restartLocal = null,
   retryConnection = null,
 }) {
   const result = await installCarried();
-  const text = cliResultText(result);
+  const text = cliResultText(result, { fromApp: true, reinstall });
   if (result.outcome === "failed") {
     return { ok: false, text, method: "none" };
   }

@@ -384,7 +384,29 @@ test("applyCarriedCLI installs offline, refreshes local CLI state, and uses POST
       retryConnection: () => calls.push("retry"),
     });
     assert.deepEqual(calls, ["install", ["refresh", "24.11.2026"], "restart-service"]);
-    assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 24.11.2026 installed", method: "service" });
+    assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 24.11.2026 installed from app", method: "service" });
+  }
+
+  // 1b. Reinstalling same version from carried CLI reports "reinstalled from app"
+  {
+    const calls = [];
+    const sameCLI = { found: true, path: "/usr/local/bin/marasi", source: "path", version: "24.11.2026", channel: "release" };
+    const outcome = await applyCarriedCLI({
+      installCarried: async () => {
+        calls.push("install");
+        return { outcome: "installed", version: "24.11.2026", channel: "release", cli: sameCLI };
+      },
+      refreshCLI: async (cli) => calls.push(["refresh", cli?.version]),
+      connectionState: localConn({ phase: "connected", restartSupported: true }),
+      connectionId: "local",
+      isActive: true,
+      reinstall: true,
+      restartService: () => calls.push("restart-service"),
+      restartLocal: async (id) => calls.push(["restart-local", id]),
+      retryConnection: () => calls.push("retry"),
+    });
+    assert.deepEqual(calls, ["install", ["refresh", "24.11.2026"], "restart-service"]);
+    assert.deepEqual(outcome, { ok: true, text: "Marasi CLI 24.11.2026 reinstalled from app", method: "service" });
   }
 
   // 2. Connected local service without /service/restart support -> falls back to RestartLocalInstance + retryNow

@@ -140,9 +140,22 @@ test("createLocalCLIStore installCarried updates located CLI and delegates resta
   });
   assert.equal(outcome.ok, true);
   assert.equal(outcome.method, "service");
+  assert.equal(outcome.text, "Marasi CLI 24.11.2026 installed from app");
   assert.equal(get(store).cli?.version, "24.11.2026");
   assert.equal(get(store).installing, false);
   assert.deepEqual(calls, ["restart-service"]);
+
+  // Running installCarried again when version and channel already match reports a reinstall from app
+  const reinstallOutcome = await store.installCarried({
+    connectionState: get(conn),
+    connectionId: "local",
+    isActive: true,
+    restartService: () => calls.push("restart-service-reinstall"),
+    retryConnection: () => calls.push("retry"),
+  });
+  assert.equal(reinstallOutcome.ok, true);
+  assert.equal(reinstallOutcome.text, "Marasi CLI 24.11.2026 reinstalled from app");
+  assert.deepEqual(calls, ["restart-service", "restart-service-reinstall"]);
 });
 
 test("createLocalCLIStore saves when_quitting through its injected API", async () => {

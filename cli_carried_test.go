@@ -328,22 +328,32 @@ func TestInstallCarriedCLIReplacesTheCurrentCLIWithoutTheNetwork(t *testing.T) {
 	}
 }
 
-func TestInstallCarriedCLILeavesTheSameVersionAlone(t *testing.T) {
+func TestInstallCarriedCLIReinstallsTheSameVersionOffline(t *testing.T) {
 	c := newCarriedInstall(t)
 	path := installedCLI(t, c.cliInstall, cliBinaryOld)
-	if err := os.WriteFile(path, cliBinaryOld, 0o700); err != nil {
+	if err := os.WriteFile(path, []byte("stale same-version binary"), 0o700); err != nil {
 		t.Fatal(err)
+	}
+	// readBuild still reports the same version and channel as the carried copy.
+	c.app.cliRuntime.readBuild = func(string) (cliBuild, error) {
+		return cliBuild{Version: "30.10.2026", Channel: "release"}, nil
 	}
 
 	result, err := c.app.InstallCarriedCLI()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != "up-to-date" {
-		t.Fatalf("result = %+v, want up to date", result)
+	if c.network.requests() != 0 || c.releases.requestCount() != 0 {
+		t.Fatalf("InstallCarriedCLI made %d requests, want none", c.network.requests())
 	}
-	if steps := cliProgressSteps(c.events); len(steps) != 0 {
-		t.Fatalf("progress steps = %v, want none", steps)
+	if result.Outcome != "installed" || result.Version != "30.10.2026" || result.Channel != "release" {
+		t.Fatalf("result = %+v, want installed 30.10.2026 on release", result)
+	}
+	if data, _ := os.ReadFile(path); !bytes.Equal(data, cliBinaryOld) {
+		t.Fatalf("CLI holds %q, want the carried copy", data)
+	}
+	if steps := cliProgressSteps(c.events); !slices.Equal(steps, []string{"extract"}) {
+		t.Fatalf("progress steps = %v, want [extract]", steps)
 	}
 }
 
