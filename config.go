@@ -65,6 +65,9 @@ type Config struct {
 	contentTypeExclusion []string
 	// highlights is the 8 highlight colours and app labels (highlights.go).
 	highlights []Highlight
+	// railOrder is the saved app-wide rail order of built-in page ids below
+	// Home (rail_order.go). Empty when uncustomized (omitted from YAML).
+	railOrder []string
 	// savedQueries and hiddenBuiltinQueries are the app-wide saved queries
 	// and the hidden built-in ids (saved_queries.go).
 	savedQueries         []SavedQuery
@@ -229,6 +232,7 @@ func LoadConfig(appConfigDir string) (*Config, error) {
 		log.Printf("[!] %s in %s left untouched, using the seeded default: %v", contentTypeExclusionConfigKey, config.path(), err)
 	}
 	config.highlights = parseHighlights(documentValue(doc, highlightsKey))
+	config.railOrder = parseRailOrder(documentValue(doc, railOrderKey))
 	config.savedQueries = parseSavedQueries(documentValue(doc, savedQueriesKey))
 	config.hiddenBuiltinQueries = parseHiddenBuiltins(documentValue(doc, hiddenBuiltinQueriesKey))
 	config.updateSettings = parseUpdateSettings(doc)

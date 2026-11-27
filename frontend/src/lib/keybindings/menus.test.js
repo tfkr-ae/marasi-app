@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
+import { buildMenu } from "../components/MarasiMenu/menuModel.js";
+import { hiddenInMenu } from "../platform.js";
+import { projectBottomBar, resolveRailPages } from "../railOrder.js";
 import { CONTEXTS, contextsConflict, eligibleContextIds, stepWebSocketTab } from "./contexts.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
@@ -891,4 +894,178 @@ test("⌘⇧P and Ctrl+Shift+P toggle the proxy listener from every menu context
       label,
     );
   }
+});
+
+test("Interactsh is in the Go to menu group, unbound by default, and runs from every context when bound", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Repeater" }] });
+  const factory = createDispatcher({ catalog, platform: MACOS, keybindings: { config: factoryKeybindings(), problem: "" } });
+  assert.deepEqual(factory.bindingsFor("global.go-interact"), []);
+
+  const globalEntries = catalog
+    .inContext("global")
+    .filter((action) => action.id !== "global.open-menu")
+    .map((action) => ({ actionId: action.id }));
+  const factoryMenu = buildMenu({
+    catalog,
+    globalEntries,
+    bindingsFor: factory.bindingsFor,
+    platform: MACOS,
+  });
+  const goTo = factoryMenu.sections.flatMap((s) => s.groups).find((g) => g.id === "global.go");
+  const interactRow = goTo.items.find((item) => item.actionId === "global.go-interact");
+  assert.ok(interactRow, "Interactsh appears in Go to menu group");
+  assert.equal(interactRow.name, "Interactsh");
+  assert.equal(interactRow.menuKey, null);
+
+  const profile = {
+    id: "work",
+    name: "Work",
+    overrides: {
+      [MACOS]: [{ action: "global.go-interact", keys: ["meta+shift+h"] }],
+      [WINDOWS_LINUX]: [{ action: "global.go-interact", keys: ["ctrl+shift+h"] }],
+    },
+    knownActions: catalog.actions.map((a) => a.id),
+  };
+  const config = { version: 1, activeProfile: "work", profiles: [profile] };
+  assert.deepEqual(validateKeybindings(catalog, config), []);
+
+  const macDispatcher = createDispatcher({ catalog, platform: MACOS, keybindings: { config, problem: "" } });
+  const winDispatcher = createDispatcher({ catalog, platform: WINDOWS_LINUX, keybindings: { config, problem: "" } });
+  for (const state of everyContextState()) {
+    const label = `${state.route} ${state.modal ?? ""} ${state.websocketTab ?? ""}`;
+    assert.equal(macDispatcher.resolve(cmdShift("H", "KeyH"), state), "global.go-interact", label);
+    assert.equal(
+      winDispatcher.resolve(keydown("H", "KeyH", { ctrlKey: true, shiftKey: true }), state),
+      "global.go-interact",
+      label,
+    );
+  }
+  const boundMenu = buildMenu({
+    catalog,
+    globalEntries,
+    bindingsFor: macDispatcher.bindingsFor,
+    platform: MACOS,
+  });
+  const boundRow = boundMenu.sections.flatMap((s) => s.groups).find((g) => g.id === "global.go").items.find((item) => item.actionId === "global.go-interact");
+  assert.equal(boundRow.menuKey, "meta+shift+h");
+});
+
+test("reconfiguring the dispatcher with a custom rail order immediately updates ⌘2-⌘8 / Ctrl+2-8 and ⌘K → Go to", () => {
+  const customOrder = [
+    "cyberchef",  // slot 2 -> ⌘2 / Ctrl+2
+    "interact",   // slot 3 -> ⌘3 / Ctrl+3
+    "launchpad",  // slot 4 -> ⌘4 / Ctrl+4
+    "ledger",     // slot 5 -> ⌘5 / Ctrl+5
+    "logbook",    // slot 6 -> ⌘6 / Ctrl+6
+    "armory",     // slot 7 -> ⌘7 / Ctrl+7
+    "checkpoint", // slot 8 -> ⌘8 / Ctrl+8
+    "workshop",   // slot 9 -> unbound
+    "excalidraw", // slot 10 -> fallback ⌘⇧J / Ctrl+Shift+J
+    "compass",    // slot 11 -> unbound
+  ];
+  const macDispatcher = createDispatcher({ catalog: buildCatalog(), platform: MACOS });
+  const winDispatcher = createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX });
+  assert.equal(macDispatcher.resolve(cmd("2", "Digit2"), on("/")), "global.go-ledger");
+
+  const nextCatalog = buildCatalog({ railOrder: customOrder, extensions: [{ Name: "Repeater" }] });
+  macDispatcher.configure({ catalog: nextCatalog });
+  winDispatcher.configure({ catalog: nextCatalog });
+
+  // Live shortcuts update immediately on both platforms without restarting.
+  assert.equal(macDispatcher.resolve(cmd("1", "Digit1"), on("/")), "global.go-home");
+  assert.equal(macDispatcher.resolve(cmd("2", "Digit2"), on("/")), "global.go-cyberchef");
+  assert.equal(macDispatcher.resolve(cmd("3", "Digit3"), on("/")), "global.go-interact");
+  assert.equal(macDispatcher.resolve(cmd("4", "Digit4"), on("/")), "global.go-launchpad");
+  assert.equal(macDispatcher.resolve(cmd("8", "Digit8"), on("/")), "global.go-checkpoint");
+  assert.equal(macDispatcher.resolve(cmd("9", "Digit9"), on("/")), "global.connections");
+  assert.equal(macDispatcher.resolve(cmd("0", "Digit0"), on("/")), "global.reset-text-size");
+  assert.equal(macDispatcher.resolve(cmd(",", "Comma"), on("/")), "global.go-settings");
+  assert.equal(macDispatcher.resolve(cmdShift("Y", "KeyY"), on("/")), null, "CyberChef moved into slot 2 so fallback ⌘⇧Y no longer fires");
+  assert.equal(macDispatcher.resolve(cmdShift("J", "KeyJ"), on("/")), "global.go-excalidraw");
+
+  const ctrl = (key, code) => keydown(key, code, { ctrlKey: true });
+  assert.equal(winDispatcher.resolve(ctrl("2", "Digit2"), on("/")), "global.go-cyberchef");
+  assert.equal(winDispatcher.resolve(ctrl("3", "Digit3"), on("/")), "global.go-interact");
+  assert.equal(winDispatcher.resolve(ctrl("9", "Digit9"), on("/")), "global.connections");
+  assert.equal(winDispatcher.resolve(ctrl("0", "Digit0"), on("/")), "global.reset-text-size");
+
+  // ⌘K → Go to lists pages in rail order with their live resolved shortcuts.
+  const globalEntries = nextCatalog
+    .inContext("global")
+    .filter((action) => action.id !== "global.open-menu")
+    .map((action) => ({ actionId: action.id }));
+  const menu = buildMenu({
+    catalog: nextCatalog,
+    globalEntries,
+    bindingsFor: macDispatcher.bindingsFor,
+    platform: MACOS,
+  });
+  const goTo = menu.sections.flatMap((s) => s.groups).find((g) => g.id === "global.go");
+  assert.deepEqual(
+    goTo.items.map((item) => [item.actionId, item.menuKey]),
+    [
+      ["global.go-home", "meta+1"],
+      ["global.go-cyberchef", "meta+2"],
+      ["global.go-interact", "meta+3"],
+      ["global.go-launchpad", "meta+4"],
+      ["global.go-ledger", "meta+5"],
+      ["global.go-logbook", "meta+6"],
+      ["global.go-armory", "meta+7"],
+      ["global.go-checkpoint", "meta+8"],
+      ["global.go-workshop", null],
+      ["global.go-excalidraw", "meta+shift+j"],
+      ["global.go-compass", null],
+      ["global.go-settings", "meta+,"],
+      ["global.open-extension.repeater", "meta+alt+1"],
+    ],
+  );
+});
+
+test("shortcut numbering stays anchored to the unfiltered saved rail order when CyberChef is hidden on narrow viewports", () => {
+  const customOrder = [
+    "cyberchef",  // index 0 -> slot 2 (hidden on narrow viewport, but slot 2 stays anchored to it)
+    "launchpad",  // index 1 -> slot 3 -> stays ⌘3 / Ctrl+3 even though it is the first visible tab after Home
+    "ledger",     // index 2 -> slot 4 -> stays ⌘4 / Ctrl+4
+    "logbook",
+    "interact",
+    "excalidraw",
+    "checkpoint",
+    "armory",
+    "compass",
+    "workshop",
+  ];
+  const narrowBar = projectBottomBar(resolveRailPages(customOrder), { chefShown: false });
+  assert.deepEqual(
+    narrowBar.primary.map((p) => p.id),
+    ["home", "launchpad", "ledger", "logbook", "interact"],
+    "narrow bottom bar skips hidden CyberChef so 5 tabs stay full",
+  );
+
+  // Catalog built from the unfiltered rail order keeps Launchpad at slot 3 (⌘3), not shifted to ⌘2.
+  const catalog = buildCatalog({ railOrder: customOrder });
+  const dispatcher = createDispatcher({ catalog, platform: MACOS });
+  assert.equal(dispatcher.resolve(cmd("3", "Digit3"), on("/")), "global.go-launchpad");
+  assert.equal(dispatcher.resolve(cmd("4", "Digit4"), on("/")), "global.go-ledger");
+
+  // Even when GlobalMenu filters hiddenInMenu({ mobile: true, chefShown: false }), remaining Go to shortcuts stay anchored.
+  const visibleGlobalEntries = catalog
+    .inContext("global")
+    .filter((action) => action.id !== "global.open-menu" && !hiddenInMenu(action.id, { mobile: true, chefShown: false }))
+    .map((action) => ({ actionId: action.id }));
+  const menu = buildMenu({
+    catalog,
+    globalEntries: visibleGlobalEntries,
+    bindingsFor: dispatcher.bindingsFor,
+    platform: MACOS,
+  });
+  const goTo = menu.sections.flatMap((s) => s.groups).find((g) => g.id === "global.go");
+  assert.deepEqual(
+    goTo.items.slice(0, 4).map((item) => [item.actionId, item.menuKey]),
+    [
+      ["global.go-home", "meta+1"],
+      ["global.go-launchpad", "meta+3"],
+      ["global.go-ledger", "meta+4"],
+      ["global.go-logbook", "meta+5"],
+    ],
+  );
 });

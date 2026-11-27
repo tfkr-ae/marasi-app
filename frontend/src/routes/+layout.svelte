@@ -36,18 +36,10 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	initializeStores();
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 
 	import { AppRail, AppRailAnchor } from "@skeletonlabs/skeleton";
-	import {
-		BookIcon,
-		SettingsIcon,
-		SendIcon,
-		ToolIcon,
-		FlagIcon,
-		CompassIcon,
-		ZapIcon,
-	} from "svelte-feather-icons";
+	import { SettingsIcon } from "svelte-feather-icons";
 	import { goto, preloadCode } from "$app/navigation";
 	import "../app.css";
 	let currentTile = 0;
@@ -106,14 +98,12 @@
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import { AnswerQuitQuestion, OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-	import {
-		ChefHat,
-		Brush,
-		BookOpenCheckIcon,
-		HomeIcon,
-		PuzzleIcon,
-		Swords,
-	} from "lucide-svelte";
+	import { PuzzleIcon } from "lucide-svelte";
+	import { RAIL_ICONS } from "../lib/railIcons.js";
+	import { projectBottomBar, visibleRailPages } from "../lib/railOrder.js";
+	import { createRailDragController } from "../lib/railDrag.js";
+	import { toastError } from "../lib/toasts.js";
+	import { railOrder, railPages, saveRailOrder } from "../stores/railOrderStore.js";
 	import BottomBar from "../lib/components/BottomBar.svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
 	import MetadataModal from "../lib/components/MetadataModal.svelte";
@@ -157,6 +147,7 @@
 		armoryDrawer,
 		keybindingCapture,
 	} from "../lib/keybindings/app.js";
+	import { interactActivator } from "../lib/interact.js";
 	let appRailIndex = 0;
 	let showInteract = false;
 
@@ -172,6 +163,18 @@
 			Interact = module.default;
 		}
 	};
+
+	const unregisterInteract = interactActivator.register({
+		load: loadInteract,
+		show: () => {
+			showInteract = true;
+		},
+		tick,
+	});
+	onDestroy(unregisterInteract);
+
+	const openInteract = () =>
+		interactActivator.activate(() => goto("/interact"));
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
 	// Go waits for the answer to quit, so the question goes in front of any
@@ -196,41 +199,174 @@
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
 	// The Armory icon's runs-in-progress badge (see armoryBadge).
 	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
-	// The narrow iOS bottom bar's pages (BottomBar.svelte), going where the
-	// rail's tiles go: Home and the main four in the bar, the rest under More.
-	$: barPrimary = [
-		{ id: "home", label: "Home", icon: HomeIcon, path: "/", go: () => goto("/") },
-		{ id: "ledger", label: "Ledger", icon: BookIcon, path: "/ledger", go: () => goto("/ledger") },
-		{ id: "checkpoint", label: "Checkpoint", icon: FlagIcon, path: "/checkpoint", badge: heldBadge.label, go: () => goto("/checkpoint") },
-		{ id: "launchpad", label: "Launchpad", icon: SendIcon, path: "/launchpad", go: () => goto("/launchpad") },
-		{ id: "logbook", label: "Logbook", icon: BookOpenCheckIcon, path: "/logbook", go: () => goto("/logbook") },
-	];
+	$: railTileTitles = {
+		checkpoint: heldBadge.title,
+		armory: runningBadge.title,
+	};
+	$: barBadges = {
+		checkpoint: heldBadge.label,
+		armory: runningBadge.label,
+	};
+	function openRailPage(item) {
+		if (item.id === "interact") return openInteract();
+		return goto(item.route);
+	}
+	function toBottomBarItem(item, badges) {
+		return {
+			id: item.id,
+			label: item.label,
+			icon: RAIL_ICONS[item.id],
+			path: item.route,
+			...(badges[item.id] ? { badge: badges[item.id] } : {}),
+			go: () => openRailPage(item),
+		};
+	}
+	$: shownRailPages = visibleRailPages($railPages, { chefShown: $chefShown });
+	// Desktop app rail direct pointer drag-and-drop (disabled on mobile/touch).
+	const railDragController = createRailDragController();
+	let railDrag = null;
+	let stopRailDragListeners = () => {};
+	let clearSuppressedClickTimer = null;
+
+	function scheduleClearSuppressedClick() {
+		clearTimeout(clearSuppressedClickTimer);
+		clearSuppressedClickTimer = setTimeout(() => {
+			clearSuppressedClickTimer = null;
+			railDragController.clearSuppressedClick();
+		}, 0);
+	}
+	function detachRailDragListeners() {
+		stopRailDragListeners();
+		stopRailDragListeners = () => {};
+	}
+	function resetRailDrag() {
+		detachRailDragListeners();
+		clearTimeout(clearSuppressedClickTimer);
+		clearSuppressedClickTimer = null;
+		railDragController.cancel();
+		railDragController.clearSuppressedClick();
+		railDrag = null;
+	}
+	function readRailTileMidpoints() {
+		const nodes = document.querySelectorAll(".nav-rail [data-rail-page]");
+		return Array.from(nodes, (el) => {
+			const rect = el.getBoundingClientRect();
+			return rect.top + rect.height / 2;
+		});
+	}
+	function suppressRailClick(event) {
+		if (!railDragController.consumeSuppressedClick()) return false;
+		clearTimeout(clearSuppressedClickTimer);
+		clearSuppressedClickTimer = null;
+		event.preventDefault();
+		event.stopPropagation();
+		return true;
+	}
+	function startRailTileDrag(event, item, index) {
+		detachRailDragListeners();
+		clearTimeout(clearSuppressedClickTimer);
+		clearSuppressedClickTimer = null;
+		const { started, state } = railDragController.pointerDown({
+			pageId: item.id,
+			fromIndex: index,
+			pointerId: event.pointerId,
+			clientX: event.clientX,
+			clientY: event.clientY,
+			button: event.button,
+			pointerType: event.pointerType,
+			mobile: $mobile,
+		});
+		if (!started) return;
+		const activePointerId = event.pointerId;
+		railDrag = state;
+
+		const onMove = (moveEvent) => {
+			if (moveEvent.pointerId !== activePointerId) return;
+			const { changed, state: nextState } = railDragController.pointerMove({
+				pointerId: moveEvent.pointerId,
+				clientX: moveEvent.clientX,
+				clientY: moveEvent.clientY,
+				midpoints: readRailTileMidpoints(),
+			});
+			if (changed) railDrag = nextState;
+		};
+		const onUp = (upEvent) => {
+			if (upEvent.pointerId !== activePointerId) return;
+			const result = railDragController.pointerUp({
+				pointerId: upEvent.pointerId,
+				fullOrder: get(railOrder),
+				visibleIds: shownRailPages.map((entry) => entry.id),
+			});
+			detachRailDragListeners();
+			railDrag = null;
+			if (result.suppressClick) scheduleClearSuppressedClick();
+			if (result.nextOrder) {
+				saveRailOrder(result.nextOrder).catch((error) =>
+					toastError(toastStore, "Error saving rail order", error),
+				);
+			}
+		};
+		const onCancel = (cancelEvent) => {
+			if (cancelEvent.pointerId !== activePointerId) return;
+			const result = railDragController.cancel({ pointerId: cancelEvent.pointerId });
+			detachRailDragListeners();
+			railDrag = null;
+			if (result.suppressClick) scheduleClearSuppressedClick();
+		};
+		const onKeyDown = (keyEvent) => {
+			if (keyEvent.key !== "Escape") return;
+			const result = railDragController.cancel();
+			if (!result.cancelled) return;
+			if (result.wasActive) {
+				keyEvent.preventDefault();
+				keyEvent.stopPropagation();
+			}
+			railDrag = null;
+			if (!result.suppressClick) {
+				detachRailDragListeners();
+			} else {
+				window.removeEventListener("pointermove", onMove);
+				window.removeEventListener("keydown", onKeyDown, true);
+			}
+		};
+		const onBlur = () => {
+			const result = railDragController.cancel();
+			detachRailDragListeners();
+			railDrag = null;
+			if (result.suppressClick) scheduleClearSuppressedClick();
+		};
+
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+		window.addEventListener("pointercancel", onCancel);
+		window.addEventListener("keydown", onKeyDown, true);
+		window.addEventListener("blur", onBlur);
+		stopRailDragListeners = () => {
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			window.removeEventListener("pointercancel", onCancel);
+			window.removeEventListener("keydown", onKeyDown, true);
+			window.removeEventListener("blur", onBlur);
+		};
+	}
+	onDestroy(resetRailDrag);
+	function onAppBodyClickCapture(event) {
+		if (suppressRailClick(event)) return;
+		closeOverlaysForNav(event);
+	}
+	$: bottomBarSplit = projectBottomBar($railPages, {
+		chefShown: $chefShown,
+	});
+	// The narrow mobile bottom bar's pages (BottomBar.svelte), driven from the
+	// resolved rail order: Home + first 4 visible pages in the bar, the rest
+	// under More in rail order, followed by extensions and Settings.
+	$: barPrimary = bottomBarSplit.primary.map((item) =>
+		toBottomBarItem(item, barBadges),
+	);
 	$: barMore = [
-		{ id: "compass", label: "Compass", icon: CompassIcon, path: "/compass", go: () => goto("/compass") },
-		{ id: "armory", label: "Armory", icon: Swords, path: "/armory", badge: runningBadge.label, go: () => goto("/armory") },
-		{ id: "workshop", label: "Workshop", icon: ToolIcon, path: "/workshop", go: () => goto("/workshop") },
-		// CyberChef only where the app offers it (chefShown).
-		...($chefShown
-			? [{ id: "cyberchef", label: "CyberChef", icon: ChefHat, path: "/cyberchef", go: () => goto("/cyberchef") }]
-			: []),
-		{
-			id: "excalidraw",
-			label: "Excalidraw",
-			icon: Brush,
-			path: "/excalidraw",
-			go: () => goto("/excalidraw"),
-		},
-		{
-			id: "interact",
-			label: "Interactsh",
-			icon: ZapIcon,
-			path: "/interact",
-			go: async () => {
-				await loadInteract();
-				goto("/interact");
-				showInteract = true;
-			},
-		},
+		...bottomBarSplit.more.map((item) =>
+			toBottomBarItem(item, barBadges),
+		),
 		...$extensions
 			.filter((extension) => $extensions_ui[extension.Name]?.icon || extension.UICode)
 			.map((extension) => ({
@@ -540,7 +676,7 @@
 	use:isolateOverlays={{ modalStore, drawerStore, toastStore, isModalToggle, live: liveNav, quiet: () => $mobile }}
 >
 	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-	<div class="app-body flex flex-1 h-screen" on:click|capture={closeOverlaysForNav}>
+	<div class="app-body flex flex-1 h-screen" on:click|capture={onAppBodyClickCapture}>
 		{#if $appState.started}
 			<GlobalMenu />
 			{#if $mobile && $chefShown}<SelectionChefButton />{:else if !$mobile}<EditorSelectionMenu />{/if}
@@ -560,7 +696,7 @@
 					}}
 					bind:group={currentTile}
 					name="Home"
-					value={appRailIndex++}
+					value={0}
 					title="Home"
 				>
 					<svelte:fragment slot="lead">
@@ -581,231 +717,63 @@
 					</svelte:fragment>
 					<span></span>
 				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/ledger"}
-					on:click={() => {
-						goto("/ledger");
-					}}
-					bind:group={currentTile}
-					name="Ledger"
-					value={appRailIndex++}
-					title="Ledger"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
+				{#each shownRailPages as item, index (item.id)}
+					<!-- svelte-ignore a11y-no-static-element-interactions -->
+					<div
+						class="relative {railDrag?.active && railDrag.fromIndex === index ? 'opacity-50' : ''} {railDrag?.active ? 'cursor-grabbing' : ''}"
+						data-rail-page={item.id}
+						data-rail-dragging={railDrag?.active && railDrag.fromIndex === index ? "true" : undefined}
+						on:pointerdown={(event) => startRailTileDrag(event, item, index)}
+						on:dragstart|preventDefault
+					>
+						{#if railDrag?.active && railDrag.dropSlot === index}
+							<div
+								class="pointer-events-none absolute inset-x-1 -top-px z-10 h-0.5 bg-primary-500"
+								data-testid="rail-drop-indicator"
+								aria-hidden="true"
+							></div>
+						{/if}
+						<AppRailAnchor
+							regionLabel="!text-2xs !font-semibold leading-tight"
+							selected={$page.url.pathname === item.route}
+							on:click={() => openRailPage(item)}
+							bind:group={currentTile}
+							name={item.label}
+							value={index + 1}
+							title={railTileTitles[item.id] ?? item.label}
+							draggable="false"
 						>
-							<BookIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Ledger</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/compass"}
-					on:click={() => {
-						goto("/compass");
-					}}
-					bind:group={currentTile}
-					name="Compass"
-					value={appRailIndex++}
-					title="Compass"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<CompassIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Compass</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/checkpoint"}
-					on:click={() => {
-						goto("/checkpoint");
-					}}
-					bind:group={currentTile}
-					name="Checkpoint"
-					value={appRailIndex++}
-					title={heldBadge.title}
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="relative flex justify-center items-center w-full"
-						>
-							<FlagIcon size="20" />
-							{#if heldBadge.label}
-								<span
-									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
-									data-testid="checkpoint-badge"
-									aria-label="{heldBadge.label} intercepted"
-								>{heldBadge.label}</span>
-							{/if}
-						</div>
-					</svelte:fragment>
-					<span>Checkpoint</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/launchpad"}
-					on:click={() => {
-						goto("/launchpad");
-					}}
-					bind:group={currentTile}
-					name="Launchpad"
-					value={appRailIndex++}
-					title="Launchpad"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<SendIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Launchpad</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/armory"}
-					on:click={() => {
-						goto("/armory");
-					}}
-					bind:group={currentTile}
-					name="Armory"
-					value={appRailIndex++}
-					title={runningBadge.title}
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="relative flex justify-center items-center w-full"
-						>
-							<Swords size="20" />
-							{#if runningBadge.label}
-								<span
-									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
-									data-testid="armory-badge"
-									aria-label="{runningBadge.label} running"
-								>{runningBadge.label}</span>
-							{/if}
-						</div>
-					</svelte:fragment>
-					<span>Armory</span>
-				</AppRailAnchor>
-
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/logbook"}
-					on:click={() => {
-						goto("/logbook");
-					}}
-					bind:group={currentTile}
-					name="Logbook"
-					value={appRailIndex++}
-					title="Logbook"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<BookOpenCheckIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Logbook</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/workshop"}
-					on:click={() => {
-						goto("/workshop");
-					}}
-					bind:group={currentTile}
-					name="Workshop"
-					value={appRailIndex++}
-					title="Workshop"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<ToolIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Workshop</span>
-				</AppRailAnchor>
-				{#if $chefShown}
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/cyberchef"}
-					on:click={() => goto("/cyberchef")}
-					bind:group={currentTile}
-					name="CyberChef"
-					value={appRailIndex++}
-					title="CyberChef"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<ChefHat size="20" />
-						</div>
-					</svelte:fragment>
-					<span>CyberChef</span>
-				</AppRailAnchor>
-				{/if}
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/excalidraw"}
-					on:click={() => goto("/excalidraw")}
-					bind:group={currentTile}
-					name="Excalidraw"
-					value={appRailIndex++}
-					title="Excalidraw"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<Brush size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Excalidraw</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/interact"}
-					on:click={async () => {
-						await loadInteract();
-						goto("/interact");
-						showInteract = true;
-					}}
-					bind:group={currentTile}
-					name="InteractSh"
-					value={appRailIndex++}
-					title="InteractSh"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<ZapIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Interactsh</span>
-				</AppRailAnchor>
+							<svelte:fragment slot="lead">
+								<div
+									class="{item.id === 'checkpoint' || item.id === 'armory' ? 'relative ' : ''}flex justify-center items-center w-full"
+								>
+									<svelte:component this={RAIL_ICONS[item.id]} size="20" />
+									{#if item.id === "checkpoint" && heldBadge.label}
+										<span
+											class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+											data-testid="checkpoint-badge"
+											aria-label="{heldBadge.label} intercepted"
+										>{heldBadge.label}</span>
+									{:else if item.id === "armory" && runningBadge.label}
+										<span
+											class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+											data-testid="armory-badge"
+											aria-label="{runningBadge.label} running"
+										>{runningBadge.label}</span>
+									{/if}
+								</div>
+							</svelte:fragment>
+							<span>{item.label}</span>
+						</AppRailAnchor>
+						{#if railDrag?.active && index === shownRailPages.length - 1 && railDrag.dropSlot === shownRailPages.length}
+							<div
+								class="pointer-events-none absolute inset-x-1 -bottom-px z-10 h-0.5 bg-primary-500"
+								data-testid="rail-drop-indicator"
+								aria-hidden="true"
+							></div>
+						{/if}
+					</div>
+				{/each}
 				{#each $extensions as extension}
 					{@const iconSchema =
 						$extensions_ui[extension.Name]

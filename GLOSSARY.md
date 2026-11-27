@@ -195,6 +195,16 @@ _Avoid_: mnemonic, access key, hotkey
 A named collection of bindings and menu letters for Marasi menu actions that a researcher can select and customize. Factory defaults remain recoverable independently of those customizations.
 _Avoid_: Vim mode, Chrome profile
 
+### Navigation
+
+**App rail**:
+The vertical navigation bar along the edge of the app (replaced by the bottom bar on narrow phones). Home stays pinned first, followed by the built-in pages in rail order, then any extension pages with an interface, and the fixed utility trail (Connections, color scheme, Settings) at the bottom.
+_Avoid_: sidebar, nav bar, dock
+
+**Rail order**:
+The app-wide sequence of the built-in pages below Home in the app rail. It sets their order in the rail, the Marasi menu's Go to group, and the narrow mobile bottom bar, and determines the default numbered shortcuts (`⌘1`–`⌘8` / `Ctrl+1`–`8`).
+_Avoid_: tab order, sidebar order, menu order
+
 ### Updates
 
 **Channel**:

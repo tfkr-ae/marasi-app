@@ -4,6 +4,7 @@ import { normalizeBinding } from "./keys.js";
 import { OPEN_MENU } from "./keymap.js";
 import { FACTORY_MENU_GROUPS } from "./menuGroups.js";
 import { MACOS, PLATFORMS, WINDOWS_LINUX } from "./platform.js";
+import { railSlotDefaultKey, resolveRailPages } from "../railOrder.js";
 
 // The menu action catalog: stable identity, menu context, label/description
 // for display, and immutable factory default bindings per platform variant.
@@ -44,24 +45,43 @@ function pageActions(context, rows) {
   );
 }
 
+// The 10 reorderable built-in navigation actions below Home. Their metadata
+// (label, description, keywords, fallbackShortcut) lives on BUILTIN_RAIL_PAGES
+// in railOrder.js. Their order and default keys follow the app rail order:
+// slots 2–8 take primary+2..8, CyberChef and Excalidraw fall back to
+// primary+shift+y / primary+shift+j past slot 8, and other overflow pages
+// have no default shortcut. Every one is marked `positionalDefault: true` so
+// explicit profile overrides stay pinned to their action id and colliding
+// positional defaults yield cleanly (docs/adr/2026-11-27-rail-order-drives-positional-page-defaults.md).
+export function railSlotDefaultBinding(page, index, platform) {
+  const key = railSlotDefaultKey(page, index);
+  if (!key) return null;
+  return `${platform === MACOS ? "meta" : "ctrl"}+${key}`;
+}
+
+function railNavigationActions(railOrder = null) {
+  return resolveRailPages(railOrder).map((page, index) => {
+    const key = railSlotDefaultKey(page, index);
+    const defaults = key ? primary(key) : { [MACOS]: [], [WINDOWS_LINUX]: [] };
+    return action(page.actionId, page.label, page.description, page.keywords, defaults, {
+      group: "go",
+      positionalDefault: true,
+    });
+  });
+}
+
 // The built-in actions. An action listed here shows in the keybinding
 // settings and is checked on save, since the catalog is sent to Go with each
 // profile (catalogDescriptor). Its handler is registered separately
 // (useMenuActions, or the handlers in GlobalMenu.svelte for global.*), and a
 // page lists it in ⌘K only through its menuOptions. Never rename an id:
 // saved profiles key their overrides by id.
-export const FACTORY_ACTIONS = [
+const HEAD_FACTORY_ACTIONS = [
   action("global.open-menu", "Open Marasi Menu", "Open or close the Marasi menu", "menu, commands, palette", primary("k")),
   action("global.go-home", "Marasi", "Dashboard", "home, dashboard", primary("1"), { group: "go" }),
-  action("global.go-ledger", "Ledger", "View requests", "ledger", primary("2"), { group: "go" }),
-  action("global.go-compass", "Compass", "Configure scope", "compass", primary("3"), { group: "go" }),
-  action("global.go-checkpoint", "Checkpoint", "Intercept Requests", "checkpoint", primary("4"), { group: "go" }),
-  action("global.go-launchpad", "Launchpad", "Edit and Repeat Requests", "Launchpad", primary("5"), { group: "go" }),
-  action("global.go-armory", "Armory", "Create request templates", "armory,template,attack", primary("6"), { group: "go" }),
-  action("global.go-logbook", "Logbook", "Review test cases and findings", "logbook,findings,tests", primary("7"), { group: "go" }),
-  action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8"), { group: "go" }),
-  action("global.go-cyberchef", "CyberChef", "Decode, encode and transform data", "cyberchef, chef, decode, encode, recipe", primary("shift+y"), { group: "go" }),
-  action("global.go-excalidraw", "Excalidraw", "Sketch with cards", "excalidraw, drawing, diagram, draw", primary("shift+j"), { group: "go" }),
+];
+
+const TAIL_FACTORY_ACTIONS = [
   action("global.go-settings", "Settings", "Configure your settings", "settings", primary(","), { group: "go" }),
   action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"), { group: "browser" }),
   action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d"), { group: "browser" }),
@@ -294,6 +314,12 @@ export const FACTORY_ACTIONS = [
   ]),
 ];
 
+function factoryActions(railOrder = null) {
+  return [...HEAD_FACTORY_ACTIONS, ...railNavigationActions(railOrder), ...TAIL_FACTORY_ACTIONS];
+}
+
+export const FACTORY_ACTIONS = factoryActions();
+
 // Lowercase dot/dash-safe slug used inside action ids.
 export function slugify(name) {
   return String(name)
@@ -516,12 +542,13 @@ export function createCatalog(definitions, { contexts = CONTEXTS, groups = FACTO
   };
 }
 
-// The app's catalog: factory actions plus actions derived from app data
-// (the loaded extensions and the menus their pages have rendered).
-export function buildCatalog({ extensions = [], extensionMenus = {} } = {}) {
+// The app's catalog: factory actions (ordered by `railOrder`, defaulting to
+// canonical order when omitted) plus actions derived from app data (the
+// loaded extensions and the menus their pages have rendered).
+export function buildCatalog({ extensions = [], extensionMenus = {}, railOrder = null } = {}) {
   const pages = extensionPageMenus(extensions, extensionMenus);
   return createCatalog(
-    [...FACTORY_ACTIONS, ...extensionNavigationActions(extensions), ...pages.actions],
+    [...factoryActions(railOrder), ...extensionNavigationActions(extensions), ...pages.actions],
     { contexts: [...CONTEXTS, ...pages.contexts] },
   );
 }

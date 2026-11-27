@@ -486,3 +486,124 @@ test("the catalog descriptor sent with a save lists every menu group with its fa
     { id: "ledger.drawer-closed.view", context: "ledger.drawer-closed", label: "View", letter: "V" },
   ]);
 });
+
+test("explicit profile overrides stay pinned to their built-in page across rail reorders while other pages inherit slot defaults", () => {
+  const defaultCatalog = buildCatalog();
+  const reorderedRail = [
+    "launchpad",  // slot 2 -> meta+2 (was ledger's slot)
+    "cyberchef",  // slot 3 -> meta+3
+    "interact",   // slot 4 -> meta+4
+    "ledger",     // slot 5 -> explicit override meta+shift+h stays pinned
+    "armory",
+    "logbook",
+    "workshop",
+    "checkpoint",
+    "compass",
+    "excalidraw",
+  ];
+  const afterReorder = buildCatalog({ railOrder: reorderedRail });
+  const pinnedLedger = saved([
+    {
+      ...settleProfile(defaultCatalog, factoryProfile("mine", "Mine")),
+      overrides: {
+        [MACOS]: [{ action: "global.go-ledger", keys: ["meta+shift+h"] }],
+        [WINDOWS_LINUX]: [{ action: "global.go-ledger", keys: ["ctrl+shift+h"] }],
+      },
+    },
+  ]);
+
+  const mac = createDispatcher({ catalog: afterReorder, platform: MACOS, keybindings: pinnedLedger });
+  assert.deepEqual(mac.bindingsFor("global.go-ledger"), ["meta+shift+h"]);
+  assert.deepEqual(mac.bindingsFor("global.go-launchpad"), ["meta+2"]);
+  assert.deepEqual(mac.bindingsFor("global.go-cyberchef"), ["meta+3"]);
+  assert.deepEqual(mac.bindingsFor("global.go-interact"), ["meta+4"]);
+  assert.equal(mac.resolve(meta("2"), home), "global.go-launchpad");
+  assert.equal(mac.resolve(keydown("H", { metaKey: true, shiftKey: true }), home), "global.go-ledger");
+  assert.deepEqual(validateKeybindings(afterReorder, pinnedLedger.config), []);
+});
+
+test("a built-in page's positional default yields when colliding with a custom binding, keeps the profile valid, and recovers once freed or moved", () => {
+  const defaultCatalog = buildCatalog();
+  // Custom profile binds Open Project to ⌘3 (normally Compass's slot 3).
+  const custom = saved([
+    {
+      ...settleProfile(defaultCatalog, factoryProfile("mine", "Mine")),
+      overrides: {
+        [MACOS]: [{ action: "global.open-project", keys: ["meta+3"] }],
+        [WINDOWS_LINUX]: [],
+      },
+    },
+  ]);
+  const slot3IsInteract = buildCatalog({
+    railOrder: [
+      "ledger",
+      "interact", // slot 3 -> wants meta+3, collides with global.open-project
+      "compass",
+      "checkpoint",
+      "launchpad",
+      "armory",
+      "logbook",
+      "workshop",
+      "cyberchef",
+      "excalidraw",
+    ],
+  });
+
+  // Interactsh yields gracefully without invalidating or dropping the profile.
+  const mac = createDispatcher({ catalog: slot3IsInteract, platform: MACOS, keybindings: custom });
+  let problem = "unset";
+  mac.subscribe((snapshot) => (problem = snapshot.problem));
+  assert.equal(problem, "");
+  assert.deepEqual(mac.bindingsFor("global.open-project"), ["meta+3"]);
+  assert.deepEqual(mac.bindingsFor("global.go-interact"), []);
+  assert.equal(mac.resolve(meta("3"), home), "global.open-project");
+  assert.deepEqual(validateKeybindings(slot3IsInteract, custom.config), []);
+
+  // Settling does not freeze the yielded positional default as an explicit keys: [] override.
+  const settled = settleProfile(slot3IsInteract, activeProfile(custom.config));
+  assert.deepEqual(settled.overrides[MACOS], [{ action: "global.open-project", keys: ["meta+3"] }]);
+
+  // Recovery 1: freeing ⌘3 restores Interactsh's positional default immediately.
+  const freed = { ...settled, overrides: { ...settled.overrides, [MACOS]: [] } };
+  assert.deepEqual(profileKeymap(slot3IsInteract, freed, MACOS).bindingsFor("global.go-interact"), ["meta+3"]);
+
+  // Recovery 2: moving Interactsh to an uncontested slot (slot 4) restores a positional default automatically.
+  const slot4IsInteract = buildCatalog({
+    railOrder: [
+      "ledger",
+      "compass",   // slot 3 -> yields to meta+3
+      "interact",  // slot 4 -> uncontested meta+4
+      "checkpoint",
+      "launchpad",
+      "armory",
+      "logbook",
+      "workshop",
+      "cyberchef",
+      "excalidraw",
+    ],
+  });
+  assert.deepEqual(profileKeymap(slot4IsInteract, settled, MACOS).bindingsFor("global.go-interact"), ["meta+4"]);
+  assert.deepEqual(profileKeymap(slot4IsInteract, settled, MACOS).bindingsFor("global.go-compass"), []);
+});
+
+test("catalogDescriptor marks the 10 reorderable built-in navigation actions as positionalDefault for Go validation", () => {
+  const descriptor = catalogDescriptor(buildCatalog());
+  const flag = (id) => descriptor.actions.find((a) => a.id === id).positionalDefault;
+  for (const id of [
+    "global.go-ledger",
+    "global.go-compass",
+    "global.go-checkpoint",
+    "global.go-launchpad",
+    "global.go-armory",
+    "global.go-logbook",
+    "global.go-workshop",
+    "global.go-cyberchef",
+    "global.go-excalidraw",
+    "global.go-interact",
+  ]) {
+    assert.equal(flag(id), true, id);
+  }
+  for (const id of ["global.go-home", "global.go-settings", "global.connections", "global.reset-text-size"]) {
+    assert.equal(flag(id), false, id);
+  }
+});

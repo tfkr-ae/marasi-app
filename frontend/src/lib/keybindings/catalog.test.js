@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCatalog, createCatalog, extensionsWithGUI } from "./catalog.js";
+import { buildCatalog, createCatalog, extensionsWithGUI, railSlotDefaultBinding } from "./catalog.js";
 import { contextsConflict } from "./contexts.js";
 import { createKeymap } from "./keymap.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
@@ -279,16 +279,36 @@ test("the Launchpad tree moves the entry selection a step with ⌘⇧ arrows and
   }
 });
 
+test("Interactsh is a positional Go to action with no factory shortcut by default", () => {
+  const action = buildCatalog().get("global.go-interact");
+  assert.ok(action);
+  assert.equal(action.label, "Interactsh");
+  assert.equal(action.context, "global");
+  assert.equal(action.group, "go");
+  assert.equal(action.positionalDefault, true);
+  assert.deepEqual(action.defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
+});
+
 // Marasi's defaults always use ⌘ (Ctrl), so every one works in the open
 // Marasi menu, where a key without it types into the search, and the menu
-// shows it as the action's key. Extension navigation keeps ⌘⌥1–9.
+// shows it as the action's key. Extension navigation keeps ⌘⌥1–9. Non-positional
+// built-in actions always have a default; only positional overflow actions may
+// be unbound by default.
 test("every factory default uses ⌘ on macOS and Ctrl on Windows and Linux", () => {
   const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }] });
+  const unbound = [];
   for (const action of catalog.actions) {
-    assert.ok(action.defaults[MACOS].length && action.defaults[WINDOWS_LINUX].length, `${action.id} has a default`);
+    const hasMac = action.defaults[MACOS].length > 0;
+    const hasWin = action.defaults[WINDOWS_LINUX].length > 0;
+    assert.equal(hasMac, hasWin, `${action.id} matches defaults across platforms`);
+    if (!hasMac) {
+      assert.equal(action.positionalDefault, true, `${action.id} has no default and is not positionalDefault`);
+      unbound.push(action.id);
+    }
     for (const binding of action.defaults[MACOS]) assert.match(binding, /^meta\+/, `${action.id}: ${binding}`);
     for (const binding of action.defaults[WINDOWS_LINUX]) assert.match(binding, /^ctrl\+/, `${action.id}: ${binding}`);
   }
+  assert.deepEqual(unbound, ["global.go-interact"]);
 });
 
 test("the Launchpad tree starts a finding or test case from the entry selection", () => {
@@ -383,7 +403,7 @@ test("the global menu groups gather Marasi's own actions as the spec lists them"
   );
   assert.deepEqual(inGroup("go"), [
     "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
-    "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-settings", "open-extension.port-scanner",
+    "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-interact", "go-settings", "open-extension.port-scanner",
   ]);
   assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener", "toggle-listener"]);
   assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);
@@ -526,4 +546,119 @@ test("every menu group has a label, an icon, a tone and a description", () => {
       assert.ok(typeof group[field] === "string" && group[field].length > 0, `${group.context}.${group.id} has no ${field}`);
     }
   }
+});
+
+test("buildCatalog marks the 10 reorderable built-in Go to actions as positionalDefault while keeping Home, Settings, Connections and Reset Text Size fixed", () => {
+  const catalog = buildCatalog();
+  const positionalIds = [
+    "global.go-ledger",
+    "global.go-compass",
+    "global.go-checkpoint",
+    "global.go-launchpad",
+    "global.go-armory",
+    "global.go-logbook",
+    "global.go-workshop",
+    "global.go-cyberchef",
+    "global.go-excalidraw",
+    "global.go-interact",
+  ];
+  for (const id of positionalIds) {
+    assert.equal(catalog.get(id).positionalDefault, true, `${id} should be positionalDefault`);
+  }
+  for (const id of ["global.go-home", "global.go-settings", "global.connections", "global.reset-text-size"]) {
+    assert.ok(!catalog.get(id).positionalDefault, `${id} should not be positionalDefault`);
+  }
+});
+
+test("buildCatalog assigns positional 2-8 defaults, CyberChef/Excalidraw fallbacks, and unbound overflow from railOrder on both platforms", () => {
+  const customOrder = [
+    "cyberchef",  // slot 2 -> ⌘2 / Ctrl+2 (promoted from fallback)
+    "interact",   // slot 3 -> ⌘3 / Ctrl+3 (promoted from unbound)
+    "excalidraw", // slot 4 -> ⌘4 / Ctrl+4 (promoted from fallback)
+    "launchpad",  // slot 5 -> ⌘5 / Ctrl+5
+    "logbook",    // slot 6 -> ⌘6 / Ctrl+6
+    "ledger",     // slot 7 -> ⌘7 / Ctrl+7
+    "armory",     // slot 8 -> ⌘8 / Ctrl+8
+    "checkpoint", // slot 9 -> unbound
+    "compass",    // slot 10 -> unbound
+    "workshop",   // slot 11 -> unbound
+  ];
+  const catalog = buildCatalog({ railOrder: customOrder, extensions: [{ Name: "Repeater" }] });
+
+  const expected = [
+    ["global.go-home", ["meta+1"], ["ctrl+1"]],
+    ["global.go-cyberchef", ["meta+2"], ["ctrl+2"]],
+    ["global.go-interact", ["meta+3"], ["ctrl+3"]],
+    ["global.go-excalidraw", ["meta+4"], ["ctrl+4"]],
+    ["global.go-launchpad", ["meta+5"], ["ctrl+5"]],
+    ["global.go-logbook", ["meta+6"], ["ctrl+6"]],
+    ["global.go-ledger", ["meta+7"], ["ctrl+7"]],
+    ["global.go-armory", ["meta+8"], ["ctrl+8"]],
+    ["global.go-checkpoint", [], []],
+    ["global.go-compass", [], []],
+    ["global.go-workshop", [], []],
+    ["global.go-settings", ["meta+,"], ["ctrl+,"]],
+    ["global.connections", ["meta+9"], ["ctrl+9"]],
+    ["global.reset-text-size", ["meta+0"], ["ctrl+0"]],
+  ];
+  for (const [id, mac, win] of expected) {
+    assert.deepEqual(catalog.get(id).defaults, { [MACOS]: mac, [WINDOWS_LINUX]: win }, id);
+  }
+
+  // Go to group emits Home, then the 10 built-in pages in rail order, then Settings, then extensions.
+  const goOrder = catalog
+    .inContext("global")
+    .filter((a) => a.group === "go")
+    .map((a) => a.id);
+  assert.deepEqual(goOrder, [
+    "global.go-home",
+    "global.go-cyberchef",
+    "global.go-interact",
+    "global.go-excalidraw",
+    "global.go-launchpad",
+    "global.go-logbook",
+    "global.go-ledger",
+    "global.go-armory",
+    "global.go-checkpoint",
+    "global.go-compass",
+    "global.go-workshop",
+    "global.go-settings",
+    "global.open-extension.repeater",
+  ]);
+});
+
+test("CyberChef and Excalidraw fall back to ⌘⇧Y/Ctrl+Shift+Y and ⌘⇧J/Ctrl+Shift+J past slot 8 while Interactsh stays unbound", () => {
+  const overflowTools = [
+    "launchpad",
+    "ledger",
+    "logbook",
+    "armory",
+    "checkpoint",
+    "compass",
+    "workshop",
+    "interact",   // slot 9 -> unbound
+    "excalidraw", // slot 10 -> fallback shift+j
+    "cyberchef",  // slot 11 -> fallback shift+y
+  ];
+  const catalog = buildCatalog({ railOrder: overflowTools });
+  assert.deepEqual(catalog.get("global.go-interact").defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
+  assert.deepEqual(catalog.get("global.go-excalidraw").defaults, {
+    [MACOS]: ["meta+shift+j"],
+    [WINDOWS_LINUX]: ["ctrl+shift+j"],
+  });
+  assert.deepEqual(catalog.get("global.go-cyberchef").defaults, {
+    [MACOS]: ["meta+shift+y"],
+    [WINDOWS_LINUX]: ["ctrl+shift+y"],
+  });
+});
+
+test("railSlotDefaultBinding formats positional and fallback bindings per platform and returns null for unbound overflow", () => {
+  assert.equal(railSlotDefaultBinding({ id: "ledger" }, 0, MACOS), "meta+2");
+  assert.equal(railSlotDefaultBinding({ id: "ledger" }, 0, WINDOWS_LINUX), "ctrl+2");
+  assert.equal(railSlotDefaultBinding({ id: "workshop" }, 6, MACOS), "meta+8");
+  assert.equal(railSlotDefaultBinding({ id: "workshop" }, 7, MACOS), null);
+  assert.equal(railSlotDefaultBinding({ id: "cyberchef", fallbackShortcut: "shift+y" }, 2, MACOS), "meta+4");
+  assert.equal(railSlotDefaultBinding({ id: "cyberchef", fallbackShortcut: "shift+y" }, 7, MACOS), "meta+shift+y");
+  assert.equal(railSlotDefaultBinding({ id: "excalidraw", fallbackShortcut: "shift+j" }, 8, WINDOWS_LINUX), "ctrl+shift+j");
+  assert.equal(railSlotDefaultBinding({ id: "interact" }, 9, WINDOWS_LINUX), null);
 });

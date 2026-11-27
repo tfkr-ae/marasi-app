@@ -14,7 +14,7 @@
 		getToastStore,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { ChromeIcon, ToolIcon } from "svelte-feather-icons";
+	import { ChromeIcon, ToolIcon, ZapIcon } from "svelte-feather-icons";
 	import {
 		AArrowDown,
 		AArrowUp,
@@ -88,6 +88,8 @@
 	import { addOpenPairToDrawing } from "../../tools/addToDrawing.js";
 	import { platformFromDesktopOS } from "../../keybindings/platform.js";
 	import { sendFocusedToChef, trackEditors } from "../../tools/cyberchef/sendAction.js";
+	import { interactActivator } from "../../interact.js";
+	import { railOrder } from "../../../stores/railOrderStore.js";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -126,6 +128,8 @@
 		"global.go-workshop": () => closeAndGoto("/workshop"),
 		"global.go-cyberchef": () => closeAndGoto("/cyberchef"),
 		"global.go-excalidraw": () => closeAndGoto("/excalidraw"),
+		"global.go-interact": () =>
+			interactActivator.activate(() => closeAndGoto("/interact")),
 		"global.go-settings": () => closeAndGoto("/settings"),
 		// The Ledger's open pair, on the last-opened drawing.
 		"global.add-to-drawing": () => addOpenPairToDrawing(toastStore, get(page).url.pathname),
@@ -181,6 +185,7 @@
 		"global.go-workshop": ToolIcon,
 		"global.go-cyberchef": ChefHat,
 		"global.go-excalidraw": Brush,
+		"global.go-interact": ZapIcon,
 		"global.go-settings": Settings,
 		"global.add-to-drawing": Shapes,
 		"global.send-to-cyberchef": CookingPot,
@@ -225,6 +230,7 @@
 				guiExtensionNames.split("\n").includes(extension.Name),
 			),
 			extensionMenus: JSON.parse(extensionMenusJSON),
+			railOrder: $railOrder,
 		}),
 	});
 	// The saved profile: the dispatcher resolves its active variant for the

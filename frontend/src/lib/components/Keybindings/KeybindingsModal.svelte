@@ -38,11 +38,12 @@
 	const toastStore = getToastStore();
 	const inputClass = "h-8 py-1 text-sm bg-white dark:bg-surface-700 border-0 ring-0 focus:border-0 focus:ring-0";
 
-	// The catalog and saved state as the modal opened.
-	const catalog = menuDispatcher.catalog;
+	// The live catalog (so rail-order changes update positional defaults) and
+	// the saved state as the modal opened.
+	$: catalog = $menuDispatcher.catalog;
 	const devicePlatform = menuDispatcher.platform;
 	const loadProblem = $keybindingState?.problem ?? "";
-	const opened = openDraft($keybindingState, catalog);
+	const opened = openDraft($keybindingState, menuDispatcher.catalog);
 
 	let draft = opened;
 	let profileId = (draft.profiles.find((p) => p.id === draft.activeProfile) ?? draft.profiles[0]).id;
