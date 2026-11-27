@@ -4,7 +4,7 @@
 	// the left and its control in one fixed-width column on the right, so
 	// inputs, buttons and switches line up. Lists are tables with the add
 	// row underneath.
-	import { ChevronLeft, ChevronRight, Chrome, FileType, Globe, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
+	import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Chrome, FileType, Globe, GripVertical, Highlighter, Info, Keyboard, Network, Palette, Pencil, RefreshCw, Replace, Search, Wrench, X } from "lucide-svelte";
 	import {
 		SetFlag,
 		ToggleFlag,
@@ -30,7 +30,7 @@
 		SlideToggle,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { onMount, tick } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 	import { settingsSection } from "../../lib/settingsSection.js";
 	import { page } from "$app/stores";
 	import { wrapStartsOn } from "../../lib/lineWrap.js";
@@ -65,6 +65,19 @@
 		resetHighlights,
 		saveHighlights,
 	} from "../../stores/highlightsStore.js";
+	import {
+		railOrder,
+		railOrderIsDefault,
+		railPages,
+		resetRailOrder,
+		saveRailOrder,
+	} from "../../stores/railOrderStore.js";
+	import {
+		dropSlotFromMidpoints,
+		reorderRailOrder,
+		targetIndexFromDropSlot,
+	} from "../../lib/railOrder.js";
+	import { RAIL_ICONS } from "../../lib/railIcons.js";
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { select } from "../../lib/storeSelect.js";
 	import { groupBuilding, jobLabel, jobsStore, jobStatus } from "../../stores/jobsStore";
@@ -80,7 +93,7 @@
 	const modalStore = getModalStore();
 
 	$: sections = [
-		{ id: "appearance", name: "Appearance", hint: "Text size and theme", icon: Palette },
+		{ id: "appearance", name: "Appearance", hint: "Text size, theme and app rail", icon: Palette },
 		{ id: "editing", name: "Keyboard & Editor", hint: "Shortcuts, Vim, syntax", icon: Keyboard },
 		{ id: "listener", name: "Listener", hint: "Default interface and port", icon: Globe },
 		{ id: "waypoints", name: "Waypoints", hint: "Host overrides", icon: Replace },
@@ -272,6 +285,84 @@
 			},
 		});
 	}
+
+	// Settings → Appearance: App rail order (Up/Down buttons, pointer drag, and Reset).
+	let railOrderListEl = null;
+	let railDrag = null;
+	let stopRailDragListeners = () => {};
+
+	function moveRailRow(fromIndex, toIndex) {
+		const next = reorderRailOrder($railOrder, fromIndex, toIndex);
+		saveRailOrder(next).catch((error) => toastError(toastStore, "Error saving rail order", error));
+	}
+
+	function handleResetRailOrder() {
+		resetRailOrder().catch((error) => toastError(toastStore, "Error resetting rail order", error));
+	}
+
+	function stopRailRowDrag() {
+		stopRailDragListeners();
+		stopRailDragListeners = () => {};
+		railDrag = null;
+	}
+
+	function startRailRowDrag(event, index) {
+		if (event.button !== 0 || event.pointerType === "touch") return;
+		if (event.target?.closest?.("button")) return;
+		stopRailRowDrag();
+		railDrag = {
+			fromIndex: index,
+			startX: event.clientX,
+			startY: event.clientY,
+			pointerId: event.pointerId,
+			active: false,
+			dropSlot: index,
+		};
+		const onMove = (moveEvent) => {
+			if (!railDrag || moveEvent.pointerId !== railDrag.pointerId) return;
+			if (!railDrag.active) {
+				const distance = Math.hypot(
+					moveEvent.clientX - railDrag.startX,
+					moveEvent.clientY - railDrag.startY,
+				);
+				if (distance < 4) return;
+			}
+			const rows = railOrderListEl?.querySelectorAll("[data-rail-order-item]") ?? [];
+			const midpoints = Array.from(rows, (el) => {
+				const rect = el.getBoundingClientRect();
+				return rect.top + rect.height / 2;
+			});
+			const dropSlot = dropSlotFromMidpoints(midpoints, moveEvent.clientY);
+			railDrag = { ...railDrag, active: true, dropSlot };
+		};
+		const onUp = (upEvent) => {
+			if (!railDrag || upEvent.pointerId !== railDrag.pointerId) return;
+			const { active, fromIndex, dropSlot } = railDrag;
+			stopRailRowDrag();
+			if (!active) return;
+			const targetIndex = targetIndexFromDropSlot(fromIndex, dropSlot);
+			if (targetIndex !== null) moveRailRow(fromIndex, targetIndex);
+		};
+		const onCancel = (cancelEvent) => {
+			if (!railDrag || cancelEvent.pointerId !== railDrag.pointerId) return;
+			stopRailRowDrag();
+		};
+		const onKeyDown = (keyEvent) => {
+			if (keyEvent.key === "Escape") stopRailRowDrag();
+		};
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+		window.addEventListener("pointercancel", onCancel);
+		window.addEventListener("keydown", onKeyDown);
+		stopRailDragListeners = () => {
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			window.removeEventListener("pointercancel", onCancel);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}
+
+	onDestroy(stopRailRowDrag);
 
 	function saveDefaultExclusion(types) {
 		ledgerStore.saveDefaultExclusion(types).catch((error) => {
@@ -561,6 +652,85 @@
 							checked={!$modeCurrent}
 							on:change={(event) => setLightMode(!event.currentTarget.checked)}
 						/>
+					</div>
+				</div>
+				<div class="mt-6">
+					<div class="flex items-baseline justify-between gap-4">
+						<div>
+							<h4 class="text-sm font-bold">App rail order</h4>
+							<p class="text-xs opacity-70">
+								Reorder the built-in pages below Home in the app rail and mobile bottom bar.
+							</p>
+						</div>
+						<button
+							type="button"
+							class="btn btn-sm shrink-0 {neutral}"
+							disabled={$railOrderIsDefault}
+							data-testid="rail-order-reset"
+							on:click={handleResetRailOrder}>Reset to default order</button
+						>
+					</div>
+					<div
+						class="mt-3 border-t border-surface-300 dark:border-surface-600"
+						role="list"
+						aria-label="App rail order"
+						data-testid="rail-order-list"
+						bind:this={railOrderListEl}
+					>
+						{#each $railPages as item, index (item.id)}
+							<div
+								role="listitem"
+								data-rail-order-item={item.id}
+								class="relative flex items-center justify-between gap-4 border-b border-surface-300 py-2 dark:border-surface-600 {railDrag?.active && railDrag.fromIndex === index
+									? 'opacity-50'
+									: ''} {railDrag?.active ? 'cursor-grabbing' : !$mobile ? 'cursor-grab' : ''}"
+								on:pointerdown={(event) => startRailRowDrag(event, index)}
+							>
+								{#if railDrag?.active && railDrag.dropSlot === index}
+									<div
+										class="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-primary-500"
+										aria-hidden="true"
+									></div>
+								{/if}
+								<div class="flex min-w-0 items-center gap-3">
+									{#if !$mobile}
+										<GripVertical size={15} class="shrink-0 opacity-40" aria-hidden="true" />
+									{/if}
+									<span class="flex h-5 w-5 shrink-0 items-center justify-center opacity-80">
+										<svelte:component this={RAIL_ICONS[item.id]} size="16" />
+									</span>
+									<span class="truncate text-sm">{item.label}</span>
+								</div>
+								<div class="flex shrink-0 items-center gap-1">
+									<button
+										type="button"
+										class="btn btn-sm h-7 w-7 shrink-0 p-0 {neutral}"
+										aria-label="Move {item.label} up"
+										title="Move {item.label} up"
+										disabled={index === 0}
+										on:click={() => moveRailRow(index, index - 1)}
+									>
+										<ChevronUp size={15} />
+									</button>
+									<button
+										type="button"
+										class="btn btn-sm h-7 w-7 shrink-0 p-0 {neutral}"
+										aria-label="Move {item.label} down"
+										title="Move {item.label} down"
+										disabled={index === $railPages.length - 1}
+										on:click={() => moveRailRow(index, index + 1)}
+									>
+										<ChevronDown size={15} />
+									</button>
+								</div>
+								{#if railDrag?.active && index === $railPages.length - 1 && railDrag.dropSlot === $railPages.length}
+									<div
+										class="pointer-events-none absolute inset-x-0 -bottom-px z-10 h-0.5 bg-primary-500"
+										aria-hidden="true"
+									></div>
+								{/if}
+							</div>
+						{/each}
 					</div>
 				</div>
 			{:else if section === "editing"}

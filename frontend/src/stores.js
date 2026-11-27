@@ -13,6 +13,7 @@ import "./stores/armoryStore";
 import "./stores/launchpadStore";
 import "./stores/checkpointStore";
 import { readHighlights } from "./stores/highlightsStore";
+import { readRailOrder } from "./stores/railOrderStore";
 // The Ledger's stores register with projectData as they load.
 import "./stores/ledgerStore";
 import "./stores/sitemapStore";
@@ -85,7 +86,7 @@ export async function readConfig() {
   lineWrap.set(wrapStartsOn(config.WrapMode));
   // Set before anything is drawn, so the app never shows at Default first.
   textSize.set(textSizeFrom(config.TextSize));
-  await Promise.all([readKeybindings(), readHighlights()]);
+  await Promise.all([readKeybindings(), readHighlights(), readRailOrder()]);
 }
 
 // Saved keybinding profiles ({ config, problem }) from the app config; the

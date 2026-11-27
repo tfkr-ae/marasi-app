@@ -39,15 +39,7 @@
 	import { onDestroy, onMount, tick } from "svelte";
 
 	import { AppRail, AppRailAnchor } from "@skeletonlabs/skeleton";
-	import {
-		BookIcon,
-		SettingsIcon,
-		SendIcon,
-		ToolIcon,
-		FlagIcon,
-		CompassIcon,
-		ZapIcon,
-	} from "svelte-feather-icons";
+	import { SettingsIcon } from "svelte-feather-icons";
 	import { goto, preloadCode } from "$app/navigation";
 	import "../app.css";
 	let currentTile = 0;
@@ -106,14 +98,10 @@
 	import SelectFindingModal from "../lib/components/SelectFindingModal.svelte";
 	import SelectWordlistModal from "../lib/components/SelectWordlistModal.svelte";
 	import { AnswerQuitQuestion, OpenFileDialog } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
-	import {
-		ChefHat,
-		Brush,
-		BookOpenCheckIcon,
-		HomeIcon,
-		PuzzleIcon,
-		Swords,
-	} from "lucide-svelte";
+	import { PuzzleIcon } from "lucide-svelte";
+	import { RAIL_ICONS } from "../lib/railIcons.js";
+	import { projectBottomBar } from "../lib/railOrder.js";
+	import { railPages } from "../stores/railOrderStore.js";
 	import BottomBar from "../lib/components/BottomBar.svelte";
 	import MenuModal from "../lib/components/MenuModal.svelte";
 	import MetadataModal from "../lib/components/MetadataModal.svelte";
@@ -209,37 +197,44 @@
 	$: heldBadge = checkpointBadge($checkpointStore.items.length);
 	// The Armory icon's runs-in-progress badge (see armoryBadge).
 	$: runningBadge = armoryBadge(activeCountsOf($armoryStore).total);
-	// The narrow iOS bottom bar's pages (BottomBar.svelte), going where the
-	// rail's tiles go: Home and the main four in the bar, the rest under More.
-	$: barPrimary = [
-		{ id: "home", label: "Home", icon: HomeIcon, path: "/", go: () => goto("/") },
-		{ id: "ledger", label: "Ledger", icon: BookIcon, path: "/ledger", go: () => goto("/ledger") },
-		{ id: "checkpoint", label: "Checkpoint", icon: FlagIcon, path: "/checkpoint", badge: heldBadge.label, go: () => goto("/checkpoint") },
-		{ id: "launchpad", label: "Launchpad", icon: SendIcon, path: "/launchpad", go: () => goto("/launchpad") },
-		{ id: "logbook", label: "Logbook", icon: BookOpenCheckIcon, path: "/logbook", go: () => goto("/logbook") },
-	];
+	$: railTileTitles = {
+		checkpoint: heldBadge.title,
+		armory: runningBadge.title,
+	};
+	$: barBadges = {
+		checkpoint: heldBadge.label,
+		armory: runningBadge.label,
+	};
+	function openRailPage(item) {
+		if (item.id === "interact") return openInteract();
+		return goto(item.route);
+	}
+	function toBottomBarItem(item, badges) {
+		return {
+			id: item.id,
+			label: item.label,
+			icon: RAIL_ICONS[item.id],
+			path: item.route,
+			...(badges[item.id] ? { badge: badges[item.id] } : {}),
+			go: () => openRailPage(item),
+		};
+	}
+	$: visibleRailPages = $railPages.filter(
+		(item) => $chefShown || item.id !== "cyberchef",
+	);
+	$: bottomBarSplit = projectBottomBar($railPages, {
+		chefShown: $chefShown,
+	});
+	// The narrow mobile bottom bar's pages (BottomBar.svelte), driven from the
+	// resolved rail order: Home + first 4 visible pages in the bar, the rest
+	// under More in rail order, followed by extensions and Settings.
+	$: barPrimary = bottomBarSplit.primary.map((item) =>
+		toBottomBarItem(item, barBadges),
+	);
 	$: barMore = [
-		{ id: "compass", label: "Compass", icon: CompassIcon, path: "/compass", go: () => goto("/compass") },
-		{ id: "armory", label: "Armory", icon: Swords, path: "/armory", badge: runningBadge.label, go: () => goto("/armory") },
-		{ id: "workshop", label: "Workshop", icon: ToolIcon, path: "/workshop", go: () => goto("/workshop") },
-		// CyberChef only where the app offers it (chefShown).
-		...($chefShown
-			? [{ id: "cyberchef", label: "CyberChef", icon: ChefHat, path: "/cyberchef", go: () => goto("/cyberchef") }]
-			: []),
-		{
-			id: "excalidraw",
-			label: "Excalidraw",
-			icon: Brush,
-			path: "/excalidraw",
-			go: () => goto("/excalidraw"),
-		},
-		{
-			id: "interact",
-			label: "Interactsh",
-			icon: ZapIcon,
-			path: "/interact",
-			go: openInteract,
-		},
+		...bottomBarSplit.more.map((item) =>
+			toBottomBarItem(item, barBadges),
+		),
 		...$extensions
 			.filter((extension) => $extensions_ui[extension.Name]?.icon || extension.UICode)
 			.map((extension) => ({
@@ -569,7 +564,7 @@
 					}}
 					bind:group={currentTile}
 					name="Home"
-					value={appRailIndex++}
+					value={0}
 					title="Home"
 				>
 					<svelte:fragment slot="lead">
@@ -590,227 +585,39 @@
 					</svelte:fragment>
 					<span></span>
 				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/ledger"}
-					on:click={() => {
-						goto("/ledger");
-					}}
-					bind:group={currentTile}
-					name="Ledger"
-					value={appRailIndex++}
-					title="Ledger"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<BookIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Ledger</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/compass"}
-					on:click={() => {
-						goto("/compass");
-					}}
-					bind:group={currentTile}
-					name="Compass"
-					value={appRailIndex++}
-					title="Compass"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<CompassIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Compass</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/checkpoint"}
-					on:click={() => {
-						goto("/checkpoint");
-					}}
-					bind:group={currentTile}
-					name="Checkpoint"
-					value={appRailIndex++}
-					title={heldBadge.title}
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="relative flex justify-center items-center w-full"
-						>
-							<FlagIcon size="20" />
-							{#if heldBadge.label}
-								<span
-									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
-									data-testid="checkpoint-badge"
-									aria-label="{heldBadge.label} intercepted"
-								>{heldBadge.label}</span>
-							{/if}
-						</div>
-					</svelte:fragment>
-					<span>Checkpoint</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/launchpad"}
-					on:click={() => {
-						goto("/launchpad");
-					}}
-					bind:group={currentTile}
-					name="Launchpad"
-					value={appRailIndex++}
-					title="Launchpad"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<SendIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Launchpad</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/armory"}
-					on:click={() => {
-						goto("/armory");
-					}}
-					bind:group={currentTile}
-					name="Armory"
-					value={appRailIndex++}
-					title={runningBadge.title}
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="relative flex justify-center items-center w-full"
-						>
-							<Swords size="20" />
-							{#if runningBadge.label}
-								<span
-									class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
-									data-testid="armory-badge"
-									aria-label="{runningBadge.label} running"
-								>{runningBadge.label}</span>
-							{/if}
-						</div>
-					</svelte:fragment>
-					<span>Armory</span>
-				</AppRailAnchor>
-
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/logbook"}
-					on:click={() => {
-						goto("/logbook");
-					}}
-					bind:group={currentTile}
-					name="Logbook"
-					value={appRailIndex++}
-					title="Logbook"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<BookOpenCheckIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Logbook</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/workshop"}
-					on:click={() => {
-						goto("/workshop");
-					}}
-					bind:group={currentTile}
-					name="Workshop"
-					value={appRailIndex++}
-					title="Workshop"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<ToolIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Workshop</span>
-				</AppRailAnchor>
-				{#if $chefShown}
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/cyberchef"}
-					on:click={() => goto("/cyberchef")}
-					bind:group={currentTile}
-					name="CyberChef"
-					value={appRailIndex++}
-					title="CyberChef"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<ChefHat size="20" />
-						</div>
-					</svelte:fragment>
-					<span>CyberChef</span>
-				</AppRailAnchor>
-				{/if}
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/excalidraw"}
-					on:click={() => goto("/excalidraw")}
-					bind:group={currentTile}
-					name="Excalidraw"
-					value={appRailIndex++}
-					title="Excalidraw"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<Brush size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Excalidraw</span>
-				</AppRailAnchor>
-				<AppRailAnchor
-					regionLabel="!text-2xs !font-semibold leading-tight"
-					selected={$page.url.pathname ===
-						"/interact"}
-					on:click={openInteract}
-					bind:group={currentTile}
-					name="Interactsh"
-					value={appRailIndex++}
-					title="Interactsh"
-				>
-					<svelte:fragment slot="lead">
-						<div
-							class="flex justify-center items-center w-full"
-						>
-							<ZapIcon size="20" />
-						</div>
-					</svelte:fragment>
-					<span>Interactsh</span>
-				</AppRailAnchor>
+				{#each visibleRailPages as item, index (item.id)}
+					<AppRailAnchor
+						regionLabel="!text-2xs !font-semibold leading-tight"
+						selected={$page.url.pathname === item.route}
+						on:click={() => openRailPage(item)}
+						bind:group={currentTile}
+						name={item.label}
+						value={index + 1}
+						title={railTileTitles[item.id] ?? item.label}
+					>
+						<svelte:fragment slot="lead">
+							<div
+								class="{item.id === 'checkpoint' || item.id === 'armory' ? 'relative ' : ''}flex justify-center items-center w-full"
+							>
+								<svelte:component this={RAIL_ICONS[item.id]} size="20" />
+								{#if item.id === "checkpoint" && heldBadge.label}
+									<span
+										class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+										data-testid="checkpoint-badge"
+										aria-label="{heldBadge.label} intercepted"
+									>{heldBadge.label}</span>
+								{:else if item.id === "armory" && runningBadge.label}
+									<span
+										class="badge-icon variant-filled-primary pointer-events-none absolute left-1/2 -top-1.5 ml-1 h-auto min-w-[1.125rem] w-auto px-1 py-px text-3xs leading-none ring-2 ring-surface-50 dark:ring-surface-800"
+										data-testid="armory-badge"
+										aria-label="{runningBadge.label} running"
+									>{runningBadge.label}</span>
+								{/if}
+							</div>
+						</svelte:fragment>
+						<span>{item.label}</span>
+					</AppRailAnchor>
+				{/each}
 				{#each $extensions as extension}
 					{@const iconSchema =
 						$extensions_ui[extension.Name]

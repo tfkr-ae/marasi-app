@@ -72,6 +72,42 @@ func writeConfigKeys(path string, values map[string]any) error {
 		}
 		mapping.Content = append(mapping.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, &value)
 	}
+	return writeConfigDocument(path, doc)
+}
+
+// deleteConfigKeys removes the given top-level keys from the app config,
+// leaving every other key as parsed, and writes the file atomically. If none
+// of the keys are present, the file is left untouched.
+func deleteConfigKeys(path string, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	doc, err := readConfigDocument(path)
+	if err != nil {
+		return err
+	}
+	drop := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		drop[key] = struct{}{}
+	}
+	mapping := doc.Content[0]
+	kept := make([]*yaml.Node, 0, len(mapping.Content))
+	removed := false
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if _, ok := drop[mapping.Content[i].Value]; ok {
+			removed = true
+			continue
+		}
+		kept = append(kept, mapping.Content[i], mapping.Content[i+1])
+	}
+	if !removed {
+		return nil
+	}
+	mapping.Content = kept
+	return writeConfigDocument(path, doc)
+}
+
+func writeConfigDocument(path string, doc *yaml.Node) error {
 	var data bytes.Buffer
 	encoder := yaml.NewEncoder(&data)
 	encoder.SetIndent(2)
