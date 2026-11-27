@@ -2,7 +2,25 @@
 
 ## Entry selection, moves and the entry menu
 
-**Entry menu.** Right-click an entry: outside the selection it becomes the selection, without reseeding. The menu is the Ledger's `.ledger-row-menu`: a header (`#n`, method, status and URL for one entry; `N entries · in <launchpad>` with method and status counts for several), then `[data-menu-item=move]` (`Move N to launchpad`, a submenu `Adds at the end` listing the other launchpads with counts, each greyed with its refusal as the `title`), `top`, `up`, `down`, `bottom` (greyed `Already first`/`Already last`, `Grouped by status` or `Searching`), `browser-view` (`Copy browser view URL`, greyed `One entry at a time` for several, `No response yet` for a pending or cancelled entry, `Not for a WebSocket upgrade` for a `101`), `finding` and `testcase` (see below), and `remove` (`Remove N from launchpad`, greyed `N launching`). A pending entry greys `move` itself, so its submenu does not open. Disabled items cannot be hovered by the driver; read their `title` from the capture instead.
+**Entry menu.** Right-click an entry: outside the selection it becomes the selection, without reseeding. The menu is the Ledger's `.ledger-row-menu`: a header (`#n`, method, status and URL for one entry; `N entries · in <launchpad>` with method and status counts for several), then, for one streamed entry (gRPC, gRPC-Web, Connect, SSE, NDJSON) or a WebSocket upgrade whose connection can open, `[data-menu-item=messages]` (`Open messages`) and a separator, then `[data-menu-item=move]` (`Move N to launchpad`, a submenu `Adds at the end` listing the other launchpads with counts, each greyed with its refusal as the `title`), `top`, `up`, `down`, `bottom` (greyed `Already first`/`Already last`, `Grouped by status` or `Searching`), `browser-view` (`Copy browser view URL`, greyed `One entry at a time` for several, `No response yet` for a pending or cancelled entry, `Not for a WebSocket upgrade` for a `101`), `finding` and `testcase` (see below), and `remove` (`Remove N from launchpad`, greyed `N launching`). A pending entry greys `move` itself, so its submenu does not open. Disabled items cannot be hovered by the driver; read their `title` from the capture instead.
+
+**Open messages.** The entry menu's `[data-menu-item=messages]` opens the Messages modal as the Ledger's `Open messages` does (`messagesModal` in `frontend/src/lib/messages/open.js`): the stream view (`Messages`, `Checkpoint`, `Inject`, `Pair`) for a streamed entry, the WebSocket view (`Stream`, `Checkpoint`, `Inject`, `Connection`) for an upgrade, read with the entry's full details. It is absent for several entries, a plain HTTP entry, and a failed or dropped upgrade. Send a WebSocket upgrade and a gRPC call to launchpads from the Ledger (`⌘⇧L` on each drawer, see `../ledger/websocket.md` and `../ledger/streamed-pairs.md`), then (proven on a `/ws-lp` upgrade that carried `hello-lp-1`, and a 4-tick `subscribe`, which stores 5 messages):
+
+```json
+{"name":"lp-open-messages","steps":[
+ {"click":".lp-row button.flex-1","hasText":"Request 3"},{"click":".lp-entry","hasText":"/ws-lp"},{"click":".lp-entry","hasText":"/ws-lp","button":"right"},
+ {"waitSelector":".ledger-row-menu [data-menu-item=messages]"},{"click":"[data-menu-item=messages]"},
+ {"waitText":"hello-lp-1"},{"waitText":"Connection"},{"key":"escape"},{"waitNoText":"hello-lp-1"}]}
+```
+
+```json
+{"name":"lp-stream-messages","steps":[
+ {"click":".lp-row button.flex-1","hasText":"Request 4"},{"click":".lp-entry","hasText":"Subscribe"},{"click":".lp-entry","hasText":"Subscribe","button":"right"},
+ {"waitSelector":"[data-menu-item=messages]"},{"click":"[data-menu-item=messages]"},
+ {"waitText":"5 messages"},{"waitText":"Pair"},{"key":"escape"},{"waitNoText":"5 messages"}]}
+```
+
+`Request 3` and `Request 4` are the launchpads those two sends created here; use the names yours got. Open the launchpad first: a collapsed launchpad shows no entries, so `.lp-entry` finds nothing.
 
 **Findings and test cases.** The entry menu's `[data-menu-item=finding]` and `[data-menu-item=testcase]` act on the entry selection's requests; the launchpad menu's act on all of that launchpad's entries. Each is a submenu with `f-new`/`t-new` (`New finding from this request`, or `New finding with N requests`), which opens the Logbook record modal (`[data-record-modal=finding]` or `testCase`, see `logbook.md`) with those requests linked on Save and close, then `f-link`/`t-link` (`Link to finding ›`, listing the project's records as `[role=menuitemcheckbox]`: checked when every request is linked, which greys it as `Already linked`; mixed when some are) and `f-unlink`/`t-unlink` (`Unlink from finding ›`) when any is linked. Linking toasts `Linked N requests to finding "<title>"`, counting only the requests not yet linked; read `finding_requests` and `test_case_requests` to prove it. With focus in the tree, `⌘⇧F` and `⌘⇧B` open the same modal for the selection. Proven on a launchpad `3 requests` (Ledger ⌘A then `⌘⇧L` over `/o1.html`, `/o2.html`, `/o3.html`), in this order:
 

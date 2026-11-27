@@ -2,9 +2,9 @@
 
 ## Sub-features
 
-- Launchpad dock: drag to resize, snap-collapse to a strip, auto-hide while editing
+- Launchpad dock: drag to any width up to its maximum, collapse to a strip when a drag ends under 64 px, a click anywhere on the strip expands it, auto-hide while editing
 - Launchpad file tree: Launchpad entries in entry order, numbered by position and windowed to the last 10, Group by status, Expand all / Collapse all, the floating `End of …` button
-- Entry selection (click, ⌘-click, ⇧-click, ⌘A, Esc), drag to reorder or move entries to another launchpad, the entry context menu (Move to launchpad, Order, Copy browser view URL, Finding, Test case, Remove from launchpad) and ⌘⇧↑/⌘⇧↓/⌘↑/⌘↓ moves
+- Entry selection (click, ⌘-click, ⇧-click, ⌘A, Esc), drag to reorder or move entries to another launchpad, the entry context menu (Open messages for one streamed or WebSocket entry, Move to launchpad, Order, Copy browser view URL, Finding, Test case, Remove from launchpad) and ⌘⇧↑/⌘⇧↓/⌘↑/⌘↓ moves
 - Findings and test cases from entries: the entry menu's and the launchpad menu's `Finding ›`/`Test case ›` (new, link, unlink) and the tree's `⌘⇧F`/`⌘⇧B`, which open the Logbook record modal with the entries' requests
 - Moves and deletes refused while a launch is pending, a pair is already in the target, or the tree is grouped or searching; the Launchpad draft follows its entry when it moves
 - Search (names locally; entry heads and bodies through Marasi), create empty launchpad, rename and description
@@ -23,5 +23,5 @@ Read `getting-there.md` for every Launchpad change: it names the entry points a 
 | [getting-there.md](launchpad/getting-there.md) | The route and `⌘5`, launchpad rows, the catalog shortcuts, `⌘J`, seeding a launchpad without the Ledger |
 | [send-launch-compare.md](launchpad/send-launch-compare.md) | Sending from the Ledger, editing and launching, tracked launches and Cancel, Compare, search, the tree, `End of …`, the dock |
 | [selection-and-drag.md](launchpad/selection-and-drag.md) | Seeding several launchpads, entry selection, drag to reorder or move, refused drops while a launch is pending |
-| [menus.md](launchpad/menus.md) | The entry menu, findings and test cases, the launchpad menu (rename, delete), browser view URL, Move and Order, the draft following its entry |
+| [menus.md](launchpad/menus.md) | The entry menu and its Open messages, findings and test cases, the launchpad menu (rename, delete), browser view URL, Move and Order, the draft following its entry |
 | [gotchas.md](launchpad/gotchas.md) | Long strings, drafts and prompts, waits and scoping, listener and HTTPS, sticky rows, theme captures |

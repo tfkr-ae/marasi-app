@@ -36,10 +36,14 @@ export function collectExpression(spec) {
 			const x = box.left + box.width / 2;
 			const y = box.top + box.height / 2;
 			// A centre clipped by a scrolling ancestor (a modal's own scroll
-			// pane) is off screen too: scrollIntoView scrolls that pane.
+			// pane) is off screen too: scrollIntoView scrolls that pane. A
+			// fixed overlay (the Logbook's expanded pair) is placed against the
+			// viewport, so the panes above it never clip what it holds.
 			let clipped = false;
-			for (let parent = el.parentElement; parent && !clipped; parent = parent.parentElement) {
+			let escaped = getComputedStyle(el).position === "fixed";
+			for (let parent = el.parentElement; parent && !clipped && !escaped; parent = parent.parentElement) {
 				const style = getComputedStyle(parent);
+				escaped = style.position === "fixed";
 				if (!/(auto|scroll|hidden)/.test(style.overflowX + style.overflowY)) continue;
 				const pane = parent.getBoundingClientRect();
 				clipped = x < pane.left || y < pane.top || x >= pane.right || y >= pane.bottom;
