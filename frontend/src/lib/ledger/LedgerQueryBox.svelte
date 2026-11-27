@@ -260,7 +260,10 @@
 		view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value }, selection: { anchor: value.length } });
 		syncing = false;
 	}
-	$: if (view) view.dispatch({ effects: setError.of(errorDecorations(view.state.doc.toString(), error)) });
+	$: if (view) {
+		view.dispatch({ effects: setError.of(errorDecorations(view.state.doc.toString(), error)) });
+		measureOverflow();
+	}
 	$: if (view) {
 		view.dispatch({ effects: wrapping.reconfigure(expanded ? EditorView.lineWrapping : []) });
 		measureOverflow();
@@ -269,9 +272,10 @@
 
 <svelte:window on:pointerdown|capture={onWindowPointerDown} on:resize={measureOverflow} />
 
-<!-- Expanded, the box keeps at least 3/5 of the row, so a long error beside
-     it truncates instead of squeezing the query into a narrow column. -->
-<div class="flex min-w-0 {expanded ? 'shrink-0 grow basis-3/5' : 'flex-1'} items-start gap-1">
+<!-- The box keeps a minimum width so an inline error beside it truncates first
+     instead of crushing the query to 0px and pushing the expand button over it.
+     Expanded, it keeps at least 3/5 of the row while room allows. -->
+<div class="ledger-query-box flex flex-1 items-start gap-1 {expanded ? 'ledger-query-box-expanded' : ''}">
 	<div
 		bind:this={parent}
 		class="ledger-query min-w-0 flex-1 {expanded ? 'ledger-query-expanded' : ''}"
@@ -293,6 +297,12 @@
 </div>
 
 <style>
+	.ledger-query-box {
+		min-width: 10rem;
+	}
+	.ledger-query-box-expanded {
+		flex: 1 0 60%;
+	}
 	.ledger-query {
 		--ledger-query-field: rgb(var(--color-primary-600));
 		--ledger-query-operator: rgb(var(--color-surface-400));
