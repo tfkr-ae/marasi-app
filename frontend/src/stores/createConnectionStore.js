@@ -753,6 +753,15 @@ export function reduce(state, action) {
 
     case "PROJECT_LOADED":
       // A switch loaded another project: reconnects compare against it.
+      // After a failed first load, opening another project recovers the
+      // connection and reopens the event stream.
+      if (state.phase === "failed" && state.loadFailed) {
+        return go(
+          state,
+          { phase: "connected", project: action.path, loaded: true, loadFailed: false, error: null },
+          [{ type: "open-events", resume: false }],
+        );
+      }
       return go(state, { project: action.path, loaded: true });
 
     case "LOAD_FAILED":

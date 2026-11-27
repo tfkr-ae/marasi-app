@@ -12,6 +12,7 @@
 		pagesHeld,
 		SLOW_LOAD_MS,
 		startupOffersConnections,
+		startupOffersProjectSwitch,
 		startupOffersRetry,
 		startupText,
 	} from "../lib/connection/status.js";
@@ -66,7 +67,7 @@
 		loadedProject,
 		startupPart,
 	} from "../stores/projectStore.js";
-	import { openProjectFile, retryOpen } from "../lib/globalActions.js";
+	import { openProjectFile, openProjectPicker, retryOpen } from "../lib/globalActions.js";
 	import { connectionStore } from "../stores/connectionStore";
 	import { localCLIStore } from "../stores/localCLIStore.js";
 	import {
@@ -354,6 +355,11 @@
 	// so the researcher can switch before the app has loaded.
 	function openConnections() {
 		if ($modalStore[0]?.component !== "Connections") modalStore.trigger(connectionsModal());
+	}
+	// The start screen's Switch project… opens the project picker over it when
+	// the running service's project failed to load (or is taking long).
+	function openProject() {
+		if (!$modalStore[0]) openProjectPicker(toastStore, modalStore);
 	}
 	// Mobile: modals and drawers leave the rail or bottom bar in view and in
 	// use (app.css, overlayIsolation.js). A tap on one of its pages closes
@@ -1026,6 +1032,16 @@
 									on:click={() => connectionStore.retry()}
 								>
 									Retry
+								</button>
+							{/if}
+							{#if startupOffersProjectSwitch($connectionStore, slowLoad)}
+								<button
+									type="button"
+									class="btn btn-sm {neutralVariant($modeCurrent)}"
+									data-testid="startup-switch-project"
+									on:click={openProject}
+								>
+									Switch project…
 								</button>
 							{/if}
 							<button

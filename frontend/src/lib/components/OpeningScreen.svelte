@@ -161,6 +161,10 @@
 					<button class={neutral} on:click={() => dispatch("stay")}>
 						Stay in {screen.actions.stayIn}
 					</button>
+				{:else}
+					<button class={neutral} on:click={() => dispatch("stay")}>
+						Back
+					</button>
 				{/if}
 				{#if screen.actions.tryAgain}
 					<button class={neutral} on:click={() => dispatch("retry")}>

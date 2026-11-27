@@ -84,7 +84,7 @@ function fakeStreams() {
   return { EventSource, emit, streams };
 }
 
-function setup({ confirmOpen = async () => true, password = async (id) => `pw-${id}` } = {}) {
+function setup({ confirmOpen = async () => true, password = async (id) => `pw-${id}`, load = async () => {} } = {}) {
   const service = fakeService();
   const streams = fakeStreams();
   const client = createServiceClient({ fetch: service.fetch, EventSource: streams.EventSource });
@@ -92,7 +92,10 @@ function setup({ confirmOpen = async () => true, password = async (id) => `pw-${
   const projectStore = createProjectStore(
     createProjectApi(client, {
       confirmSwitch: () => confirmOpen(),
-      loadProject: async (path, part, live) => loads.push({ path, live }),
+      loadProject: async (path, part, live) => {
+        loads.push({ path, live });
+        await load(path, part, live);
+      },
     }),
     { setTimeout: () => 0, clearTimeout: () => {} },
   );
@@ -110,10 +113,20 @@ function setup({ confirmOpen = async () => true, password = async (id) => `pw-${
     },
     { setTimeout: () => 1, clearTimeout: () => {} },
   );
+  // As connectionStore.js wires it: each newly loaded project informs the
+  // connection store so reconnects compare against it and a failed first load
+  // recovers to connected.
+  let reportedLoaded = null;
+  projectStore.subscribe((state) => {
+    if (state.loaded && state.loaded !== reportedLoaded) {
+      reportedLoaded = state.loaded;
+      connectionStore.dispatch({ type: "PROJECT_LOADED", path: state.loaded.path });
+    }
+  });
   // As +layout.svelte wires it: another client's opened project goes to
   // the connection store, which asks, then loads it.
   projectStore.follow({ opened: (path) => connectionStore.followSwitch(path) });
-  return { service, client, projectStore, connectionStore, loads, follows, emit: streams.emit };
+  return { service, client, projectStore, connectionStore, loads, follows, emit: streams.emit, streams: streams.streams };
 }
 
 // Connects to Alpha with /a-current.marasi loaded.
@@ -297,4 +310,118 @@ it("the app's own open in progress isn't followed as another client's", async ()
   await settle();
   assert.deepEqual(fake.follows, []);
   assert.equal(get(fake.projectStore).loaded.path, "/a-next.marasi");
+});
+
+it("after a failed first load, opening another project recovers the connection and reopens /events", async () => {
+  const fake = setup({
+    load: async (path) => {
+      if (path === "/broken.marasi") throw new Error("GET /dashboard: internal: corrupt db");
+    },
+  });
+
+  fake.connectionStore.start();
+  await settle();
+  fake.service.reply("GET", "http://a:9000/service/status", statusOf("/broken.marasi"));
+  await settle();
+
+  const failed = get(fake.connectionStore);
+  assert.equal(failed.phase, "failed");
+  assert.equal(failed.loadFailed, true);
+  assert.equal(failed.project, "/broken.marasi");
+  assert.equal(get(fake.projectStore).loaded, null);
+  const streamsBefore = fake.streams.length;
+
+  // Picking another project from the start screen opens it on the running service.
+  const opening = fake.projectStore.open({ path: "/good.marasi" });
+  await settle();
+  fake.service.reply("GET", "http://a:9000/checkpoint", { items: [] });
+  await settle();
+  assert.deepEqual(opensOn(fake, "a")[0].body, { path: "/good.marasi" });
+  fake.service.reply("POST", "http://a:9000/project/open", { project: "/good.marasi" });
+
+  assert.equal((await opening).status, "opened");
+  await settle();
+
+  const recovered = get(fake.connectionStore);
+  assert.equal(recovered.phase, "connected");
+  assert.equal(recovered.loadFailed, false);
+  assert.equal(recovered.error, null);
+  assert.equal(recovered.loaded, true);
+  assert.equal(recovered.project, "/good.marasi");
+  assert.equal(get(fake.projectStore).loaded.path, "/good.marasi");
+  assert.equal(fake.streams.length, streamsBefore + 1, "/events reopened for the recovered connection");
+});
+
+it("if switching away from a failed first load fails too, staying returns to the start screen and another pick still recovers", async () => {
+  const fake = setup({
+    load: async (path) => {
+      if (path === "/broken.marasi") throw new Error("GET /dashboard: internal: corrupt db");
+    },
+  });
+
+  fake.connectionStore.start();
+  await settle();
+  fake.service.reply("GET", "http://a:9000/service/status", statusOf("/broken.marasi"));
+  await settle();
+  assert.equal(get(fake.connectionStore).loadFailed, true);
+
+  // First pick fails POST /project/open before switching.
+  const first = fake.projectStore.open({ path: "/also-broken.marasi" });
+  await settle();
+  fake.service.reply("GET", "http://a:9000/checkpoint", { items: [] });
+  await settle();
+  fake.service.refuse("POST", "http://a:9000/project/open", 500);
+  assert.equal((await first).status, "failed");
+  assert.equal(get(fake.projectStore).shown, true);
+  assert.equal(get(fake.projectStore).opening.current, null);
+
+  // Back (stay) closes the opening screen without marking anything loaded.
+  fake.projectStore.stay();
+  assert.equal(get(fake.projectStore).opening, null);
+  assert.equal(get(fake.projectStore).loaded, null);
+  assert.equal(get(fake.connectionStore).phase, "failed");
+  assert.equal(get(fake.connectionStore).loadFailed, true);
+
+  // A working project then opens and recovers the connection.
+  const second = fake.projectStore.open({ name: "fresh" });
+  await settle();
+  fake.service.reply("GET", "http://a:9000/checkpoint", { items: [] });
+  await settle();
+  fake.service.reply("POST", "http://a:9000/project/open", { project: "/cfg/projects/fresh.marasi" });
+  assert.equal((await second).status, "opened");
+  await settle();
+  assert.equal(get(fake.connectionStore).phase, "connected");
+  assert.equal(get(fake.connectionStore).project, "/cfg/projects/fresh.marasi");
+});
+
+it("switching projects during a hanging first load supersedes it so its late failure changes nothing", async () => {
+  const slowLoad = deferred();
+  const fake = setup({
+    load: async (path) => {
+      if (path === "/hanging.marasi") return slowLoad.promise;
+    },
+  });
+
+  fake.connectionStore.start();
+  await settle();
+  fake.service.reply("GET", "http://a:9000/service/status", statusOf("/hanging.marasi"));
+  await settle();
+  assert.equal(get(fake.connectionStore).phase, "connected");
+  assert.equal(get(fake.connectionStore).loaded, false);
+
+  const opening = fake.projectStore.open({ path: "/good.marasi" });
+  await settle();
+  fake.service.reply("GET", "http://a:9000/checkpoint", { items: [] });
+  await settle();
+  fake.service.reply("POST", "http://a:9000/project/open", { project: "/good.marasi" });
+  assert.equal((await opening).status, "opened");
+
+  // The hanging first load later rejects; it was superseded and must not fail the connection.
+  slowLoad.reject(new Error("GET /traffic: timeout"));
+  await settle();
+
+  assert.equal(get(fake.connectionStore).phase, "connected");
+  assert.equal(get(fake.connectionStore).loaded, true);
+  assert.equal(get(fake.connectionStore).project, "/good.marasi");
+  assert.equal(get(fake.projectStore).loaded.path, "/good.marasi");
 });
