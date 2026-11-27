@@ -369,6 +369,57 @@ test("Interactsh is searchable, bindable, and resettable back to its unbound pos
   assert.equal(resetRow.resettable, false);
 });
 
+test("Keybindings settings reflects live positional defaults for custom rail order and Reset restores the current slot's default", () => {
+  const customOrder = [
+    "interact",   // slot 2 -> meta+2 / ctrl+2
+    "cyberchef",  // slot 3 -> meta+3 / ctrl+3
+    "launchpad",
+    "armory",
+    "logbook",
+    "checkpoint",
+    "compass",
+    "ledger",     // slot 9 -> unbound
+    "excalidraw", // slot 10 -> fallback meta+shift+j / ctrl+shift+j
+    "workshop",   // slot 11 -> unbound
+  ];
+  const customCatalog = buildCatalog({ railOrder: customOrder });
+  const opened = openDraft(null, customCatalog);
+  const rowFor = (draft, actionId, platform = MACOS) =>
+    browse({ catalog: customCatalog, profile: draft.profiles[0], platform })
+      .groups.flatMap((g) => g.all)
+      .find((row) => row.action.id === actionId);
+
+  // Initial live defaults follow customOrder.
+  assert.deepEqual(rowFor(opened, "global.go-interact").bindings, ["meta+2"]);
+  assert.deepEqual(rowFor(opened, "global.go-interact", WINDOWS_LINUX).bindings, ["ctrl+2"]);
+  assert.deepEqual(rowFor(opened, "global.go-cyberchef").bindings, ["meta+3"]);
+  assert.deepEqual(rowFor(opened, "global.go-ledger").bindings, []);
+  assert.equal(rowFor(opened, "global.go-ledger").status, "unbound");
+  assert.deepEqual(rowFor(opened, "global.go-excalidraw").bindings, ["meta+shift+j"]);
+
+  // Customize Interactsh (slot 2), CyberChef (slot 3), and Ledger (overflow), then Reset each.
+  const target = (actionId) => ({ profileId: "default", platform: MACOS, actionId });
+  let edited = replaceBinding(customCatalog, opened, target("global.go-interact"), 0, "meta+shift+h");
+  edited = replaceBinding(customCatalog, edited, target("global.go-cyberchef"), 0, "meta+shift+z");
+  edited = addBinding(customCatalog, edited, target("global.go-ledger"), "meta+shift+q");
+  assert.equal(rowFor(edited, "global.go-interact").resettable, true);
+  assert.equal(rowFor(edited, "global.go-cyberchef").resettable, true);
+  assert.equal(rowFor(edited, "global.go-ledger").resettable, true);
+
+  const resetInteract = resetAction(edited, target("global.go-interact"));
+  assert.deepEqual(rowFor(resetInteract, "global.go-interact").bindings, ["meta+2"]);
+  assert.equal(rowFor(resetInteract, "global.go-interact").resettable, false);
+
+  const resetChef = resetAction(edited, target("global.go-cyberchef"));
+  assert.deepEqual(rowFor(resetChef, "global.go-cyberchef").bindings, ["meta+3"]);
+  assert.equal(rowFor(resetChef, "global.go-cyberchef").resettable, false);
+
+  const resetLedger = resetAction(edited, target("global.go-ledger"));
+  assert.deepEqual(rowFor(resetLedger, "global.go-ledger").bindings, []);
+  assert.equal(rowFor(resetLedger, "global.go-ledger").status, "unbound");
+  assert.equal(rowFor(resetLedger, "global.go-ledger").resettable, false);
+});
+
 test("sidebar entries count their unbound actions", () => {
   const draft = removeBinding(withExtension, openDraft(saved([profile("default", "Default")]), withExtension), { ...home, actionId: "ledger.drawer-open.close" }, 0);
   assert.deepEqual(view({ profile: draft.profiles[0] }).groups.map((g) => g.unboundCount), [0, 0, 0, 1]);
