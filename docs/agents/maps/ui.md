@@ -88,7 +88,7 @@ Marasi is square-edged. `lib/squareEdges.test.js` fails on any `rounded*` class 
 
 Action buttons (`btn`, `btn-icon`) take their variant from `primaryVariant($modeCurrent)`, or `tertiaryVariant`/`neutralVariant`, in `lib/launchpad/format.js`: no other Skeleton `variant-*` and no border or ring. `lib/buttonVariants.test.js` checks them; its `GRANDFATHERED` list holds the existing exceptions.
 
-`app.css` adds the denser `.btn-group-sm` and `.table-dense`. To match the scale, copy from `LedgerTable.svelte`, `DrawerRail.svelte` or `OpeningScreen.svelte` instead of measuring.
+`app.css` adds the denser `.btn-group-sm` and `.table-dense`. To match the scale, copy from `LedgerTable.svelte`, `DrawerCommandStrip.svelte`, `DrawerLeftRail.svelte` or `OpeningScreen.svelte` instead of measuring.
 
 ## Decisions
 

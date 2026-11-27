@@ -4,6 +4,7 @@ import {
   byteSizeText,
   commandStripCopyActions,
   drawerCopyActions,
+  highlightSwatchTitle,
   noteIndicator,
   pairHasResponse,
   pairSummary,
@@ -127,36 +128,61 @@ test("commandStripCopyActions disables Copy response on pending pairs and gates 
   assert.equal(streamed[0].accent, true);
 });
 
-test("noteIndicator maps note presence and save states to dots, titles, and status labels", () => {
+test("highlightSwatchTitle appends clear hint only on the active swatch", () => {
+  const swatch = { number: 2, label: "Interesting", color: "#f59e0b" };
+  assert.equal(highlightSwatchTitle(swatch, 1), "Interesting");
+  assert.equal(highlightSwatchTitle(swatch, null), "Interesting");
+  assert.equal(highlightSwatchTitle(swatch, 2), "Interesting (click to clear)");
+});
+
+test("noteIndicator maps note presence and save states to dots, titles, status labels, and heading tints", () => {
   assert.deepEqual(noteIndicator("saved", false), {
     dot: "",
     title: "Add a note",
     statusText: "",
     statusTone: "opacity-50",
+    headingText: "",
+    headingTint: "",
   });
   assert.deepEqual(noteIndicator("saved", true), {
     dot: "bg-surface-500 dark:bg-surface-300",
     title: "Note",
     statusText: "Saved",
     statusTone: "opacity-50",
+    headingText: "",
+    headingTint: "",
   });
-  assert.deepEqual(noteIndicator("unsaved", true), {
+  assert.deepEqual(noteIndicator("saved", true, { active: true }), {
+    dot: "bg-surface-500 dark:bg-surface-300",
+    title: "Note",
+    statusText: "Saved",
+    statusTone: "opacity-50",
+    headingText: "",
+    headingTint: "text-surface-900 dark:text-surface-50 !opacity-100",
+  });
+  assert.deepEqual(noteIndicator("unsaved", true, { active: true }), {
     dot: "bg-warning-500",
     title: "Note edited",
     statusText: "Edited",
     statusTone: "text-warning-500",
+    headingText: "Edited",
+    headingTint: "text-warning-500 !opacity-100",
   });
-  assert.deepEqual(noteIndicator("saving", false), {
+  assert.deepEqual(noteIndicator("saving", false, { active: true }), {
     dot: "bg-warning-500",
     title: "Saving the note…",
     statusText: "Saving…",
     statusTone: "text-warning-500",
+    headingText: "Saving…",
+    headingTint: "text-warning-500 !opacity-100",
   });
-  assert.deepEqual(noteIndicator("failed", true), {
+  assert.deepEqual(noteIndicator("failed", true, { active: true }), {
     dot: "bg-error-500",
     title: "Note not saved: close it or keep typing to try again",
     statusText: "Not saved",
     statusTone: "text-error-500",
+    headingText: "Not saved",
+    headingTint: "text-error-500 !opacity-100",
   });
 });
 

@@ -4,21 +4,11 @@
 	// picker, focused pair summary, quick-copy cluster, and drawer window
 	// controls. All pair actions route through the drawer's existing action
 	// handlers and active keymap.
-	import { createEventDispatcher } from "svelte";
-	import {
-		ChevronDown,
-		ChevronUp,
-		Copy,
-		FileOutput,
-		Globe,
-		Highlighter,
-		Link,
-		Maximize2,
-		Minimize2,
-		Radio,
-		X,
-	} from "lucide-svelte";
+	import { createEventDispatcher, onDestroy } from "svelte";
+	import { ChevronDown, ChevronUp, Highlighter, Maximize2, Minimize2, X } from "lucide-svelte";
 	import { menuDispatcher } from "../keybindings/app.js";
+	import DrawerHighlightSwatches from "./DrawerHighlightSwatches.svelte";
+	import { DRAWER_ICONS } from "./drawerIcons.js";
 	import {
 		DRAWER_CONTEXT,
 		commandStripCopyActions,
@@ -45,17 +35,12 @@
 	export let compact = false;
 
 	const dispatch = createEventDispatcher();
-	const ICONS = {
-		radio: Radio,
-		copy: Copy,
-		"file-output": FileOutput,
-		link: Link,
-		globe: Globe,
-	};
 
 	let highlightMenu = false;
 	let highlightBox;
 	let lastPairId = null;
+	let listeningEscape = false;
+
 	$: if (pair?.ID !== lastPairId) {
 		lastPairId = pair?.ID ?? null;
 		highlightMenu = false;
@@ -68,7 +53,6 @@
 	$: maximiseLabel = maximised ? "Restore the table" : "Maximise the drawer";
 
 	const run = (actionId) => dispatch("action", actionId);
-	const highlightTitle = (h) => (pair?.Highlight === h.number ? `${h.label} (click to clear)` : h.label);
 
 	function pickHighlight(value) {
 		dispatch("highlight", value);
@@ -82,20 +66,35 @@
 		}
 	}
 
-	function onWindowKeydown(event) {
-		if (highlightMenu && event.key === "Escape") {
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			highlightMenu = false;
+	// Capture-phase Escape handler while the highlight popover is open so
+	// Escape closes only the popover and never reaches the page's bubble-phase
+	// closeDrawer() listener.
+	function onEscapeCapture(event) {
+		if (event.key !== "Escape") return;
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		highlightMenu = false;
+	}
+
+	function syncEscapeListener(open) {
+		if (typeof window === "undefined") return;
+		if (open && !listeningEscape) {
+			window.addEventListener("keydown", onEscapeCapture, true);
+			listeningEscape = true;
+		} else if (!open && listeningEscape) {
+			window.removeEventListener("keydown", onEscapeCapture, true);
+			listeningEscape = false;
 		}
 	}
+	$: syncEscapeListener(highlightMenu);
+	onDestroy(() => syncEscapeListener(false));
 
 	const topBtn =
 		"inline-flex h-6 items-center gap-1 px-1.5 text-2xs hover:bg-surface-200-700-token disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent";
 	const winBtn = "flex h-6 w-6 flex-none items-center justify-center hover:bg-surface-200-700-token";
 </script>
 
-<svelte:window on:pointerdown={onWindowPointerdown} on:keydown={onWindowKeydown} />
+<svelte:window on:pointerdown={onWindowPointerdown} />
 
 <header
 	class="ledger-drawer-command-strip relative flex h-8 flex-none items-center border-b border-surface-300-600-token bg-surface-100 dark:bg-surface-800 {compact
@@ -128,39 +127,15 @@
 			</button>
 
 			{#if highlightMenu}
-				<div
+				<DrawerHighlightSwatches
 					class="ledger-drawer-highlight-popover absolute left-0 top-full z-50 mt-1 flex items-center gap-1.5 border border-surface-300-600-token bg-surface-50 px-2.5 py-1.5 shadow-xl dark:bg-surface-800"
-					role="radiogroup"
-					aria-label="Highlight"
-				>
-					{#each palette as h (h.number)}
-						<button
-							type="button"
-							class="h-3.5 w-3.5 rounded-full {pair?.Highlight === h.number
-								? 'ring-2 ring-surface-900 ring-offset-1 ring-offset-surface-50 dark:ring-surface-50 dark:ring-offset-surface-800'
-								: ''}"
-							style="background: {h.color}"
-							role="radio"
-							aria-checked={pair?.Highlight === h.number}
-							title={highlightTitle(h)}
-							aria-label={h.label}
-							data-highlight={h.number}
-							on:click={() => pickHighlight(pair?.Highlight === h.number ? null : h.number)}
-						></button>
-					{/each}
-					{#if highlight}
-						<div class="h-3.5 w-px bg-surface-300-600-token" aria-hidden="true"></div>
-						<button
-							type="button"
-							class="flex h-4 w-4 items-center justify-center opacity-60 hover:bg-surface-200-700-token hover:opacity-100"
-							title="Clear highlight"
-							aria-label="Clear highlight"
-							on:click={() => pickHighlight(null)}
-						>
-							<X size={11} />
-						</button>
-					{/if}
-				</div>
+					{palette}
+					selected={pair?.Highlight}
+					surface="popover"
+					showClear
+					hasHighlight={Boolean(highlight)}
+					on:highlight={(e) => pickHighlight(e.detail)}
+				/>
 			{/if}
 		</div>
 	{/if}
@@ -180,10 +155,10 @@
 				<span class="opacity-60">{summary.host}</span><span>{summary.path}</span>
 			</span>
 			{#if summary.timing}
-				<span class="hidden flex-none opacity-55 lg:inline">· {summary.timing}</span>
+				<span class="flex-none opacity-55">· {summary.timing}</span>
 			{/if}
 			{#if summary.protocol}
-				<span class="hidden flex-none opacity-50 xl:inline" title={summary.protocolTitle}>· {summary.protocol}</span>
+				<span class="flex-none opacity-50" title={summary.protocolTitle}>· {summary.protocol}</span>
 			{/if}
 		{/if}
 	</div>
@@ -201,7 +176,7 @@
 					aria-label={action.label}
 					on:click={() => run(action.actionId)}
 				>
-					<svelte:component this={ICONS[action.icon]} size={12} />
+					<svelte:component this={DRAWER_ICONS[action.icon]} size={12} />
 					{#if action.shortLabel}
 						<span class={action.accent ? "hidden lg:inline" : "hidden md:inline"}>{action.shortLabel}</span>
 					{/if}
