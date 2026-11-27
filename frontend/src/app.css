@@ -212,13 +212,7 @@ html.mobile .mobile-fullscreen .armory-drawer-column {
 	padding-top: 1.5rem;
 	padding-bottom: max(var(--safe-bottom), 1rem);
 }
-/* The left inset: a highlighted pair's stripe fills it to the screen's
-   edge; without one the rail moves in by it. */
-html.mobile .mobile-fullscreen .ledger-drawer-highlight {
-	width: calc(3px + max(var(--safe-left), 0.5rem));
-}
-html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-rail:first-child,
-html.mobile .mobile-fullscreen .ledger-drawer > .ledger-drawer-column:first-child,
+/* The left inset on the Armory drawer: moves the rail clear of the screen edge. */
 html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-rail:first-child,
 html.mobile .mobile-fullscreen .armory-drawer > .armory-drawer-column:first-child {
 	margin-left: max(var(--safe-left), 0.5rem);
