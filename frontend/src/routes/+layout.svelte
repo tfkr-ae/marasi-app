@@ -36,7 +36,7 @@
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
 	initializeStores();
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 
 	import { AppRail, AppRailAnchor } from "@skeletonlabs/skeleton";
 	import {
@@ -157,6 +157,7 @@
 		armoryDrawer,
 		keybindingCapture,
 	} from "../lib/keybindings/app.js";
+	import { interactActivator } from "../lib/interact.js";
 	let appRailIndex = 0;
 	let showInteract = false;
 
@@ -172,6 +173,18 @@
 			Interact = module.default;
 		}
 	};
+
+	const unregisterInteract = interactActivator.register({
+		load: loadInteract,
+		show: () => {
+			showInteract = true;
+		},
+		tick,
+	});
+	onDestroy(unregisterInteract);
+
+	const openInteract = () =>
+		interactActivator.activate(() => goto("/interact"));
 	const toastStore = getToastStore();
 	const modalStore = getModalStore();
 	// Go waits for the answer to quit, so the question goes in front of any
@@ -225,11 +238,7 @@
 			label: "Interactsh",
 			icon: ZapIcon,
 			path: "/interact",
-			go: async () => {
-				await loadInteract();
-				goto("/interact");
-				showInteract = true;
-			},
+			go: openInteract,
 		},
 		...$extensions
 			.filter((extension) => $extensions_ui[extension.Name]?.icon || extension.UICode)
@@ -787,15 +796,11 @@
 					regionLabel="!text-2xs !font-semibold leading-tight"
 					selected={$page.url.pathname ===
 						"/interact"}
-					on:click={async () => {
-						await loadInteract();
-						goto("/interact");
-						showInteract = true;
-					}}
+					on:click={openInteract}
 					bind:group={currentTile}
-					name="InteractSh"
+					name="Interactsh"
 					value={appRailIndex++}
-					title="InteractSh"
+					title="Interactsh"
 				>
 					<svelte:fragment slot="lead">
 						<div

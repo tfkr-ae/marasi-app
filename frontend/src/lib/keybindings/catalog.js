@@ -62,6 +62,7 @@ export const FACTORY_ACTIONS = [
   action("global.go-workshop", "Workshop", "Extend Marasi", "Workshop", primary("8"), { group: "go" }),
   action("global.go-cyberchef", "CyberChef", "Decode, encode and transform data", "cyberchef, chef, decode, encode, recipe", primary("shift+y"), { group: "go" }),
   action("global.go-excalidraw", "Excalidraw", "Sketch with cards", "excalidraw, drawing, diagram, draw", primary("shift+j"), { group: "go" }),
+  action("global.go-interact", "Interactsh", "Inspect out-of-band interactions", "interact, interactsh, oob, oast", { [MACOS]: [], [WINDOWS_LINUX]: [] }, { group: "go", positionalDefault: true }),
   action("global.go-settings", "Settings", "Configure your settings", "settings", primary(","), { group: "go" }),
   action("global.start-chrome", "Start Chrome", "Start Browser", "Chrome", primary("`"), { group: "browser" }),
   action("global.download-certificate", "Download Certificate", "Download Certificate", "certificate,download", primary("d"), { group: "browser" }),

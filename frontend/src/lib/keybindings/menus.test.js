@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildCatalog, createCatalog } from "./catalog.js";
+import { buildMenu } from "../components/MarasiMenu/menuModel.js";
 import { CONTEXTS, contextsConflict, eligibleContextIds, stepWebSocketTab } from "./contexts.js";
 import { createDispatcher } from "./dispatcher.js";
 import { MACOS, WINDOWS_LINUX } from "./platform.js";
@@ -891,4 +892,58 @@ test("⌘⇧P and Ctrl+Shift+P toggle the proxy listener from every menu context
       label,
     );
   }
+});
+
+test("Interactsh is in the Go to menu group, unbound by default, and runs from every context when bound", () => {
+  const catalog = buildCatalog({ extensions: [{ Name: "Repeater" }] });
+  const factory = createDispatcher({ catalog, platform: MACOS, keybindings: { config: factoryKeybindings(), problem: "" } });
+  assert.deepEqual(factory.bindingsFor("global.go-interact"), []);
+
+  const globalEntries = catalog
+    .inContext("global")
+    .filter((action) => action.id !== "global.open-menu")
+    .map((action) => ({ actionId: action.id }));
+  const factoryMenu = buildMenu({
+    catalog,
+    globalEntries,
+    bindingsFor: factory.bindingsFor,
+    platform: MACOS,
+  });
+  const goTo = factoryMenu.sections.flatMap((s) => s.groups).find((g) => g.id === "global.go");
+  const interactRow = goTo.items.find((item) => item.actionId === "global.go-interact");
+  assert.ok(interactRow, "Interactsh appears in Go to menu group");
+  assert.equal(interactRow.name, "Interactsh");
+  assert.equal(interactRow.menuKey, null);
+
+  const profile = {
+    id: "work",
+    name: "Work",
+    overrides: {
+      [MACOS]: [{ action: "global.go-interact", keys: ["meta+shift+h"] }],
+      [WINDOWS_LINUX]: [{ action: "global.go-interact", keys: ["ctrl+shift+h"] }],
+    },
+    knownActions: catalog.actions.map((a) => a.id),
+  };
+  const config = { version: 1, activeProfile: "work", profiles: [profile] };
+  assert.deepEqual(validateKeybindings(catalog, config), []);
+
+  const macDispatcher = createDispatcher({ catalog, platform: MACOS, keybindings: { config, problem: "" } });
+  const winDispatcher = createDispatcher({ catalog, platform: WINDOWS_LINUX, keybindings: { config, problem: "" } });
+  for (const state of everyContextState()) {
+    const label = `${state.route} ${state.modal ?? ""} ${state.websocketTab ?? ""}`;
+    assert.equal(macDispatcher.resolve(cmdShift("H", "KeyH"), state), "global.go-interact", label);
+    assert.equal(
+      winDispatcher.resolve(keydown("H", "KeyH", { ctrlKey: true, shiftKey: true }), state),
+      "global.go-interact",
+      label,
+    );
+  }
+  const boundMenu = buildMenu({
+    catalog,
+    globalEntries,
+    bindingsFor: macDispatcher.bindingsFor,
+    platform: MACOS,
+  });
+  const boundRow = boundMenu.sections.flatMap((s) => s.groups).find((g) => g.id === "global.go").items.find((item) => item.actionId === "global.go-interact");
+  assert.equal(boundRow.menuKey, "meta+shift+h");
 });

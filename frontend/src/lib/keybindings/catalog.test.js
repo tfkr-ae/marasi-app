@@ -279,16 +279,36 @@ test("the Launchpad tree moves the entry selection a step with ⌘⇧ arrows and
   }
 });
 
+test("Interactsh is a positional Go to action with no factory shortcut by default", () => {
+  const action = buildCatalog().get("global.go-interact");
+  assert.ok(action);
+  assert.equal(action.label, "Interactsh");
+  assert.equal(action.context, "global");
+  assert.equal(action.group, "go");
+  assert.equal(action.positionalDefault, true);
+  assert.deepEqual(action.defaults, { [MACOS]: [], [WINDOWS_LINUX]: [] });
+});
+
 // Marasi's defaults always use ⌘ (Ctrl), so every one works in the open
 // Marasi menu, where a key without it types into the search, and the menu
-// shows it as the action's key. Extension navigation keeps ⌘⌥1–9.
+// shows it as the action's key. Extension navigation keeps ⌘⌥1–9. Non-positional
+// built-in actions always have a default; only positional overflow actions may
+// be unbound by default.
 test("every factory default uses ⌘ on macOS and Ctrl on Windows and Linux", () => {
   const catalog = buildCatalog({ extensions: [{ Name: "Port Scanner" }] });
+  const unbound = [];
   for (const action of catalog.actions) {
-    assert.ok(action.defaults[MACOS].length && action.defaults[WINDOWS_LINUX].length, `${action.id} has a default`);
+    const hasMac = action.defaults[MACOS].length > 0;
+    const hasWin = action.defaults[WINDOWS_LINUX].length > 0;
+    assert.equal(hasMac, hasWin, `${action.id} matches defaults across platforms`);
+    if (!hasMac) {
+      assert.equal(action.positionalDefault, true, `${action.id} has no default and is not positionalDefault`);
+      unbound.push(action.id);
+    }
     for (const binding of action.defaults[MACOS]) assert.match(binding, /^meta\+/, `${action.id}: ${binding}`);
     for (const binding of action.defaults[WINDOWS_LINUX]) assert.match(binding, /^ctrl\+/, `${action.id}: ${binding}`);
   }
+  assert.deepEqual(unbound, ["global.go-interact"]);
 });
 
 test("the Launchpad tree starts a finding or test case from the entry selection", () => {
@@ -383,7 +403,7 @@ test("the global menu groups gather Marasi's own actions as the spec lists them"
   );
   assert.deepEqual(inGroup("go"), [
     "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
-    "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-settings", "open-extension.port-scanner",
+    "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-interact", "go-settings", "open-extension.port-scanner",
   ]);
   assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener", "toggle-listener"]);
   assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);

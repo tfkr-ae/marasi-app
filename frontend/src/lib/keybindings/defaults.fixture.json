@@ -11,6 +11,7 @@
     "global.go-workshop": {"macos":["meta+8"],"windows-linux":["ctrl+8"]},
     "global.go-cyberchef": {"macos":["meta+shift+y"],"windows-linux":["ctrl+shift+y"]},
     "global.go-excalidraw": {"macos":["meta+shift+j"],"windows-linux":["ctrl+shift+j"]},
+    "global.go-interact": {"macos":[],"windows-linux":[]},
     "global.go-settings": {"macos":["meta+,"],"windows-linux":["ctrl+,"]},
     "global.start-chrome": {"macos":["meta+`"],"windows-linux":["ctrl+`"]},
     "global.download-certificate": {"macos":["meta+d"],"windows-linux":["ctrl+d"]},
