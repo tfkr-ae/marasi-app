@@ -325,7 +325,8 @@
 						number={focusNumber}
 						incomingResponse={$selection.incomingResponse}
 						maximised={$drawerLayout.maximised}
-						expanded={$drawerLayout.expanded}
+						leftExpanded={$drawerLayout.leftExpanded}
+						rightExpanded={$drawerLayout.rightExpanded}
 						bind:pane={drawerPane}
 						highlight={focusHighlight}
 						palette={$highlightPalette}
@@ -335,7 +336,8 @@
 						on:step={(e) => ledgerStore.stepSelection(e.detail)}
 						on:maximise={() => ledgerStore.toggleDrawerMaximised()}
 						on:close={closeDrawer}
-						on:expand={(e) => ledgerStore.setDrawerExpanded(e.detail)}
+						on:expandLeft={(e) => ledgerStore.setDrawerLeftExpanded(e.detail)}
+						on:expandRight={(e) => ledgerStore.setDrawerRightExpanded(e.detail)}
 						on:action={(e) => (drawerHandlers.get(e.detail) ?? (() => menuDispatcher.run(e.detail)))()}
 						on:highlight={(e) => highlightFocused(e.detail)}
 					/>

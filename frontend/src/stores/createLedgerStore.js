@@ -197,9 +197,28 @@ export function createLedgerStore(api) {
         ...layout,
         drawer: { ...layout.drawer, split: clampDrawerSplit(split) },
       })),
-    /** Expands the drawer's details column from its rail, or collapses it. */
-    setDrawerExpanded: (expanded) =>
-      updateLayout((layout) => ({ ...layout, drawer: { ...layout.drawer, expanded: Boolean(expanded) } })),
+    /** Expands the drawer's left details column from its rail, or collapses it. */
+    setDrawerLeftExpanded: (expanded) => {
+      const value = Boolean(expanded);
+      updateLayout((layout) => ({
+        ...layout,
+        drawer: { ...layout.drawer, leftExpanded: value, expanded: value },
+      }));
+    },
+    /** Expands the drawer's right actions column from its rail, or collapses it. */
+    setDrawerRightExpanded: (expanded) =>
+      updateLayout((layout) => ({
+        ...layout,
+        drawer: { ...layout.drawer, rightExpanded: Boolean(expanded) },
+      })),
+    /** Alias for setDrawerLeftExpanded. */
+    setDrawerExpanded: (expanded) => {
+      const value = Boolean(expanded);
+      updateLayout((layout) => ({
+        ...layout,
+        drawer: { ...layout.drawer, leftExpanded: value, expanded: value },
+      }));
+    },
     /** Maximises the open drawer over the table, or restores it. */
     toggleDrawerMaximised: () => {
       if (!isDrawerOpen(current)) return;

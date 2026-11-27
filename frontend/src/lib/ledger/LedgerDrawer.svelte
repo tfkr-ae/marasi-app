@@ -1,17 +1,21 @@
 <script>
 	// The Ledger drawer: the focused pair, request and response side by side
-	// in CodeMirror, with the rail (or, expanded, the details column) on the
-	// left. The note or the metadata opens in place of the response, beside
-	// the request it is about. The pair is read in full through the Ledger
-	// store; the page runs the actions the rail dispatches.
+	// in CodeMirror, with the top command strip, the left inspect/view rail
+	// (or expanded details column), and the right workflow/actions rail (or
+	// expanded actions column). The note or the metadata opens in place of the
+	// response, beside the request it is about. The pair is read in full
+	// through the Ledger store; the page runs the actions the drawer
+	// dispatches.
 	import { createEventDispatcher, onDestroy } from "svelte";
 	import { getToastStore } from "@skeletonlabs/skeleton";
 	import { javascript } from "@codemirror/lang-javascript";
+	import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-svelte";
 	import DrawerCommandStrip from "./DrawerCommandStrip.svelte";
 	import DrawerEditor from "./DrawerEditor.svelte";
+	import DrawerLeftRail from "./DrawerLeftRail.svelte";
 	import DrawerNote from "./DrawerNote.svelte";
 	import DrawerPaneBar from "./DrawerPaneBar.svelte";
-	import DrawerRail from "./DrawerRail.svelte";
+	import DrawerRightRail from "./DrawerRightRail.svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
 	import { drawerBodies, metadataText, pairTiming, usesSyntax } from "./drawer.js";
 	import { pairHasResponse } from "./drawerPresentation.js";
@@ -31,8 +35,10 @@
 	/** Its response, when it arrived after the pair was selected. */
 	export let incomingResponse = null;
 	export let maximised = false;
-	/** Whether the details column shows instead of the rail. */
-	export let expanded = false;
+	/** Whether the left details column shows instead of the left rail. */
+	export let leftExpanded = false;
+	/** Whether the right actions column shows instead of the right rail. */
+	export let rightExpanded = false;
 	/** "note" or "metadata" while one shows in place of the response; null for the response. */
 	export let pane = null;
 	/** The highlight colour, or null, and the palette. */
@@ -165,6 +171,7 @@
 
 	const message = "p-3 text-2xs opacity-50";
 	const paneBox = "relative min-h-0 min-w-0 flex-1 bg-white dark:bg-[#282c34]";
+	const cornerBtn = "flex h-6 w-6 flex-none items-center justify-center hover:bg-surface-200-700-token";
 </script>
 
 <div class="ledger-drawer flex h-full min-h-0 flex-col bg-surface-50 text-2xs dark:bg-surface-900">
@@ -185,12 +192,38 @@
 		on:close
 		on:action
 		on:highlight
-	/>
+	>
+		<button
+			slot="left-corner"
+			type="button"
+			class="ledger-drawer-expand ledger-drawer-expand-left {cornerBtn} {leftExpanded
+				? 'bg-surface-200-700-token text-primary-500'
+				: ''}"
+			title={leftExpanded ? "Collapse the details" : "Show the details"}
+			aria-label={leftExpanded ? "Collapse the details" : "Show the details"}
+			aria-expanded={leftExpanded}
+			on:click={() => dispatch("expandLeft", !leftExpanded)}
+		>
+			{#if leftExpanded}<PanelLeftClose size={14} />{:else}<PanelLeftOpen size={14} />{/if}
+		</button>
+		<button
+			slot="right-corner"
+			type="button"
+			class="ledger-drawer-expand-right {cornerBtn} {rightExpanded
+				? 'bg-surface-200-700-token text-primary-500'
+				: ''}"
+			title={rightExpanded ? "Collapse the actions" : "Show the actions"}
+			aria-label={rightExpanded ? "Collapse the actions" : "Show the actions"}
+			aria-expanded={rightExpanded}
+			on:click={() => dispatch("expandRight", !rightExpanded)}
+		>
+			{#if rightExpanded}<PanelRightClose size={14} />{:else}<PanelRightOpen size={14} />{/if}
+		</button>
+	</DrawerCommandStrip>
 	<div class="flex min-h-0 flex-1">
-		<DrawerRail
+		<DrawerLeftRail
 			{pair}
-			{number}
-			{expanded}
+			expanded={leftExpanded}
 			{palette}
 			{note}
 			{noteStatus}
@@ -199,12 +232,9 @@
 			{findings}
 			{testCases}
 			{pane}
-			{canOpenStream}
-			timing={pairTiming(incomingResponse ? { ...pair, RespondedAt: incomingResponse.RespondedAt } : pair)}
+			timing={pairTiming(pairIncoming ? { ...pair, RespondedAt: pairIncoming.RespondedAt } : pair)}
 			bind:prettify={$prettify}
 			bind:wrap={$lineWrap}
-			on:expand
-			on:action
 			on:highlight
 			on:pane={(e) => (pane = e.detail)}
 		/>
@@ -286,5 +316,6 @@
 				</div>
 			</div>
 		</div>
+		<DrawerRightRail expanded={rightExpanded} {canOpenStream} {hasResponse} on:action />
 	</div>
 </div>
