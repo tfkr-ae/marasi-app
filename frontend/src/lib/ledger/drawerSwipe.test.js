@@ -8,8 +8,10 @@ import {
   FLICK_V,
   SWIPE_PANES,
   SWIPE_PANEL_WIDTH,
+  applyExternalPane,
   beginGesture,
   cancelGesture,
+  computeLivePatch,
   computeTransforms,
   createSwipeState,
   endGesture,
@@ -243,12 +245,11 @@ test("swiping closed dismisses open sidebars while wrong-direction drags are ign
 });
 
 test("enforces exact DISTANCE (36px) vs FLICK_MIN (14px) + FLICK_V (0.16 px/ms) thresholds", () => {
-  // Anchor happens on the first move past AXIS_LOCK (4px), so test explicitly with two moves:
-  // 1) lock at +5px (anchorX = 105), 2) drag from anchorX by exact delta.
-  function twoStep(initial, lockDx, dragDx, dtMs) {
+  // Displacement is measured from startX across axis lock and subsequent moves.
+  function twoStep(initial, lockDx, totalDx, dtMs) {
     let state = beginGesture(initial, { x: 100, y: 200, time: 0, stageLeft: 0, stageWidth: 390 });
     state = moveGesture(state, { x: 100 + lockDx, y: 200, time: 100 }).state;
-    state = moveGesture(state, { x: 100 + lockDx + dragDx, y: 200, time: 100 + dtMs }).state;
+    state = moveGesture(state, { x: 100 + totalDx, y: 200, time: 100 + dtMs }).state;
     return endGesture(state);
   }
 
@@ -272,7 +273,7 @@ test("enforces exact DISTANCE (36px) vs FLICK_MIN (14px) + FLICK_V (0.16 px/ms) 
   assert.equal(res.committed, false);
   assert.equal(res.state.leftOpen, false);
 
-  // Fast flick of 14px (== FLICK_MIN, velocity > FLICK_V) commits for both sidebar and pager!
+  // Fast flick of 14px (== FLICK_MIN, velocity >= FLICK_V) commits for both sidebar and pager.
   res = twoStep(createSwipeState({ paneIndex: 0 }), 5, 14, 20);
   assert.equal(res.committed, true);
   assert.equal(res.state.leftOpen, true);
@@ -281,6 +282,110 @@ test("enforces exact DISTANCE (36px) vs FLICK_MIN (14px) + FLICK_V (0.16 px/ms) 
   assert.equal(res.mode, "pager");
   assert.equal(res.committed, true);
   assert.equal(res.state.paneIndex, 2);
+});
+
+test("single-move fast flick preserves full startX displacement and commits cleanly", () => {
+  // Single touchmove of +40px on Request opens the left sidebar.
+  let s = beginGesture(createSwipeState({ paneIndex: 0 }), { x: 100, y: 200, time: 0, stageWidth: 390 });
+  let step = moveGesture(s, { x: 140, y: 200, time: 25 });
+  assert.equal(step.active, true);
+  assert.equal(step.preventDefault, true);
+  assert.equal(step.state.gesture.currentDx, 40);
+  let res = endGesture(step.state);
+  assert.equal(res.mode, "open-left");
+  assert.equal(res.committed, true);
+  assert.equal(res.state.leftOpen, true);
+
+  // Single touchmove flick of -18px in 20ms on Request pages to Response.
+  s = beginGesture(createSwipeState({ paneIndex: 0 }), { x: 200, y: 200, time: 0, stageWidth: 390 });
+  step = moveGesture(s, { x: 182, y: 200, time: 20 });
+  assert.equal(step.state.gesture.currentDx, -18);
+  res = endGesture(step.state);
+  assert.equal(res.mode, "pager");
+  assert.equal(res.committed, true);
+  assert.equal(res.state.paneIndex, 1);
+
+  // Single touchmove flick of -20px in 20ms on open left sidebar closes it.
+  s = beginGesture(createSwipeState({ paneIndex: 1, leftOpen: true }), { x: 200, y: 200, time: 0, stageWidth: 390 });
+  step = moveGesture(s, { x: 180, y: 200, time: 20 });
+  assert.equal(step.state.gesture.currentDx, -20);
+  res = endGesture(step.state);
+  assert.equal(res.mode, "close-left");
+  assert.equal(res.committed, true);
+  assert.equal(res.state.leftOpen, false);
+});
+
+test("commits at exact boundary velocity v === 0.16 px/ms and -0.16 px/ms at FLICK_MIN", () => {
+  // Exact boundary v === FLICK_V (0.16 px/ms) at exact FLICK_MIN (14px) commits.
+  const rightBoundary = {
+    ...createSwipeState({ paneIndex: 0 }),
+    gesture: { axis: "x", mode: "open-left", currentDx: FLICK_MIN, velocityX: FLICK_V },
+  };
+  let res = endGesture(rightBoundary);
+  assert.equal(res.mode, "open-left");
+  assert.equal(res.committed, true);
+  assert.equal(res.state.leftOpen, true);
+
+  // Just below FLICK_V at FLICK_MIN does not commit.
+  const tooSlowRight = {
+    ...createSwipeState({ paneIndex: 0 }),
+    gesture: { axis: "x", mode: "open-left", currentDx: FLICK_MIN, velocityX: FLICK_V - 0.001 },
+  };
+  res = endGesture(tooSlowRight);
+  assert.equal(res.committed, false);
+  assert.equal(res.state.leftOpen, false);
+
+  // Leftward exact boundary: dx = -FLICK_MIN (-14px), v === -FLICK_V (-0.16 px/ms) commits.
+  const leftBoundary = {
+    ...createSwipeState({ paneIndex: 1 }),
+    gesture: { axis: "x", mode: "pager", currentDx: -FLICK_MIN, velocityX: -FLICK_V },
+  };
+  res = endGesture(leftBoundary);
+  assert.equal(res.mode, "pager");
+  assert.equal(res.committed, true);
+  assert.equal(res.state.paneIndex, 2);
+
+  // Just slower than -FLICK_V does not commit.
+  const tooSlowLeft = {
+    ...createSwipeState({ paneIndex: 1 }),
+    gesture: { axis: "x", mode: "pager", currentDx: -FLICK_MIN, velocityX: -(FLICK_V - 0.001) },
+  };
+  res = endGesture(tooSlowLeft);
+  assert.equal(res.committed, false);
+  assert.equal(res.state.paneIndex, 1);
+});
+
+test("applyExternalPane switches panes and dismisses any open mobile sidebar", () => {
+  // External switch to Note while left sidebar is open closes sidebar and selects Note.
+  const openLeft = createSwipeState({ paneIndex: 0, leftOpen: true });
+  let res = applyExternalPane(openLeft, "note");
+  assert.equal(res.changed, true);
+  assert.equal(res.sidebarClosed, true);
+  assert.equal(res.state.paneIndex, 2);
+  assert.equal(res.state.leftOpen, false);
+  assert.equal(res.state.rightOpen, false);
+
+  // External switch to Metadata while right sidebar is open closes sidebar and selects Meta.
+  const openRight = createSwipeState({ paneIndex: 1, rightOpen: true });
+  res = applyExternalPane(openRight, "metadata");
+  assert.equal(res.changed, true);
+  assert.equal(res.sidebarClosed, true);
+  assert.equal(res.state.paneIndex, 3);
+  assert.equal(res.state.rightOpen, false);
+
+  // External switch back to Response (pane === null) from Note moves to Response (1) and closes sidebar.
+  res = applyExternalPane(createSwipeState({ paneIndex: 2, leftOpen: true }), null);
+  assert.equal(res.changed, true);
+  assert.equal(res.sidebarClosed, true);
+  assert.equal(res.state.paneIndex, 1);
+  assert.equal(res.state.leftOpen, false);
+
+  // No-op when already on the target pane with no sidebar open.
+  const steady = createSwipeState({ paneIndex: 2 });
+  res = applyExternalPane(steady, "note");
+  assert.equal(res.changed, false);
+  assert.equal(res.sidebarClosed, false);
+  assert.equal(res.state, steady);
 });
 
 test("cancelGesture clears an active drag without committing state changes", () => {
@@ -292,6 +397,23 @@ test("cancelGesture clears an active drag without committing state changes", () 
   assert.equal(cancelled.gesture, null);
   assert.equal(cancelled.leftOpen, false);
   assert.equal(cancelled.paneIndex, 0);
+});
+
+test("computeLivePatch returns only the active drag target properties, and null when idle", () => {
+  assert.equal(computeLivePatch(createSwipeState({ paneIndex: 0 })), null);
+
+  let openLeft = beginGesture(createSwipeState({ paneIndex: 0 }), { x: 50, y: 200, time: 0, stageWidth: 390 });
+  openLeft = moveGesture(openLeft, { x: 182, y: 200, time: 16 }).state; // currentDx = 132
+  assert.deepEqual(computeLivePatch(openLeft, { stageWidth: 390 }), {
+    leftX: -132,
+    scrimOpacity: 0.5,
+  });
+
+  let pager = beginGesture(createSwipeState({ paneIndex: 1 }), { x: 200, y: 200, time: 0, stageWidth: 390 });
+  pager = moveGesture(pager, { x: 150, y: 200, time: 16 }).state; // currentDx = -50
+  assert.deepEqual(computeLivePatch(pager, { stageWidth: 390 }), {
+    trackX: -440,
+  });
 });
 
 test("computeTransforms calculates resting and live-drag GPU coordinates", () => {
@@ -313,8 +435,8 @@ test("computeTransforms calculates resting and live-drag GPU coordinates", () =>
 
   // Mid-drag open-left halfway (132px of 264px).
   let state = beginGesture(createSwipeState({ paneIndex: 0 }), { x: 50, y: 200, time: 0, stageWidth: 390 });
-  state = moveGesture(state, { x: 56, y: 200, time: 16 }).state; // anchorX = 56
-  state = moveGesture(state, { x: 188, y: 200, time: 32 }).state; // currentDx = 132
+  state = moveGesture(state, { x: 56, y: 200, time: 16 }).state;
+  state = moveGesture(state, { x: 182, y: 200, time: 32 }).state; // currentDx = 132 from startX = 50
   assert.deepEqual(computeTransforms(state, { stageWidth: 390 }), {
     trackX: 0,
     leftX: -132,
@@ -324,8 +446,8 @@ test("computeTransforms calculates resting and live-drag GPU coordinates", () =>
 
   // Mid-drag pager clamped cleanly at stage bounds.
   let pager = beginGesture(createSwipeState({ paneIndex: 1 }), { x: 200, y: 200, time: 0, stageWidth: 390 });
-  pager = moveGesture(pager, { x: 194, y: 200, time: 16 }).state; // anchorX = 194
-  pager = moveGesture(pager, { x: 144, y: 200, time: 32 }).state; // currentDx = -50
+  pager = moveGesture(pager, { x: 194, y: 200, time: 16 }).state;
+  pager = moveGesture(pager, { x: 150, y: 200, time: 32 }).state; // currentDx = -50 from startX = 200
   assert.deepEqual(computeTransforms(pager, { stageWidth: 390 }), {
     trackX: -440,
     leftX: -SWIPE_PANEL_WIDTH,

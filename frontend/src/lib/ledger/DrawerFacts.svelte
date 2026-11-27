@@ -1,7 +1,7 @@
 <script>
 	// The facts at the top of a drawer's details column: method, status,
 	// timing and protocol; host and path on one line; content type and size. The Ledger's
-	// DrawerRail and the Armory's ArmoryDrawerRail both show it; `prefix`
+	// DrawerDetailsContent (left rail / mobile sidebar) and the Armory's ArmoryDrawerRail both show it; `prefix`
 	// names its classes (`<prefix>-drawer-facts`, `<prefix>-drawer-url`).
 	import { statusClass } from "../launchpad/format.js";
 	import { formatSize, protocolText, protocolTitle, statusText } from "./table.js";

@@ -1,6 +1,6 @@
 <script>
 	// A drawer's Linked section: the findings and test cases that list the
-	// pair. Nothing shows when there are none. The Ledger's DrawerRail lists
+	// pair. Nothing shows when there are none. The Ledger's DrawerDetailsContent lists
 	// them; the Armory passes `onUnlink`, which adds an unlink button to each.
 	import { BookCheck, ShieldAlert, X } from "lucide-svelte";
 

@@ -2,25 +2,25 @@
 	// The Ledger drawer: the focused pair, request and response side by side
 	// in CodeMirror, with the top command strip, the left inspect/view rail
 	// (or expanded details column), and the right workflow/actions rail (or
-	// expanded actions column). On narrow screens (<= 40rem), the rails become
-	// mutually exclusive slide-over sidebars paired with a unified 4-pane GPU
-	// swipe stage (DrawerMobileStage). The pair is read in full through the
-	// Ledger store; the page runs the actions the drawer dispatches.
+	// expanded actions column). On phone-width mobile ($phoneWidth: mobile &&
+	// <= 40rem), the rails become mutually exclusive slide-over sidebars paired
+	// with a unified 4-pane GPU swipe stage (DrawerMobileStage). Desktop never
+	// enters the mobile stage. The pair is read in full through the Ledger
+	// store; the page runs the actions the drawer dispatches.
 	import { createEventDispatcher, onDestroy } from "svelte";
 	import { getToastStore } from "@skeletonlabs/skeleton";
-	import { javascript } from "@codemirror/lang-javascript";
 	import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-svelte";
 	import DrawerCommandStrip from "./DrawerCommandStrip.svelte";
-	import DrawerEditor from "./DrawerEditor.svelte";
+	import DrawerEditorPane from "./DrawerEditorPane.svelte";
 	import DrawerLeftRail from "./DrawerLeftRail.svelte";
 	import DrawerMobileStage from "./DrawerMobileStage.svelte";
-	import DrawerNote from "./DrawerNote.svelte";
 	import DrawerPaneBar from "./DrawerPaneBar.svelte";
 	import DrawerRightRail from "./DrawerRightRail.svelte";
-	import { drawerBodies, metadataText, pairTiming, usesSyntax } from "./drawer.js";
+	import { drawerBodies, metadataText, pairTiming } from "./drawer.js";
 	import { pairHasResponse } from "./drawerPresentation.js";
+	import { setSidebars, toggleLeftSidebar, toggleRightSidebar } from "./drawerSwipe.js";
 	import { sameID } from "./pairs.js";
-	import { compactWidth } from "../platform.js";
+	import { phoneWidth } from "../platform.js";
 	import { toastError } from "../toasts.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
 	import { groupBuilding, jobsStore } from "../../stores/jobsStore";
@@ -53,36 +53,37 @@
 
 	const dispatch = createEventDispatcher();
 	const toastStore = getToastStore();
-	const jsonLanguage = javascript();
 
-	$: isNarrow = $compactWidth;
+	$: isNarrow = $phoneWidth;
 
-	// Local mirrors for narrow sidebars updated synchronously on gesture end
-	// and corner toggle clicks so there is never a 1-frame snap-back waiting
-	// for the store round-trip. Narrow mode enforces mutual exclusion.
+	// Local mirrors for narrow mobile sidebars updated synchronously on gesture
+	// end and corner toggle clicks so there is never a 1-frame snap-back waiting
+	// for the store round-trip. Narrow mode enforces mutual exclusion via drawerSwipe.
 	let uiLeft = leftExpanded;
 	let uiRight = rightExpanded;
 	$: {
-		uiLeft = leftExpanded;
-		uiRight = isNarrow && leftExpanded ? false : rightExpanded;
+		const normalized = isNarrow
+			? setSidebars({ leftOpen: false, rightOpen: false }, { leftOpen: leftExpanded, rightOpen: rightExpanded })
+			: { leftOpen: leftExpanded, rightOpen: rightExpanded };
+		uiLeft = normalized.leftOpen;
+		uiRight = normalized.rightOpen;
 	}
 
-	function commitNarrowSidebars(nextLeft, nextRight) {
-		const left = Boolean(nextLeft);
-		const right = left ? false : Boolean(nextRight);
-		uiLeft = left;
-		uiRight = right;
-		if (left !== leftExpanded) dispatch("expandLeft", left);
-		if (right !== rightExpanded) dispatch("expandRight", right);
+	function commitNarrowSidebars(next) {
+		const normalized = setSidebars({ leftOpen: uiLeft, rightOpen: uiRight }, next);
+		uiLeft = normalized.leftOpen;
+		uiRight = normalized.rightOpen;
+		if (uiLeft !== leftExpanded) dispatch("expandLeft", uiLeft);
+		if (uiRight !== rightExpanded) dispatch("expandRight", uiRight);
 	}
 
 	function toggleLeftCorner() {
-		if (isNarrow) commitNarrowSidebars(!uiLeft, false);
+		if (isNarrow) commitNarrowSidebars(toggleLeftSidebar({ leftOpen: uiLeft, rightOpen: uiRight }));
 		else dispatch("expandLeft", !leftExpanded);
 	}
 
 	function toggleRightCorner() {
-		if (isNarrow) commitNarrowSidebars(false, !uiRight);
+		if (isNarrow) commitNarrowSidebars(toggleRightSidebar({ leftOpen: uiLeft, rightOpen: uiRight }));
 		else dispatch("expandRight", !rightExpanded);
 	}
 
@@ -201,7 +202,6 @@
 	$: leftCornerOpen = isNarrow ? uiLeft : leftExpanded;
 	$: rightCornerOpen = isNarrow ? uiRight : rightExpanded;
 
-	const message = "p-3 text-2xs opacity-50";
 	const paneBox = "relative min-h-0 min-w-0 flex-1 bg-white dark:bg-[#282c34]";
 	const cornerBtn = "flex h-6 w-6 flex-none items-center justify-center hover:bg-surface-200-700-token";
 </script>
@@ -280,7 +280,7 @@
 			rightOpen={uiRight}
 			bind:prettify={$prettify}
 			bind:wrap={$lineWrap}
-			on:sidebars={(e) => commitNarrowSidebars(e.detail.leftOpen, e.detail.rightOpen)}
+			on:sidebars={(e) => commitNarrowSidebars(e.detail)}
 			on:pane={(e) => (pane = e.detail)}
 			on:action
 			on:highlight
@@ -323,56 +323,32 @@
 				/>
 				<div class="flex min-h-0 flex-1">
 					<div class="ledger-drawer-request {paneBox}">
-						{#if details === undefined}
-							<p class={message}>Loading…</p>
-						{:else if details === null}
-							<p class={message}>Couldn't read this request.</p>
-						{:else}
-							<DrawerEditor
-								value={bodies.request}
-								lang={usesSyntax(bodies.request, syntaxMode) ? "http" : undefined}
-								wrap={$lineWrap}
-								on:suspend={(e) => (requestPaused = e.detail)}
-							/>
-						{/if}
+						<DrawerEditorPane
+							kind="request"
+							{details}
+							{bodies}
+							{syntaxMode}
+							wrap={$lineWrap}
+							on:suspend={(e) => (requestPaused = e.detail)}
+						/>
 					</div>
 					<div class="ledger-drawer-response {paneBox} flex flex-col border-l border-surface-300-600-token">
-						{#if pane === "note"}
-							{#if note === null}
-								<p class={message}>Loading the note…</p>
-							{:else}
-								{#key `${noteFor}:${noteVersion}`}
-									<DrawerNote
-										id={noteFor}
-										text={note}
-										save={store.saveNote}
-										on:edit={onNoteEdit}
-										on:status={(e) => (noteStatus = e.detail)}
-									/>
-								{/key}
-							{/if}
-						{:else if pane === "metadata"}
-							<div class="ledger-drawer-metadata min-h-0 flex-1">
-								{#if metadata === null}
-									<p class={message}>Loading…</p>
-								{:else}
-									<DrawerEditor value={metadata} lang={jsonLanguage} wrap />
-								{/if}
-							</div>
-						{:else}
-							{#if details === undefined}
-								<p class={message}>Loading…</p>
-							{:else if hasResponseBody}
-								<DrawerEditor
-									value={bodies.response}
-									lang={usesSyntax(bodies.response, syntaxMode) ? "http" : undefined}
-									wrap={$lineWrap}
-									on:suspend={(e) => (responsePaused = e.detail)}
-								/>
-							{:else if details !== null}
-								<p class={message}>Waiting for the response…</p>
-							{/if}
-						{/if}
+						<DrawerEditorPane
+							kind={pane ?? "response"}
+							{details}
+							{bodies}
+							{syntaxMode}
+							wrap={$lineWrap}
+							{hasResponseBody}
+							{note}
+							{noteFor}
+							{noteVersion}
+							saveNote={store.saveNote}
+							{metadata}
+							on:suspend={(e) => (responsePaused = e.detail)}
+							on:noteedit={onNoteEdit}
+							on:notestatus={(e) => (noteStatus = e.detail)}
+						/>
 					</div>
 				</div>
 			</div>

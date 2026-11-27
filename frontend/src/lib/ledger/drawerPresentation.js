@@ -181,12 +181,17 @@ export function rightRailWorkflowActions({ canOpenStream = false, showChef = tru
   ];
 }
 
+/** Tooltip text for a highlight swatch button. */
+export function highlightSwatchTitle(swatch, currentHighlight) {
+  return currentHighlight === swatch.number ? `${swatch.label} (click to clear)` : swatch.label;
+}
+
 /**
- * Note status dot, tooltip, and compact save-state label.
- * Neutral grey when saved with a note (primary is red, which reads as failure),
- * amber while edited or saving, red when saving failed.
+ * Note status dot, tooltip, compact save-state label, and details-column
+ * heading tint/label. Neutral grey when saved with a note (primary is red,
+ * which reads as failure), amber while edited or saving, red when saving failed.
  */
-export function noteIndicator(noteStatus = "saved", hasNote = false) {
+export function noteIndicator(noteStatus = "saved", hasNote = false, { active = false } = {}) {
   const dot =
     noteStatus === "failed"
       ? "bg-error-500"
@@ -217,7 +222,15 @@ export function noteIndicator(noteStatus = "saved", hasNote = false) {
             : "";
   const statusTone =
     noteStatus === "failed" ? "text-error-500" : noteStatus !== "saved" ? "text-warning-500" : "opacity-50";
-  return { dot, title, statusText, statusTone };
+  const headingText = active && noteStatus !== "saved" ? statusText : "";
+  const headingTint = !active
+    ? ""
+    : noteStatus === "failed"
+      ? "text-error-500 !opacity-100"
+      : noteStatus !== "saved"
+        ? "text-warning-500 !opacity-100"
+        : "text-surface-900 dark:text-surface-50 !opacity-100";
+  return { dot, title, statusText, statusTone, headingText, headingTint };
 }
 
 /** Presentation state for the 50/50 pane identifier bar directly above the editors. */

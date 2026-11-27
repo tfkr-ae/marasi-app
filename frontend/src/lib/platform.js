@@ -69,9 +69,6 @@ if (typeof window !== "undefined" && window.matchMedia) {
 	query.addEventListener?.("change", (event) => narrow.set(event.matches));
 }
 
-/** Whether the viewport is at narrow width (under COMPACT_QUERY, <= 40rem). */
-export const compactWidth = { subscribe: narrow.subscribe };
-
 /** Whether the app is a phone-width mobile layout (`mobile` under COMPACT_QUERY). */
 export const phoneWidth = derived([mobile, narrow], ([$mobile, $narrow]) => $mobile && $narrow);
 

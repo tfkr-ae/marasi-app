@@ -67,6 +67,28 @@ export function selectPane(state, indexOrId) {
   return { ...state, paneIndex: idx, leftOpen: false, rightOpen: false, gesture: null };
 }
 
+/**
+ * Applies an external pane change (shortcuts ⌘⇧N / ⌘⇧M or row menu actions),
+ * dismissing any open mobile sidebar so the target editor is immediately visible.
+ */
+export function applyExternalPane(state, pane) {
+  const targetIdx =
+    pane === "note" || pane === "metadata"
+      ? paneIndexFor(pane)
+      : pane === null && state.paneIndex >= 2
+        ? 1
+        : state.paneIndex;
+  const sidebarClosed = state.leftOpen || state.rightOpen;
+  if (targetIdx === state.paneIndex && !sidebarClosed) {
+    return { state, changed: false, sidebarClosed: false };
+  }
+  return {
+    state: selectPane(state, targetIdx),
+    changed: true,
+    sidebarClosed,
+  };
+}
+
 export function beginGesture(state, { x, y, time = 0, stageLeft = 0, stageWidth = 390 }) {
   const localX = x - stageLeft;
   return {
@@ -76,7 +98,6 @@ export function beginGesture(state, { x, y, time = 0, stageLeft = 0, stageWidth 
       mode: null,
       startX: x,
       startY: y,
-      anchorX: x,
       lastX: x,
       lastTime: time,
       velocityX: 0,
@@ -93,7 +114,7 @@ export function moveGesture(state, { x, y, time = 0 }) {
     return { state, preventDefault: false, active: false };
   }
 
-  let { velocityX, lastX, lastTime, axis, anchorX, mode } = gesture;
+  let { velocityX, lastX, lastTime, axis, mode } = gesture;
   const dt = time - lastTime;
   if (dt > 0) {
     const instant = (x - lastX) / dt;
@@ -121,7 +142,6 @@ export function moveGesture(state, { x, y, time = 0 }) {
       };
     }
     axis = "x";
-    anchorX = x;
 
     if (state.leftOpen) {
       mode = rawDx < 0 ? "close-left" : null;
@@ -138,17 +158,19 @@ export function moveGesture(state, { x, y, time = 0 }) {
 
   if (!mode) {
     return {
-      state: { ...state, gesture: { ...gesture, axis, anchorX, mode, velocityX, lastX, lastTime } },
+      state: { ...state, gesture: { ...gesture, axis, mode, velocityX, lastX, lastTime } },
       preventDefault: false,
       active: false,
     };
   }
 
-  const currentDx = x - anchorX;
+  // Preserve full horizontal displacement from startX so fast single-move flicks
+  // keep their displacement and commit cleanly.
+  const currentDx = rawDx;
   return {
     state: {
       ...state,
-      gesture: { ...gesture, axis, anchorX, mode, currentDx, velocityX, lastX, lastTime },
+      gesture: { ...gesture, axis, mode, currentDx, velocityX, lastX, lastTime },
     },
     preventDefault: true,
     active: true,
@@ -156,11 +178,11 @@ export function moveGesture(state, { x, y, time = 0 }) {
 }
 
 function commitsRight(dx, vx) {
-  return dx >= DISTANCE || (dx >= FLICK_MIN && vx > FLICK_V);
+  return dx >= DISTANCE || (dx >= FLICK_MIN && vx >= FLICK_V);
 }
 
 function commitsLeft(dx, vx) {
-  return -dx >= DISTANCE || (-dx >= FLICK_MIN && vx < -FLICK_V);
+  return -dx >= DISTANCE || (-dx >= FLICK_MIN && vx <= -FLICK_V);
 }
 
 export function endGesture(state) {
@@ -230,6 +252,42 @@ export function cancelGesture(state) {
 }
 
 /**
+ * Computes only the GPU transform properties touched by the active drag mode
+ * (or null when idle), so callers apply live frames without switching on mode.
+ */
+export function computeLivePatch(state, { stageWidth = 390, panelWidth = SWIPE_PANEL_WIDTH } = {}) {
+  const gesture = state.gesture;
+  if (!gesture || !gesture.mode) return null;
+
+  const width = stageWidth > 0 ? stageWidth : 390;
+  const panel = panelWidth > 0 ? panelWidth : SWIPE_PANEL_WIDTH;
+  const dx = gesture.currentDx;
+
+  if (gesture.mode === "pager") {
+    const restingTrackX = state.paneIndex === 0 ? 0 : -state.paneIndex * width;
+    const minX = -(SWIPE_PANES.length - 1) * width;
+    return { trackX: clamp(restingTrackX + dx, minX, 0) };
+  }
+  if (gesture.mode === "open-left") {
+    const off = clamp(dx, 0, panel);
+    return { leftX: off - panel, scrimOpacity: off / panel };
+  }
+  if (gesture.mode === "open-right") {
+    const off = clamp(-dx, 0, panel);
+    return { rightX: panel - off, scrimOpacity: off / panel };
+  }
+  if (gesture.mode === "close-left") {
+    const off = clamp(panel + dx, 0, panel);
+    return { leftX: off - panel, scrimOpacity: off / panel };
+  }
+  if (gesture.mode === "close-right") {
+    const off = clamp(panel - dx, 0, panel);
+    return { rightX: panel - off, scrimOpacity: off / panel };
+  }
+  return null;
+}
+
+/**
  * Computes the GPU translate3d X offsets (px) and scrim opacity (0..1) for the
  * 4-pane track and both slide-over sidebars, whether resting or mid-drag.
  */
@@ -242,30 +300,6 @@ export function computeTransforms(state, { stageWidth = 390, panelWidth = SWIPE_
     rightX: state.rightOpen ? 0 : panel,
     scrimOpacity: state.leftOpen || state.rightOpen ? 1 : 0,
   };
-
-  const gesture = state.gesture;
-  if (!gesture || !gesture.mode) return resting;
-
-  const dx = gesture.currentDx;
-  if (gesture.mode === "pager") {
-    const minX = -(SWIPE_PANES.length - 1) * width;
-    return { ...resting, trackX: clamp(resting.trackX + dx, minX, 0) };
-  }
-  if (gesture.mode === "open-left") {
-    const off = clamp(dx, 0, panel);
-    return { ...resting, leftX: off - panel, scrimOpacity: off / panel };
-  }
-  if (gesture.mode === "open-right") {
-    const off = clamp(-dx, 0, panel);
-    return { ...resting, rightX: panel - off, scrimOpacity: off / panel };
-  }
-  if (gesture.mode === "close-left") {
-    const off = clamp(panel + dx, 0, panel);
-    return { ...resting, leftX: off - panel, scrimOpacity: off / panel };
-  }
-  if (gesture.mode === "close-right") {
-    const off = clamp(panel - dx, 0, panel);
-    return { ...resting, rightX: panel - off, scrimOpacity: off / panel };
-  }
-  return resting;
+  const patch = computeLivePatch(state, { stageWidth: width, panelWidth: panel });
+  return patch ? { ...resting, ...patch } : resting;
 }
