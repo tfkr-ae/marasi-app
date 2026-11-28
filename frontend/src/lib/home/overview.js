@@ -44,15 +44,24 @@ const readCount = (read, n) => (read ? count(n) : null);
  * `statusClasses` maps each class, in order, to { count, colour,
  * destination }: `count` is a number, or null until read; `colour` the
  * theme colour of its bar. `findings` is
- * { total, unfinished, bySeverity, destination }, `bySeverity` listing
+ * { total, unfinished, summary, bySeverity, destination }, `summary` the
+ * heading's text, `bySeverity` listing
  * { severity, count, destination } for each severity, most severe first.
  */
+// The Findings heading's count: "None", "N · all done" or "N · M unfinished".
+function findingsSummary(total, unfinished) {
+  if (!total) return "None";
+  return `${count(total)} · ${unfinished ? `${count(unfinished)} unfinished` : "all done"}`;
+}
+
 export function overviewOf(state) {
   const { dashboard: d, scope } = state;
   // The intercepted figure is a floor while Marasi's intercepted_count job
   // still counts pairs from before the upgrade.
   const floor = d?.interceptedComplete === false;
   const casesDone = state.testCases.filter((testCase) => testCase.done).length;
+  const findingsTotal = state.findings.length;
+  const unfinished = state.findings.filter((finding) => !finding.done).length;
   return {
     pending: pendingOf(state),
     statusClasses: Object.fromEntries(
@@ -66,8 +75,9 @@ export function overviewOf(state) {
       ]),
     ),
     findings: {
-      total: state.findings.length,
-      unfinished: state.findings.filter((finding) => !finding.done).length,
+      total: findingsTotal,
+      unfinished,
+      summary: findingsSummary(findingsTotal, unfinished),
       bySeverity: SEVERITIES.map((severity) => ({
         severity,
         count: state.findings.filter((finding) => finding.severity === severity).length,
@@ -127,7 +137,7 @@ export function overviewOf(state) {
       {
         id: "test-cases",
         label: "Test cases done",
-        value: `${count(casesDone)} / ${count(state.testCases.length)}`,
+        value: state.testCases.length ? `${count(casesDone)} / ${count(state.testCases.length)}` : "None",
         colour: "tertiary",
         destination: { page: "logbook", kind: "testCases" },
       },
