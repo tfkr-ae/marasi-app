@@ -1,5 +1,5 @@
 import { NodeSet, NodeType, Parser, Tree, parseMixed } from "@lezer/common";
-import { StreamLanguage } from "@codemirror/language";
+import { StreamLanguage, foldNodeProp } from "@codemirror/language";
 import { styleTags, tags as t } from "@lezer/highlight";
 import { protobufText } from "../messages/protobufText.js";
 import { bodyParserFor } from "./bodyParsers.js";
@@ -14,7 +14,15 @@ const framedNodeSet = new NodeSet([
   NodeType.define({ id: 1, name: "FramedBody", top: true }),
   NodeType.define({ id: 2, name: "MessageSeparator" }),
   NodeType.define({ id: 3, name: "MessagePayload" }),
+  NodeType.define({ id: 4, name: "FramedMessage" }),
 ]).extend(
+  foldNodeProp.add({
+    FramedMessage(node, state) {
+      const firstLine = state.doc.lineAt(node.from);
+      if (node.to <= firstLine.to) return null;
+      return { from: firstLine.to, to: node.to };
+    },
+  }),
   styleTags({
     MessageSeparator: t.heading,
   }),
@@ -23,6 +31,7 @@ const framedNodeSet = new NodeSet([
 const T_FRAMED_BODY = framedNodeSet.types[1];
 const T_SEPARATOR = framedNodeSet.types[2];
 const T_PAYLOAD = framedNodeSet.types[3];
+const T_FRAMED_MESSAGE = framedNodeSet.types[4];
 
 const protobufTextParser = StreamLanguage.define({
   ...protobufText,
@@ -52,13 +61,36 @@ class FramedBodyParse {
 
     const children = [];
     const positions = [];
+    let sepStart = -1;
+    let sepEnd = -1;
     let payloadStart = -1;
 
-    const flushPayload = (relEnd) => {
-      if (payloadStart >= 0 && relEnd > payloadStart) {
+    const trimTrailingLineBreak = (relStart, relEnd) => {
+      let endPos = relEnd;
+      if (endPos > relStart && text.charCodeAt(endPos - 1) === 10 /* \n */) endPos--;
+      if (endPos > relStart && text.charCodeAt(endPos - 1) === 13 /* \r */) endPos--;
+      return endPos;
+    };
+
+    const flushMessage = (relEnd) => {
+      if (sepStart >= 0) {
+        const msgChildren = [new Tree(T_SEPARATOR, [], [], sepEnd - sepStart)];
+        const msgPositions = [0];
+        let msgEnd = sepEnd;
+        if (payloadStart >= 0 && relEnd > payloadStart) {
+          const payloadTree = new Tree(T_PAYLOAD, [], [], relEnd - payloadStart);
+          msgChildren.push(payloadTree);
+          msgPositions.push(payloadStart - sepStart);
+          msgEnd = Math.max(sepEnd, trimTrailingLineBreak(payloadStart, relEnd));
+        }
+        children.push(new Tree(T_FRAMED_MESSAGE, msgChildren, msgPositions, msgEnd - sepStart));
+        positions.push(sepStart);
+      } else if (payloadStart >= 0 && relEnd > payloadStart) {
         children.push(new Tree(T_PAYLOAD, [], [], relEnd - payloadStart));
         positions.push(payloadStart);
       }
+      sepStart = -1;
+      sepEnd = -1;
       payloadStart = -1;
     };
 
@@ -70,12 +102,9 @@ class FramedBodyParse {
       const rawLine = text.slice(pos, lineEnd);
 
       if (isSeparatorLine(rawLine)) {
-        flushPayload(pos);
-        const visibleEnd = rawLine.endsWith("\r") ? lineEnd - 1 : lineEnd;
-        if (visibleEnd > pos) {
-          children.push(new Tree(T_SEPARATOR, [], [], visibleEnd - pos));
-          positions.push(pos);
-        }
+        flushMessage(pos);
+        sepStart = pos;
+        sepEnd = rawLine.endsWith("\r") ? lineEnd - 1 : lineEnd;
       } else if (payloadStart < 0) {
         payloadStart = pos;
       }
@@ -83,7 +112,7 @@ class FramedBodyParse {
       pos = nextPos;
     }
 
-    flushPayload(len);
+    flushMessage(len);
 
     this.parsedPos = end;
     return new Tree(T_FRAMED_BODY, children, positions, end - origin).balance();

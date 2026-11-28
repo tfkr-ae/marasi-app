@@ -438,7 +438,7 @@ test("Connect unary separator-less bodies highlight as Protobuf text form or JSO
   assert.equal(classFor(jsonDoc, "5", { framing: "connect", fromIndex: jsonDoc.indexOf("\n\n") + 2 }), "tok-number");
 });
 
-test("framed bodies add no folds/closeBrackets, emit zero invalid spans, respect SYNTAX_AUTO_LIMIT, and stay off outside Armory", () => {
+test("framed bodies support message and JSON folding without closeBrackets, emit zero invalid spans, respect SYNTAX_AUTO_LIMIT, and stay off outside Armory", () => {
   const doc = [
     "POST /svc/M HTTP/2",
     "content-type: application/grpc+json",
@@ -449,10 +449,10 @@ test("framed bodies add no folds/closeBrackets, emit zero invalid spans, respect
 
   const state = armoryState(doc, { framing: "grpc" });
   ensureSyntaxTree(state, doc.length, 5000);
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `line ${n} must not be foldable`);
-  }
+  const sepLine = state.doc.line(4);
+  assert.deepEqual(foldable(state, sepLine.from, sepLine.to), { from: sepLine.to, to: doc.length });
+  const jsonLine = state.doc.line(5);
+  assert.ok(foldable(state, jsonLine.from, jsonLine.to), "JSON object inside framed message folds");
   const bodyStart = doc.indexOf("\n\n") + 2;
   assert.deepEqual(state.languageDataAt("closeBrackets", doc.indexOf('"broken"')), []);
   assert.deepEqual(state.languageDataAt("indentOnInput", doc.indexOf('"broken"')), []);
@@ -461,15 +461,32 @@ test("framed bodies add no folds/closeBrackets, emit zero invalid spans, respect
     [],
   );
 
-  const protoDoc = "POST /svc/M HTTP/2\ncontent-type: application/grpc\n\n--- message ---\n1: {\n  2: \"x\"\n}\n";
+  const protoDoc = [
+    "POST /svc/M HTTP/2",
+    "content-type: application/grpc",
+    "",
+    "--- message ---",
+    "1:VARINT 1",
+    '2:LEN {"first"}',
+    "--- message compressed ---",
+    "1:VARINT 2",
+  ].join("\n");
   const protoState = armoryState(protoDoc, { framing: "grpc" });
   ensureSyntaxTree(protoState, protoDoc.length, 5000);
-  for (let n = 1; n <= protoState.doc.lines; n++) {
-    const line = protoState.doc.line(n);
-    assert.equal(foldable(protoState, line.from, line.to), null, `proto line ${n} must not be foldable`);
-  }
-  assert.deepEqual(protoState.languageDataAt("closeBrackets", protoDoc.indexOf('"x"')), []);
-  assert.deepEqual(protoState.languageDataAt("indentOnInput", protoDoc.indexOf('"x"')), []);
+  const firstMsg = protoState.doc.line(4);
+  const secondMsg = protoState.doc.line(7);
+  assert.deepEqual(
+    foldable(protoState, firstMsg.from, firstMsg.to),
+    { from: firstMsg.to, to: protoState.doc.line(6).to },
+    "first framed message folds without swallowing the next separator line",
+  );
+  assert.deepEqual(
+    foldable(protoState, secondMsg.from, secondMsg.to),
+    { from: secondMsg.to, to: protoState.doc.line(8).to },
+    "compressed framed message folds cleanly",
+  );
+  assert.deepEqual(protoState.languageDataAt("closeBrackets", protoDoc.indexOf('"first"')), []);
+  assert.deepEqual(protoState.languageDataAt("indentOnInput", protoDoc.indexOf('"first"')), []);
 
   // SYNTAX_AUTO_LIMIT: under auto, head & head Armory overlays stay active while body (>= 75,000) skips both body parser and Armory overlays
   const head = "POST /svc/M HTTP/2\n:authority: @@host@@\ncontent-type: application/grpc\n\n";

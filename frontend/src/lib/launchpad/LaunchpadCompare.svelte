@@ -4,9 +4,10 @@
 	// MergeView of A against B. Rules live in compare.js; this only renders.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { MergeView } from "@codemirror/merge";
+	import { foldGutter, foldKeymap } from "@codemirror/language";
 	import { httpHighlighting } from "../httpHighlight.js";
 	import { EditorState } from "@codemirror/state";
-	import { EditorView } from "@codemirror/view";
+	import { EditorView, keymap } from "@codemirror/view";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { ArrowLeftRight, GitCompare } from "lucide-svelte";
@@ -63,13 +64,15 @@
 		const build = (next) => {
 			editor?.destroy();
 			current = next;
+			const highlighting = httpHighlighting({ mode: next.syntaxMode });
 			const side = (doc) => ({
 				doc,
 				extensions: [
 					EditorState.readOnly.of(true),
 					EditorView.editable.of(false),
 					next.light ? githubLight : oneDark,
-					...httpHighlighting({ mode: next.syntaxMode }),
+					...highlighting,
+					...(highlighting.length ? [foldGutter(), keymap.of(foldKeymap)] : []),
 					next.wrap ? EditorView.lineWrapping : [],
 				],
 			});
