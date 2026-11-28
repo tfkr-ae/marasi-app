@@ -15,6 +15,20 @@ export function formatFromContentType(contentType) {
   if (slash > 0 && mediaType.endsWith("+json") && mediaType.length > slash + "+json".length + 1) {
     return "json";
   }
+  if (mediaType === "text/html" || mediaType === "application/xhtml+xml") return "html";
+  if (mediaType === "application/xml" || mediaType === "text/xml") return "xml";
+  if (slash > 0 && mediaType.endsWith("+xml") && mediaType.length > slash + "+xml".length + 1) {
+    return "xml";
+  }
+  if (
+    mediaType === "text/javascript" ||
+    mediaType === "application/javascript" ||
+    mediaType === "application/x-javascript"
+  ) {
+    return "js";
+  }
+  if (mediaType === "text/css") return "css";
+  if (mediaType === "application/x-www-form-urlencoded") return "form";
   return null;
 }
 
