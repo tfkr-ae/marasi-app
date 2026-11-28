@@ -1,13 +1,13 @@
 // Home's api over the service client: each call reads a control API route
 // and maps its snake_case answer to the shape createHomeStore keeps, which
-// is what Home's Overview (lib/home/) and LogTable.svelte read. The mappers for stream
+// is what Home's Overview (lib/home/) and ServiceLog.svelte read. The mappers for stream
 // events (toLog, toListener) live here too, so one file knows the API's
 // shapes.
 
 /** The most log lines Home reads at once (the service's page limit). */
 export const LOG_LIMIT = 500;
 
-/** A log line, from GET /logs or log.added, in the log table's fields. */
+/** A log line, from GET /logs or log.added, in the Service log's fields. */
 export function toLog(log) {
   return {
     ID: log.id,

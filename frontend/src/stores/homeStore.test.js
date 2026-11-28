@@ -74,7 +74,7 @@ test("populate counts the scope's rules", async () => {
   assert.deepEqual(get(store).scope, { defaultAllow: false, includeCount: 1, excludeCount: 2 });
 });
 
-test("populate reads the log oldest first, in the fields the log table reads", async () => {
+test("populate reads the log oldest first, in the fields the Service log reads", async () => {
   const { store, client } = setup();
   await store.populate();
   const logs = get(store).logs;

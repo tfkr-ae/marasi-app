@@ -3,6 +3,8 @@
 	import { getDrawerStore } from "@skeletonlabs/skeleton";
 	const drawerStore = getDrawerStore();
 	import ExtensionLogs from "./ExtensionLogs.svelte";
+	import ServiceLog from "./ServiceLog.svelte";
+	import { SERVICE_LOG_DRAWER } from "../serviceLog.js";
 	import ExtensionDrawerWrapper from "../extensions/components/ExtensionDrawerWrapper.svelte";
 
 	$: drawerPosition = $drawerStore?.position || "bottom";
@@ -22,6 +24,9 @@
 		<ExtensionLogs
 			extensionName={$drawerStore.meta.extensionName}
 		/>
+	{/if}
+	{#if $drawerStore.id === SERVICE_LOG_DRAWER.id}
+		<ServiceLog />
 	{/if}
 	{#if $drawerStore.id === "extension-drawer"}
 		<ExtensionDrawerWrapper />

@@ -3,7 +3,7 @@
 	// figures (lib/home/overview.js), each opening the page it counts.
 	import { GetChromeProfiles } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { startChrome as startChromeOn } from "../lib/chrome.js";
-	import { getModalStore, getToastStore } from "@skeletonlabs/skeleton";
+	import { getDrawerStore, getModalStore, getToastStore } from "@skeletonlabs/skeleton";
 	import { activeProject } from "../stores";
 	import { homeStore } from "../stores/homeStore";
 	import {
@@ -22,6 +22,8 @@
 	import CaptureControls from "../lib/home/CaptureControls.svelte";
 	import FigureGrid from "../lib/home/FigureGrid.svelte";
 	import { openDestination, overview } from "../lib/home/homeOverview.js";
+	import { toggleServiceLog } from "../lib/serviceLog.js";
+	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -70,9 +72,7 @@
 				}}
 				on:downloadCertificate={() => downloadCertificate(toastStore)}
 				on:startChrome={(e) => startChrome(e.detail)}
-				on:openServiceLog={() => {
-					// The Service log drawer comes with its own ticket.
-				}}
+				on:openServiceLog={() => toggleServiceLog(drawerStore, $drawerStore)}
 			/>
 		</div>
 		<FigureGrid figures={$overview.figures} on:open={(e) => openDestination(e.detail)} />
