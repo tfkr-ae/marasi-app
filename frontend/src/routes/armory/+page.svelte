@@ -770,7 +770,11 @@
 			<!-- Editor and Run settings side by side when wide, stacked when narrow. -->
 			<div class="armory-editor-area flex min-h-0 flex-1 flex-col lg:flex-row">
 				<section class="min-h-24 min-w-0 flex-1">
-					<TemplateEditor bind:this={templateEditor} bind:value={rawTemplate} />
+					<TemplateEditor
+						bind:this={templateEditor}
+						bind:value={rawTemplate}
+						framing={selectedTemplate.Framing ?? ""}
+					/>
 				</section>
 				<section
 					class="armory-run-settings flex flex-none flex-col border-t border-surface-500/30 lg:border-l lg:border-t-0 {settingsOpen

@@ -14,6 +14,7 @@
 	import { lineWrap, marasiConfig } from "../../stores";
 
 	export let value = "";
+	export let framing = "";
 
 	let container;
 
@@ -29,7 +30,7 @@
 		styles={{ "&": { fontSize: "0.6875rem" } }}
 		theme={$modeCurrent ? githubLight : oneDark}
 		extensions={[
-			...httpHighlighting({ mode: $marasiConfig.SyntaxMode }),
+			...httpHighlighting({ mode: $marasiConfig.SyntaxMode, armory: true, framing }),
 			...($marasiConfig.VimEnabled ? [vim()] : []),
 			autocompletion({ override: [armoryCompletionSource] }),
 			longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode }),
