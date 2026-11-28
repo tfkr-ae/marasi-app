@@ -28,13 +28,14 @@
 	const size = "btn btn-sm text-xs !px-3 !py-1.5 gap-1.5 whitespace-nowrap";
 	$: neutral = `${size} ${neutralVariant($modeCurrent)}`;
 	$: primary = `${size} ${primaryVariant($modeCurrent)}`;
-	$: full = compact ? "w-full" : "";
+	// Stacked, every button starts its icon and text at the same left edge.
+	$: full = compact ? "w-full !justify-start" : "";
 	const chromeProfilesPopup = { event: "click", target: "chromeProfilesPopup", placement: "bottom-end" };
 </script>
 
 <div class={compact ? "w-full space-y-2" : "flex min-w-0 flex-wrap items-center gap-2"} data-testid="home-capture">
 	<div class="btn-group btn-group-sm [&>button]:!text-xs [&>button]:!px-3 [&>button]:!py-1.5 {full} {$modeCurrent ? 'light-ghost-group' : 'variant-filled'}">
-		<button type="button" class="{neutral} {compact ? 'flex-1 min-w-0' : ''}" title="Change listener" on:click={() => dispatch("editListener")}>
+		<button type="button" class="{neutral} {compact ? 'flex-1 min-w-0 !justify-start' : ''}" title="Change listener" on:click={() => dispatch("editListener")}>
 			<span class="truncate font-mono text-2xs" data-testid="home-listener"
 				>{listener.status ? `${listener.address}:${listener.port}` : "Listener off"}</span
 			>
@@ -58,7 +59,7 @@
 		{/if}
 	</div>
 	{#if compact}
-		<button type="button" class="{neutral} w-full" title="Open Project" on:click={() => dispatch("openProject")}>
+		<button type="button" class="{neutral} {full}" title="Open Project" on:click={() => dispatch("openProject")}>
 			<FolderOpen size={14} /><span>Open Project</span>
 		</button>
 	{/if}
@@ -69,7 +70,7 @@
 		<div class="flex overflow-hidden {full}">
 			<button
 				type="button"
-				class="{primary} {compact ? 'flex-1' : ''}"
+				class="{primary} {compact ? 'flex-1 !justify-start' : ''}"
 				class:rounded-none={chromeProfiles.length > 0}
 				on:click={() => dispatch("startChrome", "")}
 			>

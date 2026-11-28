@@ -2,7 +2,7 @@
 // status class and the proxy listener's status. It reads through the injected
 // `api` (homeApi.js over the service client; tests pass a fake client):
 //
-//   dashboard() -> {requests, notes, launchpads, intercepted, interceptedComplete}
+//   dashboard() -> {requests, notes, launchpads, intercepted, interceptedComplete, projectBytes}
 //   scope() -> {defaultAllow, includeCount, excludeCount}
 //   statusClasses() -> {"2xx", "3xx", "4xx", "5xx"}: pairs per status class
 //   listener() -> {status, address, port}

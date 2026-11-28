@@ -52,6 +52,9 @@ export function createHomeApi(client) {
         launchpads: d.launchpads,
         intercepted: d.intercepted,
         interceptedComplete: d.intercepted_count?.complete !== false,
+        // The open project's size on disk; null when the service can't
+        // read it or, being older than marasi 87dd84e, doesn't send it.
+        projectBytes: typeof d.project_bytes === "number" ? d.project_bytes : null,
       };
     },
     async statusClasses() {

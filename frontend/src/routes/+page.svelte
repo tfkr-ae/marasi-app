@@ -24,7 +24,7 @@
 	import CaptureControls from "../lib/home/CaptureControls.svelte";
 	import FigureGrid from "../lib/home/FigureGrid.svelte";
 	import Breakdowns from "../lib/home/Breakdowns.svelte";
-	import PendingColumn from "../lib/home/PendingColumn.svelte";
+	import PendingItems from "../lib/home/PendingItems.svelte";
 	import { openDestination, overview } from "../lib/home/homeOverview.js";
 	import { toggleServiceLog } from "../lib/serviceLog.js";
 	const drawerStore = getDrawerStore();
@@ -61,6 +61,9 @@
 			<div class="min-w-0">
 				<p class="text-2xs opacity-60">Project</p>
 				<h2 class="text-base font-bold truncate" data-testid="home-project">{$activeProject || "—"}</h2>
+				{#if $overview.projectSize}
+					<p class="text-2xs opacity-60" data-testid="home-project-size">{$overview.projectSize}</p>
+				{/if}
 			</div>
 			<CaptureControls
 				listener={$homeStore.listener}
@@ -79,11 +82,9 @@
 				on:openServiceLog={() => toggleServiceLog(drawerStore, $drawerStore)}
 			/>
 		</div>
-		<div class="flex flex-col lg:flex-row gap-6">
-			<aside class="lg:w-96 shrink-0">
-				<PendingColumn items={$overview.pending} on:open={(e) => openDestination(e.detail, { toastStore })} />
-			</aside>
-			<div class="flex-1 min-w-0 space-y-3">
+		<div class="space-y-5">
+			<PendingItems items={$overview.pending} on:open={(e) => openDestination(e.detail, { toastStore })} />
+			<div class="space-y-3">
 				<FigureGrid figures={$overview.figures} on:open={(e) => openDestination(e.detail)} />
 				<Breakdowns
 					statusClasses={$overview.statusClasses}

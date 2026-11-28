@@ -13,6 +13,21 @@ const project = {
   findings: [],
   listenerStopped: false,
 };
+test("the project's size reads in 1024-based units with one decimal", () => {
+  const sizeOf = (projectBytes) => overviewOf({ ...project, dashboard: { ...project.dashboard, projectBytes } }).projectSize;
+  assert.equal(sizeOf(512), "512 B");
+  assert.equal(sizeOf(1536), "1.5 KB");
+  assert.equal(sizeOf(1468006), "1.4 MB");
+  assert.equal(sizeOf(3 * 1024 ** 3 + 1024 ** 3 / 2), "3.5 GB");
+  assert.equal(sizeOf(0), "0 B");
+});
+
+test("without a size from the service, Home shows no size", () => {
+  assert.equal(overviewOf({ ...project, dashboard: { ...project.dashboard, projectBytes: null } }).projectSize, null);
+  assert.equal(overviewOf(project).projectSize, null);
+  assert.equal(overviewOf({ ...project, dashboard: null }).projectSize, null);
+});
+
 const figure = (state, id) => overviewOf(state).figures.find((f) => f.id === id);
 
 test("Pairs counts every pair and opens the unfiltered Ledger", () => {
@@ -78,7 +93,10 @@ test("Test cases done reads done / total and opens the Logbook's test cases", ()
   assert.equal(cases.label, "Test cases done");
   assert.equal(cases.value, "2 / 3");
   assert.deepEqual(cases.destination, { page: "logbook", kind: "testCases" });
-  assert.equal(figure(project, "test-cases").value, "0 / 0");
+});
+
+test("Test cases done reads None, not 0 / 0, when the project has no test cases", () => {
+  assert.equal(figure(project, "test-cases").value, "None");
 });
 
 test("Scope shows the default with the include and exclude counts, and opens Compass", () => {
@@ -108,7 +126,7 @@ test("until the counts and the scope are first read, their tiles have no value",
     launchpads: null,
     held: "0",
     armory: "0",
-    "test-cases": "0 / 0",
+    "test-cases": "None",
     scope: null,
   });
 });
@@ -143,6 +161,7 @@ test("Findings counts every finding and the unfinished ones, and opens the Logbo
   const findings = overviewOf({ ...project, findings: someFindings }).findings;
   assert.equal(findings.total, 7);
   assert.equal(findings.unfinished, 3);
+  assert.equal(findings.summary, "7 · 3 unfinished");
   assert.deepEqual(findings.destination, { page: "logbook", kind: "findings" });
 });
 
@@ -166,6 +185,12 @@ test("a project without findings counts none in every severity", () => {
   assert.equal(findings.total, 0);
   assert.equal(findings.unfinished, 0);
   assert.ok(findings.bySeverity.every((s) => s.count === 0));
+  assert.equal(findings.summary, "None");
+});
+
+test("Findings says all done when no finding is unfinished", () => {
+  const done = someFindings.map((finding) => ({ ...finding, done: true }));
+  assert.equal(overviewOf({ ...project, findings: done }).findings.summary, "7 · all done");
 });
 
 const pendingIds = (state) => overviewOf(state).pending.map((item) => item.id);

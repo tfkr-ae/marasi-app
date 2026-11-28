@@ -1,7 +1,8 @@
 <script>
-	// Home's Pending column: one card per overviewOf pending item, coloured by
-	// its tone, each doing its action or opening where you act; "All clear"
-	// when nothing is pending.
+	// Home's Pending row, above the figures: one card per overviewOf pending
+	// item, coloured by its tone, each doing its action or opening where you
+	// act, laid out in the figures' columns; a slim "All clear" when nothing
+	// is pending.
 	import { createEventDispatcher } from "svelte";
 	import { Check, Flag, Power, Radio, TriangleAlert } from "lucide-svelte";
 	import ChipIcon from "./ChipIcon.svelte";
@@ -15,12 +16,12 @@
 <section data-testid="home-pending">
 	<h3 class="text-sm font-bold mb-2">Pending</h3>
 	{#if items.length}
-		<ul class="space-y-2">
+		<ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
 			{#each items as item (item.id)}
 				<li>
 					<button
 						type="button"
-						class="action-card card bg-surface-100-500-token text-surface-900-50-token border-l-4 w-full flex items-center gap-3 p-2 text-left"
+						class="action-card card bg-surface-100-500-token text-surface-900-50-token border-l-4 w-full h-full flex items-center gap-3 p-2 text-left"
 						style={swatch(item.tone)}
 						data-testid="home-pending-item"
 						data-pending={item.id}
@@ -38,7 +39,7 @@
 		</ul>
 	{:else}
 		<div
-			class="card bg-surface-100-500-token text-surface-900-50-token border-l-4 flex items-center gap-3 p-2 text-xs font-bold"
+			class="card bg-surface-100-500-token text-surface-900-50-token border-l-4 inline-flex items-center gap-3 p-2 pr-4 text-xs font-bold"
 			style={swatch("success")}
 			data-testid="home-pending-clear"
 		>
