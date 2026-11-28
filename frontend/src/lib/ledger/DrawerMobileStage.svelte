@@ -9,7 +9,7 @@
 	import DrawerActionsContent from "./DrawerActionsContent.svelte";
 	import DrawerDetailsContent from "./DrawerDetailsContent.svelte";
 	import DrawerEditorPane from "./DrawerEditorPane.svelte";
-	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
+	import { Code2, Eye } from "lucide-svelte";
 	import { noteIndicator } from "./drawerPresentation.js";
 	import {
 		SWIPE_PANES,
@@ -147,6 +147,25 @@
 		if (live.state.leftOpen !== leftOpen || live.state.rightOpen !== rightOpen) {
 			dispatch("sidebars", { leftOpen: live.state.leftOpen, rightOpen: live.state.rightOpen });
 		}
+	}
+
+	const RESPONSE_IDX = SWIPE_PANES.indexOf("response");
+
+	// The Response tab carries Raw | Render: tapping it while it is the open
+	// pane flips the mode, so the phone needs no toggle row of its own.
+	function onTabTap(idx) {
+		if (idx === RESPONSE_IDX && activeIdx === idx && hasResponse) {
+			responseMode = responseMode === "render" ? "raw" : "render";
+			return;
+		}
+		onTabPick(idx);
+	}
+
+	function tabTitle(tab, idx) {
+		if (tab !== "response" || !hasResponse) return undefined;
+		const now = responseMode === "render" ? "Rendered preview" : "Raw HTTP";
+		const next = responseMode === "render" ? "raw" : "render";
+		return activeIdx === idx ? `Response · ${now} (tap to ${next})` : `Response · ${now}`;
 	}
 
 	function onTabPick(indexOrId) {
@@ -314,12 +333,19 @@
 			aria-selected={activeIdx === idx}
 			data-pane={tab}
 			data-status={tab === "note" ? noteStatus : null}
+			data-response-mode={tab === "response" && hasResponse ? responseMode : null}
+			title={tabTitle(tab, idx)}
 			class="relative flex flex-1 items-center justify-center gap-1 border-b-2 text-3xs font-semibold uppercase tracking-wider {activeIdx === idx
 				? 'border-primary-500 text-primary-500'
 				: 'border-transparent opacity-55'}"
-			on:click={() => onTabPick(idx)}
+			on:click={() => onTabTap(idx)}
 		>
 			<span>{SWIPE_PANE_LABELS[tab]}</span>
+			{#if tab === "response" && hasResponse}
+				<span class="ledger-drawer-mobile-response-mode flex-none" aria-hidden="true">
+					{#if responseMode === "render"}<Eye size={12} />{:else}<Code2 size={12} />{/if}
+				</span>
+			{/if}
 			{#if tab === "note" && noteInfo.dot}
 				<span class="h-1.5 w-1.5 rounded-full {noteInfo.dot}" aria-hidden="true"></span>
 			{/if}
@@ -351,13 +377,6 @@
 		</div>
 
 		<div class="ledger-drawer-response {slidePane}">
-			{#if hasResponse}
-				<div
-					class="flex h-7 flex-none items-center justify-end border-b border-surface-300-600-token bg-surface-50 px-2 dark:bg-surface-900"
-				>
-					<ResponseModeToggle bind:mode={responseMode} actionId="ledger.drawer-open.toggle-render" />
-				</div>
-			{/if}
 			<div class="relative flex min-h-0 flex-1 flex-col">
 				<DrawerEditorPane
 					kind="response"
