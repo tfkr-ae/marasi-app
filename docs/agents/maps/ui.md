@@ -65,6 +65,8 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 
 Raw HTTP is highlighted with `lib/httpHighlight.js` (`httpHighlighting({ mode: $marasiConfig.SyntaxMode })`) backed by `lib/httpHighlight/` (`headParser.js`, `bodyParsers.js`, `formParser.js`, `resolveBody.js`, `armoryOverlay.js`, `framedBodyParser.js`), a shared Lezer HTTP language that parses HTTP/1.1 and Marasi's HTTP/2 text form (GLOSSARY Protocol), mounts body parsers through `parseMixed`, enables square-edged code folding for HTTP headers, structured bodies, and Armory framed messages (with `LaunchpadCompare` mounting `foldGutter`), and honors `SyntaxMode` (`auto` always highlights the head and skips body highlighting at 75,000 characters, `enabled` highlights all, `disabled` highlights nothing). Import it rather than `@codemirror/legacy-modes/mode/http`. The Lua editors' autocomplete is `lib/autocomplete/` (see `marasi-service.md`, Marasi source, for keeping it in step with Marasi).
 
+Every HTTP response pane (Ledger drawer desktop & mobile, Launchpad, Armory drawer, Logbook linked `RequestPair`, and Checkpoint held responses) offers a square-edged **Raw | Render** toggle (`lib/render/ResponseModeToggle.svelte`) backed by `lib/render/ResponseRenderPane.svelte`, `httpResponse.js`, `decodeBody.js`, `classify.js`, and `sanitizeHtml.js`. HTML renders strictly offline and scriptless inside `<iframe sandbox="" referrerpolicy="no-referrer" srcdoc>` on a white canvas with pre-render sanitization and an injected `default-src 'none'` CSP; `image/svg+xml` renders exclusively through `<img src="blob:">`; raster images, video, and audio render via revoked `blob:` URLs with no `autoplay`, a 10 MiB decompression cap, and a 10 MiB click-to-load gate for large raw media.
+
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 
 ## Type scale
@@ -95,3 +97,4 @@ Action buttons (`btn`, `btn-icon`) take their variant from `primaryVariant($mode
 - [Text size scales the root font size, not the whole page](../../adr/2026-10-29-text-size-scales-the-root-font-size.md)
 - [Rail order drives positional defaults for built-in pages](../../adr/2026-11-27-rail-order-drives-positional-page-defaults.md)
 - [HTTP editors highlight bodies with a Lezer grammar and parseMixed](../../adr/2026-11-28-http-editors-highlight-bodies-with-lezer-parsemixed.md)
+- [Response render uses an offline sandboxed iframe and frontend decoding](../../adr/2026-11-28-response-render-uses-offline-sandboxed-iframe-and-frontend-decoding.md)

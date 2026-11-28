@@ -2,11 +2,16 @@
 // standard base64. The app shows raw HTTP as text, as the Go bindings did:
 // UTF-8, with invalid bytes as U+FFFD.
 
+/** Base64 bytes as a Uint8Array; null for none. */
+export function decodeBase64Bytes(base64) {
+  if (!base64) return null;
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
 /** Base64 bytes as UTF-8 text; "" for none. */
 export function decodeBase64Text(base64) {
-  if (!base64) return "";
-  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+  const bytes = decodeBase64Bytes(base64);
+  return bytes ? new TextDecoder().decode(bytes) : "";
 }
 
 /** Text as the base64 of its UTF-8 bytes. */

@@ -14,6 +14,7 @@ import {
 	CopyIcon,
 	GlobeIcon,
 	BracesIcon,
+	EyeIcon,
 	MaximizeIcon,
 	WrapTextIcon,
 	BookCheckIcon,
@@ -47,6 +48,7 @@ export function createLedgerMenus({
 	runShortcut,
 	openRowMenuAtFocus,
 	toggleDrawerPane,
+	toggleDrawerRender,
 	openWebSocketStream,
 }) {
 	const shortcut = (actionId) => () => runShortcut(actionId);
@@ -297,6 +299,11 @@ export function createLedgerMenus({
 			actionId: "ledger.drawer-open.view-metadata",
 			icon: BracesIcon,
 			handler: whenOpen(() => toggleDrawerPane("metadata")),
+		},
+		{
+			actionId: "ledger.drawer-open.toggle-render",
+			icon: EyeIcon,
+			handler: whenOpen(() => toggleDrawerRender?.()),
 		},
 		{
 			actionId: "ledger.drawer-open.copy-url",

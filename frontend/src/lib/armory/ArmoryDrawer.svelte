@@ -16,6 +16,8 @@
 	import { ledgerStore } from "../../stores/ledgerStore";
 	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
 	import ArmoryDrawerRail from "./ArmoryDrawerRail.svelte";
+	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
+	import ResponseRenderPane from "../render/ResponseRenderPane.svelte";
 
 	/** The open pair's traffic row, and its request number. */
 	export let pair;
@@ -23,6 +25,8 @@
 	export let maximised = false;
 	/** Whether the details column shows instead of the rail. */
 	export let expanded = false;
+	/** "raw" | "render" for the response pane; sticky across pairs in a run. */
+	export let responseMode = "raw";
 	export let onClose = () => {};
 	/** Whether Previous and Next request have a pair to open. */
 	export let canPrevious = true;
@@ -86,11 +90,18 @@
 
 	$: bodies = drawerBodies(details, { prettify: $prettify, joinedResponse: $joined });
 	$: syntaxMode = $marasiConfig.SyntaxMode;
+	$: canRenderResponse = hasResponse || Boolean(bodies.response);
+
+	/** Toggles the response pane between Raw HTTP and Rendered preview. */
+	export function toggleRender() {
+		if (!canRenderResponse) return;
+		responseMode = responseMode === "render" ? "raw" : "render";
+	}
 
 	const message = "p-3 text-2xs opacity-50";
-	// As in the Ledger drawer, the panes start a few pixels below the red top
-	// line, on the editors' own background.
-	const paneBox = "relative min-h-0 min-w-0 flex-1 pt-[3px] bg-white dark:bg-[#282c34]";
+	const paneBox = "relative min-h-0 min-w-0 flex-1 flex flex-col bg-white dark:bg-[#282c34]";
+	const paneBar =
+		"flex h-6 flex-none items-center justify-between gap-2 border-b border-surface-300-600-token bg-surface-50 px-2.5 dark:bg-surface-900";
 
 	// Below this width the panes stack, so each editor keeps the full width.
 	const STACK_BELOW = 480;
@@ -132,37 +143,62 @@
 		bind:clientWidth={panesWidth}
 	>
 		<div class="armory-drawer-request {paneBox}" class:pane-off={narrowPane !== "request"}>
-			{#if details === undefined}
-				<p class={message}>Loading…</p>
-			{:else if details === null}
-				<p class={message}>Couldn't read this request.</p>
-			{:else}
-				<DrawerEditor
-					value={bodies.request}
-					lang="http"
-					{syntaxMode}
-					wrap={$lineWrap}
-				/>
-			{/if}
+			<div class={paneBar}>
+				<div class="flex min-w-0 items-center gap-1.5">
+					<span class="h-1.5 w-1.5 flex-none rounded-full bg-primary-500" aria-hidden="true"></span>
+					<span class="text-3xs font-semibold uppercase tracking-wider opacity-80">Request</span>
+				</div>
+			</div>
+			<div class="relative min-h-0 flex-1 pt-[3px]">
+				{#if details === undefined}
+					<p class={message}>Loading…</p>
+				{:else if details === null}
+					<p class={message}>Couldn't read this request.</p>
+				{:else}
+					<DrawerEditor
+						value={bodies.request}
+						lang="http"
+						{syntaxMode}
+						wrap={$lineWrap}
+					/>
+				{/if}
+			</div>
 		</div>
 		<div
-			class="armory-drawer-response {paneBox} flex flex-col border-surface-300-600-token {stacked
+			class="armory-drawer-response {paneBox} border-surface-300-600-token {stacked
 				? 'border-t'
 				: 'border-l'}"
 			class:pane-off={narrowPane !== "response"}
 		>
-			{#if details === undefined}
-				<p class={message}>Loading…</p>
-			{:else if bodies.response}
-				<DrawerEditor
-					value={bodies.response}
-					lang="http"
-					{syntaxMode}
-					wrap={$lineWrap}
-				/>
-			{:else if details !== null}
-				<p class={message}>Waiting for the response…</p>
-			{/if}
+			<div class={paneBar}>
+				<span class="text-3xs font-semibold uppercase tracking-wider opacity-80">Response</span>
+				{#if canRenderResponse}
+					<ResponseModeToggle bind:mode={responseMode} actionId="armory.drawer.toggle-render" />
+				{/if}
+			</div>
+			<div class="relative flex min-h-0 flex-1 flex-col {responseMode === 'render' ? '' : 'pt-[3px]'}">
+				{#if details === undefined}
+					<p class={message}>Loading…</p>
+				{:else if responseMode === "render" && canRenderResponse}
+					<ResponseRenderPane
+						rawBytes={$joined != null ? null : (pairDetails?.Response?.RawBytes ?? null)}
+						rawText={bodies.response}
+						contentType={pairDetails?.Response?.ContentType ?? pair?.ContentType ?? ""}
+						statusCode={pairDetails?.Response?.StatusCode ?? pair?.StatusCode ?? 0}
+						truncated={Boolean(pairDetails?.Metadata?.body_cut_short || pairDetails?.Metadata?.body_too_large)}
+						onShowRaw={() => (responseMode = "raw")}
+					/>
+				{:else if bodies.response}
+					<DrawerEditor
+						value={bodies.response}
+						lang="http"
+						{syntaxMode}
+						wrap={$lineWrap}
+					/>
+				{:else if details !== null}
+					<p class={message}>Waiting for the response…</p>
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>

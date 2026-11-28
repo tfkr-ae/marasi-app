@@ -4,7 +4,7 @@
 // reads every traffic view shares: a page of traffic and a count, each
 // minus the project's content-type exclusion.
 
-import { decodeBase64Text } from "../lib/service/bytes.js";
+import { decodeBase64Bytes, decodeBase64Text } from "../lib/service/bytes.js";
 
 /** The service's largest GET /traffic page. */
 export const SERVICE_PAGE_ROWS = 500;
@@ -116,6 +116,7 @@ export function toDetails(pair) {
   const route = toRoute(pair.upstream_proxy);
   const request = pair.request ?? {};
   const response = pair.response ?? {};
+  const responseRawBytes = decodeBase64Bytes(response.raw);
   return {
     Request: {
       ID: pair.id,
@@ -133,7 +134,8 @@ export function toDetails(pair) {
       StatusCode: response.status_code,
       ContentType: response.content_type,
       Length: response.length,
-      Raw: decodeBase64Text(response.raw),
+      Raw: responseRawBytes ? new TextDecoder().decode(responseRawBytes) : "",
+      RawBytes: responseRawBytes,
       RespondedAt: response.responded_at ?? null,
       Route: route,
     },

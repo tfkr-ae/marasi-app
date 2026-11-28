@@ -23,8 +23,11 @@
 	import { launchpadResponseView } from "./responseView.js";
 	import LaunchpadCompare from "./LaunchpadCompare.svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
+	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
+	import ResponseRenderPane from "../render/ResponseRenderPane.svelte";
 
 	export let store;
+	export let responseMode = "raw";
 	export let onEditorFocus = () => {};
 	export let onLaunch = () => {};
 	export let onCancel = () => {};
@@ -96,6 +99,11 @@
 	/** Flips the diff between Request and Response while comparing. */
 	export function toggleCompareView() {
 		comparePane?.toggleTab();
+	}
+	/** Toggles the response pane between Raw HTTP and Rendered preview. */
+	export function toggleRender() {
+		if (comparing || responseView.kind !== "response") return;
+		responseMode = responseMode === "render" ? "raw" : "render";
 	}
 
 	let editing = false;
@@ -289,12 +297,15 @@
 							· <span class={statusClass(details.Response.StatusCode)}>{details.Response.StatusCode}</span>
 							· {details.Response.Length} B
 						{/if}
-						{#if responseView.kind === "response" && responsePaused}
+						{#if responseView.kind === "response" && responseMode !== "render" && responsePaused}
 							<span class="lp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 						{/if}
 					</span>
 					<span class="flex items-center gap-3">
-					{#if details?.Response}<SendToChefButton />{/if}
+					{#if responseView.kind === "response"}
+						<ResponseModeToggle bind:mode={responseMode} actionId="launchpad.toggle-render" />
+					{/if}
+					{#if details?.Response && responseMode !== "render"}<SendToChefButton />{/if}
 					{#if selectedId}
 						<button
 							class="lp-browser-view flex items-center gap-1 opacity-60 hover:opacity-100 disabled:opacity-30"
@@ -324,16 +335,29 @@
 								{responseView.endText}
 							</p>
 						{/if}
-						<div class="lp-scroll min-h-0 flex-1 overflow-auto">
-							<CodeMirror
-								value={responseView.text}
-								readonly
-								class="text-xs"
-								styles={{ "&": { fontSize: "0.6875rem" } }}
-								{theme}
-								extensions={responseExtensions}
+						{#if responseMode === "render"}
+							<ResponseRenderPane
+								rawBytes={$joined != null ? null : (details?.Response?.RawBytes ?? null)}
+								rawText={responseView.text}
+								contentType={details?.Response?.ContentType ?? selectedEntry?.ContentType ?? ""}
+								statusCode={details?.Response?.StatusCode ?? selectedEntry?.StatusCode ?? 0}
+								truncated={Boolean(details?.Metadata?.body_cut_short || details?.Metadata?.body_too_large)}
+								canBrowserView={!browserViewOff}
+								{onBrowserView}
+								onShowRaw={() => (responseMode = "raw")}
 							/>
-						</div>
+						{:else}
+							<div class="lp-scroll min-h-0 flex-1 overflow-auto">
+								<CodeMirror
+									value={responseView.text}
+									readonly
+									class="text-xs"
+									styles={{ "&": { fontSize: "0.6875rem" } }}
+									{theme}
+									extensions={responseExtensions}
+								/>
+							</div>
+						{/if}
 					{:else if responseView.kind === "loading"}
 						<p class="p-4 text-sm opacity-60">Loading…</p>
 					{:else}

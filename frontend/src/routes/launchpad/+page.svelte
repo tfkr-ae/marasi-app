@@ -16,6 +16,7 @@
         BracesIcon,
         CircleStopIcon,
         Columns2Icon,
+        EyeIcon,
         FolderTreeIcon,
         GitCompareIcon,
         GlobeIcon,
@@ -703,6 +704,7 @@
             icon: BracesIcon,
             handler: () => toggleEntryModal("Metadata", "launchpad.view-metadata", entryMetadata, "Metadata"),
         },
+        { actionId: "launchpad.toggle-render", icon: EyeIcon, handler: () => workspace?.toggleRender() },
         { actionId: "launchpad.copy-browser-view-url", icon: GlobeIcon, handler: copyOpenBrowserView },
     ];
     useMenuActions(launchpadMenu);

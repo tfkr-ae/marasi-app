@@ -100,14 +100,21 @@ function picking(state, id, { toggle = false, range = false, order }) {
 }
 
 // Wails sends a Go []byte as base64.
+function decodeBytes(bytes) {
+  if (!bytes) return null;
+  if (typeof bytes !== "string") return Uint8Array.from(bytes);
+  try {
+    return Uint8Array.from(atob(bytes), (char) => char.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
 function decode(bytes) {
   if (!bytes) return "";
-  if (typeof bytes !== "string") return new TextDecoder().decode(Uint8Array.from(bytes));
-  try {
-    return new TextDecoder().decode(Uint8Array.from(atob(bytes), (char) => char.charCodeAt(0)));
-  } catch {
-    return bytes;
-  }
+  const decoded = decodeBytes(bytes);
+  if (decoded) return new TextDecoder().decode(decoded);
+  return typeof bytes === "string" ? bytes : "";
 }
 
 /** True for a held HTTP request or response, whose edit is parsed. */
@@ -122,8 +129,9 @@ function withText(item) {
     return { ...item, text, textForm, editable, language };
   }
   if (item.Type === "trailer") return { ...item, text: decode(item.Raw), editable: true };
-  const text = decode(item.Raw);
-  return { ...item, text, protocol: heldProtocol(text, item.Type) };
+  const rawBytes = decodeBytes(item.Raw);
+  const text = rawBytes ? new TextDecoder().decode(rawBytes) : typeof item.Raw === "string" ? item.Raw : "";
+  return { ...item, text, rawBytes, protocol: heldProtocol(text, item.Type) };
 }
 
 // CodeMirror rewrites \r\n to \n, so texts compare without them.

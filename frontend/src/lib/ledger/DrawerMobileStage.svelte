@@ -9,6 +9,7 @@
 	import DrawerActionsContent from "./DrawerActionsContent.svelte";
 	import DrawerDetailsContent from "./DrawerDetailsContent.svelte";
 	import DrawerEditorPane from "./DrawerEditorPane.svelte";
+	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
 	import { noteIndicator } from "./drawerPresentation.js";
 	import {
 		SWIPE_PANES,
@@ -42,6 +43,13 @@
 	export let timing = "";
 	export let hasResponse = false;
 	export let hasResponseBody = false;
+	export let responseMode = "raw";
+	export let rawResponseBytes = null;
+	export let responseContentType = "";
+	export let responseStatusCode = 0;
+	export let responseTruncated = false;
+	export let canBrowserView = false;
+	export let onBrowserView = null;
 	export let hasNote = false;
 	export let canOpenStream = false;
 	export let indexing = false;
@@ -343,15 +351,33 @@
 		</div>
 
 		<div class="ledger-drawer-response {slidePane}">
-			<DrawerEditorPane
-				kind="response"
-				{details}
-				{bodies}
-				{syntaxMode}
-				{wrap}
-				{hasResponseBody}
-				on:suspend={(e) => dispatch("responsesuspend", e.detail)}
-			/>
+			{#if hasResponse}
+				<div
+					class="flex h-7 flex-none items-center justify-end border-b border-surface-300-600-token bg-surface-50 px-2 dark:bg-surface-900"
+				>
+					<ResponseModeToggle bind:mode={responseMode} actionId="ledger.drawer-open.toggle-render" />
+				</div>
+			{/if}
+			<div class="relative flex min-h-0 flex-1 flex-col">
+				<DrawerEditorPane
+					kind="response"
+					{details}
+					{bodies}
+					{syntaxMode}
+					{wrap}
+					{hasResponse}
+					{hasResponseBody}
+					{responseMode}
+					{rawResponseBytes}
+					{responseContentType}
+					{responseStatusCode}
+					{responseTruncated}
+					{canBrowserView}
+					{onBrowserView}
+					onShowRaw={() => (responseMode = "raw")}
+					on:suspend={(e) => dispatch("responsesuspend", e.detail)}
+				/>
+			</div>
 		</div>
 
 		<div class="ledger-drawer-note-pane {slidePane}">

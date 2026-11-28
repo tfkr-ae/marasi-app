@@ -101,6 +101,7 @@
 	// "note" or "metadata" while the drawer shows one in place of the
 	// response; a closed drawer reopens on the response.
 	let drawerPane = null;
+	let drawerResponseMode = "raw";
 	$: if (!drawerOpen) drawerPane = null;
 	$: focusID = $selection.focus;
 	$: focusNumber = $focused ? ledgerStore.pairNumber($focused.ID) : "";
@@ -170,6 +171,18 @@
 		drawerPane = drawerPane === pane ? null : pane;
 	}
 
+	// ⌘⌥R: toggle the response pane between Raw HTTP and Rendered preview.
+	// If Note or Metadata is currently shown, switch back to Response in Render mode.
+	function toggleDrawerRender() {
+		if ($modalStore[0] || !drawerOpen) return;
+		if (drawerPane !== null) {
+			drawerPane = null;
+			drawerResponseMode = "render";
+		} else {
+			drawerResponseMode = drawerResponseMode === "render" ? "raw" : "render";
+		}
+	}
+
 	// The drawer's highlight swatches: the focused pair alone, as the row
 	// menu's swatches highlight a selection.
 	function highlightFocused(number) {
@@ -197,6 +210,7 @@
 		runShortcut: (actionId) => rowMenu?.runShortcut(actionId),
 		openRowMenuAtFocus: () => rowMenu?.openRowMenuAtFocus(),
 		toggleDrawerPane,
+		toggleDrawerRender,
 		openWebSocketStream,
 	});
 
@@ -328,6 +342,7 @@
 						leftExpanded={$drawerLayout.leftExpanded}
 						rightExpanded={$drawerLayout.rightExpanded}
 						bind:pane={drawerPane}
+						bind:responseMode={drawerResponseMode}
 						highlight={focusHighlight}
 						palette={$highlightPalette}
 						findings={linkedTo($focused.ID, $findingStore)}

@@ -20,6 +20,7 @@
 	import { pairHasResponse } from "./drawerPresentation.js";
 	import { setSidebars, toggleLeftSidebar, toggleRightSidebar } from "./drawerSwipe.js";
 	import { sameID } from "./pairs.js";
+	import { browserViewRefusal } from "../browserView.js";
 	import { phoneWidth } from "../platform.js";
 	import { toastError } from "../toasts.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
@@ -42,6 +43,8 @@
 	export let rightExpanded = false;
 	/** "note" or "metadata" while one shows in place of the response; null for the response. */
 	export let pane = null;
+	/** "raw" or "render" for the response pane; sticky while stepping pairs. */
+	export let responseMode = "raw";
 	/** The highlight colour, or null, and the palette. */
 	export let highlight = null;
 	export let palette = [];
@@ -183,13 +186,27 @@
 	$: syntaxMode = $marasiConfig.SyntaxMode;
 	$: hasResponseBody = Boolean(bodies.response);
 	$: hasResponse = pairHasResponse(pair, { incomingResponse: pairIncoming, responseBody: bodies.response });
+	$: rawResponseBytes = $joined != null ? null : (pairIncoming?.RawBytes ?? pairDetails?.Response?.RawBytes ?? null);
+	$: responseContentType = pairIncoming?.ContentType ?? pairDetails?.Response?.ContentType ?? pair?.ContentType ?? "";
+	$: responseStatusCode =
+		Number(pairIncoming?.StatusCode) || Number(pairDetails?.Response?.StatusCode) || Number(pair?.StatusCode) || 0;
+	$: responseTruncated = Boolean(
+		pairDetails?.Metadata?.body_cut_short ||
+			pairDetails?.Metadata?.body_too_large ||
+			pair?.Metadata?.body_cut_short ||
+			pair?.Metadata?.body_too_large,
+	);
+	$: canBrowserView =
+		hasResponse &&
+		!browserViewRefusal(pairIncoming ? { ...pair, StatusCode: pairIncoming.StatusCode } : pair);
 	$: hasNote = note != null ? note.length > 0 : pair.Metadata?.has_note == 1;
 	$: timing = pairTiming(pairIncoming ? { ...pair, RespondedAt: pairIncoming.RespondedAt } : pair);
 	// Wrap lines is on but a shown long string stopped an editor wrapping;
 	// the rail's Wrap lines button shows it as an amber dot.
 	let requestPaused = false;
 	let responsePaused = false;
-	$: wrapPaused = requestPaused || ((isNarrow || pane === null) && hasResponseBody && responsePaused);
+	$: wrapPaused =
+		requestPaused || ((isNarrow || pane === null) && responseMode !== "render" && hasResponseBody && responsePaused);
 
 	function copyMetadata() {
 		if (metadata == null) return;
@@ -271,6 +288,13 @@
 			{timing}
 			{hasResponse}
 			{hasResponseBody}
+			{rawResponseBytes}
+			{responseContentType}
+			{responseStatusCode}
+			{responseTruncated}
+			{canBrowserView}
+			onBrowserView={() => dispatch("action", "ledger.drawer-open.copy-browser-view-url")}
+			bind:responseMode
 			{hasNote}
 			{canOpenStream}
 			indexing={prettifiedMoving}
@@ -311,6 +335,7 @@
 			<div class="flex min-h-0 min-w-0 flex-1 flex-col">
 				<DrawerPaneBar
 					{pane}
+					bind:responseMode
 					requestBody={bodies.request}
 					responseBody={bodies.response}
 					metadataBody={metadata}
@@ -339,7 +364,16 @@
 							{bodies}
 							{syntaxMode}
 							wrap={$lineWrap}
+							{hasResponse}
 							{hasResponseBody}
+							{responseMode}
+							{rawResponseBytes}
+							{responseContentType}
+							{responseStatusCode}
+							{responseTruncated}
+							{canBrowserView}
+							onBrowserView={() => dispatch("action", "ledger.drawer-open.copy-browser-view-url")}
+							onShowRaw={() => (responseMode = "raw")}
 							{note}
 							{noteFor}
 							{noteVersion}
