@@ -4,6 +4,7 @@
 //
 //   dashboard() -> {requests, notes, launchpads, intercepted, interceptedComplete}
 //   scope() -> {defaultAllow, includeCount, excludeCount}
+//   statusClasses() -> {"2xx", "3xx", "4xx", "5xx"}: pairs per status class
 //   logs() -> [log], oldest first, in the Service log's fields (toLog)
 //   extensionNames() -> {id: name}
 //   listener() -> {status, address, port}
@@ -15,7 +16,7 @@
 // onCountsChanged.
 // A part that fails to read stays null (or as it was) and the rest load.
 import { get, writable } from "svelte/store";
-import { toListener, toLog, toScope } from "./homeApi.js";
+import { noStatusClasses, toListener, toLog, toScope } from "./homeApi.js";
 import { codeIDs } from "../lib/errorCodes.js";
 
 /**
@@ -29,6 +30,7 @@ export const DASHBOARD_SETTLE_MS = 500;
 const empty = () => ({
   dashboard: null,
   scope: null,
+  statusClasses: null,
   logs: [],
   extensionNames: {},
   listener: { status: false, address: "", port: "" },
@@ -68,8 +70,19 @@ export function createHomeStore(api) {
     }
   }
 
-  async function readDashboard(run = generation) {
-    await read("dashboard", run, api.dashboard);
+  // A failed read counts no responses in any class, never an error.
+  async function readStatusClasses(run) {
+    const value = await api.statusClasses().catch((err) => {
+      console.error("Reading Home's status classes failed:", err);
+      return noStatusClasses();
+    });
+    if (run === generation) store.update((s) => ({ ...s, statusClasses: value }));
+  }
+
+  // The dashboard counts and, unless `classes` is false, the status
+  // classes, which count the same pairs.
+  async function readDashboard(run = generation, { dashboard = true, classes = true } = {}) {
+    await Promise.all([dashboard && read("dashboard", run, api.dashboard), classes && readStatusClasses(run)]);
   }
 
   /** Reads every part from the service. Also the store's resync. */
@@ -88,14 +101,20 @@ export function createHomeStore(api) {
 
   let countsTimer = null;
   let counting = Promise.resolve();
+  // What the pending window reads: the dashboard counts, the status classes.
+  let due = { dashboard: false, classes: false };
 
   // Reads the counts once the settle window that the first change since
-  // the last read started has passed. Later changes join that window.
-  function countsChanged() {
+  // the last read started has passed. Later changes join that window. A
+  // response only changes the status classes, unless it was intercepted.
+  function countsChanged({ dashboard = true, classes = true } = {}) {
+    due = { dashboard: due.dashboard || dashboard, classes: due.classes || classes };
     if (countsTimer !== null) return;
     countsTimer = setTimeout(() => {
       countsTimer = null;
-      counting = readDashboard();
+      const parts = due;
+      due = { dashboard: false, classes: false };
+      counting = readDashboard(generation, parts);
     }, DASHBOARD_SETTLE_MS);
   }
 
@@ -108,15 +127,16 @@ export function createHomeStore(api) {
       store.update((s) => ({ ...s, scope: toScope(scope) }));
     },
     /** Another client changed what the dashboard counts; reads it once the window settles. */
-    onCountsChanged: countsChanged,
+    onCountsChanged: () => countsChanged(),
     /** A traffic.request event: a captured request adds to Requests. */
-    onRequest: countsChanged,
+    onRequest: () => countsChanged(),
     /**
-     * A traffic.response event: only one whose metadata marks it
-     * intercepted, the flag the Intercepted count follows, changes a count.
+     * A traffic.response event: its status code adds to a status class.
+     * Only one whose metadata marks it intercepted, the flag the
+     * Intercepted count follows, changes a dashboard count.
      */
     onResponse(event) {
-      if (event?.metadata?.intercepted === true) countsChanged();
+      countsChanged({ dashboard: event?.metadata?.intercepted === true });
     },
     /** Waits for a dashboard read onCountsChanged started. */
     settled: () => counting,
@@ -128,6 +148,7 @@ export function createHomeStore(api) {
     clear() {
       clearTimeout(countsTimer);
       countsTimer = null;
+      due = { dashboard: false, classes: false };
       generation++;
       store.set(empty());
     },
@@ -184,7 +205,7 @@ export function createHomeStore(api) {
     async onJobComplete(event) {
       if (event?.name !== "intercepted_count") return;
       if (get(store).dashboard?.interceptedComplete !== false) return;
-      await readDashboard();
+      await readDashboard(generation, { classes: false });
     },
   };
 }

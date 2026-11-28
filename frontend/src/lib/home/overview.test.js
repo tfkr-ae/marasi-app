@@ -111,3 +111,58 @@ test("until the counts and the scope are first read, their tiles have no value",
     scope: null,
   });
 });
+
+test("each status class counts its responses and opens the Ledger filtered to its range", () => {
+  const classes = overviewOf({ ...project, statusClasses: { "2xx": 40, "3xx": 5, "4xx": 3, "5xx": 1 } }).statusClasses;
+  assert.deepEqual(classes, {
+    "2xx": { count: 40, destination: { page: "ledger", query: "status_code >= 200 status_code < 300" } },
+    "3xx": { count: 5, destination: { page: "ledger", query: "status_code >= 300 status_code < 400" } },
+    "4xx": { count: 3, destination: { page: "ledger", query: "status_code >= 400 status_code < 500" } },
+    "5xx": { count: 1, destination: { page: "ledger", query: "status_code >= 500" } },
+  });
+});
+
+test("until the status classes are first read, they have no count", () => {
+  const classes = overviewOf({ ...project, statusClasses: null }).statusClasses;
+  assert.deepEqual(Object.keys(classes), ["2xx", "3xx", "4xx", "5xx"]);
+  assert.ok(Object.values(classes).every((c) => c.count === null));
+});
+
+const someFindings = [
+  { severity: "Critical", done: false },
+  { severity: "High", done: true },
+  { severity: "High", done: false },
+  { severity: "Medium", done: true },
+  { severity: "Medium", done: true },
+  { severity: "Medium", done: false },
+  { severity: "Informational", done: true },
+];
+
+test("Findings counts every finding and the unfinished ones, and opens the Logbook's findings", () => {
+  const findings = overviewOf({ ...project, findings: someFindings }).findings;
+  assert.equal(findings.total, 7);
+  assert.equal(findings.unfinished, 3);
+  assert.deepEqual(findings.destination, { page: "logbook", kind: "findings" });
+});
+
+test("Findings counts each severity, in order, and each opens the Logbook filtered to it", () => {
+  const { bySeverity } = overviewOf({ ...project, findings: someFindings }).findings;
+  assert.deepEqual(bySeverity, [
+    { severity: "Critical", count: 1, destination: { page: "logbook", kind: "findings", severities: ["Critical"] } },
+    { severity: "High", count: 2, destination: { page: "logbook", kind: "findings", severities: ["High"] } },
+    { severity: "Medium", count: 3, destination: { page: "logbook", kind: "findings", severities: ["Medium"] } },
+    { severity: "Low", count: 0, destination: { page: "logbook", kind: "findings", severities: ["Low"] } },
+    {
+      severity: "Informational",
+      count: 1,
+      destination: { page: "logbook", kind: "findings", severities: ["Informational"] },
+    },
+  ]);
+});
+
+test("a project without findings counts none in every severity", () => {
+  const findings = overviewOf(project).findings;
+  assert.equal(findings.total, 0);
+  assert.equal(findings.unfinished, 0);
+  assert.ok(findings.bySeverity.every((s) => s.count === 0));
+});

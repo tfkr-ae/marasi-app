@@ -7,6 +7,17 @@
 //   { page: "logbook", kind: "findings" | "testCases", severities?, status? }
 //   { page: "checkpoint" | "launchpad" | "armory" | "compass" }
 
+import { STATUS_CLASSES } from "../../stores/homeApi.js";
+import { SEVERITIES } from "../../stores/createLogbookStore.js";
+
+// The Ledger query for each status class's range of codes.
+const STATUS_QUERIES = {
+  "2xx": "status_code >= 200 status_code < 300",
+  "3xx": "status_code >= 300 status_code < 400",
+  "4xx": "status_code >= 400 status_code < 500",
+  "5xx": "status_code >= 500",
+};
+
 const count = (n) => (n ?? 0).toLocaleString();
 // A count that is null until it has been read, so the page draws a ghost.
 const readCount = (read, n) => (read ? count(n) : null);
@@ -18,12 +29,19 @@ const readCount = (read, n) => (read ? count(n) : null);
  * - held: requests held in Checkpoint; interceptAll: the Intercept all flag
  * - activeRuns: Armory runs in progress
  * - testCases: [{ done }]
+ * - findings: [{ severity, done }]
+ * - statusClasses: { "2xx", "3xx", "4xx", "5xx" } pairs per class, null until read
  *
  * Returns `figures`: the eight tiles in order, each
  * { id, label, value, sub?, colour, glyph?, destination } (and `floor` on
  * Intercepted). `value` is the text to show, or null for a ghost; `colour`
  * is the theme colour of its border and icon square, `glyph` the icon's
  * shade when it isn't 200.
+ *
+ * `statusClasses` maps each class, in order, to { count, destination }:
+ * `count` is a number, or null until read. `findings` is
+ * { total, unfinished, bySeverity, destination }, `bySeverity` listing
+ * { severity, count, destination } for each severity, most severe first.
  */
 export function overviewOf(state) {
   const { dashboard: d, scope } = state;
@@ -32,6 +50,22 @@ export function overviewOf(state) {
   const floor = d?.interceptedComplete === false;
   const casesDone = state.testCases.filter((testCase) => testCase.done).length;
   return {
+    statusClasses: Object.fromEntries(
+      STATUS_CLASSES.map((key) => [
+        key,
+        { count: state.statusClasses?.[key] ?? null, destination: { page: "ledger", query: STATUS_QUERIES[key] } },
+      ]),
+    ),
+    findings: {
+      total: state.findings.length,
+      unfinished: state.findings.filter((finding) => !finding.done).length,
+      bySeverity: SEVERITIES.map((severity) => ({
+        severity,
+        count: state.findings.filter((finding) => finding.severity === severity).length,
+        destination: { page: "logbook", kind: "findings", severities: [severity] },
+      })),
+      destination: { page: "logbook", kind: "findings" },
+    },
     figures: [
       {
         id: "pairs",

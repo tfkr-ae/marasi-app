@@ -6,6 +6,7 @@ import { homeStore } from "../../stores/homeStore.js";
 import { checkpointStore } from "../../stores/checkpointStore.js";
 import { activeCountsOf, armoryStore } from "../../stores/armoryStore.js";
 import { testCaseStore } from "../../stores/testCaseStore.js";
+import { findingStore } from "../../stores/findingStore.js";
 import { ledgerStore } from "../../stores/ledgerStore.js";
 import { logbookStore } from "../../stores/logbookStore.js";
 import { completenessOf } from "../../stores/createLogbookStore.js";
@@ -13,8 +14,8 @@ import { overviewOf } from "./overview.js";
 
 /** The Overview of the open project, current with the stores. */
 export const overview = derived(
-  [homeStore, checkpointStore, interceptFlag, armoryStore, testCaseStore],
-  ([$home, $checkpoint, $interceptAll, $armory, $testCases]) =>
+  [homeStore, checkpointStore, interceptFlag, armoryStore, testCaseStore, findingStore],
+  ([$home, $checkpoint, $interceptAll, $armory, $testCases, $findings]) =>
     overviewOf({
       dashboard: $home.dashboard,
       scope: $home.scope,
@@ -22,6 +23,8 @@ export const overview = derived(
       interceptAll: $interceptAll,
       activeRuns: activeCountsOf($armory).total,
       testCases: $testCases.map((t) => ({ done: completenessOf("testCase", t).status === "done" })),
+      findings: $findings.map((f) => ({ severity: f.Severity, done: completenessOf("finding", f).status === "done" })),
+      statusClasses: $home.statusClasses,
     }),
 );
 
