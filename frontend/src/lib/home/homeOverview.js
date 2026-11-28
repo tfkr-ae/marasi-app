@@ -1,5 +1,5 @@
 // Binds overviewOf to the app's stores, and opens a figure's destination.
-import { derived } from "svelte/store";
+import { derived, get } from "svelte/store";
 import { goto } from "$app/navigation";
 import { interceptFlag } from "../../stores/interceptFlag.js";
 import { homeStore } from "../../stores/homeStore.js";
@@ -10,6 +10,7 @@ import { findingStore } from "../../stores/findingStore.js";
 import { ledgerStore } from "../../stores/ledgerStore.js";
 import { logbookStore } from "../../stores/logbookStore.js";
 import { completenessOf } from "../../stores/createLogbookStore.js";
+import { startListener } from "../globalActions.js";
 import { overviewOf } from "./overview.js";
 
 /** The Overview of the open project, current with the stores. */
@@ -25,11 +26,19 @@ export const overview = derived(
       testCases: $testCases.map((t) => ({ done: completenessOf("testCase", t).status === "done" })),
       findings: $findings.map((f) => ({ severity: f.Severity, done: completenessOf("finding", f).status === "done" })),
       statusClasses: $home.statusClasses,
+      listenerStopped: $home.listenerStopped,
     }),
 );
 
-/** Opens the page a figure counts, filtered so its rows match the figure. */
-export async function openDestination(destination) {
+/**
+ * Opens the page a figure counts, filtered so its rows match the figure,
+ * or does a Pending item's action (`toastStore` announces a listener start).
+ */
+export async function openDestination(destination, { toastStore } = {}) {
+  if (destination.action === "start-listener") {
+    if (!get(homeStore).listenerBusy) await startListener(toastStore);
+    return;
+  }
   if (destination.page === "ledger") {
     await goto("/ledger");
     ledgerStore.setQueryText(destination.query);

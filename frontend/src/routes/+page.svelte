@@ -1,7 +1,8 @@
 <script>
-	// Home: the project name with the capture controls, then the Overview's
-	// figures (lib/home/overview.js) and their breakdowns by status and
-	// severity, each opening the page it counts.
+	// Home: the project name with the capture controls, then the Overview
+	// (lib/home/overview.js): Pending on the left (above on narrow screens),
+	// and the figures with their breakdowns by status and severity, each
+	// opening the page it counts.
 	import { GetChromeProfiles } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { startChrome as startChromeOn } from "../lib/chrome.js";
 	import { getDrawerStore, getModalStore, getToastStore } from "@skeletonlabs/skeleton";
@@ -23,6 +24,7 @@
 	import CaptureControls from "../lib/home/CaptureControls.svelte";
 	import FigureGrid from "../lib/home/FigureGrid.svelte";
 	import Breakdowns from "../lib/home/Breakdowns.svelte";
+	import PendingColumn from "../lib/home/PendingColumn.svelte";
 	import { openDestination, overview } from "../lib/home/homeOverview.js";
 	import { toggleServiceLog } from "../lib/serviceLog.js";
 	const drawerStore = getDrawerStore();
@@ -77,12 +79,19 @@
 				on:openServiceLog={() => toggleServiceLog(drawerStore, $drawerStore)}
 			/>
 		</div>
-		<FigureGrid figures={$overview.figures} on:open={(e) => openDestination(e.detail)} />
-		<Breakdowns
-			statusClasses={$overview.statusClasses}
-			findings={$overview.findings}
-			on:open={(e) => openDestination(e.detail)}
-		/>
+		<div class="flex flex-col lg:flex-row gap-6">
+			<aside class="lg:w-96 shrink-0">
+				<PendingColumn items={$overview.pending} on:open={(e) => openDestination(e.detail, { toastStore })} />
+			</aside>
+			<div class="flex-1 min-w-0 space-y-3">
+				<FigureGrid figures={$overview.figures} on:open={(e) => openDestination(e.detail)} />
+				<Breakdowns
+					statusClasses={$overview.statusClasses}
+					findings={$overview.findings}
+					on:open={(e) => openDestination(e.detail)}
+				/>
+			</div>
+		</div>
 	</div>
 </div>
 

@@ -24,7 +24,7 @@
 </script>
 
 <div
-	class="card bg-surface-100-500-token text-surface-900-50-token grid grid-cols-1 md:grid-cols-2 md:divide-x divide-surface-300-600-token mt-3"
+	class="card bg-surface-100-500-token text-surface-900-50-token grid grid-cols-1 md:grid-cols-2 md:divide-x divide-surface-300-600-token"
 	data-testid="home-breakdowns"
 >
 	<div class="p-3" data-testid="home-status-classes">

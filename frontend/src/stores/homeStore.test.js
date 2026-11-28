@@ -510,3 +510,39 @@ test("a response that wasn't intercepted reads the status classes again, not the
   assert.equal(reads("/dashboard"), before.dashboard);
   assert.equal(get(store).statusClasses["4xx"], 4);
 });
+
+test("stopping the listener records that the researcher stopped it, and starting it clears that", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  routes["POST /listener/start"] = (body) => ({ status: "active", proxy_listener: `${body.address}:${body.port}` });
+  const { store } = setup(routes);
+  await store.populate();
+  assert.equal(get(store).listenerStopped, false);
+
+  await store.stopListener();
+  assert.equal(get(store).listenerStopped, true);
+
+  await store.setListener("127.0.0.1", "52062");
+  assert.equal(get(store).listenerStopped, false);
+});
+
+test("a listener that starts elsewhere clears the stopped record", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  const { store } = setup(routes);
+  await store.populate();
+  await store.stopListener();
+
+  store.onListener({ status: "active", proxy_listener: "127.0.0.1:8080" });
+
+  assert.equal(get(store).listenerStopped, false);
+});
+
+test("a listener that is off without the researcher stopping it isn't recorded as stopped", async () => {
+  const routes = serviceRoutes();
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  const { store } = setup(routes);
+  await store.populate();
+  store.onListener({ status: "inactive", proxy_listener: null, reason: "error" });
+  assert.equal(get(store).listenerStopped, false);
+});

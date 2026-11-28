@@ -6,6 +6,7 @@
 //   { page: "ledger", query }            "" is every pair
 //   { page: "logbook", kind: "findings" | "testCases", severities?, status? }
 //   { page: "checkpoint" | "launchpad" | "armory" | "compass" }
+//   { action: "start-listener" }         Pending's listener item
 
 import { STATUS_CLASSES } from "../../stores/homeApi.js";
 import { SEVERITIES } from "../../stores/createLogbookStore.js";
@@ -28,11 +29,15 @@ const readCount = (read, n) => (read ? count(n) : null);
  * - scope: { defaultAllow, includeCount, excludeCount }, null until read
  * - held: requests held in Checkpoint; interceptAll: the Intercept all flag
  * - activeRuns: Armory runs in progress
- * - testCases: [{ done }]
- * - findings: [{ severity, done }]
+ * - testCases: [{ done }]; findings: [{ severity, done }]
+ * - listenerStopped: the researcher stopped the listener
  * - statusClasses: { "2xx", "3xx", "4xx", "5xx" } pairs per class, null until read
  *
- * Returns `figures`: the eight tiles in order, each
+ * Returns `pending`: what needs the researcher, in order (listener, held,
+ * intercept-all, urgent), each { id, tone, title, detail, action,
+ * destination } and present only when it applies.
+ *
+ * And `figures`: the eight tiles in order, each
  * { id, label, value, sub?, colour, glyph?, destination } (and `floor` on
  * Intercepted). `value` is the text to show, or null for a ghost; `colour`
  * is the theme colour of its border and icon square, `glyph` the icon's
@@ -50,6 +55,7 @@ export function overviewOf(state) {
   const floor = d?.interceptedComplete === false;
   const casesDone = state.testCases.filter((testCase) => testCase.done).length;
   return {
+    pending: pendingOf(state),
     statusClasses: Object.fromEntries(
       STATUS_CLASSES.map((key) => [
         key,
@@ -132,4 +138,50 @@ export function overviewOf(state) {
       },
     ],
   };
+}
+
+// Findings urgent while unfinished.
+const URGENT = ["Critical", "High"];
+
+// What needs the researcher, in order, each only when it applies.
+function pendingOf(state) {
+  const pending = [];
+  if (state.listenerStopped)
+    pending.push({
+      id: "listener",
+      tone: "error",
+      title: "Listener is off",
+      detail: "Nothing is being captured",
+      action: "Start",
+      destination: { action: "start-listener" },
+    });
+  if (state.held)
+    pending.push({
+      id: "held",
+      tone: "warning",
+      title: `${count(state.held)} held in Checkpoint`,
+      detail: "Forward or drop them",
+      action: "Review",
+      destination: { page: "checkpoint" },
+    });
+  if (state.interceptAll)
+    pending.push({
+      id: "intercept-all",
+      tone: "warning",
+      title: "Intercept all is on",
+      detail: "Every request will be held",
+      action: "Open",
+      destination: { page: "checkpoint" },
+    });
+  const urgent = state.findings.filter((f) => URGENT.includes(f.severity) && !f.done).length;
+  if (urgent)
+    pending.push({
+      id: "urgent",
+      tone: "error",
+      title: `${count(urgent)} Critical/High finding${urgent === 1 ? "" : "s"} unfinished`,
+      detail: "Missing details for the report",
+      action: "Finish",
+      destination: { page: "logbook", kind: "findings", severities: [...URGENT], status: "progress" },
+    });
+  return pending;
 }
