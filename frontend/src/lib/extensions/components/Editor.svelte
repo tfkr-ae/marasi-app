@@ -9,7 +9,7 @@
     import { resolveBind, updateBind } from "./utils";
     import { StreamLanguage } from "@codemirror/language";
     import { javascript } from "@codemirror/lang-javascript";
-    import { http } from "../../httpMode.js";
+    import { httpHighlighting } from "../../httpHighlight.js";
 
     export let extensionData;
     export let value = { bind: "" };
@@ -36,10 +36,8 @@
         localValue = effectiveValue;
     }
 
-    $: language = (() => {
-        if (lang === "javascript") return StreamLanguage.define(javascript);
-        return StreamLanguage.define(http);
-    })();
+    $: language = lang === "javascript" ? StreamLanguage.define(javascript) : undefined;
+    $: httpExtensions = lang === "javascript" ? [] : httpHighlighting({ mode: $marasiConfig?.SyntaxMode });
 
     async function handleChange(event) {
         isTyping = true;
@@ -58,7 +56,7 @@
     value={localValue}
     class={"text-xs " + classes}
     theme={$modeCurrent ? githubLight : oneDark}
-    extensions={$marasiConfig?.VimEnabled ? [vim()] : []}
+    extensions={[...httpExtensions, ...($marasiConfig?.VimEnabled ? [vim()] : [])]}
     lang={language}
     {readonly}
     {placeholder}

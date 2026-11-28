@@ -5,8 +5,7 @@
 	import { onDestroy } from "svelte";
 	import CodeMirror from "svelte-codemirror-editor";
 	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "../httpMode.js";
+	import { httpHighlighting } from "../httpHighlight.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";
@@ -53,6 +52,7 @@
 	$: primary = primaryVariant($modeCurrent);
 	$: neutral = neutralVariant($modeCurrent);
 	$: theme = $modeCurrent ? githubLight : oneDark;
+	$: httpExtensions = httpHighlighting({ mode: $marasiConfig.SyntaxMode });
 	$: vimExtensions = $marasiConfig.VimEnabled ? [vim()] : [];
 	// Long strings fold in both editors; the panes' titles say when a shown
 	// one stopped the lines wrapping.
@@ -60,8 +60,13 @@
 	let responsePaused = false;
 	const onDraftSuspend = (suspended) => (draftPaused = suspended);
 	const onResponseSuspend = (suspended) => (responsePaused = suspended);
-	$: draftExtensions = [...vimExtensions, longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onDraftSuspend })];
+	$: draftExtensions = [
+		...httpExtensions,
+		...vimExtensions,
+		longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onDraftSuspend }),
+	];
 	$: responseExtensions = [
+		...httpExtensions,
 		...vimExtensions,
 		longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: onResponseSuspend }),
 	];
@@ -91,19 +96,6 @@
 	/** Flips the diff between Request and Response while comparing. */
 	export function toggleCompareView() {
 		comparePane?.toggleTab();
-	}
-
-	// Follows the Syntax setting, with "auto" skipping
-	// highlighting on very large bodies.
-	function lang(body) {
-		switch ($marasiConfig.SyntaxMode) {
-			case "disabled":
-				return undefined;
-			case "auto":
-				return (body ?? "").length < 75000 ? StreamLanguage.define(http) : undefined;
-			default:
-				return StreamLanguage.define(http);
-		}
 	}
 
 	let editing = false;
@@ -283,7 +275,6 @@
 							on:change={(e) => store.updateDraft(launchpadId, e.detail)}
 							class="text-xs"
 							styles={{ "&": { fontSize: "0.6875rem" } }}
-							lang={lang(draft?.raw)}
 							{theme}
 							extensions={draftExtensions}
 						/>
@@ -339,7 +330,6 @@
 								readonly
 								class="text-xs"
 								styles={{ "&": { fontSize: "0.6875rem" } }}
-								lang={lang(responseView.text)}
 								{theme}
 								extensions={responseExtensions}
 							/>

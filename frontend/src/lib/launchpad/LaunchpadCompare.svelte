@@ -4,8 +4,7 @@
 	// MergeView of A against B. Rules live in compare.js; this only renders.
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { MergeView } from "@codemirror/merge";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "../httpMode.js";
+	import { httpHighlighting } from "../httpHighlight.js";
 	import { EditorState } from "@codemirror/state";
 	import { EditorView } from "@codemirror/view";
 	import { oneDark } from "@codemirror/theme-one-dark";
@@ -49,14 +48,15 @@
 		b: rightText,
 		light: $modeCurrent,
 		wrap: wrapsLines(leftText, $lineWrap, $marasiConfig.WrapMode) && wrapsLines(rightText, $lineWrap, $marasiConfig.WrapMode),
+		syntaxMode: $marasiConfig.SyntaxMode,
 	};
 
 	let changes = 0;
 	let approximate = false;
 
 	// Builds the MergeView into `node`, and rebuilds it whenever A, B, the
-	// view, their texts, the theme or wrapping change; destroyed with the node.
-	const MERGE_KEYS = ["leftId", "rightId", "part", "a", "b", "light", "wrap"];
+	// view, their texts, the theme, wrapping or syntax mode change; destroyed with the node.
+	const MERGE_KEYS = ["leftId", "rightId", "part", "a", "b", "light", "wrap", "syntaxMode"];
 	function mergeView(node, config) {
 		let current;
 		let editor;
@@ -69,7 +69,7 @@
 					EditorState.readOnly.of(true),
 					EditorView.editable.of(false),
 					next.light ? githubLight : oneDark,
-					StreamLanguage.define(http),
+					...httpHighlighting({ mode: next.syntaxMode }),
 					next.wrap ? EditorView.lineWrapping : [],
 				],
 			});
