@@ -63,7 +63,7 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 - `lib/armory/TemplateEditor.svelte` holds the Armory request template.
 - Compass and Workshop create their own in the route file.
 
-Raw HTTP is highlighted with `lib/httpMode.js` (`StreamLanguage.define(http)`), CodeMirror's legacy http mode widened for Marasi's HTTP/2 text form (GLOSSARY Protocol). Import it, not `@codemirror/legacy-modes/mode/http`. The Lua editors' autocomplete is `lib/autocomplete/` (see `marasi-service.md`, Marasi source, for keeping it in step with Marasi).
+Raw HTTP is highlighted with `lib/httpHighlight.js` (`httpHighlighting({ mode: $marasiConfig.SyntaxMode })`), a shared Lezer HTTP language that parses HTTP/1.1 and Marasi's HTTP/2 text form (GLOSSARY Protocol) and mounts body parsers through `parseMixed`, honoring `SyntaxMode` (`auto` always highlights the head and skips body highlighting at 75,000 characters, `enabled` highlights all, `disabled` highlights nothing). Import it rather than `@codemirror/legacy-modes/mode/http`. The Lua editors' autocomplete is `lib/autocomplete/` (see `marasi-service.md`, Marasi source, for keeping it in step with Marasi).
 
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 
@@ -94,3 +94,4 @@ Action buttons (`btn`, `btn-icon`) take their variant from `primaryVariant($mode
 
 - [Text size scales the root font size, not the whole page](../../adr/2026-10-29-text-size-scales-the-root-font-size.md)
 - [Rail order drives positional defaults for built-in pages](../../adr/2026-11-27-rail-order-drives-positional-page-defaults.md)
+- [HTTP editors highlight bodies with a Lezer grammar and parseMixed](../../adr/2026-11-28-http-editors-highlight-bodies-with-lezer-parsemixed.md)
