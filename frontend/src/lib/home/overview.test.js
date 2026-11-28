@@ -11,6 +11,7 @@ const project = {
   activeRuns: 0,
   testCases: [],
   findings: [],
+  listenerStopped: false,
 };
 const figure = (state, id) => overviewOf(state).figures.find((f) => f.id === id);
 
@@ -110,4 +111,75 @@ test("until the counts and the scope are first read, their tiles have no value",
     "test-cases": "0 / 0",
     scope: null,
   });
+});
+
+const pendingIds = (state) => overviewOf(state).pending.map((item) => item.id);
+const pendingItem = (state, id) => overviewOf(state).pending.find((item) => item.id === id);
+
+test("a fresh, running project has nothing pending", () => {
+  assert.deepEqual(overviewOf(project).pending, []);
+});
+
+test("a listener the researcher stopped is pending, and its item starts the listener", () => {
+  const item = pendingItem({ ...project, listenerStopped: true }, "listener");
+  assert.equal(item.title, "Listener is off");
+  assert.deepEqual(item.destination, { action: "start-listener" });
+});
+
+test("held requests are pending with their count, and open Checkpoint", () => {
+  const item = pendingItem({ ...project, held: 3 }, "held");
+  assert.equal(item.title, "3 held in Checkpoint");
+  assert.deepEqual(item.destination, { page: "checkpoint" });
+});
+
+test("Intercept all on is pending, and opens Checkpoint", () => {
+  const item = pendingItem({ ...project, interceptAll: true }, "intercept-all");
+  assert.equal(item.title, "Intercept all is on");
+  assert.deepEqual(item.destination, { page: "checkpoint" });
+});
+
+test("only unfinished Critical and High findings are urgent, and they open the Logbook to exactly those", () => {
+  const findings = [
+    { severity: "Critical", done: false },
+    { severity: "High", done: false },
+    { severity: "High", done: true },
+    { severity: "Medium", done: false },
+    { severity: "Low", done: false },
+  ];
+  const item = pendingItem({ ...project, findings }, "urgent");
+  assert.equal(item.title, "2 Critical/High findings unfinished");
+  assert.deepEqual(item.destination, {
+    page: "logbook",
+    kind: "findings",
+    severities: ["Critical", "High"],
+    status: "progress",
+  });
+});
+
+test("one unfinished High finding reads in the singular", () => {
+  const item = pendingItem({ ...project, findings: [{ severity: "High", done: false }] }, "urgent");
+  assert.equal(item.title, "1 Critical/High finding unfinished");
+});
+
+test("finished or lesser findings aren't pending", () => {
+  const findings = [
+    { severity: "Critical", done: true },
+    { severity: "Medium", done: false },
+  ];
+  assert.deepEqual(pendingIds({ ...project, findings }), []);
+});
+
+test("everything pending lists in order: listener, held, Intercept all, urgent", () => {
+  const busy = {
+    ...project,
+    listenerStopped: true,
+    held: 1,
+    interceptAll: true,
+    findings: [{ severity: "Critical", done: false }],
+  };
+  assert.deepEqual(pendingIds(busy), ["listener", "held", "intercept-all", "urgent"]);
+});
+
+test("Armory runs in progress aren't pending", () => {
+  assert.deepEqual(pendingIds({ ...project, activeRuns: 2 }), []);
 });

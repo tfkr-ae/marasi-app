@@ -33,6 +33,8 @@ const empty = () => ({
   extensionNames: {},
   listener: { status: false, address: "", port: "" },
   lastListener: null,
+  // The researcher stopped the listener (Home's Pending reads it); a start clears it.
+  listenerStopped: false,
   listenerBusy: false,
   loading: false,
 });
@@ -42,6 +44,7 @@ function withListener(state, next) {
     ...state,
     listener: next,
     lastListener: next.status ? { address: next.address, port: next.port } : state.lastListener,
+    listenerStopped: next.status ? false : state.listenerStopped,
   };
 }
 
@@ -170,7 +173,7 @@ export function createHomeStore(api) {
       store.update((s) => ({ ...s, listenerBusy: true }));
       try {
         const next = await api.stopListener();
-        if (run === generation) store.update((s) => withListener(s, next));
+        if (run === generation) store.update((s) => ({ ...withListener(s, next), listenerStopped: !next.status }));
         return next;
       } finally {
         if (run === generation) store.update((s) => ({ ...s, listenerBusy: false }));
