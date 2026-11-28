@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { drawerBodies, linkedTo, metadataText, pairTiming, SYNTAX_AUTO_LIMIT, usesSyntax } from "./drawer.js";
+import { drawerBodies, linkedTo, metadataText, pairTiming } from "./drawer.js";
 
 const details = {
   Request: { Raw: "GET / HTTP/1.1" },
@@ -39,17 +39,6 @@ test("a joined SSE response is shown in both Prettify modes", () => {
     }).response,
     joined,
   );
-});
-
-test("syntax highlighting follows the setting; auto stops at 75,000 characters", () => {
-  const big = "x".repeat(SYNTAX_AUTO_LIMIT);
-  assert.equal(usesSyntax("GET /", "enabled"), true);
-  assert.equal(usesSyntax(big, "enabled"), true);
-  assert.equal(usesSyntax("GET /", "auto"), true);
-  assert.equal(usesSyntax(big, "auto"), false);
-  assert.equal(usesSyntax("GET /", "disabled"), false);
-  assert.equal(usesSyntax("", "enabled"), false, "nothing to highlight");
-  assert.equal(usesSyntax("GET /", undefined), false, "before the settings load");
 });
 
 test("timing is the time from request to response, absent without a response", () => {

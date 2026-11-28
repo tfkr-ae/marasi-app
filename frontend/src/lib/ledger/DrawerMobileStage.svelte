@@ -35,7 +35,7 @@
 	export let noteVersion = 0;
 	export let noteStatus = "saved";
 	export let metadata = null;
-	export let syntaxMode = "auto";
+	export let syntaxMode = undefined;
 	export let palette = [];
 	export let findings = [];
 	export let testCases = [];

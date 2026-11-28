@@ -826,7 +826,7 @@
 					<div>
 						<p>Syntax highlighting</p>
 						<p class="text-xs opacity-70">
-							Auto highlights requests and responses it recognises
+							Auto skips body highlighting over 75,000 characters
 						</p>
 					</div>
 					<div class="{control} grid grid-cols-3 text-sm" role="radiogroup" aria-label="Syntax highlighting">

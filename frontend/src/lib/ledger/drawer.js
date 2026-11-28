@@ -1,10 +1,6 @@
 // What the Ledger drawer shows of the focused pair: its request and response
-// text, whether the editors highlight it, its timing, and what it is linked
-// to.
+// text, its timing, and what it is linked to.
 import { prettifiedBody } from "../prettified.js";
-
-/** Bodies at least this long are not highlighted under the "auto" syntax mode. */
-export const SYNTAX_AUTO_LIMIT = 75_000;
 
 /**
  * The request and response text from the full pair read (GetRawDetails):
@@ -23,18 +19,6 @@ export function drawerBodies(details, { prettify, incomingResponse = null, joine
         ? (prettify && incomingResponse.Prettified) || incomingResponse.Raw || ""
         : (pretty("response") ?? details?.Response?.Raw ?? "");
   return { request, response };
-}
-
-/**
- * Whether an editor highlights `body` as HTTP under the Syntax setting
- * ("enabled", "disabled", or "auto", which stops at SYNTAX_AUTO_LIMIT).
- * Nothing is highlighted before the settings load.
- */
-export function usesSyntax(body, mode) {
-  if (!body) return false;
-  if (mode === "enabled") return true;
-  if (mode === "auto") return body.length < SYNTAX_AUTO_LIMIT;
-  return false;
 }
 
 /**

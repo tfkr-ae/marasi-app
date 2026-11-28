@@ -3,8 +3,7 @@
 	// its container; the parent sets the height. `focus()` puts the cursor
 	// in it.
 	import CodeMirror from "svelte-codemirror-editor";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "../httpMode.js";
+	import { httpHighlighting } from "../httpHighlight.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";
@@ -15,6 +14,7 @@
 	import { lineWrap, marasiConfig } from "../../stores";
 
 	export let value = "";
+	export let framing = "";
 
 	let container;
 
@@ -30,8 +30,8 @@
 		styles={{ "&": { fontSize: "0.6875rem" } }}
 		theme={$modeCurrent ? githubLight : oneDark}
 		extensions={[
+			...httpHighlighting({ mode: $marasiConfig.SyntaxMode, armory: true, framing }),
 			...($marasiConfig.VimEnabled ? [vim()] : []),
-			StreamLanguage.define(http),
 			autocompletion({ override: [armoryCompletionSource] }),
 			longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode }),
 		]}

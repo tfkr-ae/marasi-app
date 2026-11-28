@@ -5,19 +5,20 @@
 	// `suspend` event says whether a shown one stopped the lines wrapping.
 	import { createEventDispatcher } from "svelte";
 	import CodeMirror from "svelte-codemirror-editor";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "../httpMode.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";
 	import { modeCurrent } from "@skeletonlabs/skeleton";
 	import { marasiConfig } from "../../stores";
+	import { httpHighlighting } from "../httpHighlight.js";
 	import { clearSelectionOnBlur } from "./leaveEditor.js";
 	import { longStrings } from "../longStrings.js";
 
 	export let value = "";
 	/** A CodeMirror language, or "http" for a request or response. */
 	export let lang = undefined;
+	/** Syntax highlighting setting for "http" editors ("auto" | "enabled" | "disabled" | undefined). */
+	export let syntaxMode = undefined;
 	/** The Wrap lines toggle. */
 	export let wrap = false;
 	export let readonly = true;
@@ -25,7 +26,7 @@
 
 	const dispatch = createEventDispatcher();
 	const onSuspend = (suspended) => dispatch("suspend", suspended);
-	const httpLanguage = StreamLanguage.define(http);
+	$: httpExtensions = lang === "http" ? httpHighlighting({ mode: syntaxMode }) : [];
 	const styles = {
 		"&": { height: "100%", fontSize: "0.6875rem" },
 		// Scrolling stops at the editor's edges: no bounce past them and no
@@ -42,9 +43,10 @@
 <CodeMirror
 	class="ledger-editor h-full min-h-0"
 	bind:value
-	lang={lang === "http" ? httpLanguage : lang}
+	lang={lang === "http" ? undefined : lang}
 	theme={$modeCurrent ? githubLight : oneDark}
 	extensions={[
+		...httpExtensions,
 		...($marasiConfig.VimEnabled ? [vim()] : []),
 		clearSelectionOnBlur,
 		longStrings({ wrap, mode: $marasiConfig.WrapMode, onSuspend }),

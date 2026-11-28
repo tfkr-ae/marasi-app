@@ -9,8 +9,7 @@
 	// belong to the page.
 	import CodeMirror from "svelte-codemirror-editor";
 	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
-	import { StreamLanguage } from "@codemirror/language";
-	import { http } from "../httpMode.js";
+	import { httpHighlighting } from "../httpHighlight.js";
 	import { oneDark } from "@codemirror/theme-one-dark";
 	import { githubLight } from "@uiw/codemirror-theme-github";
 	import { vim } from "@replit/codemirror-vim";
@@ -20,7 +19,6 @@
 	import { isChecking, isDirty, parseErrorOf, refusalOf, textOf } from "../../stores/checkpointStore";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import { longStrings } from "../longStrings.js";
-	import { usesSyntax } from "../ledger/drawer.js";
 	import { primaryVariant, statusClass } from "../launchpad/format.js";
 	import { interceptedFor, itemTitle, offersInterceptResponse, streamedHead } from "./items.js";
 	import PaneTabs from "../components/PaneTabs.svelte";
@@ -53,17 +51,19 @@
 	$: checking = isChecking(state, item.ID);
 	$: primary = primaryVariant($modeCurrent);
 	$: theme = $modeCurrent ? githubLight : oneDark;
+	$: httpExtensions = httpHighlighting({ mode: $marasiConfig.SyntaxMode });
 	$: vimExtensions = $marasiConfig.VimEnabled ? [vim()] : [];
 	let paused = false;
 	let contextPaused = false;
 	$: editExtensions = [
+		...(item.Type === "websocket" ? [] : httpExtensions),
 		...vimExtensions,
 		longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: (on) => (paused = on) }),
 	];
 	$: contextExtensions = [
+		...httpExtensions,
 		longStrings({ wrap: $lineWrap, mode: $marasiConfig.WrapMode, onSuspend: (on) => (contextPaused = on) }),
 	];
-	const lang = (body) => (usesSyntax(body, $marasiConfig.SyntaxMode) ? StreamLanguage.define(http) : undefined);
 
 	const OPCODES = { 0: "continuation", 1: "text", 2: "binary", 8: "close", 9: "ping", 10: "pong" };
 	$: heldLeft = item.Type === "request";
@@ -193,7 +193,6 @@
 								on:ready={(event) => (editor = event.detail)}
 								class="text-xs"
 								styles={{ "&": { fontSize: "0.6875rem" } }}
-								lang={lang(text)}
 								{theme}
 								extensions={editExtensions}
 							/>
@@ -204,7 +203,6 @@
 								editable={false}
 								class="text-xs opacity-80"
 								styles={{ "&": { fontSize: "0.6875rem" } }}
-								lang={lang(request.Raw)}
 								{theme}
 								extensions={contextExtensions}
 							/>
@@ -265,7 +263,6 @@
 								on:ready={(event) => (editor = event.detail)}
 								class="text-xs"
 								styles={{ "&": { fontSize: "0.6875rem" } }}
-								lang={item.Type === "websocket" ? undefined : lang(text)}
 								{theme}
 								extensions={editExtensions}
 							/>
