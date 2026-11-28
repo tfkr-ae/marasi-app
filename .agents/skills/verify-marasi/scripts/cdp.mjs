@@ -16,7 +16,7 @@ if (!mode || !Number.isInteger(port) || !appURL || !evidenceDir || !Number.isInt
 // `expected` must be text only the destination page paints. Rail labels are
 // always visible, so a bare feature name proves nothing.
 const routes = {
-	dashboard: { selector: '[title="Home"]', path: "/", expected: "Project Dashboard" },
+	dashboard: { selector: '[title="Home"]', path: "/", page: "[data-testid=home-overview]" },
 	ledger: { selector: '[title="Ledger"]', path: "/ledger", expected: "Saved queries" },
 	compass: { selector: '[title="Compass"]', path: "/compass", expected: "Compass Settings" },
 	// The rail icon's title gains " · N intercepted" while items are held.
@@ -698,7 +698,7 @@ if (mode === "launch") {
 	socket.addEventListener("message", watchSockets);
 	try {
 		await send("Page.navigate", { url: appURL });
-		await waitFor(`document.body?.innerText.includes("Project Dashboard")`, "the scratchpad dashboard", 60000);
+		await waitFor(`!!document.querySelector("[data-testid=home-project]")?.innerText.includes("scratchpad")`, "the scratchpad Home", 60000);
 		await waitFor(runtimeLoaded, "the Wails runtime and /wails/custom.js in the page", 10000);
 		const connected = () => Array.from(eventSockets.values()).some((entry) => entry.status === 101);
 		const deadline = Date.now() + 10000;
