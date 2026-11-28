@@ -8,7 +8,7 @@
 	import { onDestroy } from "svelte";
 	import PaneTabs from "../components/PaneTabs.svelte";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
-	import { drawerBodies, pairTiming, usesSyntax } from "../ledger/drawer.js";
+	import { drawerBodies, pairTiming } from "../ledger/drawer.js";
 	import { RAW_ONLY } from "../../stores/trafficApi.js";
 	import { sameID } from "../ledger/pairs.js";
 	import { pairURL } from "../ledger/rowMenu.js";
@@ -139,7 +139,8 @@
 			{:else}
 				<DrawerEditor
 					value={bodies.request}
-					lang={usesSyntax(bodies.request, syntaxMode) ? "http" : undefined}
+					lang="http"
+					{syntaxMode}
 					wrap={$lineWrap}
 				/>
 			{/if}
@@ -155,7 +156,8 @@
 			{:else if bodies.response}
 				<DrawerEditor
 					value={bodies.response}
-					lang={usesSyntax(bodies.response, syntaxMode) ? "http" : undefined}
+					lang="http"
+					{syntaxMode}
 					wrap={$lineWrap}
 				/>
 			{:else if details !== null}

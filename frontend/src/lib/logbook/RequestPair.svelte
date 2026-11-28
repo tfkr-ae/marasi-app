@@ -12,7 +12,7 @@
 	import { canOpenPairMessages, messagesModal } from "../messages/open.js";
 	import { interceptModalEscape } from "../overlayIsolation.js";
 	import DrawerEditor from "../ledger/DrawerEditor.svelte";
-	import { drawerBodies, usesSyntax } from "../ledger/drawer.js";
+	import { drawerBodies } from "../ledger/drawer.js";
 	import { sameID } from "../ledger/pairs.js";
 	import { METHOD_CLASS, statusClass } from "../launchpad/format.js";
 	import { lineWrap, marasiConfig, prettify } from "../../stores";
@@ -129,7 +129,8 @@
 				{:else}
 					{#key id}<DrawerEditor
 							value={text}
-							lang={usesSyntax(text, $marasiConfig.SyntaxMode) ? "http" : undefined}
+							lang="http"
+							syntaxMode={$marasiConfig.SyntaxMode}
 							wrap={$lineWrap}
 							on:suspend={(e) => (paused[i] = e.detail)}
 						/>{/key}

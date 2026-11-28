@@ -5,13 +5,12 @@
 	import { javascript } from "@codemirror/lang-javascript";
 	import DrawerEditor from "./DrawerEditor.svelte";
 	import DrawerNote from "./DrawerNote.svelte";
-	import { usesSyntax } from "./drawer.js";
 
 	/** "request" | "response" | "note" | "metadata" */
 	export let kind;
 	export let details = undefined;
 	export let bodies = { request: "", response: "" };
-	export let syntaxMode = "auto";
+	export let syntaxMode = undefined;
 	export let wrap = false;
 	export let hasResponseBody = false;
 	export let note = null;
@@ -33,7 +32,8 @@
 	{:else}
 		<DrawerEditor
 			value={bodies.request}
-			lang={usesSyntax(bodies.request, syntaxMode) ? "http" : undefined}
+			lang="http"
+			{syntaxMode}
 			{wrap}
 			on:suspend
 		/>
@@ -44,7 +44,8 @@
 	{:else if hasResponseBody}
 		<DrawerEditor
 			value={bodies.response}
-			lang={usesSyntax(bodies.response, syntaxMode) ? "http" : undefined}
+			lang="http"
+			{syntaxMode}
 			{wrap}
 			on:suspend
 		/>
