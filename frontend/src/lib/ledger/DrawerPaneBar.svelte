@@ -6,10 +6,12 @@
 	import { createEventDispatcher } from "svelte";
 	import { Copy } from "lucide-svelte";
 	import { menuDispatcher } from "../keybindings/app.js";
+	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
 	import { paneHeaderState, shortcutTooltip } from "./drawerPresentation.js";
 
 	/** "note" or "metadata" while one shows in place of the response; null for Response. */
 	export let pane = null;
+	export let responseMode = "raw";
 	export let requestBody = "";
 	export let responseBody = "";
 	export let metadataBody = null;
@@ -87,6 +89,9 @@
 		</div>
 
 		<div class="flex flex-none items-center gap-1.5">
+			{#if pane === null && hasResponse}
+				<ResponseModeToggle bind:mode={responseMode} actionId="ledger.drawer-open.toggle-render" />
+			{/if}
 			{#if header.right.metaText}
 				{#if pane === "note"}
 					<span class="text-3xs {header.right.metaTone}" role="status">{header.right.metaText}</span>

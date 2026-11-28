@@ -6,7 +6,7 @@
 	// confirmations, the toasts and the checkpoint.* shortcuts.
 	import { onDestroy } from "svelte";
 	import { getDrawerStore, getModalStore, getToastStore, modeCurrent } from "@skeletonlabs/skeleton";
-	import { CornerDownRight, CornerLeftDown, EditIcon, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft, Waves } from "lucide-svelte";
+	import { CornerDownRight, CornerLeftDown, EditIcon, Eye, FileCode, FilePenLine, Forward, ListChecks, ListX, SquarePlay, ToggleLeft, Waves } from "lucide-svelte";
 	import MarasiMenu from "../../lib/components/MarasiMenu/MarasiMenu.svelte";
 	import { useMenuActions } from "../../lib/keybindings/app.js";
 	import { checkpointItemContext as itemContext, checkpointRules, checkpointStore } from "../../stores/checkpointStore";
@@ -192,6 +192,11 @@
 			actionId: "checkpoint.toggle-stream-intercept",
 			icon: Waves,
 			handler: toggleStreamIntercept,
+		},
+		{
+			actionId: "checkpoint.toggle-render",
+			icon: Eye,
+			handler: () => view === "item" && workspace?.toggleRender(),
 		},
 		{
 			actionId: "checkpoint.forward-picked",

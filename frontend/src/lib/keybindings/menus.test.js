@@ -241,6 +241,30 @@ test("the Launchpad renames on ⌘R and swaps compared entries on ⌘⇧X", () =
   assert.equal(dispatcher.resolve(cmdShift("L", "KeyL"), on("/launchpad")), "launchpad.launch");
 });
 
+test("⌘⌥R (Ctrl+Alt+R) toggles Render across Ledger drawer, Launchpad, Armory drawer, and Checkpoint", () => {
+  const macDisp = mac();
+  const winDisp = createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX });
+  const macPress = () => keydown("®", "KeyR", { metaKey: true, altKey: true });
+  const winPress = () => keydown("r", "KeyR", { ctrlKey: true, altKey: true });
+
+  const cases = [
+    [on("/ledger", requestDrawer()), "ledger.drawer-open.toggle-render"],
+    [on("/launchpad"), "launchpad.toggle-render"],
+    [armoryDrawerOpen(), "armory.drawer.toggle-render"],
+    [on("/checkpoint"), "checkpoint.toggle-render"],
+  ];
+  for (const [state, actionId] of cases) {
+    assert.equal(macDisp.resolve(macPress(), state), actionId, `mac ${actionId}`);
+    assert.equal(winDisp.resolve(winPress(), state), actionId, `win ${actionId}`);
+  }
+
+  // Inert when Ledger or Armory drawer is closed, or on pages without a response editor.
+  assert.equal(macDisp.resolve(macPress(), on("/ledger")), null);
+  assert.equal(macDisp.resolve(macPress(), on("/armory")), null);
+  assert.equal(macDisp.resolve(macPress(), on("/")), null);
+  assert.equal(macDisp.resolve(macPress(), on("/settings")), null);
+});
+
 test("a logs drawer keeps its page's menu", () => {
   const dispatcher = mac();
   const logs = { open: true, id: "extension-logs", meta: { extensionName: "checkpoint" } };

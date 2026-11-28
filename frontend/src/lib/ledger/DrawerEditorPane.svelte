@@ -5,6 +5,7 @@
 	import { javascript } from "@codemirror/lang-javascript";
 	import DrawerEditor from "./DrawerEditor.svelte";
 	import DrawerNote from "./DrawerNote.svelte";
+	import ResponseRenderPane from "../render/ResponseRenderPane.svelte";
 
 	/** "request" | "response" | "note" | "metadata" */
 	export let kind;
@@ -12,7 +13,16 @@
 	export let bodies = { request: "", response: "" };
 	export let syntaxMode = undefined;
 	export let wrap = false;
+	export let hasResponse = false;
 	export let hasResponseBody = false;
+	export let responseMode = "raw";
+	export let rawResponseBytes = null;
+	export let responseContentType = "";
+	export let responseStatusCode = 0;
+	export let responseTruncated = false;
+	export let canBrowserView = false;
+	export let onBrowserView = null;
+	export let onShowRaw = () => {};
 	export let note = null;
 	export let noteFor = null;
 	export let noteVersion = 0;
@@ -41,6 +51,17 @@
 {:else if kind === "response"}
 	{#if details === undefined}
 		<p class={message}>Loading…</p>
+	{:else if responseMode === "render" && (hasResponseBody || hasResponse)}
+		<ResponseRenderPane
+			rawBytes={rawResponseBytes}
+			rawText={bodies.response}
+			contentType={responseContentType}
+			statusCode={responseStatusCode}
+			truncated={responseTruncated}
+			{canBrowserView}
+			{onBrowserView}
+			{onShowRaw}
+		/>
 	{:else if hasResponseBody}
 		<DrawerEditor
 			value={bodies.response}

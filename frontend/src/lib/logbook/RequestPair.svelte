@@ -19,6 +19,8 @@
 	import { joinedResponseStore } from "../../stores/joinedResponseStore.js";
 	import { WRAP_SUSPENDED } from "../lineWrap.js";
 	import SendToChefButton from "../tools/cyberchef/SendToChefButton.svelte";
+	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
+	import ResponseRenderPane from "../render/ResponseRenderPane.svelte";
 
 	/** The pair's ID. */
 	export let id;
@@ -30,6 +32,8 @@
 	export let expanded = false;
 	/** Offers Messages; off inside a modal, which the Messages modal would queue behind. */
 	export let messages = true;
+	/** "raw" | "render" for the response pane; preserved when expanding. */
+	export let responseMode = "raw";
 
 	const modalStore = getModalStore();
 	// Tells the expanding pane that Messages opened, so it closes its
@@ -102,10 +106,13 @@
 				class="flex h-7 flex-none items-center gap-3 border-b border-surface-500/30 px-2 text-3xs font-bold uppercase tracking-wider"
 			>
 				<span class="flex-1 opacity-60">{label}</span>
-				{#if paused[i]}
+				{#if paused[i] && !(i === 1 && responseMode === "render")}
 					<span class="logbook-wrap-suspended font-normal normal-case tracking-normal opacity-60" title={WRAP_SUSPENDED}>Not wrapped</span>
 				{/if}
-				{#if details}<SendToChefButton />{/if}
+				{#if i === 1 && response}
+					<ResponseModeToggle bind:mode={responseMode} />
+				{/if}
+				{#if details && !(i === 1 && responseMode === "render")}<SendToChefButton />{/if}
 				{#if i === 1}
 					{#if canOpenMessages}<button
 							type="button"
@@ -121,11 +128,20 @@
 						>{/if}
 				{/if}
 			</div>
-			<div class="relative min-h-0 flex-1 bg-white pt-[3px] dark:bg-[#282c34]">
+			<div class="relative flex min-h-0 flex-1 flex-col bg-white {i === 1 && responseMode === 'render' ? '' : 'pt-[3px]'} dark:bg-[#282c34]">
 				{#if details === undefined}
 					<p class="p-4 text-2xs opacity-50">Loading…</p>
 				{:else if details === null}
 					<p class="p-4 text-2xs opacity-60">{i ? "" : "Request not found"}</p>
+				{:else if i === 1 && responseMode === "render"}
+					<ResponseRenderPane
+						rawBytes={$joined != null ? null : (response?.RawBytes ?? null)}
+						rawText={bodies.response}
+						contentType={response?.ContentType ?? ""}
+						statusCode={response?.StatusCode ?? 0}
+						truncated={Boolean(details?.Metadata?.body_cut_short || details?.Metadata?.body_too_large)}
+						onShowRaw={() => (responseMode = "raw")}
+					/>
 				{:else}
 					{#key id}<DrawerEditor
 							value={text}
@@ -158,7 +174,7 @@
 					><X size={15} /></button
 				>
 			</header>
-			<div class="min-h-0 flex-1"><svelte:self {id} {read} {messages} expanded on:messages={() => (big = false)} /></div>
+			<div class="min-h-0 flex-1"><svelte:self {id} {read} {messages} expanded bind:responseMode on:messages={() => (big = false)} /></div>
 		</div>
 	</div>
 {/if}

@@ -436,7 +436,7 @@ test("the Ledger with its drawer open groups its actions as the spec lists them"
     ["send", "Send to", "S", ["send-to-armory", "send-to-launchpad"]],
     ["logbook", "Logbook", "L", ["create-finding", "create-test-case", "link-finding", "link-test-case", "unlink-finding", "unlink-test-case"]],
     ["copy", "Copy", "C", ["copy-browser-view-url", "copy-raw-request", "copy-raw-response", "copy-url"]],
-    ["view", "View", "V", ["toggle-fullscreen", "toggle-sidebar", "toggle-word-wrap", "view-metadata", "view-note"]],
+    ["view", "View", "V", ["toggle-fullscreen", "toggle-render", "toggle-sidebar", "toggle-word-wrap", "view-metadata", "view-note"]],
   ]);
   assert.equal(catalog.get("ledger.drawer-open.websocket.open-stream").group, undefined);
 });
@@ -461,7 +461,7 @@ test("the Launchpad groups its actions as Launch, Navigate, Compare, View and En
     ["launch", "Launch", "L", ["cancel-launch", "create", "delete-tab", "edit-request", "launch", "toggle-tls"]],
     ["navigate", "Navigate", "N", ["focus-search", "jump-to-latest", "next-entry", "next-tab", "previous-entry", "previous-tab"]],
     ["compare", "Compare", "C", ["swap-compare", "toggle-compare", "toggle-compare-view"]],
-    ["view", "View", "V", ["copy-browser-view-url", "toggle-group-by-status", "toggle-settings", "toggle-sidebar", "view-metadata", "view-notes"]],
+    ["view", "View", "V", ["copy-browser-view-url", "toggle-group-by-status", "toggle-render", "toggle-settings", "toggle-sidebar", "view-metadata", "view-notes"]],
   ]);
   assert.deepEqual(groupsOf(catalog, "launchpad.tree"), [
     ["entries", "Entries", "E", catalog.inContext("launchpad.tree").map((a) => a.id.slice("launchpad.tree.".length)).sort()],
@@ -484,7 +484,7 @@ test("the Armory page groups Templates and Runs, with the rest loose", () => {
 test("the Checkpoint groups Held items under I, since H is reserved, and Rules", () => {
   const catalog = buildCatalog();
   assert.deepEqual(groupsOf(catalog, "checkpoint"), [
-    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked", "toggle-stream-intercept"]],
+    ["held", "Held items", "I", ["drop-intercepted", "drop-picked", "edit-intercepted", "forward-intercept-response", "forward-intercepted", "forward-picked", "toggle-render", "toggle-stream-intercept"]],
     ["rules", "Rules", "R", ["edit-rules", "update-rules"]],
   ]);
   assert.equal(catalog.get("checkpoint.toggle-settings").group, undefined);

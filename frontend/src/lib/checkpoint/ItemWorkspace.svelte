@@ -23,6 +23,8 @@
 	import { interceptedFor, itemTitle, offersInterceptResponse, streamedHead } from "./items.js";
 	import PaneTabs from "../components/PaneTabs.svelte";
 	import MessageEditor from "../messages/MessageEditor.svelte";
+	import ResponseModeToggle from "../render/ResponseModeToggle.svelte";
+	import ResponseRenderPane from "../render/ResponseRenderPane.svelte";
 
 	export let store;
 	/** { item, summary, launch, context } for the selected item. */
@@ -32,6 +34,8 @@
 	export let now = Date.now();
 	export let onForward = (id, options) => {};
 	export let onDrop = (id) => {};
+	/** "raw" | "render" for held HTTP responses; sticky across held responses. */
+	export let responseMode = "raw";
 
 	$: state = $store;
 	$: item = entry.item;
@@ -80,12 +84,31 @@
 	const heldHead = "!bg-primary-500/10 shadow-[inset_3px_0_0_rgb(var(--color-primary-500))]";
 	const chip = "cp-chip ml-1 bg-primary-500 px-1 py-px text-3xs font-bold uppercase text-white";
 
+	const encoder = new TextEncoder();
+	$: isHeldResponse = item.Type === "response";
+	$: renderingResponse = isHeldResponse && responseMode === "render";
+	$: renderBytes = !isHeldResponse
+		? null
+		: dirty
+			? encoder.encode(text)
+			: (item.rawBytes ?? encoder.encode(text));
+
 	let editor;
 	let messageEditor;
-	/** Focuses the intercepted pane's editor. */
+	/** Toggles a held HTTP response between Raw HTTP and Rendered preview. */
+	export function toggleRender() {
+		if (!isHeldResponse) return;
+		responseMode = responseMode === "render" ? "raw" : "render";
+	}
+	/** Focuses the intercepted pane's editor (returning from Render if active). */
 	export function focusEditor() {
 		if (isStream) messageEditor?.focus();
-		else editor?.focus();
+		else if (renderingResponse) {
+			responseMode = "raw";
+			setTimeout(() => editor?.focus(), 0);
+		} else {
+			editor?.focus();
+		}
 	}
 	const revert = () => store.edit(item.ID, item.text);
 	const edit = (event) => store.edit(item.ID, event.detail);
@@ -228,12 +251,15 @@
 							<span class={chip}>Intercepted</span>
 							{#if summary.status}· <span class={statusClass(summary.status)}>{summary.status}</span>{/if}
 							{#if dirty}<span class="ml-1 text-warning-500" title="Edited">●</span>{/if}
-							{#if paused}
+							{#if paused && !renderingResponse}
 								<span class="cp-wrap-suspended font-normal opacity-60" title={WRAP_SUSPENDED}>· Not wrapped</span>
 							{/if}
 						</span>
 						<span class="flex items-center gap-3">
-							{#if item.editable !== false}<SendToChefButton />{/if}
+							{#if isHeldResponse}
+								<ResponseModeToggle bind:mode={responseMode} actionId="checkpoint.toggle-render" />
+							{/if}
+							{#if item.editable !== false && !renderingResponse}<SendToChefButton />{/if}
 							{#if dirty}
 								<button class="cp-revert btn btn-sm {primary} px-2 py-0 text-2xs" on:click={revert}>Revert</button>
 							{/if}
@@ -244,7 +270,7 @@
 					{:else if item.Type === "stream" && !item.editable}
 						<div class="cp-hex-note border-b border-surface-500/30 px-3 py-1 text-2xs opacity-70">No text form; shown as hex, read-only</div>
 					{/if}
-					<div class="cp-response min-h-0 flex-1 overflow-auto dark:bg-[#282c34]">
+					<div class="cp-response flex min-h-0 flex-1 flex-col {renderingResponse ? 'overflow-hidden' : 'overflow-auto'} dark:bg-[#282c34]">
 						{#if isStream}
 							<MessageEditor
 								bind:this={messageEditor}
@@ -254,6 +280,13 @@
 								readonly={!item.editable}
 								errorAt={refusal}
 								on:change={edit}
+							/>
+						{:else if renderingResponse}
+							<ResponseRenderPane
+								rawBytes={renderBytes}
+								rawText={text}
+								statusCode={Number(summary?.status) || 0}
+								onShowRaw={() => (responseMode = "raw")}
 							/>
 						{:else}
 							<CodeMirror

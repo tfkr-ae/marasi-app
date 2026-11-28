@@ -443,3 +443,22 @@ test("an edit back to the held text is not dirty, ignoring CRLF", async () => {
   await store.edit("a", "GET /a HTTP/1.1\nHost: x\n\n");
   assert.equal(isDirty(get(store), "a"), false);
 });
+
+test("held HTTP responses preserve lossless rawBytes alongside text without affecting isDirty", async () => {
+  const head = Buffer.from("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n\r\n", "ascii");
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0xfe]);
+  const raw = Buffer.concat([head, png]);
+  const { store } = await loaded([
+    {
+      ID: "res-bin",
+      Type: "response",
+      Raw: raw.toString("base64"),
+      InterceptedAt: "2026-10-23T10:00:00Z",
+    },
+  ]);
+  const item = get(store).items[0];
+  assert.ok(item.rawBytes instanceof Uint8Array);
+  assert.deepEqual([...item.rawBytes], [...raw]);
+  assert.ok(item.text.startsWith("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n\r\n"));
+  assert.equal(isDirty(get(store), "res-bin"), false);
+});

@@ -111,6 +111,7 @@ export function createLive(core, api, win, { setSelection }) {
       incomingResponse: {
         ...incoming,
         Raw: details.Response?.Raw ?? "",
+        RawBytes: details.Response?.RawBytes ?? null,
         Prettified: details.Prettified?.Response ?? "",
       },
     });

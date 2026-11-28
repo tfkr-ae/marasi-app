@@ -27,6 +27,7 @@
 		ChevronRight,
 		CircleStop,
 		Edit,
+		Eye,
 		FilePlus2,
 		ListChecks,
 		RefreshCw,
@@ -122,6 +123,8 @@
 	let settingsOpen = savedSettingsOpen;
 	let drawerMaximised = false;
 	let drawerExpanded = savedDrawerExpanded;
+	let drawerResponseMode = "raw";
+	let armoryDrawerPane;
 	let workspace;
 	// Measured for the drawer's height until it is dragged (drawerShareOf):
 	// the traffic section's with its top border, so the edges meet.
@@ -720,6 +723,11 @@
 			icon: ArrowLeft,
 			handler: () => cycleRequest(-1),
 		},
+		{
+			actionId: "armory.drawer.toggle-render",
+			icon: Eye,
+			handler: () => armoryDrawerPane?.toggleRender(),
+		},
 	];
 	// The armory.page and armory.drawer menu contexts decide which of these
 	// a key reaches; the menu lists the actions of the drawer's state.
@@ -884,10 +892,12 @@
 						></div>
 					{/if}
 					<ArmoryDrawer
+						bind:this={armoryDrawerPane}
 						pair={openRow}
 						number={openRow.Number}
 						maximised={drawerMaximised}
 						bind:expanded={drawerExpanded}
+						bind:responseMode={drawerResponseMode}
 						onClose={closeRequestDrawer}
 						onStep={cycleRequest}
 						canPrevious={runCanStep($runTraffic, -1)}

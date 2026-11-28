@@ -136,6 +136,7 @@ const TAIL_FACTORY_ACTIONS = [
     ["unlink-finding", "Unlink Finding", "Remove request from linked finding", "unlink test case", primary("shift+x"), { group: "logbook" }],
     ["view-note", "View Note", "View or modify request note", "note", primary("shift+n"), { group: "view" }],
     ["view-metadata", "View Metadata", "View metadata for this request", "metadata", primary("shift+m"), { group: "view" }],
+    ["toggle-render", "Toggle Render", "Switch the response between raw HTTP and rendered preview", "render, preview, html, image, video, response", primary("alt+r"), { group: "view" }],
     ["copy-url", "Copy URL", "Copy the selected requests' URLs", "request, url", primary("shift+c"), { group: "copy" }],
     ["copy-raw-request", "Copy Raw Request", "Copy the selected complete HTTP requests", "request, raw", primary("shift+r"), { group: "copy" }],
     ["copy-raw-response", "Copy Raw Response", "Copy the selected complete HTTP responses", "response, raw", primary("shift+s"), { group: "copy" }],
@@ -164,6 +165,7 @@ const TAIL_FACTORY_ACTIONS = [
   ...pageActions("armory.drawer", [
     ["next-request", "Next Request", "Open the next request in this run", "next request", primary("shift+]")],
     ["previous-request", "Previous Request", "Open the previous request in this run", "previous request", primary("shift+[")],
+    ["toggle-render", "Toggle Render", "Switch the response between raw HTTP and rendered preview", "render, preview, html, image, video, response", primary("alt+r")],
   ]),
   // Ids predate the redesigned page (tabs, a settings accordion) and stay
   // put so saved profiles keep their overrides (docs/adr/2026-10-10-keybinding-profiles-override-factory-defaults.md).
@@ -180,6 +182,7 @@ const TAIL_FACTORY_ACTIONS = [
     ["cancel-launch", "Cancel Launch", "Cancel the open launchpad's pending launch", "cancel, stop, abort, launch", primary("shift+."), { group: "launch" }],
     ["view-notes", "View Notes", "View or edit request notes", "notes", primary("shift+n"), { group: "view" }],
     ["view-metadata", "View Metadata", "View request Metadata", "metadata", primary("shift+m"), { group: "view" }],
+    ["toggle-render", "Toggle Render", "Switch the response between raw HTTP and rendered preview", "render, preview, html, image, video, response", primary("alt+r"), { group: "view" }],
     ["copy-browser-view-url", "Copy Browser View URL", "Copy the URL that shows the open entry's stored response in a proxied browser", "browser, view, response, render, url", primary("shift+v"), { yieldsToEditors: true, group: "view" }],
     ["focus-search", "Search Launchpads", "Jump to the sidebar search", "search, find, filter", primary("shift+s"), { group: "navigate" }],
     ["create", "New Launchpad", "Create an empty launchpad", "new, create, add, launchpad", primary("shift+a"), { group: "launch" }],
@@ -220,6 +223,7 @@ const TAIL_FACTORY_ACTIONS = [
     ["drop-picked", "Drop Picked Items", "Drop the picked items, or every item when none are picked", "drop, bulk, picked, all, intercept", primary("shift+x"), { group: "held" }],
     ["forward-intercept-response", "Forward + Intercept Response", "Forward the selected request and intercept its response", "forward, intercept, response", primary("shift+s"), { group: "held" }],
     ["toggle-stream-intercept", "Toggle Stream Intercept", "Turn Stream intercept on or off", "stream, intercept, toggle, grpc, messages", primary("shift+t"), { group: "held" }],
+    ["toggle-render", "Toggle Render", "Switch the response between raw HTTP and rendered preview", "render, preview, html, image, video, response", primary("alt+r"), { group: "held" }],
     ["show-logs", "Show Logs", "Show Extension Logs", "logs, lua", primary("shift+l")],
   ]),
   // Esc, which goes back to the list, is reserved for the page (gate.js),
