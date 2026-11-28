@@ -1,15 +1,13 @@
 <script>
 	// The Service log in the app drawer (AppDrawer, id SERVICE_LOG_DRAWER):
 	// the service's own messages, newest first, joined live by log.added
-	// (homeStore). The level filter and opening a line's pair are in
+	// (serviceLogStore). The level filter and opening a line's pair are in
 	// serviceLog.js.
 	import { getDrawerStore, getToastStore } from "@skeletonlabs/skeleton";
 	import { goto } from "$app/navigation";
 	import { ArrowUpRight, X } from "lucide-svelte";
-	import { homeStore } from "../../stores/homeStore";
+	import { serviceLogStore } from "../../stores/serviceLogStore.js";
 	import { ledgerStore } from "../../stores/ledgerStore";
-	import { NO_BODIES, pairQuery } from "../../stores/trafficApi.js";
-	import { service } from "../service/index.js";
 	import { mobile } from "../platform.js";
 	import { LEVEL_FILTERS, canOpenPair, filterByLevel, openPair } from "../serviceLog.js";
 
@@ -17,8 +15,8 @@
 	const toastStore = getToastStore();
 
 	let level = "all";
-	$: lines = filterByLevel($homeStore.logs, level).toReversed();
-	$: extensionNames = $homeStore.extensionNames;
+	$: lines = filterByLevel($serviceLogStore.logs, level).toReversed();
+	$: extensionNames = $serviceLogStore.extensionNames;
 
 	const levelTone = {
 		ERROR: "text-error-600 dark:text-error-400",
@@ -30,15 +28,9 @@
 		new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 	const source = (line) => (line.ExtensionID ? (extensionNames[line.ExtensionID] ?? "") : "");
 
-	const pairNumber = (id) =>
-		service
-			.get(`/traffic/${id}`, pairQuery(NO_BODIES))
-			.then((pair) => pair?.number ?? null)
-			.catch(() => null);
-
 	async function open(line) {
 		const opened = await openPair(line, {
-			pairNumber,
+			pairNumber: serviceLogStore.pairNumber,
 			goto: (url) => {
 				drawerStore.close();
 				return goto(url);
@@ -58,19 +50,17 @@
 	>
 		<h3 class="text-sm font-bold">Service log</h3>
 		<div
-			class="inline-flex flex-none items-center border border-surface-300-600-token bg-surface-50 dark:bg-surface-900"
+			class="inline-flex flex-none items-center divide-x divide-surface-300-600-token border border-surface-300-600-token bg-surface-50 dark:bg-surface-900"
 			role="tablist"
 			aria-label="Level"
 			data-testid="service-log-level"
 		>
-			{#each LEVEL_FILTERS as filter, i}
+			{#each LEVEL_FILTERS as filter}
 				<button
 					type="button"
 					role="tab"
 					aria-selected={level === filter.id}
-					class="{seg} {i ? 'border-l border-surface-300-600-token' : ''} {level === filter.id
-						? 'bg-surface-200-700-token text-primary-500'
-						: 'opacity-60 hover:opacity-90'}"
+					class="{seg} {level === filter.id ? 'bg-surface-200-700-token text-primary-500' : 'opacity-60'}"
 					on:click={() => (level = filter.id)}>{filter.label}</button
 				>
 			{/each}
@@ -92,7 +82,7 @@
 				this={opens ? "button" : "div"}
 				type={opens ? "button" : undefined}
 				class="flex w-full items-baseline gap-3 border-b border-surface-300/60 px-4 py-1.5 text-left text-xs dark:border-surface-600/60 {opens
-					? 'hover:bg-surface-200-700-token'
+					? 'action-card'
 					: ''}"
 				title={opens ? "Open the pair" : undefined}
 				data-testid="service-log-line"
@@ -110,7 +100,7 @@
 			</svelte:element>
 		{:else}
 			<p class="px-4 py-3 text-xs opacity-60">
-				{$homeStore.logs.length ? "No messages at this level" : "No messages yet"}
+				{$serviceLogStore.logs.length ? "No messages at this level" : "No messages yet"}
 			</p>
 		{/each}
 	</div>

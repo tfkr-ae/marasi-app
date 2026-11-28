@@ -4,13 +4,13 @@
 	// Findings heading, opens the list it counts.
 	import { createEventDispatcher } from "svelte";
 	import { ArrowUpRight } from "lucide-svelte";
-	/** overviewOf's statusClasses: { "2xx": { count, destination }, … } */
+	import { count as n } from "./overview.js";
+	/** overviewOf's statusClasses: { "2xx": { count, colour, destination }, … } */
 	export let statusClasses = {};
 	/** overviewOf's findings: { total, unfinished, bySeverity, destination } */
 	export let findings = { total: 0, unfinished: 0, bySeverity: [], destination: null };
 	const dispatch = createEventDispatcher();
 
-	const classBar = { "2xx": "bg-success-500", "3xx": "bg-tertiary-500", "4xx": "bg-warning-500", "5xx": "bg-error-500" };
 	const severityBar = {
 		Critical: "bg-error-700",
 		High: "bg-error-500",
@@ -18,7 +18,6 @@
 		Low: "bg-tertiary-500",
 		Informational: "bg-surface-400",
 	};
-	const n = (count) => count.toLocaleString();
 	const share = (count, total) => (total ? (count / total) * 100 : 0);
 	$: classTotal = Object.values(statusClasses).reduce((sum, c) => sum + (c.count ?? 0), 0);
 </script>
@@ -32,14 +31,17 @@
 		{#each Object.entries(statusClasses) as [key, statusClass] (key)}
 			<button
 				type="button"
-				class="bar-row w-full flex items-center gap-2 py-1"
+				class="action-card w-full flex items-center gap-2 py-1"
 				data-testid="home-status-class"
 				data-class={key}
 				on:click={() => dispatch("open", statusClass.destination)}
 			>
 				<span class="w-10 text-left font-mono text-2xs">{key}</span>
 				<span class="flex-1 h-2 bg-surface-300-600-token">
-					<span class="block h-2 {classBar[key]}" style="width:{share(statusClass.count ?? 0, classTotal)}%"></span>
+					<span
+						class="block h-2"
+						style="width:{share(statusClass.count ?? 0, classTotal)}%; background-color: rgb(var(--color-{statusClass.colour}-500))"
+					></span>
 				</span>
 				<span class="w-12 text-right font-bold" data-testid="home-status-class-count">
 					{#if statusClass.count === null}<span class="inline-block h-3 w-6 animate-pulse bg-surface-300 align-middle dark:bg-surface-600"></span>{:else}{n(statusClass.count)}{/if}
@@ -50,7 +52,7 @@
 	<div class="p-3 border-t md:border-t-0 border-surface-300-600-token" data-testid="home-findings">
 		<button
 			type="button"
-			class="w-full flex items-center justify-between mb-2 hover:opacity-80"
+			class="action-card w-full flex items-center justify-between mb-2"
 			data-testid="home-findings-heading"
 			on:click={() => dispatch("open", findings.destination)}
 		>
@@ -63,7 +65,7 @@
 		{#each findings.bySeverity as { severity, count, destination } (severity)}
 			<button
 				type="button"
-				class="bar-row w-full flex items-center gap-2 py-1"
+				class="action-card w-full flex items-center gap-2 py-1"
 				data-testid="home-severity"
 				data-severity={severity}
 				on:click={() => dispatch("open", destination)}
@@ -78,8 +80,3 @@
 	</div>
 </div>
 
-<style>
-	.bar-row:hover {
-		background-color: rgb(var(--color-surface-500) / 0.12);
-	}
-</style>

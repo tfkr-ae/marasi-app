@@ -2,7 +2,7 @@
 // be tested without the stores (homeOverview.js binds it to them).
 //
 // A figure's destination is data, never a closure; `openDestination` in
-// destinations.js turns one into navigation:
+// homeOverview.js turns one into navigation:
 //   { page: "ledger", query }            "" is every pair
 //   { page: "logbook", kind: "findings" | "testCases", severities?, status? }
 //   { page: "checkpoint" | "launchpad" | "armory" | "compass" }
@@ -11,15 +11,13 @@
 import { STATUS_CLASSES } from "../../stores/homeApi.js";
 import { SEVERITIES } from "../../stores/createLogbookStore.js";
 
-// The Ledger query for each status class's range of codes.
-const STATUS_QUERIES = {
-  "2xx": "status_code >= 200 status_code < 300",
-  "3xx": "status_code >= 300 status_code < 400",
-  "4xx": "status_code >= 400 status_code < 500",
-  "5xx": "status_code >= 500",
-};
+// Each status class's bar colour; its Ledger query is its range of codes,
+// as homeApi's toStatusClasses counts it ("4xx" is 400 to 499).
+const STATUS_COLOURS = { "2xx": "success", "3xx": "tertiary", "4xx": "warning", "5xx": "error" };
+const statusQuery = (key) => `status_code >= ${key[0]}00 status_code < ${Number(key[0]) + 1}00`;
 
-const count = (n) => (n ?? 0).toLocaleString();
+/** A count as Home shows it: grouped digits, none as 0. */
+export const count = (n) => (n ?? 0).toLocaleString();
 // A count that is null until it has been read, so the page draws a ghost.
 const readCount = (read, n) => (read ? count(n) : null);
 
@@ -27,7 +25,7 @@ const readCount = (read, n) => (read ? count(n) : null);
  * The Overview of `state`:
  * - dashboard: { requests, intercepted, interceptedComplete, notes, launchpads }, null until read
  * - scope: { defaultAllow, includeCount, excludeCount }, null until read
- * - held: requests held in Checkpoint; interceptAll: the Intercept all flag
+ * - held: requests intercepted in Checkpoint; interceptAll: the Intercept all flag
  * - activeRuns: Armory runs in progress
  * - testCases: [{ done }]; findings: [{ severity, done }]
  * - listenerStopped: the researcher stopped the listener
@@ -43,8 +41,9 @@ const readCount = (read, n) => (read ? count(n) : null);
  * is the theme colour of its border and icon square, `glyph` the icon's
  * shade when it isn't 200.
  *
- * `statusClasses` maps each class, in order, to { count, destination }:
- * `count` is a number, or null until read. `findings` is
+ * `statusClasses` maps each class, in order, to { count, colour,
+ * destination }: `count` is a number, or null until read; `colour` the
+ * theme colour of its bar. `findings` is
  * { total, unfinished, bySeverity, destination }, `bySeverity` listing
  * { severity, count, destination } for each severity, most severe first.
  */
@@ -59,7 +58,11 @@ export function overviewOf(state) {
     statusClasses: Object.fromEntries(
       STATUS_CLASSES.map((key) => [
         key,
-        { count: state.statusClasses?.[key] ?? null, destination: { page: "ledger", query: STATUS_QUERIES[key] } },
+        {
+          count: state.statusClasses?.[key] ?? null,
+          colour: STATUS_COLOURS[key],
+          destination: { page: "ledger", query: statusQuery(key) },
+        },
       ]),
     ),
     findings: {
@@ -106,7 +109,7 @@ export function overviewOf(state) {
       },
       {
         id: "held",
-        label: "Held",
+        label: "In Checkpoint",
         value: count(state.held),
         sub: `Intercept all ${state.interceptAll ? "on" : "off"}`,
         colour: "warning",
@@ -151,7 +154,7 @@ function pendingOf(state) {
       id: "listener",
       tone: "error",
       title: "Listener is off",
-      detail: "Nothing is being captured",
+      detail: "Not capturing",
       action: "Start",
       destination: { action: "start-listener" },
     });
@@ -159,7 +162,7 @@ function pendingOf(state) {
     pending.push({
       id: "held",
       tone: "warning",
-      title: `${count(state.held)} held in Checkpoint`,
+      title: `${count(state.held)} intercepted in Checkpoint`,
       detail: "Forward or drop them",
       action: "Review",
       destination: { page: "checkpoint" },
@@ -169,7 +172,7 @@ function pendingOf(state) {
       id: "intercept-all",
       tone: "warning",
       title: "Intercept all is on",
-      detail: "Every request will be held",
+      detail: "Every request is intercepted",
       action: "Open",
       destination: { page: "checkpoint" },
     });
@@ -179,7 +182,7 @@ function pendingOf(state) {
       id: "urgent",
       tone: "error",
       title: `${count(urgent)} Critical/High finding${urgent === 1 ? "" : "s"} unfinished`,
-      detail: "Missing details for the report",
+      detail: "Missing report details",
       action: "Finish",
       destination: { page: "logbook", kind: "findings", severities: [...URGENT], status: "progress" },
     });

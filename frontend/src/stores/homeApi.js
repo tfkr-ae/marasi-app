@@ -1,24 +1,7 @@
 // Home's api over the service client: each call reads a control API route
 // and maps its snake_case answer to the shape createHomeStore keeps, which
-// is what Home's Overview (lib/home/) and ServiceLog.svelte read. The mappers for stream
-// events (toLog, toListener) live here too, so one file knows the API's
-// shapes.
-
-/** The most log lines Home reads at once (the service's page limit). */
-export const LOG_LIMIT = 500;
-
-/** A log line, from GET /logs or log.added, in the Service log's fields. */
-export function toLog(log) {
-  return {
-    ID: log.id,
-    Timestamp: log.timestamp,
-    Level: log.level,
-    Message: log.message,
-    Context: log.context ?? {},
-    RequestID: log.request_id ?? null,
-    ExtensionID: log.extension_id ?? null,
-  };
-}
+// is what Home's Overview (lib/home/) reads. The mappers for stream events
+// (toListener, toScope) live here too, so one file knows the API's shapes.
 
 /**
  * The proxy listener as `{status, address, port}` from its "host:port"
@@ -77,15 +60,6 @@ export function createHomeApi(client) {
     },
     async scope() {
       return toScope(await client.get("/scope"));
-    },
-    // Newest first from the service; oldest first for the table.
-    async logs() {
-      const page = await client.get("/logs", { limit: LOG_LIMIT });
-      return (page.items ?? []).map(toLog).reverse();
-    },
-    async extensionNames() {
-      const list = await client.get("/extension");
-      return Object.fromEntries((list.items ?? []).map((ext) => [ext.id, ext.name]));
     },
     async listener() {
       const status = await client.get("/listener/status");

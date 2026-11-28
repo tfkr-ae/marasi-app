@@ -17,7 +17,6 @@ projectData.register("home", {
   resync: homeStore.resync,
 });
 
-service.on("log.added", homeStore.onLog);
 service.on("listener.started", homeStore.onListener);
 service.on("listener.updated", homeStore.onListener);
 service.on("listener.stopped", homeStore.onListener);

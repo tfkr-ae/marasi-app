@@ -1,4 +1,4 @@
-// Home: the dashboard counts, scope, listener status and live log, read from
+// Home: the dashboard counts, scope, status classes and listener status, read from
 // the service through createHomeApi (over a fake service client) and kept
 // by createHomeStore.
 import { test } from "node:test";
@@ -38,15 +38,6 @@ const serviceRoutes = () => ({
       { pattern: "/logout", match_type: "url" },
     ],
   },
-  // Newest first, as the service pages them.
-  "/logs": {
-    items: [
-      { id: "l2", timestamp: "2026-11-06T22:14:34+04:00", level: "WARN", message: "second", context: {}, request_id: "r1", extension_id: "e1" },
-      { id: "l1", timestamp: "2026-11-06T22:14:33+04:00", level: "INFO", message: "first", context: {}, request_id: null, extension_id: null },
-    ],
-    next_cursor: null,
-  },
-  "/extension": { items: [{ id: "e1", name: "compass", enabled: true }] },
   "/listener/status": { status: "active", proxy_listener: "127.0.0.1:52062" },
   "/traffic/count/by-field": (query) =>
     query?.field === "status_code"
@@ -89,49 +80,10 @@ test("populate counts the scope's rules", async () => {
   assert.deepEqual(get(store).scope, { defaultAllow: false, includeCount: 1, excludeCount: 2 });
 });
 
-test("populate reads the log oldest first, in the fields the Service log reads", async () => {
-  const { store, client } = setup();
-  await store.populate();
-  const logs = get(store).logs;
-  assert.deepEqual(
-    logs.map((log) => [log.ID, log.Level, log.Message, log.RequestID, log.ExtensionID]),
-    [
-      ["l1", "INFO", "first", null, null],
-      ["l2", "WARN", "second", "r1", "e1"],
-    ],
-  );
-  assert.equal(logs[0].Timestamp, "2026-11-06T22:14:33+04:00");
-  assert.ok(client.calls.some(([path, query]) => path === "/logs" && query?.limit === 500));
-});
-
-test("populate names extensions by id for the log's Extension column", async () => {
-  const { store } = setup();
-  await store.populate();
-  assert.deepEqual(get(store).extensionNames, { e1: "compass" });
-});
-
 test("populate reads the proxy listener's address and status", async () => {
   const { store } = setup();
   await store.populate();
   assert.deepEqual(get(store).listener, { status: true, address: "127.0.0.1", port: "52062" });
-});
-
-test("a log line from the stream is added after the others", async () => {
-  const { store } = setup();
-  await store.populate();
-  store.onLog({ id: "l3", timestamp: "2026-11-06T22:15:00+04:00", level: "ERROR", message: "live", context: {}, request_id: null, extension_id: null });
-  assert.deepEqual(
-    get(store).logs.map((log) => log.ID),
-    ["l1", "l2", "l3"],
-  );
-  assert.equal(get(store).logs[2].Level, "ERROR");
-});
-
-test("a log line already read isn't added twice", async () => {
-  const { store } = setup();
-  await store.populate();
-  store.onLog({ id: "l2", timestamp: "2026-11-06T22:14:34+04:00", level: "WARN", message: "second", context: {} });
-  assert.equal(get(store).logs.length, 2);
 });
 
 test("listener events keep the listener status current", async () => {
@@ -350,17 +302,13 @@ test("listener.stopped from the stream keeps lastListener so starting again reus
   assert.deepEqual(get(store).lastListener, { address: "0.0.0.0", port: "9090" });
 });
 
-test("resync replaces the counts and log in place, keeping the old ones until the new arrive", async () => {
+test("resync replaces the counts in place, keeping the old ones until the new arrive", async () => {
   const routes = serviceRoutes();
   const { store } = setup(routes);
   await store.populate();
 
   let answer;
   routes["/dashboard"] = () => new Promise((resolve) => (answer = resolve));
-  routes["/logs"] = {
-    items: [{ id: "l3", timestamp: "2026-11-06T22:20:00+04:00", level: "INFO", message: "while away", context: {} }, ...routes["/logs"].items],
-    next_cursor: null,
-  };
   const resynced = store.resync();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(get(store).dashboard.requests, 1200, "nothing blanks while the service answers");
@@ -368,7 +316,6 @@ test("resync replaces the counts and log in place, keeping the old ones until th
   answer({ pairs: 1300, notes: 3, launchpads: 2, intercepted: 7, intercepted_count: { complete: true } });
   await resynced;
   assert.equal(get(store).dashboard.requests, 1300);
-  assert.deepEqual(get(store).logs.map((log) => log.ID), ["l1", "l2", "l3"]);
 });
 
 test("scope.updated counts the new rules from the event, without reading the scope", async () => {
@@ -545,4 +492,24 @@ test("a listener that is off without the researcher stopping it isn't recorded a
   await store.populate();
   store.onListener({ status: "inactive", proxy_listener: null, reason: "error" });
   assert.equal(get(store).listenerStopped, false);
+});
+
+test("populate leaves the Service log to its own store", async () => {
+  const { store, client } = setup();
+  await store.populate();
+  assert.deepEqual(client.calls.filter(([path]) => path === "/logs" || path === "/extension"), []);
+  assert.equal("logs" in get(store), false);
+});
+
+test("a listener the researcher stopped stays recorded as stopped across a resync", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  const { store } = setup(routes);
+  await store.populate();
+  await store.stopListener();
+
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  await store.resync();
+
+  assert.equal(get(store).listenerStopped, true);
 });
