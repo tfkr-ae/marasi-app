@@ -21,7 +21,7 @@ A new built-in page needs a route, an entry in `BUILTIN_RAIL_PAGES` (`lib/railOr
 
 | Screen | Route | Main components |
 |---|---|---|
-| Home | `routes/+page.svelte` | `Dashboard.svelte`; its Service log button opens the Service log drawer |
+| Home | `routes/+page.svelte` | `lib/home/`: `CaptureControls.svelte` (listener group, certificate, Chrome, Service log, whose button opens the Service log drawer; one row from 40rem up, stacked below), `FigureGrid.svelte` (the eight tiles); `overview.js` (`overviewOf`, pure: every figure with its destination as data) and `homeOverview.js` (the store binding and `openDestination`) |
 | Ledger | `routes/ledger/` | `lib/ledger/`, `lib/dock/Dock.svelte` |
 | Launchpad | `routes/launchpad/` | `lib/launchpad/` |
 | Checkpoint | `routes/checkpoint/` | `lib/checkpoint/`, `lib/dock/Dock.svelte` (see `checkpoint.md`) |

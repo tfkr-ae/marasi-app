@@ -1,16 +1,10 @@
 <script>
+	// Home: the project name with the capture controls, then the Overview's
+	// figures (lib/home/overview.js), each opening the page it counts.
 	import { GetChromeProfiles } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { startChrome as startChromeOn } from "../lib/chrome.js";
-	import { ChromeIcon } from "svelte-feather-icons";
-	import Dashboard from "../lib/components/Dashboard.svelte";
-	import {
-		getDrawerStore,
-		getModalStore,
-		getToastStore,
-		popup,
-		modeCurrent,
-	} from "@skeletonlabs/skeleton";
-	import { ChevronDown, Download, FolderOpen, Play, ScrollText, Square } from "lucide-svelte";
+	import { getDrawerStore, getModalStore, getToastStore } from "@skeletonlabs/skeleton";
+	import { activeProject } from "../stores";
 	import { homeStore } from "../stores/homeStore";
 	import {
 		chromeError,
@@ -19,23 +13,20 @@
 		openProjectPicker,
 		toggleListener,
 	} from "../lib/globalActions.js";
-	import { neutralVariant } from "../lib/launchpad/format.js";
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import { followChromeConfig } from "../lib/chromeConfigEvents.js";
 	import { service } from "../lib/service/index.js";
 	import { connectionStore } from "../stores/connectionStore.js";
 	import { mobile, mobileCheck } from "../lib/platform.js";
+	import CaptureControls from "../lib/home/CaptureControls.svelte";
+	import FigureGrid from "../lib/home/FigureGrid.svelte";
+	import { openDestination, overview } from "../lib/home/homeOverview.js";
 	import { toggleServiceLog } from "../lib/serviceLog.js";
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
-	const chromeProfilesPopup = {
-		event: "click",
-		target: "chromeProfilesPopup",
-		placement: "bottom-end",
-	};
 
 	const readChromeProfiles = () =>
 		GetChromeProfiles()
@@ -45,6 +36,9 @@
 			.catch(chromeError(toastStore, "Error reading Chrome profiles"));
 
 	onMount(() => {
+		// Home reads the counts and scope again each time it shows, keeping
+		// the last figures meanwhile.
+		homeStore.refreshDashboard();
 		// The iOS app has no Chrome to start.
 		mobileCheck.then((onMobile) => onMobile || readChromeProfiles());
 		return followChromeConfig(service.on, {
@@ -57,204 +51,45 @@
 		startChromeOn(profile).catch(chromeError(toastStore, "Error starting Chrome"));
 </script>
 
-<div class="content" class:mobile-home={$mobile}>
-	<div class="no-select dashboard-content">
-		<div class="container mx-auto p-4 space-y-4 text-sm">
-			<div
-				class="header flex justify-between items-center"
-			>
-				<div class="btn-group btn-group-sm {$modeCurrent ? 'light-ghost-group' : 'variant-filled'}">
-					<button
-						type="button"
-						class="btn btn-sm text-sm items-center flex {neutralVariant($modeCurrent)}"
-						on:click={() => {
-							if (!$modalStore[0]) modalStore.trigger(listenerModal(toastStore));
-						}}
-					>
-						<span data-testid="home-listener"
-							>{$homeStore.listener.status
-								? $homeStore.listener.address +
-									":" +
-									$homeStore.listener.port
-								: "Listener off"}</span
-						>
-						<span
-							class={"flex w-3 h-3 me-3 rounded-full " +
-								($homeStore.listener.status
-									? "bg-success-500"
-									: "bg-primary-500")}
-						></span>
-					</button>
-					<button
-						type="button"
-						class="btn btn-sm text-sm flex items-center {neutralVariant($modeCurrent)}"
-						data-testid="home-listener-toggle"
-						disabled={$homeStore.listenerBusy}
-						title={$homeStore.listener.status ? "Stop proxy listener" : "Start proxy listener"}
-						aria-label={$homeStore.listener.status ? "Stop Listener" : "Start Listener"}
-						on:click={() => toggleListener(toastStore)}
-					>
-						{#if $homeStore.listener.status}
-							<span class="mr-1.5"><Square size={14} /></span>
-							<span>Stop</span>
-						{:else}
-							<span class="mr-1.5"><Play size={14} /></span>
-							<span>Start</span>
-						{/if}
-					</button>
-					<button
-						type="button"
-						class="btn btn-sm text-sm flex items-center {neutralVariant($modeCurrent)}"
-						on:click={() => {
-							if (!$modalStore[0]) openProjectPicker(toastStore, modalStore);
-						}}
-					>
-						<span class="mr-2"
-							><FolderOpen size={16} /></span
-						>
-						<span>Open Project</span>
-					</button>
-				</div>
-				<div class="flex items-center gap-2">
-					<button
-						type="button"
-						class="btn btn-sm text-sm {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-						on:click={() => downloadCertificate(toastStore)}
-					>
-						<span
-							><Download
-								size={16}
-							/></span
-						>
-						<span>Download Certificate</span
-						>
-					</button>
-
-					{#if !$mobile}
-					<div class="relative w-fit">
-						<div
-							class="flex w-full overflow-hidden"
-						>
-							<button
-								type="button"
-								class="btn btn-sm text-sm flex-1 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-								class:rounded-none={chromeProfiles.length >
-									0}
-								on:click={() => startChrome("")}
-							>
-								<span
-									><ChromeIcon size="16"
-									/></span
-								>
-								<span
-									>Start
-									Chrome</span
-								>
-							</button>
-
-							{#if chromeProfiles.length > 0}
-								<button
-									type="button"
-									class="btn btn-sm text-sm rounded-none px-3 {$modeCurrent ? 'variant-ghost-primary border-0 ring-0' : 'variant-filled-primary'}"
-									use:popup={chromeProfilesPopup}
-									aria-label="Start Chrome with custom profile"
-									title="Start with custom profile"
-								>
-									<span
-										><ChevronDown size={16}
-										/></span
-									>
-								</button>
-							{/if}
-						</div>
-
-						{#if chromeProfiles.length >= 0}
-							<div
-								class="card z-10 w-full bg-surface-100-800-token shadow-xl"
-								data-popup="chromeProfilesPopup"
-							>
-								{#each chromeProfiles as profile}
-									<button
-										type="button"
-										class="w-full px-3 py-2 text-left text-sm hover:variant-soft-primary focus:variant-soft-primary"
-										on:click={() => startChrome(profile)}
-									>
-										{profile}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-					{/if}
-					<button
-						type="button"
-						class="btn btn-sm text-sm {neutralVariant($modeCurrent)}"
-						data-testid="home-service-log"
-						on:click={() => toggleServiceLog(drawerStore, $drawerStore)}
-					>
-						<span><ScrollText size={16} /></span>
-						<span>Service log</span>
-					</button>
-				</div>
+<div class="home no-select" class:mobile-home={$mobile} data-testid="home-overview">
+	<div class="container mx-auto p-4 pb-8 text-xs">
+		<div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-5">
+			<div class="min-w-0">
+				<p class="text-2xs opacity-60">Project</p>
+				<h2 class="text-base font-bold truncate" data-testid="home-project">{$activeProject || "—"}</h2>
 			</div>
-			<Dashboard />
+			<CaptureControls
+				listener={$homeStore.listener}
+				listenerBusy={$homeStore.listenerBusy}
+				{chromeProfiles}
+				mobile={$mobile}
+				on:editListener={() => {
+					if (!$modalStore[0]) modalStore.trigger(listenerModal(toastStore));
+				}}
+				on:toggleListener={() => toggleListener(toastStore)}
+				on:openProject={() => {
+					if (!$modalStore[0]) openProjectPicker(toastStore, modalStore);
+				}}
+				on:downloadCertificate={() => downloadCertificate(toastStore)}
+				on:startChrome={(e) => startChrome(e.detail)}
+				on:openServiceLog={() => toggleServiceLog(drawerStore, $drawerStore)}
+			/>
 		</div>
+		<FigureGrid figures={$overview.figures} on:open={(e) => openDestination(e.detail)} />
 	</div>
 </div>
 
 <style>
-	:global(.light-ghost-group .btn:hover) {
-		background-color: rgb(var(--color-surface-400) / 0.25) !important;
-	}
-
-	/* One scrolling column: the header and the cards. The Service log
-	   opens in the app drawer (ServiceLog.svelte). */
-	.content {
+	.home {
 		height: 100vh;
 		overflow-y: auto;
 	}
-	.mobile-home {
+	/* The phone app: the page scrolls inside the frame, above the bottom bar,
+	   full width so its edges line up with the connection banner's (px-4). */
+	.home.mobile-home {
 		height: 100%;
 	}
-	/* Full width on a phone, so its edges line up with the connection
-	   banner's (px-4) above the page, as the header does with the cards. */
-	.mobile-home :global(.container) {
+	.mobile-home .container {
 		max-width: none;
-	}
-	.mobile-home :global([data-dashboard]) {
-		padding-left: 0;
-		padding-right: 0;
-	}
-
-	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
-	   global, as app.css's shared mobile rules are, so they weigh the same
-	   against Skeleton's and Tailwind's classes. */
-	:global(html.mobile .mobile-home .header) {
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-	/* When the phone's text size leaves no room for the listener and Open
-	   Project side by side, Open Project wraps under the listener. */
-	:global(html.mobile .mobile-home .header > .btn-group) {
-		flex-wrap: wrap;
-		max-width: 100%;
-	}
-	:global(html.mobile .mobile-home .header > .btn-group > .btn) {
-		flex: 1 1 0;
-		min-width: max-content;
-		justify-content: center;
-	}
-	/* ---- Narrow mobile: Home, the dock buttons, CVSS ---- */
-	/* Home's listener and Open Project, and Download Certificate with the
-	   Service log, each take the full width. */
-	@media (max-width: 40rem) {
-		:global(html.mobile .mobile-home .header > *) {
-			flex: 1 1 100%;
-			display: flex;
-		}
-		:global(html.mobile .mobile-home .header > * > .btn) {
-			flex: 1 1 0;
-			justify-content: center;
-		}
 	}
 </style>

@@ -1,6 +1,6 @@
 // Home's api over the service client: each call reads a control API route
 // and maps its snake_case answer to the shape createHomeStore keeps, which
-// is what Dashboard.svelte and ServiceLog.svelte read. The mappers for stream
+// is what Home's Overview (lib/home/) and ServiceLog.svelte read. The mappers for stream
 // events (toLog, toListener) live here too, so one file knows the API's
 // shapes.
 

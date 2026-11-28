@@ -102,7 +102,7 @@ const callService = `((route, params = {}) => fetch(${JSON.stringify(controlUrl)
 
 async function toHome() {
 	await evaluate(`${helpers} __bench.go("Home")`);
-	await until(`document.body.innerText.includes("Project Dashboard") && !document.querySelector(".ledger-toolbar")`);
+	await until(`document.querySelector("[data-testid=home-overview]") && !document.querySelector(".ledger-toolbar")`);
 	await sleep(400);
 }
 
@@ -124,7 +124,7 @@ const visit = `new Promise(async (resolve) => {
 const results = { first: null, startup: [], warm: [], sort: [], firstPage: [], count: [] };
 
 // The first visit since launch, once Home has been idle for a moment.
-await until(`Boolean(window._wails?.clientId && document.body?.innerText.includes("Project Dashboard"))`, 120000);
+await until(`Boolean(window._wails?.clientId && document.querySelector("[data-testid=home-overview]"))`, 120000);
 await sleep(4000);
 results.first = await evaluate(visit);
 
@@ -135,7 +135,7 @@ for (let i = 0; i < 3; i++) {
 	// wait for a document without the mark: a click on the old one is lost.
 	await evaluate("window.__benchBeforeReload = true");
 	await send("Page.reload", {});
-	await until(`Boolean(!window.__benchBeforeReload && window._wails?.clientId && document.body?.innerText.includes("Project Dashboard") && document.querySelector('[title="Ledger"]'))`, 120000);
+	await until(`Boolean(!window.__benchBeforeReload && window._wails?.clientId && document.querySelector("[data-testid=home-overview]") && document.querySelector('[title="Ledger"]'))`, 120000);
 	// Timed from here by polling: the page is still settling, and one long
 	// call into it can go unanswered.
 	const start = Date.now();
