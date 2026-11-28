@@ -1,24 +1,7 @@
 // Home's api over the service client: each call reads a control API route
 // and maps its snake_case answer to the shape createHomeStore keeps, which
-// is what Dashboard.svelte and LogTable.svelte read. The mappers for stream
-// events (toLog, toListener) live here too, so one file knows the API's
-// shapes.
-
-/** The most log lines Home reads at once (the service's page limit). */
-export const LOG_LIMIT = 500;
-
-/** A log line, from GET /logs or log.added, in the log table's fields. */
-export function toLog(log) {
-  return {
-    ID: log.id,
-    Timestamp: log.timestamp,
-    Level: log.level,
-    Message: log.message,
-    Context: log.context ?? {},
-    RequestID: log.request_id ?? null,
-    ExtensionID: log.extension_id ?? null,
-  };
-}
+// is what Home's Overview (lib/home/) reads. The mappers for stream events
+// (toListener, toScope) live here too, so one file knows the API's shapes.
 
 /**
  * The proxy listener as `{status, address, port}` from its "host:port"
@@ -39,6 +22,26 @@ export function toScope(s) {
   return { defaultAllow: s.default_allow, includeCount: s.include?.length ?? 0, excludeCount: s.exclude?.length ?? 0 };
 }
 
+/** The status classes Home breaks responses down by, in order. */
+export const STATUS_CLASSES = ["2xx", "3xx", "4xx", "5xx"];
+
+/** No responses in any status class. */
+export const noStatusClasses = () => Object.fromEntries(STATUS_CLASSES.map((key) => [key, 0]));
+
+/**
+ * GET /traffic/count/by-field?field=status_code's `items` as the pairs per
+ * status class, by the code's first digit. Other values (1xx, no response
+ * yet, anything not a code) count in no class.
+ */
+export function toStatusClasses(items) {
+  const classes = noStatusClasses();
+  for (const { value, count } of items ?? []) {
+    const key = /^[2-5]\d\d$/.test(String(value)) ? `${String(value)[0]}xx` : null;
+    if (key) classes[key] += count;
+  }
+  return classes;
+}
+
 export function createHomeApi(client) {
   return {
     async dashboard() {
@@ -51,17 +54,12 @@ export function createHomeApi(client) {
         interceptedComplete: d.intercepted_count?.complete !== false,
       };
     },
+    async statusClasses() {
+      const counts = await client.get("/traffic/count/by-field", { field: "status_code" });
+      return toStatusClasses(counts.items);
+    },
     async scope() {
       return toScope(await client.get("/scope"));
-    },
-    // Newest first from the service; oldest first for the table.
-    async logs() {
-      const page = await client.get("/logs", { limit: LOG_LIMIT });
-      return (page.items ?? []).map(toLog).reverse();
-    },
-    async extensionNames() {
-      const list = await client.get("/extension");
-      return Object.fromEntries((list.items ?? []).map((ext) => [ext.id, ext.name]));
     },
     async listener() {
       const status = await client.get("/listener/status");

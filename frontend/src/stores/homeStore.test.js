@@ -1,4 +1,4 @@
-// Home: the dashboard counts, scope, listener status and live log, read from
+// Home: the dashboard counts, scope, status classes and listener status, read from
 // the service through createHomeApi (over a fake service client) and kept
 // by createHomeStore.
 import { test } from "node:test";
@@ -38,16 +38,22 @@ const serviceRoutes = () => ({
       { pattern: "/logout", match_type: "url" },
     ],
   },
-  // Newest first, as the service pages them.
-  "/logs": {
-    items: [
-      { id: "l2", timestamp: "2026-11-06T22:14:34+04:00", level: "WARN", message: "second", context: {}, request_id: "r1", extension_id: "e1" },
-      { id: "l1", timestamp: "2026-11-06T22:14:33+04:00", level: "INFO", message: "first", context: {}, request_id: null, extension_id: null },
-    ],
-    next_cursor: null,
-  },
-  "/extension": { items: [{ id: "e1", name: "compass", enabled: true }] },
   "/listener/status": { status: "active", proxy_listener: "127.0.0.1:52062" },
+  "/traffic/count/by-field": (query) =>
+    query?.field === "status_code"
+      ? {
+          items: [
+            { value: "200", count: 40 },
+            { value: "204", count: 2 },
+            { value: "302", count: 5 },
+            { value: "404", count: 3 },
+            { value: "503", count: 1 },
+            { value: "101", count: 4 },
+            { value: "", count: 9 },
+            { value: "abc", count: 6 },
+          ],
+        }
+      : { items: [] },
 });
 
 function setup(routes = serviceRoutes()) {
@@ -74,49 +80,10 @@ test("populate counts the scope's rules", async () => {
   assert.deepEqual(get(store).scope, { defaultAllow: false, includeCount: 1, excludeCount: 2 });
 });
 
-test("populate reads the log oldest first, in the fields the log table reads", async () => {
-  const { store, client } = setup();
-  await store.populate();
-  const logs = get(store).logs;
-  assert.deepEqual(
-    logs.map((log) => [log.ID, log.Level, log.Message, log.RequestID, log.ExtensionID]),
-    [
-      ["l1", "INFO", "first", null, null],
-      ["l2", "WARN", "second", "r1", "e1"],
-    ],
-  );
-  assert.equal(logs[0].Timestamp, "2026-11-06T22:14:33+04:00");
-  assert.ok(client.calls.some(([path, query]) => path === "/logs" && query?.limit === 500));
-});
-
-test("populate names extensions by id for the log's Extension column", async () => {
-  const { store } = setup();
-  await store.populate();
-  assert.deepEqual(get(store).extensionNames, { e1: "compass" });
-});
-
 test("populate reads the proxy listener's address and status", async () => {
   const { store } = setup();
   await store.populate();
   assert.deepEqual(get(store).listener, { status: true, address: "127.0.0.1", port: "52062" });
-});
-
-test("a log line from the stream is added after the others", async () => {
-  const { store } = setup();
-  await store.populate();
-  store.onLog({ id: "l3", timestamp: "2026-11-06T22:15:00+04:00", level: "ERROR", message: "live", context: {}, request_id: null, extension_id: null });
-  assert.deepEqual(
-    get(store).logs.map((log) => log.ID),
-    ["l1", "l2", "l3"],
-  );
-  assert.equal(get(store).logs[2].Level, "ERROR");
-});
-
-test("a log line already read isn't added twice", async () => {
-  const { store } = setup();
-  await store.populate();
-  store.onLog({ id: "l2", timestamp: "2026-11-06T22:14:34+04:00", level: "WARN", message: "second", context: {} });
-  assert.equal(get(store).logs.length, 2);
 });
 
 test("listener events keep the listener status current", async () => {
@@ -193,14 +160,14 @@ test("a newer populate wins over a slower older one", async () => {
   assert.equal(get(store).dashboard.requests, 2);
 });
 
-test("refreshDashboard reads the counts and scope again, not the log", async () => {
+test("refreshDashboard reads the counts, status classes and scope again, not the log", async () => {
   const { store, client } = setup();
   await store.populate();
   const before = client.calls.length;
   await store.refreshDashboard();
   assert.deepEqual(
     client.calls.slice(before).map(([path]) => path).sort(),
-    ["/dashboard", "/scope"],
+    ["/dashboard", "/scope", "/traffic/count/by-field"],
   );
 });
 
@@ -335,17 +302,13 @@ test("listener.stopped from the stream keeps lastListener so starting again reus
   assert.deepEqual(get(store).lastListener, { address: "0.0.0.0", port: "9090" });
 });
 
-test("resync replaces the counts and log in place, keeping the old ones until the new arrive", async () => {
+test("resync replaces the counts in place, keeping the old ones until the new arrive", async () => {
   const routes = serviceRoutes();
   const { store } = setup(routes);
   await store.populate();
 
   let answer;
   routes["/dashboard"] = () => new Promise((resolve) => (answer = resolve));
-  routes["/logs"] = {
-    items: [{ id: "l3", timestamp: "2026-11-06T22:20:00+04:00", level: "INFO", message: "while away", context: {} }, ...routes["/logs"].items],
-    next_cursor: null,
-  };
   const resynced = store.resync();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(get(store).dashboard.requests, 1200, "nothing blanks while the service answers");
@@ -353,7 +316,6 @@ test("resync replaces the counts and log in place, keeping the old ones until th
   answer({ pairs: 1300, notes: 3, launchpads: 2, intercepted: 7, intercepted_count: { complete: true } });
   await resynced;
   assert.equal(get(store).dashboard.requests, 1300);
-  assert.deepEqual(get(store).logs.map((log) => log.ID), ["l1", "l2", "l3"]);
 });
 
 test("scope.updated counts the new rules from the event, without reading the scope", async () => {
@@ -439,4 +401,115 @@ test("an intercepted response reads the counts again; one that wasn't intercepte
   await store.settled();
   assert.equal(dashboardReads(), before + 1);
   assert.equal(get(store).dashboard.intercepted, 8);
+});
+
+test("populate groups the responses by status class, ignoring other values", async () => {
+  const { store } = setup();
+  await store.populate();
+  assert.deepEqual(get(store).statusClasses, { "2xx": 42, "3xx": 5, "4xx": 3, "5xx": 1 });
+});
+
+test("a failed status class read counts no responses rather than failing", async () => {
+  const routes = serviceRoutes();
+  delete routes["/traffic/count/by-field"];
+  const { store } = setup(routes);
+  await store.populate();
+  assert.deepEqual(get(store).statusClasses, { "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0 });
+  assert.equal(get(store).dashboard.requests, 1200, "the rest still loads");
+});
+
+test("new pairs read the status classes again, on the dashboard's settle", async (t) => {
+  const routes = serviceRoutes();
+  const { store, client } = setup(routes);
+  await store.populate();
+  routes["/traffic/count/by-field"] = { items: [{ value: "200", count: 43 }, { value: "500", count: 2 }] };
+  const classReads = () => client.calls.filter(([path]) => path === "/traffic/count/by-field").length;
+  const before = classReads();
+  const request = { id: "t2", number: 2, scheme: "https", method: "GET", host: "example.com", path: "/", metadata: {} };
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onRequest(request);
+  store.onRequest(request);
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS - 1);
+  assert.equal(classReads(), before, "not before the window settles");
+  t.mock.timers.tick(1);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(classReads(), before + 1, "once for the burst");
+  assert.deepEqual(get(store).statusClasses, { "2xx": 43, "3xx": 0, "4xx": 0, "5xx": 2 });
+});
+
+test("a response that wasn't intercepted reads the status classes again, not the dashboard", async (t) => {
+  const routes = serviceRoutes();
+  const { store, client } = setup(routes);
+  await store.populate();
+  routes["/traffic/count/by-field"] = { items: [{ value: "200", count: 40 }, { value: "404", count: 4 }] };
+  const reads = (route) => client.calls.filter(([path]) => path === route).length;
+  const before = { dashboard: reads("/dashboard"), classes: reads("/traffic/count/by-field") };
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onResponse({ id: "t1", status: "404 Not Found", status_code: 404, metadata: {} });
+  store.onResponse({ id: "t2", status: "404 Not Found", status_code: 404, metadata: {} });
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(reads("/traffic/count/by-field"), before.classes + 1);
+  assert.equal(reads("/dashboard"), before.dashboard);
+  assert.equal(get(store).statusClasses["4xx"], 4);
+});
+
+test("stopping the listener records that the researcher stopped it, and starting it clears that", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  routes["POST /listener/start"] = (body) => ({ status: "active", proxy_listener: `${body.address}:${body.port}` });
+  const { store } = setup(routes);
+  await store.populate();
+  assert.equal(get(store).listenerStopped, false);
+
+  await store.stopListener();
+  assert.equal(get(store).listenerStopped, true);
+
+  await store.setListener("127.0.0.1", "52062");
+  assert.equal(get(store).listenerStopped, false);
+});
+
+test("a listener that starts elsewhere clears the stopped record", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  const { store } = setup(routes);
+  await store.populate();
+  await store.stopListener();
+
+  store.onListener({ status: "active", proxy_listener: "127.0.0.1:8080" });
+
+  assert.equal(get(store).listenerStopped, false);
+});
+
+test("a listener that is off without the researcher stopping it isn't recorded as stopped", async () => {
+  const routes = serviceRoutes();
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  const { store } = setup(routes);
+  await store.populate();
+  store.onListener({ status: "inactive", proxy_listener: null, reason: "error" });
+  assert.equal(get(store).listenerStopped, false);
+});
+
+test("populate leaves the Service log to its own store", async () => {
+  const { store, client } = setup();
+  await store.populate();
+  assert.deepEqual(client.calls.filter(([path]) => path === "/logs" || path === "/extension"), []);
+  assert.equal("logs" in get(store), false);
+});
+
+test("a listener the researcher stopped stays recorded as stopped across a resync", async () => {
+  const routes = serviceRoutes();
+  routes["POST /listener/stop"] = { status: "inactive", proxy_listener: null };
+  const { store } = setup(routes);
+  await store.populate();
+  await store.stopListener();
+
+  routes["/listener/status"] = { status: "inactive", proxy_listener: null };
+  await store.resync();
+
+  assert.equal(get(store).listenerStopped, true);
 });

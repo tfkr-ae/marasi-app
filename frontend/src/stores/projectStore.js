@@ -13,6 +13,7 @@ import { activeConnectionId } from "./activeConnection.js";
 // Each store registers itself with projectData when its module loads; these
 // stores aren't imported elsewhere before the first load.
 import "./homeStore.js";
+import "./serviceLogStore.js";
 
 /**
  * Loads the service's project at `path` into every store, on connecting and

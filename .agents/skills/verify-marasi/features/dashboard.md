@@ -2,8 +2,7 @@
 
 ## Sub-features
 
-- Startup on the local Marasi service (start or attach), traffic metrics, reporting, and scope summaries
-- The service's log table, live from `log.added`
+- Startup on the local Marasi service (start or attach), and Home's figure tiles, each opening the page it counts
 - Listener status (live from `listener.*`) and listener reconfiguration
 - Open Project, Download Certificate, and Start Chrome actions
 - Switching projects: the `Switch Projects` picker, the opening screen (steps, a locked project), and the refusal while Checkpoint holds items
@@ -12,17 +11,17 @@
 
 ## How to get to it (user POV)
 
-Launch Marasi or select the rail item titled `Home`. The command shortcut is `Command+1`. Until the app reaches the service, the start screen says `Starting Marasi…`, `Connecting to Marasi…`, or `Connecting to <name>…` for a remote (`[data-testid=connection-status]`); a failure says `Couldn't reach <name>` and shows the CLI's or service's error and `Retry`. While starting, connecting or failed, `Connections…` (`[data-testid=startup-connections]`) opens the Connections modal over the start screen. Home's counts, scope, listener and log come from the service (`homeStore`: `GET /dashboard`, `/scope`, `/listener/status`, `/logs`, `/extension`). Until the counts are first read, those cards show pulsing ghost bars (`.dashboard-ghost`) in place of their figures; Test Cases and Findings come from the Logbook's stores, which don't read the service yet and show 0. A ready scratchpad shows `scratchpad Project Dashboard`, listener address and port, `Open Project`, `Download Certificate`, `Start Chrome`, and an application log table with ID, Level, Message, Request Response ID, Extension, and Timestamp columns.
+Launch Marasi or select the rail item titled `Home`. The command shortcut is `Command+1`. Until the app reaches the service, the start screen says `Starting Marasi…`, `Connecting to Marasi…`, or `Connecting to <name>…` for a remote (`[data-testid=connection-status]`); a failure says `Couldn't reach <name>` and shows the CLI's or service's error and `Retry`. While starting, connecting or failed, `Connections…` (`[data-testid=startup-connections]`) opens the Connections modal over the start screen. Home's counts, scope and listener come from the service (`homeStore`: `GET /dashboard`, `/scope`, `/listener/status`, `/traffic/count/by-field`); the Service log's lines come from `serviceLogStore` (`GET /logs`, `/extension`, live by `log.added`); In Checkpoint, Armory runs and Test cases done come from the Checkpoint, Armory and Logbook stores. Home (`[data-testid=home-overview]`) shows the project name (`[data-testid=home-project]`) with the capture controls (`[data-testid=home-capture]`): the listener address and port, `Stop`/`Start`, `Open Project`, `Download Certificate`, `Start Chrome` (not on a phone) and `Service log`. From 40rem up they form a row that wraps between controls, never clipping one; below it they stack full-width, with Open Project on its own row. Under them are eight figure tiles (`[data-testid=home-figure]`, `data-figure` = `pairs`, `intercepted`, `notes`, `launchpads`, `held`, `armory`, `test-cases`, `scope`; the value is `[data-testid=home-figure-value]`). Each opens the page that lists what it counts: Pairs the unfiltered Ledger, Intercepted the Ledger with `metadata.intercepted = true`, With a note the Ledger with `note:*`, Test cases done the Logbook's test cases, and the rest Launchpad, Checkpoint, Armory and Compass. Until the counts and scope are first read, their tiles show a pulsing ghost bar (`.ghost`) in place of the value.
 
 Shortcuts: every menu shortcut for this feature is a catalog action in context `global` (Home has no page menu; its buttons share the global actions) in `frontend/src/lib/keybindings/catalog.js`; the Marasi menu (`⌘K`) on the page lists them with their current keys.
 
 ## Driving it with Chrome CDP
 
-Run `scripts/drive.sh dashboard`. It clicks the actionable `[title="Home"]` through Chrome DevTools and requires `Project Dashboard` in the resulting DOM. Pair it with `scripts/doctor.sh`, which proves the service runs in the isolated config dir, owns the proxy port, and has its scratchpad project. The first log row is the service's `Marasi Service Started on 127.0.0.1:<proxy port>`.
+Run `scripts/drive.sh dashboard`. It clicks the actionable `[title="Home"]` through Chrome DevTools and requires Home's root, `[data-testid=home-overview]`, in the resulting DOM. Pair it with `scripts/doctor.sh`, which proves the service runs in the isolated config dir, owns the proxy port, and has its scratchpad project.
 
-### Live log and listener over `/events`
+### Live listener over `/events`
 
-Change the service behind the app and wait for Home to follow, without navigating. Moving the proxy listener over the control API logs a line and sends `listener.updated`. Proven:
+Change the service behind the app and wait for Home to follow, without navigating. Moving the proxy listener over the control API sends `listener.updated`. Proven:
 
 ```sh
 NP=<free port>
@@ -31,8 +30,7 @@ printf '%s\n' "$NP" > "$MARASI_VERIFY_STATE_DIR/proxy-port"
 ```
 
 ```json
-{"name":"live-log-listener","steps":[
- {"waitText":"Marasi Service Started on 127.0.0.1:<NP>"},
+{"name":"live-listener","steps":[
  {"waitText":"127.0.0.1:<NP>","within":"[data-testid=home-listener]"}]}
 ```
 
@@ -59,7 +57,7 @@ The chosen scheme lives in the page's `localStorage` (`modeUserPrefers`, `false`
 Home's counts follow traffic without navigating. Proven, with a request sent through the proxy (`curl -x http://127.0.0.1:<proxy port> …`) a few seconds after the drive starts on a fresh project:
 
 ```json
-{"name":"live-counts","steps":[{"waitText":"Total Requests\n\n0"},{"waitText":"Total Requests\n\n1","timeoutMs":15000}]}
+{"name":"live-counts","steps":[{"waitText":"0","within":"[data-figure=pairs] [data-testid=home-figure-value]"},{"waitText":"1","within":"[data-figure=pairs] [data-testid=home-figure-value]","timeoutMs":15000}]}
 ```
 
 Prove the Connections modal with `scripts/drive.sh dashboard compare "Local" "cmd+9"`: the rail tile and `⌘9` both paint `Connections` (the connection list, `Add connection`, and the picked connection's details). Add connection also lists unsaved running local instances under `[data-testid=add-local-running]` (rows `[data-testid=add-local-running-item]`: instance, project, proxy listener, version, and Add). Proven with a second isolated instance named `extra` that had no saved connection yet; one-click Add saves a connection for that instance's current proxy port.
@@ -87,10 +85,10 @@ With a Checkpoint item held, the confirmed restart is refused and `Checkpoint ha
 ```json
 {"name":"open-second","steps":[
  {"key":"cmd+o"},{"waitText":"Switch Projects"},{"waitText":"scratchpad"},{"click":"input[type=search]"},{"insert":"second"},
- {"waitText":"Create “second”"},{"key":"enter"},{"waitText":"second Project Dashboard","timeoutMs":20000},{"waitText":"Opened second project"}]}
+ {"waitText":"Create “second”"},{"key":"enter"},{"waitText":"second","within":"[data-testid=home-project]","timeoutMs":20000},{"waitText":"Opened second project"}]}
 {"name":"back-to-scratchpad","steps":[
  {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"li.project-item","hasText":"scratchpad"},{"text":"Open scratchpad"},
- {"waitText":"scratchpad Project Dashboard","timeoutMs":20000}]}
+ {"waitText":"scratchpad","within":"[data-testid=home-project]","timeoutMs":20000}]}
 ```
 
 A project another instance holds is refused (`409 project_already_open`, read as `project_locked`): the screen reads `The project is opened by another instance.`, lists `Open another project` with `Browse…`, and offers `Stay in <open project>`, `Try again` and `Open <picked>`. Stand in for the other instance with a second isolated service holding a project file: `MARASI_PASSWORD=<any> "$MARASI_VERIFY_CLI" --config-dir /tmp/<dir>/cfg service start --port 0 --control-address 127.0.0.1:0 --project /tmp/<dir>/locked.marasi`, and stop it afterwards with `service stop` against the same `--config-dir`. Proven:
@@ -100,7 +98,7 @@ A project another instance holds is refused (`409 project_already_open`, read as
  {"key":"cmd+o"},{"waitText":"Switch Projects"},{"click":"input[type=search]"},{"insert":"/private/tmp/<dir>/locked.marasi"},{"key":"enter"},
  {"waitText":"The project is opened by another instance.","timeoutMs":20000},{"waitText":"Open another project"},
  {"text":"Details"},{"waitText":"project.opening_failed"},{"text":"Stay in scratchpad"},
- {"waitNoText":"opened by another instance"},{"waitText":"scratchpad Project Dashboard"}]}
+ {"waitNoText":"opened by another instance"},{"waitText":"scratchpad","within":"[data-testid=home-project]"}]}
 ```
 
 The service keeps the scratchpad open (`GET /service/status`).
@@ -119,19 +117,19 @@ After `Forward`, `⌘O` opens `Switch Projects` again.
 
 When `/events` drops, the pages stay: a warning toast, `Lost connection to Local. Reconnecting…`, stays until the stream is back, and a banner over the page reads `Reconnecting to Local (attempt n). Your work stays where it is.` with `Retry now`. Attempts wait 1, 2, 4, 8, 16, then 30 s. On reconnect the toast gives way to `Reconnected to Local` (3 s); the same project resyncs every store in place, and another project (or a restarted service) loads in full after the unsaved-work prompt, remounting the pages.
 
-Drop the stream by stopping the control listener: `"$MARASI_VERIFY_STATE_DIR"/bin/marasi --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi service control stop`. Each attempt reaches the local instance through the linked CLI again, which turns a control listener back on at once, so the banner shows only for about a second. To watch it and the backoff, hold the CLI back from the app first: move `$MARASI_VERIFY_STATE_DIR/bin/marasi` to `marasi.real` and put a script there that exits 2 when `HOME` is the app's isolated home and otherwise runs `marasi.real "$@"`, so doctor and your own commands still work. Attempts then fail with `finding the Marasi CLI: cli_missing (): the Marasi CLI isn't installed…` (in `app.log` and the console): the app probes the CLI with `service status --json` first, and one that exits 2 doesn't answer like Marasi. Restore the link before `Retry now`. Requests sent through the proxy while disconnected show in `Total Requests` after the resync. Proven:
+Drop the stream by stopping the control listener: `"$MARASI_VERIFY_STATE_DIR"/bin/marasi --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi service control stop`. Each attempt reaches the local instance through the linked CLI again, which turns a control listener back on at once, so the banner shows only for about a second. To watch it and the backoff, hold the CLI back from the app first: move `$MARASI_VERIFY_STATE_DIR/bin/marasi` to `marasi.real` and put a script there that exits 2 when `HOME` is the app's isolated home and otherwise runs `marasi.real "$@"`, so doctor and your own commands still work. Attempts then fail with `finding the Marasi CLI: cli_missing (): the Marasi CLI isn't installed…` (in `app.log` and the console): the app probes the CLI with `service status --json` first, and one that exits 2 doesn't answer like Marasi. Restore the link before `Retry now`. Requests sent through the proxy while disconnected show in the Pairs figure after the resync. Proven:
 
 ```json
 {"name":"drop","steps":[{"waitText":"Lost connection to Local. Reconnecting…","timeoutMs":15000},{"waitText":"Reconnecting to Local (attempt 5)","timeoutMs":30000}]}
-{"name":"retrynow","steps":[{"text":"Retry now"},{"waitText":"Reconnected to Local","timeoutMs":5000},{"waitNoText":"Lost connection to Local"},{"waitNoText":"Reconnecting to Local"},{"waitText":"Total Requests\n\n3"}]}
+{"name":"retrynow","steps":[{"text":"Retry now"},{"waitText":"Reconnected to Local","timeoutMs":5000},{"waitNoText":"Lost connection to Local"},{"waitNoText":"Reconnecting to Local"},{"waitText":"3","within":"[data-figure=pairs] [data-testid=home-figure-value]"}]}
 ```
 
-Run `retrynow` straight after restoring the CLI, inside the wait, or the scheduled attempt reconnects first and `Retry now` is gone. For the project change, run `"$MARASI_VERIFY_STATE_DIR"/bin/marasi.real --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi project open --name acme` while held back, then reconnect and wait for `acme Project Dashboard`. With no unsaved work the prompt passes without a dialog; a declined prompt (`Load it` in the banner) is covered by `connectionStore.test.js`, since the server build has no dialogs.
+Run `retrynow` straight after restoring the CLI, inside the wait, or the scheduled attempt reconnects first and `Retry now` is gone. For the project change, run `"$MARASI_VERIFY_STATE_DIR"/bin/marasi.real --config-dir "$MARASI_VERIFY_STATE_DIR"/marasi project open --name acme` while held back, then reconnect and wait for `acme` in `[data-testid=home-project]`. With no unsaved work the prompt passes without a dialog; a declined prompt (`Load it` in the banner) is covered by `connectionStore.test.js`, since the server build has no dialogs.
 
 ## Gotchas
 
 - Each verification launch picks its own free proxy port (`<proxy port>`, in `$MARASI_VERIFY_STATE_DIR/proxy-port`); an instance the app starts uses the app config's `default_port`, which launch sets to that port (the app falls back to a free port only when it is taken). The proxy belongs to the service process, never the app.
 - The proxy itself answers the host `marasi`: `curl -x 127.0.0.1:<proxy port> http://marasi/cert` returns the CA certificate (`application/x-x509-ca-cert`), the URL the first-run setup shows. Download Certificate needs a native save dialog ([native.md](native.md)). Start Chrome opens an external process. Record and clean up anything those actions create.
 - The Marasi menu keeps a closed `<dialog>` of the same labels. The driver's hit-test skips those copies; never target a label by `textContent`.
-- `Project Dashboard` paints before the cards, log table, and listener status finish loading. Counts and scope refresh when Home mounts; the counts also follow captured traffic live (`traffic.request`, reread at most every 500 ms), and the log and the listener update live from the stream. Wait for the specific value.
+- Home's root and project name paint before the figures and listener status finish loading. Counts and scope refresh when Home mounts; the counts also follow captured traffic live (`traffic.request`, reread at most every 500 ms), and the listener updates live from the stream. Wait for the specific value.
 - Shortcuts are gated by `frontend/src/lib/keybindings/gate.js`: unmodified keys never fire from inputs or editors; modified ones are dropped from form fields except on `/ledger`, `/logbook`, `/launchpad` and `/settings` (and the menu's own search field). An open modal (other than the WebSocket overlay) blocks all menu shortcuts, including global ones; the binding that opened the modal can still close it via `isModalToggle`. The WebSocket modal keeps its own contexts plus global.

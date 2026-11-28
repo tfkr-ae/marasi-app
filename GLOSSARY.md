@@ -195,6 +195,20 @@ _Avoid_: mnemonic, access key, hotkey
 A named collection of bindings and menu letters for Marasi menu actions that a researcher can select and customize. Factory defaults remain recoverable independently of those customizations.
 _Avoid_: Vim mode, Chrome profile
 
+### Home
+
+**Home**:
+The first page in the app rail: where a researcher sets up capture for the open project and sees what needs them.
+_Avoid_: dashboard page, landing page
+
+**Overview**:
+Home's summary of the open project: what needs attention, and the project's figures, each leading to the page that lists what it counts.
+_Avoid_: dashboard, stats
+
+**Service log**:
+The running log of the connected Marasi service's own messages: its warnings, errors and extension output.
+_Avoid_: log table, logs, proxy log; not to be confused with the Logbook
+
 ### Navigation
 
 **App rail**:
