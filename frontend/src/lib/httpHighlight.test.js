@@ -189,7 +189,7 @@ test("broken, truncated, or fuzzed JSON produces no invalid spans in body while 
 });
 
 test("live edits to Content-Type or body immediately update highlighting", () => {
-  const initial = 'HTTP/1.1 200 OK\nContent-Type: text/plain\n\n{"id": 7}';
+  const initial = "HTTP/1.1 200 OK\nContent-Type: text/plain\n\nconst id = 7;";
   let state = EditorState.create({ doc: initial, extensions: httpHighlighting({ mode: "auto" }) });
 
   const spansOf = (st) => {
@@ -202,22 +202,22 @@ test("live edits to Content-Type or body immediately update highlighting", () =>
     return out;
   };
 
-  assert.equal(spansOf(state).some((s) => s.text === '"id"' && s.classes === "tok-propertyName"), false);
+  assert.equal(spansOf(state).some((s) => s.text === "const" && s.classes === "tok-keyword"), false);
 
   const ctFrom = initial.indexOf("text/plain");
-  state = state.update({ changes: { from: ctFrom, to: ctFrom + "text/plain".length, insert: "application/json" } }).state;
-  assert.equal(spansOf(state).some((s) => s.text === '"id"' && s.classes === "tok-propertyName"), true);
+  state = state.update({ changes: { from: ctFrom, to: ctFrom + "text/plain".length, insert: "application/javascript" } }).state;
+  assert.equal(spansOf(state).some((s) => s.text === "const" && s.classes === "tok-keyword"), true);
   assert.equal(spansOf(state).some((s) => s.text === "7" && s.classes === "tok-number"), true);
 
-  // Edit inside JSON body
+  // Edit inside JS body
   const numPos = state.doc.toString().indexOf("7");
   state = state.update({ changes: { from: numPos, to: numPos + 1, insert: "true" } }).state;
   assert.equal(spansOf(state).some((s) => s.text === "true" && s.classes === "tok-bool"), true);
 
   // Switch Content-Type back to text/plain
-  const jsonPos = state.doc.toString().indexOf("application/json");
-  state = state.update({ changes: { from: jsonPos, to: jsonPos + "application/json".length, insert: "text/plain" } }).state;
-  assert.equal(spansOf(state).some((s) => s.text === '"id"' && s.classes === "tok-propertyName"), false);
+  const jsPos = state.doc.toString().indexOf("application/javascript");
+  state = state.update({ changes: { from: jsPos, to: jsPos + "application/javascript".length, insert: "text/plain" } }).state;
+  assert.equal(spansOf(state).some((s) => s.text === "const" && s.classes === "tok-keyword"), false);
 });
 
 test("SyntaxMode controls head and body highlighting and supports live reconfiguration", () => {
@@ -753,4 +753,314 @@ test("URL-encoded form bodies add no folds or closeBrackets and recover permissi
       );
     }
   }
+});
+
+test("binary prefix guard skips body highlighting while preserving head highlighting", () => {
+  const binaryPayloads = [
+    ["gzip magic bytes", '\x1f\x8b\x08\x00\x00\x00\x00\x00{"id": 1}'],
+    ["leading NUL byte", '\x00{"id": 1}'],
+    ["NUL byte within first 256 chars", '{"id": 1}' + " ".repeat(200) + "\x00tail"],
+    ["DEL control byte", '<html><body>\x7f</body></html>'],
+    ["UTF-8 replacement char from lossy binary decode", "\uFFFDPNG\r\n\x1a\n<html></html>"],
+    ["non-whitespace ASCII control byte", 'const x = 1;\x07;'],
+  ];
+
+  const contentTypes = [
+    "application/json",
+    "text/html",
+    "application/xml",
+    "application/javascript",
+    "text/css",
+    "application/x-www-form-urlencoded",
+  ];
+
+  for (const ct of contentTypes) {
+    for (const [label, body] of binaryPayloads) {
+      const head = `HTTP/1.1 200 OK\nContent-Type: ${ct}\nContent-Encoding: gzip\n\n`;
+      const doc = head + body;
+      const bodyStart = head.length;
+      const spans = highlightSpans(doc);
+      const headSpans = spans.filter((s) => s.to <= bodyStart);
+      const bodySpans = spans.filter((s) => s.from >= bodyStart);
+
+      assert.ok(headSpans.some((s) => s.text === "HTTP/1.1" && s.classes === "tok-keyword"), `head highlighted for ${ct} / ${label}`);
+      assert.deepEqual(bodySpans, [], `body must stay unhighlighted for ${ct} / ${label}`);
+    }
+  }
+
+  // Standard whitespace (\t, \n, \r\n) and valid UTF-8 text are NOT treated as binary
+  const validUtf8 = 'HTTP/1.1 200 OK\nContent-Type: application/json\n\n\t\n{"greeting": "héllo 🚀"}';
+  assert.equal(classFor(validUtf8, '"greeting"'), "tok-propertyName");
+  assert.equal(classFor(validUtf8, '"héllo 🚀"'), "tok-string");
+
+  // CRLF line endings normalized by EditorState also highlight normally
+  const crlfState = EditorState.create({
+    doc: 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n\t\r\n{"ok": true}',
+    extensions: httpHighlighting({ mode: "auto" }),
+  });
+  const crlfTree = ensureSyntaxTree(crlfState, crlfState.doc.length, 5000);
+  const crlfSpans = [];
+  highlightTree(crlfTree, classHighlighter, (from, to, classes) => {
+    crlfSpans.push({ text: crlfState.doc.sliceString(from, to), classes });
+  });
+  assert.ok(crlfSpans.some((s) => s.text === '"ok"' && s.classes === "tok-propertyName"));
+});
+
+test("contradiction override switches to the actual format when body unmistakably contradicts Content-Type", () => {
+  // Declared JSON with HTML error pages -> switches to HTML (including embedded <script>)
+  for (const ct of ["application/json", "application/problem+json"]) {
+    const doctypeHtml = `HTTP/1.1 502 Bad Gateway\nContent-Type: ${ct}\n\n  <!DOCTYPE html><html><body><h1>502</h1><script>const retry = 3;</script></body></html>`;
+    assert.equal(classFor(doctypeHtml, "html", { fromIndex: doctypeHtml.indexOf("<html") }), "tok-typeName");
+    assert.equal(classFor(doctypeHtml, "const", { fromIndex: doctypeHtml.indexOf("<script>") }), "tok-keyword");
+    assert.equal(classFor(doctypeHtml, "3", { fromIndex: doctypeHtml.indexOf("<script>") }), "tok-number");
+
+    const headingHtml = `HTTP/1.1 502 Bad Gateway\nContent-Type: ${ct}\n\n<h1>502 Bad Gateway</h1>`;
+    assert.equal(classFor(headingHtml, "h1", { fromIndex: headingHtml.indexOf("<h1") }), "tok-typeName");
+
+    // Declared JSON with XML -> switches to XML
+    const xmlPi = `HTTP/1.1 403 Forbidden\nContent-Type: ${ct}\n\n<?xml version="1.0"?><error code="403"/>`;
+    assert.equal(classFor(xmlPi, '<?xml version="1.0"?>'), "tok-meta");
+    assert.equal(classFor(xmlPi, "error", { fromIndex: xmlPi.indexOf("<error") }), "tok-typeName");
+    assert.equal(classFor(xmlPi, "code"), "tok-propertyName");
+
+    const s3Xml = `HTTP/1.1 403 Forbidden\nContent-Type: ${ct}\n\n<Error><Code>AccessDenied</Code></Error>`;
+    assert.equal(classFor(s3Xml, "Error", { fromIndex: s3Xml.indexOf("<Error") }), "tok-typeName");
+    assert.equal(classFor(s3Xml, "Code", { fromIndex: s3Xml.indexOf("<Code") }), "tok-typeName");
+  }
+
+  // Declared HTML or XML with JSON object or array -> switches to JSON
+  for (const ct of ["text/html", "application/xhtml+xml", "application/xml", "text/xml", "application/soap+xml"]) {
+    const jsonObj = `HTTP/1.1 200 OK\nContent-Type: ${ct}\n\n  {"error": "unauthorized", "code": 401}`;
+    assert.equal(classFor(jsonObj, '"error"'), "tok-propertyName", `JSON object under ${ct}`);
+    assert.equal(classFor(jsonObj, "401"), "tok-number", `JSON number under ${ct}`);
+
+    const jsonArr = `HTTP/1.1 200 OK\nContent-Type: ${ct}\n\n[{"id": 9, "active": true}]`;
+    assert.equal(classFor(jsonArr, '"id"'), "tok-propertyName", `JSON array under ${ct}`);
+    assert.equal(classFor(jsonArr, "true"), "tok-bool", `JSON bool under ${ct}`);
+  }
+
+  // Declared JS, CSS, or form-urlencoded with unmistakable HTML, XML, or JSON signature
+  for (const ct of ["application/javascript", "text/css", "application/x-www-form-urlencoded"]) {
+    const doctypeHtml = `HTTP/1.1 404 Not Found\nContent-Type: ${ct}\n\n<!DOCTYPE html><html><head><title>404</title></head></html>`;
+    assert.equal(classFor(doctypeHtml, "html", { fromIndex: doctypeHtml.indexOf("<html") }), "tok-typeName", `DOCTYPE HTML under ${ct}`);
+    assert.equal(classFor(doctypeHtml, "title", { fromIndex: doctypeHtml.indexOf("<title") }), "tok-typeName", `title tag under ${ct}`);
+
+    const bareHtml = `HTTP/1.1 502 Bad Gateway\nContent-Type: ${ct}\n\n<html><body>502</body></html>`;
+    assert.equal(classFor(bareHtml, "html", { fromIndex: bareHtml.indexOf("<html") }), "tok-typeName", `<html> under ${ct}`);
+
+    const xmlDoc = `HTTP/1.1 500 Internal Server Error\nContent-Type: ${ct}\n\n<?xml version="1.0"?><error code="500"/>`;
+    assert.equal(classFor(xmlDoc, '<?xml version="1.0"?>'), "tok-meta", `<?xml under ${ct}`);
+    assert.equal(classFor(xmlDoc, "code", { fromIndex: xmlDoc.indexOf("\n\n") }), "tok-propertyName", `XML attr under ${ct}`);
+
+    const jsonObj = `HTTP/1.1 403 Forbidden\nContent-Type: ${ct}\n\n{"error": "forbidden", "status": 403}`;
+    assert.equal(classFor(jsonObj, '"error"'), "tok-propertyName", `JSON object under ${ct}`);
+    assert.equal(classFor(jsonObj, "403", { fromIndex: jsonObj.indexOf("\n\n") }), "tok-number", `JSON number under ${ct}`);
+
+    const jsonArr = `HTTP/1.1 200 OK\nContent-Type: ${ct}\n\n[{"id": 9, "ok": false}]`;
+    assert.equal(classFor(jsonArr, '"id"'), "tok-propertyName", `JSON array under ${ct}`);
+    assert.equal(classFor(jsonArr, "false"), "tok-bool", `JSON bool under ${ct}`);
+  }
+});
+
+test("ambiguous, partial, or normal bodies keep their declared Content-Type", () => {
+  // Partial JSON stays JSON
+  const partialJson = 'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"a":';
+  assert.equal(classFor(partialJson, '"a"'), "tok-propertyName");
+
+  // Normal JS, array expression chains, and block statements stay JS
+  const plainJs = "HTTP/1.1 200 OK\nContent-Type: application/javascript\n\nconst x = 1;";
+  assert.equal(classFor(plainJs, "const"), "tok-keyword");
+
+  const arrayChainJs = 'HTTP/1.1 200 OK\nContent-Type: application/javascript\n\n["a", "b"].forEach((s) => console.log(s));';
+  assert.equal(classFor(arrayChainJs, "forEach"), "tok-propertyName");
+
+  const blockJs = 'HTTP/1.1 200 OK\nContent-Type: application/javascript\n\n{"use strict"; const y = 2;}';
+  assert.equal(classFor(blockJs, "const"), "tok-keyword");
+
+  // Normal CSS stays CSS
+  const css = "HTTP/1.1 200 OK\nContent-Type: text/css\n\nbody { color: red; }";
+  assert.equal(classFor(css, "color"), "tok-propertyName");
+
+  // Normal and fuzzed form-urlencoded stay form-urlencoded
+  const form = "POST /submit HTTP/1.1\nContent-Type: application/x-www-form-urlencoded\n\na=1&b=2";
+  const formStart = form.indexOf("\n\n") + 2;
+  assert.equal(classFor(form, "a", { fromIndex: formStart }), "tok-propertyName");
+  assert.equal(classFor(form, "=", { fromIndex: formStart }), "tok-operator");
+  assert.equal(classFor(form, "&", { fromIndex: formStart }), "tok-atom");
+
+  const formWithHtmlVal = "POST /submit HTTP/1.1\nContent-Type: application/x-www-form-urlencoded\n\npayload=<html>&q=1";
+  const fuzzedStart = formWithHtmlVal.indexOf("\n\n") + 2;
+  assert.equal(classFor(formWithHtmlVal, "payload", { fromIndex: fuzzedStart }), "tok-propertyName");
+  assert.equal(classFor(formWithHtmlVal, "<html>", { fromIndex: fuzzedStart }), "tok-string");
+
+  // Non-unmistakable leading '<' fragment in form-urlencoded keeps form
+  const formLeadingAngle = "POST /submit HTTP/1.1\nContent-Type: application/x-www-form-urlencoded\n\n<div=1&b=2";
+  const angleStart = formLeadingAngle.indexOf("\n\n") + 2;
+  assert.equal(classFor(formLeadingAngle, "<div", { fromIndex: angleStart }), "tok-propertyName");
+  assert.equal(classFor(formLeadingAngle, "=", { fromIndex: angleStart }), "tok-operator");
+});
+
+test("prefix sniffing detects JSON, XML, and HTML when Content-Type is absent, generic, or unknown", () => {
+  const genericHeads = [
+    "HTTP/1.1 200 OK\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: text/plain; charset=utf-8\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: application/octet-stream\n\n",
+    "HTTP/2 200\n:status: 200\ncontent-type: application/x-custom-payload\n\n",
+  ];
+
+  for (const head of genericHeads) {
+    // JSON objects, arrays, BOM-prefixed JSON, and NDJSON
+    const obj = `${head}  {"id": 42, "ok": true}`;
+    assert.equal(classFor(obj, '"id"'), "tok-propertyName", `JSON object under ${head}`);
+    assert.equal(classFor(obj, "42"), "tok-number", `JSON number under ${head}`);
+    assert.equal(classFor(obj, "true"), "tok-bool", `JSON bool under ${head}`);
+
+    const bomObj = `${head}\uFEFF{"bom": 1}`;
+    assert.equal(classFor(bomObj, '"bom"'), "tok-propertyName", `BOM JSON under ${head}`);
+
+    const arrObj = `${head}[{"k": "v"}]`;
+    assert.equal(classFor(arrObj, '"k"'), "tok-propertyName", `JSON object array under ${head}`);
+
+    const arrNum = `${head}[1, 2, 3]`;
+    assert.equal(classFor(arrNum, "2", { fromIndex: head.length }), "tok-number", `JSON number array under ${head}`);
+
+    const arrKw = `${head}[true, false, null]`;
+    assert.equal(classFor(arrKw, "false", { fromIndex: head.length }), "tok-bool", `JSON keyword array under ${head}`);
+    assert.equal(classFor(arrKw, "null", { fromIndex: head.length }), "tok-keyword", `JSON null array under ${head}`);
+
+    const arrStr = `${head}["alpha", "beta"]`;
+    assert.equal(classFor(arrStr, '"alpha"', { fromIndex: head.length }), "tok-string", `JSON string array under ${head}`);
+
+    const nestedArr = `${head}[[1, 2], [3, 4]]`;
+    assert.equal(classFor(nestedArr, "3", { fromIndex: head.length }), "tok-number", `nested JSON array under ${head}`);
+
+    const emptyObj = `${head}{}`;
+    assert.equal(classFor(emptyObj, "{", { fromIndex: head.length }), "tok-punctuation", `empty JSON object under ${head}`);
+
+    const emptyArr = `${head}[]`;
+    assert.equal(classFor(emptyArr, "[", { fromIndex: head.length }), "tok-punctuation", `empty JSON array under ${head}`);
+
+    const ndjson = `${head}{"a": 1}\n{"b": 2}`;
+    assert.equal(classFor(ndjson, '"b"', { fromIndex: head.length }), "tok-propertyName", `NDJSON under ${head}`);
+
+    // XML signatures
+    const xmlPi = `${head}<?xml version="1.0"?><root id="1"/>`;
+    assert.equal(classFor(xmlPi, '<?xml version="1.0"?>'), "tok-meta", `XML PI under ${head}`);
+    assert.equal(classFor(xmlPi, "id", { fromIndex: head.length }), "tok-propertyName", `XML attr under ${head}`);
+
+    const svg = `${head}<svg xmlns="http://www.w3.org/2000/svg" width="16"></svg>`;
+    assert.equal(classFor(svg, "svg", { fromIndex: svg.indexOf("<svg") }), "tok-typeName", `SVG under ${head}`);
+
+    const soap = `${head}<soap:Envelope><soap:Body/></soap:Envelope>`;
+    assert.equal(classFor(soap, "soap:Envelope", { fromIndex: head.length }), "tok-typeName", `SOAP under ${head}`);
+
+    const rss = `${head}<rss version="2.0"><channel/></rss>`;
+    assert.equal(classFor(rss, "rss", { fromIndex: head.length }), "tok-typeName", `RSS under ${head}`);
+
+    const atom = `${head}<feed xmlns="http://www.w3.org/2005/Atom"></feed>`;
+    assert.equal(classFor(atom, "feed", { fromIndex: head.length }), "tok-typeName", `Atom under ${head}`);
+
+    const genericXml = `${head}<Error><Code>AccessDenied</Code></Error>`;
+    assert.equal(classFor(genericXml, "Error", { fromIndex: head.length }), "tok-typeName", `generic XML under ${head}`);
+
+    // HTML signatures (including leading comment)
+    const htmlDoc = `${head}<!DOCTYPE html><html><body><p>Hi</p></body></html>`;
+    assert.equal(classFor(htmlDoc, "html", { fromIndex: htmlDoc.indexOf("<html") }), "tok-typeName", `DOCTYPE HTML under ${head}`);
+
+    const htmlDiv = `${head}<div class="err">Oops</div>`;
+    assert.equal(classFor(htmlDiv, "div", { fromIndex: head.length }), "tok-typeName", `HTML div under ${head}`);
+    assert.equal(classFor(htmlDiv, "class", { fromIndex: head.length }), "tok-propertyName", `HTML attr under ${head}`);
+
+    const commentedHtml = `${head}<!-- banner -->\n<!DOCTYPE html><html><body>Hi</body></html>`;
+    assert.equal(classFor(commentedHtml, "html", { fromIndex: commentedHtml.indexOf("<html") }), "tok-typeName", `commented HTML under ${head}`);
+  }
+});
+
+test("prefix sniffing leaves plain text, ambiguous prefixes, and JS/CSS/form bodies unhighlighted", () => {
+  const genericHeads = [
+    "HTTP/1.1 200 OK\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: text/plain\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: application/octet-stream\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: application/x-unknown\n\n",
+  ];
+
+  const nonSniffableBodies = [
+    "Hello world",
+    "[INFO] server started",
+    "[2026-01-01] boot complete",
+    "[1] item one",
+    "{note}",
+    "{} placeholder",
+    "[] todo item",
+    "[[wiki link]]",
+    "<placeholder> enter your name",
+    "<user@example.com>",
+    "<p is less than 5>",
+    "const x = 1; return x;",
+    "body { color: red; }",
+    "user=alice&role=admin",
+  ];
+
+  for (const head of genericHeads) {
+    for (const body of nonSniffableBodies) {
+      const doc = head + body;
+      const bodyStart = head.length;
+      const spans = highlightSpans(doc);
+      const bodySpans = spans.filter((s) => s.from >= bodyStart);
+      assert.deepEqual(bodySpans, [], `body must stay unhighlighted for ${JSON.stringify(body)} under ${head.trim()}`);
+    }
+  }
+});
+
+test("live edits re-evaluate binary guard, contradiction override, and prefix sniffing immediately", () => {
+  const spansOf = (st) => {
+    const tree = ensureSyntaxTree(st, st.doc.length, 5000);
+    const out = [];
+    if (!tree) return out;
+    highlightTree(tree, classHighlighter, (from, to, classes) => {
+      out.push({ from, to, text: st.doc.sliceString(from, to), classes });
+    });
+    return out;
+  };
+
+  // 1. Under text/plain, replacing plain text with JSON -> HTML -> XML -> plain text updates live
+  const baseHead = "HTTP/1.1 200 OK\nContent-Type: text/plain\n\n";
+  let state = EditorState.create({ doc: `${baseHead}hello world`, extensions: httpHighlighting({ mode: "auto" }) });
+  const replaceBody = (st, nextBody) => {
+    const bodyStart = st.doc.toString().indexOf("\n\n") + 2;
+    return st.update({ changes: { from: bodyStart, to: st.doc.length, insert: nextBody } }).state;
+  };
+
+  assert.deepEqual(spansOf(state).filter((s) => s.from >= baseHead.length), []);
+
+  state = replaceBody(state, '{"id": 7}');
+  assert.ok(spansOf(state).some((s) => s.text === '"id"' && s.classes === "tok-propertyName"));
+
+  state = replaceBody(state, "<h1>Error</h1>");
+  assert.ok(spansOf(state).some((s) => s.text === "h1" && s.classes === "tok-typeName"));
+
+  state = replaceBody(state, '<?xml version="1.0"?><ok/>');
+  assert.ok(spansOf(state).some((s) => s.text === '<?xml version="1.0"?>' && s.classes === "tok-meta"));
+
+  state = replaceBody(state, "[INFO] all clear");
+  assert.deepEqual(spansOf(state).filter((s) => s.from >= baseHead.length), []);
+
+  // 2. Under application/json, live contradiction and binary byte toggles update immediately
+  const jsonHead = "HTTP/1.1 200 OK\nContent-Type: application/json\n\n";
+  let jsonState = EditorState.create({ doc: `${jsonHead}{"ok": true}`, extensions: httpHighlighting({ mode: "auto" }) });
+  assert.ok(spansOf(jsonState).some((s) => s.text === '"ok"' && s.classes === "tok-propertyName"));
+
+  // Switch body to HTML error page -> overrides to HTML
+  jsonState = replaceBody(jsonState, "<html><body>502</body></html>");
+  assert.ok(spansOf(jsonState).some((s) => s.text === "html" && s.classes === "tok-typeName"));
+
+  // Prepend NUL byte -> binary guard strips body highlighting while head stays highlighted
+  jsonState = jsonState.update({ changes: { from: jsonHead.length, to: jsonHead.length, insert: "\x00" } }).state;
+  const binSpans = spansOf(jsonState);
+  assert.ok(binSpans.some((s) => s.text === "HTTP/1.1" && s.classes === "tok-keyword"));
+  assert.deepEqual(binSpans.filter((s) => s.from >= jsonHead.length), []);
+
+  // Remove NUL byte -> HTML override highlighting returns immediately
+  jsonState = jsonState.update({ changes: { from: jsonHead.length, to: jsonHead.length + 1, insert: "" } }).state;
+  assert.ok(spansOf(jsonState).some((s) => s.text === "html" && s.classes === "tok-typeName"));
 });
