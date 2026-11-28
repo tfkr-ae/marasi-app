@@ -290,3 +290,467 @@ test("HTTP JSON highlighting coexists cleanly with long-string folding", () => {
   assert.ok(spans.some((s) => s.text === '"file.pdf"' && s.classes === "tok-string"));
   assert.ok(spans.some((s) => s.text === '"data"' && s.classes === "tok-propertyName"));
 });
+
+test("HTML and XHTML bodies highlight markup, embedded <script> JS, and embedded <style> CSS", () => {
+  const body = [
+    "<!DOCTYPE html>",
+    '<html lang="en">',
+    "<head>",
+    "  <style>body { color: #ff0000; }</style>",
+    "  <script>const count = 42; return count;</script>",
+    "</head>",
+    '<body><!-- note --><a href="/home" onclick="alert(1)" style="margin: 0">Hi &amp; bye</a></body>',
+    "</html>",
+  ].join("\n");
+
+  const heads = [
+    "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n",
+    "HTTP/2 200\n:status: 200\ncontent-type: application/xhtml+xml\n\n",
+  ];
+
+  for (const head of heads) {
+    const doc = head + body;
+    // HTML markup
+    assert.equal(classFor(doc, "html", { fromIndex: doc.indexOf("<html") }), "tok-typeName");
+    assert.equal(classFor(doc, "href"), "tok-propertyName");
+    assert.equal(classFor(doc, '"/home"'), "tok-string");
+    assert.equal(classFor(doc, "<!-- note -->"), "tok-comment");
+    assert.equal(classFor(doc, "&amp;"), "tok-string");
+
+    // Embedded <style> CSS
+    assert.equal(classFor(doc, "color", { fromIndex: doc.indexOf("<style>") }), "tok-propertyName");
+    assert.equal(classFor(doc, "#ff0000"), "tok-literal");
+
+    // Embedded <script> JS
+    assert.equal(classFor(doc, "const", { fromIndex: doc.indexOf("<script>") }), "tok-keyword");
+    assert.equal(classFor(doc, "42", { fromIndex: doc.indexOf("<script>") }), "tok-number");
+    assert.equal(classFor(doc, "return", { fromIndex: doc.indexOf("<script>") }), "tok-keyword");
+
+    // Both light and dark themes style HTML, embedded JS, and embedded CSS
+    for (const highlighter of [oneDarkHighlightStyle, githubLightHighlightStyle]) {
+      assert.ok(classFor(doc, "href", { highlighter }), "HTML attribute styled");
+      assert.ok(classFor(doc, "const", { fromIndex: doc.indexOf("<script>"), highlighter }), "embedded JS keyword styled");
+      assert.ok(classFor(doc, "color", { fromIndex: doc.indexOf("<style>"), highlighter }), "embedded CSS property styled");
+    }
+  }
+});
+
+test("HTML bodies including embedded <script> and <style> add no folds or closeBrackets and recover without invalid spans", () => {
+  const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
+  const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
+
+  const foldableHtml = [
+    "HTTP/1.1 200 OK",
+    "Content-Type: text/html",
+    "",
+    "<div>",
+    "  <script>",
+    "    function f() {",
+    "      return [1, 2];",
+    "    }",
+    "  </script>",
+    "  <style>",
+    "    .box {",
+    "      color: red;",
+    "    }",
+    "  </style>",
+    '  <button onclick="fn()" style="color: blue">Go</button>',
+    "</div>",
+  ].join("\n");
+
+  const state = EditorState.create({ doc: foldableHtml, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(state, foldableHtml.length, 5000);
+
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    assert.equal(foldable(state, line.from, line.to), null, `HTML line ${n} must not be foldable`);
+  }
+  for (const probe of ["<div>", "function f()", "color: red;", "fn()", "color: blue"]) {
+    const pos = foldableHtml.indexOf(probe) + 2;
+    assert.deepEqual(state.languageDataAt("closeBrackets", pos), [], `no closeBrackets at ${probe}`);
+    assert.deepEqual(state.languageDataAt("indentOnInput", pos), [], `no indentOnInput at ${probe}`);
+  }
+
+  const brokenBodies = [
+    "<div><span></wrong><p attr=",
+    "<script>const x = {{{ ;;;</script><style>body { color: ;;; </style>",
+    "<html><body><a href='unterminated",
+  ];
+  for (const body of brokenBodies) {
+    const doc = `GET / HTTP/x\nContent-Type: text/html\n\n${body}`;
+    const bodyStart = doc.indexOf("\n\n") + 2;
+
+    const classSpans = highlightSpans(doc);
+    assert.ok(classSpans.some((s) => s.to <= bodyStart && s.classes.includes("tok-invalid")));
+    assert.deepEqual(
+      classSpans.filter((s) => s.from >= bodyStart && s.classes.includes("tok-invalid")),
+      [],
+      `expected zero invalid spans in broken HTML: ${body}`,
+    );
+
+    for (const [name, highlighter, invalidCls] of [
+      ["oneDark", oneDarkHighlightStyle, oneDarkInvalid],
+      ["githubLight", githubLightHighlightStyle, githubLightInvalid],
+    ]) {
+      const spans = highlightSpans(doc, { highlighter });
+      assert.deepEqual(
+        spans.filter((s) => s.from >= bodyStart && s.classes.split(" ").includes(invalidCls)),
+        [],
+        `${name}: expected zero invalid spans in broken HTML: ${body}`,
+      );
+    }
+  }
+});
+
+test("XML and *+xml bodies highlight elements, attributes, processing instructions, comments, and CDATA", () => {
+  const body = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16">',
+    "  <!-- icon -->",
+    "  <desc><![CDATA[raw <text>]]></desc>",
+    "</svg>",
+  ].join("\n");
+
+  const heads = [
+    "HTTP/1.1 200 OK\nContent-Type: application/xml\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: text/xml; charset=utf-8\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: image/svg+xml\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: application/soap+xml; charset=utf-8\n\n",
+    "HTTP/2 200\n:status: 200\ncontent-type: application/atom+xml\n\n",
+  ];
+
+  for (const head of heads) {
+    const doc = head + body;
+    assert.equal(classFor(doc, '<?xml version="1.0" encoding="UTF-8"?>'), "tok-meta", `PI for ${head}`);
+    assert.equal(classFor(doc, "svg", { fromIndex: doc.indexOf("<svg") }), "tok-typeName", `tag for ${head}`);
+    assert.equal(classFor(doc, "width"), "tok-propertyName", `attr name for ${head}`);
+    assert.equal(classFor(doc, '"16"'), "tok-string", `attr val for ${head}`);
+    assert.equal(classFor(doc, "<!-- icon -->"), "tok-comment", `comment for ${head}`);
+    assert.equal(classFor(doc, "<![CDATA[raw <text>]]>"), "tok-string2", `cdata for ${head}`);
+
+    for (const highlighter of [oneDarkHighlightStyle, githubLightHighlightStyle]) {
+      assert.ok(classFor(doc, "svg", { fromIndex: doc.indexOf("<svg"), highlighter }), `tag styled for ${head}`);
+      assert.ok(classFor(doc, "width", { highlighter }), `attr styled for ${head}`);
+      assert.ok(classFor(doc, '"16"', { highlighter }), `attr val styled for ${head}`);
+    }
+  }
+});
+
+test("XML bodies add no folds or closeBrackets and recover permissively on broken/mismatched markup", () => {
+  const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
+  const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
+
+  const doc = [
+    "HTTP/1.1 200 OK",
+    "Content-Type: application/xml",
+    "",
+    "<envelope>",
+    "  <body>",
+    '    <item id="1">ok</item>',
+    "  </body>",
+    "</envelope>",
+  ].join("\n");
+  const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(state, doc.length, 5000);
+
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    assert.equal(foldable(state, line.from, line.to), null, `XML line ${n} must not be foldable`);
+  }
+  const itemPos = doc.indexOf("<item") + 2;
+  assert.deepEqual(state.languageDataAt("closeBrackets", itemPos), []);
+  assert.deepEqual(state.languageDataAt("indentOnInput", itemPos), []);
+
+  const brokenBodies = [
+    "<root><item></wrong>",
+    '<?xml version="1.0"?><feed><entry id="1"',
+    "<soap:Envelope><soap:Body><unclosed attr=",
+  ];
+  for (const body of brokenBodies) {
+    const brokenDoc = `GET / HTTP/x\nContent-Type: application/soap+xml\n\n${body}`;
+    const bodyStart = brokenDoc.indexOf("\n\n") + 2;
+
+    const classSpans = highlightSpans(brokenDoc);
+    assert.ok(classSpans.some((s) => s.to <= bodyStart && s.classes.includes("tok-invalid")));
+    assert.deepEqual(
+      classSpans.filter((s) => s.from >= bodyStart && s.classes.includes("tok-invalid")),
+      [],
+      `expected zero invalid spans in broken XML: ${body}`,
+    );
+
+    for (const [name, highlighter, invalidCls] of [
+      ["oneDark", oneDarkHighlightStyle, oneDarkInvalid],
+      ["githubLight", githubLightHighlightStyle, githubLightInvalid],
+    ]) {
+      const spans = highlightSpans(brokenDoc, { highlighter });
+      assert.deepEqual(
+        spans.filter((s) => s.from >= bodyStart && s.classes.split(" ").includes(invalidCls)),
+        [],
+        `${name}: expected zero invalid spans in broken XML: ${body}`,
+      );
+    }
+  }
+});
+
+test("JavaScript bodies highlight across text/javascript, application/javascript, and application/x-javascript", () => {
+  const body = [
+    "// handler",
+    'export async function fetchItem(id) {',
+    '  const url = "/api/" + id;',
+    "  return { ok: true, retries: 3 };",
+    "}",
+  ].join("\n");
+
+  const heads = [
+    "HTTP/1.1 200 OK\nContent-Type: text/javascript; charset=utf-8\n\n",
+    "HTTP/1.1 200 OK\nContent-Type: application/javascript\n\n",
+    "HTTP/2 200\n:status: 200\ncontent-type: application/x-javascript\n\n",
+  ];
+
+  for (const head of heads) {
+    const doc = head + body;
+    assert.equal(classFor(doc, "// handler"), "tok-comment");
+    assert.equal(classFor(doc, "export"), "tok-keyword");
+    assert.equal(classFor(doc, "function"), "tok-keyword");
+    assert.equal(classFor(doc, '"/api/"'), "tok-string");
+    assert.equal(classFor(doc, "true"), "tok-bool");
+    assert.equal(classFor(doc, "3"), "tok-number");
+
+    for (const highlighter of [oneDarkHighlightStyle, githubLightHighlightStyle]) {
+      assert.ok(classFor(doc, "function", { highlighter }), `keyword styled for ${head}`);
+      assert.ok(classFor(doc, '"/api/"', { highlighter }), `string styled for ${head}`);
+      assert.ok(classFor(doc, "3", { highlighter }), `number styled for ${head}`);
+    }
+  }
+});
+
+test("JavaScript bodies add no folds or closeBrackets and recover permissively on broken/truncated code", () => {
+  const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
+  const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
+
+  const doc = [
+    "HTTP/1.1 200 OK",
+    "Content-Type: application/javascript",
+    "",
+    "function run() {",
+    "  const list = [1, 2, 3];",
+    "  return list;",
+    "}",
+  ].join("\n");
+  const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(state, doc.length, 5000);
+
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    assert.equal(foldable(state, line.from, line.to), null, `JS line ${n} must not be foldable`);
+  }
+  const bodyPos = doc.indexOf("const list") + 2;
+  assert.deepEqual(state.languageDataAt("closeBrackets", bodyPos), []);
+  assert.deepEqual(state.languageDataAt("indentOnInput", bodyPos), []);
+
+  const brokenBodies = [
+    "const x = [1, 2, ;;; function (",
+    'const msg = "unterminated',
+    "return {{{ ) ] }",
+  ];
+  for (const body of brokenBodies) {
+    const brokenDoc = `GET / HTTP/x\nContent-Type: text/javascript\n\n${body}`;
+    const bodyStart = brokenDoc.indexOf("\n\n") + 2;
+
+    const classSpans = highlightSpans(brokenDoc);
+    assert.ok(classSpans.some((s) => s.to <= bodyStart && s.classes.includes("tok-invalid")));
+    assert.deepEqual(
+      classSpans.filter((s) => s.from >= bodyStart && s.classes.includes("tok-invalid")),
+      [],
+      `expected zero invalid spans in broken JS: ${body}`,
+    );
+
+    for (const [name, highlighter, invalidCls] of [
+      ["oneDark", oneDarkHighlightStyle, oneDarkInvalid],
+      ["githubLight", githubLightHighlightStyle, githubLightInvalid],
+    ]) {
+      const spans = highlightSpans(brokenDoc, { highlighter });
+      assert.deepEqual(
+        spans.filter((s) => s.from >= bodyStart && s.classes.split(" ").includes(invalidCls)),
+        [],
+        `${name}: expected zero invalid spans in broken JS: ${body}`,
+      );
+    }
+  }
+});
+
+test("CSS bodies highlight selectors, properties, values, and comments in light and dark themes", () => {
+  const body = [
+    "/* theme */",
+    "@media (min-width: 640px) {",
+    '  .card > a { color: #336699; padding: 12px; content: "ok"; }',
+    "}",
+  ].join("\n");
+
+  const heads = [
+    "HTTP/1.1 200 OK\nContent-Type: text/css; charset=utf-8\n\n",
+    "HTTP/2 200\n:status: 200\ncontent-type: text/css\n\n",
+  ];
+
+  for (const head of heads) {
+    const doc = head + body;
+    assert.equal(classFor(doc, "/* theme */"), "tok-comment");
+    assert.equal(classFor(doc, "@media"), "tok-keyword");
+    assert.equal(classFor(doc, "card"), "tok-className");
+    assert.equal(classFor(doc, "color"), "tok-propertyName");
+    assert.equal(classFor(doc, "#336699"), "tok-literal");
+    assert.equal(classFor(doc, "12", { fromIndex: doc.indexOf("padding") }), "tok-number");
+    assert.equal(classFor(doc, '"ok"'), "tok-string");
+
+    for (const highlighter of [oneDarkHighlightStyle, githubLightHighlightStyle]) {
+      assert.ok(classFor(doc, "@media", { highlighter }), `at-rule styled for ${head}`);
+      assert.ok(classFor(doc, "color", { highlighter }), `property styled for ${head}`);
+      assert.ok(classFor(doc, '"ok"', { highlighter }), `string styled for ${head}`);
+    }
+  }
+});
+
+test("CSS bodies add no folds or closeBrackets and recover permissively on broken stylesheets", () => {
+  const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
+  const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
+
+  const doc = [
+    "HTTP/1.1 200 OK",
+    "Content-Type: text/css",
+    "",
+    ".panel {",
+    "  display: grid;",
+    "  gap: 1rem;",
+    "}",
+  ].join("\n");
+  const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(state, doc.length, 5000);
+
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    assert.equal(foldable(state, line.from, line.to), null, `CSS line ${n} must not be foldable`);
+  }
+  const propPos = doc.indexOf("display") + 2;
+  assert.deepEqual(state.languageDataAt("closeBrackets", propPos), []);
+  assert.deepEqual(state.languageDataAt("indentOnInput", propPos), []);
+
+  const brokenBodies = [
+    ".box { color: ;;; ??? }",
+    '@media ( { background: url("unclosed',
+    "body { margin: 10px",
+  ];
+  for (const body of brokenBodies) {
+    const brokenDoc = `GET / HTTP/x\nContent-Type: text/css\n\n${body}`;
+    const bodyStart = brokenDoc.indexOf("\n\n") + 2;
+
+    const classSpans = highlightSpans(brokenDoc);
+    assert.ok(classSpans.some((s) => s.to <= bodyStart && s.classes.includes("tok-invalid")));
+    assert.deepEqual(
+      classSpans.filter((s) => s.from >= bodyStart && s.classes.includes("tok-invalid")),
+      [],
+      `expected zero invalid spans in broken CSS: ${body}`,
+    );
+
+    for (const [name, highlighter, invalidCls] of [
+      ["oneDark", oneDarkHighlightStyle, oneDarkInvalid],
+      ["githubLight", githubLightHighlightStyle, githubLightInvalid],
+    ]) {
+      const spans = highlightSpans(brokenDoc, { highlighter });
+      assert.deepEqual(
+        spans.filter((s) => s.from >= bodyStart && s.classes.split(" ").includes(invalidCls)),
+        [],
+        `${name}: expected zero invalid spans in broken CSS: ${body}`,
+      );
+    }
+  }
+});
+
+test("URL-encoded form bodies highlight parameter names, =, values, and & distinctly in light and dark themes", () => {
+  const body = "user=alice%40example.com&token=abc123==&debug&empty=";
+  const heads = [
+    "POST /login HTTP/1.1\nContent-Type: application/x-www-form-urlencoded\n\n",
+    "POST /login HTTP/2\n:method: POST\ncontent-type: application/x-www-form-urlencoded; charset=UTF-8\n\n",
+  ];
+
+  for (const head of heads) {
+    const doc = head + body;
+    const bodyStart = head.length;
+
+    // Distinct semantic classes in classHighlighter
+    assert.equal(classFor(doc, "user", { fromIndex: bodyStart }), "tok-propertyName");
+    assert.equal(classFor(doc, "=", { fromIndex: doc.indexOf("user=") }), "tok-operator");
+    assert.equal(classFor(doc, "alice%40example.com", { fromIndex: bodyStart }), "tok-string");
+    assert.equal(classFor(doc, "&", { fromIndex: doc.indexOf("&token") }), "tok-atom");
+    // Additional '=' inside a value (e.g., base64 padding) stays part of the value
+    assert.equal(classFor(doc, "token", { fromIndex: bodyStart }), "tok-propertyName");
+    assert.equal(classFor(doc, "abc123==", { fromIndex: bodyStart }), "tok-string");
+    // Bare flag without '=' highlights as a parameter name; empty value keeps key and '='
+    assert.equal(classFor(doc, "debug", { fromIndex: bodyStart }), "tok-propertyName");
+    assert.equal(classFor(doc, "empty", { fromIndex: bodyStart }), "tok-propertyName");
+
+    // In both oneDark and githubLight, all four roles are styled and mutually distinct
+    for (const [themeName, highlighter] of [
+      ["oneDark", oneDarkHighlightStyle],
+      ["githubLight", githubLightHighlightStyle],
+    ]) {
+      const keyCls = classFor(doc, "user", { fromIndex: bodyStart, highlighter });
+      const eqCls = classFor(doc, "=", { fromIndex: doc.indexOf("user="), highlighter });
+      const valCls = classFor(doc, "alice%40example.com", { fromIndex: bodyStart, highlighter });
+      const ampCls = classFor(doc, "&", { fromIndex: doc.indexOf("&token"), highlighter });
+      assert.ok(keyCls && eqCls && valCls && ampCls, `${themeName}: all four form token roles must be styled`);
+      assert.equal(
+        new Set([keyCls, eqCls, valCls, ampCls]).size,
+        4,
+        `${themeName}: key, =, value, and & must have 4 distinct classes`,
+      );
+    }
+  }
+});
+
+test("URL-encoded form bodies add no folds or closeBrackets and recover permissively on fuzzed input", () => {
+  const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
+  const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
+
+  const doc = "POST /submit HTTP/1.1\nContent-Type: application/x-www-form-urlencoded\n\na=1&b=2\n&c=3";
+  const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(state, doc.length, 5000);
+
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    assert.equal(foldable(state, line.from, line.to), null, `form line ${n} must not be foldable`);
+  }
+  const bodyStart = doc.indexOf("\n\n") + 2;
+  assert.deepEqual(state.languageDataAt("closeBrackets", bodyStart + 1), []);
+  assert.deepEqual(state.languageDataAt("indentOnInput", bodyStart + 1), []);
+
+  const brokenBodies = [
+    "&=val&&=&&",
+    "===&%ZZ=bad%2&",
+    "flagonly",
+    "k=v&unclosed=%",
+  ];
+  for (const body of brokenBodies) {
+    const brokenDoc = `GET / HTTP/x\nContent-Type: application/x-www-form-urlencoded\n\n${body}`;
+    const start = brokenDoc.indexOf("\n\n") + 2;
+
+    const classSpans = highlightSpans(brokenDoc);
+    assert.ok(classSpans.some((s) => s.to <= start && s.classes.includes("tok-invalid")));
+    assert.deepEqual(
+      classSpans.filter((s) => s.from >= start && s.classes.includes("tok-invalid")),
+      [],
+      `expected zero invalid spans in fuzzed form body: ${body}`,
+    );
+
+    for (const [name, highlighter, invalidCls] of [
+      ["oneDark", oneDarkHighlightStyle, oneDarkInvalid],
+      ["githubLight", githubLightHighlightStyle, githubLightInvalid],
+    ]) {
+      const spans = highlightSpans(brokenDoc, { highlighter });
+      assert.deepEqual(
+        spans.filter((s) => s.from >= start && s.classes.split(" ").includes(invalidCls)),
+        [],
+        `${name}: expected zero invalid spans in fuzzed form body: ${body}`,
+      );
+    }
+  }
+});
