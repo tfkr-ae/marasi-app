@@ -29,8 +29,8 @@
 					>
 						<ChipIcon><svelte:component this={icons[item.id] ?? TriangleAlert} size={14} /></ChipIcon>
 						<span class="flex-1 min-w-0">
-							<span class="block text-xs font-bold truncate" title={item.title}>{item.title}</span>
-							<span class="block text-2xs opacity-70 truncate">{item.detail}</span>
+							<span class="block text-xs font-bold">{item.title}</span>
+							<span class="block text-2xs opacity-70">{item.detail}</span>
 						</span>
 						<span class="text-2xs opacity-70 shrink-0">{item.action} →</span>
 					</button>
