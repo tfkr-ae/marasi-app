@@ -29,7 +29,14 @@ function fakeClient(routes) {
 }
 
 const serviceRoutes = () => ({
-  "/dashboard": { pairs: 1200, notes: 3, launchpads: 2, intercepted: 7, intercepted_count: { complete: false } },
+  "/dashboard": {
+    pairs: 1200,
+    notes: 3,
+    launchpads: 2,
+    intercepted: 7,
+    intercepted_count: { complete: false },
+    project_bytes: 1468006,
+  },
   "/scope": {
     default_allow: false,
     include: [{ pattern: "example\\.com", match_type: "host" }],
@@ -71,7 +78,19 @@ test("populate reads the dashboard counts the Dashboard shows", async () => {
     launchpads: 2,
     intercepted: 7,
     interceptedComplete: false,
+    projectBytes: 1468006,
   });
+});
+
+test("the project's size is null when the service sends null or, being older, no size", async () => {
+  for (const projectBytes of [null, undefined]) {
+    const { store } = setup({
+      ...serviceRoutes(),
+      "/dashboard": { pairs: 1, notes: 0, launchpads: 0, intercepted: 0, project_bytes: projectBytes },
+    });
+    await store.populate();
+    assert.equal(get(store).dashboard.projectBytes, null);
+  }
 });
 
 test("populate counts the scope's rules", async () => {

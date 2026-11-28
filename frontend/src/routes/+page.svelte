@@ -61,6 +61,9 @@
 			<div class="min-w-0">
 				<p class="text-2xs opacity-60">Project</p>
 				<h2 class="text-base font-bold truncate" data-testid="home-project">{$activeProject || "—"}</h2>
+				{#if $overview.projectSize}
+					<p class="text-2xs opacity-60" data-testid="home-project-size">{$overview.projectSize}</p>
+				{/if}
 			</div>
 			<CaptureControls
 				listener={$homeStore.listener}

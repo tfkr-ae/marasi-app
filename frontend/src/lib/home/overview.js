@@ -18,12 +18,26 @@ const statusQuery = (key) => `status_code >= ${key[0]}00 status_code < ${Number(
 
 /** A count as Home shows it: grouped digits, none as 0. */
 export const count = (n) => (n ?? 0).toLocaleString();
+
+// A size in bytes, 1024-based with one decimal: "512 B", "1.5 KB", "3.5 GB".
+export function formatBytes(n) {
+  const units = ["KB", "MB", "GB", "TB"];
+  if (n < 1024) return `${n} B`;
+  let value = n / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(1)} ${units[unit]}`;
+}
+
 // A count that is null until it has been read, so the page draws a ghost.
 const readCount = (read, n) => (read ? count(n) : null);
 
 /**
  * The Overview of `state`:
- * - dashboard: { requests, intercepted, interceptedComplete, notes, launchpads }, null until read
+ * - dashboard: { requests, intercepted, interceptedComplete, notes, launchpads, projectBytes }, null until read
  * - scope: { defaultAllow, includeCount, excludeCount }, null until read
  * - held: requests intercepted in Checkpoint; interceptAll: the Intercept all flag
  * - activeRuns: Armory runs in progress
@@ -31,7 +45,8 @@ const readCount = (read, n) => (read ? count(n) : null);
  * - listenerStopped: the researcher stopped the listener
  * - statusClasses: { "2xx", "3xx", "4xx", "5xx" } pairs per class, null until read
  *
- * Returns `pending`: what needs the researcher, in order (listener, held,
+ * Returns `projectSize`: the project's size on disk ("1.4 MB"), or null
+ * without one from the service. Returns `pending`: what needs the researcher, in order (listener, held,
  * intercept-all, urgent), each { id, tone, title, detail, action,
  * destination } and present only when it applies.
  *
@@ -63,6 +78,8 @@ export function overviewOf(state) {
   const findingsTotal = state.findings.length;
   const unfinished = state.findings.filter((finding) => !finding.done).length;
   return {
+    // The open project's size on disk, or null without one from the service.
+    projectSize: typeof d?.projectBytes === "number" ? formatBytes(d.projectBytes) : null,
     pending: pendingOf(state),
     statusClasses: Object.fromEntries(
       STATUS_CLASSES.map((key) => [

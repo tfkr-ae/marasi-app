@@ -13,6 +13,21 @@ const project = {
   findings: [],
   listenerStopped: false,
 };
+test("the project's size reads in 1024-based units with one decimal", () => {
+  const sizeOf = (projectBytes) => overviewOf({ ...project, dashboard: { ...project.dashboard, projectBytes } }).projectSize;
+  assert.equal(sizeOf(512), "512 B");
+  assert.equal(sizeOf(1536), "1.5 KB");
+  assert.equal(sizeOf(1468006), "1.4 MB");
+  assert.equal(sizeOf(3 * 1024 ** 3 + 1024 ** 3 / 2), "3.5 GB");
+  assert.equal(sizeOf(0), "0 B");
+});
+
+test("without a size from the service, Home shows no size", () => {
+  assert.equal(overviewOf({ ...project, dashboard: { ...project.dashboard, projectBytes: null } }).projectSize, null);
+  assert.equal(overviewOf(project).projectSize, null);
+  assert.equal(overviewOf({ ...project, dashboard: null }).projectSize, null);
+});
+
 const figure = (state, id) => overviewOf(state).figures.find((f) => f.id === id);
 
 test("Pairs counts every pair and opens the unfiltered Ledger", () => {
