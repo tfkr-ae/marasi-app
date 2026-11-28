@@ -1,5 +1,5 @@
 import { NodeProp, NodeSet, NodeType, Parser, Tree, parseMixed } from "@lezer/common";
-import { languageDataProp } from "@codemirror/language";
+import { foldNodeProp, languageDataProp } from "@codemirror/language";
 import { styleTags, tags as t } from "@lezer/highlight";
 import { findClosingMarker, findClosingTemplateAction } from "./armoryOverlay.js";
 
@@ -17,10 +17,18 @@ export function createHeadNodeSet(languageDataFacet) {
     NodeType.define({ id: 7, name: "HeaderName" }),
     NodeType.define({ id: 8, name: "HeaderValue" }),
     NodeType.define({ id: 9, name: "Body" }),
+    NodeType.define({ id: 10, name: "HttpHead" }),
   ];
 
   return new NodeSet(types).extend(
     languageDataProp.add((type) => (type.isTop ? languageDataFacet : undefined)),
+    foldNodeProp.add({
+      HttpHead(node, state) {
+        const firstLine = state.doc.lineAt(node.from);
+        if (node.to <= firstLine.to) return null;
+        return { from: firstLine.to, to: node.to };
+      },
+    }),
     styleTags({
       Method: t.keyword,
       RequestTarget: t.special(t.string),
@@ -116,15 +124,17 @@ class HttpHeadParse {
     const T_HEADER_NAME = types[7];
     const T_HEADER_VALUE = types[8];
     const T_BODY = types[9];
+    const T_HEAD = types[10];
 
-    const children = [];
-    const positions = [];
+    const headChildren = [];
+    const headPositions = [];
     const origin = this.start;
+    let headEnd = origin;
 
     const pushToken = (type, from, to) => {
       if (to > from) {
-        children.push(new Tree(type, [], [], to - from));
-        positions.push(from - origin);
+        headChildren.push(new Tree(type, [], [], to - from));
+        headPositions.push(from - origin);
       }
     };
 
@@ -181,6 +191,7 @@ class HttpHeadParse {
             pushToken(T_INVALID, pos + idx, pos + line.length);
           }
         }
+        headEnd = first.contentEnd;
         pos = first.nextPos;
       }
     }
@@ -221,7 +232,15 @@ class HttpHeadParse {
           lastHeaderName = "";
         }
       }
+      headEnd = lineInfo.contentEnd;
       pos = lineInfo.nextPos;
+    }
+
+    const children = [];
+    const positions = [];
+    if (headEnd > origin) {
+      children.push(new Tree(T_HEAD, headChildren, headPositions, headEnd - origin));
+      positions.push(0);
     }
 
     if (bodyStart >= 0 && bodyStart < end) {

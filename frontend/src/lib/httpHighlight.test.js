@@ -108,18 +108,43 @@ test("JSON and *+json bodies highlight via parseMixed regardless of header casin
   assert.equal(classFor(noContent, "Content-Type:"), "tok-atom");
 });
 
-test("JSON body highlighting adds no fold ranges or auto-closing bracket languageData", () => {
+test("HTTP heads and JSON bodies support code folding without adding auto-closing bracket languageData", () => {
   const doc = 'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{\n  "items": [\n    1,\n    2\n  ]\n}';
   const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
   ensureSyntaxTree(state, doc.length, 5000);
 
+  // Line 1 (start-line) folds the HTTP headers block down to the end of the last header line
+  const headFold = foldable(state, state.doc.line(1).from, state.doc.line(1).to);
+  assert.deepEqual(headFold, { from: state.doc.line(1).to, to: state.doc.line(2).to });
+
+  // Multi-line JSON object and array lines are foldable
+  const objLine = state.doc.line(4);
+  const arrLine = state.doc.line(5);
+  assert.ok(foldable(state, objLine.from, objLine.to), "JSON object line must be foldable");
+  assert.ok(foldable(state, arrLine.from, arrLine.to), "JSON array line must be foldable");
+
+  // Headerless HTTP start-line is not foldable
+  const headerless = "GET / HTTP/1.1\n\n{}";
+  const headerlessState = EditorState.create({ doc: headerless, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(headerlessState, headerless.length, 5000);
+  assert.equal(foldable(headerlessState, headerlessState.doc.line(1).from, headerlessState.doc.line(1).to), null);
+
+  // Auto-closing brackets and auto-indent languageData stay stripped
   const bodyStart = doc.indexOf("\n\n") + 2;
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `line ${n} must not be foldable`);
-  }
   assert.deepEqual(state.languageDataAt("closeBrackets", bodyStart + 2), []);
   assert.deepEqual(state.languageDataAt("indentOnInput", bodyStart + 2), []);
+
+  // Under auto with body >= 75,000 chars, HTTP head stays foldable while body folding is skipped
+  const bigDoc = `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{\n  "data": "${"x".repeat(SYNTAX_AUTO_LIMIT)}"\n}`;
+  const bigAuto = EditorState.create({ doc: bigDoc, extensions: httpHighlighting({ mode: "auto" }) });
+  ensureSyntaxTree(bigAuto, bigDoc.length, 5000);
+  assert.ok(foldable(bigAuto, bigAuto.doc.line(1).from, bigAuto.doc.line(1).to), "head folds under auto");
+  assert.equal(foldable(bigAuto, bigAuto.doc.line(4).from, bigAuto.doc.line(4).to), null, "oversized body does not fold under auto");
+
+  // Under disabled, nothing folds
+  const disabled = EditorState.create({ doc, extensions: httpHighlighting({ mode: "disabled" }) });
+  assert.equal(foldable(disabled, disabled.doc.line(1).from, disabled.doc.line(1).to), null);
+  assert.equal(foldable(disabled, disabled.doc.line(4).from, disabled.doc.line(4).to), null);
 });
 
 test("broken, truncated, or fuzzed JSON produces no invalid spans in body while broken head lines do", () => {
@@ -310,7 +335,7 @@ test("HTML and XHTML bodies highlight markup, embedded <script> JS, and embedded
   }
 });
 
-test("HTML bodies including embedded <script> and <style> add no folds or closeBrackets and recover without invalid spans", () => {
+test("HTML bodies including embedded <script> and <style> support folding without closeBrackets and recover without invalid spans", () => {
   const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
   const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
 
@@ -336,10 +361,9 @@ test("HTML bodies including embedded <script> and <style> add no folds or closeB
   const state = EditorState.create({ doc: foldableHtml, extensions: httpHighlighting({ mode: "auto" }) });
   ensureSyntaxTree(state, foldableHtml.length, 5000);
 
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `HTML line ${n} must not be foldable`);
-  }
+  assert.ok(foldable(state, state.doc.line(4).from, state.doc.line(4).to), "HTML <div> element folds");
+  assert.ok(foldable(state, state.doc.line(6).from, state.doc.line(6).to), "nested JS function block folds");
+  assert.ok(foldable(state, state.doc.line(11).from, state.doc.line(11).to), "nested CSS rule block folds");
   for (const probe of ["<div>", "function f()", "color: red;", "fn()", "color: blue"]) {
     const pos = foldableHtml.indexOf(probe) + 2;
     assert.deepEqual(state.languageDataAt("closeBrackets", pos), [], `no closeBrackets at ${probe}`);
@@ -411,7 +435,7 @@ test("XML and *+xml bodies highlight elements, attributes, processing instructio
   }
 });
 
-test("XML bodies add no folds or closeBrackets and recover permissively on broken/mismatched markup", () => {
+test("XML bodies support folding without closeBrackets and recover permissively on broken/mismatched markup", () => {
   const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
   const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
 
@@ -428,10 +452,8 @@ test("XML bodies add no folds or closeBrackets and recover permissively on broke
   const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
   ensureSyntaxTree(state, doc.length, 5000);
 
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `XML line ${n} must not be foldable`);
-  }
+  assert.ok(foldable(state, state.doc.line(4).from, state.doc.line(4).to), "XML <envelope> element folds");
+  assert.ok(foldable(state, state.doc.line(5).from, state.doc.line(5).to), "XML <body> element folds");
   const itemPos = doc.indexOf("<item") + 2;
   assert.deepEqual(state.languageDataAt("closeBrackets", itemPos), []);
   assert.deepEqual(state.languageDataAt("indentOnInput", itemPos), []);
@@ -499,7 +521,7 @@ test("JavaScript bodies highlight across text/javascript, application/javascript
   }
 });
 
-test("JavaScript bodies add no folds or closeBrackets and recover permissively on broken/truncated code", () => {
+test("JavaScript bodies support folding without closeBrackets and recover permissively on broken/truncated code", () => {
   const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
   const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
 
@@ -515,10 +537,7 @@ test("JavaScript bodies add no folds or closeBrackets and recover permissively o
   const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
   ensureSyntaxTree(state, doc.length, 5000);
 
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `JS line ${n} must not be foldable`);
-  }
+  assert.ok(foldable(state, state.doc.line(4).from, state.doc.line(4).to), "JS function block folds");
   const bodyPos = doc.indexOf("const list") + 2;
   assert.deepEqual(state.languageDataAt("closeBrackets", bodyPos), []);
   assert.deepEqual(state.languageDataAt("indentOnInput", bodyPos), []);
@@ -585,7 +604,7 @@ test("CSS bodies highlight selectors, properties, values, and comments in light 
   }
 });
 
-test("CSS bodies add no folds or closeBrackets and recover permissively on broken stylesheets", () => {
+test("CSS bodies support folding without closeBrackets and recover permissively on broken stylesheets", () => {
   const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
   const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
 
@@ -601,10 +620,7 @@ test("CSS bodies add no folds or closeBrackets and recover permissively on broke
   const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
   ensureSyntaxTree(state, doc.length, 5000);
 
-  for (let n = 1; n <= state.doc.lines; n++) {
-    const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `CSS line ${n} must not be foldable`);
-  }
+  assert.ok(foldable(state, state.doc.line(4).from, state.doc.line(4).to), "CSS rule block folds");
   const propPos = doc.indexOf("display") + 2;
   assert.deepEqual(state.languageDataAt("closeBrackets", propPos), []);
   assert.deepEqual(state.languageDataAt("indentOnInput", propPos), []);
@@ -682,7 +698,7 @@ test("URL-encoded form bodies highlight parameter names, =, values, and & distin
   }
 });
 
-test("URL-encoded form bodies add no folds or closeBrackets and recover permissively on fuzzed input", () => {
+test("URL-encoded form bodies keep head folding, add no closeBrackets, and recover permissively on fuzzed input", () => {
   const oneDarkInvalid = oneDarkHighlightStyle.style([t.invalid]);
   const githubLightInvalid = githubLightHighlightStyle.style([t.invalid]);
 
@@ -690,9 +706,10 @@ test("URL-encoded form bodies add no folds or closeBrackets and recover permissi
   const state = EditorState.create({ doc, extensions: httpHighlighting({ mode: "auto" }) });
   ensureSyntaxTree(state, doc.length, 5000);
 
-  for (let n = 1; n <= state.doc.lines; n++) {
+  assert.ok(foldable(state, state.doc.line(1).from, state.doc.line(1).to), "form request head folds");
+  for (let n = 4; n <= state.doc.lines; n++) {
     const line = state.doc.line(n);
-    assert.equal(foldable(state, line.from, line.to), null, `form line ${n} must not be foldable`);
+    assert.equal(foldable(state, line.from, line.to), null, `form body line ${n} has no block fold`);
   }
   const bodyStart = doc.indexOf("\n\n") + 2;
   assert.deepEqual(state.languageDataAt("closeBrackets", bodyStart + 1), []);

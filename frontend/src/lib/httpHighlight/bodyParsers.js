@@ -8,12 +8,11 @@ import {
   tsxLanguage,
   typescriptLanguage,
 } from "@codemirror/lang-javascript";
-import { foldNodeProp, indentNodeProp, languageDataProp, sublanguageProp } from "@codemirror/language";
+import { indentNodeProp, languageDataProp, sublanguageProp } from "@codemirror/language";
 import { getStyleTags, styleTags, tags as t } from "@lezer/highlight";
 import { formUrlEncodedParser } from "./formParser.js";
 
 const STRIP_CHROME_PROPS = [
-  foldNodeProp.add(() => null),
   indentNodeProp.add(() => null),
   languageDataProp.add(() => null),
   sublanguageProp.add(() => null),
@@ -23,9 +22,10 @@ const hasInvalidTag = (tag) => tag.set.includes(t.invalid);
 const formatSegment = (name) => (!name ? "*" : /[\/!* "]/.test(name) ? JSON.stringify(name) : name);
 
 /**
- * Strips interactive editor chrome (folding, indentation, closeBrackets /
- * languageData) and any `tags.invalid` highlight rules from a Lezer LRParser
- * so body subtrees highlight permissively without injecting editor chrome.
+ * Strips auto-indentation and languageData (closeBrackets, extra completions)
+ * plus any `tags.invalid` highlight rules from a Lezer LRParser so body
+ * subtrees highlight permissively and support native code folding without
+ * injecting editing chrome.
  */
 export function stripBodyParser(parser) {
   const invalidOverrides = Object.create(null);

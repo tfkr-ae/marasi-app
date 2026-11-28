@@ -1,4 +1,5 @@
 import { Language, defineLanguageFacet } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
 import { HttpParser, bodyMetaProp, createHeadNodeSet } from "./httpHighlight/headParser.js";
 import { bodyParserFor } from "./httpHighlight/bodyParsers.js";
 import { BODY_PREVIEW_BYTES, resolveBodyFormat } from "./httpHighlight/resolveBody.js";
@@ -10,6 +11,22 @@ export const SYNTAX_AUTO_LIMIT = 75_000;
 
 const httpData = defineLanguageFacet();
 const headNodeSet = createHeadNodeSet(httpData);
+
+const foldTheme = EditorView.theme({
+  "&.cm-editor .cm-foldPlaceholder": {
+    backgroundColor: "rgba(127, 127, 127, 0.16)",
+    border: "1px solid rgba(127, 127, 127, 0.28)",
+    color: "inherit",
+    opacity: "0.85",
+    borderRadius: "0",
+    padding: "0 4px",
+    margin: "0 2px",
+    cursor: "pointer",
+  },
+  "&.cm-editor .cm-foldPlaceholder:hover": {
+    opacity: "1",
+  },
+});
 
 function createHttpLanguage(bodyLimit, { armory = false, framed = false } = {}) {
   const nest = (node, input) => {
@@ -55,7 +72,7 @@ export function httpHighlighting({ mode, armory = false, framing = "" } = {}) {
   const isAuto = mode === "auto";
   if (!isAuto && mode !== "enabled") return [];
 
-  if (!armory) return [isAuto ? autoLanguage : enabledLanguage];
+  if (!armory) return [isAuto ? autoLanguage : enabledLanguage, foldTheme];
 
   const framed = isMessageFraming(framing);
   const language = framed
@@ -65,5 +82,5 @@ export function httpHighlighting({ mode, armory = false, framing = "" } = {}) {
     : isAuto
       ? autoArmoryLanguage
       : enabledArmoryLanguage;
-  return [language, ...armoryOverlay(isAuto ? SYNTAX_AUTO_LIMIT : Infinity)];
+  return [language, foldTheme, ...armoryOverlay(isAuto ? SYNTAX_AUTO_LIMIT : Infinity)];
 }
