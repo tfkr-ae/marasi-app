@@ -1,6 +1,7 @@
 // The Service log drawer's logic: its level filter, and opening the pair a
-// line names. ServiceLog.svelte draws it; homeStore holds the lines (homeApi's
-// toLog shape: Level, Message, RequestID, ExtensionID, Timestamp).
+// line names. ServiceLog.svelte draws it; serviceLogStore holds the lines
+// (serviceLogApi's toLog shape: Level, Message, RequestID, ExtensionID,
+// Timestamp).
 
 const RANK = { DEBUG: 0, INFO: 1, WARN: 2, WARNING: 2, ERROR: 3, FATAL: 4 };
 

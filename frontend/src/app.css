@@ -148,6 +148,12 @@ select[data-overlay-initial-focus]:focus {
     background-color: rgb(var(--color-success-200)) !important;
     filter: none !important;
   }
+
+  /* A card or row that is itself the button (Home's figures, Pending items
+     and bars, the Service log's lines) tints as the pointer crosses it. */
+  .action-card:not(:disabled):hover {
+    background-color: rgb(var(--color-surface-500) / 0.12);
+  }
 }
 
 /* The mobile app (html.mobile, lib/platform.js): a long press opens the app's

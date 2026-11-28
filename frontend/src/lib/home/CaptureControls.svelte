@@ -1,8 +1,9 @@
 <script>
 	// Home's capture controls: the listener group (address, Stop/Start, Open
 	// Project), Download Certificate, Start Chrome with its profiles (not on
-	// a phone) and the Service log. From 40rem up they form one row; below it
-	// they stack full-width. Every button is the same height, in text-xs.
+	// a phone) and the Service log. From 40rem up they form a row that wraps
+	// between controls, never inside one, so none is clipped; below it they
+	// stack full-width. Every button is the same height, in text-xs.
 	import { createEventDispatcher, onMount } from "svelte";
 	import { modeCurrent, popup } from "@skeletonlabs/skeleton";
 	import { ChevronDown, Download, FolderOpen, Play, ScrollText, Square } from "lucide-svelte";
@@ -24,14 +25,14 @@
 	});
 
 	// One size for every button: the group's small padding, text-xs.
-	const size = "btn btn-sm text-xs !px-3 !py-1.5 gap-1.5";
+	const size = "btn btn-sm text-xs !px-3 !py-1.5 gap-1.5 whitespace-nowrap";
 	$: neutral = `${size} ${neutralVariant($modeCurrent)}`;
 	$: primary = `${size} ${primaryVariant($modeCurrent)}`;
 	$: full = compact ? "w-full" : "";
 	const chromeProfilesPopup = { event: "click", target: "chromeProfilesPopup", placement: "bottom-end" };
 </script>
 
-<div class={compact ? "w-full space-y-2" : "flex flex-nowrap items-center gap-2 whitespace-nowrap"} data-testid="home-capture">
+<div class={compact ? "w-full space-y-2" : "flex min-w-0 flex-wrap items-center gap-2"} data-testid="home-capture">
 	<div class="btn-group btn-group-sm [&>button]:!text-xs [&>button]:!px-3 [&>button]:!py-1.5 {full} {$modeCurrent ? 'light-ghost-group' : 'variant-filled'}">
 		<button type="button" class="{neutral} {compact ? 'flex-1 min-w-0' : ''}" title="Change listener" on:click={() => dispatch("editListener")}>
 			<span class="truncate font-mono text-2xs" data-testid="home-listener"

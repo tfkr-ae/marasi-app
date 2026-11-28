@@ -52,9 +52,9 @@ test("Launchpads counts the launchpads and opens the Launchpad", () => {
   assert.deepEqual(launchpads.destination, { page: "launchpad" });
 });
 
-test("Held counts the held requests, says whether Intercept all is on, and opens Checkpoint", () => {
+test("In Checkpoint counts the intercepted requests, says whether Intercept all is on, and opens Checkpoint", () => {
   const quiet = figure(project, "held");
-  assert.equal(quiet.label, "Held");
+  assert.equal(quiet.label, "In Checkpoint");
   assert.equal(quiet.value, "0");
   assert.equal(quiet.sub, "Intercept all off");
   assert.deepEqual(quiet.destination, { page: "checkpoint" });
@@ -94,7 +94,7 @@ test("Scope shows the default with the include and exclude counts, and opens Com
 test("the eight tiles come in order", () => {
   assert.deepEqual(
     overviewOf(project).figures.map((f) => f.label),
-    ["Pairs", "Intercepted", "With a note", "Launchpads", "Held", "Armory runs", "Test cases done", "Scope"],
+    ["Pairs", "Intercepted", "With a note", "Launchpads", "In Checkpoint", "Armory runs", "Test cases done", "Scope"],
   );
 });
 
@@ -116,10 +116,10 @@ test("until the counts and the scope are first read, their tiles have no value",
 test("each status class counts its responses and opens the Ledger filtered to its range", () => {
   const classes = overviewOf({ ...project, statusClasses: { "2xx": 40, "3xx": 5, "4xx": 3, "5xx": 1 } }).statusClasses;
   assert.deepEqual(classes, {
-    "2xx": { count: 40, destination: { page: "ledger", query: "status_code >= 200 status_code < 300" } },
-    "3xx": { count: 5, destination: { page: "ledger", query: "status_code >= 300 status_code < 400" } },
-    "4xx": { count: 3, destination: { page: "ledger", query: "status_code >= 400 status_code < 500" } },
-    "5xx": { count: 1, destination: { page: "ledger", query: "status_code >= 500" } },
+    "2xx": { count: 40, colour: "success", destination: { page: "ledger", query: "status_code >= 200 status_code < 300" } },
+    "3xx": { count: 5, colour: "tertiary", destination: { page: "ledger", query: "status_code >= 300 status_code < 400" } },
+    "4xx": { count: 3, colour: "warning", destination: { page: "ledger", query: "status_code >= 400 status_code < 500" } },
+    "5xx": { count: 1, colour: "error", destination: { page: "ledger", query: "status_code >= 500 status_code < 600" } },
   });
 });
 
@@ -181,9 +181,9 @@ test("a listener the researcher stopped is pending, and its item starts the list
   assert.deepEqual(item.destination, { action: "start-listener" });
 });
 
-test("held requests are pending with their count, and open Checkpoint", () => {
+test("requests intercepted in Checkpoint are pending with their count, and open Checkpoint", () => {
   const item = pendingItem({ ...project, held: 3 }, "held");
-  assert.equal(item.title, "3 held in Checkpoint");
+  assert.equal(item.title, "3 intercepted in Checkpoint");
   assert.deepEqual(item.destination, { page: "checkpoint" });
 });
 
@@ -237,4 +237,19 @@ test("everything pending lists in order: listener, held, Intercept all, urgent",
 
 test("Armory runs in progress aren't pending", () => {
   assert.deepEqual(pendingIds({ ...project, activeRuns: 2 }), []);
+});
+
+test("Checkpoint's copy says intercepted, never hold or held", () => {
+  const busy = overviewOf({
+    ...project,
+    listenerStopped: true,
+    held: 2,
+    interceptAll: true,
+    findings: [{ severity: "Critical", done: false }],
+  });
+  const copy = [
+    ...busy.figures.flatMap((f) => [f.label, f.sub ?? ""]),
+    ...busy.pending.flatMap((item) => [item.title, item.detail, item.action]),
+  ];
+  assert.deepEqual(copy.filter((text) => /\bhol(d|ds|ding)\b|\bheld\b/i.test(text)), []);
 });

@@ -1,22 +1,21 @@
-// Home's data: the dashboard counts, the scope's rule counts, the proxy
-// listener's status and the service's log. It reads through the injected
+// Home's data: the dashboard counts, the scope's rule counts, the pairs per
+// status class and the proxy listener's status. It reads through the injected
 // `api` (homeApi.js over the service client; tests pass a fake client):
 //
 //   dashboard() -> {requests, notes, launchpads, intercepted, interceptedComplete}
 //   scope() -> {defaultAllow, includeCount, excludeCount}
 //   statusClasses() -> {"2xx", "3xx", "4xx", "5xx"}: pairs per status class
-//   logs() -> [log], oldest first, in the Service log's fields (toLog)
-//   extensionNames() -> {id: name}
 //   listener() -> {status, address, port}
 //   setListener(address, port, active) -> {status, address, port}
 //   stopListener() -> {status, address, port}
 //
 // homeStore.js routes the stream's events, as the service sends them, to
-// onLog, onListener, onJobComplete, onRequest, onResponse and
-// onCountsChanged.
-// A part that fails to read stays null (or as it was) and the rest load.
+// onListener, onJobComplete, onScope, onRequest, onResponse and
+// onCountsChanged. The Service log keeps its own store (serviceLogStore.js).
+// A part that fails to read stays null (or as it was) and the rest load,
+// except the status classes, which count no responses in any class.
 import { get, writable } from "svelte/store";
-import { noStatusClasses, toListener, toLog, toScope } from "./homeApi.js";
+import { noStatusClasses, toListener, toScope } from "./homeApi.js";
 import { codeIDs } from "../lib/errorCodes.js";
 
 /**
@@ -31,8 +30,6 @@ const empty = () => ({
   dashboard: null,
   scope: null,
   statusClasses: null,
-  logs: [],
-  extensionNames: {},
   listener: { status: false, address: "", port: "" },
   lastListener: null,
   // The researcher stopped the listener (Home's Pending reads it); a start clears it.
@@ -82,10 +79,13 @@ export function createHomeStore(api) {
     if (run === generation) store.update((s) => ({ ...s, statusClasses: value }));
   }
 
-  // The dashboard counts and, unless `classes` is false, the status
-  // classes, which count the same pairs.
-  async function readDashboard(run = generation, { dashboard = true, classes = true } = {}) {
-    await Promise.all([dashboard && read("dashboard", run, api.dashboard), classes && readStatusClasses(run)]);
+  // The counts `parts` names: "dashboard", "statusClasses" or both.
+  const COUNTS = ["dashboard", "statusClasses"];
+  async function readCounts(run, parts = COUNTS) {
+    await Promise.all([
+      parts.includes("dashboard") && read("dashboard", run, api.dashboard),
+      parts.includes("statusClasses") && readStatusClasses(run),
+    ]);
   }
 
   /** Reads every part from the service. Also the store's resync. */
@@ -93,10 +93,8 @@ export function createHomeStore(api) {
     const run = ++generation;
     store.update((s) => ({ ...s, loading: true }));
     await Promise.all([
-      readDashboard(run),
+      readCounts(run),
       read("scope", run, api.scope),
-      read("logs", run, api.logs),
-      read("extensionNames", run, api.extensionNames),
       readListener(run),
     ]);
     if (run === generation) store.update((s) => ({ ...s, loading: false }));
@@ -104,20 +102,21 @@ export function createHomeStore(api) {
 
   let countsTimer = null;
   let counting = Promise.resolve();
-  // What the pending window reads: the dashboard counts, the status classes.
-  let due = { dashboard: false, classes: false };
+  // The counts the pending window reads.
+  let due = new Set();
 
-  // Reads the counts once the settle window that the first change since
-  // the last read started has passed. Later changes join that window. A
-  // response only changes the status classes, unless it was intercepted.
-  function countsChanged({ dashboard = true, classes = true } = {}) {
-    due = { dashboard: due.dashboard || dashboard, classes: due.classes || classes };
+  // Reads the counts `parts` names once the settle window that the first
+  // change since the last read started has passed. Later changes join that
+  // window. A response only changes the status classes, unless it was
+  // intercepted.
+  function countsChanged(parts = COUNTS) {
+    for (const part of parts) due.add(part);
     if (countsTimer !== null) return;
     countsTimer = setTimeout(() => {
       countsTimer = null;
-      const parts = due;
-      due = { dashboard: false, classes: false };
-      counting = readDashboard(generation, parts);
+      const read = [...due];
+      due = new Set();
+      counting = readCounts(generation, read);
     }, DASHBOARD_SETTLE_MS);
   }
 
@@ -139,26 +138,21 @@ export function createHomeStore(api) {
      * Intercepted count follows, changes a dashboard count.
      */
     onResponse(event) {
-      countsChanged({ dashboard: event?.metadata?.intercepted === true });
+      countsChanged(event?.metadata?.intercepted === true ? COUNTS : ["statusClasses"]);
     },
     /** Waits for a dashboard read onCountsChanged started. */
     settled: () => counting,
     /** Reads the counts and scope again, as Home does each time it shows. */
     async refreshDashboard() {
       const run = generation;
-      await Promise.all([readDashboard(run), read("scope", run, api.scope)]);
+      await Promise.all([readCounts(run), read("scope", run, api.scope)]);
     },
     clear() {
       clearTimeout(countsTimer);
       countsTimer = null;
-      due = { dashboard: false, classes: false };
+      due = new Set();
       generation++;
       store.set(empty());
-    },
-    /** A log.added event. */
-    onLog(event) {
-      const log = toLog(event);
-      store.update((s) => (s.logs.some((l) => l.ID === log.ID) ? s : { ...s, logs: [...s.logs, log] }));
     },
     /**
      * Starts the proxy listener on `address:port`, or moves it there, and
@@ -208,7 +202,7 @@ export function createHomeStore(api) {
     async onJobComplete(event) {
       if (event?.name !== "intercepted_count") return;
       if (get(store).dashboard?.interceptedComplete !== false) return;
-      await readDashboard(generation, { classes: false });
+      await readCounts(generation, ["dashboard"]);
     },
   };
 }
