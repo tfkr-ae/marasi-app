@@ -279,6 +279,16 @@ test("global actions stay available on pages and in drawers", () => {
   }
 });
 
+test("⌘⌥L opens the Service log from every page, its drawers included", () => {
+  const dispatcher = mac();
+  const press = () => keydown("¬", "KeyL", { metaKey: true, altKey: true });
+  const pages = ["/", "/ledger", "/compass", "/checkpoint", "/launchpad", "/armory", "/logbook", "/workshop", "/settings"];
+  const states = [...pages.map((route) => on(route)), on("/ledger", requestDrawer()), armoryDrawerOpen(), on("/", { open: true, id: "service-log" })];
+  for (const state of states) {
+    assert.equal(dispatcher.resolve(press(), state), "global.open-service-log", state.route);
+  }
+});
+
 test("Windows/Linux page shortcuts use Ctrl", () => {
   const dispatcher = createDispatcher({ catalog: buildCatalog(), platform: WINDOWS_LINUX });
   const ctrlShift = (key, code) => keydown(key, code, { ctrlKey: true, shiftKey: true });

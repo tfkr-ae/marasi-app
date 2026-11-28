@@ -99,6 +99,7 @@ const TAIL_FACTORY_ACTIONS = [
   action("global.reset-text-size", "Reset Text Size", "Set text back to the default size", "text, font, size, reset, default, zoom", primary("0"), { group: "appearance" }),
   action("global.check-for-updates", "Check for updates…", "Check your channel for a newer build", "update, updates, version, release, nightly", primary("shift+u"), { group: "project" }),
   action("global.connections", "Connections…", "Switch or manage connections", "connection, connections, remote, local, service, switch", primary("9"), { group: "project" }),
+  action("global.open-service-log", "Open Service log", "Show the service's own messages in the drawer", "service log, log, messages, errors, warnings, extension output", primary("alt+l"), { group: "project" }),
   action("global.send-to-cyberchef", "Send to CyberChef", "Send the selection, or the whole editor, to CyberChef as input", "cyberchef, chef, send, decode, input", primary("e")),
   action("global.toggle-intercept", "Toggle Intercept", "Turn Intercept all on or off", "intercept, all, toggle, global", primary("i"), { group: "browser" }),
   ...pageActions("ledger.drawer-closed", [

@@ -2,15 +2,15 @@
 	import { GetChromeProfiles } from "../lib/bindings/github.com/tfkr-ae/marasi-app/app.js";
 	import { startChrome as startChromeOn } from "../lib/chrome.js";
 	import { ChromeIcon } from "svelte-feather-icons";
-	import LogTable from "../lib/components/LogTable.svelte";
 	import Dashboard from "../lib/components/Dashboard.svelte";
 	import {
+		getDrawerStore,
 		getModalStore,
 		getToastStore,
 		popup,
 		modeCurrent,
 	} from "@skeletonlabs/skeleton";
-	import { ChevronDown, Download, FolderOpen, Play, Square } from "lucide-svelte";
+	import { ChevronDown, Download, FolderOpen, Play, ScrollText, Square } from "lucide-svelte";
 	import { homeStore } from "../stores/homeStore";
 	import {
 		chromeError,
@@ -26,6 +26,8 @@
 	import { service } from "../lib/service/index.js";
 	import { connectionStore } from "../stores/connectionStore.js";
 	import { mobile, mobileCheck } from "../lib/platform.js";
+	import { toggleServiceLog } from "../lib/serviceLog.js";
+	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
 	const toastStore = getToastStore();
 	let chromeProfiles = [];
@@ -184,18 +186,20 @@
 						{/if}
 					</div>
 					{/if}
+					<button
+						type="button"
+						class="btn btn-sm text-sm {neutralVariant($modeCurrent)}"
+						data-testid="home-service-log"
+						on:click={() => toggleServiceLog(drawerStore, $drawerStore)}
+					>
+						<span><ScrollText size={16} /></span>
+						<span>Service log</span>
+					</button>
 				</div>
 			</div>
 			<Dashboard />
-			{#if $mobile}<LogTable compact />{/if}
 		</div>
 	</div>
-
-	{#if !$mobile}
-	<div class="log-table-container">
-		<LogTable />
-	</div>
-	{/if}
 </div>
 
 <style>
@@ -203,88 +207,23 @@
 		background-color: rgb(var(--color-surface-400) / 0.25) !important;
 	}
 
-	/* Container for the page content */
+	/* One scrolling column: the header and the cards. The Service log
+	   opens in the app drawer (ServiceLog.svelte). */
 	.content {
-		display: flex;
-		flex-direction: column;
-		height: 100vh; /* Use fixed height instead of min-height */
-		overflow: hidden; /* Prevent overall page scrolling */
-		position: relative; /* Create positioning context */
-	}
-
-	/* Main content area - fixed, non-scrollable */
-	.dashboard-content {
-		flex: 1 0 auto;
-		overflow-y: hidden; /* Prevent dashboard content from scrolling */
-		max-height: calc(
-			100vh - 30vh
-		); /* Ensure it doesn't overflow available space */
-		padding-bottom: 1rem;
-	}
-
-	/* Log table container - the only scrollable part */
-	.log-table-container {
-		flex: 0 0 50vh; /* Fixed height */
-		height: 50vh;
-		border-top: 2px solid rgb(var(--color-surface-300));
-		background-color: rgb(var(--color-surface-50));
-		overflow-y: auto; /* Enable scrolling only for log table */
-		position: relative; /* Create stacking context */
-		bottom: 0; /* Position at bottom */
-		width: 100%;
-		scrollbar-color: rgb(var(--color-surface-400))
-			rgb(var(--color-surface-100));
-	}
-
-	:global(.dark) .log-table-container {
-		border-top-color: rgb(var(--color-surface-500));
-		background-color: rgb(var(--color-surface-900));
-		scrollbar-color: rgb(var(--color-surface-600))
-			rgb(var(--color-surface-800));
-	}
-
-	/* The iOS app: one scrolling column, the cards and the log in line
-	   with the header, no split between them. */
-	.mobile-home {
-		height: 100%;
+		height: 100vh;
 		overflow-y: auto;
 	}
-	.mobile-home .dashboard-content {
-		flex: none;
-		max-height: none;
-		overflow: visible;
+	.mobile-home {
+		height: 100%;
 	}
-	/* Full width, so its edges line up with the connection banner's
-	   (px-4) above the page, as the header does with the cards. */
+	/* Full width on a phone, so its edges line up with the connection
+	   banner's (px-4) above the page, as the header does with the cards. */
 	.mobile-home :global(.container) {
 		max-width: none;
 	}
 	.mobile-home :global([data-dashboard]) {
 		padding-left: 0;
 		padding-right: 0;
-	}
-
-	/* Responsive adjustments for small screens */
-	@media (max-height: 700px) {
-		.dashboard-content {
-			max-height: calc(100vh - 25vh);
-		}
-
-		.log-table-container {
-			flex: 0 0 25vh;
-			height: 25vh;
-		}
-	}
-
-	@media (max-height: 500px) {
-		.dashboard-content {
-			max-height: calc(100vh - 20vh);
-		}
-
-		.log-table-container {
-			flex: 0 0 20vh;
-			height: 20vh;
-		}
 	}
 
 	/* The mobile layout (html.mobile, lib/platform.js). The selectors are
@@ -306,8 +245,8 @@
 		justify-content: center;
 	}
 	/* ---- Narrow mobile: Home, the dock buttons, CVSS ---- */
-	/* Home's listener and Open Project, and Download Certificate, each take
-	   the full width. */
+	/* Home's listener and Open Project, and Download Certificate with the
+	   Service log, each take the full width. */
 	@media (max-width: 40rem) {
 		:global(html.mobile .mobile-home .header > *) {
 			flex: 1 1 100%;

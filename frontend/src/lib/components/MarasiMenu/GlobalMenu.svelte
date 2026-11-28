@@ -41,6 +41,7 @@
 		ToggleLeft,
 		Brush,
 		Shapes,
+		ScrollText,
 	} from "lucide-svelte";
 	import MarasiMenu from "./MarasiMenu.svelte";
 	import ExtensionUI from "../../extensions/ExtensionUI.svelte";
@@ -90,6 +91,7 @@
 	import { sendFocusedToChef, trackEditors } from "../../tools/cyberchef/sendAction.js";
 	import { interactActivator } from "../../interact.js";
 	import { railOrder } from "../../../stores/railOrderStore.js";
+	import { toggleServiceLog } from "../../serviceLog.js";
 
 	const drawerStore = getDrawerStore();
 	const modalStore = getModalStore();
@@ -164,6 +166,10 @@
 		"global.check-for-updates": checkForUpdates,
 		"global.toggle-intercept": () => checkpointStore.toggleIntercept(),
 		"global.connections": () => toggleModal(connectionsModal()),
+		"global.open-service-log": () => {
+			modalStore.close();
+			toggleServiceLog(drawerStore, get(drawerStore));
+		},
 	};
 
 	// "Check for updates…": an update opens the details panel; otherwise a
@@ -204,6 +210,7 @@
 		"global.check-for-updates": ArrowUpCircle,
 		"global.toggle-intercept": ToggleLeft,
 		"global.connections": Network,
+		"global.open-service-log": ScrollText,
 	};
 
 	$: menuDispatcher.configure({

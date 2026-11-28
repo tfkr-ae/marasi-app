@@ -28,6 +28,7 @@
     "global.reset-text-size": {"macos":["meta+0"],"windows-linux":["ctrl+0"]},
     "global.check-for-updates": {"macos":["meta+shift+u"],"windows-linux":["ctrl+shift+u"]},
     "global.connections": {"macos":["meta+9"],"windows-linux":["ctrl+9"]},
+    "global.open-service-log": {"macos":["meta+alt+l"],"windows-linux":["ctrl+alt+l"]},
     "global.send-to-cyberchef": {"macos":["meta+e"],"windows-linux":["ctrl+e"]},
     "global.toggle-intercept": {"macos":["meta+i"],"windows-linux":["ctrl+i"]},
     "ledger.drawer-closed.toggle-settings": {"macos":["meta+p"],"windows-linux":["ctrl+p"]},
