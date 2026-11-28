@@ -4,7 +4,7 @@
 //
 //   dashboard() -> {requests, notes, launchpads, intercepted, interceptedComplete}
 //   scope() -> {defaultAllow, includeCount, excludeCount}
-//   logs() -> [log], oldest first, in the log table's fields (toLog)
+//   logs() -> [log], oldest first, in the Service log's fields (toLog)
 //   extensionNames() -> {id: name}
 //   listener() -> {status, address, port}
 //   setListener(address, port, active) -> {status, address, port}

@@ -50,6 +50,15 @@ test("the palette order of global actions is preserved", () => {
   assert.equal(ids.at(-1), "global.toggle-intercept");
 });
 
+test("Open Service log is a global Project action bound to ⌘⌥L and Ctrl+Alt+L", () => {
+  const action = buildCatalog().get("global.open-service-log");
+  assert.ok(action);
+  assert.equal(action.label, "Open Service log");
+  assert.equal(action.context, "global");
+  assert.equal(action.group, "project");
+  assert.deepEqual(action.defaults, { [MACOS]: ["meta+alt+l"], [WINDOWS_LINUX]: ["ctrl+alt+l"] });
+});
+
 test("Check for updates… is a global Marasi menu action bound to ⌘⇧U and Ctrl+Shift+U", () => {
   const action = buildCatalog().get("global.check-for-updates");
   assert.ok(action);
@@ -405,7 +414,7 @@ test("the global menu groups gather Marasi's own actions as the spec lists them"
     "go-home", "go-ledger", "go-compass", "go-checkpoint", "go-launchpad",
     "go-armory", "go-logbook", "go-workshop", "go-cyberchef", "go-excalidraw", "go-interact", "go-settings", "open-extension.port-scanner",
   ]);
-  assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "setup-listener", "toggle-listener"]);
+  assert.deepEqual(inGroup("project").sort(), ["check-for-updates", "connections", "open-project", "open-service-log", "setup-listener", "toggle-listener"]);
   assert.deepEqual(inGroup("browser").sort(), ["copy-certificate", "download-certificate", "start-chrome", "toggle-intercept"]);
   assert.deepEqual(inGroup("appearance").sort(), [
     "decrease-text-size", "increase-text-size", "reset-text-size", "toggle-light-mode", "toggle-vim",
