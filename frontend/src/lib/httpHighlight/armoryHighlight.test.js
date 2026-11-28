@@ -2,13 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EditorState, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { HighlightStyle, ensureSyntaxTree, foldable } from "@codemirror/language";
+import { ensureSyntaxTree, foldable } from "@codemirror/language";
 import { classHighlighter, highlightTree, tags as t } from "@lezer/highlight";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
-import { githubLightStyle } from "@uiw/codemirror-theme-github";
 import { SYNTAX_AUTO_LIMIT, httpHighlighting } from "../httpHighlight.js";
-
-const githubLightHighlightStyle = HighlightStyle.define(githubLightStyle);
+import {
+  classFor as baseClassFor,
+  createHttpState,
+  githubLightHighlightStyle,
+  highlightSpans as baseHighlightSpans,
+} from "./testHelpers.js";
 
 function overlaySpans(state) {
   const ranges = [];
@@ -27,10 +30,7 @@ function overlaySpans(state) {
 }
 
 function armoryState(doc, opts = {}) {
-  const mode = "mode" in opts ? opts.mode : "auto";
-  const armory = "armory" in opts ? opts.armory : true;
-  const framing = opts.framing ?? "";
-  return EditorState.create({ doc, extensions: httpHighlighting({ mode, armory, framing }) });
+  return createHttpState(doc, { armory: true, ...opts });
 }
 
 function overlaysFor(doc, opts = {}) {
@@ -38,32 +38,11 @@ function overlaysFor(doc, opts = {}) {
 }
 
 function highlightSpans(doc, opts = {}) {
-  const highlighter = opts.highlighter ?? classHighlighter;
-  const state = armoryState(doc, opts);
-  const tree = ensureSyntaxTree(state, state.doc.length, 5000);
-  if (!tree) return [];
-  const spans = [];
-  highlightTree(tree, highlighter, (from, to, classes) => {
-    spans.push({ from, to, text: state.doc.sliceString(from, to), classes });
-  });
-  return spans;
+  return baseHighlightSpans(doc, { armory: true, ...opts });
 }
 
 function classFor(doc, needle, options = {}) {
-  const { fromIndex = 0 } = options;
-  const state = armoryState(doc, options);
-  const text = state.doc.toString();
-  const from = text.indexOf(needle, fromIndex);
-  assert.ok(from >= 0, `needle ${JSON.stringify(needle)} not found in doc`);
-  const to = from + needle.length;
-  const highlighter = options.highlighter ?? classHighlighter;
-  const tree = ensureSyntaxTree(state, state.doc.length, 5000);
-  if (!tree) return null;
-  let found = null;
-  highlightTree(tree, highlighter, (sFrom, sTo, classes) => {
-    if (found === null && sFrom <= from && sTo >= to) found = classes;
-  });
-  return found;
+  return baseClassFor(doc, needle, { armory: true, ...options });
 }
 
 test("@@fallback@@ payload markers highlight across start-line, headers, and JSON/HTML/form bodies", () => {
@@ -492,9 +471,9 @@ test("framed bodies add no folds/closeBrackets, emit zero invalid spans, respect
   assert.deepEqual(protoState.languageDataAt("closeBrackets", protoDoc.indexOf('"x"')), []);
   assert.deepEqual(protoState.languageDataAt("indentOnInput", protoDoc.indexOf('"x"')), []);
 
-  // SYNTAX_AUTO_LIMIT: under auto, head & Armory overlays stay active while framed body >= 75,000 is skipped
+  // SYNTAX_AUTO_LIMIT: under auto, head & head Armory overlays stay active while body (>= 75,000) skips both body parser and Armory overlays
   const head = "POST /svc/M HTTP/2\n:authority: @@host@@\ncontent-type: application/grpc\n\n";
-  const largeBody = `--- message ---\n1:LEN {"${"a".repeat(SYNTAX_AUTO_LIMIT)}"}\n`;
+  const largeBody = `--- message ---\n1:LEN {"@@bodyMarker@@ {{uuid}} ${"a".repeat(SYNTAX_AUTO_LIMIT)}"}\n`;
   assert.ok(largeBody.length >= SYNTAX_AUTO_LIMIT);
   const largeDoc = head + largeBody;
 
@@ -505,9 +484,17 @@ test("framed bodies add no folds/closeBrackets, emit zero invalid spans, respect
     [["@@host@@", "cm-armory-marker"]],
   );
 
-  // Under enabled, large framed body IS highlighted
+  // Under enabled, large framed body AND its Armory overlays ARE highlighted
   assert.equal(classFor(largeDoc, "--- message ---", { mode: "enabled", framing: "grpc" }), "tok-heading");
   assert.equal(classFor(largeDoc, "LEN", { mode: "enabled", framing: "grpc" }), "tok-keyword");
+  assert.deepEqual(
+    overlaysFor(largeDoc, { mode: "enabled", framing: "grpc" }).map((m) => [m.text, m.className]),
+    [
+      ["@@host@@", "cm-armory-marker"],
+      ["@@bodyMarker@@", "cm-armory-marker"],
+      ["{{uuid}}", "cm-armory-template"],
+    ],
+  );
 
   // Scoping guarantee: non-Armory HTTP editor NEVER highlights --- message --- as a framed separator
   const nonArmoryDoc = "POST /svc/M HTTP/2\ncontent-type: application/grpc\n\n--- message ---\n1:VARINT 1\n";
@@ -530,6 +517,29 @@ test("framed bodies add no folds/closeBrackets, emit zero invalid spans, respect
   reconf = reconf.update({ effects: StateEffect.reconfigure.of(httpHighlighting({ mode: "auto", armory: true, framing: "grpc" })) }).state;
   assert.equal(spansOf(reconf).some((s) => s.text === "--- message ---" && s.classes === "tok-heading"), true);
   assert.equal(spansOf(reconf).some((s) => s.text === "VARINT" && s.classes === "tok-keyword"), true);
+});
+
+test("Armory actions and markers containing spaces in the request target keep HTTP version valid", () => {
+  const templateTarget = 'POST /items/{{.Payload 0 "1"}} HTTP/1.1\nHost: app.test\n\n';
+  assert.equal(classFor(templateTarget, "POST"), "tok-keyword");
+  assert.equal(classFor(templateTarget, '/items/{{.Payload 0 "1"}}'), "tok-string2");
+  assert.equal(classFor(templateTarget, "HTTP/1.1"), "tok-keyword");
+  assert.deepEqual(
+    highlightSpans(templateTarget).filter((s) => s.classes.includes("tok-invalid")),
+    [],
+  );
+
+  const markerTarget = "GET /search?q=@@hello world@@.urlencode() HTTP/2\n:authority: app.test\n\n";
+  assert.equal(classFor(markerTarget, "GET"), "tok-keyword");
+  assert.equal(classFor(markerTarget, "/search?q=@@hello world@@.urlencode()"), "tok-string2");
+  assert.equal(classFor(markerTarget, "HTTP/2"), "tok-keyword");
+  assert.deepEqual(
+    highlightSpans(markerTarget).filter((s) => s.classes.includes("tok-invalid")),
+    [],
+  );
+
+  // Non-Armory mode still flags unescaped spaces in the request target as invalid
+  assert.equal(classFor(templateTarget, "HTTP/1.1", { armory: false }), "tok-invalid");
 });
 
 

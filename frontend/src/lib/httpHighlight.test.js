@@ -1,37 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EditorState, StateEffect } from "@codemirror/state";
-import { HighlightStyle, ensureSyntaxTree, foldable } from "@codemirror/language";
+import { ensureSyntaxTree, foldable } from "@codemirror/language";
 import { classHighlighter, highlightTree, tags as t } from "@lezer/highlight";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
-import { githubLightStyle } from "@uiw/codemirror-theme-github";
 import { SYNTAX_AUTO_LIMIT, httpHighlighting } from "./httpHighlight.js";
 import { LONG_STRING_LIMIT, foldedLongStrings, longStrings } from "./longStrings.js";
-
-const githubLightHighlightStyle = HighlightStyle.define(githubLightStyle);
-
-function highlightSpans(doc, opts = {}) {
-  const mode = "mode" in opts ? opts.mode : "auto";
-  const highlighter = opts.highlighter ?? classHighlighter;
-  const state = EditorState.create({ doc, extensions: httpHighlighting({ mode }) });
-  const tree = ensureSyntaxTree(state, doc.length, 5000);
-  if (!tree) return [];
-  const spans = [];
-  highlightTree(tree, highlighter, (from, to, classes) => {
-    spans.push({ from, to, text: doc.slice(from, to), classes });
-  });
-  return spans;
-}
-
-function classFor(doc, needle, options = {}) {
-  const { fromIndex = 0 } = options;
-  const from = doc.indexOf(needle, fromIndex);
-  assert.ok(from >= 0, `needle ${JSON.stringify(needle)} not found in doc`);
-  const to = from + needle.length;
-  const spans = highlightSpans(doc, options);
-  const matching = spans.filter((s) => s.from <= from && s.to >= to);
-  return matching.length ? matching[0].classes : null;
-}
+import { classFor, githubLightHighlightStyle, highlightSpans } from "./httpHighlight/testHelpers.js";
 
 test("HTTP/1.1 request and response heads highlight with exact semantic token roles", () => {
   const req = "POST /api/v1/items?x=1 HTTP/1.1\nHost: shop.test\nX-Note: hello\n continued\n\n";
@@ -1063,4 +1038,15 @@ test("live edits re-evaluate binary guard, contradiction override, and prefix sn
   // Remove NUL byte -> HTML override highlighting returns immediately
   jsonState = jsonState.update({ changes: { from: jsonHead.length, to: jsonHead.length + 1, insert: "" } }).state;
   assert.ok(spansOf(jsonState).some((s) => s.text === "html" && s.classes === "tok-typeName"));
+});
+
+test("JS bodies starting with a >256-char array literal keep JavaScript highlighting", () => {
+  const longItem = "x".repeat(300);
+  const jsDoc = `HTTP/1.1 200 OK\nContent-Type: application/javascript\n\n["${longItem}"].forEach((v) => console.log(v));`;
+  assert.equal(classFor(jsDoc, "forEach"), "tok-propertyName");
+  assert.equal(classFor(jsDoc, "console"), "tok-variableName");
+
+  // Short closed JSON array under application/javascript still overrides cleanly to JSON
+  const jsonArrAsJs = 'HTTP/1.1 200 OK\nContent-Type: application/javascript\n\n[{"id": 1}, {"id": 2}]';
+  assert.equal(classFor(jsonArrAsJs, '"id"'), "tok-propertyName");
 });

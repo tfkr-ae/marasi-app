@@ -1,19 +1,17 @@
 import { Language, defineLanguageFacet } from "@codemirror/language";
 import { HttpParser, bodyMetaProp, createHeadNodeSet } from "./httpHighlight/headParser.js";
 import { bodyParserFor } from "./httpHighlight/bodyParsers.js";
-import { resolveBodyFormat } from "./httpHighlight/resolveBody.js";
-import { armoryOverlayExtensions } from "./httpHighlight/armoryOverlay.js";
+import { BODY_PREVIEW_BYTES, resolveBodyFormat } from "./httpHighlight/resolveBody.js";
+import { armoryOverlay } from "./httpHighlight/armoryOverlay.js";
 import { framedBodyParserFor, isMessageFraming } from "./httpHighlight/framedBodyParser.js";
 
 /** Bodies at least this long skip body highlighting under the "auto" syntax mode. */
 export const SYNTAX_AUTO_LIMIT = 75_000;
 
-const BODY_PREVIEW_BYTES = 256;
-
 const httpData = defineLanguageFacet();
 const headNodeSet = createHeadNodeSet(httpData);
 
-function createHttpLanguage(bodyLimit, { framed = false } = {}) {
+function createHttpLanguage(bodyLimit, { armory = false, framed = false } = {}) {
   const nest = (node, input) => {
     if (node.name !== "Body") return null;
     const bodyLength = node.to - node.from;
@@ -29,13 +27,15 @@ function createHttpLanguage(bodyLimit, { framed = false } = {}) {
     const parser = bodyParserFor(format);
     return parser ? { parser } : null;
   };
-  return new Language(httpData, new HttpParser(headNodeSet, nest), [], "http");
+  return new Language(httpData, new HttpParser(headNodeSet, nest, { armory }), [], "http");
 }
 
 const autoLanguage = createHttpLanguage(SYNTAX_AUTO_LIMIT);
 const enabledLanguage = createHttpLanguage(Infinity);
-const autoFramedLanguage = createHttpLanguage(SYNTAX_AUTO_LIMIT, { framed: true });
-const enabledFramedLanguage = createHttpLanguage(Infinity, { framed: true });
+const autoArmoryLanguage = createHttpLanguage(SYNTAX_AUTO_LIMIT, { armory: true });
+const enabledArmoryLanguage = createHttpLanguage(Infinity, { armory: true });
+const autoFramedLanguage = createHttpLanguage(SYNTAX_AUTO_LIMIT, { armory: true, framed: true });
+const enabledFramedLanguage = createHttpLanguage(Infinity, { armory: true, framed: true });
 
 /**
  * Returns CodeMirror extensions for HTTP syntax highlighting under `mode`
@@ -63,7 +63,7 @@ export function httpHighlighting({ mode, armory = false, framing = "" } = {}) {
       ? autoFramedLanguage
       : enabledFramedLanguage
     : isAuto
-      ? autoLanguage
-      : enabledLanguage;
-  return [language, ...armoryOverlayExtensions];
+      ? autoArmoryLanguage
+      : enabledArmoryLanguage;
+  return [language, ...armoryOverlay(isAuto ? SYNTAX_AUTO_LIMIT : Infinity)];
 }

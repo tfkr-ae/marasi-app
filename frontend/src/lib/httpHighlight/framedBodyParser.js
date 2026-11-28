@@ -3,6 +3,7 @@ import { StreamLanguage } from "@codemirror/language";
 import { styleTags, tags as t } from "@lezer/highlight";
 import { protobufText } from "../messages/protobufText.js";
 import { bodyParserFor } from "./bodyParsers.js";
+import { formatFromContentType } from "./resolveBody.js";
 
 const MESSAGE_FRAMINGS = new Set(["grpc", "grpc-web", "connect"]);
 const MESSAGE_SEPARATOR = "--- message ---";
@@ -31,15 +32,6 @@ const protobufTextParser = StreamLanguage.define({
 function isSeparatorLine(line) {
   const clean = line.endsWith("\r") ? line.slice(0, -1) : line;
   return clean === MESSAGE_SEPARATOR || clean === COMPRESSED_MESSAGE_SEPARATOR;
-}
-
-function isJsonContentType(contentType) {
-  if (!contentType || typeof contentType !== "string") return false;
-  const semi = contentType.indexOf(";");
-  const mediaType = (semi >= 0 ? contentType.slice(0, semi) : contentType).trim().toLowerCase();
-  if (mediaType === "application/json" || mediaType === "text/json") return true;
-  const slash = mediaType.indexOf("/");
-  return slash > 0 && mediaType.endsWith("+json") && mediaType.length > slash + "+json".length + 1;
 }
 
 class FramedBodyParse {
@@ -120,5 +112,5 @@ export function isMessageFraming(framing) {
 
 /** Returns the framed body Lezer parser (JSON or Protobuf text form) for `contentType`. */
 export function framedBodyParserFor(contentType) {
-  return isJsonContentType(contentType) ? framedJsonParser : framedProtobufParser;
+  return formatFromContentType(contentType) === "json" ? framedJsonParser : framedProtobufParser;
 }

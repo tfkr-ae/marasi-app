@@ -32,7 +32,7 @@ function isIdentChar(code) {
  * respecting `\\` and `\@` escapes as in Marasi's `armory/templates.go`.
  * Returns -1 if unclosed.
  */
-function findClosingMarker(text, from) {
+export function findClosingMarker(text, from) {
   const len = text.length;
   for (let i = from; i < len; ) {
     const ch = text.charCodeAt(i);
@@ -85,7 +85,7 @@ function scanFunctionChain(text, start, ranges) {
  * backtick raw strings (e.g. `` {{`{{`}} ``), and `/* ... *\/` comments.
  * Returns -1 if unclosed.
  */
-function findClosingTemplateAction(text, from) {
+export function findClosingTemplateAction(text, from) {
   const len = text.length;
   for (let i = from; i < len; ) {
     const ch = text.charCodeAt(i);
@@ -127,8 +127,30 @@ function findClosingTemplateAction(text, from) {
   return -1;
 }
 
-function buildArmoryDecorations(doc) {
-  const text = doc.toString();
+/**
+ * Returns the document offset immediately after the first blank line (head/body
+ * separator), or -1 if the document has no blank line.
+ */
+function findBodyStart(doc) {
+  for (let n = 1; n <= doc.lines; n++) {
+    const line = doc.line(n);
+    const content = line.text.endsWith("\r") ? line.text.slice(0, -1) : line.text;
+    if (content.length === 0) {
+      return Math.min(line.to + 1, doc.length);
+    }
+  }
+  return -1;
+}
+
+function buildArmoryDecorations(doc, bodyLimit) {
+  let scanEnd = doc.length;
+  if (Number.isFinite(bodyLimit) && doc.length >= bodyLimit) {
+    const bodyStart = findBodyStart(doc);
+    if (bodyStart >= 0 && doc.length - bodyStart >= bodyLimit) {
+      scanEnd = bodyStart;
+    }
+  }
+  const text = scanEnd === doc.length ? doc.toString() : doc.sliceString(0, scanEnd);
   const len = text.length;
   const ranges = [];
   let noMoreMarkers = false;
@@ -174,15 +196,17 @@ function buildArmoryDecorations(doc) {
   return Decoration.set(ranges);
 }
 
-const armoryDecorationsField = StateField.define({
-  create(state) {
-    return buildArmoryDecorations(state.doc);
-  },
-  update(value, tr) {
-    return tr.docChanged ? buildArmoryDecorations(tr.state.doc) : value;
-  },
-  provide: (field) => EditorView.decorations.from(field),
-});
+function createArmoryDecorationsField(bodyLimit) {
+  return StateField.define({
+    create(state) {
+      return buildArmoryDecorations(state.doc, bodyLimit);
+    },
+    update(value, tr) {
+      return tr.docChanged ? buildArmoryDecorations(tr.state.doc, bodyLimit) : value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  });
+}
 
 const armoryOverlayTheme = EditorView.baseTheme({
   "&light .cm-armory-marker, &light .cm-armory-marker *": {
@@ -229,5 +253,18 @@ const armoryOverlayTheme = EditorView.baseTheme({
   },
 });
 
-/** CodeMirror extensions that highlight Armory payload markers and template syntax. */
-export const armoryOverlayExtensions = [armoryDecorationsField, armoryOverlayTheme];
+const overlayCache = new Map();
+
+/**
+ * CodeMirror extensions that highlight Armory payload markers and Go template
+ * syntax. When `bodyLimit` is finite, bodies at least `bodyLimit` characters
+ * long skip overlay scanning while the HTTP head stays highlighted.
+ */
+export function armoryOverlay(bodyLimit = Infinity) {
+  let cached = overlayCache.get(bodyLimit);
+  if (!cached) {
+    cached = [createArmoryDecorationsField(bodyLimit), armoryOverlayTheme];
+    overlayCache.set(bodyLimit, cached);
+  }
+  return cached;
+}

@@ -32,7 +32,10 @@ export function formatFromContentType(contentType) {
   return null;
 }
 
-const PREVIEW_LIMIT = 256;
+export const BODY_PREVIEW_BYTES = 256;
+
+const TAG_UNCLOSED = -1;
+const TAG_NESTED_OPEN = -2;
 
 const HTML_TAGS = new Set([
   "html",
@@ -112,7 +115,7 @@ const JSON_KEYWORD = /^(?:true|false|null)/;
 const OPEN_TAG_START = /^<([A-Za-z][A-Za-z0-9:._-]*)(?=[\s/>])/;
 
 function hasBinaryPrefix(preview) {
-  const limit = Math.min(preview.length, PREVIEW_LIMIT);
+  const limit = Math.min(preview.length, BODY_PREVIEW_BYTES);
   for (let i = 0; i < limit; i++) {
     const code = preview.charCodeAt(i);
     if (
@@ -152,14 +155,14 @@ function scanJsonStringEnd(str, start) {
   return -1;
 }
 
-function hasCleanJsonTail(trimmed) {
+function hasCleanJsonTail(trimmed, { requireClosed = false } = {}) {
   let depth = 0;
   let i = 0;
   while (i < trimmed.length) {
     const ch = trimmed[i];
     if (ch === '"') {
       const end = scanJsonStringEnd(trimmed, i);
-      if (end < 0) return true;
+      if (end < 0) return !requireClosed;
       i = end;
       continue;
     }
@@ -181,7 +184,7 @@ function hasCleanJsonTail(trimmed) {
     }
     i++;
   }
-  return depth > 0;
+  return !requireClosed && depth > 0;
 }
 
 function looksLikeJsonValueStart(str, idx, depth) {
@@ -236,9 +239,10 @@ function looksLikeJsonValueStart(str, idx, depth) {
   return false;
 }
 
-function looksLikeJson(trimmed) {
+function looksLikeJson(trimmed, { requireClosedArray = false } = {}) {
   if (!trimmed || (trimmed[0] !== "{" && trimmed[0] !== "[")) return false;
-  return looksLikeJsonValueStart(trimmed, 0, 0) && hasCleanJsonTail(trimmed);
+  const requireClosed = requireClosedArray && trimmed[0] === "[";
+  return looksLikeJsonValueStart(trimmed, 0, 0) && hasCleanJsonTail(trimmed, { requireClosed });
 }
 
 function findTagClose(str, start) {
@@ -252,12 +256,12 @@ function findTagClose(str, start) {
     if (ch === '"' || ch === "'") {
       quote = ch;
     } else if (ch === "<") {
-      return -2;
+      return TAG_NESTED_OPEN;
     } else if (ch === ">") {
       return i;
     }
   }
-  return -1;
+  return TAG_UNCLOSED;
 }
 
 function sniffMarkup(trimmed, { strict = false } = {}) {
@@ -284,7 +288,7 @@ function sniffMarkup(trimmed, { strict = false } = {}) {
   const lower = tagName.toLowerCase();
   const afterName = tagMatch[0].length;
   const closeIdx = findTagClose(s, afterName);
-  if (closeIdx === -2) return null;
+  if (closeIdx === TAG_NESTED_OPEN) return null;
 
   const rawAttrs = (closeIdx >= 0 ? s.slice(afterName, closeIdx) : s.slice(afterName)).trim();
   const selfClosing = closeIdx >= 0 && rawAttrs.endsWith("/");
@@ -322,7 +326,7 @@ function sniffMarkup(trimmed, { strict = false } = {}) {
  * leading preview of the body.
  */
 export function resolveBodyFormat({ contentType, bodyPreview = "" } = {}) {
-  const preview = typeof bodyPreview === "string" ? bodyPreview.slice(0, PREVIEW_LIMIT) : "";
+  const preview = typeof bodyPreview === "string" ? bodyPreview.slice(0, BODY_PREVIEW_BYTES) : "";
   if (hasBinaryPrefix(preview)) return null;
 
   const declared = formatFromContentType(contentType);
@@ -342,11 +346,13 @@ export function resolveBodyFormat({ contentType, bodyPreview = "" } = {}) {
       }
       return declared;
     }
-    // Declared js, css, or form: only override on unmistakable HTML, XML, or JSON signatures
+    // Declared js, css, or form: only override on unmistakable HTML, XML, or JSON signatures.
+    // For JS, an unclosed leading array literal (`["<long>..."].forEach(...)`) is valid JS,
+    // so only override arrays when they close cleanly inside the preview with no JS tail.
     if (trimmed[0] === "<") {
       return sniffMarkup(trimmed, { strict: true }) ?? declared;
     }
-    if (looksLikeJson(trimmed)) {
+    if (looksLikeJson(trimmed, { requireClosedArray: declared === "js" })) {
       return "json";
     }
     return declared;

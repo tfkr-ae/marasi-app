@@ -1,6 +1,7 @@
 import { NodeProp, NodeSet, NodeType, Parser, Tree, parseMixed } from "@lezer/common";
 import { languageDataProp } from "@codemirror/language";
 import { styleTags, tags as t } from "@lezer/highlight";
+import { findClosingMarker, findClosingTemplateAction } from "./armoryOverlay.js";
 
 export const bodyMetaProp = new NodeProp({ perNode: true });
 
@@ -64,10 +65,39 @@ function skipHorizontalSpace(text, idx) {
   return idx;
 }
 
+function scanRequestTargetEnd(line, start, armory) {
+  let idx = start;
+  while (idx < line.length && line[idx] !== " " && line[idx] !== "\t") {
+    if (armory) {
+      if (line[idx] === "\\" && idx + 1 < line.length && (line[idx + 1] === "\\" || line[idx + 1] === "@")) {
+        idx += 2;
+        continue;
+      }
+      if (line[idx] === "@" && line[idx + 1] === "@") {
+        const closeEnd = findClosingMarker(line, idx + 2);
+        if (closeEnd > 0) {
+          idx = closeEnd;
+          continue;
+        }
+      }
+      if (line[idx] === "{" && line[idx + 1] === "{") {
+        const closeEnd = findClosingTemplateAction(line, idx + 2);
+        if (closeEnd > 0) {
+          idx = closeEnd;
+          continue;
+        }
+      }
+    }
+    idx++;
+  }
+  return idx;
+}
+
 class HttpHeadParse {
-  constructor(nodeSet, input, ranges) {
+  constructor(nodeSet, input, ranges, armory) {
     this.nodeSet = nodeSet;
     this.input = input;
+    this.armory = armory;
     this.start = ranges.length ? ranges[0].from : 0;
     this.end = ranges.length ? ranges[ranges.length - 1].to : input.length;
     this.parsedPos = this.start;
@@ -135,7 +165,7 @@ class HttpHeadParse {
             idx = skipHorizontalSpace(line, idx);
             if (idx < line.length) {
               const targetStart = idx;
-              while (idx < line.length && line[idx] !== " " && line[idx] !== "\t") idx++;
+              idx = scanRequestTargetEnd(line, idx, this.armory);
               pushToken(T_TARGET, pos + targetStart, pos + idx);
               idx = skipHorizontalSpace(line, idx);
               if (idx < line.length) {
@@ -206,14 +236,15 @@ class HttpHeadParse {
 }
 
 export class HttpParser extends Parser {
-  constructor(nodeSet, nest = null) {
+  constructor(nodeSet, nest = null, { armory = false } = {}) {
     super();
     this.nodeSet = nodeSet;
+    this.armory = armory;
     this.wrapper = nest ? parseMixed(nest) : null;
   }
 
   createParse(input, fragments, ranges) {
-    let parse = new HttpHeadParse(this.nodeSet, input, ranges);
+    let parse = new HttpHeadParse(this.nodeSet, input, ranges, this.armory);
     if (this.wrapper) parse = this.wrapper(parse, input, fragments, ranges);
     return parse;
   }

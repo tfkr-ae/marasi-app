@@ -60,10 +60,10 @@ Every code editor is `svelte-codemirror-editor`'s `CodeMirror`:
 - `WebSocketInject.svelte`, `WebSocketCheckpoint.svelte` and `WebSocketMessagesTable.svelte` are the WebSocket editors.
 - `lib/checkpoint/ItemWorkspace.svelte` holds the intercepted item and its context; `lib/checkpoint/RulesEditor.svelte` holds the Checkpoint rules.
 - `lib/extensions/components/Editor.svelte` is the editor an extension interface gets.
-- `lib/armory/TemplateEditor.svelte` holds the Armory request template.
+- `lib/armory/TemplateEditor.svelte` holds the Armory request template (opts into Armory overlays and framed message-form body highlighting via `httpHighlighting({ mode: $marasiConfig.SyntaxMode, armory: true, framing })`).
 - Compass and Workshop create their own in the route file.
 
-Raw HTTP is highlighted with `lib/httpHighlight.js` (`httpHighlighting({ mode: $marasiConfig.SyntaxMode })`), a shared Lezer HTTP language that parses HTTP/1.1 and Marasi's HTTP/2 text form (GLOSSARY Protocol) and mounts body parsers through `parseMixed`, honoring `SyntaxMode` (`auto` always highlights the head and skips body highlighting at 75,000 characters, `enabled` highlights all, `disabled` highlights nothing). Import it rather than `@codemirror/legacy-modes/mode/http`. The Lua editors' autocomplete is `lib/autocomplete/` (see `marasi-service.md`, Marasi source, for keeping it in step with Marasi).
+Raw HTTP is highlighted with `lib/httpHighlight.js` (`httpHighlighting({ mode: $marasiConfig.SyntaxMode })`) backed by `lib/httpHighlight/` (`headParser.js`, `bodyParsers.js`, `formParser.js`, `resolveBody.js`, `armoryOverlay.js`, `framedBodyParser.js`), a shared Lezer HTTP language that parses HTTP/1.1 and Marasi's HTTP/2 text form (GLOSSARY Protocol) and mounts body parsers through `parseMixed`, honoring `SyntaxMode` (`auto` always highlights the head and skips body highlighting at 75,000 characters, `enabled` highlights all, `disabled` highlights nothing). Import it rather than `@codemirror/legacy-modes/mode/http`. The Lua editors' autocomplete is `lib/autocomplete/` (see `marasi-service.md`, Marasi source, for keeping it in step with Marasi).
 
 A shortcut typed in an editor runs after the editor has handled the key (see `keybindings-and-menus.md`).
 
