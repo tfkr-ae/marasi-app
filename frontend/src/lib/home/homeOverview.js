@@ -25,6 +25,7 @@ export const overview = derived(
       activeRuns: activeCountsOf($armory).total,
       testCases: $testCases.map((t) => ({ done: completenessOf("testCase", t).status === "done" })),
       findings: $findings.map((f) => ({ severity: f.Severity, done: completenessOf("finding", f).status === "done" })),
+      statusClasses: $home.statusClasses,
       listenerStopped: $home.listenerStopped,
     }),
 );

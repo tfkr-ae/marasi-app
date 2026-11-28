@@ -48,6 +48,21 @@ const serviceRoutes = () => ({
   },
   "/extension": { items: [{ id: "e1", name: "compass", enabled: true }] },
   "/listener/status": { status: "active", proxy_listener: "127.0.0.1:52062" },
+  "/traffic/count/by-field": (query) =>
+    query?.field === "status_code"
+      ? {
+          items: [
+            { value: "200", count: 40 },
+            { value: "204", count: 2 },
+            { value: "302", count: 5 },
+            { value: "404", count: 3 },
+            { value: "503", count: 1 },
+            { value: "101", count: 4 },
+            { value: "", count: 9 },
+            { value: "abc", count: 6 },
+          ],
+        }
+      : { items: [] },
 });
 
 function setup(routes = serviceRoutes()) {
@@ -193,14 +208,14 @@ test("a newer populate wins over a slower older one", async () => {
   assert.equal(get(store).dashboard.requests, 2);
 });
 
-test("refreshDashboard reads the counts and scope again, not the log", async () => {
+test("refreshDashboard reads the counts, status classes and scope again, not the log", async () => {
   const { store, client } = setup();
   await store.populate();
   const before = client.calls.length;
   await store.refreshDashboard();
   assert.deepEqual(
     client.calls.slice(before).map(([path]) => path).sort(),
-    ["/dashboard", "/scope"],
+    ["/dashboard", "/scope", "/traffic/count/by-field"],
   );
 });
 
@@ -439,6 +454,61 @@ test("an intercepted response reads the counts again; one that wasn't intercepte
   await store.settled();
   assert.equal(dashboardReads(), before + 1);
   assert.equal(get(store).dashboard.intercepted, 8);
+});
+
+test("populate groups the responses by status class, ignoring other values", async () => {
+  const { store } = setup();
+  await store.populate();
+  assert.deepEqual(get(store).statusClasses, { "2xx": 42, "3xx": 5, "4xx": 3, "5xx": 1 });
+});
+
+test("a failed status class read counts no responses rather than failing", async () => {
+  const routes = serviceRoutes();
+  delete routes["/traffic/count/by-field"];
+  const { store } = setup(routes);
+  await store.populate();
+  assert.deepEqual(get(store).statusClasses, { "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0 });
+  assert.equal(get(store).dashboard.requests, 1200, "the rest still loads");
+});
+
+test("new pairs read the status classes again, on the dashboard's settle", async (t) => {
+  const routes = serviceRoutes();
+  const { store, client } = setup(routes);
+  await store.populate();
+  routes["/traffic/count/by-field"] = { items: [{ value: "200", count: 43 }, { value: "500", count: 2 }] };
+  const classReads = () => client.calls.filter(([path]) => path === "/traffic/count/by-field").length;
+  const before = classReads();
+  const request = { id: "t2", number: 2, scheme: "https", method: "GET", host: "example.com", path: "/", metadata: {} };
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onRequest(request);
+  store.onRequest(request);
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS - 1);
+  assert.equal(classReads(), before, "not before the window settles");
+  t.mock.timers.tick(1);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(classReads(), before + 1, "once for the burst");
+  assert.deepEqual(get(store).statusClasses, { "2xx": 43, "3xx": 0, "4xx": 0, "5xx": 2 });
+});
+
+test("a response that wasn't intercepted reads the status classes again, not the dashboard", async (t) => {
+  const routes = serviceRoutes();
+  const { store, client } = setup(routes);
+  await store.populate();
+  routes["/traffic/count/by-field"] = { items: [{ value: "200", count: 40 }, { value: "404", count: 4 }] };
+  const reads = (route) => client.calls.filter(([path]) => path === route).length;
+  const before = { dashboard: reads("/dashboard"), classes: reads("/traffic/count/by-field") };
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  store.onResponse({ id: "t1", status: "404 Not Found", status_code: 404, metadata: {} });
+  store.onResponse({ id: "t2", status: "404 Not Found", status_code: 404, metadata: {} });
+  t.mock.timers.tick(DASHBOARD_SETTLE_MS);
+  t.mock.timers.reset();
+  await store.settled();
+  assert.equal(reads("/traffic/count/by-field"), before.classes + 1);
+  assert.equal(reads("/dashboard"), before.dashboard);
+  assert.equal(get(store).statusClasses["4xx"], 4);
 });
 
 test("stopping the listener records that the researcher stopped it, and starting it clears that", async () => {
