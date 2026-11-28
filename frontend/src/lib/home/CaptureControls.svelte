@@ -3,7 +3,7 @@
 	// Project), Download Certificate, Start Chrome with its profiles (not on
 	// a phone) and the Service log. From 40rem up they form a row that wraps
 	// between controls, never inside one, so none is clipped; below it they
-	// stack full-width. Every button is the same height, in text-xs.
+	// stack full-width, Open Project on its own row so the listener group fits. Every button is the same height, in text-xs.
 	import { createEventDispatcher, onMount } from "svelte";
 	import { modeCurrent, popup } from "@skeletonlabs/skeleton";
 	import { ChevronDown, Download, FolderOpen, Play, ScrollText, Square } from "lucide-svelte";
@@ -51,10 +51,17 @@
 		>
 			{#if listener.status}<Square size={14} /><span>Stop</span>{:else}<Play size={14} /><span>Start</span>{/if}
 		</button>
-		<button type="button" class={neutral} title="Open Project" on:click={() => dispatch("openProject")}>
+		{#if !compact}
+			<button type="button" class={neutral} title="Open Project" on:click={() => dispatch("openProject")}>
+				<FolderOpen size={14} /><span>Open Project</span>
+			</button>
+		{/if}
+	</div>
+	{#if compact}
+		<button type="button" class="{neutral} w-full" title="Open Project" on:click={() => dispatch("openProject")}>
 			<FolderOpen size={14} /><span>Open Project</span>
 		</button>
-	</div>
+	{/if}
 	<button type="button" class="{primary} {full}" on:click={() => dispatch("downloadCertificate")}>
 		<Download size={14} /><span>Download Certificate</span>
 	</button>
